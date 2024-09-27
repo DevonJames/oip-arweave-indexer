@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Program",
+            "skipFiles": ["<node_internals>/**"],
+            "program": "${workspaceFolder}/index.js",
+            "args": ["--keepDBUpToDate", "1", "100"]
+        },
+        {
+            "type": "node",
+            "request": "attach",
+            "name": "Attach to Docker",
+            "address": "localhost",
+            "port": 9229,
+            "localRoot": "${workspaceFolder}",
+            "remoteRoot": "/usr/src/app",
+            "skipFiles": ["<node_internals>/**"]
+        }
+    ]
+}
