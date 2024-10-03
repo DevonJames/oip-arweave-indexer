@@ -1,6 +1,6 @@
 FROM node:lts-alpine
 ENV NODE_ENV=production
-WORKDIR /usr/src/oiparweave
+WORKDIR /usr/src/app
 
 # Install curl and bash
 RUN apk add --no-cache bash curl
@@ -10,6 +10,15 @@ RUN apk add --no-cache make g++ python3
 
 # Install chromium for puppeteer
 RUN apk add --no-cache chromium
+
+# Set the Puppeteer executable path to the installed chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Set the cache directory for Puppeteer
+ENV PUPPETEER_CACHE_DIR="/usr/src/app/cache/puppeteer"
+
+# Create cache directory for Puppeteer
+RUN mkdir -p /usr/src/app/cache/puppeteer && chown -R node:node /usr/src/app/cache
 
 # Install app dependencies
 COPY package*.json ./
@@ -41,16 +50,15 @@ EXPOSE 3005
 EXPOSE 9229
 
 # Set permissions and switch to non-root user
-RUN chown -R node /usr/src/oiparweave
+RUN chown -R node /usr/src/app
 USER node
 
 # Rebuild native modules
 RUN npm rebuild
 
 # Command to run the application with debugging enabled
-CMD ["./wait-for-it.sh", "elasticsearch:9200", "--timeout=90", "--strict", "--", "node", "--inspect=0.0.0.0:9229", "index.js", "--keepDBUpToDate", "1", "100"]
+CMD ["./wait-for-it.sh", "elasticsearch:9200", "--timeout=90", "--strict", "--", "node", "--inspect=0.0.0.0:9229", "index.js", "--keepDBUpToDate", "10", "100"]
+# CMD ["./wait-for-it.sh", "elasticsearch:9200", "--timeout=90", "--strict", "--", "node", "--inspect=0.0.0.0:9229", "index.js"]
 # Add healthcheck for the app (ensure curl is installed)
 HEALTHCHECK --interval=75s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:3005/api/health || exit 1
-
-ENV PUPPETEER_CACHE_DIR="/home/node/.cache/puppeteer"

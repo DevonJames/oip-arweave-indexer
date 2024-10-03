@@ -106,7 +106,7 @@ function remapRecordData(record, remapTemplate, templateName) {
         const fieldParts = oldFieldPath.split('.'); // Split the path to access nested fields
         let fieldValue;
 
-        console.log(`Remapping ${newField} using path ${oldFieldPath}`);
+        // console.log(`Remapping ${newField} using path ${oldFieldPath}`);
 
         // Iterate through the 'data' array to find the relevant object that contains the field
         for (const dataObj of record.data) {
@@ -163,7 +163,7 @@ const findTemplateByTxId = (txId, templates) => {
 };
 
 const searchRecordByTxId = async (txid) => {
-    console.log('searching by txid:', txid);
+    // console.log('searching by txid:', txid);
     try {
         const searchResponse = await elasticClient.search({
             index: 'records',
@@ -230,14 +230,10 @@ const translateOIPDataToJSON = async (record, template) => {
 
 const expandData = async (compressedData, templates) => {
     const records = JSON.parse(compressedData);
-    // console.log(getFileInfo(), getLineNumber(), 'records:', records);
     const expandedRecords = await Promise.all(records.map(async record => {
-        // console.log(getFileInfo(), getLineNumber(), 'record:', record.t);
         let template = findTemplateByTxId(record.t, templates);
-        // console.log(getFileInfo(), getLineNumber(), 'template:', record.t, template);
         let jsonData = await translateOIPDataToJSON(record, template);
         if (!jsonData) {
-            // console.log(getFileInfo(), getLineNumber(), 'Template translation failed for record:', record);
             return null;
         }
         let expandedRecord = {
@@ -393,7 +389,7 @@ const indexRecord = async (record) => {
         });
 
         if (response.result === 'created') {
-            console.log(getFileInfo(), getLineNumber, `Record created successfully: ${didTx}`);
+            console.log(`Record created successfully: ${didTx}`);
             return;
         } else if (response.result === 'updated') {
             console.log(getFileInfo(), getLineNumber, `Record updated successfully: ${didTx}`);
@@ -443,11 +439,11 @@ async function searchTemplateByTxId(templateTxid) {
 }
 
 async function deleteRecordFromDB(creatorDid, transaction) {
-    console.log(getFileInfo(), getLineNumber(), 'deleteRecordFromDB:', creatorDid, 'transaction:', transaction)
+    // console.log(getFileInfo(), getLineNumber(), 'deleteRecordFromDB:', creatorDid, 'transaction:', transaction)
     try {
 
         txIdToDelete = JSON.parse(transaction.data).delete.didTx;
-        console.log(getFileInfo(), getLineNumber(), 'txIdToDelete:', creatorDid, transaction.creator, transaction.data, { txIdToDelete })
+        // console.log(getFileInfo(), getLineNumber(), 'txIdToDelete:', creatorDid, transaction.creator, transaction.data, { txIdToDelete })
         if (creatorDid === 'did:arweave:' + transaction.creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
 
@@ -543,7 +539,10 @@ async function searchCreatorByAddress(didAddress) {
                     }
                 }
                 return creator;
+            } else {
+                return null;
             }
+
         }
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error searching for creator by address:', error);
@@ -604,17 +603,17 @@ async function getRecords(queryParams) {
             });
         }
 
-        if (txid) {
-            didTx = 'did:arweave:'+txid;
-            records = records.filter(record => record.oip.didTx === didTx);
-        }
+        // if (txid) {
+        //     didTx = 'did:arweave:'+txid;
+        //     records = records.filter(record => record.oip.didTx === didTx);
+        // }
 
         if (didTx) {
             records = records.filter(record => record.oip.didTx === didTx);
         }
 
         if (didTxRef) {
-            console.log('didTxRef:', didTxRef);
+            // console.log('didTxRef:', didTxRef);
         
             // Helper function to recursively search through objects and arrays for matching values
             const searchForDidTxRef = (obj) => {
@@ -646,9 +645,9 @@ async function getRecords(queryParams) {
         }
 
         if (tags) {
-            console.log('tags to match:', tags);
+            // console.log('tags to match:', tags);
             const tagArray = tags.split(',').map(tag => tag.trim());
-            console.log('type of tags:', typeof tagArray);
+            // console.log('type of tags:', typeof tagArray);
             records = records.filter(record => {
             return record.data.some(item => {
                 return item.basic && item.basic.tagItems && item.basic.tagItems.some(tag => tagArray.includes(tag));
@@ -676,7 +675,7 @@ async function getRecords(queryParams) {
         if (sortBy) {
             fieldToSortBy = sortBy.split(':')[0];
             order = sortBy.split(':')[1];
-            console.log('fieldToSortBy:', fieldToSortBy, 'order:', order);
+            // console.log('fieldToSortBy:', fieldToSortBy, 'order:', order);
             // fields will all be found in records[0].oip
             if (fieldToSortBy === 'inArweaveBlock') {
                 records.sort((a, b) => {
@@ -877,7 +876,7 @@ const findCreatorsByHandle = async (handle) => {
 
 const convertToCreatorHandle = async (txId, handle) => {
     const decimalNumber = parseInt(txId.replace(/[^0-9a-fA-F]/g, ''), 16);
-    console.log(getFileInfo(), getLineNumber(), 'handle and decimalNumber:', txId, handle, decimalNumber);
+    // console.log(getFileInfo(), getLineNumber(), 'handle and decimalNumber:', txId, handle, decimalNumber);
 
     // Start with one digit
     let digitsCount = 1;
@@ -904,7 +903,44 @@ const convertToCreatorHandle = async (txId, handle) => {
     return finalHandle;
 };
 
-async function indexNewCreatorRegistration(transaction) {
+// add some kind of history of registrations
+async function indexNewCreatorRegistration(creatorRegistrationParams) {
+    const { transaction, block, creatorInfo } = creatorRegistrationParams;
+    if (creatorInfo) {
+        creatorDid = creatorInfo.data.didAddress
+        const existingCreator = await elasticClient.search({
+            index: 'creatorregistrations',
+            body: {
+            query: {
+                match: {
+                "data.didAddress": creatorDid
+                }
+            }
+            }
+        });
+        if (existingCreator.hits.hits.length > 0) {
+            const creatorId = existingCreator.hits.hits[0]._id;
+            try {
+                await elasticClient.delete({
+                    index: 'creatorregistrations',
+                    id: creatorId
+                });
+                console.log(getFileInfo(), getLineNumber(), `Creator deleted successfully: ${creatorInfo.data.didAddress}`);
+            } catch (error) {
+                console.error(getFileInfo(), getLineNumber(), `Error deleting creatorInfo: ${creatorInfo.data.didAddress}`, error);
+            }
+         }
+            try {
+                await elasticClient.index({
+                    index: 'creatorregistrations',
+                    body: creatorInfo,
+                    id: creatorInfo.oip.didTx,
+                });
+                console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creatorInfo.oip.didTx}`);
+            } catch (error) {
+                console.error(getFileInfo(), getLineNumber(), `Error indexing creatorInfo: ${creatorInfo.oip.didTx}`, error);
+            }
+    } else {
     const newCreators = [];
     let creator;
 
@@ -914,12 +950,11 @@ async function indexNewCreatorRegistration(transaction) {
     }
 
     let transactionData;
-
+        // console.log(getFileInfo(), getLineNumber(),'transaction:', transaction, 'transaction.data:', transaction.data, 'type of transaction.data:', typeof transaction.data);
     if (typeof transaction.data === 'string') {
         try {
             // Attempt to parse the JSON string directly
             transactionData = JSON.parse(`[${transaction.data.replace(/}{/g, '},{')}]`);
-
         } catch (error) {
             console.error(getFileInfo(), getLineNumber(), `Invalid JSON data, skipping: ${transactionId}`);
             return
@@ -937,7 +972,9 @@ async function indexNewCreatorRegistration(transaction) {
         return  // Return early if it's a delete message
     }
     const creatorDid = txidToDid(transaction.creator);
-    const creatorInfo = await searchCreatorByAddress(creatorDid);
+    let creatorInfo = creatorRegistrationParams.creatorInfo || await searchCreatorByAddress(creatorDid)
+
+    // creatorInfo = await searchCreatorByAddress(creatorDid) || creatorRegistrationParams.creatorInfo;
     if (!creatorInfo) {
         console.log(getFileInfo(), getLineNumber(), `Creator not found for transaction ${transaction.transactionId}, skipping.`);
         return;
@@ -957,7 +994,6 @@ async function indexNewCreatorRegistration(transaction) {
         const templates = await getTemplatesInDB();
         const expandedRecordPromises = await expandData(transaction.data, templates.templatesInDB);
         const expandedRecord = await Promise.all(expandedRecordPromises);
-        console.log(getFileInfo(), getLineNumber(), 'expandedRecord:', expandedRecord);
         const inArweaveBlock = await getBlockHeightFromTxId(transactionId);
         if (expandedRecord !== null) {
             const creatorRegistration = expandedRecord.find(item => item.creatorRegistration !== undefined);
@@ -1002,10 +1038,10 @@ async function indexNewCreatorRegistration(transaction) {
 
                 creator = {
                     data: {
-                        templates: [
+                        raw: [
                             {
-                                "creatorRegistration": creatorRegistration.creatorRegistration.templateTxId,
-                                "basic": basic.basic.templateTxId
+                                "creatorRegistration": creatorRegistration.creatorRegistration,
+                                "basic": basic.basic
                             }
                         ],
                         publicKey: result.creatorPublicKey,
@@ -1021,6 +1057,7 @@ async function indexNewCreatorRegistration(transaction) {
                         signature: transaction.creatorSig,
                     },
                     oip: {
+                        recordType: 'creatorRegistration',
                         didTx: result.didTx,
                         inArweaveBlock: inArweaveBlock,
                         indexedAt: new Date(),
@@ -1037,7 +1074,6 @@ async function indexNewCreatorRegistration(transaction) {
         }
     }
 
-    // console.log(getFileInfo(), getLineNumber(), 'creator to be indexed:', creator);
     const existingCreator = await elasticClient.exists({
         index: 'creatorregistrations',
         id: creator.oip.didTx
@@ -1046,6 +1082,7 @@ async function indexNewCreatorRegistration(transaction) {
         try {
             await elasticClient.index({
                 index: 'creatorregistrations',
+                id: creator.oip.didTx,
                 body: creator,
             });
             console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creator.oip.didTx}`);
@@ -1057,9 +1094,9 @@ async function indexNewCreatorRegistration(transaction) {
         console.log(getFileInfo(), getLineNumber(), `Creator already exists: ${result.oip.didTx}`);
     }
 }
+}
 
 async function processNewTemplate(transaction) {
-    console.log(getFileInfo(), getLineNumber(), 'processNewTemplate:', transaction)
 
     if (!transaction || !transaction.tags || !transaction.data) {
         console.log(getFileInfo(), getLineNumber(), 'CANT FIND TRANSACTION (or tags or fields), skipping txid:', transaction.transactionId);
@@ -1079,7 +1116,7 @@ async function processNewTemplate(transaction) {
 
     const fieldsString = JSON.stringify(parsedData);
     const fieldsString1 = transaction.data
-    console.log(getFileInfo(), getLineNumber(), 'fieldsString:', transaction.transactionId, { fieldsString, fieldsString1 })
+    // console.log(getFileInfo(), getLineNumber(), 'fieldsString:', transaction.transactionId, { fieldsString, fieldsString1 })
     const template = {
         TxId: transaction.transactionId,
         ver: transaction.ver,
@@ -1119,12 +1156,10 @@ async function processNewTemplate(transaction) {
     }
 }
 
-
 async function keepDBUpToDate(remapTemplates) {
     await ensureIndexExists();
 
     let { qtyCreatorsInDB, maxArweaveCreatorRegBlockInDB, creatorsInDB } = await getCreatorsInDB();
-    // console.log('qtyCreatorsInDB:', qtyCreatorsInDB, 'maxArweaveCreatorRegBlockInDB:', maxArweaveCreatorRegBlockInDB, 'creatorsInDB:', creatorsInDB);
     foundInDB = {
         qtyRecordsInDB: qtyCreatorsInDB,
         maxArweaveBlockInDB: maxArweaveCreatorRegBlockInDB,
@@ -1133,10 +1168,16 @@ async function keepDBUpToDate(remapTemplates) {
 
     if (qtyCreatorsInDB === 0) {
         const hardCodedTxId = 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y';
+        const block = 1463761
         console.log(getFileInfo(), getLineNumber(), 'Exception - No creators found in DB, looking up creator registration data in hard-coded txid', hardCodedTxId);
         try {
             const transaction = await getTransaction(hardCodedTxId);
-            await indexNewCreatorRegistration(transaction)
+            let creatorRegistrationParams = {
+                transaction,
+                block,
+                creatorInfo: null
+            }
+            await indexNewCreatorRegistration(creatorRegistrationParams)
             maxArweaveCreatorRegBlockInDB = await getBlockHeightFromTxId(hardCodedTxId)
             qtyCreatorsInDB = 1;
         } catch (error) {
@@ -1173,7 +1214,7 @@ async function keepDBUpToDate(remapTemplates) {
             }
         }
         else {
-            console.log(getFileInfo(), getLineNumber(), 'No new transactions found, waiting...');
+            console.log('No new transactions found, waiting...', getFileInfo(), getLineNumber());
         }
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error fetching new transactions:', {
@@ -1190,7 +1231,7 @@ async function searchArweaveForNewTransactions(foundInDB) {
     await ensureIndexExists();
     const { qtyRecordsInDB, maxArweaveBlockInDB } = foundInDB;
     const min = (qtyRecordsInDB === 0) ? 1463750 : (maxArweaveBlockInDB + 1);
-    console.log(getFileInfo(), getLineNumber(), 'Searching for new OIP data after block:', min);
+    console.log('Searching for new OIP data after block:', min, getFileInfo(), getLineNumber());
 
     let allTransactions = [];
     let hasNextPage = true;
@@ -1237,19 +1278,19 @@ async function searchArweaveForNewTransactions(foundInDB) {
         hasNextPage = response.transactions.pageInfo.hasNextPage;  // Check if more pages exist
         afterCursor = response.transactions.edges.length > 0 ? response.transactions.edges[response.transactions.edges.length - 1].cursor : null;  // Get the cursor for the next page
 
-        console.log(getFileInfo(), getLineNumber(), 'Fetched', transactions.length, 'transactions, total so far:', allTransactions.length);
+        console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
 
         // If there's no next page, stop the loop
         if (!hasNextPage) break;
     }
 
-    console.log(getFileInfo(), getLineNumber(), 'Total transactions fetched:', allTransactions.length);
+    console.log('Total transactions fetched:', allTransactions.length, getFileInfo(), getLineNumber());
     return allTransactions.reverse();  // Returning reversed transactions as per your original code
 }
 
 
 async function processTransaction(tx, remapTemplates) {
-    console.log(getFileInfo(), getLineNumber(),'processing transaction:', tx.id, 'block:', tx)
+    // console.log(getFileInfo(), getLineNumber(),'processing transaction:', tx.id, 'block:', tx)
     const transaction = await getTransaction(tx.id);
     if (!transaction || !transaction.tags) {
         console.log(getFileInfo(), getLineNumber(),'CANT FIND TX OR TAGS IN CHAIN, skipping:', tx.id);
@@ -1260,28 +1301,10 @@ async function processTransaction(tx, remapTemplates) {
         return acc;
     }, {});
     if (tags['Type'] === 'Record' && tags['Index-Method'] === 'OIP') {
-        const isCreatorRegistration = await checkIfCreatorRegistration(transaction);
-        if (isCreatorRegistration) {
-            // console.log(getFileInfo(), getLineNumber(),'processing creator registration:', transaction.transactionId)
-            await indexNewCreatorRegistration(transaction);
-        } else {
-            // console.log(getFileInfo(), getLineNumber(),'processing record:', transaction.transactionId)
             await processNewRecord(transaction, remapTemplates);
-        }
     } else if (tags['Type'] === 'Template') {
-        // console.log(getFileInfo(), getLineNumber(),'processing template:', transaction.transactionId)
         await processNewTemplate(transaction);
     }
-}
-
-async function checkIfCreatorRegistration(transaction) {
-    if (!transaction || !transaction.data) return false;
-
-    const transactionData = typeof transaction.data === 'string'
-        ? JSON.parse(`[${transaction.data.replace(/}{/g, '},{')}]`)
-        : transaction.data;
-
-    return transactionData.some(item => item.hasOwnProperty('creatorRegistration'));
 }
 
 async function processNewTemplate(transaction) {
@@ -1320,7 +1343,6 @@ async function processNewTemplate(transaction) {
         console.error(getFileInfo(), getLineNumber(),`Signature verification failed for transaction ${transaction.transactionId}`);
         return null;
     } else {
-        console.log(getFileInfo(), getLineNumber(),`es 848 signature verified for transaction ${transaction.transactionId}`);
         const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
         const data = {
             TxId: transaction.transactionId,
@@ -1371,11 +1393,12 @@ async function processNewRecord(transaction, remapTemplates = []) {
         console.log(getFileInfo(), getLineNumber(),'cannot find transaction (or data or tags) in chain, skipping:', transaction.transactionId);
         return { records: newRecords, recordsToDelete };
     }
+    const transactionId = transaction.transactionId;
     const tags = transaction.tags.slice(0, -1);
     const recordType = tags.find(tag => tag.name === 'RecordType')?.value;
     const dataForSignature = JSON.stringify(tags) + transaction.data;
     const creatorDid = txidToDid(transaction.creator);
-    const creatorInfo = await searchCreatorByAddress(creatorDid);
+    let creatorInfo = await searchCreatorByAddress(creatorDid);
     let transactionData;
     let isDeleteMessageFound = false;
     if (typeof transaction.data === 'string') {
@@ -1396,21 +1419,9 @@ async function processNewRecord(transaction, remapTemplates = []) {
         console.log(getFileInfo(), getLineNumber(),'UNSUPPORTED DATA TYPE, skipping:', transaction.transactionId, typeof transaction.data);
         return { records: newRecords, recordsToDelete };
     }
-    if (!creatorInfo) {
-        console.log(getFileInfo(), getLineNumber(),`Creator not found for transaction ${transaction.transactionId}, skipping.`);
-        return { records: newRecords, recordsToDelete };
-    }
     let record;
-    const publicKey = creatorInfo.data.publicKey;
-    const isVerified = await verifySignature(dataForSignature, transaction.creatorSig, publicKey, transaction.creator);
-    if (!isVerified) {
-        console.error(getFileInfo(), getLineNumber(),`Signature verification failed for transaction ${transactionId}`);
-        return { records: newRecords, recordsToDelete };
-    }
-    console.log(getFileInfo(), getLineNumber(),`Signature verified for transaction ${transaction.transactionId}`);
 
     const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
-    console.log(getFileInfo(), getLineNumber(),`inArweaveBlock ${inArweaveBlock}`);
     let dataArray = [];
     dataArray.push(transactionData);
     if (isDeleteMessageFound) {
@@ -1437,53 +1448,149 @@ async function processNewRecord(transaction, remapTemplates = []) {
         const templates = await getTemplatesInDB();
         const expandedRecordPromises = await expandData(transaction.data, templates.templatesInDB);
         const expandedRecord = await Promise.all(expandedRecordPromises);
-        // console.log(getFileInfo(), getLineNumber(),`Transaction ${transaction.transactionId}:`);
-        if (expandedRecord !== null && expandedRecord.length > 0) {
-            // console.log(getFileInfo(), getLineNumber(),`Transaction ${transaction.transactionId}:`, expandedRecord)
-            record = {
-                data: expandedRecord,
-                oip: {
-                    recordType: recordType,
-                    recordStatus: "original",
-                    didTx: 'did:arweave:' + transaction.transactionId,
-                    inArweaveBlock: inArweaveBlock,
-                    indexedAt: new Date().toISOString(),
-                    ver: transaction.ver,
-                    signature: transaction.creatorSig,
-                    creator: {
-                        creatorHandle: creatorInfo.data.creatorHandle,
-                        didAddress: creatorInfo.data.didAddress,
-                        didTx: creatorInfo.oip.didTx,
-                        publicKey: creatorInfo.data.publicKey
+        let publicKey
+        if (recordType === 'creatorRegistration') {
+            publicKey = expandedRecord[0].creatorRegistration.publicKey || '';
+            address = expandedRecord[0].creatorRegistration.address || '';
+            const creatorRegistration = expandedRecord.find(item => item.creatorRegistration !== undefined);
+            if (creatorRegistration) {
+                const basic = expandedRecord.find(item => item.basic !== undefined);
+                const result = {};
+                if (creatorRegistration.creatorRegistration.address) {
+                    result.didAddress = 'did:arweave:' + creatorRegistration.creatorRegistration.address;
+                }
+                if (creatorRegistration.creatorRegistration.publicKey) {
+                    result.creatorPublicKey = creatorRegistration.creatorRegistration.publicKey;
+                }
+                if (creatorRegistration.creatorRegistration.handle) {
+                    result.creatorHandle = await convertToCreatorHandle(transaction.transactionId, creatorRegistration.creatorRegistration.handle);
+                }
+                if (transaction.transactionId) {
+                    result.didTx = 'did:arweave:' + transaction.transactionId;
+                }
+                if (creatorRegistration.creatorRegistration.surname) {
+                    result.surname = creatorRegistration.creatorRegistration.surname;
+                }
+                if (creatorRegistration.creatorRegistration.description) {
+                    result.description = creatorRegistration.creatorRegistration.description;
+                }
+                if (creatorRegistration.creatorRegistration.youtube) {
+                    result.youtube = creatorRegistration.creatorRegistration.youtube;
+                }
+                if (creatorRegistration.creatorRegistration.x) {
+                    result.x = creatorRegistration.creatorRegistration.x;
+                }
+                if (creatorRegistration.creatorRegistration.instagram) {
+                    result.instagram = creatorRegistration.creatorRegistration.instagram;
+                }
+                if (basic) {
+                    if (basic.basic.name) {
+                        result.name = basic.basic.name;
+                    }
+                    if (basic.basic.language) {
+                        result.language = basic.basic.language;
                     }
                 }
-            };
-            console.log(getFileInfo(), getLineNumber(),'Record:', transaction.transactionId, record)
 
-
-            // Check if the record should be remapped
-            if (remapTemplates.includes(record.oip.recordType)) {
-                const remapTemplateData = loadRemapTemplates(record.oip.recordType);
-                if (remapTemplateData) {
-                    console.log(getFileInfo(), getLineNumber(), `Remapping record of type: ${record.oip.recordType}`);
-                    record = remapRecordData(record, remapTemplateData, record.oip.recordType);
-                    
-                } else {
-                    // let recordStatus = "original"; // Default status for new records
-                    console.warn(getFileInfo(), getLineNumber(), `No remap template found for type: ${record.oip.recordType}`);
-                }
+                creatorInfo = {
+                    data: {
+                        raw: [
+                            {
+                                "creatorRegistration": creatorRegistration.creatorRegistration,
+                                "basic": basic.basic
+                            }
+                        ],
+                        publicKey: result.creatorPublicKey,
+                        creatorHandle: result.creatorHandle,
+                        name: result.name,
+                        surname: result.surname,
+                        language: result.language,
+                        description: result.description,
+                        youtube: result.youtube,
+                        x: result.x,
+                        instagram: result.instagram,
+                        didAddress: result.didAddress,
+                        signature: transaction.creatorSig,
+                    },
+                    oip: {
+                        recordType: 'creatorRegistration',
+                        didTx: result.didTx,
+                        inArweaveBlock: inArweaveBlock,
+                        indexedAt: new Date(),
+                        ver: transaction.ver,
+                        signature: transaction.creatorSig,
+                        creator: {
+                            creatorHandle: result.creatorHandle,
+                            didAddress: result.didAddress,
+                            didTx: result.didTx,
+                        }
+                    }
+                };
             }
-
-            if (!record.data || !record.oip) {
-                console.log(getFileInfo(), getLineNumber(),`${record.oip.didTx} is missing required data, cannot be indexed.`);
-            } else {
-                const existingRecord = await elasticClient.exists({
-                    index: 'records',
-                    id: record.oip.didTx
-                });
-                if (!existingRecord.body) {
-                    // console.log(getFileInfo(), getLineNumber(),`Record to index:`, record);
-                    return await indexRecord(record)
+        } else {
+    
+            publicKey = creatorInfo.data.publicKey || '';
+        
+        }
+        const isVerified = await verifySignature(dataForSignature, transaction.creatorSig, publicKey, transaction.creator);
+        if (!isVerified) {
+            console.error(getFileInfo(), getLineNumber(),`Signature verification failed for transaction ${transactionId}`);
+                return { records: newRecords, recordsToDelete };
+        }
+        const creatorRegistrationParams = {
+            transaction,
+            inArweaveBlock,
+            creatorInfo
+        }
+        if (recordType === 'creatorRegistration') {
+        await indexNewCreatorRegistration(creatorRegistrationParams)
+        } else {
+            if (expandedRecord !== null && expandedRecord.length > 0) {
+                record = {
+                    data: expandedRecord,
+                    oip: {
+                        recordType: recordType,
+                        recordStatus: "original",
+                        didTx: 'did:arweave:' + transaction.transactionId,
+                        inArweaveBlock: inArweaveBlock,
+                        indexedAt: new Date().toISOString(),
+                        ver: transaction.ver,
+                        signature: transaction.creatorSig,
+                        creator: {
+                            creatorHandle: creatorInfo.data.creatorHandle || expandedRecord[0].creatorRegistration.handle,
+                            didAddress: creatorInfo.data.didAddress || expandedRecord[0].creatorRegistration.address,
+                            didTx: creatorInfo.oip.didTx || 'did:arweave:' + transaction.transactionId,
+                            publicKey: creatorInfo.data.publicKey || expandedRecord[0].creatorRegistration.publicKey
+                        }
+                    }
+                };
+    
+    
+                // Check if the record should be remapped
+    
+                // REMAPPING OFF FOR NOW
+                // if (remapTemplates.includes(record.oip.recordType)) {
+                //     const remapTemplateData = loadRemapTemplates(record.oip.recordType);
+                //     if (remapTemplateData) {
+                //         console.log(getFileInfo(), getLineNumber(), `Remapping record of type: ${record.oip.recordType}`);
+                //         record = remapRecordData(record, remapTemplateData, record.oip.recordType);
+                        
+                //     } else {
+                //         // let recordStatus = "original"; // Default status for new records
+                //         console.warn(getFileInfo(), getLineNumber(), `No remap template found for type: ${record.oip.recordType}`);
+                //     }
+                // }
+    
+                if (!record.data || !record.oip) {
+                    console.log(getFileInfo(), getLineNumber(),`${record.oip.didTx} is missing required data, cannot be indexed.`);
+                } else {
+                    const existingRecord = await elasticClient.exists({
+                        index: 'records',
+                        id: record.oip.didTx
+                    });
+                    if (!existingRecord.body) {
+                        return await indexRecord(record)
+                    }
                 }
             }
         }

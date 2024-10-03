@@ -23,7 +23,14 @@ router.get('/', async (req, res) => {
                 }
             }
         });
-        res.status(200).json({ creators: creators.hits.hits });
+        creatorRecords = creators.hits.hits.map(hit => hit._source);
+        res.status(200).json({
+            // qtyRecordsInDB: records.qtyRecordsInDB,
+            // maxArweaveBlockInDB: records.maxArweaveBlockInDB,
+            qtyReturned: creatorRecords.length,
+            creators: creatorRecords
+        });
+        // res.status(200).json({ creators: creators.hits.hits });
     } catch (error) {
         console.error('Error retrieving creators:', error);
         res.status(500).json({ error: 'Failed to retrieve creators' });
