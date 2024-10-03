@@ -1,2 +1,6 @@
 node_modules
 downloads
+docker-compose.yml
+.DS_Store
+.env
+config/arweave-keyfile.json

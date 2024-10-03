@@ -100,7 +100,7 @@ These keys are required to access OpenAI and Twitter services used by the scrape
 ### Records	    
 ### newRecord
 
-Create a new record.
+Create a new record. 
 
 `POST /api/records/newRecord`
 
@@ -108,7 +108,6 @@ Body:
 
 ```
 {
-  "recordType": "basic",
   "record": {
     "creatorRegistration": {
       "handle": "creatorHandle",
@@ -122,10 +121,7 @@ Body:
 ```
 Query Parameters:
 
-	•	publishFiles: Optional, true/false.
-	•	addMediaToArweave: Optional, true/false.
-	•	addMediaToIPFS: Optional, true/false.
-	•	youtubeUrl: Optional, for video content.
+	•	recordType - Required, must be the name of one of the templates used in the record.
 
 The `newRecord` endpoint allows embedding records inside other records. This can be used to reference a piece of media multiple times without duplicating metadata.
 

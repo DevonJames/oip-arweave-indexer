@@ -228,6 +228,14 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
             let stringValue = JSON.stringify(record);
             recordData += stringValue;
         } else {
+
+            if (recordType === 'creatorRegistration') {
+                const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+                const myPublicKey = jwk.n;
+                const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
+                record.creatorRegistration.publicKey = myPublicKey;
+                record.creatorRegistration.address = myAddress;
+            }
             const oipData = await translateJSONtoOIPData(record);
             let recordDataArray = [];
 
