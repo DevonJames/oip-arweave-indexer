@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.get('/', async (req, res) => {
     try {
-        const { template, resolveDepth = 0, creator_name, creator_did_address, txid, url, didTx, didTxRef, tags, sortBy } = req.query;
+        const { template, resolveDepth = 0, creator_name, creator_did_address, txid, url, didTx, didTxRef, tags, sortBy, recordType } = req.query;
         const queryParams = {
             template,
             resolveDepth,
@@ -18,7 +18,8 @@ router.get('/', async (req, res) => {
             didTx,
             didTxRef,
             tags,
-            sortBy
+            sortBy,
+            recordType
         };
         const records = await getRecords(queryParams);
         res.status(200).json({
@@ -37,6 +38,9 @@ router.post('/newRecord', async (req, res) => {
     try {
         const record = req.body;
         const recordType = req.query.recordType;
+        // if (recordType = 'creatorRegistration') {
+        //     record.publicKey = req.query.publicKey;
+        // }
         const publishFiles = req.query.publishFiles === 'true';
         const addMediaToArweave = req.query.addMediaToArweave === 'true';
         const addMediaToIPFS = req.query.addMediaToIPFS === 'true';

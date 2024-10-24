@@ -11,9 +11,7 @@
 **/*.dbmdl
 **/*.jfm
 **/charts
-**/docker-compose*
 **/compose*
-**/Dockerfile*
 **/node_modules
 **/npm-debug.log
 **/obj
@@ -21,3 +19,8 @@
 **/values.dev.yaml
 LICENSE
 README.md
+speech-synthesizer/Dockerfile
+speech-synthesizer/Dockerfilelinux
+speech-synthesizer/myenv
+text-generator/Dockerfile
+
