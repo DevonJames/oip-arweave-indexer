@@ -4,3 +4,7 @@ docker-compose.yml
 .DS_Store
 .env
 config/arweave-keyfile.json
+speech-synthesizer/myenv
+speech-synthesizer/packages
+text-generator/packages
+text-generator/myenv

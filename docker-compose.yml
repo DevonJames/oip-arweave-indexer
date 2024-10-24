@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.8
@@ -44,7 +42,7 @@ services:
     networks:
       - oip-network
 
-  oiparweave:
+  oip:
     build: .
     env_file:
       - .env
@@ -53,14 +51,46 @@ services:
       - "9229:9229"  # Expose the debugging port
     environment:
       - NODE_ENV=production
-      - ELASTICSEARCH_HOST=http://elasticsearch:9200
-      - ELASTICCLIENTUSERNAME=elastic
-      - ELASTICCLIENTPASSWORD=tVUsFYYXexZshWT3Jbhx
+      - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
+      - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
+      - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
     depends_on:
       - elasticsearch
     networks:
       - oip-network
-    command: ["./wait-for-it.sh", "elasticsearch:9200", "-t", "90", "--", "node", "index.js", "--keepDBUpToDate"]
+
+  # Self-hosted Text Generation (LLaMA2)
+  # text-generator:
+  #   build: ./text-generator  # Path to your text generator Dockerfile
+  #   ports:
+  #     - "8081:8081"
+  #   networks:
+  #     - oip-network
+
+  # Self-hosted Speech Synthesizer (Coqui TTS)
+  speech-synthesizer:
+    build:
+      context: ./speech-synthesizer
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    networks:
+      - oip-network
+
+  # Ngrok for public access
+  ngrok:
+    image: ngrok/ngrok
+    command: http oip:3005  # Tunnel OIP server on port 3005
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}  # Add your Ngrok token to the .env file
+    depends_on:
+      - oip
+    ports:
+      - "4040:4040"
+    networks:
+      - oip-network
+
+
 networks:
    oip-network:
     driver: bridge

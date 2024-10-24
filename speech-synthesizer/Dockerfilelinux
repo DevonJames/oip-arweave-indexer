@@ -1,0 +1,43 @@
+# Use a Python slim image
+FROM python:3.10-slim
+
+# Install system dependencies needed for building Python packages and compiling Cython extensions
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    llvm \
+    libffi-dev \
+    libssl-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables for LLVM and libffi (for spacy and TTS dependencies)
+ENV LDFLAGS="-L/usr/lib/llvm-11/lib -L/usr/lib/libffi/lib"
+ENV CPPFLAGS="-I/usr/lib/llvm-11/include -I/usr/lib/libffi/include"
+ENV PATH="/usr/lib/llvm-11/bin:$PATH"
+
+# Upgrade pip, setuptools, and wheel
+RUN pip install --upgrade pip setuptools wheel
+
+# Create an app directory for your project
+WORKDIR /app
+
+# Copy your project files into the Docker container
+COPY . /app
+
+# Copy pre-installed Python packages from the virtual environment (site-packages)
+# Replace this with the correct path to your 'site-packages' directory inside your local virtual environment
+COPY ./myenv/lib/python3.10/site-packages /app/site-packages
+
+# Set the PYTHONPATH to include the copied site-packages
+ENV PYTHONPATH=/app/site-packages
+
+# Expose the port your application will run on (adjust based on your actual setup)
+EXPOSE 8080
+
+# Set the command to run your application (adjust as necessary for your app)
+CMD ["python", "your_speech_synthesizer_app.py"]

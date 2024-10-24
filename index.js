@@ -6,11 +6,20 @@ const templateRoutes = require('./routes/templates');
 const creatorRoutes = require('./routes/creators');
 const scrapeRoutes = require('./routes/scrape');
 const healthRoutes = require('./routes/health');
+const generateRoutes = require('./routes/generate');
+const userRoutes = require('./routes/user');
 const { keepDBUpToDate, remapExistingRecords } = require('./helpers/elasticsearch');
 const minimist = require('minimist');
 dotenv.config();
 const cors = require('cors');
 const app = express();
+const { getIsProcessing, setIsProcessing } = require('./helpers/processingState');
+const path = require('path');
+
+
+// Set higher body size limit (e.g., 10MB)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // CORS configuration
 const corsOptions = {
@@ -33,11 +42,19 @@ app.use((req, res, next) => {
 });
 
 app.use(bodyParser.json());
+
+app.use('/api/generate/media', express.static(path.join(__dirname, 'media')));
+
 app.use('/api/records', recordRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/creators', creatorRoutes);
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/generate', generateRoutes);
+app.use('/api/user', userRoutes);
+
+let isProcessing = false;  // Flag to indicate if the process is running
+
 app.listen(port, async () => {
     console.log(`Server is running on port ${port}`);
 
@@ -68,11 +85,31 @@ app.listen(port, async () => {
         }
         console.log(`After a delay of ${wait} seconds, will check Arweave for new OIP data every ${interval} seconds`);
 
+        // setTimeout(() => {
+        //     keepDBUpToDate(remapTemplates);
+        //     setInterval(async () => {
+        //         keepDBUpToDate(remapTemplates);
+        //     }, interval * 1000);
+        // }, wait * 1000);
         setTimeout(() => {
             keepDBUpToDate(remapTemplates);
             setInterval(async () => {
-                keepDBUpToDate(remapTemplates);
+                // Only start a new process if one isn't already running
+                if (!getIsProcessing()) {
+                    try {
+                        console.log("Starting new cycle...");
+                        setIsProcessing(true);
+                        await keepDBUpToDate(remapTemplates);
+                    } catch (error) {
+                        console.error("Error during keepDBUpToDate:", error);
+                    } finally {
+                        setIsProcessing(false);
+                    }
+                } else {
+                    console.log("Skipping new cycle because a previous process is still running.");
+                }
             }, interval * 1000);
-        }, wait * 1000);
+        }, wait * 1000)
+
     }
 });
