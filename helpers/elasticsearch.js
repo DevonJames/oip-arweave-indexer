@@ -5,16 +5,16 @@ const { resolveRecords } = require('../helpers/utils');
 const { setIsProcessing } = require('../helpers/processingState');  // Adjust the path as needed
 const arweaveConfig = require('../config/arweave.config');
 const arweave = Arweave.init(arweaveConfig);
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
+
 const { gql, request } = require('graphql-request');
 const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber } = require('./utils');
-const { sign } = require('crypto');
-const { get } = require('http');
+// const { sign } = require('crypto');
+// const { get } = require('http');
 const path = require('path');
 const fs = require('fs');
-
-
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
-
 
 const elasticClient = new Client({
     node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
@@ -157,6 +157,20 @@ function remapRecordData(record, remapTemplate, templateName) {
     };
 
     return remappedRecord;
+}
+
+// Search for records by specific fields
+async function searchByField(index, field, value) {
+    try {
+        const searchResponse = await elasticClient.search({
+            index,
+            body: { query: { match: { [field]: value } } }
+        });
+        return searchResponse.hits.hits.map(hit => hit._source);
+    } catch (error) {
+        console.error(`Error searching ${index} by ${field}:`, error);
+        return [];
+    }
 }
 
 
@@ -380,10 +394,11 @@ const ensureIndexExists = async () => {
     }
 };
 
-// Ensure that the 'users' index exists in Elasticsearch
 const ensureUserIndexExists = async () => {
     try {
         const indexExists = await elasticClient.indices.exists({ index: 'users' });
+        console.log(`Index exists check for 'users':`, indexExists.body);  // Log existence check result
+        
         if (!indexExists.body) {
             await elasticClient.indices.create({
                 index: 'users',
@@ -400,31 +415,68 @@ const ensureUserIndexExists = async () => {
                 }
             });
             console.log('Users index created successfully.');
+        } else {
+            console.log('Users index already exists, skipping creation.');
         }
     } catch (error) {
-        console.error('Error creating users index:', error);
+        if (error.meta && error.meta.body && error.meta.body.error && error.meta.body.error.type === 'resource_already_exists_exception') {
+            console.log('Users index already exists (caught in error).');
+        } else {
+            console.error('Error creating users index:', error);
+        }
     }
 };
+
+// General function to index a document
+async function indexDocument(index, id, body) {
+    try {
+        const response = await elasticClient.index({ index, id, body, refresh: 'wait_for' });
+        console.log(`Document ${response.result} in ${index} with ID: ${id}`);
+    } catch (error) {
+        console.error(`Error indexing document in ${index} with ID ${id}:`, error);
+    }
+}
 
 const indexRecord = async (record) => {
     try {
         const didTx = record.oip.didTx;
-        const response = await elasticClient.index({
+        const existingRecord = await elasticClient.exists({
             index: 'records',
-            id: didTx, // Use didTx as the ID
-            body: record,
-            refresh: 'wait_for' // Wait for indexing to be complete before returning
+            id: didTx
         });
-
-        if (response.result === 'created') {
-            console.log(`Record created successfully: ${didTx}`);
-            return;
-        } else if (response.result === 'updated') {
-            console.log(getFileInfo(), getLineNumber, `Record updated successfully: ${didTx}`);
-            return;
+        if (existingRecord.body) {
+            // Update existing unconfirmed record with new confirmed data
+            const response = await elasticClient.update({
+                index: 'records',
+                id: didTx,
+                body: {
+                    doc: {
+                        ...record,
+                        "oip.recordStatus": "original"
+                    }
+                },
+                refresh: 'wait_for'
+            });
+            console.log(`Record updated successfully: ${didTx}`);    
         } else {
-            console.log(getFileInfo(), getLineNumber, `Unexpected response from Elasticsearch: ${JSON.stringify(response)}`);
+            const response = await elasticClient.index({
+                index: 'records',
+                id: didTx, // Use didTx as the ID
+                body: record,
+                refresh: 'wait_for' // Wait for indexing to be complete before returning
+            });
+            console.log(getFileInfo(), getLineNumber, `Record indexed successfully: ${didTx}`);
         }
+
+        // if (response.result === 'created') {
+        //     console.log(`Record created successfully: ${didTx}`);
+        //     return;
+        // } else if (response.result === 'updated') {
+        //     console.log(getFileInfo(), getLineNumber, `Record updated successfully: ${didTx}`);
+        //     return;
+        // } else {
+        //     console.log(getFileInfo(), getLineNumber, `Unexpected response from Elasticsearch: ${JSON.stringify(response)}`);
+        // }
     } catch (error) {
         console.error(getFileInfo(), getLineNumber, `Error indexing record ${record.oip.didTx}:`, error);
     }
@@ -452,6 +504,21 @@ const getTemplatesInDB = async () => {
         return { qtyTemplatesInDB: 0, maxArweaveBlockInDB: 0, templatesInDB: [] };
     }
 };
+
+
+// Retrieve all templates from the database
+async function getTemplates() {
+    try {
+        const response = await elasticClient.search({
+            index: 'templates',
+            body: { query: { match_all: {} }, size: 1000 }
+        });
+        return response.hits.hits.map(hit => hit._source);
+    } catch (error) {
+        console.error('Error retrieving templates:', error);
+        return [];
+    }
+}
 
 async function searchTemplateByTxId(templateTxid) {
     const searchResponse = await elasticClient.search({
@@ -579,7 +646,7 @@ async function searchCreatorByAddress(didAddress) {
 };
 
 async function getRecords(queryParams) {
-    
+
     const {
         template,
         resolveDepth,
@@ -592,44 +659,51 @@ async function getRecords(queryParams) {
         didTxRef,
         tags,
         sortBy,
-        recordType
+        recordType,
+        limit,
+        page,
+        search
     } = queryParams;
 
-    console.log('569 get records using:', {template, creator_name, creator_did_address, resolveDepth, url, didTx, didTxRef, tags, sortBy, recordType});
+    // console.log('get records using:', {template, creator_name, creator_did_address, resolveDepth, url, didTx, didTxRef, tags, sortBy, recordType});
     try {
         const result = await getRecordsInDB();
-        
+
         let records = result.records;
         let recordsInDB = result.records;
         records.qtyRecordsInDB = result.qtyRecordsInDB;
         records.maxArweaveBlockInDB = result.finalMaxRecordArweaveBlock;
 
-         // Perform filtering based on query parameters
-         
+        // Perform filtering based on query parameters
+
+        const totalRecordsInDB = recordsInDB.length;
+
+        console.log('before filtering, there are', totalRecordsInDB, 'records');
+
 
         if (creator_name != undefined) {
             records = records.filter(record => {
                 return record.oip.creator.name.toLowerCase() === creator_name.toLowerCase();
             });
+            console.log('after filtering by creator_name, there are', records.length, 'records');
         }
-        console.log('after filtering by creator_name, there are', records.length, 'records');
 
         if (creatorHandle != undefined) {
             records = records.filter(record => {
                 return record.oip.creator.creatorHandle === creatorHandle;
             });
+            console.log('after filtering by creatorHandle, there are', records.length, 'records');
         }
 
-        console.log('after filtering by creatorHandle, there are', records.length, 'records');
 
         if (creator_did_address != undefined) {
             const decodedCreatorDidAddress = decodeURIComponent(creator_did_address);
             records = records.filter(record => {
                 return record.oip.creator.didAddress === decodedCreatorDidAddress;
             });
+            console.log('after filtering by creator_did_address, there are', records.length, 'records');
         }
 
-        console.log('after filtering by creator_did_address, there are', records.length, 'records');
 
         // if (txid) {
         //     didTx = 'did:arweave:'+txid;
@@ -638,9 +712,9 @@ async function getRecords(queryParams) {
 
         if (didTx != undefined) {
             records = records.filter(record => record.oip.didTx === didTx);
+            console.log('after filtering by didTx, there are', records.length, 'records');
         }
 
-        console.log('after filtering by didTx, there are', records.length, 'records');
 
         if (template) {
             records = records.filter(record => {
@@ -648,21 +722,21 @@ async function getRecords(queryParams) {
                     return Object.keys(item).some(key => key.toLowerCase().includes(template.toLowerCase()));
                 });
             });
+            console.log('after filtering by template, there are', records.length, 'records');
         }
 
-        console.log('after filtering by template, there are', records.length, 'records');
 
         if (recordType != undefined) {
             records = records.filter(record => {
                 // console.log('record', record);
                 return record.oip.recordType && record.oip.recordType.toLowerCase() === recordType.toLowerCase();
             });
+            console.log('after filtering by recordType, there are', records.length, 'records');
         }
-        console.log('after filtering by recordType, there are', records.length, 'records');
 
         if (didTxRef != undefined) {
-            // console.log('didTxRef:', didTxRef);
-        
+            console.log('didTxRef:', didTxRef);
+
             // Helper function to recursively search through objects and arrays for matching values
             const searchForDidTxRef = (obj) => {
                 if (Array.isArray(obj)) {
@@ -677,21 +751,22 @@ async function getRecords(queryParams) {
                 }
                 return false;
             };
-        
+
             // Filter records based on the recursive search function
-            records = records.filter(record => 
+            records = records.filter(record =>
                 record.data.some(item => searchForDidTxRef(item))
             );
+            console.log('after filtering by didTxRef, there are', records.length, 'records');
         }
-        console.log('after filtering by didTxRef, there are', records.length, 'records');
         if (url != undefined) {
+            console.log('url to match:', url);
             records = records.filter(record => {
                 return record.data.some(item => {
-                    return item.associatedURLOnWeb && item.associatedURLOnWeb.url === url;
+                    return item.associatedUrlOnWeb && item.associatedUrlOnWeb.url === url || item.associatedURLOnWeb && item.associatedURLOnWeb.url === url;
                 });
             });
+            console.log('767 after filtering by url:', url, 'there are', records.length, 'records');
         }
-        console.log('after filtering by url, there are', records.length, 'records');
         if (tags != undefined) {
             console.log('tags to match:', tags);
             const tagArray = tags.split(',').map(tag => tag.trim());
@@ -718,10 +793,32 @@ async function getRecords(queryParams) {
 
                 return bMatches - aMatches; // Sort in descending order
             });
+            console.log('795 after filtering by tags, there are', records.length, 'records');
         }
-        console.log('after filtering by tags, there are', records.length, 'records');
-        console.log('all filters complete, there are', records.length, 'records, sorting by:', sortBy);
+
+        // search records by search parameter
+        if (search != undefined) {
+            const searchLower = search.toLowerCase();
+            console.log('searching for:', searchLower, 'in records', records[0]);
+            records = records.filter(record => {
+                const basicData = record.data.find(item => item.basic); // Ensure `basic` exists
+
+                // Match title (basic.name), description (basic.description), and tags (basic.tagItems)
+                const titleMatches = basicData?.basic?.name?.toLowerCase().includes(searchLower) || false;
+                const descriptionMatches = basicData?.basic?.description?.toLowerCase().includes(searchLower) || false;
+                const tagsMatches = basicData?.basic?.tagItems?.some(tag => tag.toLowerCase().includes(searchLower)) || false;
+
+                return titleMatches || descriptionMatches || tagsMatches;
+            });
+            console.log('after search filtering, there are', records.length, 'records');
+        }
+
+
+        console.log('all filters complete, there are', records.length, 'records');
+
+        // Sort records based on sortBy parameter
         if (sortBy != undefined) {
+            console.log('sorting by:', sortBy);
             fieldToSortBy = sortBy.split(':')[0];
             order = sortBy.split(':')[1];
             // console.log('fieldToSortBy:', fieldToSortBy, 'order:', order);
@@ -775,33 +872,211 @@ async function getRecords(queryParams) {
                     }
                 });
             }
-            
+
             if (fieldToSortBy === 'date') {
                 records.sort((a, b) => {
+                    if (!a.data || !a.data[0].basic.date) return 1;
+                    if (!b.data || !b.data[0].basic.date) return -1;
                     if (order === 'asc') {
-                        return new Date(a.data[0].basic.date) - new Date(b.data[0].basic.date);
+                        return a.data[0].basic.date - b.data[0].basic.date;
                     } else {
-                        return new Date(b.data[0].basic.date) - new Date(a.data[0].basic.date);
+                        return b.data[0].basic.date - a.data[0].basic.date;
                     }
                 });
             }
-                
+
         }
 
+        // Apply Paging
+        const pageSize = parseInt(limit) || 20; // Default to 20 if not specified
+        const pageNumber = parseInt(page) || 1;  // Default to the first page
 
-            records = await Promise.all(records.map(async (record) => {
-                const resolvedRecord = await resolveRecords(record, parseInt(resolveDepth),  recordsInDB );
-                return resolvedRecord;
-            }));
+        const startIndex = (pageNumber - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
 
-            
-        return records
+        const paginatedRecords = records.slice(startIndex, endIndex);
+
+        // Resolve records if resolveDepth is specified
+        const resolvedRecords = await Promise.all(paginatedRecords.map(async (record) => {
+            const resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB);
+            return resolvedRecord;
+        }));
+        console.log('es 896 records:', resolvedRecords);
+        return {
+            message: "Records retrieved successfully",
+            // qtyRecordsInDB: records.qtyRecordsInDB,
+            // maxArweaveBlockInDB: records.maxArweaveBlockInDB,
+            // qtyReturned: records.length,
+            totalRecords: totalRecordsInDB,
+            searchResults: records.length,
+            pageSize: pageSize,
+            currentPage: pageNumber,
+            totalPages: Math.ceil(records.length / pageSize),
+            records: resolvedRecords
+        };
+        //     records = await Promise.all(records.map(async (record) => {
+        //         const resolvedRecord = await resolveRecords(record, parseInt(resolveDepth),  recordsInDB );
+        //         return resolvedRecord;
+        //     }));
+
+
+        // return records
 
     } catch (error) {
         console.error('Error retrieving records:', error);
         throw new Error('Failed to retrieve records');
     }
 }
+
+// async function getRecords(queryParams) {
+    
+//     const {
+//         template,
+//         resolveDepth,
+//         creator_name,
+//         creator_did_address,
+//         creatorHandle,
+//         url,
+//         didTx,
+//         didTxRef,
+//         tags,
+//         sortBy,
+//         recordType,
+//         limit,
+//         page,
+//         search  // New search parameter
+//     } = queryParams;
+
+//     try {
+//         const result = await getRecordsInDB();
+        
+//         let records = result.records;
+//         let recordsInDB = result.records;
+//         records.qtyRecordsInDB = result.qtyRecordsInDB;
+//         records.maxArweaveBlockInDB = result.finalMaxRecordArweaveBlock;
+
+//         // Perform filtering based on query parameters
+//         if (creator_name != undefined) {
+//             records = records.filter(record => {
+//                 return record.oip.creator.name.toLowerCase() === creator_name.toLowerCase();
+//             });
+//         }
+//         console.log('after filtering by creator_name, there are', records.length, 'records');
+
+//         if (creatorHandle != undefined) {
+//             records = records.filter(record => {
+//                 return record.oip.creator.creatorHandle === creatorHandle;
+//             });
+//         }
+//         console.log('after filtering by creatorHandle, there are', records.length, 'records');
+
+//         if (creator_did_address != undefined) {
+//             const decodedCreatorDidAddress = decodeURIComponent(creator_did_address);
+//             records = records.filter(record => {
+//                 return record.oip.creator.didAddress === decodedCreatorDidAddress;
+//             });
+//         }
+//         console.log('after filtering by creator_did_address, there are', records.length, 'records');
+
+//         if (didTx != undefined) {
+//             records = records.filter(record => record.oip.didTx === didTx);
+//         }
+//         console.log('after filtering by didTx, there are', records.length, 'records');
+
+//         if (template) {
+//             records = records.filter(record => {
+//                 return record.data.some(item => {
+//                     return Object.keys(item).some(key => key.toLowerCase().includes(template.toLowerCase()));
+//                 });
+//             });
+//         }
+//         console.log('after filtering by template, there are', records.length, 'records');
+
+//         if (recordType != undefined) {
+//             records = records.filter(record => {
+//                 return record.oip.recordType && record.oip.recordType.toLowerCase() === recordType.toLowerCase();
+//             });
+//         }
+//         console.log('after filtering by recordType, there are', records.length, 'records');
+
+//         if (didTxRef != undefined) {
+//             const searchForDidTxRef = (obj) => {
+//                 if (Array.isArray(obj)) {
+//                     return obj.some(item => searchForDidTxRef(item));
+//                 } else if (typeof obj === 'object' && obj !== null) {
+//                     return Object.values(obj).some(value => searchForDidTxRef(value));
+//                 } else if (typeof obj === 'string') {
+//                     return obj.startsWith(didTxRef);
+//                 }
+//                 return false;
+//             };
+        
+//             records = records.filter(record => 
+//                 record.data.some(item => searchForDidTxRef(item))
+//             );
+//         }
+//         console.log('after filtering by didTxRef, there are', records.length, 'records');
+        
+//         if (url != undefined) {
+//             records = records.filter(record => {
+//                 return record.data.some(item => {
+//                     return item.associatedURLOnWeb && item.associatedURLOnWeb.url === url;
+//                 });
+//             });
+//         }
+//         console.log('after filtering by url, there are', records.length, 'records');
+
+//         if (tags != undefined) {
+//             const tagArray = tags.split(',').map(tag => tag.trim());
+//             records = records.filter(record => {
+//                 return record.data.some(item => {
+//                     return item.basic && item.basic.tagItems && item.basic.tagItems.some(tag => tagArray.includes(tag));
+//                 });
+//             });
+//             records.sort((a, b) => {
+//                 const countMatches = (record) => {
+//                     return record.data.reduce((count, item) => {
+//                         if (item.basic && item.basic.tagItems) {
+//                             return count + item.basic.tagItems.filter(tag => tagArray.includes(tag)).length;
+//                         }
+//                         return count;
+//                     }, 0);
+//                 };
+
+//                 return countMatches(b) - countMatches(a); // Sort in descending order
+//             });
+//         }
+//         console.log('after filtering by tags, there are', records.length, 'records');
+
+//         // Add search functionality
+//         if (search != undefined) {
+//             const searchLower = search.toLowerCase();
+//             records = records.filter(record => {
+//                 const titleMatches = record.data.some(item => item.title && item.title.toLowerCase().includes(searchLower));
+//                 const descriptionMatches = record.data.some(item => item.description && item.description.toLowerCase().includes(searchLower));
+//                 const tagsMatches = record.data.some(item => item.basic && item.basic.tagItems && item.basic.tagItems.some(tag => tag.toLowerCase().includes(searchLower)));
+//                 return titleMatches || descriptionMatches || tagsMatches;
+//             });
+//         }
+//         console.log('after search filtering, there are', records.length, 'records');
+
+//         // Apply Sorting (existing code)
+
+//         // Apply Paging (existing code)
+
+//         return {
+//             records: resolvedRecords,
+//             totalRecords: records.length,
+//             pageSize: pageSize,
+//             currentPage: pageNumber,
+//             totalPages: Math.ceil(records.length / pageSize)
+//         };
+
+//     } catch (error) {
+//         console.error('Error retrieving records:', error);
+//         throw new Error('Failed to retrieve records');
+//     }
+// }
 
 const getCreatorsInDB = async () => {
     try {
@@ -860,7 +1135,7 @@ const getRecordsInDB = async () => {
                 query: {
                     match_all: {}
                 },
-                size: 1000 // make this a variable to be passed in
+                size: 5000 // make this a variable to be passed in
             }
         });
         const records = searchResponse.hits.hits.map(hit => hit._source);
@@ -1205,6 +1480,19 @@ async function processNewTemplate(transaction) {
     }
 }
 
+// maybe implement this
+const reIndexUnconfirmedRecords = async () => {
+    const unconfirmedRecords = await searchByField('records', 'oip.recordStatus', 'unconfirmed');
+    for (const record of unconfirmedRecords) {
+        const confirmedData = await getTransaction(record.oip.didTx.replace('did:arweave:', ''));
+        if (confirmedData) {
+            record.oip.recordStatus = "confirmed";
+            await indexRecord(record);
+            console.log(`Record ${record.oip.didTx} status updated to confirmed.`);
+        }
+    }
+};
+
 async function keepDBUpToDate(remapTemplates) {
     try {
         await ensureIndexExists();
@@ -1456,7 +1744,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
             transactionData = JSON.parse(transaction.data);
             if (transactionData.hasOwnProperty('delete')) {
                 console.log(getFileInfo(), getLineNumber(),'DELETE MESSAGE FOUND, processing', transaction.transactionId);
-                isDeleteMessageFound = true;
+                // turning off for now till we implement a security mechanism for this since it can come in over an API
+                // isDeleteMessageFound = true;
                 await deleteRecordFromDB(creatorDid, transaction);
             }
         } catch (error) {
@@ -1665,12 +1954,61 @@ async function processNewRecord(transaction, remapTemplates = []) {
     }
 }
 
+// Middleware to verify if a user is an admin
+async function verifyAdmin(req, res, next) {
+    try {
+        const token = req.headers.authorization?.split(' ')[1]; // Assuming 'Bearer <token>'
+        console.log('Token received:', token); // Debug log
+        if (!token) {
+            return res.status(403).json({ success: false, error: 'Unauthorized access' });
+        }
 
+        const decoded = jwt.verify(token, JWT_SECRET); // Use your actual JWT secret
+        console.log("Decoded token:", decoded);
+        const userId = decoded.userId; // Assuming the token contains userId
+        console.log('User ID:', userId); // Debug log
+        // Check if the user has admin privileges directly from the token
+        if (decoded.isAdmin) {
+            req.user = decoded; // Attach token data to request
+            return next(); // Proceed if the user is admin
+        }
+
+        // Fetch the user from Elasticsearch
+        const user = await elasticClient.get({
+            index: 'users',
+            id: userId
+        });
+        console.log('User fetched:', user._source); // Debug log
+
+        if (!user._source.isAdmin) {
+            console.error('User is not an admin:', user._source.email);
+            return res.status(403).json({ success: false, error: 'Admin access required' });
+        }
+
+        req.user = user._source; // Attach user info to the request
+        next(); // Proceed to the route handler
+    } catch (error) {
+        console.error('Error verifying admin:', error);
+
+        // Differentiate between invalid/expired token and other errors
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ success: false, error: 'Token expired' });
+        } else if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ success: false, error: 'Invalid token' });
+        } else if (error.meta && error.meta.statusCode === 404) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        } else {
+            return res.status(500).json({ success: false, error: 'Internal server error' });
+        }
+    }
+}
 
 module.exports = {
     ensureIndexExists,
     ensureUserIndexExists,
     indexRecord,
+    indexDocument,
+    searchByField,
     searchCreatorByAddress,
     searchRecordInDB,
     searchRecordByTxId,
@@ -1679,5 +2017,6 @@ module.exports = {
     keepDBUpToDate,
     searchTemplateByTxId,
     remapExistingRecords,
+    verifyAdmin,
     elasticClient
 };

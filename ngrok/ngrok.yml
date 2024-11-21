@@ -1,0 +1,7 @@
+version: "2"
+authtoken: 2nGiS7QiXhXKCin8ouPKLIArdOq_3j1URh6srmYH6ZN1MZwgP
+tunnels:
+  oiparweave:
+    proto: http
+    addr: 192.168.0.153:3005  # This is your OIP app's port
+    hostname: api.oip.onl  # The custom domain you're using
