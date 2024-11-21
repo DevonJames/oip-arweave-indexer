@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
+const rootRoute = require('./routes/api')
 const recordRoutes = require('./routes/records');
 const templateRoutes = require('./routes/templates');
 const creatorRoutes = require('./routes/creators');
@@ -8,6 +9,7 @@ const scrapeRoutes = require('./routes/scrape');
 const healthRoutes = require('./routes/health');
 const generateRoutes = require('./routes/generate');
 const userRoutes = require('./routes/user');
+const walletRoutes = require('./routes/wallet');
 const { keepDBUpToDate, remapExistingRecords } = require('./helpers/elasticsearch');
 const minimist = require('minimist');
 dotenv.config();
@@ -23,8 +25,8 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // CORS configuration
 const corsOptions = {
-    origin: '*',  // Allows requests from any origin (for development). Change this to specific origins in production
-    methods: ['GET', 'POST', 'OPTIONS'],
+    origin: 'https://api.oip.onl',  // Allows requests from any origin (for development). Change this to specific origins in production
+    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,  
     optionsSuccessStatus: 204
@@ -32,7 +34,6 @@ const corsOptions = {
 
 // Use CORS middleware
 app.use(cors(corsOptions));
-
 app.options('*', cors());  // Allow preflight for all routes
 
 const port = process.env.PORT || 3005;
@@ -41,17 +42,30 @@ app.use((req, res, next) => {
     next();
 });
 
+// Serve static files from the 'public' directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Define a route to serve the admin page
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+// Define a route to serve the admin login page
+app.get('/admin_login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin_login.html'));
+});
+
 app.use(bodyParser.json());
 
-app.use('/api/generate/media', express.static(path.join(__dirname, 'media')));
-
+app.use('/api', rootRoute);
 app.use('/api/records', recordRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/creators', creatorRoutes);
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/generate', generateRoutes);
+app.use('/api/generate/media', express.static(path.join(__dirname, 'media')));
 app.use('/api/user', userRoutes);
+app.use('/api/wallet', walletRoutes);
 
 let isProcessing = false;  // Flag to indicate if the process is running
 

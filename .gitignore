@@ -8,3 +8,7 @@ speech-synthesizer/myenv
 speech-synthesizer/packages
 text-generator/packages
 text-generator/myenv
+.env
+.DS_Store
+config/arweave-keyfile.json
+media

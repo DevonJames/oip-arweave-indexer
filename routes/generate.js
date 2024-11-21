@@ -1,12 +1,15 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
+const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+
 const fs = require('fs');
 const crypto = require('crypto');  // For generating a unique hash
 const path = require('path');
-const { generateCombinedSummaryFromArticles } = require('../helpers/generators');
+const { generateCombinedSummaryFromArticles, replaceAcronyms } = require('../helpers/generators');
 // Create a directory to store the audio files if it doesn't exist
 const audioDirectory = path.join(__dirname, '../media');
+
 if (!fs.existsSync(audioDirectory)) {
     fs.mkdirSync(audioDirectory);
 }
@@ -46,7 +49,8 @@ router.post('/text', async (req, res) => {
     }
 });
 
-router.post('/summary', async (req, res) => {
+router.post('/summary', authenticateToken, async (req, res) => {
+// router.post('/summary', async (req, res) => {
     console.log('Generating summary for multiple articles...');
     let { articles } = req.body;
   
@@ -55,13 +59,36 @@ router.post('/summary', async (req, res) => {
     }
   
     try {
-      let summary = await generateCombinedSummaryFromArticles(articles);
-      res.json({ summary });
+      let combinedArticles = await generateCombinedSummaryFromArticles(articles, model = 'xAI', useSelfHosted = false);
+    //   res.json({ summary });
+        let summary = combinedArticles.summary;
+        let urlString = Array.isArray(combinedArticles.urls) ? combinedArticles.urls.join(', ') : combinedArticles.urls;
+      const script = replaceAcronyms(summary);
+      // **create audio of summary**
+      const audioFileName = generateAudioFileName(urlString);
+      const filePath = path.join(audioDirectory, audioFileName);
+      console.log('url and filepath:', audioFileName, urlString, filePath);
+      // Check if the file already exists
+      if (fs.existsSync(filePath)) {
+        // If the file already exists, return the URL
+        return res.json({ url: `/api/generate/media?id=${audioFileName}` });
+      }
+      // const response = await axios.post('http://localhost:8082/synthesize', 
+        const response = await axios.post('http://speech-synthesizer:8082/synthesize', 
+            { text: script, model_name: model, vocoder_name: 'vocoder_name' }, 
+            { responseType: 'arraybuffer', timeout: 90000 } // 90 seconds timeout for testing
+        );
+      console.log('saving Synthesized speech');
+      // Save the audio file locally
+      fs.writeFileSync(filePath, Buffer.from(response.data, 'binary'));
+    return res.json({ url: `/api/generate/media?id=${audioFileName}` });
+
+
     } catch (error) {
       console.error('Error generating summary:', error);
       return res.status(500).json({ error: 'An error occurred while generating the summary.' });
     }
-  });
+});
 
 // Route for listing available voice models
 router.post('/listVoiceModels', async (req, res) => {
@@ -90,7 +117,8 @@ router.post('/listVoiceModels', async (req, res) => {
 });
 
 // Route for speech synthesis (switches between self-hosted and external models)
-router.post('/speech', async (req, res) => {
+// router.post('/speech', async (req, res) => {
+router.post('/speech', authenticateToken, async (req, res) => {
     console.log('speech being generated');
     const { text, model_name = 'tts_models/en/ljspeech/tacotron2-DDC', vocoder_name, useSelfHosted } = req.body;
 
@@ -108,6 +136,7 @@ router.post('/speech', async (req, res) => {
                 return res.json({ url: `/api/generate/media?id=${audioFileName}` });
             }
             // Call the self-hosted Coqui TTS API
+            // response = await axios.post('http://localhost:8082/synthesize',
             response = await axios.post('http://speech-synthesizer:8082/synthesize',
                 { text, model_name, vocoder_name }, 
                  { responseType: 'arraybuffer' });
@@ -141,10 +170,10 @@ router.post('/speech', async (req, res) => {
 });
 
 // Route to serve audio files
+// router.get('/media', (req, res) => {
 router.get('/media', (req, res) => {
     const { id } = req.query;
     const filePath = path.join(audioDirectory, id);
-
     if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
     } else {

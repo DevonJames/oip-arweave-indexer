@@ -1,25 +1,39 @@
 const express = require('express');
-const { getRecords } = require('../helpers/elasticsearch');
-// const puppeteer = require('puppeteer-extra');
-// const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-// puppeteer.use(StealthPlugin());
-const Parser = require('@postlight/parser');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const router = express.Router();
-const { exec } = require('child_process');
 const path = require('path');
 const cheerio = require('cheerio');
 const axios = require('axios');
 const fs = require('fs');
 const crypto = require('crypto');  // For generating a unique hash
-// const path = require('path');
-const progress = require('progress-stream');
-const {publishVideoFiles, publishArticleText, publishImage} = require('../helpers/templateHelper');
-const {generateSummaryFromContent, generateTagsFromContent, generateCombinedSummaryFromArticles} = require('../helpers/generators');
+// const progress = require('progress-stream');
 const ProgressBar = require('progress');
+const Parser = require('@postlight/parser');
 // const { video_basic_info } = require('play-dl');
-const { timeout } = require('../config/arweave.config');
 const sharp = require('sharp');
+const { timeout } = require('../config/arweave.config');
+const { getRecords, indexRecord } = require('../helpers/elasticsearch');
+const { publishNewRecord } = require('../helpers/templateHelper');
+const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const {
+  replaceAcronyms,
+  identifyAuthorNameFromContent, 
+  identifyPublishDateFromContent, 
+  generateSummaryFromContent
+} = require('../helpers/generators');
+const {getCurrentBlockHeight, getBlockHeightFromTxId, lazyFunding, upfrontFunding, arweave} = require('../helpers/arweave');
+const { exec } = require('child_process');
+
+console.log('authenticateToken:', authenticateToken);
+
 require('dotenv').config();
+
+// const backendURL = 'http://localhost:3005';
+const backendURL = 'https://api.oip.onl';
+
+// Add this line near the top of your file, after your imports
+const ongoingScrapes = new Map();
 
 // Create a directory to store the audio files if it doesn't exist
 const audioDirectory = path.join(__dirname, '../media');
@@ -27,9 +41,59 @@ if (!fs.existsSync(audioDirectory)) {
     fs.mkdirSync(audioDirectory);
 }
 
+// Use the same directory for downloaded files
+const downloadsDirectory = path.join(__dirname, '../media');
+if (!fs.existsSync(downloadsDirectory)) {
+    fs.mkdirSync(downloadsDirectory);
+}
+
+// Generic retry function
+async function retryAsync(asyncFunction, args = [], options = { maxRetries: 5, delay: 3000, fallbackValue: null }) {
+  console.log('retrying async function');
+  const { maxRetries, delay, fallbackValue } = options;
+  let attempts = 0;
+
+  while (attempts < maxRetries) {
+      try {
+          // Attempt to execute the provided async function with the arguments
+          // console.log('attempting async function', asyncFunction.name);
+          console.log("asyncFunction:", asyncFunction.name, "args:", args);
+          const result = await asyncFunction(...args);
+          if (result !== undefined) return result;
+          
+          // console.log('result', result);
+          // return result; // Return the result if successful
+      } catch (error) {
+          // Log the error
+          console.error(`Error in ${asyncFunction.name}:`, error.response ? error.response.data : error.message);
+
+          attempts++;
+          console.warn(`Retrying ${asyncFunction.name} (${attempts}/${maxRetries})...`);
+
+          // If max retries are reached, return the fallback value
+          if (attempts >= maxRetries) {
+              console.error(`Max retries reached for ${asyncFunction.name}. Returning fallback value.`);
+              return fallbackValue;
+          }
+
+          // Wait for the specified delay before retrying
+          await new Promise(resolve => setTimeout(resolve, delay));
+      }
+  }
+}
+
 // Utility function to create a unique hash based on the URL or text
 function generateAudioFileName(text) {
   return crypto.createHash('sha256').update(text).digest('hex') + '.wav';
+}
+
+// Utility function to create a unique hash based on the URL or text for a text file
+function generateTextFileName(text) {
+  return crypto.createHash('sha256').update(text).digest('hex') + '.txt';
+}
+
+function generateImageFileName(imageUrl, fileType) {
+  return crypto.createHash('sha256').update(imageUrl).digest('hex');
 }
 
 async function downloadFile(url, outputPath) {
@@ -69,14 +133,57 @@ async function downloadFile(url, outputPath) {
   }
 }
 
-async function downloadTextFile(content) {
-  const outputPath = path.resolve(__dirname, `../downloads/text_file.txt`);
-  // console.log('Downloading text file to:', outputPath);
+async function downloadTextFile(content, url) {
   try {
-    fs.writeFileSync(outputPath, content);
-    return outputPath;
+    const textFileName = generateTextFileName(url);
+    const outputPath = path.resolve(downloadsDirectory, `../media/${textFileName}`);
+    // const outputPath = path.resolve(__dirname, `../media/text_file.txt`);
+    // console.log('Downloading text file to:', outputPath);
+    if (fs.existsSync(outputPath)) {
+      console.log('Text file already exists:', textFileName);
+      return outputPath;
+    } else {
+      console.log('Writing text file:', textFileName);
+      fs.writeFileSync(outputPath, Buffer.from(content));
+      return outputPath;
+    }
   } catch (error) {
     console.error('Error downloading text file:', error);
+    throw error;
+  }
+}
+
+async function downloadImageFile(imageUrl, url) {
+  try {
+    // extract the file extension from the URL
+    const parsedPath = path.parse(imageUrl);
+    const cleanFileName = encodeURIComponent(parsedPath.base.split('?')[0] || "none");
+    const fileType = parsedPath.ext;
+    // let imageFileName = generateImageFileName(imageUrl);
+    let articleUrlHash = crypto.createHash('sha256').update(url).digest('hex');
+    let imageFileName = `${articleUrlHash}-${generateImageFileName(imageUrl)}-${cleanFileName}`
+    // let outputPath;
+    // const imageDir = path.resolve(__dirname, `../media/${id}`);
+    const outputPath = path.resolve(downloadsDirectory, `../media/${imageFileName}`);
+    // fs.writeFileSync(outputPath, imageFileName);
+    
+    // const outputPath = path.join(imageDir, `${imageFileName}.jpg`);
+    // if (!fs.existsSync(imageDir)) {
+      //   fs.mkdirSync(imageDir, { recursive: true });
+      //   console.log(`Created directory: ${imageDir}`);
+      // }
+      
+      // const parsedPath = path.parse(imageUrl);
+      // const cleanFileName = parsedPath.base.split('?')[0];
+      // outputPath = path.join(imageDir, cleanFileName);
+      // console.log('Cleaned file name:', cleanFileName);
+      
+      await downloadFile(imageUrl, outputPath);
+        console.log('Image Download complete:', outputPath);
+
+        return imageFileName;
+  } catch (error) {
+    console.error('Error downloading image:', error);
     throw error;
   }
 }
@@ -103,7 +210,7 @@ async function downloadMedia(mediaUrl, id) {
   // download images and video from twitter
   try {
     let outputPath;
-    const mediaDir = path.resolve(__dirname, `../downloads/${id}`);
+    const mediaDir = path.resolve(__dirname, `../media/${id}`);
     if (!fs.existsSync(mediaDir)) {
       fs.mkdirSync(mediaDir, { recursive: true });
       console.log(`Created directory: ${mediaDir}`);
@@ -129,7 +236,7 @@ async function downloadVideo(videoUrl, id) {
     let outputPath;
 
     // Create a unique directory for the video based on its ID
-    const videoDir = path.resolve(__dirname, `../downloads/${id}`);
+    const videoDir = path.resolve(__dirname, `../media/${id}`);
     if (!fs.existsSync(videoDir)) {
       fs.mkdirSync(videoDir, { recursive: true });
       console.log(`Created directory: ${videoDir}`);
@@ -252,6 +359,7 @@ async function getTwitterVideoUrls(tweetUrls) {
     throw error;
   }
 }
+
 async function getTwitterMediaUrls(tweetUrls) {
   try {
     const twitterBearerToken = process.env.TWITTER_BEARER_TOKEN;
@@ -322,7 +430,6 @@ async function getTwitterMediaUrls(tweetUrls) {
 
 async function publishArticleAndAttachedMedia(articleData, $, url, html, res) {
 
-    
   // Initialize an array to hold YouTube URLs
   let youtubeUrls = [];
 
@@ -330,11 +437,12 @@ async function publishArticleAndAttachedMedia(articleData, $, url, html, res) {
   youtubeUrls = [...articleData.content.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)].map(match => match[0]);
 
   // Ensure the downloads directory exists
-  const downloadsDir = path.resolve(__dirname, '../downloads');
+  const downloadsDir = path.resolve(__dirname, '../media');
   if (!fs.existsSync(downloadsDir)) {
     fs.mkdirSync(downloadsDir, { recursive: true });
   }
-
+  let imageArweaveAddress
+  let imageIPFSAddress
   let imageBittorrentAddress
   let imageFileType
   let imageWidth
@@ -366,227 +474,243 @@ const mimeTypes = {
 '.mpeg': 'video/mpeg'
 };
 
-  outputPath = await downloadTextFile(articleData.content);
-  articleTextAddresses = await publishArticleText(outputPath, null, null, null, false);
-  console.log('articleTextBittorrentAddress', articleTextAddresses.torrent.magnetURI);
-  articleTextBittorrentAddress = articleTextAddresses.torrent.magnetURI;
+  textFile = await downloadTextFile(articleData.content, url);
+  
+  articleTextURL = `${backendURL}/api/media?id=${textFile.textFileName}`;
+  // TEMPORARILY TURNED OFF FOR FIRST RELEASE
+  // articleTextAddresses = await publishArticleText(textFile.outputPath, null, null, null, false);
+  // console.log({articleTextURL},'articleTextBittorrentAddress', articleTextAddresses.torrent.magnetURI);
+  // articleTextBittorrentAddress = articleTextAddresses.torrent.magnetURI;
 
   if (articleData.embeddedImage) {
     const imageUrl = articleData.embeddedImage;
     console.log('imageUrl', imageUrl);
 
     // Extract the filename and file type from the URL
-    const parsedPath = path.parse(new URL(imageUrl).pathname);
-    const fileName = parsedPath.base;
-    const fileType = parsedPath.ext;
+    let parsedPath = path.parse(new URL(imageUrl).pathname);
+    let fileName = parsedPath.base;
+    let fileType = parsedPath.ext;
+
+    // Check if the URL contains a query parameter that points to a filename
+    const urlObj = new URL(imageUrl);
+    if (urlObj.searchParams.has('url')) {
+      const queryUrl = urlObj.searchParams.get('url');
+      parsedPath = path.parse(new URL(queryUrl).pathname);
+      fileName = parsedPath.base;
+      fileType = parsedPath.ext;
+    }
 
     // Use the extracted filename in the imagePath
-    const imagePath = path.join(downloadsDir, fileName);
-    await downloadFile(imageUrl, imagePath);
-    torrent = await publishImage(imagePath, null, null, null, false);
-    imageBittorrentAddress = torrent.magnetURI;
-    console.log('imageBittorrentAddress', imageBittorrentAddress);
-    imageFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
+    // const imagePath = path.join(downloadsDir, fileName);
+
+    const imageFileName = await downloadImageFile(imageUrl, url);
+    // fileName=imageFile.imageFileName
+    const mediaDownloadsDir = path.resolve(__dirname, '../media');
+    console.log('mediaDownloadsDir', mediaDownloadsDir, 'fileName', imageFileName);
+    const imagePath = path.join(mediaDownloadsDir, imageFileName);
+
+    // const imagePath = imageFile.imageFileName
+    // const imagePath = path.join(downloadsDirectory, imageFile.imageFileName);
+    const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
+    articleData.embeddedImage = hostedImageUrl;
+    // TEMPORARILY TURNED OFF FOR FIRST RELEASE
+    // torrent = await publishImage(imageFile.outputPath, null, null, null, false);
+    // imageBittorrentAddress = torrent.magnetURI;
+    // console.log('imageBittorrentAddress', imageBittorrentAddress);
+    // imageFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
 
     // Get image dimensions and file size using 'sharp'
+    // path.join(downloadsDir, fileName)
+    console.log('Image file:', imagePath);
     const imageStats = fs.statSync(imagePath);
     imageSize = imageStats.size;
 
     const imageMetadata = await sharp(imagePath).metadata();
     imageWidth = imageMetadata.width;
     imageHeight = imageMetadata.height;
+    console.log({imageUrl});
 
-    console.log('Image dimensions:', imageWidth, imageHeight);
-    console.log('Image size:', imageSize);
+    // console.log('Image dimensions:', imageWidth, imageHeight);
+    // console.log('Image size:', imageSize);
   }
 
-
+  // TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
   // Fetch and download Twitter videos
-  let embeddedTweets = await getEmbeddedTweets(html);
-  let tweetDetails = null;
-  const tweetVideoTorrent = [];
-  const tweetRecords = [];
-  const tweetVideoRecords = [];
-  const youtubeVideoTorrent = [];
-  let videoRecords = [];
-  
-  if (embeddedTweets.length > 0) {
-    tweetDetails = await fetchTweetDetails(embeddedTweets);
-    console.log('Tweet details:', tweetDetails);
+    // let embeddedTweets = await getEmbeddedTweets(html);
+    // let tweetDetails = null;
+    // const tweetVideoTorrent = [];
+    // const tweetRecords = [];
+    // const tweetVideoRecords = [];
+    // const youtubeVideoTorrent = [];
+    // let videoRecords = [];
 
-    if (tweetDetails && tweetDetails.includes && tweetDetails.includes.media) {
-      let tweetMediaUrls = await getTwitterMediaUrls(embeddedTweets);
-      await Promise.all(embeddedTweets.map(async (tweet, index) => {
-        const tweetId = tweet.match(/status\/(\d+)/)[1]; // Extract tweet ID
-        const mediaUrl = tweetMediaUrls[index];
-    
-        if (mediaUrl) {
-          outputPath = await downloadMedia(mediaUrl, tweetId); // Pass media URL and tweet ID
-          mediaFiles = await publishMediaFiles(outputPath, tweetId, false);
-          tweetMediaRecords[index] = {
-            "media": {
-              "bittorrentAddress": mediaFiles.torrentAddress
-            }
-          };
-          tweetMediaTorrent.push(mediaFiles.torrentAddress);
-        } else {
-          tweetMediaRecords[index] = null; // No media for this tweet
-        }
-      }));
-    }
-  
-    for (let i = 0; i < embeddedTweets.length; i++) {
-      // console.log('tweetDetails from index', tweetDetails[i], 'tweetdetails', tweetDetails);
-      const tweetRecord = {
-        "basic": {
-          "name": tweetDetails.data[i].id,
-          "language": "en",
-          "date": tweetDetails.data[i].created_at,
-          "description": tweetDetails.data[i].text,
-          "urlItems": [
-            {
-              "associatedUrlOnWeb": {
-                "url": embeddedTweets[i]
-              }
-            }
-          ]
-        },
-        "post": {
-          "bylineWriter": tweetDetails.data[i].author_id,
-          "videoItems": tweetVideoRecords[i] ? [tweetVideoRecords[i]] : [] // Add video record or empty array
-        }
-      };
-      tweetRecords.push(tweetRecord);
-    }
-  
-    console.log('tweetRecords', tweetRecords);
+    // if (embeddedTweets.length > 0) {
+    //   tweetDetails = await fetchTweetDetails(embeddedTweets);
+    //   console.log('Tweet details:', tweetDetails);
+
+    //   if (tweetDetails && tweetDetails.includes && tweetDetails.includes.media) {
+    //     let tweetMediaUrls = await getTwitterMediaUrls(embeddedTweets);
+    //     await Promise.all(embeddedTweets.map(async (tweet, index) => {
+    //       const tweetId = tweet.match(/status\/(\d+)/)[1]; // Extract tweet ID
+    //       const mediaUrl = tweetMediaUrls[index];
+
+    //       if (mediaUrl) {
+    //         outputPath = await downloadMedia(mediaUrl, tweetId); // Pass media URL and tweet ID
+    //         mediaFiles = await publishMediaFiles(outputPath, tweetId, false);
+    //         tweetMediaRecords[index] = {
+    //           "media": {
+    //             "bittorrentAddress": mediaFiles.torrentAddress
+    //           }
+    //         };
+    //         tweetMediaTorrent.push(mediaFiles.torrentAddress);
+    //       } else {
+    //         tweetMediaRecords[index] = null; // No media for this tweet
+    //       }
+    //     }));
+    //   }
+
+    //   for (let i = 0; i < embeddedTweets.length; i++) {
+    //     // console.log('tweetDetails from index', tweetDetails[i], 'tweetdetails', tweetDetails);
+    //     const tweetRecord = {
+    //       "basic": {
+    //         "name": tweetDetails.data[i].id,
+    //         "language": "en",
+    //         "date": tweetDetails.data[i].created_at,
+    //         "description": tweetDetails.data[i].text,
+    //         "urlItems": [
+    //           {
+    //             "associatedUrlOnWeb": {
+    //               "url": embeddedTweets[i]
+    //             }
+    //           }
+    //         ]
+    //       },
+    //       "post": {
+    //         "bylineWriter": tweetDetails.data[i].author_id,
+    //         "videoItems": tweetVideoRecords[i] ? [tweetVideoRecords[i]] : [] // Add video record or empty array
+    //       }
+    //     };
+    //     tweetRecords.push(tweetRecord);
+    //   }
+
+    //   console.log('tweetRecords', tweetRecords);
+    // }
+
+
+
+
+    // if (tweetVideoTorrent.length > 0) {
+    //   console.log('Twitter video torrents:', tweetVideoTorrent);
+    //   res.write(`event: tweets\n`);
+    //   res.write(`data: ${JSON.stringify(tweetVideoTorrent)}\n\n`);
+    // }
+    // // Scrape YouTube iframes using Cheerio
+    // const youtubeIframeUrls = [];
+
+    // $('iframe[src*="youtube.com"]').each((i, elem) => {
+    //   const iframeSrc = $(elem).attr('src');
+    //   if (iframeSrc) {
+    //     youtubeIframeUrls.push(iframeSrc);
+    //   }
+    // });
+    // // Also look for YouTube videos embedded in iframes
+    // if (youtubeIframeUrls.length > 0) {
+    //   youtubeIframeUrls.forEach(iframeSrc => {
+    //     const youtubeUrlMatch = iframeSrc.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/)[\w-]+)/);
+    //     if (youtubeUrlMatch) {
+    //       const videoUrl = youtubeUrlMatch[0].replace("/embed/", "/watch?v=");
+    //       youtubeUrls.push(videoUrl);
+    //     }
+    //   });
+    // }
+    // // Direct YouTube URL search (in the content)
+    // const youtubeUrlMatches = [...html.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)];
+    // youtubeUrlMatches.forEach(match => youtubeUrls.push(match[0]));
+    // // Remove duplicates
+    // youtubeUrls = [...new Set(youtubeUrls)];
+    // for (const videoUrl of youtubeUrls) {
+    //   const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)[1]; // Extract YouTube video ID
+    //   const metadata = await getYouTubeMetadata(videoUrl);
+    //   videoOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.mp4`);
+    //   // videoMetadata.push(metadata);
+    //   await downloadVideo(videoUrl, videoId); // Pass video URL and YouTube video ID
+    //   // Assuming metadata.automatic_captions.en is your array
+    //   const captions = metadata.automatic_captions.en;
+    //   let vttUrl;
+    //   if (captions) {
+    //     // Find the URL for the caption with the 'vtt' extension
+    //     const vttCaption = captions.find(caption => caption.ext === 'vtt');
+
+    //     if (vttCaption) {
+    //       vttUrl = vttCaption.url;
+    //       console.log('VTT Caption URL:', vttUrl);
+    //     } else {
+    //       console.log('No VTT captions found.');
+    //     }
+    //     await downloadFile(vttUrl, path.join(downloadsDir, `${videoId}/${videoId}.vtt`));
+    //     transcriptOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.vtt`)
+    //     console.log('Transcript downloaded to:', transcriptOutputPath);
+    //     transriptAddresses = await publishArticleText(transcriptOutputPath, null, null, null, false);
+    //     console.log('transcriptBittorrentAddress', transriptAddresses.torrent.magnetURI);
+    //     transcriptBittorrentAddress = transriptAddresses.torrent.magnetURI;
+    //   }
+    //   const videoFiles = await publishVideoFiles(videoOutputPath, videoId, false);
+    //   let fileType = path.extname(videoOutputPath);
+    //   let videoFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
+    //   let fileName = `${videoId}.mp4`
+    //   youtubeVideoTorrent.push(videoFiles.torrentAddress);
+    //   videoRecordData = {
+    //     "basic": {
+    //       "name": metadata.title,
+    //       "language": "en",
+    //       "date": metadata.timestamp,
+    //       "description": metadata.description,
+    //       "urlItems": [
+    //         {
+    //           "associatedUrlOnWeb": {
+    //             "url": videoUrl
+    //           }
+    //         }
+    //       ],
+    //       "nsfw": false,
+    //       "tagItems": [...(metadata.tags || []), ...(metadata.categories || [])]
+    //     },
+    //     "video": {
+    //       "arweaveAddress": "",
+    //       "ipfsAddress": "",
+    //       "bittorrentAddress": youtubeVideoTorrent,
+    //       "filename": fileName,
+    //       "size": metadata.filesize || 0,
+    //       "width": metadata.width,
+    //       "height": metadata.height,
+    //       "duration": metadata.duration,
+    //       "contentType": videoFileType
+    //     },
+    //     "text": {
+    //       "bittorrentAddress": transcriptBittorrentAddress,
+    //       "contentType": "text/text"
+    //     }
+
+    //   };
+    //   videoRecords.push(videoRecordData);
+    // }
+    // if (youtubeUrls.length > 0) {
+    //   console.log('YouTube video URLs:', youtubeUrls);
+    //   console.log('YouTube video torrents:', youtubeVideoTorrent);
+    //   res.write(`event: youtube\n`);
+    //   res.write(`data: ${JSON.stringify(youtubeVideoTorrent)}\n\n`);
+    // }
+
+  if (articleData.summaryTTS) {
+    const fullUrl = backendURL + articleData.summaryTTS;
+    articleData.summaryTTS = fullUrl;
   }
-    
-
-
-
-  if (tweetVideoTorrent.length > 0) {
-    console.log('Twitter video torrents:', tweetVideoTorrent);
-    res.write(`event: tweets\n`);
-    res.write(`data: ${JSON.stringify(tweetVideoTorrent)}\n\n`);
-  }
-
-  // Scrape YouTube iframes using Cheerio
-  const youtubeIframeUrls = [];
-
-  $('iframe[src*="youtube.com"]').each((i, elem) => {
-    const iframeSrc = $(elem).attr('src');
-    if (iframeSrc) {
-      youtubeIframeUrls.push(iframeSrc);
-    }
-  });
-
-  // Also look for YouTube videos embedded in iframes
-  if (youtubeIframeUrls.length > 0) {
-    youtubeIframeUrls.forEach(iframeSrc => {
-      const youtubeUrlMatch = iframeSrc.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/)[\w-]+)/);
-      if (youtubeUrlMatch) {
-        const videoUrl = youtubeUrlMatch[0].replace("/embed/", "/watch?v=");
-        youtubeUrls.push(videoUrl);
-      }
-    });
-  }
-
-  // Direct YouTube URL search (in the content)
-  const youtubeUrlMatches = [...html.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)];
-  youtubeUrlMatches.forEach(match => youtubeUrls.push(match[0]));
-
-  // Remove duplicates
-  youtubeUrls = [...new Set(youtubeUrls)];
-
-  for (const videoUrl of youtubeUrls) {
-    const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)[1]; // Extract YouTube video ID
-    const metadata = await getYouTubeMetadata(videoUrl);
-
-    videoOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.mp4`);
-
-    // videoMetadata.push(metadata);
-    await downloadVideo(videoUrl, videoId); // Pass video URL and YouTube video ID
-
-    // Assuming metadata.automatic_captions.en is your array
-    const captions = metadata.automatic_captions.en;
-    let vttUrl;
-    if (captions) {
-    // Find the URL for the caption with the 'vtt' extension
-    const vttCaption = captions.find(caption => caption.ext === 'vtt');
-
-    if (vttCaption) {
-      vttUrl = vttCaption.url;
-      console.log('VTT Caption URL:', vttUrl);
-    } else {
-      console.log('No VTT captions found.');
-    }
-    
-    await downloadFile(vttUrl, path.join(downloadsDir, `${videoId}/${videoId}.vtt`));
-    transcriptOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.vtt`)
-    console.log('Transcript downloaded to:', transcriptOutputPath);
-    transriptAddresses = await publishArticleText(transcriptOutputPath, null, null, null, false);
-    console.log('transcriptBittorrentAddress', transriptAddresses.torrent.magnetURI);
-    transcriptBittorrentAddress = transriptAddresses.torrent.magnetURI;
-    }
-    
-    const videoFiles = await publishVideoFiles(videoOutputPath, videoId, false);
-    let fileType = path.extname(videoOutputPath);
-    let videoFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
-    let fileName = `${videoId}.mp4`
-    youtubeVideoTorrent.push(videoFiles.torrentAddress);
-
-    videoRecordData = {
-      "basic": {
-        "name": metadata.title,
-        "language": "en",
-        "date": metadata.timestamp,
-        "description": metadata.description,
-        "urlItems": [
-      {
-        "associatedUrlOnWeb": {
-          "url": videoUrl
-        }
-      }
-        ],
-        "nsfw": false,
-        "tagItems": [...(metadata.tags || []), ...(metadata.categories || [])]
-      },
-      "video": {
-        "arweaveAddress": "",
-        "ipfsAddress": "",
-        "bittorrentAddress": youtubeVideoTorrent,
-        "filename": fileName,
-        "size": metadata.filesize || 0,
-        "width": metadata.width,
-        "height": metadata.height,
-        "duration": metadata.duration,
-        "contentType": videoFileType
-      },
-      "text": {
-        "bittorrentAddress": transcriptBittorrentAddress,
-        "contentType": "text/text"
-      }
-        
-    };
-    videoRecords.push(videoRecordData);
-
-  
-  }
-
-  if (youtubeUrls.length > 0) {
-    console.log('YouTube video URLs:', youtubeUrls);
-    console.log('YouTube video torrents:', youtubeVideoTorrent);
-    res.write(`event: youtube\n`);
-    res.write(`data: ${JSON.stringify(youtubeVideoTorrent)}\n\n`);
-  }
-  
   // console.log('Final article data:', articleData);
-  res.write(`event: finalData\n`);
-  res.write(`data: ${JSON.stringify(articleData)}\n\n`);
+  // res.write(`event: finalData\n`);
+  // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
 
-  res.end();
-
+  // res.end();
+  // audioUrl = `https://api.oip.onl/api/generate/media?id=${articleData.summaryTTSid}`
   const recordToPublish = {
     "basic": {
       "name": articleData.title,
@@ -606,102 +730,203 @@ const mimeTypes = {
     "post": {
       "bylineWriter": articleData.byline,
       "articleText": {
-      "text": {
-        "bittorrentAddress": articleTextBittorrentAddress,
-        "contentType": "text/text"
-      }
-      }
-    }
-    };
-    if (youtubeVideoTorrent.length > 0) {
-      recordToPublish.post.videoItems = [...videoRecords];
-    }
-    if (imageBittorrentAddress) {
-      recordToPublish.post.featuredImage = [{
-      "basic": {
-        "name": articleData.title,
-        "language": "en",
-        "nsfw": false,
-        "urlItems": [
+        "text": {
+          // "bittorrentAddress": articleTextBittorrentAddress,
+          "contentType": "text/text"
+        },
+        "basic": {
+          "urlItems": [
+            {
+              "associatedUrlOnWeb": {
+                "url": articleData.articleTextURL
+              }
+            }
+          ]
+        }
+      },
+      // "featuredImage": {
+      //   "basic": {
+      //     "name": articleData.title,
+      //     "language": "en",
+      //     "nsfw": false,
+      //     "urlItems": [
+      //       {
+      //         "associatedUrlOnWeb": {
+      //           "url": articleData.embeddedImage
+      //         }
+      //       }
+      //     ]
+      //   },
+      //   "image": {
+      //     // "bittorrentAddress": imageBittorrentAddress,
+      //     "height": imageHeight,
+      //     "width": imageWidth,
+      //     "size": imageSize,
+      //     "contentType": imageFileType
+      //   }
+      // },
+      "audioItems": [
         {
           "associatedUrlOnWeb": {
-          "url": articleData.embeddedImage
+            "url": articleData.summaryTTS
           }
         }
-        ]
-      },
-      "image": {
-        "bittorrentAddress": imageBittorrentAddress,
-        "height": imageHeight,
-        "width": imageWidth,
-        "size": imageSize,
-        "contentType": imageFileType
+      ]
+    }
+  };
+  if (articleData.embeddedImage) {
+    recordToPublish.post.featuredImage = [
+      {
+        "basic": {
+          "name": articleData.title,
+          "language": "en",
+          "nsfw": false,
+          "urlItems": [
+            {
+              "associatedUrlOnWeb": {
+                "url": articleData.embeddedImage
+              }
+            }
+          ]
+        },
+        "image": {
+          // "bittorrentAddress": imageBittorrentAddress,
+          "height": imageHeight,
+          "width": imageWidth,
+          "size": imageSize,
+          "contentType": imageFileType
+        }
       }
-      }];
-    }
-    if (tweetRecords.length > 0) {
-      recordToPublish.post.citations = [...tweetRecords];
-    }
+    ];
+  }
 
-    console.log('recordToPublish 123', recordToPublish, recordToPublish.basic.urlItems, recordToPublish.post.featuredImage, recordToPublish.post.videoItems, recordToPublish.post.citations);
-  
-    const apiEndpoint = "http://localhost:3005/api/records/newRecord?recordType=post";  // Update your API URL here
-    fetch(apiEndpoint, {
-      method: "POST",
-      headers: {
-          "Content-Type": "application/json"
-      },
-      body: JSON.stringify(recordToPublish)
-  })
-  .then(response => response.json())
-  .then(data => {
-      console.log("Record published:", data);
-  })
-  .catch(error => {
-      console.error("Error publishing record:", error);
-  });
+// TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
+    // if (youtubeVideoTorrent.length > 0) {
+    //   recordToPublish.post.videoItems = [...videoRecords];
+    // }
+    // if (imageBittorrentAddress) {
+    //   recordToPublish.post.featuredImage = [{
+    //   "basic": {
+    //     "name": articleData.title,
+    //     "language": "en",
+    //     "nsfw": false,
+    //     "urlItems": [
+    //     {
+    //       "associatedUrlOnWeb": {
+    //       "url": articleData.embeddedImage
+    //       }
+    //     }
+    //     ]
+    //   },
+    //   "image": {
+    //     "bittorrentAddress": imageBittorrentAddress,
+    //     "height": imageHeight,
+    //     "width": imageWidth,
+    //     "size": imageSize,
+    //     "contentType": imageFileType
+    //   }
+    //   }];
+    // }
+    // if (tweetRecords.length > 0) {
+    //   recordToPublish.post.citations = [...tweetRecords];
+    // }
+    record = await publishNewRecord(recordToPublish, "post")
+    console.log('Record published XYZ:', record);
+    return record;
 }
 
-async function fetchParsedArticleData(url, html, res) {
-  console.log('Fetching parsed article data from', url);
+function cleanArticleContent(content) {
+  // Step 1: Replace common HTML entities with equivalent characters
+    const htmlEntities = {
+      '&apos;': "'",
+      '&quot;': '"',
+      '&amp;': '&',
+      '&#xA0;': ' ',      // Non-breaking space
+      '&#x2026;': '…',    // Ellipsis
+      '&#39;': "'"        // Apostrophe sometimes encoded differently
+  };
 
+  // Replace HTML entities using the mapping
+  content = content.replace(/&[a-zA-Z#0-9]+;/g, (entity) => htmlEntities[entity] || '');
+
+  // Step 2: Remove extra symbols and unwanted characters
+  // This regex will remove isolated special characters and preserve words and numbers
+  content = content.replace(/[*\xA0]+/g, ' ');     // Removing unnecessary symbols
+  content = content.replace(/\s{2,}/g, ' ');       // Reducing multiple spaces to a single space
+
+  // Step 3: Trim leading/trailing whitespace and punctuation
+  content = content.trim();
+
+  return content;
+}
+
+async function fetchParsedArticleData(url, html, scrapeId, res) {
+  console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
+
+    // Check if a scrape for this identifier is already in progress
+    if (ongoingScrapes.has(scrapeId)) {
+      console.log(`Scrape already in progress for ${url}. Reconnecting to existing stream.`);
+      
+      // Resume sending updates for the ongoing scrape
+      const existingStream = ongoingScrapes.get(scrapeId);
+      existingStream.clients.push(res);
+      
+      // Send existing data if available
+      existingStream.data.forEach(chunk => res.write(chunk));
+      return;
+  }
+  // If this is a new scrape, set up a new entry in ongoingScrapes
+  const streamData = {
+    clients: [res],
+    data: []
+  };
+  ongoingScrapes.set(scrapeId, streamData);
   try {
+    console.log('Scrape ID:', scrapeId, 'Checking for articles in archive with URL:', url);
     // Attempt to retrieve existing records based on the URL
     const queryParams = { resolveDepth: 2, url };
     const records = await getRecords(queryParams);
-    console.log('Records:', records);
+    console.log('919 searchResults:', records.searchResults);
 
-    if (records.length > 0) {
-      const didTxRef = records[0].oip.didTx;
+    if (records.searchResults > 0) {
+      console.log('OIP data from first record found in archive:', records);
+      const didTx = records.records[0].oip.didTx;
       const refQueryParams = { 
-        recordType: "post", 
-        didTxRef: didTxRef
+        // recordType: "post", 
+        didTxRef: didTx
        };
-      const references = await getRecords(refQueryParams);
+      txId = didTx.split(':')[2];
+      const referenceRecords = await getRecords(refQueryParams);
+      const references = referenceRecords.records;
+      console.log('929 References:', references[0].data[0]);
 
       const domain = (new URL(url)).hostname.split('.').slice(-2, -1)[0];
       let articleData = {
         title: references[0].data[0].basic.name || null,
-        byline: references[0].data[1].post.bylineWriter || null,
+        byline: references[0].data[0].post.bylineWriter || null,
         publishDate: references[0].data[0].basic.date || null,
         description: references[0].data[0].basic.description || null,
         tags: references[0].data[0].basic.tagItems || '',
-        content: references[0].data[1].post.articleText.data[0].text || null,
-        embeddedImage: references[0].data[1].post.featuredImage.data[1] || [],
+        // content: references[0].data[0].post.articleText.data[0].basic.urlItems.associatedUrlOnWeb.url || null,
+        // embeddedImage: references[0].data[0].post.featuredImage.data[0] || [],
         domain: domain || null,
-        url: url
+        url: url,
+        summaryTTS: references[0].data[0].post.audioItems[0].data[0].associatedUrlOnWeb.url || null,
+        didTx: didTx,
+        txId: txId,
+        recordStatus: references[0].oip.recordStatus || null
       };
 
       console.log('Article data found in archive:', articleData);
-
-      // Stream the final article data
-      res.write(`event: finalData\n`);
+      res.write(`event: dataFromIndex\n`);
       res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       res.end();
+      ongoingScrapes.delete(scrapeId); // Clear completed scrape
+
 
     } else {
       // Handle new article scraping if no archived data is found
-      console.log('New article, fetching...');
+      console.log('Not found in Archive, fetching as a new article...');
       const data = await Parser.parse(url, { html: html });
       console.log('Parsed data:', data);
 
@@ -709,6 +934,8 @@ async function fetchParsedArticleData(url, html, res) {
         .replace(/<[^>]+>/g, '') // Remove HTML tags
         .replace(/\s+/g, ' ') // Remove multiple spaces
         .trim() || null;
+
+      content = cleanArticleContent(content);
 
       let publishDate = data.date_published
         ? Math.floor(new Date(data.date_published.replace(/\s+/g, ' ').trim().replace(/^PUBLISHED:\s*/, '')).getTime() / 1000)
@@ -756,9 +983,20 @@ async function fetchParsedArticleData(url, html, res) {
           '.meta-author', '.contributor', '.by', '.opinion-author', '.author-block', '.author-wrapper', '.news-author', '.header-byline',
           '.byline-name', '.post-byline', '.metadata__byline', '.author-box', '.bio-name', '.auth-link', 'ArticleFull_headerFooter__author__pC2tR'
         ];
+
         const byline = await manualScrapeWithSelectors($, authorSelector);
+        console.log('Byline1:', articleData.byline);
         articleData.byline = byline ? byline.trim().replace(/^by\s*/i, '').replace(/\s+/g, ' ').replace(/\n|\t/g, '').split('by').map(name => name.trim()).filter(Boolean).join(', ') : articleData.byline;
-        console.log('Byline:', articleData.byline);
+        console.log('Byline2:', articleData.byline);
+        const repeatedWordsPattern = /\b(\w+)\b\s*\1\b/i; // Check for repeated words
+        const excessiveSpacesPattern = /\s{2,}/; // Matches two or more spaces
+        if (!articleData.byline || articleData.byline === null || repeatedWordsPattern.test(byline) || excessiveSpacesPattern.test(byline)) {
+          const bylineFound = await identifyAuthorNameFromContent(articleData.content);
+          articleData.byline = bylineFound
+        }
+        if (!articleData.byline && articleData.domain === 'zerohedge' ) {
+          articleData.byline = 'Tyler Durden'
+       }
         res.write(`event: byline\n`);
         res.write(`data: ${JSON.stringify({ byline: articleData.byline })}\n\n`); // Send only the byline
       }
@@ -771,18 +1009,31 @@ async function fetchParsedArticleData(url, html, res) {
         ];
         const publishDate = await manualScrapeWithSelectors($, dateSelector);
         console.log('Publish Date after manual scrape:', publishDate);
+        if (publishDate){
         articleData.publishDate = 
             Math.floor(new Date(
           publishDate.replace(/\s+/g, ' ').trim().replace(/^Published:\s*/i, '').split('|')[0].trim().split(' - ')[0].trim()
             ).getTime() / 1000)
-
+          }
         console.log('Publish Date:', articleData.publishDate);
+        if (!articleData.publishDate || articleData.publishDate === null || isNaN(articleData.publishDate) || articleData.publishDate <= 0) {
+          const dateFound = await identifyPublishDateFromContent(articleData.content);
+          articleData.publishDate = dateFound
+        }
         res.write(`event: publishDate\n`);
         res.write(`data: ${JSON.stringify({ publishDate: articleData.publishDate })}\n\n`); // Send only the publish date
       }
 
       // **CONTENT**
       if (!articleData.content) {
+        const contentFileName = generateTextFileName(url);
+        const filePath = path.join(downloadsDirectory, contentFileName);
+        if (fs.existsSync(filePath)) {
+          // If the file already exists, return the URL
+          // return res.json({ url: `/api/generate/media?id=${contentFileName}` });
+          articleData.articleTextUrl = `${backendURL}/api/generate/media?id=${contentFileName}`;
+          articleData.articleTextId = contentFileName; 
+        } else {
         const textSelector = [
           '.article-content', '.entry-content', '.post-content', '.content', '.article-body', '.article-text', '.article-content',
           '.article-body', '.article-text', '.article-copy', '.article-content', '.article-main', '.article-contents', '.article-content-body'
@@ -790,53 +1041,235 @@ async function fetchParsedArticleData(url, html, res) {
         const content = await manualScrapeWithSelectors($, textSelector);
         articleData.content = content ? content.trim() : articleData.content;
         console.log('Content:', articleData.content);
+        fs.writeFileSync(filePath, Buffer.from(articleData.content, 'utf-8'));
+        articleData.articleTextUrl = `${backendURL}/api/generate/media?id=${contentFileName}`;
+        articleData.articleTextId = contentFileName; 
+
+      }
         res.write(`event: content\n`);
-        res.write(`data: ${JSON.stringify({ content: articleData.content })}\n\n`); // Send only the content
+        res.write(`data: ${JSON.stringify({ content: articleData.articleTextUrl })}\n\n`); // Send only the content
       }
 
-      // **TAGS**
-      const tags = await generateTagsFromContent(articleData.title, articleData.content);
-      articleData.tags = tags;
-      console.log('Tags:', tags);
-      res.write(`event: tags\n`);
-      res.write(`data: ${JSON.stringify({ tags: articleData.tags })}\n\n`); // Send only the tags
-
-      // **SUMMARY**
-      const summary = await generateSummaryFromContent(articleData.title, articleData.content);
-      console.log('description:', articleData.description);
-      articleData.description = `${articleData.description}\n\n${summary}`;
-      console.log('description with Summary:', articleData.description);
-      res.write(`event: summary\n`);
-      res.write(`data: ${JSON.stringify({ description: articleData.description })}\n\n`); // Send only the summary
+      let generatedText = await generateSummaryFromContent(articleData.title, articleData.content);
+      if (!generatedText || generatedText === null || generatedText === 'no summary') {
+         generatedText = await generateSummaryFromContent(articleData.title, articleData.content);
+      }
+      console.log('Generated Text:', generatedText);
+      const summary = generatedText.summary;
+      const model_name = 'tts_models/en/jenny/jenny' // higher quality speech
+      // const model_name = 'tts_models/en/ljspeech/tacotron2-DDC'; // faster but lower quality speech
+      const script = replaceAcronyms(summary);
       // **create audio of summary**
       const audioFileName = generateAudioFileName(url);
       const filePath = path.join(audioDirectory, audioFileName);
       // Check if the file already exists
       if (fs.existsSync(filePath)) {
         // If the file already exists, return the URL
-        return res.json({ url: `/api/generate/media?id=${audioFileName}` });
-      }
-      const model_name = 'tts_models/en/jenny/jenny'
-      // const model_name = 'tts_models/en/ljspeech/tacotron2-DDC';
+        articleData.summaryTTS = `/api/generate/media?id=${audioFileName}`;
+        articleData.summaryTTSid = audioFileName; 
+      } else {
+      // const response = await axios.post('http://localhost:8082/synthesize', 
       const response = await axios.post('http://speech-synthesizer:8082/synthesize', 
-        { text: summary, model_name, vocoder_name: 'vocoder_name' }, 
+        { text: script, model_name, vocoder_name: 'vocoder_name' }, 
         { responseType: 'arraybuffer' });
-
       console.log('saving Synthesized speech');
       // Save the audio file locally
       fs.writeFileSync(filePath, Buffer.from(response.data, 'binary'));
-
       // Return the URL for the stored file
       res.write(`event: synthesizedSpeech\n`);
       res.write(`data: /api/generate/media?id=${audioFileName}\n\n`);
-        console.log('sending finalData');
+      articleData.summaryTTS = `/api/generate/media?id=${audioFileName}`;
+      articleData.summaryTTSid = audioFileName; 
+    } 
+      console.log('Tags:', generatedText.tags);
+      const generatedTags = generatedText.tags.split(',').map(tag => tag.trim());
+      articleData.tags = generatedTags;
+      res.write(`event: tags\n`);
+      res.write(`data: ${JSON.stringify({ tags: generatedTags })}\n\n`);
+      articleData.description = `${articleData.description}\n\n${summary}`;
+      console.log('description with Summary:', articleData.description);
+      console.log('sending finalData');
       res.write(`event: finalData\n`);
       res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       console.log('Sent finalData:', articleData);
-      // article
-      didTx = await publishArticleAndAttachedMedia(articleData, $, url,html, res);
-      console.log('article archived successfully at didTx', didTx);
+      let article = await publishArticleAndAttachedMedia(articleData, $, url,html, res);
+      let articleTxid = article.transactionId;
+      let articleDidTx = article.didTx;
+      // this is the audio url
+      let didTxRefs = article.didTxRefs;
+      let subRecords = article.subRecords;
+      let subRecordTypes = article.subRecordTypes;
+
+      // Define placeholders for each type of record
+      let articleUrlRecord = null;
+      let audioUrlRecord = null;
+      let articleDidTxRef = null;
+      let audioDidTxRef = null;
+      let urlInRecord = null;
+      let imageRecord = null;
+      let imageDidTxRef = null;
+      let textRecord = null;
+      let textDidTxRef = null;
+
+      const currentblock = await getCurrentBlockHeight();
+      const records = getRecords({ resolveDepth: 0 });
+      
+    // Separate the records based on the URL extension, accounting for the array structure
+      subRecords.forEach(async (record, index) => {
+        console.log('1169y record:', index, record);
+        let didTxRef = didTxRefs[index]; // Get the corresponding didTxRef
+        recordType = subRecordTypes[index]; // Get the corresponding record type
+        if (recordType = 'associatedUrlOnWeb') {
+          // handle the associatedUrlOnWeb recordType
+          if (record.associatedUrlOnWeb !== undefined && record.associatedUrlOnWeb.url !== undefined) {
+            urlInRecord = record.associatedUrlOnWeb.url
+          } else if (record.basic.urlItems !== undefined && record.basic.urlItems[0] !== undefined) {
+            console.log('1176 record:', record.basic.urlItems[0]);
+            urlInRecord = record.basic.urlItems[0].associatedUrlOnWeb.url;
+          }
+          if (urlInRecord !== undefined) {
+            if (urlInRecord.endsWith('.wav')) {
+              audioUrlRecord = audioUrlRecord || { oip: {} };
+              audioUrlRecord.oip.didTx = didTxRef;
+              audioUrlRecord.data = audioUrlRecord.data || [];
+              audioUrlRecord.data.push(record);
+              audioDidTxRef = didTxRefs[index];
+              console.log('audioUrlRecord:', audioUrlRecord);
+              console.log('audioDidTxRef:', audioDidTxRef);
+              audioUrlRecord.oip.indexedAt = new Date().toISOString();
+              audioUrlRecord.oip.recordType = 'associatedUrlOnWeb';
+              const currentblock = await getCurrentBlockHeight();
+              const records = getRecords({ resolveDepth: 0 });
+              console.log('max in db and current:', records.maxArweaveBlockInDB, currentblock);
+              audioUrlRecord.oip.inArweaveBlock = currentblock;
+              audioUrlRecord.oip.recordStatus = 'pending confirmation in Arweave';
+
+              indexRecord(audioUrlRecord);
+            } else if (record.image !== undefined) {
+              console.log('Image record found:', record);
+              // Handle image record processing here
+              // ultimately need to fix whatever is causing images to get the type of associatedUrlOnWeb
+              imageRecord = record || { oip: {} };
+              imageRecord.oip.didTx = didTxRef;
+              imageRecord.data = imageRecord.data || [];
+              imageRecord.data.push(record);
+              imageDidTxRef = didTxRefs[index];
+              console.log('imageRecord:', imageRecord);
+              console.log('imageDidTxRef:', imageDidTxRef);
+              imageRecord.oip.indexedAt = new Date().toISOString();
+              imageRecord.oip.recordType = 'image';
+              // const currentblock = await getCurrentBlockHeight();
+              // const records = getRecords({ resolveDepth: 0 });
+              console.log('max in db and current:', records, currentblock);
+              imageRecord.oip.inArweaveBlock = currentblock;
+              imageRecord.oip.recordStatus = 'pending confirmation in Arweave';
+              indexRecord(imageRecord);
+            } else {
+              console.log('articleUrlRecord:', articleUrlRecord);
+              articleUrlRecord = articleUrlRecord || { oip: {} };
+              articleUrlRecord.oip.didTx = didTxRef;
+              articleUrlRecord.data = articleUrlRecord.data || [];
+              articleUrlRecord.data.push(record);
+              articleDidTxRef = didTxRefs[index];
+              console.log('articleUrlRecord:', articleUrlRecord);
+              console.log('articleDidTxRef:', articleDidTxRef);
+              articleUrlRecord.oip.indexedAt = new Date().toISOString();
+              articleUrlRecord.oip.recordType = 'associatedUrlOnWeb';
+              // const currentblock = await getCurrentBlockHeight();
+              // const records = getRecords({ resolveDepth: 0 });
+              console.log('max in db and current:', records, currentblock);
+
+              articleUrlRecord.oip.inArweaveBlock = currentblock;
+              articleUrlRecord.oip.recordStatus = 'pending confirmation in Arweave';
+              indexRecord(articleUrlRecord);
+            }
+          }
+        }
+        
+        // if (recordType = 'image') {
+        //   imageRecord = record;
+        //   imageDidTxRef = didTxRef;
+        //   console.log('imageRecord:', imageRecord);
+        //   console.log('imageDidTxRef:', imageDidTxRef);
+        // }
+        if (recordType = 'text') {
+          textRecord = record || { oip: {} };
+          textRecord.oip.didTx = didTxRef;
+          textRecord.data = textRecord.data || [];
+          textRecord.data.push(record);
+          textDidTxRef = didTxRef;
+          console.log('textRecord:', textRecord);
+          console.log('textDidTxRef:', textDidTxRef);
+          textRecord.oip.indexedAt = new Date().toISOString();
+          textRecord.oip.recordType = 'text';
+          // const currentblock = await getCurrentBlockHeight();
+          // const records = getRecords({ resolveDepth: 0 });
+          console.log('max in db and current:', records, currentblock);
+          textRecord.oip.inArweaveBlock = currentblock;
+          textRecord.oip.recordStatus = 'pending confirmation in Arweave';
+          indexRecord(textRecord);
+        }
+
+      });
+
+      res.write(`event: archived\n`);
+      res.write(`data: ${JSON.stringify({ archived: articleDidTx })}\n\n`);
+      console.log('article archived successfully at didTx', articleDidTx);
+      articleData.url = String(url);
+      let record = {
+        "data": [
+          {
+            "basic": {
+              "name": articleData.title,
+              "language": "en",
+              "date": articleData.publishDate,
+              "description": articleData.description,
+              "urlItems": [
+                articleDidTxRef
+              ],
+              "nsfw": false,
+              "tagItems": articleData.tags || []
+            },
+            "post": {
+              "bylineWriter": articleData.byline,
+              "audioItems": [
+                audioDidTxRef
+              ],
+              "articleText": {
+                "text": {
+                  "contentType": "text/text"
+                },
+                "basic": {
+                  "urlItems": [
+                    textDidTxRef
+                  ]
+                }
+              },
+              // "featuredImage": [
+              //   imageDidTxRef
+              // ]
+            }
+          }
+        ],
+        "oip": {
+          "didTx": articleDidTx,
+          "indexedAt": new Date().toISOString(),
+        }
+      };
+      if (imageRecord && imageDidTxRef) {
+        record.data.post.featuredImage = [imageDidTxRef];
+      }
+      
+      console.log('pending record to index:', record);
+      console.log('max in db and current:', records, currentblock);
+      record.oip.inArweaveBlock = currentblock;
+      record.oip.recordType = 'post';
+      record.oip.indexedAt = new Date().toISOString();
+      record.oip.recordStatus = 'pending confirmation in Arweave';
+      indexRecord(record);
       res.end();
+      ongoingScrapes.delete(scrapeId); // Clear completed scrape
+
     }
   } catch (error) {
     console.error('Error fetching parsed article data:', error);
@@ -961,36 +1394,32 @@ async function manualScrapeWithSelectors($, selectors) {
   return null;  // Return null if nothing is found
 }
 
-// might be deprecated by helpers/generators
-router.post('/articles/summary', async (req, res) => {
-  console.log('Generating summary for multiple articles...');
-  let { articles } = req.body;
+function generateScrapeId(url, userId) {
+  // Concatenate URL and userId
+  const data = `${url}-${userId}`;
+  
+  // Create a SHA-256 hash of the concatenated string
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
 
-  if (!articles) {
-    return res.status(400).json({ error: 'articles are required' });
-  }
-
-  try {
-    let summary = await generateCombinedSummaryFromArticles(articles);
-    res.json({ summary });
-  } catch (error) {
-    console.error('Error generating summary:', error);
-    return res.status(500).json({ error: 'An error occurred while generating the summary.' });
-  }
-});
-
+// router.post('/article/stream', authenticateToken, async (req, res) => {
 router.post('/article/stream', async (req, res) => {
   console.log('Received scraping request...', req.body.url);
-  const { html, url } = req.body; // Extract HTML and URL from request body
+  const { html, url, userId } = req.body; // Extract HTML and URL from request body
+  // const userId = req.user.userId; // Extract userId from the decoded token
+  console.log('User ID:', userId);
 
-  if (!html || !url) {
-    return res.status(400).json({ error: 'HTML and URL are required' });
+  if (!html || !url || !userId) {
+    return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
   }
 
+  // Generate a unique identifier for this scrape request
+  const scrapeId = generateScrapeId(url, userId);
+  console.log('Scrape ID:', scrapeId);
   // Set SSE headers for streaming data
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  // res.setHeader('Content-Type', 'text/event-stream');
+  // res.setHeader('Cache-Control', 'no-cache');
+  // res.setHeader('Connection', 'keep-alive');
   res.flushHeaders(); // Flush headers to establish the SSE connection
 
   // Keep the connection alive by sending periodic "ping" events
@@ -1001,7 +1430,7 @@ router.post('/article/stream', async (req, res) => {
 
   try {
     // Start scraping and stream data back piece by piece
-    await fetchParsedArticleData(url, html, res);
+    await fetchParsedArticleData(url, html, scrapeId, res);
   } catch (error) {
     console.error('Error processing scraping:', error);
     res.write(`event: error\n`);
@@ -1016,6 +1445,5 @@ router.post('/article/stream', async (req, res) => {
     res.end(); // Close the SSE connection
   });
 });
-
 
 module.exports = router;
