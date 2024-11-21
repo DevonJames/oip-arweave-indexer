@@ -42,6 +42,7 @@
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "sharp": "^0.33.5",
+    "utp-native": "^2.5.3",
     "webtorrent": "^2.5.1"
   }
 }

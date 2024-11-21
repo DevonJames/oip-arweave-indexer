@@ -1,10 +1,9 @@
 const express = require('express');
+const router = express.Router();
+const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const { getTemplatesInDB } = require('../helpers/elasticsearch');
-// const { verifySignature, signMessage } = require('../helpers/utils');
 const { publishNewTemplate } = require('../helpers/templateHelper');
 
-
-const router = express.Router();
 
 router.get('/', async (req, res) => {
     try {
@@ -18,14 +17,16 @@ router.get('/', async (req, res) => {
     }
 });
 
-router.post('/newTemplate', async (req, res) => {
+router.post('/newTemplate', authenticateToken, async (req, res) => {
+// router.post('/newTemplate', async (req, res) => {
     console.log('POST /api/templates/newTemplate', req.body)
     const template = req.body;
     const transactionId = await publishNewTemplate(template);
     res.status(200).json({ transactionId });
 });
 
-router.post('/newTemplateRemap', async (req, res) => {
+router.post('/newTemplateRemap', authenticateToken, async (req, res) => {
+// router.post('/newTemplateRemap', async (req, res) => {
     try {
         const templateRemap = req.body;
         if (!validateTemplateRemap(templateRemap)) {

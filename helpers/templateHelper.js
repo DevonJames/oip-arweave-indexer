@@ -12,9 +12,15 @@ const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB } = require('./
 let WebTorrent;
 async function initializeWebTorrent() {
   if (!WebTorrent) {
-    WebTorrent = (await import('webtorrent')).default;
-  }
+    try {
+        WebTorrent = (await import('webtorrent')).default;
+      } catch (error) {
+        console.warn('uTP not supported or module not found. Falling back to TCP only.');
+      }
+    }
 }
+
+initializeWebTorrent();
 
 const getFileInfo = () => {
     const filename = path.basename(__filename);
@@ -47,6 +53,9 @@ const translateJSONtoOIPData = async (record, recordType) => {
     const { qtyTemplatesInDB } = await getTemplatesInDB()
     console.log('Translating JSON to OIP data:', record);
     const templates = Object.values(record);
+    const didTxRefs = [];
+    const subRecords = [];
+    const subRecordTypes = [];
     const templateNames = Object.keys(record);
     if (qtyTemplatesInDB === 0) {
         console.log('No templates found in DB, using hardcoded translation');
@@ -114,11 +123,12 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 }
                             } else if (fieldType === 'dref') {
                                 const subRecord = json[key];
-                                console.log('th 108 Processing dref:', json[key], subRecord, 'type of json[key]:', typeof json[key], typeof subRecord, { key })
+                                console.log('126 Processing dref:', subRecord);
+                                // console.log('th 108 Processing dref:', json[key], subRecord, 'type of json[key]:', typeof json[key], typeof subRecord, { key })
 
                                 const templatesArray = Object.keys(json[key]);
                                 recordType = findMatchingString(JSON.stringify(key), templatesArray)
-                                console.log('th 130 recordType', recordType)
+                                // console.log('th 130 recordType', recordType)
                                 if (!recordType) {
                                     // check if there is only one template in the array
                                     if (templatesArray.length === 1) {
@@ -127,14 +137,19 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                         recordType = key;
                                     }
                                 }
-                                console.log('th 138 recordType', recordType)
+                                // console.log('th 138 recordType', recordType)
                                 const newRecord = await publishNewRecord(subRecord, recordType);
                                 const dref = newRecord.didTx;
+                                didTxRefs.push(dref);
+                                subRecords.push(subRecord);
+                                subRecordTypes.push(recordType);
+                                // console.log('recordType 143', recordType, {didTxRefs}, {subRecords})
                                 converted[fields[indexKey]] = dref;
                             } else if (fieldType === 'repeated dref') {
                                 const subRecord = json[key][0];
+                                console.log('150 Processing repeated dref:', subRecord);
 
-                                console.log('th 113 Processing repeated dref for template:', template, json[key][0], subRecord, { key })
+                                // console.log('th 113 Processing repeated dref for template:', template, json[key][0], subRecord, { key })
                                 const templatesArray = Object.keys(json[key][0]);
                                 recordType = findMatchingString(JSON.stringify(key)[0], templatesArray)
                                 if (!recordType) {
@@ -147,9 +162,14 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                     }
                                 }
 
-                                console.log('th 155 recordType', recordType)
+                                // console.log('th 155 recordType', recordType)
                                 const newRecord = await publishNewRecord(subRecord, recordType);
                                 const dref = newRecord.didTx;
+                                subRecords.push(subRecord);
+                                didTxRefs.push(dref);
+                                subRecordTypes.push(recordType);
+                                // console.log('recordType 166', recordType, {didTxRefs}, {subRecords})
+
                                 const repeatedDref = [dref];
                                 converted[fields[indexKey]] = repeatedDref;
                             } else {
@@ -168,14 +188,18 @@ const translateJSONtoOIPData = async (record, recordType) => {
                 console.error('Error processing template:', { templateName, error });
             }
         }
-        return convertedTemplates;
+        return { convertedTemplates, didTxRefs, subRecords, subRecordTypes };
     }
 };
 
 async function createAndSeedTorrent(videoFile) {
     try {
-      // Initialize WebTorrent client
+      // Initialize WebTorrent client TURNING THIS OFF AS A TEST
       await initializeWebTorrent();
+
+      if (!WebTorrent) {
+        throw new Error("WebTorrent module failed to load.");
+      }
   
       // Create the WebTorrent client
       const client = new WebTorrent();
@@ -183,7 +207,7 @@ async function createAndSeedTorrent(videoFile) {
       // Seed the video file
       const torrent = await new Promise((resolve, reject) => {
         client.seed(videoFile, (torrent) => {
-        //   console.log(`Torrent created and seeded: ${torrent.magnetURI}`);
+          console.log(`Torrent created and seeded: ${torrent.magnetURI}`);
           resolve(torrent);
         });
       });
@@ -202,10 +226,12 @@ async function createAndSeedTorrent(videoFile) {
 
 // note: need to have new creator records derive their address and public key before publishing the registration record
 async function publishNewRecord(record, recordType, publishFiles = false, addMediaToArweave = false, addMediaToIPFS = false, youtubeUrl = null) {
-    console.log(getFileInfo(), getLineNumber(), 'record', { recordType }, record)
+    console.log(getFileInfo(), getLineNumber(), 'publish new record', { recordType }, record)
     try {
         let videoPath, thumbnailPath, videoInfo, arweaveAddress, ipfsAddress;
-
+        let didTxRefs = [];
+        let subRecords = [];
+        let subRecordTypes = [];
         if (publishFiles && youtubeUrl) {
             const result = await downloadAndProcessYouTubeVideo(youtubeUrl);
             videoPath = result.videoPath;
@@ -237,9 +263,14 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                 record.creatorRegistration.address = myAddress;
             }
             const oipData = await translateJSONtoOIPData(record);
+
+            const oipRecord = oipData.convertedTemplates;
+            didTxRefs = oipData.didTxRefs;
+            subRecords = oipData.subRecords;
+            subRecordTypes = oipData.subRecordTypes;
             let recordDataArray = [];
 
-            oipData.forEach((record) => {
+            oipRecord.forEach((record) => {
                 let stringValue = JSON.stringify(record);
                 recordDataArray.push(stringValue);
                 recordData = `[${recordDataArray.join(',')}]`;
@@ -272,7 +303,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
         const transactionId = receipt.id;
         const didTx = txidToDid(transactionId);
 
-        return { transactionId, didTx, dataForSignature, creatorSig };
+        return { transactionId, didTx, dataForSignature, creatorSig, didTxRefs, subRecords , subRecordTypes};
     } catch (error) {
         console.error('Error publishing new record:', error);
     }

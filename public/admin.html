@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Admin Dashboard</h1>
+    <button id="logout-btn">Logout</button> <!-- Logout Button -->
+
+    <section id="user-list-section">
+        <h2>Registered Users</h2>
+        <table id="user-table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>User ID</th>
+                    <th>Subscription Status</th>
+                    <th>Waitlist Status</th>
+                    <th>Admin Status</th>
+                </tr>
+            </thead>
+            <tbody id="user-table-body">
+                <!-- User data will be populated here by JavaScript -->
+            </tbody>
+        </table>
+    </section>
+    <script src="admin.js"></script>
+
+    <!-- <script>
+        async function fetchUsers() {
+            try {
+                const response = await fetch('https://api.oip.onl/api/user/admin/users'); // Fetch users from the API
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const users = await response.json();
+                const userTableBody = document.getElementById('user-table-body');
+
+                // Clear any existing rows
+                userTableBody.innerHTML = '';
+
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+
+                    // Populate table with user information
+                    row.innerHTML = `
+                        <td>${user.email}</td>
+                        <td>${user.userId || 'N/A'}</td>
+                        <td>${user.subscriptionStatus || 'Inactive'}</td>
+                        <td>${user.waitlistStatus || 'N/A'}</td>
+                        <td>${user.isAdmin ? 'Yes' : 'No'}</td>
+                    `;
+
+                    userTableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error fetching users:', error);
+            }
+        }
+
+        // Fetch and display users when the page loads
+        document.addEventListener('DOMContentLoaded', fetchUsers);
+    </script> -->
+</body>
+</html>
