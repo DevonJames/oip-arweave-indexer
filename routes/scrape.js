@@ -141,11 +141,11 @@ async function downloadTextFile(content, url) {
     // console.log('Downloading text file to:', outputPath);
     if (fs.existsSync(outputPath)) {
       console.log('Text file already exists:', textFileName);
-      return outputPath;
+      return textFileName;
     } else {
       console.log('Writing text file:', textFileName);
       fs.writeFileSync(outputPath, Buffer.from(content));
-      return outputPath;
+      return textFileName;
     }
   } catch (error) {
     console.error('Error downloading text file:', error);
@@ -428,8 +428,13 @@ async function getTwitterMediaUrls(tweetUrls) {
   }
 }
 
-async function publishArticleAndAttachedMedia(articleData, $, url, html, res) {
+const cleanUrl = (url) => {
+  const urlObj = new URL(url);
+  return urlObj.origin + urlObj.pathname;
+};
 
+async function publishArticleAndAttachedMedia(articleData, $, url, html, res) {
+  console.log('test test url:', url); 
   // Initialize an array to hold YouTube URLs
   let youtubeUrls = [];
 
@@ -475,13 +480,18 @@ const mimeTypes = {
 };
 
   textFile = await downloadTextFile(articleData.content, url);
+
+  console.log('textFile', textFile);
+
+  // publish to arweave
+  // const arweaveAddress = await publishArticleText(textFile.outputPath, null, null, null, false);
   
-  articleTextURL = `${backendURL}/api/media?id=${textFile.textFileName}`;
+  articleTextURL = `${backendURL}/api/media?id=${textFile}`;
   // TEMPORARILY TURNED OFF FOR FIRST RELEASE
   // articleTextAddresses = await publishArticleText(textFile.outputPath, null, null, null, false);
   // console.log({articleTextURL},'articleTextBittorrentAddress', articleTextAddresses.torrent.magnetURI);
   // articleTextBittorrentAddress = articleTextAddresses.torrent.magnetURI;
-
+// let hostedImageUrl
   if (articleData.embeddedImage) {
     const imageUrl = articleData.embeddedImage;
     console.log('imageUrl', imageUrl);
@@ -512,7 +522,7 @@ const mimeTypes = {
     // const imagePath = imageFile.imageFileName
     // const imagePath = path.join(downloadsDirectory, imageFile.imageFileName);
     const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
-    articleData.embeddedImage = hostedImageUrl;
+    articleData.embeddedImageUrl = hostedImageUrl;
     // TEMPORARILY TURNED OFF FOR FIRST RELEASE
     // torrent = await publishImage(imageFile.outputPath, null, null, null, false);
     // imageBittorrentAddress = torrent.magnetURI;
@@ -524,11 +534,12 @@ const mimeTypes = {
     console.log('Image file:', imagePath);
     const imageStats = fs.statSync(imagePath);
     imageSize = imageStats.size;
+    imageFileType = mimeTypes[fileType.toLowerCase()] || 'image/jpeg';
 
     const imageMetadata = await sharp(imagePath).metadata();
     imageWidth = imageMetadata.width;
     imageHeight = imageMetadata.height;
-    console.log({imageUrl});
+    console.log(articleData.embeddedImageUrl);
 
     // console.log('Image dimensions:', imageWidth, imageHeight);
     // console.log('Image size:', imageSize);
@@ -711,67 +722,35 @@ const mimeTypes = {
 
   // res.end();
   // audioUrl = `https://api.oip.onl/api/generate/media?id=${articleData.summaryTTSid}`
+  // const cleanUrl = (url) => {
+  //   const urlObj = new URL(url);
+  //   return urlObj.origin + urlObj.pathname;
+  // };
+
   const recordToPublish = {
     "basic": {
       "name": articleData.title,
       "language": "en",
       "date": articleData.publishDate,
       "description": articleData.description,
-      "urlItems": [
-        {
-          "associatedUrlOnWeb": {
-            "url": articleData.url
-          }
-        }
-      ],
       "nsfw": false,
       "tagItems": articleData.tags || []
     },
     "post": {
       "bylineWriter": articleData.byline,
-      "articleText": {
-        "text": {
-          // "bittorrentAddress": articleTextBittorrentAddress,
-          "contentType": "text/text"
-        },
-        "basic": {
-          "urlItems": [
-            {
-              "associatedUrlOnWeb": {
-                "url": articleData.articleTextURL
-              }
-            }
-          ]
-        }
-      },
-      // "featuredImage": {
-      //   "basic": {
-      //     "name": articleData.title,
-      //     "language": "en",
-      //     "nsfw": false,
-      //     "urlItems": [
-      //       {
-      //         "associatedUrlOnWeb": {
-      //           "url": articleData.embeddedImage
-      //         }
-      //       }
-      //     ]
-      //   },
-      //   "image": {
-      //     // "bittorrentAddress": imageBittorrentAddress,
-      //     "height": imageHeight,
-      //     "width": imageWidth,
-      //     "size": imageSize,
-      //     "contentType": imageFileType
-      //   }
-      // },
-      "audioItems": [
-        {
+      "articleText": [
+        { 
+          "text": {
+            "contentType": "text/text"
+          },
           "associatedUrlOnWeb": {
-            "url": articleData.summaryTTS
+            "url": articleTextURL
           }
         }
       ]
+    },
+    "associatedUrlOnWeb": {
+      "url": cleanUrl(articleData.url)
     }
   };
   if (articleData.embeddedImage) {
@@ -781,13 +760,16 @@ const mimeTypes = {
           "name": articleData.title,
           "language": "en",
           "nsfw": false,
-          "urlItems": [
-            {
-              "associatedUrlOnWeb": {
-                "url": articleData.embeddedImage
-              }
-            }
-          ]
+          // "urlItems": [
+          //   {
+          //     "associatedUrlOnWeb": {
+          //       "url": articleData.embeddedImage
+          //     }
+          //   }
+          // ]
+        },
+        "associatedUrlOnWeb": {
+          "url": articleData.embeddedImageUrl
         },
         "image": {
           // "bittorrentAddress": imageBittorrentAddress,
@@ -799,6 +781,20 @@ const mimeTypes = {
       }
     ];
   }
+
+  if (articleData.summaryTTS) {
+    recordToPublish.post.audioItems = [
+      { 
+        "audio": {
+          "webUrl": articleData.summaryTTS,
+          "contentType" : "audio/mp3"
+        }
+      }
+    ];
+  }
+
+  console.log('this is whats getting published:', recordToPublish)
+        
 
 // TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
     // if (youtubeVideoTorrent.length > 0) {
@@ -860,6 +856,27 @@ function cleanArticleContent(content) {
   return content;
 }
 
+async function scrapeZeroHedgeByline($) {
+  // Define selectors based on the page structure
+  const authorSelectors = [
+      '.ArticleFull_headerFooter__author__pC2tR', // Primary class for byline
+      '.byline', '.author', '.by-author', '.author-name' // Fallbacks
+  ];
+
+  // Attempt to find the byline using defined selectors
+  for (const selector of authorSelectors) {
+      const element = $(selector);
+      if (element.length && element.text().trim()) {
+          const bylineText = element.text().trim();
+          // Clean and standardize the byline text
+          return bylineText.replace(/^by\s*/i, '').trim();
+      }
+  }
+
+  // Return default byline for ZeroHedge if no byline is found
+  return 'Tyler Durden';
+}
+
 async function fetchParsedArticleData(url, html, scrapeId, res) {
   console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
 
@@ -884,37 +901,66 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
   try {
     console.log('Scrape ID:', scrapeId, 'Checking for articles in archive with URL:', url);
     // Attempt to retrieve existing records based on the URL
-    const queryParams = { resolveDepth: 2, url };
+    // const cleanUrl = (url) => {
+    //   const urlObj = new URL(url);
+    //   return urlObj.origin + urlObj.pathname;
+    // };
+    const sortBy = 'inArweaveBlock:desc';
+    const queryParams = { resolveDepth: 2, url: cleanUrl(url), sortBy: 'inArweaveBlock:desc', limit:1 };
     const records = await getRecords(queryParams);
     console.log('919 searchResults:', records.searchResults);
 
     if (records.searchResults > 0) {
-      console.log('OIP data from first record found in archive:', records);
+
+      console.log('OIP data from first record found in archive:', records.records[0]);
       const didTx = records.records[0].oip.didTx;
-      const refQueryParams = { 
-        // recordType: "post", 
-        didTxRef: didTx
-       };
+      // const refQueryParams = { 
+      //   didTxRef: didTx
+      //  };
       txId = didTx.split(':')[2];
-      const referenceRecords = await getRecords(refQueryParams);
-      const references = referenceRecords.records;
-      console.log('929 References:', references[0].data[0]);
+      // const referenceRecords = await getRecords(refQueryParams);
+      // const references = referenceRecords
+      // console.log('929 References:', referenceRecords.data[0]);
 
       const domain = (new URL(url)).hostname.split('.').slice(-2, -1)[0];
+
+      let summaryTTS
+      console.log('First Record in response:', records.records[0].data[0]);
+      if (records.records[0].data[0].post !== undefined) {
+        console.log('00', records.records[0].data[0].post);
+        if (records.records[0].data[0].post.audioItems[0] !== undefined) {
+          console.log('0', records.records[0].data[0].post.audioItems[0]);
+          if (records.records[0].data[0].post.audioItems[0].data[0].associatedUrlOnWeb !== undefined) {
+            console.log('1', records.records[0].data[0].post.audioItems[0].data[0].associatedUrlOnWeb.url);
+            summaryTTS = records.records[0].data[0].post.audioItems[0].data[0].associatedUrlOnWeb.url
+          }
+          else if (records.records[0].data[0].post.audioItems[0].data[0].audio !== undefined) {
+            console.log('2', records.records[0].data[0].post.audioItems[0].data[0].audio.webUrl);
+            summaryTTS = records.records[0].data[0].post.audioItems[0].data[0].audio.webUrl
+          }
+          else {
+            console.log('3');
+            summaryTTS = null
+          }
+        }
+      }
+      console.log('SummaryTTS:', summaryTTS);
+      
+      //  = (records.records[0].data[0].post !== undefined)
       let articleData = {
-        title: references[0].data[0].basic.name || null,
-        byline: references[0].data[0].post.bylineWriter || null,
-        publishDate: references[0].data[0].basic.date || null,
-        description: references[0].data[0].basic.description || null,
-        tags: references[0].data[0].basic.tagItems || '',
-        // content: references[0].data[0].post.articleText.data[0].basic.urlItems.associatedUrlOnWeb.url || null,
-        // embeddedImage: references[0].data[0].post.featuredImage.data[0] || [],
+        title: records.records[0].data[0].basic !== undefined ? records.records[0].data[0].basic.name : null,
+        byline: records.records[0].data[0].post !== undefined ? records.records[0].data[0].post.bylineWriter : null,
+        publishDate: records.records[0].data[0].basic !== undefined ? records.records[0].data[0].basic.date : null,
+        description: records.records[0].data[0].basic !== undefined ? records.records[0].data[0].basic.description : null,
+        tags: records.records[0].data[0].basic !== undefined ? records.records[0].data[0].basic.tagItems : '',
+        // content: records.records[0].data[0].post.articleText.data[0].basic.urlItems.associatedUrlOnWeb.url || null,
+        // embeddedImage: records.records[0].data[0].post.featuredImage.data[0] || [],
         domain: domain || null,
         url: url,
-        summaryTTS: references[0].data[0].post.audioItems[0].data[0].associatedUrlOnWeb.url || null,
+        summaryTTS: summaryTTS,
         didTx: didTx,
         txId: txId,
-        recordStatus: references[0].oip.recordStatus || null
+        recordStatus: records.records[0].oip.recordStatus || null
       };
 
       console.log('Article data found in archive:', articleData);
@@ -990,13 +1036,13 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
         console.log('Byline2:', articleData.byline);
         const repeatedWordsPattern = /\b(\w+)\b\s*\1\b/i; // Check for repeated words
         const excessiveSpacesPattern = /\s{2,}/; // Matches two or more spaces
+        if (articleData.domain === 'zerohedge' ) {
+          articleData.byline = await scrapeZeroHedgeByline($);
+       }
         if (!articleData.byline || articleData.byline === null || repeatedWordsPattern.test(byline) || excessiveSpacesPattern.test(byline)) {
           const bylineFound = await identifyAuthorNameFromContent(articleData.content);
           articleData.byline = bylineFound
         }
-        if (!articleData.byline && articleData.domain === 'zerohedge' ) {
-          articleData.byline = 'Tyler Durden'
-       }
         res.write(`event: byline\n`);
         res.write(`data: ${JSON.stringify({ byline: articleData.byline })}\n\n`); // Send only the byline
       }
@@ -1046,53 +1092,61 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
         articleData.articleTextId = contentFileName; 
 
       }
-        res.write(`event: content\n`);
-        res.write(`data: ${JSON.stringify({ content: articleData.articleTextUrl })}\n\n`); // Send only the content
+        // res.write(`event: content\n`);
+        // res.write(`data: ${JSON.stringify({ content: articleData.articleTextUrl })}\n\n`); // Send only the content
       }
 
       let generatedText = await generateSummaryFromContent(articleData.title, articleData.content);
       if (!generatedText || generatedText === null || generatedText === 'no summary') {
+        console.log('No summary generated, trying again');
          generatedText = await generateSummaryFromContent(articleData.title, articleData.content);
       }
       console.log('Generated Text:', generatedText);
       const summary = generatedText.summary;
-      const model_name = 'tts_models/en/jenny/jenny' // higher quality speech
-      // const model_name = 'tts_models/en/ljspeech/tacotron2-DDC'; // faster but lower quality speech
       const script = replaceAcronyms(summary);
       // **create audio of summary**
       const audioFileName = generateAudioFileName(url);
       const filePath = path.join(audioDirectory, audioFileName);
       // Check if the file already exists
-      if (fs.existsSync(filePath)) {
+      // if (fs.existsSync(filePath)) {
         // If the file already exists, return the URL
-        articleData.summaryTTS = `/api/generate/media?id=${audioFileName}`;
-        articleData.summaryTTSid = audioFileName; 
-      } else {
+        // articleData.summaryTTS = `/api/generate/media?id=${audioFileName}`;
+        // articleData.summaryTTSid = audioFileName; 
+      // } else {
       // const response = await axios.post('http://localhost:8082/synthesize', 
-      const response = await axios.post('http://speech-synthesizer:8082/synthesize', 
-        { text: script, model_name, vocoder_name: 'vocoder_name' }, 
-        { responseType: 'arraybuffer' });
-      console.log('saving Synthesized speech');
+      // const response = await axios.post('http://speech-synthesizer:8082/synthesize', 
+      //   { text: script, model_name, vocoder_name: 'vocoder_name' }, 
+      //   { responseType: 'arraybuffer' });
+
+      const response = await axios
+        .post
+        (
+          `${backendURL}/api/generate/speech`,
+          { text: script }
+        );
+        // { responseType: 'arraybuffer' });
+      console.log('saving Synthesized speech', response.data);
+      // summaryTTS = response.data.url;
+      format = response.data.format;
+      articleData.summaryTTS = response.data.url;
+      console.log('Synthesized speech:', articleData.summaryTTS, format);
       // Save the audio file locally
-      fs.writeFileSync(filePath, Buffer.from(response.data, 'binary'));
+      // fs.writeFileSync(filePath, Buffer.from(response.data, 'binary'));
       // Return the URL for the stored file
       res.write(`event: synthesizedSpeech\n`);
-      res.write(`data: /api/generate/media?id=${audioFileName}\n\n`);
-      articleData.summaryTTS = `/api/generate/media?id=${audioFileName}`;
-      articleData.summaryTTSid = audioFileName; 
-    } 
+      res.write(`data: ${url}\n\n`);
       console.log('Tags:', generatedText.tags);
       const generatedTags = generatedText.tags.split(',').map(tag => tag.trim());
       articleData.tags = generatedTags;
       res.write(`event: tags\n`);
       res.write(`data: ${JSON.stringify({ tags: generatedTags })}\n\n`);
-      articleData.description = `${articleData.description}\n\n${summary}`;
+      articleData.description = summary;
       console.log('description with Summary:', articleData.description);
       console.log('sending finalData');
       res.write(`event: finalData\n`);
       res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       console.log('Sent finalData:', articleData);
-      let article = await publishArticleAndAttachedMedia(articleData, $, url,html, res);
+      let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url,html, res);
       let articleTxid = article.transactionId;
       let articleDidTx = article.didTx;
       // this is the audio url
@@ -1114,119 +1168,81 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
       const currentblock = await getCurrentBlockHeight();
       const records = getRecords({ resolveDepth: 0 });
       
-    // Separate the records based on the URL extension, accounting for the array structure
+    console.log('subRecords:', subRecords, 'subRecordTypes', subRecordTypes);
       subRecords.forEach(async (record, index) => {
-        console.log('1169y record:', index, record);
         let didTxRef = didTxRefs[index]; // Get the corresponding didTxRef
         recordType = subRecordTypes[index]; // Get the corresponding record type
-        if (recordType = 'associatedUrlOnWeb') {
-          // handle the associatedUrlOnWeb recordType
+        console.log('1184 record:', index, {recordType}, record);
           if (record.associatedUrlOnWeb !== undefined && record.associatedUrlOnWeb.url !== undefined) {
             urlInRecord = record.associatedUrlOnWeb.url
-          } else if (record.basic.urlItems !== undefined && record.basic.urlItems[0] !== undefined) {
-            console.log('1176 record:', record.basic.urlItems[0]);
+            console.log('1187 record:', urlInRecord, {recordType}, record);
+          } else if (record.basic && record.basic.urlItems !== undefined && record.basic.urlItems[0] !== undefined) {
+            console.log('1176 record:', {recordType}, record.basic.urlItems);
             urlInRecord = record.basic.urlItems[0].associatedUrlOnWeb.url;
+          } else if (record.audio !== undefined && record.audio.webUrl !== undefined) {
+            urlInRecord = record.audio.webUrl;
           }
-          if (urlInRecord !== undefined) {
-            if (urlInRecord.endsWith('.wav')) {
+            if (recordType === 'audio') {
               audioUrlRecord = audioUrlRecord || { oip: {} };
               audioUrlRecord.oip.didTx = didTxRef;
               audioUrlRecord.data = audioUrlRecord.data || [];
               audioUrlRecord.data.push(record);
               audioDidTxRef = didTxRefs[index];
-              console.log('audioUrlRecord:', audioUrlRecord);
-              console.log('audioDidTxRef:', audioDidTxRef);
               audioUrlRecord.oip.indexedAt = new Date().toISOString();
-              audioUrlRecord.oip.recordType = 'associatedUrlOnWeb';
-              const currentblock = await getCurrentBlockHeight();
-              const records = getRecords({ resolveDepth: 0 });
-              console.log('max in db and current:', records.maxArweaveBlockInDB, currentblock);
+              audioUrlRecord.oip.recordType = 'audio';
               audioUrlRecord.oip.inArweaveBlock = currentblock;
               audioUrlRecord.oip.recordStatus = 'pending confirmation in Arweave';
+              console.log('30 indexRecord audioUrlRecord:', audioUrlRecord);
+              console.log('audioDidTxRef:', audioDidTxRef);
 
               indexRecord(audioUrlRecord);
-            } else if (record.image !== undefined) {
-              console.log('Image record found:', record);
-              // Handle image record processing here
-              // ultimately need to fix whatever is causing images to get the type of associatedUrlOnWeb
-              imageRecord = record || { oip: {} };
+            } else if (recordType === 'image') {
+              console.log('Image record found:', imageRecord);
+              imageRecord = imageRecord || { oip: {} };
               imageRecord.oip.didTx = didTxRef;
               imageRecord.data = imageRecord.data || [];
               imageRecord.data.push(record);
               imageDidTxRef = didTxRefs[index];
-              console.log('imageRecord:', imageRecord);
-              console.log('imageDidTxRef:', imageDidTxRef);
               imageRecord.oip.indexedAt = new Date().toISOString();
               imageRecord.oip.recordType = 'image';
-              // const currentblock = await getCurrentBlockHeight();
-              // const records = getRecords({ resolveDepth: 0 });
-              console.log('max in db and current:', records, currentblock);
               imageRecord.oip.inArweaveBlock = currentblock;
               imageRecord.oip.recordStatus = 'pending confirmation in Arweave';
+              console.log('30 indexRecord imageRecord:', imageRecord);
+              console.log('imageDidTxRef:', imageDidTxRef);
               indexRecord(imageRecord);
-            } else {
-              console.log('articleUrlRecord:', articleUrlRecord);
-              articleUrlRecord = articleUrlRecord || { oip: {} };
-              articleUrlRecord.oip.didTx = didTxRef;
-              articleUrlRecord.data = articleUrlRecord.data || [];
-              articleUrlRecord.data.push(record);
-              articleDidTxRef = didTxRefs[index];
-              console.log('articleUrlRecord:', articleUrlRecord);
-              console.log('articleDidTxRef:', articleDidTxRef);
-              articleUrlRecord.oip.indexedAt = new Date().toISOString();
-              articleUrlRecord.oip.recordType = 'associatedUrlOnWeb';
-              // const currentblock = await getCurrentBlockHeight();
-              // const records = getRecords({ resolveDepth: 0 });
-              console.log('max in db and current:', records, currentblock);
-
-              articleUrlRecord.oip.inArweaveBlock = currentblock;
-              articleUrlRecord.oip.recordStatus = 'pending confirmation in Arweave';
-              indexRecord(articleUrlRecord);
+            
+            } else if (recordType === 'text') {
+              textRecord = textRecord || { oip: {} };
+              textRecord.oip.didTx = didTxRef;
+              textRecord.data = textRecord.data || [];
+              textRecord.data.push(record);
+              textDidTxRef = didTxRef;
+              textRecord.oip.indexedAt = new Date().toISOString();
+              textRecord.oip.recordType = 'text';
+              textRecord.oip.inArweaveBlock = currentblock;
+              textRecord.oip.recordStatus = 'pending confirmation in Arweave';
+              console.log('30 indexRecord textRecord:', textRecord);
+              console.log('textDidTxRef:', textDidTxRef);
+              indexRecord(textRecord);
             }
-          }
-        }
-        
-        // if (recordType = 'image') {
-        //   imageRecord = record;
-        //   imageDidTxRef = didTxRef;
-        //   console.log('imageRecord:', imageRecord);
-        //   console.log('imageDidTxRef:', imageDidTxRef);
-        // }
-        if (recordType = 'text') {
-          textRecord = record || { oip: {} };
-          textRecord.oip.didTx = didTxRef;
-          textRecord.data = textRecord.data || [];
-          textRecord.data.push(record);
-          textDidTxRef = didTxRef;
-          console.log('textRecord:', textRecord);
-          console.log('textDidTxRef:', textDidTxRef);
-          textRecord.oip.indexedAt = new Date().toISOString();
-          textRecord.oip.recordType = 'text';
-          // const currentblock = await getCurrentBlockHeight();
-          // const records = getRecords({ resolveDepth: 0 });
-          console.log('max in db and current:', records, currentblock);
-          textRecord.oip.inArweaveBlock = currentblock;
-          textRecord.oip.recordStatus = 'pending confirmation in Arweave';
-          indexRecord(textRecord);
-        }
-
       });
 
-      res.write(`event: archived\n`);
-      res.write(`data: ${JSON.stringify({ archived: articleDidTx })}\n\n`);
+      // res.write(`event: archived\n`);
+      // res.write(`data: ${JSON.stringify({ archived: articleDidTx })}\n\n`);
       console.log('article archived successfully at didTx', articleDidTx);
-      articleData.url = String(url);
+      // articleData.url = String(url);
       let record = {
-        "data": [
+        "data": 
+        [
           {
             "basic": {
               "name": articleData.title,
               "language": "en",
               "date": articleData.publishDate,
               "description": articleData.description,
-              "urlItems": [
-                articleDidTxRef
-              ],
+              // "urlItems": [
+              //   articleDidTxRef
+              // ],
               "nsfw": false,
               "tagItems": articleData.tags || []
             },
@@ -1235,37 +1251,34 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
               "audioItems": [
                 audioDidTxRef
               ],
-              "articleText": {
-                "text": {
-                  "contentType": "text/text"
-                },
-                "basic": {
-                  "urlItems": [
-                    textDidTxRef
-                  ]
-                }
-              },
+              "articleText": [
+                textDidTxRef
+              ]
               // "featuredImage": [
               //   imageDidTxRef
               // ]
+            },
+            "associatedUrlOnWeb": {
+              "url": cleanUrl(articleData.url)
             }
           }
-        ],
+        ]
+        ,
         "oip": {
           "didTx": articleDidTx,
           "indexedAt": new Date().toISOString(),
         }
       };
       if (imageRecord && imageDidTxRef) {
-        record.data.post.featuredImage = [imageDidTxRef];
+        record.data[0].post.featuredImage = [imageDidTxRef];
       }
       
-      console.log('pending record to index:', record);
-      console.log('max in db and current:', records, currentblock);
+      // console.log('max in db and current:', records, currentblock);
       record.oip.inArweaveBlock = currentblock;
       record.oip.recordType = 'post';
       record.oip.indexedAt = new Date().toISOString();
       record.oip.recordStatus = 'pending confirmation in Arweave';
+      console.log('30 indexRecord pending record to index:', record);
       indexRecord(record);
       res.end();
       ongoingScrapes.delete(scrapeId); // Clear completed scrape
@@ -1273,9 +1286,9 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
     }
   } catch (error) {
     console.error('Error fetching parsed article data:', error);
-    res.write(`event: error\n`);
-    res.write(`data: ${JSON.stringify({ error: 'Failed to fetch article data.' })}\n\n`);
-    res.end();
+    // res.write(`event: error\n`);
+    // res.write(`data: ${JSON.stringify({ error: 'Failed to fetch article data.' })}\n\n`);
+    // res.end();
   }
 }
 
