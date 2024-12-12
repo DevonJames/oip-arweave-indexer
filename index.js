@@ -25,12 +25,27 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // CORS configuration
 const corsOptions = {
-    origin: 'https://api.oip.onl',  // Allows requests from any origin (for development). Change this to specific origins in production
+    origin: 'https://api.oip.onl',
     methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,  
     optionsSuccessStatus: 204
 };
+
+// const corsOptions = {
+//     origin: (origin, callback) => {
+//         const allowedOrigins = ['https://api.oip.onl', 'https://13231b78-b445-459d-963b-64064b32e1eb-00-1scoo6awpk8yx.kirk.replit.dev'];
+//         if (!origin || allowedOrigins.includes(origin)) {
+//             callback(null, true);
+//         } else {
+//             callback(new Error('Not allowed by CORS'));
+//         }
+//     },
+//     methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+//     allowedHeaders: ['Content-Type', 'Authorization'],
+//     credentials: true,
+//     optionsSuccessStatus: 204
+// };
 
 // Use CORS middleware
 app.use(cors(corsOptions));
