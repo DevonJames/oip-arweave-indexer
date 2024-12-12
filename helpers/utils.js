@@ -67,6 +67,7 @@ const validateTemplateFields = (fieldsJson) => {
 };
 
 const verifySignature = async (message, signatureBase64, publicKey, creatorAddress = null) => {
+    // console.log('Verifying signature... for creatorAddress', creatorAddress, 'publicKey', publicKey);
     if (publicKey === null && creatorAddress !== null) {
         const creatorData = await searchCreatorByAddress(creatorAddress);
         if (creatorData) {
@@ -123,6 +124,7 @@ const getTemplateTxidByName = (templateName) => {
 };
 
 const resolveRecords = async (record, resolveDepth, recordsInDB) => {
+    // console.log('111 record:', record);
     // console.log(getFileInfo(), getLineNumber(), 'Resolving record:', record, 'with resolveDepth:', resolveDepth, 'qty of records in db', recordsInDB.length);
     // console.log(
     //     getFileInfo(),
@@ -147,7 +149,7 @@ const resolveRecords = async (record, resolveDepth, recordsInDB) => {
     }
 
     for (const item of record.data) {
-        // console.log(getFileInfo(), getLineNumber(), 'Checking item:', item);
+        // console.log(getFileInfo(), getLineNumber(), 'Checking record.data:', record.data);
         for (const category of Object.keys(item)) {
             const properties = item[category];
             for (const key of Object.keys(properties)) {
@@ -186,16 +188,19 @@ function authenticateToken(req, res, next) {
     const token = req.headers['authorization']?.split(' ')[1];
     console.log('token:', token);
     if (!token) {
+        console.log('No token provided');
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
-
+    
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) {
+            console.log('Invalid token:', err);
             return res.status(403).json({ error: 'Invalid token.' });
         }
         req.user = decoded; // Attach the decoded token data, including userId, to the request
 
         // req.user = user; // Store the user info in the request object
+        console.log('Token authenticated');
         next(); // Proceed to the next middleware or route
     });
 }

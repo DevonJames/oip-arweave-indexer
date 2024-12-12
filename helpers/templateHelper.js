@@ -42,7 +42,7 @@ function findMatchingString(mainString, arrayOfStrings) {
     for (const str of arrayOfStrings) {
         const lowerStr = str.toLowerCase();
 
-        if (lowerMainString.includes(lowerStr)) {
+        if (lowerMainString.includes(lowerStr) || lowerStr.includes(lowerMainString)) {
             return str; 
         }
     }
@@ -51,12 +51,14 @@ function findMatchingString(mainString, arrayOfStrings) {
 
 const translateJSONtoOIPData = async (record, recordType) => {
     const { qtyTemplatesInDB } = await getTemplatesInDB()
-    console.log('Translating JSON to OIP data:', record);
+    // console.log('Translating JSON to OIP data:', record);
     const templates = Object.values(record);
     const didTxRefs = [];
     const subRecords = [];
     const subRecordTypes = [];
     const templateNames = Object.keys(record);
+    // console.log('60 templateNames', templateNames)
+    // console.log('61 templates', templates)
     if (qtyTemplatesInDB === 0) {
         console.log('No templates found in DB, using hardcoded translation');
         const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
@@ -108,8 +110,9 @@ const translateJSONtoOIPData = async (record, recordType) => {
                         const indexKey = `index_${key}`;
                         const fieldType = fields[key];
                         const fieldValuesKey = `${key}Values`;
-
+                        
                         if (fields[indexKey] !== undefined) {
+                            // console.log('field', key)
                             if (fieldType === 'enum' && fields[fieldValuesKey]) {
                                 const valueIndex = fields[fieldValuesKey].findIndex(val => {
                                     const inputCode = json[key].toLowerCase();
@@ -122,13 +125,10 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                     console.log(`Value not found in enum values for key: ${key}`);
                                 }
                             } else if (fieldType === 'dref') {
-                                const subRecord = json[key];
-                                console.log('126 Processing dref:', subRecord);
-                                // console.log('th 108 Processing dref:', json[key], subRecord, 'type of json[key]:', typeof json[key], typeof subRecord, { key })
-
-                                const templatesArray = Object.keys(json[key]);
+                                const subRecord = json[key][0] || json[key];
+                                const templatesArray = (json[key][0] !== undefined) ? Object.keys(json[key][0]) : Object.keys(json[key]);
                                 recordType = findMatchingString(JSON.stringify(key), templatesArray)
-                                // console.log('th 130 recordType', recordType)
+                                console.log('thx 133', subRecord, templatesArray, { key }, recordType)
                                 if (!recordType) {
                                     // check if there is only one template in the array
                                     if (templatesArray.length === 1) {
@@ -145,13 +145,15 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 subRecordTypes.push(recordType);
                                 // console.log('recordType 143', recordType, {didTxRefs}, {subRecords})
                                 converted[fields[indexKey]] = dref;
-                            } else if (fieldType === 'repeated dref') {
+                            } else if (fieldType === 'repeated dref' && key !== "citations") {
+                                // console.log('149 Processing repeated dref:', json[key], fields[indexKey]);
                                 const subRecord = json[key][0];
-                                console.log('150 Processing repeated dref:', subRecord);
+                                // console.log('151b Processing repeated dref:', subRecord);
 
                                 // console.log('th 113 Processing repeated dref for template:', template, json[key][0], subRecord, { key })
                                 const templatesArray = Object.keys(json[key][0]);
                                 recordType = findMatchingString(JSON.stringify(key)[0], templatesArray)
+                                console.log('th 158', templatesArray, recordType)
                                 if (!recordType) {
                                     // check if there is only one template in the array
                                     if (templatesArray.length === 1) {
@@ -188,6 +190,7 @@ const translateJSONtoOIPData = async (record, recordType) => {
                 console.error('Error processing template:', { templateName, error });
             }
         }
+        // console.log('convertedTemplates', convertedTemplates, { didTxRefs }, { subRecords }, { subRecordTypes })
         return { convertedTemplates, didTxRefs, subRecords, subRecordTypes };
     }
 };
@@ -270,12 +273,20 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
             subRecordTypes = oipData.subRecordTypes;
             let recordDataArray = [];
 
+            // oipRecord.forEach((record) => {
+            //     let stringValue = JSON.stringify(record);
+            //     recordDataArray.push(stringValue);
+            //     recordData = `[${recordDataArray.join(',')}]`;
+            //     console.log(getFileInfo(), getLineNumber(), 'recordData', recordData)
+            // });
+            // recordData = JSON.stringify(oipRecord);
+
             oipRecord.forEach((record) => {
-                let stringValue = JSON.stringify(record);
+                let stringValue = JSON.stringify(record); // Each record is stringified here
                 recordDataArray.push(stringValue);
-                recordData = `[${recordDataArray.join(',')}]`;
-                console.log(getFileInfo(), getLineNumber(), 'recordData', recordData)
             });
+            recordData = `[${recordDataArray.join(',')}]`; // Final serialized string of all records
+            console.log(getFileInfo(), getLineNumber(), 'recordData', recordData);
         }
         const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
 
@@ -286,7 +297,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
         const tags = [
             { name: 'Content-Type', value: 'application/json' },
             { name: 'Index-Method', value: 'OIP' },
-            { name: 'Ver', value: '0.7.2' },
+            { name: 'Ver', value: '0.7.4' },
             { name: 'Type', value: 'Record' },
             { name: 'RecordType', value: `${recordType}` },
             { name: 'Creator', value: `${myAddress}` }

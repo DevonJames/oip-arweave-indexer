@@ -1,6 +1,6 @@
 const { Client } = require('@elastic/elasticsearch');
 const Arweave = require('arweave');
-const { getTransaction, getBlockHeightFromTxId } = require('./arweave');
+const { getTransaction, getBlockHeightFromTxId, getCurrentBlockHeight } = require('./arweave');
 const { resolveRecords } = require('../helpers/utils');
 const { setIsProcessing } = require('../helpers/processingState');  // Adjust the path as needed
 const arweaveConfig = require('../config/arweave.config');
@@ -15,7 +15,7 @@ const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDi
 const path = require('path');
 const fs = require('fs');
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
-
+let startBlockHeight = 1463761;
 const elasticClient = new Client({
     node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
 
@@ -529,7 +529,9 @@ async function searchTemplateByTxId(templateTxid) {
             }
         }
     });
+    // console.log('1234 searchResponse hits hits:', searchResponse.hits.hits);
     template = searchResponse.hits.hits[0]._source;
+    // console.log('12345 template:', template);
     return template
 }
 
@@ -668,17 +670,20 @@ async function getRecords(queryParams) {
     // console.log('get records using:', {template, creator_name, creator_did_address, resolveDepth, url, didTx, didTxRef, tags, sortBy, recordType});
     try {
         const result = await getRecordsInDB();
-
+        // console.log('es 671 result:', result);
         let records = result.records;
+        // console.log('es 673 records:', records[0]);
         let recordsInDB = result.records;
-        records.qtyRecordsInDB = result.qtyRecordsInDB;
-        records.maxArweaveBlockInDB = result.finalMaxRecordArweaveBlock;
+        // console.log('recordsInDB:', recordsInDB);
+        let qtyRecordsInDB = result.qtyRecordsInDB;
+        let maxArweaveBlockInDB = result.finalMaxRecordArweaveBlock;
 
         // Perform filtering based on query parameters
 
-        const totalRecordsInDB = recordsInDB.length;
+        // const totalRecordsInDB = recordsInDB.length;
 
-        console.log('before filtering, there are', totalRecordsInDB, 'records');
+        console.log('before filtering, there are', qtyRecordsInDB, 'records');
+
 
 
         if (creator_name != undefined) {
@@ -716,7 +721,7 @@ async function getRecords(queryParams) {
         }
 
 
-        if (template) {
+        if (template != undefined) {
             records = records.filter(record => {
                 return record.data.some(item => {
                     return Object.keys(item).some(key => key.toLowerCase().includes(template.toLowerCase()));
@@ -816,6 +821,25 @@ async function getRecords(queryParams) {
 
         console.log('all filters complete, there are', records.length, 'records');
 
+
+
+        // Add a dateReadable field to each record that has a timestamp value at ...basic.date
+        records = records.map(record => {
+            const basicData = record.data.find(item => item.basic); // Ensure `basic` exists
+            if (basicData && basicData.basic.date) {
+                const date = new Date(basicData.basic.date * 1000); // Convert Unix timestamp to milliseconds
+                record.data = record.data.map(item => {
+                    if (item.basic && item.basic.date) {
+                        item.basic.dateReadable = date.toDateString();
+                    }
+                    return item;
+                });
+            }
+            return record;
+        });
+
+        console.log('after adding dateReadable field, there are', records.length, 'records');
+
         // Sort records based on sortBy parameter
         if (sortBy != undefined) {
             console.log('sorting by:', sortBy);
@@ -875,8 +899,8 @@ async function getRecords(queryParams) {
 
             if (fieldToSortBy === 'date') {
                 records.sort((a, b) => {
-                    if (!a.data || !a.data[0].basic.date) return 1;
-                    if (!b.data || !b.data[0].basic.date) return -1;
+                    if (!a.data || !a.data[0].basic || !a.data[0].basic.date) return 1;
+                    if (!b.data || !b.data[0].basic || !b.data[0].basic.date) return -1;
                     if (order === 'asc') {
                         return a.data[0].basic.date - b.data[0].basic.date;
                     } else {
@@ -901,13 +925,18 @@ async function getRecords(queryParams) {
             const resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB);
             return resolvedRecord;
         }));
-        console.log('es 896 records:', resolvedRecords);
+        // console.log('es 896 resolvedRecords:', resolvedRecords);
+
+        let currentBlockHeight = await getCurrentBlockHeight();
+        // let startBlockHeight = 1463761;
+        let progress = Math.round((maxArweaveBlockInDB - startBlockHeight) / (currentBlockHeight - startBlockHeight)  * 100);
         return {
             message: "Records retrieved successfully",
             // qtyRecordsInDB: records.qtyRecordsInDB,
-            // maxArweaveBlockInDB: records.maxArweaveBlockInDB,
+            latestArweaveBlockInDB: maxArweaveBlockInDB,
+            indexingProgress: `${progress}%`,
             // qtyReturned: records.length,
-            totalRecords: totalRecordsInDB,
+            totalRecords: qtyRecordsInDB,
             searchResults: records.length,
             pageSize: pageSize,
             currentPage: pageNumber,
@@ -1759,8 +1788,10 @@ async function processNewRecord(transaction, remapTemplates = []) {
         return { records: newRecords, recordsToDelete };
     }
     let record;
-
-    const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+    let currentBlockHeight = await getCurrentBlockHeight();
+    let inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+    let progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight)  * 100);
+    console.log(getFileInfo(), getLineNumber(),`Indexing Progress: ${progress}%`);
     let dataArray = [];
     dataArray.push(transactionData);
     if (isDeleteMessageFound) {

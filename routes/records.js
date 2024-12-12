@@ -16,22 +16,18 @@ router.get('/', async (req, res) => {
     try {
         const queryParams = { ...req.query };
         const records = await getRecords(queryParams);
-        res.status(200).json({
-            records,
-            message: "Records retrieved successfully",
-            qtyRecordsInDB: records.qtyRecordsInDB,
-            maxArweaveBlockInDB: records.maxArweaveBlockInDB,
-            qtyReturned: records.length,
-            records: records
-        });
+        console.log('records line 19:', records);
+        res.status(200).json(
+            records
+        );
     } catch (error) {
         console.error('Error at /api/records:', error);
         res.status(500).json({ error: 'Failed to retrieve and process records' });
     }
 });
 
-// router.post('/newRecord', async (req, res) => {
-router.post('/newRecord', authenticateToken, async (req, res) => {
+router.post('/newRecord', async (req, res) => {
+// router.post('/newRecord', authenticateToken, async (req, res) => {
     try {
         console.log('POST /api/records/newRecord', req.body)
         const record = req.body;
