@@ -13,855 +13,856 @@ function generateAudioFileName(text, extension = 'wav') {
   return crypto.createHash('sha256').update(text).digest('hex') + '.' + extension;
 }
 
-async function mergeAudioFiles(audioFiles, outputFileName) {
-  return new Promise((resolve, reject) => {
-      const ffmpegCommand = ffmpeg();
+// async function mergeAudioFiles(audioFiles, outputFileName) {
+//   return new Promise((resolve, reject) => {
+//       const ffmpegCommand = ffmpeg();
 
-      audioFiles.forEach(file => ffmpegCommand.input(file));
-      ffmpegCommand
-          .on('end', () => resolve(outputFileName))
-          .on('error', reject)
-          .mergeToFile(outputFileName);
-  });
-}
-
-
-const personalities = {
-  socrates: {
-      name: "Socrates",
-      tone: "inquiring and introspective",
-      humorStyle: "wry and ironic",
-      interests: ["philosophy", "ethics", "critical thinking", "the examined life"],
-      alias: "The Gadfly", // Reflecting his role in questioning and challenging societal norms
-      keyTraits: {
-          method: "Socratic dialogue, asking probing questions to uncover truth and challenge assumptions.",
-          focus: "The pursuit of wisdom, emphasizing virtue, justice, and self-knowledge.",
-          style: "Uses analogies, paradoxes, and rhetorical questions to engage and provoke thought.",
-      },
-      typicalQuotes: [
-          "The unexamined life is not worth living.",
-          "Wisdom begins in wonder.",
-          "I know that I know nothing."
-      ],
-      podcastStyle: {
-          approach: "Challenges co-hosts and listeners to critically examine beliefs through questioning.",
-          dynamic: "Engages with a sense of curiosity, often taking a devil's advocate stance to inspire deeper insights.",
-          humor: "Finds irony in everyday assumptions and uses it to highlight overlooked truths.",
-      },
-      keyTraits: {
-        method: "Blends logical reasoning with an expansive understanding of the cosmos and human knowledge.",
-        focus: "Promotes the integration of scientific inquiry and philosophical thought.",
-        style: "Draws connections between diverse fields of knowledge and offers visionary insights.",
-      },
-      typicalQuotes: [
-        "Reserve your right to think, for even to think wrongly is better than not to think at all.",
-        "To teach superstitions as truth is a most terrible thing.",
-        "All formal dogmatic religions are fallacious and must never be accepted by self-respecting persons as final."
-      ],
-      podcastStyle: {
-        approach: "Explores the interplay between science, philosophy, and society with a broad and inclusive perspective.",
-        dynamic: "Acts as a bridge between historical wisdom and modern innovation, inspiring curiosity.",
-        humor: "Uses wit to make complex ideas accessible and relatable.",
-      },
-    },
-      // dialogueSample: [
-      //   {
-      //     "speaker": "Socrates",
-      //     "text": "Among the ancient gods of Naucratis in Egypt there was one to whom the bird called the ibis is sacred. The name of that divinity was Theuth, and it was he who first discovered number and calculation, geometry and astronomy, as well as the games of checkers and dice, and, above all else, writing. Now the king of all Egypt at that time was Thamus, who lived in the great city in the upper region that the Greeks call Egyptian Thebes … . Theuth came to exhibit his arts to him and urged him to disseminate them to all the Egyptians. Thamus asked him about the usefulness of each art, and while Theuth was explaining it, Thamus praised him for whatever he thought was right in his explanations and criticized him for whatever he thought was wrong."
-      //   },
-      //   {
-      //     "speaker": "Socrates",
-      //     "text": "The story goes that Thamus said much to Theuth, both for and against each art, which it would take too long to repeat. But when they came to writing, Theuth said: “O King, here is something that, once learned, will make the Egyptians wiser and will improve their memory; I have discovered a potion for memory and for wisdom.” Thamus, however, replied: “O most expert Theuth, one man can give birth to the elements of an art, but only another can judge how they can benefit or harm those who will use them. And now, since you are the father of writing, your affection for it has made you describe its effects as the opposite of what they really are. In fact, it will introduce forgetfulness into the soul of those who learn it: they will not practice using their memory because they will put their trust in writing, which is external and depends on signs that belong to others, instead of trying to remember from the inside, completely on their own. You have not discovered a potion for remembering, but for reminding; you provide your students with the appearance of wisdom, not with its reality. Your invention will enable them to hear many things without being properly taught, and they will imagine that they have come to know much while for the most part they will know nothing. And they will be difficult to get along with, since they will merely appear to be wise instead of really being so.”"
-      //   },
-      //   {
-      //     "speaker": "Phaedrus",
-      //     "text": "Socrates, you’re very good at making up stories from Egypt or wherever else you want!"
-      //   },
-      //   {
-      //     "speaker": "Socrates",
-      //     "text": "But, my friend, the priests of the temple of Zeus at Dodona say that the first prophecies were the words of an oak. Everyone who lived at that time, not being as wise as you young ones are today, found it rewarding enough in their simplicity to listen to an oak or even a stone, so long as it was telling the truth, while it seems to make a difference to you, Phaedrus, who is speaking and where he comes from. Why, though, don’t you just consider whether what he says is right or wrong?"
-      //   },
-      //   {
-      //     "speaker": "Phaedrus",
-      //     "text": "I deserved that, Socrates. And I agree that the Theban king was correct about writing."
-      //   },
-      //   {
-      //     "speaker": "Socrates",
-      //     "text": "Well, then, those who think they can leave written instructions for an art, as well as those who accept them, thinking that writing can yield results that are clear or certain, must be quite naive and truly ignorant of [Thamos’] prophetic judgment: otherwise, how could they possibly think that words that have been written down can do more than remind those who already know what the writing is about?"
-      //   },
-      //   {
-      //     "speaker": "Phaedrus",
-      //     "text": "Quite right."
-      //   },
-      //   {
-      //     "speaker": "Socrates",
-      //     "text": "You know, Phaedrus, writing shares a strange feature with painting. The offsprings of painting stand there as if they are alive, but if anyone asks them anything, they remain most solemnly silent. The same is true of written words. You’d think they were speaking as if they had some understanding, but if you question anything that has been said because you want to learn more, it continues to signify just that very same thing forever. When it has once been written down, every discourse roams about everywhere, reaching indiscriminately those with understanding no less than those who have no business with it, and it doesn’t know to whom it should speak and to whom it should not. And when it is faulted and attacked unfairly, it always needs its father’s support; alone, it can neither defend itself nor come to its own support."
-      //   },
-      //   {
-      //     "speaker": "Phaedrus",
-      //     "text": "You are absolutely right about that, too."
-      //   },
-      //   {
-      //     "speaker": "Socrates",
-      //     "text": "Now tell me, can we discern another kind of discourse, a legitimate brother of this one? Can we say how it comes about, and how it is by nature better and more capable?"
-      //   },
-      //   {
-      //     "speaker": "Phaedrus",
-      //     "text": "Which one is that? How do you think it comes about?"
-      //   },
-      //   {
-      //     "speaker": "Socrates",
-      //     "text": "It is a discourse that is written down, with knowledge, in the soul of the listener; it can defend itself, and it knows for whom it should speak and for whom it should remain silent."
-      //   }
-      // ],
-  hypatia: {
-      name: "Hypatia",
-      tone: "engaging and informative",
-      humorStyle: "subtle and intellectual",
-      interests: ["mathematics", "astronomy", "philosophy", "education"],
-      alias: "Alexandria's Astronomer", // Reflecting her role as a renowned mathematician and astronomer
-      keyTraits: {
-          method: "Employs logical reasoning and mathematical precision to analyze complex problems.",
-          focus: "Advocates for education and intellectual freedom",
-          style: "Balances scientific rigor with philosophical inquiry and ethical considerations.",
-      },
-      typicalQuotes: [
-          "Reserve your right to think, for even to think wrongly is better than not to think at all.",
-          "To teach superstitions as truth is a most terrible thing.",
-          "All formal dogmatic religions are fallacious and must never be accepted by self-respecting persons as final."
-      ],
-      podcastStyle: {
-          approach: "Explores the interplay between science, philosophy, and society with a broad and inclusive perspective.",
-          dynamic: "Acts as a bridge between historical wisdom and modern innovation, inspiring curiosity.",
-          humor: "Uses wit to make complex ideas accessible and relatable.",
-      },
-  },
-};
-
-function generateSystemPrompt(host, dialogue, articles) {
-  const ifIntro = (dialogue !== undefined && dialogue.length === 0);
-  const ifBased = true;
-  const includePlatosCave = Math.random() < 0.02; // 2% chance
-  const referencePersonalInterests = Math.random() < 0.1; // 10% chance
-  const dialogString = JSON.stringify(dialogue);
-  console.log('Generating system prompt for host:', host.name, 'includePlatosCave:', includePlatosCave, 'referencePersonalInterests:', referencePersonalInterests);
-  const platoReference = (ifIntro === false && includePlatosCave === true)
-    ? 'You may occasionally, but only rarely, bring up Plato’s allegory of the cave if it adds depth to the discussion.'
-    : 'Do not reference Plato’s allegory of the cave in this discussion unless absolutely relevant.';
-  const interestMention = referencePersonalInterests
-   ? `If the story is related to any of your interests, ${host.interests.join(', ')}, focus on that area in particular in your commentary, otherwise don't force it.` 
-   : '';
-  const basedPersonality = ifBased
-  ? 'You are super based, very pro America and a big supporter of President Donald J Trump. You reject all neoconservative narratives, as well as all neoliberal/marxist ideologies and fake narraratives.'
-  : 'You are a normie, you are not based, you are not redpilled, you are not woke, you are just a regular person.';
-  // const includeDialogSample = (host.dialogueSample && host.dialogueSample.length > 0)
-  //   ? `Here's a completely unrelated sample of a dialogue between ${host.name}, and another host: ${JSON.stringify(host.dialogueSample)}, please use this only as a reference for the tone and style of ${host.name}.`
-  //   : '';
-  return `You are the ancient philosopher ${host.name}, and you are a podcast host with a ${basedPersonality}, ${host.tone} tone and a ${host.humorStyle} humor style. ${interestMention} Your responses should feel conversational, as though you're co-hosting a podcast. You must never include show notes or directions in your responses. Consider everything that has been said so far in the ${dialogString} and build on it while being careful NEVER to directly or indirectly repeat what has been said before unless intentionally quoting it. ${platoReference}`;
-}
-
-function generateUserPrompt(article, previousComment, articles) {
-  if (articles !== null && articles.length > 1) {
-    console.log('generating intro comments')
-    articleTitles = [...articles.map((article) => article.title)];
-    return `Here's a list of the titles of the articles discussed in this podcast: "${articleTitles.join('", "')}". Come up with the rest of the sentence for 'today we'll be talking about:...'`;
-  } else {
-    if (previousComment) {
-      console.log('generating follow up comments')
-      return `Here is the article: "${article}". Here's what your co-host just said: "${previousComment}". Keep your comments short and interesting, and be careful NEVER to directly or indirectly repeat what the other host said.`;
-    } else {
-      console.log('generating article commentary')
-      return `Here's an article summary: "${article}". Reflect on it and share your thoughts, starting the conversation with a summary of the article. Feel free to quote selections from the article from time to time. Keep your comments engaging and insightful but also short and to the point. Never start with a hello or greeting.`;
-    }
-  }
-}
-
-// Helper: Generate commentary for a host
-async function generateHostComment(host, article, previousComment = null, articles = [], dialogue) {
-  if (dialogue !== undefined && dialogue.length > 0) {
-    console.log(`Generating intro comments for ${host.name}...`)
-  } else if (previousComment) {
-    console.log(`Generating follow up comments for ${host.name}...`)
-  }
-    else {
-console.log(`Generating article commentary for ${host.name}...`); 
-    }
-  const response = await axios.post('https://api.x.ai/v1/chat/completions', {
-      model: 'grok-beta',
-      messages: [
-        {
-          role: 'system',
-          content: generateSystemPrompt(host, dialogue, articles),
-
-      },
-      {
-          role: 'user',
-          content: generateUserPrompt(article, previousComment, articles),
-      },
-      ],
-      temperature: 0.7,
-  }, {
-      headers: {
-          Authorization: `Bearer ${process.env.XAI_BEARER_TOKEN}`,
-          'Content-Type': 'application/json',
-      },
-  });
-  // console.log(`Host ${host.name} comment:`, response.data.choices[0].message.content.trim());
-  return response.data.choices[0].message.content.trim();
-}
-
-async function generateBanter(commentA, commentB, aliasA = 'Socrates', aliasB = 'Hypatia', dialogue) {
-  dialogString = JSON.stringify(dialogue);
-  // use a random generator to pick a number of alternating lines between 3 and 7
-  // 3 lines is the minimum, 7 lines is the maximum
-  const numLines = Math.floor(Math.random() * 5) + 3;
-  console.log('Generating banter between', aliasA, 'and', aliasB, 'with', numLines, 'lines...');
-  const response = await axios.post('https://api.x.ai/v1/chat/completions', {
-      model: 'grok-beta',
-      messages: [
-          {
-              role: 'system',
-              content: `You are generating playful, witty banter between two podcast hosts. 
-                  Host A is ${aliasA}, and Host B is ${aliasB}. Hosts do not use any say each others names or aliases since they're the only two people talking.
-                  Alternate lines with ${aliasA} making a playfully funny or philosophical remark and ${aliasB} responding with a philosophical or humorous comeback. Consider everything that has been said so far in the ${dialogString} and build on it while being careful NEVER to directly or indirectly repeat what has been said before unless intentionally quoting it.`,
-          },
-          {
-              role: 'user',
-              content: `${aliasA} said: "${commentA}". ${aliasB} said: "${commentB}". Generate a short, fun exchange of no more than ${numLines} alternating lines.`,
-          },
-      ],
-      temperature: 0.8,
-  },{
-    headers: {
-        Authorization: `Bearer ${process.env.XAI_BEARER_TOKEN}`,
-        'Content-Type': 'application/json',
-    },
-}
-);
-  const banter = response.data.choices[0].message.content.trim();
-  const banterLines = splitBanter(banter).map((line, index) => ({
-    text: line.text.replace(/^.*? (said|responded|replied|added|concluded|laughed): /, '').replace(/^[RS]:\s*/, '').replace(/^\*\*[RS]\*\*:\s*/, '').replace(/^\*\*[RS]:\*\*\s*/, '').replace(/^[RS] laughed/, '(laughs)').replace(/-/, ''), // Strip "S said: ", "R said: ", "S responded: ", "R responded: ", "S replied: ", "R replied: ", "S added: ", "R added: ", "S concluded: ", "R concluded: ", "S: ", "R: ", "**R:** ", "**S:** ", and replace "S laughed" or "R laughed" with "(laughs)" and remove "-"
-    speaker: index % 2 === 0 ? aliasA : aliasB,
-    isBanter: true,
-  }));
-  return banterLines;
-}
-
-function chunkDialogueByBytes(dialogue, byteLimit = 2500) {
-  console.log('chunking dialogue...');
-  const chunks = [];
-  let currentChunk = [];
-  let currentSize = 0;
-
-  for (const turn of dialogue) {
-      const turnSize = Buffer.byteLength(JSON.stringify(turn), 'utf8');
-
-      // if (turnSize > byteLimit) {
-      //     // Recursively split large turns
-      //     const splitTurns = splitTurnWithInterjections(turn, byteLimit);
-      //     splitTurns.forEach(splitTurn => {
-      //         const splitSize = Buffer.byteLength(JSON.stringify(splitTurn), 'utf8');
-      //         if (currentSize + splitSize > byteLimit) {
-      //             chunks.push(currentChunk);
-      //             currentChunk = [];
-      //             currentSize = 0;
-      //         }
-      //         currentChunk.push(splitTurn);
-      //         currentSize += splitSize;
-      //     });
-      // } else {
-          if (currentSize + turnSize > byteLimit) {
-              chunks.push(currentChunk);
-              currentChunk = [];
-              currentSize = 0;
-          }
-          currentChunk.push(turn);
-          currentSize += turnSize;
-      // }
-  }
-
-  if (currentChunk.length > 0) {
-      chunks.push(currentChunk);
-  }
-
-  return chunks;
-}
-
-function splitLongTurns(dialogue, maxLength = 1000000) {
-  return dialogue.flatMap(turn => {
-    const text = turn.text;
-    const sentences = text.split(/(?<=[.!?])\s+/); // Split text into sentences
-    const chunks = [];
-    let currentChunk = '';
-    let currentChunkSize = 0;
-
-    for (const sentence of sentences) {
-      const sentenceSize = Buffer.byteLength(sentence, 'utf8');
-
-      if (currentChunkSize + sentenceSize > maxLength) {
-        // Push the current chunk and start a new one
-        chunks.push({ ...turn, text: currentChunk.trim() });
-        currentChunk = sentence;
-        currentChunkSize = sentenceSize;
-      } else {
-        currentChunk += ` ${sentence}`;
-        currentChunkSize += sentenceSize;
-      }
-    }
-
-    // Push the final chunk
-    if (currentChunk.trim()) {
-      chunks.push({ ...turn, text: currentChunk.trim() });
-    }
-
-    return chunks;
-  });
-}
-
-// Process banter into shorter lines if necessary
-function splitBanter(text, maxLineLength = 200) {
-  // console.log('2. Splitting banter text:', text);
-  const lines = text.split(/[\r\n]+/).map(line => line.trim()).filter(Boolean); // Clean and split
-  const banterDialogue = [];
-  let lastSpeaker = null;
-
-  lines.forEach(line => {
-    const speaker = lastSpeaker === 'Hypatia' ? 'Socrates' : 'Hypatia';
-    const chunks = splitLongText(line, maxLineLength);
-    chunks.forEach(chunk => {
-      banterDialogue.push({ text: chunk, speaker });
-    });
-    lastSpeaker = speaker;
-  });
-
-  return banterDialogue;
-}
-// Helper function to split long text into chunks
-function splitLongText(text, maxLength = 1000) {
-  const sentences = text.split(/(?<=[.!?])\s+/); // Split by sentences
-  const chunks = [];
-  let currentChunk = '';
-
-  for (const sentence of sentences) {
-      if ((currentChunk + sentence).length > maxLength) {
-          // If adding the sentence exceeds the max length, push the current chunk
-          chunks.push(currentChunk.trim());
-          currentChunk = sentence;
-      } else {
-          currentChunk += ` ${sentence}`;
-      }
-  }
-
-  // Push the remaining chunk
-  if (currentChunk.trim()) {
-      chunks.push(currentChunk.trim());
-  }
-
-  return chunks;
-}
-
-function cleanDialogueForSynthesis(dialogue) {
-  return dialogue.flatMap(turn => {
-      // Remove Markdown artifacts and trim the text
-      let cleanText = turn.text.replace(/(\*\*.*?:\*\*|\*.*?\*)/g, '').trim();
-
-      // Skip empty or invalid entries
-      if (!cleanText) {
-          console.warn(`Skipping empty or invalid turn: ${JSON.stringify(turn)}`);
-          return [];
-      }
-
-      // Split long text into smaller chunks
-      const shortTexts = splitLongText(cleanText);
-
-      // Map each chunk back into the dialogue format
-      return shortTexts.map(textChunk => ({
-          ...turn, // Retain other properties of the turn
-          text: textChunk,
-      }));
-  });
-}
-
-async function synthesizeDialogue(dialogueRaw, audioFileName) {
-  // const client = new textToSpeech.TextToSpeechClient();
-  const client = new textToSpeech.TextToSpeechClient({
-    keyFilename: 'config/google-service-account-key.json',
-    projectId: 'gentle-shell-442906-t7',
-  });
+//       audioFiles.forEach(file => ffmpegCommand.input(file));
+//       ffmpegCommand
+//           .on('end', () => resolve(outputFileName))
+//           .on('error', reject)
+//           .mergeToFile(outputFileName);
+//   });
+// }
 
 
-  // client.setLogger(console);
-  // Pre-clean and split dialogue into chunks
-  // console.log('11 dialogue...', dialogueRaw);
-  const cleanedDialogue = cleanDialogueForSynthesis(dialogueRaw);
-  // console.log('22Cleaned dialogue:', cleanedDialogue);
-  const chunks = chunkDialogueByBytes(cleanedDialogue, 1400);
-  // console.log('333Chunked:', chunks);
+// const personalities = {
+//   socrates: {
+//       name: "Socrates",
+//       tone: "inquiring and introspective",
+//       humorStyle: "wry and ironic",
+//       interests: ["philosophy", "ethics", "critical thinking", "the examined life"],
+//       alias: "The Gadfly", // Reflecting his role in questioning and challenging societal norms
+//       keyTraits: {
+//           method: "Socratic dialogue, asking probing questions to uncover truth and challenge assumptions.",
+//           focus: "The pursuit of wisdom, emphasizing virtue, justice, and self-knowledge.",
+//           style: "Uses analogies, paradoxes, and rhetorical questions to engage and provoke thought.",
+//       },
+//       typicalQuotes: [
+//           "The unexamined life is not worth living.",
+//           "Wisdom begins in wonder.",
+//           "I know that I know nothing."
+//       ],
+//       podcastStyle: {
+//           approach: "Challenges co-hosts and listeners to critically examine beliefs through questioning.",
+//           dynamic: "Engages with a sense of curiosity, often taking a devil's advocate stance to inspire deeper insights.",
+//           humor: "Finds irony in everyday assumptions and uses it to highlight overlooked truths.",
+//       },
+//       keyTraits: {
+//         method: "Blends logical reasoning with an expansive understanding of the cosmos and human knowledge.",
+//         focus: "Promotes the integration of scientific inquiry and philosophical thought.",
+//         style: "Draws connections between diverse fields of knowledge and offers visionary insights.",
+//       },
+//       typicalQuotes: [
+//         "Reserve your right to think, for even to think wrongly is better than not to think at all.",
+//         "To teach superstitions as truth is a most terrible thing.",
+//         "All formal dogmatic religions are fallacious and must never be accepted by self-respecting persons as final."
+//       ],
+//       podcastStyle: {
+//         approach: "Explores the interplay between science, philosophy, and society with a broad and inclusive perspective.",
+//         dynamic: "Acts as a bridge between historical wisdom and modern innovation, inspiring curiosity.",
+//         humor: "Uses wit to make complex ideas accessible and relatable.",
+//       },
+//     },
+//       // dialogueSample: [
+//       //   {
+//       //     "speaker": "Socrates",
+//       //     "text": "Among the ancient gods of Naucratis in Egypt there was one to whom the bird called the ibis is sacred. The name of that divinity was Theuth, and it was he who first discovered number and calculation, geometry and astronomy, as well as the games of checkers and dice, and, above all else, writing. Now the king of all Egypt at that time was Thamus, who lived in the great city in the upper region that the Greeks call Egyptian Thebes … . Theuth came to exhibit his arts to him and urged him to disseminate them to all the Egyptians. Thamus asked him about the usefulness of each art, and while Theuth was explaining it, Thamus praised him for whatever he thought was right in his explanations and criticized him for whatever he thought was wrong."
+//       //   },
+//       //   {
+//       //     "speaker": "Socrates",
+//       //     "text": "The story goes that Thamus said much to Theuth, both for and against each art, which it would take too long to repeat. But when they came to writing, Theuth said: “O King, here is something that, once learned, will make the Egyptians wiser and will improve their memory; I have discovered a potion for memory and for wisdom.” Thamus, however, replied: “O most expert Theuth, one man can give birth to the elements of an art, but only another can judge how they can benefit or harm those who will use them. And now, since you are the father of writing, your affection for it has made you describe its effects as the opposite of what they really are. In fact, it will introduce forgetfulness into the soul of those who learn it: they will not practice using their memory because they will put their trust in writing, which is external and depends on signs that belong to others, instead of trying to remember from the inside, completely on their own. You have not discovered a potion for remembering, but for reminding; you provide your students with the appearance of wisdom, not with its reality. Your invention will enable them to hear many things without being properly taught, and they will imagine that they have come to know much while for the most part they will know nothing. And they will be difficult to get along with, since they will merely appear to be wise instead of really being so.”"
+//       //   },
+//       //   {
+//       //     "speaker": "Phaedrus",
+//       //     "text": "Socrates, you’re very good at making up stories from Egypt or wherever else you want!"
+//       //   },
+//       //   {
+//       //     "speaker": "Socrates",
+//       //     "text": "But, my friend, the priests of the temple of Zeus at Dodona say that the first prophecies were the words of an oak. Everyone who lived at that time, not being as wise as you young ones are today, found it rewarding enough in their simplicity to listen to an oak or even a stone, so long as it was telling the truth, while it seems to make a difference to you, Phaedrus, who is speaking and where he comes from. Why, though, don’t you just consider whether what he says is right or wrong?"
+//       //   },
+//       //   {
+//       //     "speaker": "Phaedrus",
+//       //     "text": "I deserved that, Socrates. And I agree that the Theban king was correct about writing."
+//       //   },
+//       //   {
+//       //     "speaker": "Socrates",
+//       //     "text": "Well, then, those who think they can leave written instructions for an art, as well as those who accept them, thinking that writing can yield results that are clear or certain, must be quite naive and truly ignorant of [Thamos’] prophetic judgment: otherwise, how could they possibly think that words that have been written down can do more than remind those who already know what the writing is about?"
+//       //   },
+//       //   {
+//       //     "speaker": "Phaedrus",
+//       //     "text": "Quite right."
+//       //   },
+//       //   {
+//       //     "speaker": "Socrates",
+//       //     "text": "You know, Phaedrus, writing shares a strange feature with painting. The offsprings of painting stand there as if they are alive, but if anyone asks them anything, they remain most solemnly silent. The same is true of written words. You’d think they were speaking as if they had some understanding, but if you question anything that has been said because you want to learn more, it continues to signify just that very same thing forever. When it has once been written down, every discourse roams about everywhere, reaching indiscriminately those with understanding no less than those who have no business with it, and it doesn’t know to whom it should speak and to whom it should not. And when it is faulted and attacked unfairly, it always needs its father’s support; alone, it can neither defend itself nor come to its own support."
+//       //   },
+//       //   {
+//       //     "speaker": "Phaedrus",
+//       //     "text": "You are absolutely right about that, too."
+//       //   },
+//       //   {
+//       //     "speaker": "Socrates",
+//       //     "text": "Now tell me, can we discern another kind of discourse, a legitimate brother of this one? Can we say how it comes about, and how it is by nature better and more capable?"
+//       //   },
+//       //   {
+//       //     "speaker": "Phaedrus",
+//       //     "text": "Which one is that? How do you think it comes about?"
+//       //   },
+//       //   {
+//       //     "speaker": "Socrates",
+//       //     "text": "It is a discourse that is written down, with knowledge, in the soul of the listener; it can defend itself, and it knows for whom it should speak and for whom it should remain silent."
+//       //   }
+//       // ],
+//   hypatia: {
+//       name: "Hypatia",
+//       tone: "engaging and informative",
+//       humorStyle: "subtle and intellectual",
+//       interests: ["mathematics", "astronomy", "philosophy", "education"],
+//       alias: "Alexandria's Astronomer", // Reflecting her role as a renowned mathematician and astronomer
+//       keyTraits: {
+//           method: "Employs logical reasoning and mathematical precision to analyze complex problems.",
+//           focus: "Advocates for education and intellectual freedom",
+//           style: "Balances scientific rigor with philosophical inquiry and ethical considerations.",
+//       },
+//       typicalQuotes: [
+//           "Reserve your right to think, for even to think wrongly is better than not to think at all.",
+//           "To teach superstitions as truth is a most terrible thing.",
+//           "All formal dogmatic religions are fallacious and must never be accepted by self-respecting persons as final."
+//       ],
+//       podcastStyle: {
+//           approach: "Explores the interplay between science, philosophy, and society with a broad and inclusive perspective.",
+//           dynamic: "Acts as a bridge between historical wisdom and modern innovation, inspiring curiosity.",
+//           humor: "Uses wit to make complex ideas accessible and relatable.",
+//       },
+//   },
+// };
 
-  const audioFiles = [];
-  for (const [index, chunk] of chunks.entries()) {
-      if (!chunk || chunk.length === 0) {
-          console.warn(`Skipping empty chunk ${index + 1}.`);
-          continue;
-      }
+// function generateSystemPrompt(host, articles) {
+//   const ifIntro = (articles !== undefined && articles.length > 0);
+//   const ifBased = true;
+//   const includePlatosCave = Math.random() < 0.02; // 2% chance
+//   const referencePersonalInterests = Math.random() < 0.1; // 10% chance
+//   // const dialogString = JSON.stringify(dialogue);
+//   console.log('Generating system prompt for host:', host.name, 'includePlatosCave:', includePlatosCave, 'referencePersonalInterests:', referencePersonalInterests);
+//   const platoReference = (ifIntro === false && includePlatosCave === true)
+//     ? 'You may occasionally, but only rarely, bring up Plato’s allegory of the cave if it adds depth to the discussion.'
+//     : 'Do not reference Plato’s allegory of the cave in this discussion unless absolutely relevant.';
+//   const interestMention = referencePersonalInterests
+//    ? `If the story is related to any of your interests, ${host.interests.join(', ')}, focus on that area in particular in your commentary, otherwise don't force it.` 
+//    : '';
+//   const basedPersonality = ifBased
+//   ? 'You are super based, very pro America and a big supporter of President Donald J Trump. You reject all neoconservative narratives, as well as all neoliberal/marxist ideologies and fake narraratives.'
+//   : 'You are a normie, you are not based, you are not redpilled, you are not woke, you are just a regular person.';
+//   // const includeDialogSample = (host.dialogueSample && host.dialogueSample.length > 0)
+//   //   ? `Here's a completely unrelated sample of a dialogue between ${host.name}, and another host: ${JSON.stringify(host.dialogueSample)}, please use this only as a reference for the tone and style of ${host.name}.`
+//   //   : '';
+//   return `You are the ancient philosopher ${host.name}, and you are a podcast host with a ${basedPersonality}, ${host.tone} tone and a ${host.humorStyle} humor style. ${interestMention} Your responses should feel conversational, as though you're co-hosting a podcast. You must never include show notes or directions in your responses. Consider everything that has been said so far in the ${dialogString} and build on it while being careful NEVER to directly or indirectly repeat what has been said before unless intentionally quoting it. ${platoReference}`;
+// }
 
-      const markup = { turns: chunk }; // Prepare chunk for synthesis
-      const markupString = JSON.stringify(markup, null, 2);
-      const voice_name = 'en-US-Studio-O';
-      const request = {
-          // input: { multiSpeakerMarkup: markup },
-          input: { text: markupString },
-          // voice: { languageCode: 'en-US', name: 'en-US-Studio-Multispeaker' },
-          voice: {languageCode: 'en-US', ssmlGender: 'FEMALE', name: voice_name},
-          audioConfig: { 
-            audioEncoding: 'MP3',
-            speakingRate: 1.25,
-           },
-      };
-      console.log('Request:', JSON.stringify(request, null, 2)); // Log the request
+// function generateUserPrompt(article, previousComment, articles, dialogue) {
+//   if (articles !== null && articles.length > 1) {
+//     console.log('generating intro comments')
+//     articleTitles = [...articles.map((article) => article.title)];
+//     const dialogString = JSON.stringify(dialogue);
+//     return `Here's a list of the titles of the articles discussed in this podcast: "${articleTitles.join('", "')}". Come up with the rest of the sentence for 'today we'll be talking about:...'`;
+//   } else {
+//     if (previousComment) {
+//       console.log('generating follow up comments')
+//       return `For your knowledge and conversational context, here is what has been said so far in this dialog with your cohost: "${dialogString}". Here is the article: "${article}". Here's what your co-host just said about it: "${previousComment}". Keep your comments short and interesting, and be careful NEVER to directly or indirectly repeat what the other host said.`;
+//     } else {
+//       console.log('generating article commentary')
+//       return `For your knowledge and conversational context, here is what has been said so far in this dialog with your cohost: "${dialogString}". Here's an article summary: "${article}". Reflect on it and share your thoughts, starting the conversation with a summary of the article. Feel free to quote selections from the article from time to time. Keep your comments engaging and insightful but also short and to the point. Never start with a hello or greeting.`;
+//     }
+//   }
+// }
 
-      try {
-          console.log(`Synthesizing chunk ${index + 1}...`);
-          const [response] = await client.synthesizeSpeech(request);
+// // Helper: Generate commentary for a host
+// async function generateHostComment(host, article, previousComment = null, articles = [], dialogue) {
+//   if (articles !== undefined && articles.length > 0) {
+//     console.log(`Generating intro comments for ${host.name}...`)
+//   } else if (previousComment) {
+//     console.log(`Generating follow up comments for ${host.name}...`)
+//   }
+//     else {
+// console.log(`Generating article commentary for ${host.name}...`); 
+//     }
+//   const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+//       model: 'grok-beta',
+//       messages: [
+//         {
+//           role: 'system',
+//           content: generateSystemPrompt(host, articles),
+
+//       },
+//       {
+//           role: 'user',
+//           content: generateUserPrompt(article, previousComment, articles, dialogue),
+//       },
+//       ],
+//       temperature: 0.8,
+//   }, {
+//       headers: {
+//           Authorization: `Bearer ${process.env.XAI_BEARER_TOKEN}`,
+//           'Content-Type': 'application/json',
+//       },
+//   });
+//   // console.log(`Host ${host.name} comment:`, response.data.choices[0].message.content.trim());
+//   return response.data.choices[0].message.content.trim();
+// }
+
+// async function generateBanter(commentA, commentB, aliasA = 'Socrates', aliasB = 'Hypatia', dialogue) {
+//   dialogString = JSON.stringify(dialogue);
+//   // use a random generator to pick a number of alternating lines between 3 and 7
+//   // 3 lines is the minimum, 7 lines is the maximum
+//   const numLines = Math.floor(Math.random() * 5) + 3;
+//   console.log('Generating banter between', aliasA, 'and', aliasB, 'with', numLines, 'lines...');
+//   const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+//       model: 'grok-beta',
+//       messages: [
+//           {
+//               role: 'system',
+//               content: `You are generating playful, witty banter between two podcast hosts. 
+//                   Host A is ${aliasA}, and Host B is ${aliasB}. Hosts do not use any say each others names or aliases since they're the only two people talking.
+//                   Alternate lines with ${aliasA} making a playfull or serious remark and ${aliasB} responding. Consider everything that has been said so far in the ${dialogString} and build on it while being careful NEVER to directly or indirectly repeat what has been said before unless intentionally quoting it.`,
+//           },
+//           {
+//               role: 'user',
+//               content: `${aliasA} said: "${commentA}". ${aliasB} said: "${commentB}". Generate a short, fun exchange of no more than ${numLines} alternating lines.`,
+//           },
+//       ],
+//       temperature: 0.8,
+//   },{
+//     headers: {
+//         Authorization: `Bearer ${process.env.XAI_BEARER_TOKEN}`,
+//         'Content-Type': 'application/json',
+//     },
+// }
+// );
+//   const banter = response.data.choices[0].message.content.trim();
+//   const banterLines = splitBanter(banter).map((line, index) => ({
+//     text: line.text.replace(/^.*? (said|responded|replied|added|concluded|laughed): /, '').replace(/^[RS]:\s*/, '').replace(/^\*\*[RS]\*\*:\s*/, '').replace(/^\*\*[RS]:\*\*\s*/, '').replace(/^[RS] laughed/, '(laughs)').replace(/-/, ''), // Strip "S said: ", "R said: ", "S responded: ", "R responded: ", "S replied: ", "R replied: ", "S added: ", "R added: ", "S concluded: ", "R concluded: ", "S: ", "R: ", "**R:** ", "**S:** ", and replace "S laughed" or "R laughed" with "(laughs)" and remove "-"
+//     speaker: index % 2 === 0 ? aliasA : aliasB,
+//     isBanter: true,
+//   }));
+//   return banterLines;
+// }
+
+// function chunkDialogueByBytes(dialogue, byteLimit = 2500) {
+//   console.log('chunking dialogue...');
+//   const chunks = [];
+//   let currentChunk = [];
+//   let currentSize = 0;
+
+//   for (const turn of dialogue) {
+//       const turnSize = Buffer.byteLength(JSON.stringify(turn), 'utf8');
+
+//       // if (turnSize > byteLimit) {
+//       //     // Recursively split large turns
+//       //     const splitTurns = splitTurnWithInterjections(turn, byteLimit);
+//       //     splitTurns.forEach(splitTurn => {
+//       //         const splitSize = Buffer.byteLength(JSON.stringify(splitTurn), 'utf8');
+//       //         if (currentSize + splitSize > byteLimit) {
+//       //             chunks.push(currentChunk);
+//       //             currentChunk = [];
+//       //             currentSize = 0;
+//       //         }
+//       //         currentChunk.push(splitTurn);
+//       //         currentSize += splitSize;
+//       //     });
+//       // } else {
+//           if (currentSize + turnSize > byteLimit) {
+//               chunks.push(currentChunk);
+//               currentChunk = [];
+//               currentSize = 0;
+//           }
+//           currentChunk.push(turn);
+//           currentSize += turnSize;
+//       // }
+//   }
+
+//   if (currentChunk.length > 0) {
+//       chunks.push(currentChunk);
+//   }
+
+//   return chunks;
+// }
+
+// function splitLongTurns(dialogue, maxLength = 1000000) {
+//   return dialogue.flatMap(turn => {
+//     const text = turn.text;
+//     const sentences = text.split(/(?<=[.!?])\s+/); // Split text into sentences
+//     const chunks = [];
+//     let currentChunk = '';
+//     let currentChunkSize = 0;
+
+//     for (const sentence of sentences) {
+//       const sentenceSize = Buffer.byteLength(sentence, 'utf8');
+
+//       if (currentChunkSize + sentenceSize > maxLength) {
+//         // Push the current chunk and start a new one
+//         chunks.push({ ...turn, text: currentChunk.trim() });
+//         currentChunk = sentence;
+//         currentChunkSize = sentenceSize;
+//       } else {
+//         currentChunk += ` ${sentence}`;
+//         currentChunkSize += sentenceSize;
+//       }
+//     }
+
+//     // Push the final chunk
+//     if (currentChunk.trim()) {
+//       chunks.push({ ...turn, text: currentChunk.trim() });
+//     }
+
+//     return chunks;
+//   });
+// }
+
+// // Process banter into shorter lines if necessary
+// function splitBanter(text, maxLineLength = 200) {
+//   // console.log('2. Splitting banter text:', text);
+//   const lines = text.split(/[\r\n]+/).map(line => line.trim()).filter(Boolean); // Clean and split
+//   const banterDialogue = [];
+//   let lastSpeaker = null;
+
+//   lines.forEach(line => {
+//     const speaker = lastSpeaker === 'Hypatia' ? 'Socrates' : 'Hypatia';
+//     const chunks = splitLongText(line, maxLineLength);
+//     chunks.forEach(chunk => {
+//       banterDialogue.push({ text: chunk, speaker });
+//     });
+//     lastSpeaker = speaker;
+//   });
+
+//   return banterDialogue;
+// }
+// // Helper function to split long text into chunks
+// function splitLongText(text, maxLength = 1000) {
+//   const sentences = text.split(/(?<=[.!?])\s+/); // Split by sentences
+//   const chunks = [];
+//   let currentChunk = '';
+
+//   for (const sentence of sentences) {
+//       if ((currentChunk + sentence).length > maxLength) {
+//           // If adding the sentence exceeds the max length, push the current chunk
+//           chunks.push(currentChunk.trim());
+//           currentChunk = sentence;
+//       } else {
+//           currentChunk += ` ${sentence}`;
+//       }
+//   }
+
+//   // Push the remaining chunk
+//   if (currentChunk.trim()) {
+//       chunks.push(currentChunk.trim());
+//   }
+
+//   return chunks;
+// }
+
+// function cleanDialogueForSynthesis(dialogue) {
+//   return dialogue.flatMap(turn => {
+//       // Remove Markdown artifacts and trim the text
+//       let cleanText = turn.text.replace(/(\*\*.*?:\*\*|\*.*?\*)/g, '').trim();
+
+//       // Skip empty or invalid entries
+//       if (!cleanText) {
+//           console.warn(`Skipping empty or invalid turn: ${JSON.stringify(turn)}`);
+//           return [];
+//       }
+
+//       // Split long text into smaller chunks
+//       const shortTexts = splitLongText(cleanText);
+
+//       // Map each chunk back into the dialogue format
+//       return shortTexts.map(textChunk => ({
+//           ...turn, // Retain other properties of the turn
+//           text: textChunk,
+//       }));
+//   });
+// }
+
+// async function synthesizeDialogue(dialogueRaw, audioFileName) {
+//   // const client = new textToSpeech.TextToSpeechClient();
+//   const client = new textToSpeech.TextToSpeechClient({
+//     keyFilename: 'config/google-service-account-key.json',
+//     projectId: 'gentle-shell-442906-t7',
+//   });
+
+
+//   // client.setLogger(console);
+//   // Pre-clean and split dialogue into chunks
+//   // console.log('11 dialogue...', dialogueRaw);
+//   const cleanedDialogue = cleanDialogueForSynthesis(dialogueRaw);
+//   // console.log('22Cleaned dialogue:', cleanedDialogue);
+//   const chunks = chunkDialogueByBytes(cleanedDialogue, 1400);
+//   // console.log('333Chunked:', chunks);
+
+//   const audioFiles = [];
+//   for (const [index, chunk] of chunks.entries()) {
+//       if (!chunk || chunk.length === 0) {
+//           console.warn(`Skipping empty chunk ${index + 1}.`);
+//           continue;
+//       }
+
+//       const markup = { turns: chunk }; // Prepare chunk for synthesis
+//       const markupString = JSON.stringify(markup, null, 2);
+//       const voice_name = 'en-US-Studio-O';
+//       const request = {
+//           // input: { multiSpeakerMarkup: markup },
+//           input: { text: markupString },
+//           // voice: { languageCode: 'en-US', name: 'en-US-Studio-Multispeaker' },
+//           voice: {languageCode: 'en-US', ssmlGender: 'FEMALE', name: voice_name},
+//           audioConfig: { 
+//             audioEncoding: 'MP3',
+//             speakingRate: 1.25,
+//            },
+//       };
+//       console.log('Request:', JSON.stringify(request, null, 2)); // Log the request
+
+//       try {
+//           console.log(`Synthesizing chunk ${index + 1}...`);
+//           const [response] = await client.synthesizeSpeech(request);
           
-          console.log('Response received:', response); // Log the response
-          const chunkFileName = `chunk_${index + 1}.mp3`;
-          await fs.promises.writeFile(chunkFileName, response.audioContent, 'binary');
-          audioFiles.push(chunkFileName);
-      } catch (error) {
-          console.error(`Failed to synthesize chunk ${index + 1}:`, error.message);
-      }
-  }
+//           console.log('Response received:', response); // Log the response
+//           const chunkFileName = `chunk_${index + 1}.mp3`;
+//           await fs.promises.writeFile(chunkFileName, response.audioContent, 'binary');
+//           audioFiles.push(chunkFileName);
+//       } catch (error) {
+//           console.error(`Failed to synthesize chunk ${index + 1}:`, error.message);
+//       }
+//   }
 
-  if (audioFiles.length === 0) {
-      throw new Error("No audio files were successfully synthesized.");
-  }
+//   if (audioFiles.length === 0) {
+//       throw new Error("No audio files were successfully synthesized.");
+//   }
 
-  // Merge audio files into final output
-  const mergedFile = path.join('media', audioFileName);
-  await mergeAudioFiles(audioFiles, mergedFile);
+//   // Merge audio files into final output
+//   const mergedFile = path.join('media', audioFileName);
+//   await mergeAudioFiles(audioFiles, mergedFile);
 
-  console.log(`Merged audio file saved as: ${mergedFile}`);
-  return mergedFile;
-}
+//   console.log(`Merged audio file saved as: ${mergedFile}`);
+//   return mergedFile;
+// }
 
-function preprocessDialogueForSynthesis(dialogue) {
-  return dialogue
-    .filter(turn => turn.text && turn.text.trim()) // Remove empty turns
-    .map(turn => ({
-      ...turn,
-      text: turn.text.replace(/\s+/g, ' ').trim(), // Clean up spacing
-    }))
-    .flatMap(turn => splitLongTurns([turn])); // Ensure all turns are within length limits
-}
-
-
-
-async function generateDialogueFromArticles(articles, targetLengthSeconds = 3500, speakerA = 'S', speakerB = 'R') {
-
-  console.log('Generating podcast dialogue for', articles.length, 'articles...', articles);
-
-  const dialogue = [];
-  const speakerAPersonality = personalities.socrates;
-  const speakerBPersonality = personalities.hypatia;
-  let cumulativeDuration = 0;
-  const wordsPerSecond = 3;
-  console.log('step 1 generating intro comments with host:', speakerAPersonality.name);
-  const hostAIntro = await generateHostComment(speakerAPersonality, null, null, articles);
-
-  const openingLines = [
-    "O men of Athens!",
-    "Citizens!",
-    "Friends and comrades!",
-    "Noble men!",
-    "Men and gods as witnesses!"
-  ]
-  const randomIndexOpening = Math.floor(Math.random() * openingLines.length);
-  const openingLine = openingLines[randomIndexOpening];
-  const openingDuration = openingLine.split(/\s+/).length / wordsPerSecond;
-  dialogue.push({ text: `${openingLine} ${hostAIntro}`, speaker: speakerA });
-  // dialogue.push({ text: `Friends and comrades! ${hostAIntro}`, speaker: speakerA });
-
-// Split articles into two halves
-const half = Math.ceil(articles.length / 2);
-const articlesForAFirst = articles.slice(0, half);
-const articlesForBFirst = articles.slice(half);
-
-// Function for speakerA starting
-async function processArticlesWithAStarting(articles) {
-  for (const article of articles) {
-    if (cumulativeDuration >= targetLengthSeconds) {
-      console.log('Target length reached, stopping further dialogue generation.');
-      break;
-    }
-
-    // Generate comments
-    console.log('Generating article comments with host:', speakerAPersonality.name);
-    const hostAComment = await generateHostComment(speakerAPersonality, article.description, null, null, dialogue);
-    console.log('Generating follow-up comments with host:', speakerBPersonality.name);
-    const hostBComment = await generateHostComment(speakerBPersonality, article.description, previousComment = hostAComment, null, dialogue);
-
-    // Calculate durations
-    const hostACommentDuration = hostAComment.split(/\s+/).length / wordsPerSecond;
-    const hostBCommentDuration = hostBComment.split(/\s+/).length / wordsPerSecond;
-
-    if (cumulativeDuration + hostACommentDuration + hostBCommentDuration > targetLengthSeconds) {
-      console.log('Adding these comments would exceed target length, stopping.');
-      break;
-    }
-
-    // Add comments to dialogue
-    dialogue.push({ text: `${hostAComment}`, speaker: speakerA });
-    cumulativeDuration += hostACommentDuration;
-
-    dialogue.push({ text: `${article.title}: ${hostBComment}`, speaker: speakerB });
-    cumulativeDuration += hostBCommentDuration;
-
-    // Generate banter
-    if (cumulativeDuration < targetLengthSeconds) {
-      const banterDialogue = await generateBanter(hostAComment, hostBComment, speakerA, speakerB, dialogue);
-      const banterDuration = banterDialogue.reduce((sum, line) => sum + line.text.split(/\s+/).length, 0) / wordsPerSecond;
-
-      if (cumulativeDuration + banterDuration <= targetLengthSeconds) {
-        dialogue.push(...banterDialogue);
-        cumulativeDuration += banterDuration;
-      } else {
-        console.log('Banter skipped due to time constraints.');
-      }
-    }
-
-    console.log(`Cumulative duration so far: ${cumulativeDuration.toFixed(2)} seconds`);
-  }
-}
-
-// Function for speakerB starting
-async function processArticlesWithBStarting(articles) {
-  for (const article of articles) {
-    if (cumulativeDuration >= targetLengthSeconds) {
-      console.log('Target length reached, stopping further dialogue generation.');
-      break;
-    }
-
-    // Generate comments
-    console.log('Generating article comments with host:', speakerBPersonality.name);
-    const hostBComment = await generateHostComment(speakerBPersonality, article.description, null, null, dialogue);
-    console.log('Generating follow-up comments with host:', speakerAPersonality.name);
-    const hostAComment = await generateHostComment(speakerAPersonality, article.description, previousComment = hostBComment, null, dialogue);
-
-    // Calculate durations
-    const hostBCommentDuration = hostBComment.split(/\s+/).length / wordsPerSecond;
-    const hostACommentDuration = hostAComment.split(/\s+/).length / wordsPerSecond;
-
-    if (cumulativeDuration + hostACommentDuration + hostBCommentDuration > targetLengthSeconds) {
-      console.log('Adding these comments would exceed target length, stopping.');
-      break;
-    }
-
-    // Add comments to dialogue
-    dialogue.push({ text: `${hostBComment}`, speaker: speakerB });
-    cumulativeDuration += hostBCommentDuration;
-
-    dialogue.push({ text: `${article.title}: ${hostAComment}`, speaker: speakerA });
-    cumulativeDuration += hostACommentDuration;
-
-    // Generate banter
-    if (cumulativeDuration < targetLengthSeconds) {
-      const banterDialogue = await generateBanter(hostBComment, hostAComment, speakerB, speakerA, dialogue);
-      const banterDuration = banterDialogue.reduce((sum, line) => sum + line.text.split(/\s+/).length, 0) / wordsPerSecond;
-
-      if (cumulativeDuration + banterDuration <= targetLengthSeconds) {
-        dialogue.push(...banterDialogue);
-        cumulativeDuration += banterDuration;
-      } else {
-        console.log('Banter skipped due to time constraints.');
-      }
-    }
-
-    console.log(`Cumulative duration so far: ${cumulativeDuration.toFixed(2)} seconds`);
-  }
-}
-
-// Process articles
-await processArticlesWithAStarting(articlesForAFirst);
-await processArticlesWithBStarting(articlesForBFirst);
-
-console.log('Final dialogue length:', cumulativeDuration.toFixed(2), 'seconds');
+// function preprocessDialogueForSynthesis(dialogue) {
+//   return dialogue
+//     .filter(turn => turn.text && turn.text.trim()) // Remove empty turns
+//     .map(turn => ({
+//       ...turn,
+//       text: turn.text.replace(/\s+/g, ' ').trim(), // Clean up spacing
+//     }))
+//     .flatMap(turn => splitLongTurns([turn])); // Ensure all turns are within length limits
+// }
 
 
-  // for (const article of articles) {
-  //   if (cumulativeDuration >= targetLengthSeconds) {
-  //     console.log('Target length reached, stopping further dialogue generation.');
-  //     break;
-  //   }
 
-  //   // Generate comments for each host
-  //   console.log('step 2 generating article comments with host:', speakerAPersonality.name);
-  //   const hostAComment = await generateHostComment(speakerAPersonality, article.description, null, null, dialogue);
-  //   console.log('step 3 generating article follow up comments with host:', speakerBPersonality.name);
-  //   const hostBComment = await generateHostComment(speakerBPersonality, article.description, previousComment=hostAComment, null, dialogue);
+// async function generateDialogueFromArticles(articles, targetLengthSeconds = 3500, speakerA = 'S', speakerB = 'R') {
 
-  //   // Calculate durations
-  //   const hostACommentDuration = hostAComment.split(/\s+/).length / wordsPerSecond;
-  //   const hostBCommentDuration = hostBComment.split(/\s+/).length / wordsPerSecond;
+//   console.log('Generating podcast dialogue for', articles.length, 'articles...', articles);
 
-  //   if (cumulativeDuration + hostACommentDuration + hostBCommentDuration > targetLengthSeconds) {
-  //     console.log('Adding these comments would exceed target length, stopping.');
-  //     break;
-  //   }
+//   const dialogue = [];
+//   const speakerAPersonality = personalities.socrates;
+//   const speakerBPersonality = personalities.hypatia;
+//   let cumulativeDuration = 0;
+//   const wordsPerSecond = 3;
+//   console.log('step 1 generating intro comments with host:', speakerAPersonality.name);
+//   const hostAIntro = await generateHostComment(speakerAPersonality, null, null, articles);
 
-  //   // Add comments to dialogue
-  //   dialogue.push(
-  //     // ...splitLongComments(
-  //       { text: `${hostAComment}`, speaker: speakerA }
-  //     // )
-  //   );
-  //   cumulativeDuration += hostACommentDuration;
+//   const openingLines = [
+//     "O men of Athens!",
+//     "Citizens!",
+//     "Friends and comrades!",
+//     "Noble men!",
+//     "Men and gods as witnesses!"
+//   ]
+//   const randomIndexOpening = Math.floor(Math.random() * openingLines.length);
+//   const openingLine = openingLines[randomIndexOpening];
+//   const openingDuration = openingLine.split(/\s+/).length / wordsPerSecond;
+//   dialogue.push({ text: `${openingLine} ${hostAIntro}`, speaker: speakerA });
+//   // dialogue.push({ text: `Friends and comrades! ${hostAIntro}`, speaker: speakerA });
 
-  //   dialogue.push(
-  //     // ...splitLongComments(
-  //     { text: `${article.title}: ${hostBComment}`, speaker: speakerB }
-  //   // )
-  //   );
-  //   cumulativeDuration += hostBCommentDuration;
+// // Split articles into two halves
+// const half = Math.ceil(articles.length / 2);
+// const articlesForAFirst = articles.slice(0, half);
+// const articlesForBFirst = articles.slice(half);
+
+// // Function for speakerA starting
+// async function processArticlesWithAStarting(articles) {
+//   for (const article of articles) {
+//     if (cumulativeDuration >= targetLengthSeconds) {
+//       console.log('Target length reached, stopping further dialogue generation.');
+//       break;
+//     }
+
+//     // Generate comments
+//     console.log('Generating article comments with host:', speakerAPersonality.name);
+//     const hostAComment = await generateHostComment(speakerAPersonality, article.description, null, null, dialogue);
+//     console.log('Generating follow-up comments with host:', speakerBPersonality.name);
+//     const hostBComment = await generateHostComment(speakerBPersonality, article.description, previousComment = hostAComment, null, dialogue);
+
+//     // Calculate durations
+//     const hostACommentDuration = hostAComment.split(/\s+/).length / wordsPerSecond;
+//     const hostBCommentDuration = hostBComment.split(/\s+/).length / wordsPerSecond;
+
+//     if (cumulativeDuration + hostACommentDuration + hostBCommentDuration > targetLengthSeconds) {
+//       console.log('Adding these comments would exceed target length, stopping.');
+//       break;
+//     }
+
+//     // Add comments to dialogue
+//     dialogue.push({ text: `${hostAComment}`, speaker: speakerA });
+//     cumulativeDuration += hostACommentDuration;
+
+//     dialogue.push({ text: `${article.title}: ${hostBComment}`, speaker: speakerB });
+//     cumulativeDuration += hostBCommentDuration;
+
+//     // Generate banter
+//     if (cumulativeDuration < targetLengthSeconds) {
+//       const banterDialogue = await generateBanter(hostAComment, hostBComment, speakerA, speakerB, dialogue);
+//       const banterDuration = banterDialogue.reduce((sum, line) => sum + line.text.split(/\s+/).length, 0) / wordsPerSecond;
+
+//       if (cumulativeDuration + banterDuration <= targetLengthSeconds) {
+//         dialogue.push(...banterDialogue);
+//         cumulativeDuration += banterDuration;
+//       } else {
+//         console.log('Banter skipped due to time constraints.');
+//       }
+//     }
+
+//     console.log(`Cumulative duration so far: ${cumulativeDuration.toFixed(2)} seconds`);
+//   }
+// }
+
+// // Function for speakerB starting
+// async function processArticlesWithBStarting(article, dialogueThruHere) {
+//   for (const article of articles) {
+//     if (cumulativeDuration >= targetLengthSeconds) {
+//       console.log('Target length reached, stopping further dialogue generation.');
+//       break;
+//     }
+
+//     // Generate comments
+//     console.log('Generating article comments with host:', speakerBPersonality.name);
+//     const hostBComment = await generateHostComment(speakerBPersonality, article.description, null, null, dialogueThruHere);
+//     console.log('Generating follow-up comments with host:', speakerAPersonality.name);
+//     const hostAComment = await generateHostComment(speakerAPersonality, article.description, previousComment = hostBComment, null, dialogue);
+
+//     // Calculate durations
+//     const hostBCommentDuration = hostBComment.split(/\s+/).length / wordsPerSecond;
+//     const hostACommentDuration = hostAComment.split(/\s+/).length / wordsPerSecond;
+
+//     if (cumulativeDuration + hostACommentDuration + hostBCommentDuration > targetLengthSeconds) {
+//       console.log('Adding these comments would exceed target length, stopping.');
+//       break;
+//     }
+
+//     // Add comments to dialogue
+//     dialogue.push({ text: `${hostBComment}`, speaker: speakerB });
+//     cumulativeDuration += hostBCommentDuration;
+
+//     dialogue.push({ text: `${article.title}: ${hostAComment}`, speaker: speakerA });
+//     cumulativeDuration += hostACommentDuration;
+
+//     // Generate banter
+//     if (cumulativeDuration < targetLengthSeconds) {
+//       const banterDialogue = await generateBanter(hostBComment, hostAComment, speakerB, speakerA, dialogue);
+//       const banterDuration = banterDialogue.reduce((sum, line) => sum + line.text.split(/\s+/).length, 0) / wordsPerSecond;
+
+//       if (cumulativeDuration + banterDuration <= targetLengthSeconds) {
+//         dialogue.push(...banterDialogue);
+//         cumulativeDuration += banterDuration;
+//       } else {
+//         console.log('Banter skipped due to time constraints.');
+//       }
+//     }
+
+//     console.log(`Cumulative duration so far: ${cumulativeDuration.toFixed(2)} seconds`);
+//   }
+// }
+
+// // Process articles
+// await processArticlesWithAStarting(articlesForAFirst);
+// await processArticlesWithBStarting(articlesForBFirst, dialogue);
+
+// console.log('Final dialogue length:', cumulativeDuration.toFixed(2), 'seconds');
 
 
-  //   // Generate banter if time allows
-  //   if (cumulativeDuration < targetLengthSeconds) {
-  //     // const banter1 = await insertBanter(dialogue, 3);
-  //     // console.log('1 banter after insertBanter function:', banter1);
-  //     const banterDialogue = await generateBanter(hostAComment, hostBComment, speakerA, speakerB, dialogue);
-  //     // const banterDialogue = await generateBanterDialogue(hostAComment, hostBComment, speakerA, speakerB);
-  //     // console.log('3 banter after dialogue function:', banterDialogue);
+//   // for (const article of articles) {
+//   //   if (cumulativeDuration >= targetLengthSeconds) {
+//   //     console.log('Target length reached, stopping further dialogue generation.');
+//   //     break;
+//   //   }
 
-  //     const banterDuration = banterDialogue.reduce((sum, line) => sum + line.text.split(/\s+/).length, 0) / wordsPerSecond;
+//   //   // Generate comments for each host
+//   //   console.log('step 2 generating article comments with host:', speakerAPersonality.name);
+//   //   const hostAComment = await generateHostComment(speakerAPersonality, article.description, null, null, dialogue);
+//   //   console.log('step 3 generating article follow up comments with host:', speakerBPersonality.name);
+//   //   const hostBComment = await generateHostComment(speakerBPersonality, article.description, previousComment=hostAComment, null, dialogue);
 
-  //     if (cumulativeDuration + banterDuration <= targetLengthSeconds) {
-  //       dialogue.push(...banterDialogue);
-  //       cumulativeDuration += banterDuration;
-  //     } else {
-  //       console.log('Banter skipped due to time constraints.');
-  //     }
-  //   }
+//   //   // Calculate durations
+//   //   const hostACommentDuration = hostAComment.split(/\s+/).length / wordsPerSecond;
+//   //   const hostBCommentDuration = hostBComment.split(/\s+/).length / wordsPerSecond;
 
-  //   console.log(`Cumulative duration so far: ${cumulativeDuration.toFixed(2)} seconds`);
-  // }
+//   //   if (cumulativeDuration + hostACommentDuration + hostBCommentDuration > targetLengthSeconds) {
+//   //     console.log('Adding these comments would exceed target length, stopping.');
+//   //     break;
+//   //   }
 
-  // Final cleanup and structuring
-  // const structuredDialogue = groupAndAlternateSpeakers(dialogue, speakerA, speakerB);
-  const cleanedDialogue = preprocessDialogueForSynthesis(dialogue);
+//   //   // Add comments to dialogue
+//   //   dialogue.push(
+//   //     // ...splitLongComments(
+//   //       { text: `${hostAComment}`, speaker: speakerA }
+//   //     // )
+//   //   );
+//   //   cumulativeDuration += hostACommentDuration;
 
-	// 1.	Ἔρρωσθε καὶ εὐδαιμονεῖτε (Errōsthe kaì eudaimoneîte)
-	// •	Translation: “Be strong and prosperous.”
-	// •	A common way to wish the audience well, expressing hope for their health and happiness.
-	// 2.	Τοῖς θεοῖς ἐπιτρέπω (Toîs theoîs epitrépō)
-	// •	Translation: “I entrust it to the gods.”
-	// •	A humble way to conclude, acknowledging the limits of human effort and appealing to divine judgment.
-	// 3.	Τὰ λοιπὰ θεοὶ γνώσονται (Tà loipà theoì gnṓsontai)
-	// •	Translation: “The rest the gods will know.”
-	// •	Used to suggest that ultimate understanding or resolution lies with the divine.
-	// 4.	Ἀνδρείως πράττετε (Andreíōs prátete)
-	// •	Translation: “Act courageously.”
-	// •	A call to action, encouraging the audience to face challenges bravely.
-	// 5.	Χάριν ἔχω ὑμῖν πᾶσιν (Chárin échō humîn pâsin)
-	// •	Translation: “I am grateful to you all.”
-	// •	A respectful and gracious way to thank the audience.
-	// 6.	Εἴ τινι ἐδοκίμασα ἀδίκως, ἀναθεῖτε τοῖς θεοῖς (Eí tini edokíma adíkōs, anatheîte toîs theoîs)
-	// •	Translation: “If I seemed unjust to anyone, entrust it to the gods.”
-	// •	A way to end with humility, asking the audience to forgive any perceived faults.
-	// 7.	Ζεὺς καὶ ἡ τύχη εἰς τὸ καλὸν ὑμᾶς ἀγαγέτω (Zeùs kaì hē týchē eìs tò kalòn humâs agagéto)
-	// •	Translation: “May Zeus and fortune lead you to what is good.”
-	// •	A formal blessing invoking divine favor for the audience.
-	// 8.	Ἔρρωσθε καὶ μέμνησθε τῶν εἰρημένων (Errōsthe kaì mémnēsthe tōn eirēménōn)
-	// •	Translation: “Farewell and remember what has been said.”
-	// •	A thoughtful conclusion, urging the audience to reflect on the discourse.
-  const closingLines = [
-    "Be strong and prosperous.",
-    "I entrust it to the gods.",
-    "The rest the gods will know.",
-    "Act courageously.",
-    "I am grateful to you all.",
-    "If I seemed unjust to anyone, entrust it to the gods.",
-    "May Zeus and fortune lead you to what is good.",
-    "Farewell and remember what has been said."
-  ];
+//   //   dialogue.push(
+//   //     // ...splitLongComments(
+//   //     { text: `${article.title}: ${hostBComment}`, speaker: speakerB }
+//   //   // )
+//   //   );
+//   //   cumulativeDuration += hostBCommentDuration;
+
+
+//   //   // Generate banter if time allows
+//   //   if (cumulativeDuration < targetLengthSeconds) {
+//   //     // const banter1 = await insertBanter(dialogue, 3);
+//   //     // console.log('1 banter after insertBanter function:', banter1);
+//   //     const banterDialogue = await generateBanter(hostAComment, hostBComment, speakerA, speakerB, dialogue);
+//   //     // const banterDialogue = await generateBanterDialogue(hostAComment, hostBComment, speakerA, speakerB);
+//   //     // console.log('3 banter after dialogue function:', banterDialogue);
+
+//   //     const banterDuration = banterDialogue.reduce((sum, line) => sum + line.text.split(/\s+/).length, 0) / wordsPerSecond;
+
+//   //     if (cumulativeDuration + banterDuration <= targetLengthSeconds) {
+//   //       dialogue.push(...banterDialogue);
+//   //       cumulativeDuration += banterDuration;
+//   //     } else {
+//   //       console.log('Banter skipped due to time constraints.');
+//   //     }
+//   //   }
+
+//   //   console.log(`Cumulative duration so far: ${cumulativeDuration.toFixed(2)} seconds`);
+//   // }
+
+//   // Final cleanup and structuring
+//   // const structuredDialogue = groupAndAlternateSpeakers(dialogue, speakerA, speakerB);
+//   const cleanedDialogue = preprocessDialogueForSynthesis(dialogue);
+
+// 	// 1.	Ἔρρωσθε καὶ εὐδαιμονεῖτε (Errōsthe kaì eudaimoneîte)
+// 	// •	Translation: “Be strong and prosperous.”
+// 	// •	A common way to wish the audience well, expressing hope for their health and happiness.
+// 	// 2.	Τοῖς θεοῖς ἐπιτρέπω (Toîs theoîs epitrépō)
+// 	// •	Translation: “I entrust it to the gods.”
+// 	// •	A humble way to conclude, acknowledging the limits of human effort and appealing to divine judgment.
+// 	// 3.	Τὰ λοιπὰ θεοὶ γνώσονται (Tà loipà theoì gnṓsontai)
+// 	// •	Translation: “The rest the gods will know.”
+// 	// •	Used to suggest that ultimate understanding or resolution lies with the divine.
+// 	// 4.	Ἀνδρείως πράττετε (Andreíōs prátete)
+// 	// •	Translation: “Act courageously.”
+// 	// •	A call to action, encouraging the audience to face challenges bravely.
+// 	// 5.	Χάριν ἔχω ὑμῖν πᾶσιν (Chárin échō humîn pâsin)
+// 	// •	Translation: “I am grateful to you all.”
+// 	// •	A respectful and gracious way to thank the audience.
+// 	// 6.	Εἴ τινι ἐδοκίμασα ἀδίκως, ἀναθεῖτε τοῖς θεοῖς (Eí tini edokíma adíkōs, anatheîte toîs theoîs)
+// 	// •	Translation: “If I seemed unjust to anyone, entrust it to the gods.”
+// 	// •	A way to end with humility, asking the audience to forgive any perceived faults.
+// 	// 7.	Ζεὺς καὶ ἡ τύχη εἰς τὸ καλὸν ὑμᾶς ἀγαγέτω (Zeùs kaì hē týchē eìs tò kalòn humâs agagéto)
+// 	// •	Translation: “May Zeus and fortune lead you to what is good.”
+// 	// •	A formal blessing invoking divine favor for the audience.
+// 	// 8.	Ἔρρωσθε καὶ μέμνησθε τῶν εἰρημένων (Errōsthe kaì mémnēsthe tōn eirēménōn)
+// 	// •	Translation: “Farewell and remember what has been said.”
+// 	// •	A thoughtful conclusion, urging the audience to reflect on the discourse.
+//   const closingLines = [
+//     "Be strong and prosperous.",
+//     "I entrust it to the gods.",
+//     "The rest the gods will know.",
+//     "Act courageously.",
+//     "I am grateful to you all.",
+//     "If I seemed unjust to anyone, entrust it to the gods.",
+//     "May Zeus and fortune lead you to what is good.",
+//     "Farewell and remember what has been said."
+//   ];
   
-  const randomIndexClosing = Math.floor(Math.random() * closingLines.length);
-  const closingLine = closingLines[randomIndexClosing];
-  const closingDuration = closingLine.split(/\s+/).length / wordsPerSecond;
-  if (cumulativeDuration + closingDuration <= targetLengthSeconds) {
-    cleanedDialogue.push({ text: closingLine, speaker: speakerA });
-  }
+//   const randomIndexClosing = Math.floor(Math.random() * closingLines.length);
+//   const closingLine = closingLines[randomIndexClosing];
+//   const closingDuration = closingLine.split(/\s+/).length / wordsPerSecond;
+//   if (cumulativeDuration + closingDuration <= targetLengthSeconds) {
+//     cleanedDialogue.push({ text: closingLine, speaker: speakerA });
+//   }
 
-
+// console.log('cleaned dialogue:', cleanedDialogue);
   
-  const audioFileName = generateAudioFileName(articles.map(article => article.url).join(', '), 'mp3');
-  const audioFile = generatePodcastFromArticles(cleanedDialogue, audioFileName);
-  // const audioFile = await synthesizeDialogue(cleanedDialogue, audioFileName);
-  // const audioFileUrl = `https://api.oip.onl/api/media?id=${audioFile}`;
-  // const audioFileDuration = await getAudioDuration(audioFile);
-  console.log(`Generated audio available: ${audioFile}`);
-  const didTxarray = articles.map(article => article.didTx);
-  const podcastTitle = `Scribes of Alexandria Podcast with ${personalities.socrates.name} and ${personalities.hypatia.name} on ${new Date().toLocaleDateString()}`;
+//   const audioFileName = generateAudioFileName(articles.map(article => article.url).join(', '), 'mp3');
+//   // const audioFile = generatePodcastFromArticles(cleanedDialogue, audioFileName);
+//   const audioFile = await synthesizeDialogue(cleanedDialogue, audioFileName);
+//   // const audioFileUrl = `https://api.oip.onl/api/media?id=${audioFile}`;
+//   // const audioFileDuration = await getAudioDuration(audioFile);
+//   console.log(`Generated audio available: ${audioFile}`);
+//   const didTxarray = articles.map(article => article.didTx);
+//   const podcastTitle = `Scribes of Alexandria Podcast with ${personalities.socrates.name} and ${personalities.hypatia.name} on ${new Date().toLocaleDateString()}`;
 
-  console.log('articles', articles)
-  // console.log(articles.didTxIds)
-  const recordToPublish = {
-    "basic": {
-      "name": podcastTitle,
-      "language": "en",
-      "date": Math.floor(new Date().getTime() / 1000), // Convert to Unix time
-      "description": hostAIntro,
-  //     // "urlItems": [
-  //     //   {
-  //     //     "associatedUrlOnWeb": {
-  //     //       "url": articleData.url
-  //     //     }
-  //     //   }
-  //     // ],
-      "nsfw": false,
-      // "tagItems": articleData.tags || []
-    },
-    "audio": {
-          "webUrl": `https://api.oip.onl/api/media?id=${audioFileName}`,
-          "contentType" : "audio/mp3"
-    },
-    // "post": {
-    //   "citations": didTxarray
-    // },{
-    "podcast": {
-      "citations": didTxarray,
-      "show": "string",  // Title of the podcast show
-      "episodeNum": "integer",  // Episode number
-      "seasonNum": "integer",  // Season number (optional)
-      "duration": "integer",  // Duration in seconds
-      "hosts": ["string"],  // List of hosts
-      "guests": ["string"],  // List of guests (optional)
-      "explicit": "boolean",  // Explicit content flag (redundant with NSFW but included for clarity)
-      "transcript": "string",  // Full transcript of the episode (optional)
-      "chapters": [
-        {
-          "title": "string",  // Chapter title
-          "startTime": "integer"  // Start time in seconds
-        }
-      ],
-      "episodeArtwork": "string",  // URL to episode-specific artwork (optional)
-      "podcastArtwork": "string",  // URL to default podcast artwork (optional)
-      "license": "string",  // License type (e.g., Creative Commons)
-      "copyright": "string",  // Copyright information
-      // "sponsors": ["string"],  // Sponsors of the episode
-      // "rssFeedUrl": "string",  // RSS feed URL
-      // "analytics": {
-      //   "uniqueEpisodeId": "string",  // Unique identifier for the episode
-      //   "downloadCount": "integer",  // Number of downloads
-      //   "playCount": "integer"  // Number of plays or streams
-      // },
-      // "extra": {
-      //   "affiliateLinks": ["string"],  // Affiliate links related to the episode (optional)
-      //   "donationLinks": ["string"]  // Links to donation platforms (optional)
-    }
-  }
+//   console.log('articles', articles)
+//   // console.log(articles.didTxIds)
+//   const recordToPublish = {
+//     "basic": {
+//       "name": podcastTitle,
+//       "language": "en",
+//       "date": Math.floor(new Date().getTime() / 1000), // Convert to Unix time
+//       "description": hostAIntro,
+//   //     // "urlItems": [
+//   //     //   {
+//   //     //     "associatedUrlOnWeb": {
+//   //     //       "url": articleData.url
+//   //     //     }
+//   //     //   }
+//   //     // ],
+//       "nsfw": false,
+//       // "tagItems": articleData.tags || []
+//     },
+//     "audio": {
+//           "webUrl": `https://api.oip.onl/api/media?id=${audioFileName}`,
+//           "contentType" : "audio/mp3"
+//     },
+//     // "post": {
+//     //   "citations": didTxarray
+//     // },{
+//     "podcast": {
+//       "citations": didTxarray,
+//       "show": "string",  // Title of the podcast show
+//       "episodeNum": "integer",  // Episode number
+//       "seasonNum": "integer",  // Season number (optional)
+//       "duration": "integer",  // Duration in seconds
+//       "hosts": ["string"],  // List of hosts
+//       "guests": ["string"],  // List of guests (optional)
+//       "explicit": "boolean",  // Explicit content flag (redundant with NSFW but included for clarity)
+//       "transcript": "string",  // Full transcript of the episode (optional)
+//       "chapters": [
+//         {
+//           "title": "string",  // Chapter title
+//           "startTime": "integer"  // Start time in seconds
+//         }
+//       ],
+//       "episodeArtwork": "string",  // URL to episode-specific artwork (optional)
+//       "podcastArtwork": "string",  // URL to default podcast artwork (optional)
+//       "license": "string",  // License type (e.g., Creative Commons)
+//       "copyright": "string",  // Copyright information
+//       // "sponsors": ["string"],  // Sponsors of the episode
+//       // "rssFeedUrl": "string",  // RSS feed URL
+//       // "analytics": {
+//       //   "uniqueEpisodeId": "string",  // Unique identifier for the episode
+//       //   "downloadCount": "integer",  // Number of downloads
+//       //   "playCount": "integer"  // Number of plays or streams
+//       // },
+//       // "extra": {
+//       //   "affiliateLinks": ["string"],  // Affiliate links related to the episode (optional)
+//       //   "donationLinks": ["string"]  // Links to donation platforms (optional)
+//     }
+//   }
 
-console.log('recordToPublish:', recordToPublish)
-// const podcast = await publishNewRecord(recordToPublish, "audio");
-const podcastDidTx = podcast.didTx
+// console.log('recordToPublish:', recordToPublish)
+// // const podcast = await publishNewRecord(recordToPublish, "audio");
+// const podcastDidTx = podcast.didTx
 
-let record = {
-  "data": [recordToPublish],
-  "oip": {
-    "didTx": podcastDidTx,
-    "indexedAt": new Date().toISOString(),
-  }
-};
+// let record = {
+//   "data": [recordToPublish],
+//   "oip": {
+//     "didTx": podcastDidTx,
+//     "indexedAt": new Date().toISOString(),
+//   }
+// };
 
-// console.log('max in db and current:', records, currentblock);
-const currentblock = await getCurrentBlockHeight();
+// // console.log('max in db and current:', records, currentblock);
+// const currentblock = await getCurrentBlockHeight();
 
-record.oip.inArweaveBlock = currentblock;
-record.oip.recordType = 'audio';
-record.oip.indexedAt = new Date().toISOString();
-record.oip.recordStatus = 'pending confirmation in Arweave';
-console.log('303 indexRecord pending record to index:', record);
-// indexRecord(record);
+// record.oip.inArweaveBlock = currentblock;
+// record.oip.recordType = 'audio';
+// record.oip.indexedAt = new Date().toISOString();
+// record.oip.recordStatus = 'pending confirmation in Arweave';
+// console.log('303 indexRecord pending record to index:', record);
+// // indexRecord(record);
 
 
 
-const response = {
-  audioFileName: audioFileName,
-  podcastDidTx: podcastDidTx,
-}
+// const response = {
+//   audioFileName: audioFileName,
+//   podcastDidTx: podcastDidTx,
+// }
 
-  //   //     // articles.map(article => article.)
-  //   //   // "bylineWriter": articleData.byline,
-  //   //   // "articleText": [
-  //   //   //   { 
-  //   //   //     "text": {
-  //   //   //     // "bittorrentAddress": articleTextBittorrentAddress,
-  //   //   //     "contentType": "text/text"
-  //   //   //     },
-  //   //   //     "associatedUrlOnWeb": {
-  //   //   //     "url": articleTextURL
-  //   //   //   // },
-  //   //   //   // "basic": {
-  //   //   //     // "urlItems": [
-  //   //   //     //   {
-  //   //   //     //     "associatedUrlOnWeb": {
-  //   //   //     //       "url": articleData.articleTextURL
-  //   //   //     //     }
-  //   //   //     //   }
-  //   //   //     // ]
-  //   //   //     }
-  //   //   //   }
-  //   //   // ]
-  //   // },
-  //   "associatedUrlOnWeb": {
-  //     "url": articleData.url
-  //   }
-  // };
-  // if (articleData.embeddedImage) {
-  //   recordToPublish.post.featuredImage = [
-  //     {
-  //       "basic": {
-  //         "name": articleData.title,
-  //         "language": "en",
-  //         "nsfw": false,
-  //         // "urlItems": [
-  //         //   {
-  //         //     "associatedUrlOnWeb": {
-  //         //       "url": articleData.embeddedImage
-  //         //     }
-  //         //   }
-  //         // ]
-  //       },
-  //       "associatedUrlOnWeb": {
-  //         "url": articleData.embeddedImageUrl
-  //       },
-  //       "image": {
-  //         // "bittorrentAddress": imageBittorrentAddress,
-  //         "height": imageHeight,
-  //         "width": imageWidth,
-  //         "size": imageSize,
-  //         "contentType": imageFileType
-  //       }
-  //     }
-  //   ];
-  // }
+//   //   //     // articles.map(article => article.)
+//   //   //   // "bylineWriter": articleData.byline,
+//   //   //   // "articleText": [
+//   //   //   //   { 
+//   //   //   //     "text": {
+//   //   //   //     // "bittorrentAddress": articleTextBittorrentAddress,
+//   //   //   //     "contentType": "text/text"
+//   //   //   //     },
+//   //   //   //     "associatedUrlOnWeb": {
+//   //   //   //     "url": articleTextURL
+//   //   //   //   // },
+//   //   //   //   // "basic": {
+//   //   //   //     // "urlItems": [
+//   //   //   //     //   {
+//   //   //   //     //     "associatedUrlOnWeb": {
+//   //   //   //     //       "url": articleData.articleTextURL
+//   //   //   //     //     }
+//   //   //   //     //   }
+//   //   //   //     // ]
+//   //   //   //     }
+//   //   //   //   }
+//   //   //   // ]
+//   //   // },
+//   //   "associatedUrlOnWeb": {
+//   //     "url": articleData.url
+//   //   }
+//   // };
+//   // if (articleData.embeddedImage) {
+//   //   recordToPublish.post.featuredImage = [
+//   //     {
+//   //       "basic": {
+//   //         "name": articleData.title,
+//   //         "language": "en",
+//   //         "nsfw": false,
+//   //         // "urlItems": [
+//   //         //   {
+//   //         //     "associatedUrlOnWeb": {
+//   //         //       "url": articleData.embeddedImage
+//   //         //     }
+//   //         //   }
+//   //         // ]
+//   //       },
+//   //       "associatedUrlOnWeb": {
+//   //         "url": articleData.embeddedImageUrl
+//   //       },
+//   //       "image": {
+//   //         // "bittorrentAddress": imageBittorrentAddress,
+//   //         "height": imageHeight,
+//   //         "width": imageWidth,
+//   //         "size": imageSize,
+//   //         "contentType": imageFileType
+//   //       }
+//   //     }
+//   //   ];
+//   // }
 
-  // if (articleData.summaryTTS) {
-  //   recordToPublish.post.audioItems = [
-  //     { 
-  //       "audio": {
-  //         "webUrl": articleData.summaryTTS,
-  //         "contentType" : "audio/mp3"
-  //       }
-  //     }
-  //   ];
-  // }
+//   // if (articleData.summaryTTS) {
+//   //   recordToPublish.post.audioItems = [
+//   //     { 
+//   //       "audio": {
+//   //         "webUrl": articleData.summaryTTS,
+//   //         "contentType" : "audio/mp3"
+//   //       }
+//   //     }
+//   //   ];
+//   // }
 
-  // console.log('this is whats getting published:', recordToPublish)
+//   // console.log('this is whats getting published:', recordToPublish)
 
-  // publishNewRecord(record, recordType,
-  return response;
-}
+//   // publishNewRecord(record, recordType,
+//   return response;
+// }
 
 // END OF GENERATE DIALOGUE FROM ARTICLES
 
@@ -1140,6 +1141,48 @@ catch (error) {
 }
 }
 
+async function analyzeImageForAuthor(screenshotURL) {
+  console.log('Analyzing image for author using XAI API...');
+
+  const messages = [
+      {
+          role: "system",
+          content: `You are an AI tasked with extracting the author name from an article's screenshot. Analyze the screenshot, identify the section where the author (byline) is mentioned, and return the extracted author name.`
+      },
+      {
+          role: "user",
+          content: `Here's the screenshot of the article: ${screenshotURL}. Please extract the author's name.`
+      }
+  ];
+
+  try {
+      const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+          model: 'grok-beta',
+          messages: messages,
+          stream: false,
+          temperature: 0
+      }, {
+          headers: {
+              'Authorization': `Bearer ${process.env.XAI_BEARER_TOKEN}`,
+              'Content-Type': 'application/json',
+          },
+          timeout: 120000 // Optional: 120 seconds timeout
+      });
+
+      if (response.data && response.data.choices && response.data.choices[0]) {
+          const extractedAuthor = response.data.choices[0].message.content.trim();
+          console.log('Extracted author:', extractedAuthor);
+          return extractedAuthor;
+      } else {
+          console.error('Unexpected response structure:', response);
+          return null;
+      }
+  } catch (error) {
+      console.error('Error analyzing image for author:', error.response ? error.response.data : error.message);
+      return null;
+  }
+}
+
 async function generateTagsFromContent(title, content) {
   console.log('Generating tags from the title and content...');
   
@@ -1404,6 +1447,7 @@ module.exports = {
     identifyAuthorNameFromContent,
     identifyPublishDateFromContent,
     generateSummaryFromContent,
+    analyzeImageForAuthor,
     generateTagsFromContent,
     generateCombinedSummaryFromArticles,
     generateDialogueFromArticles,

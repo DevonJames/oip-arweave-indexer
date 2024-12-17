@@ -31,7 +31,7 @@ router.post('/newRecord', async (req, res) => {
     try {
         console.log('POST /api/records/newRecord', req.body)
         const record = req.body;
-        const recordType = req.query.recordType;
+        let recordType = req.query.recordType;
         // if (recordType = 'creatorRegistration') {
         //     record.publicKey = req.query.publicKey;
         // }

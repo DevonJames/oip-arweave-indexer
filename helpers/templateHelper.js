@@ -5,7 +5,7 @@ const { exec } = require('child_process');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
 const { signMessage, txidToDid, getIrysArweave, getTemplateTxidByName } = require('./utils');
-const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB } = require('./elasticsearch');
+const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB } = require('./elasticsearch');
 // const templatesConfig = require('../config/templates.config');
 // const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
 
@@ -253,11 +253,26 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
         }
         let recordData = '';
         console.log(getFileInfo(), getLineNumber(), 'Publishing new record:', { recordType }, record);
-        if (record.delete) {
+        if (record.delete && typeof record.delete === 'object' && record.delete.didTx) {
+            recordType = 'delete';
+            const didTx = record.delete.didTx;
+            let transaction = {
+                data: record,
+                creator: record.delete.didTx
+            } 
+            const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+            
+            const myPublicKey = jwk.n;
+            const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
+            const creatorDid = `did:arweave:${myAddress}`;
+            deleteRecordFromDB(creatorDid, transaction);
+            console.log(getFileInfo(), getLineNumber(), 'Record deleted:', didTx)
             let stringValue = JSON.stringify(record);
             recordData += stringValue;
-        } else {
+            console.log(getFileInfo(), getLineNumber(), 'Publishing new record:', { recordType }, record);
 
+        } else {
+            
             if (recordType === 'creatorRegistration') {
                 const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
                 const myPublicKey = jwk.n;
@@ -266,33 +281,35 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                 record.creatorRegistration.address = myAddress;
             }
             const oipData = await translateJSONtoOIPData(record);
-
+            
             const oipRecord = oipData.convertedTemplates;
             didTxRefs = oipData.didTxRefs;
             subRecords = oipData.subRecords;
             subRecordTypes = oipData.subRecordTypes;
             let recordDataArray = [];
-
-            // oipRecord.forEach((record) => {
-            //     let stringValue = JSON.stringify(record);
-            //     recordDataArray.push(stringValue);
-            //     recordData = `[${recordDataArray.join(',')}]`;
-            //     console.log(getFileInfo(), getLineNumber(), 'recordData', recordData)
-            // });
-            // recordData = JSON.stringify(oipRecord);
-
-            oipRecord.forEach((record) => {
-                let stringValue = JSON.stringify(record); // Each record is stringified here
-                recordDataArray.push(stringValue);
-            });
-            recordData = `[${recordDataArray.join(',')}]`; // Final serialized string of all records
-            console.log(getFileInfo(), getLineNumber(), 'recordData', recordData);
-        }
-        const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
-
-        const myPublicKey = jwk.n;
-        const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
-
+            // if (recordType === undefined || recordType === 'undefined') {
+                //     if record.
+                // }
+                // oipRecord.forEach((record) => {
+                    //     let stringValue = JSON.stringify(record);
+                    //     recordDataArray.push(stringValue);
+                    //     recordData = `[${recordDataArray.join(',')}]`;
+                    //     console.log(getFileInfo(), getLineNumber(), 'recordData', recordData)
+                    // });
+                    // recordData = JSON.stringify(oipRecord);
+                    
+                    oipRecord.forEach((record) => {
+                        let stringValue = JSON.stringify(record); // Each record is stringified here
+                        recordDataArray.push(stringValue);
+                    });
+                    recordData = `[${recordDataArray.join(',')}]`; // Final serialized string of all records
+                    console.log(getFileInfo(), getLineNumber(), 'recordData', recordData);
+                }
+                const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+                
+                const myPublicKey = jwk.n;
+                const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
+                
         const irys = await getIrysArweave();
         const tags = [
             { name: 'Content-Type', value: 'application/json' },

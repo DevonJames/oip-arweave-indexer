@@ -61,15 +61,15 @@ router.post('/summary', async (req, res) => {
     const podcast = true;
 // router.post('/summary', async (req, res) => {
     // console.log('Generating summary for multiple articles...');
-    let { articles } = req.body;
+    let { articles, selectedHosts, targetLengthSeconds} = req.body;
   
     if (!articles) {
       return res.status(400).json({ error: 'articles are required' });
     }
     if (podcast) {
     // let podcast = await generateDialogueFromArticles(articles);
-    let podcast = await generatePodcastFromArticles(articles);
-    const audioFileName = podcast.audioFileName;
+    let audioFileName = await generatePodcastFromArticles(articles, selectedHosts, targetLengthSeconds = 3500);
+    // const audioFileName = podcast.audioFileName;
     audioFileUrl = `/api/generate/media?id=${audioFileName}`;
     console.log('saving Synthesized Dialog', audioFileName);
 
