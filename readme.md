@@ -16,7 +16,7 @@ This project provides an API to index and interact with records stored on the Ar
 - Docker & Docker Compose
 - Node.js (version 16 or higher if running locally without Docker)
 
-### Installing `canvas` Dependency
+- ### Installing `canvas` Dependency
 
 The `canvas` module is required for certain functionalities, such as rendering or processing images. To use it, ensure the necessary system libraries are installed.
 
