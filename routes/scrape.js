@@ -1,6 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { createCanvas, loadImage, Image } = require('canvas');
+const nodeHtmlToImage = require('node-html-to-image');
 const router = express.Router();
 const path = require('path');
 const cheerio = require('cheerio');
@@ -20,7 +22,8 @@ const {
   replaceAcronyms,
   identifyAuthorNameFromContent, 
   identifyPublishDateFromContent, 
-  generateSummaryFromContent
+  generateSummaryFromContent,
+  analyzeImageForAuthor
 } = require('../helpers/generators');
 const {getCurrentBlockHeight, getBlockHeightFromTxId, lazyFunding, upfrontFunding, arweave} = require('../helpers/arweave');
 const { exec } = require('child_process');
@@ -877,9 +880,149 @@ async function scrapeZeroHedgeByline($) {
   return 'Tyler Durden';
 }
 
-async function fetchParsedArticleData(url, html, scrapeId, res) {
+async function convertBase64ToImage(base64String, scrapeId) {
+  try {
+    const outputPath = path.resolve(downloadsDirectory, `../media/screenshot-${scrapeId}.png`);
+    const base64Data = base64String.replace(/^data:image\/png;base64,/, '');
+    fs.writeFileSync(outputPath, base64Data, 'base64');
+    return outputPath;
+  } catch (error) {
+    console.error('Error converting base64 to image:', error);
+    throw error;
+  }
+}
+
+async function stitchImages(screenshots, totalHeight, scrapeId) {
+  console.log('converting screenshot base64 to files before stitching');
+
+
+
+  try {
+    const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+    const mediaId = `fullscreenshot-${scrapeId}-${today}.png`;
+    const outputPath = path.resolve(downloadsDirectory, mediaId);
+    console.log('outputPath', outputPath);
+    const firstImage = new Image();
+    firstImage.src = Buffer.from(screenshots[0].screenshot.replace(/^data:image\/png;base64,/, ''), 'base64');
+    const canvas = createCanvas(firstImage.width, totalHeight);
+    const ctx = canvas.getContext('2d');
+    let y = 0;
+
+    for (const screenshot of screenshots) {
+      // console.log('screenshot 111111');
+      const base64Data = screenshot.screenshot.replace(/^data:image\/png;base64,/, '');
+      const img = new Image();
+      img.src = Buffer.from(base64Data, 'base64');
+      ctx.drawImage(img, 0, y, canvas.width, img.height); // Stretch to fit each section
+      y += img.height;
+    }
+
+    const buffer = canvas.toBuffer('image/png');
+    fs.writeFileSync(outputPath, buffer);
+    return mediaId;
+    
+  } catch (error) {
+    console.error('Error stitching images:', error);
+    throw error;
+  }
+}
+
+// async function fetchParsedArticleData(url, html, scrapeId, res) {
+//   console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
+
+//   if (ongoingScrapes.has(scrapeId)) {
+//     console.log(`Scrape already in progress for ${url}. Reconnecting to existing stream.`);
+//     const existingStream = ongoingScrapes.get(scrapeId);
+//     existingStream.clients.push(res);
+//     existingStream.data.forEach(chunk => res.write(chunk));
+//     return;
+//   }
+
+//   const streamData = { clients: [res], data: [] };
+//   ongoingScrapes.set(scrapeId, streamData);
+
+//   try {
+//     console.log('Scrape ID:', scrapeId, 'Checking for articles in archive with URL:', url);
+
+//     const queryParams = { resolveDepth: 2, url: cleanUrl(url), sortBy: 'inArweaveBlock:desc', limit: 1 };
+//     const records = await getRecords(queryParams);
+
+//     if (records.searchResults > 0) {
+//       console.log('Found article in archive:', records.records[0]);
+
+//       // Existing Article Logic (No Screenshot Needed Here)
+//       res.write(`event: dataFromIndex\n`);
+//       res.write(`data: ${JSON.stringify(records.records[0])}\n\n`);
+//       res.end();
+//       ongoingScrapes.delete(scrapeId);
+//     } else {
+//       console.log('Not found in Archive, fetching as a new article...');
+//       const parsedData = await Parser.parse(url, { html });
+
+//       console.log('Parsed article:', parsedData);
+
+//       // Generate a Screenshot from HTML
+//       const screenshotPath = await generateScreenshotFromHTML(html, scrapeId);
+//       console.log('Screenshot saved at:', screenshotPath);
+
+//       const articleData = {
+//         title: parsedData.title || null,
+//         byline: parsedData.author || null,
+//         publishDate: parsedData.date_published || null,
+//         description: parsedData.excerpt || null,
+//         screenshot: screenshotPath, // Add Screenshot Path
+//         content: parsedData.content || null,
+//         url,
+//       };
+
+//       console.log('Article Data:', articleData);
+
+//       // Stream Data
+//       res.write(`event: initialData\n`);
+//       res.write(`data: ${JSON.stringify(articleData)}\n\n`);
+//       res.end();
+
+//       ongoingScrapes.delete(scrapeId);
+//     }
+//   } catch (error) {
+//     console.error('Error fetching parsed article data:', error);
+//     res.write(`event: error\n`);
+//     res.write(`data: ${JSON.stringify({ error: 'Failed to fetch article data.' })}\n\n`);
+//     res.end();
+//   }
+// }
+
+// // Helper function to generate a screenshot
+// async function generateScreenshotFromHTML(html, scrapeId) {
+//   const outputPath = `media/screenshot-${scrapeId}.png`;
+
+//   try {
+//     await nodeHtmlToImage({
+//       output: outputPath,
+//       html,
+//       puppeteerArgs: { headless: true }, // Ensure this runs in a server-friendly environment
+//       type: 'png',
+//       quality: 100,
+//       width: 1200, // Set desired width
+//       height: 800, // Set desired height
+//     });
+//     return outputPath;
+//   } catch (error) {
+//     console.error('Error generating screenshot:', error);
+//     throw new Error('Screenshot generation failed');
+//   }
+// }
+
+// works perfectly - trying a version that adds screenshot download
+async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res) {
   console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
 
+  console.log('converting screenshot to file');
+  // const screenshotPath = await convertBase64ToImage(screenshotBase64, scrapeId);
+  // console.log('Screenshot saved at:', screenshotPath);
+  console.log('stitching images together using totalHeight:', totalHeight); 
+  const screenshotMediaId = await stitchImages(screenshots, totalHeight, scrapeId);
+  console.log('Full Screenshot saved at:', screenshotMediaId);
     // Check if a scrape for this identifier is already in progress
     if (ongoingScrapes.has(scrapeId)) {
       console.log(`Scrape already in progress for ${url}. Reconnecting to existing stream.`);
@@ -908,6 +1051,7 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
     const sortBy = 'inArweaveBlock:desc';
     const queryParams = { resolveDepth: 2, url: cleanUrl(url), sortBy: 'inArweaveBlock:desc', limit:1 };
     const records = await getRecords(queryParams);
+    const latestArweaveBlockInDB = records.latestArweaveBlockInDB;
     console.log('919 searchResults:', records.searchResults);
 
     if (records.searchResults > 0) {
@@ -933,19 +1077,49 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
           if (records.records[0].data[0].post.audioItems[0].data[0].associatedUrlOnWeb !== undefined) {
             console.log('1', records.records[0].data[0].post.audioItems[0].data[0].associatedUrlOnWeb.url);
             summaryTTS = records.records[0].data[0].post.audioItems[0].data[0].associatedUrlOnWeb.url
+            console.log('1 summaryTTS', summaryTTS);
+
           }
           else if (records.records[0].data[0].post.audioItems[0].data[0].audio !== undefined) {
             console.log('2', records.records[0].data[0].post.audioItems[0].data[0].audio.webUrl);
             summaryTTS = records.records[0].data[0].post.audioItems[0].data[0].audio.webUrl
+            console.log('2 summaryTTS', summaryTTS);
           }
           else {
             console.log('3');
             summaryTTS = null
+            console.log('3 summaryTTS', summaryTTS);
+
+          }
+        }
+      }
+      if (summaryTTS === undefined && records.records[0] !== undefined && records.records[0].data[1] !== undefined) {
+        console.log('a00', records.records[0].data[1].post);
+        if (records.records[0].data[1].post !== undefined) {
+          if(records.records[0].data[1].post.audioItems[0] !== undefined) {
+            console.log('a0', records.records[0].data[1].post.audioItems[0]);
+            if (records.records[0].data[1].post.audioItems[0].data[0].associatedUrlOnWeb !== undefined) {
+              console.log('a1', records.records[0].data[1].post.audioItems[0].data[0].associatedUrlOnWeb.url);
+              summaryTTS = records.records[0].data[1].post.audioItems[0].data[0].associatedUrlOnWeb.url
+              console.log('a1 summaryTTS', summaryTTS);
+
+            }
+            else if (records.records[0].data[1].post.audioItems[0].data[0].audio !== undefined) {
+              console.log('a2', records.records[0].data[1].post.audioItems[0].data[0].audio.webUrl);
+              summaryTTS = records.records[0].data[1].post.audioItems[0].data[0].audio.webUrl
+              console.log('a2 summaryTTS', summaryTTS);
+
+            }
+            else {
+              console.log('a3');
+              summaryTTS = null
+              console.log('a3 summaryTTS', summaryTTS);
+            }
           }
         }
       }
       console.log('SummaryTTS:', summaryTTS);
-      
+      const screenshotURL = `${backendURL}/api/media?id=${screenshotMediaId}`;
       //  = (records.records[0].data[0].post !== undefined)
       let articleData = {
         title: records.records[0].data[0].basic !== undefined ? records.records[0].data[0].basic.name : null,
@@ -955,6 +1129,7 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
         tags: records.records[0].data[0].basic !== undefined ? records.records[0].data[0].basic.tagItems : '',
         // content: records.records[0].data[0].post.articleText.data[0].basic.urlItems.associatedUrlOnWeb.url || null,
         // embeddedImage: records.records[0].data[0].post.featuredImage.data[0] || [],
+        screenshotURL: screenshotURL,
         domain: domain || null,
         url: url,
         summaryTTS: summaryTTS,
@@ -989,6 +1164,8 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
 
       const domain = (new URL(url)).hostname.split('.').slice(-2, -1)[0];
 
+      const screenshotURL = `${backendURL}/api/media?id=${screenshotMediaId}`;
+
       // Initial parsed article data
       let articleData = {
         title: data.title || null,
@@ -998,7 +1175,8 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
         content: content || null,
         embeddedImage: data.lead_image_url || null,
         domain: domain || null,
-        url: url || null
+        url: url || null,
+        screenshotURL 
       };
 
 
@@ -1023,6 +1201,11 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
 
       // **BYLINE**
       if (!articleData.byline) {
+        // if (!articleData.byline) {
+          console.log('Byline not found in content. Attempting to extract from screenshot...');
+          const extractedByline = await analyzeImageForAuthor(screenshotURL);
+          articleData.byline = extractedByline || null; // Fallback to any previously found byline
+      // }
         const authorSelector = [
           '.author', '.author-name', '.byline', '.by-author', '.byline__name', '.post-author', '.auth-name', '.ArticleFull_headerFooter__author',
           '.entry-author', '.post-author-name', '.post-meta-author', '.article__author', '.author-link', '.article__byline', '.content-author',
@@ -1165,7 +1348,14 @@ async function fetchParsedArticleData(url, html, scrapeId, res) {
       let textRecord = null;
       let textDidTxRef = null;
 
-      const currentblock = await getCurrentBlockHeight();
+      let currentblock = await getCurrentBlockHeight();
+      if (currentblock === null) {
+        currentblock = await getCurrentBlockHeight();
+        if (currentblock === null) {
+          currentblock = latestArweaveBlockInDB;
+        }
+      }
+      console.log('SUPER IMPORTANT currentblock:', currentblock);
       const records = getRecords({ resolveDepth: 0 });
       
     console.log('subRecords:', subRecords, 'subRecordTypes', subRecordTypes);
@@ -1417,15 +1607,16 @@ function generateScrapeId(url, userId) {
 
 // router.post('/article/stream', authenticateToken, async (req, res) => {
 router.post('/article/stream', async (req, res) => {
-  console.log('Received scraping request...', req.body.url);
-  const { html, url, userId } = req.body; // Extract HTML and URL from request body
+  const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body; // Extract HTML and URL from request body
   // const userId = req.user.userId; // Extract userId from the decoded token
-  console.log('User ID:', userId);
-
+  
   if (!html || !url || !userId) {
     return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
   }
-
+  
+  console.log('User ID:', userId);
+  console.log('Received scraping request...', req.body.url);
+  console.log('Total screenshots received:', screenshots?.length);
   // Generate a unique identifier for this scrape request
   const scrapeId = generateScrapeId(url, userId);
   console.log('Scrape ID:', scrapeId);
@@ -1443,7 +1634,7 @@ router.post('/article/stream', async (req, res) => {
 
   try {
     // Start scraping and stream data back piece by piece
-    await fetchParsedArticleData(url, html, scrapeId, res);
+    await fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res);
   } catch (error) {
     console.error('Error processing scraping:', error);
     res.write(`event: error\n`);

@@ -16,6 +16,50 @@ This project provides an API to index and interact with records stored on the Ar
 - Docker & Docker Compose
 - Node.js (version 16 or higher if running locally without Docker)
 
+### Installing `canvas` Dependency
+
+The `canvas` module is required for certain functionalities, such as rendering or processing images. To use it, ensure the necessary system libraries are installed.
+
+#### Canvas Installation Steps
+
+1. **Install the `canvas` module**:  
+Run the following command to install the `canvas` module:
+   ```bash
+   npm install canvas
+   ```
+
+2.	**System Dependencies**:
+Depending on your operating system, install the necessary system-level libraries:
+	•	Ubuntu/Debian:
+    `sudo apt-get install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev`
+
+    •	Fedora:
+    `sudo yum install gcc-c++ cairo-devel pango-devel libjpeg-turbo-devel giflib-devel`
+
+    •	macOS:
+Install the libraries using Homebrew:
+    `brew install pkg-config cairo pango libpng jpeg giflib librsvg`
+
+    •	Windows:
+Follow the instructions provided in the node-canvas Wiki for Windows setup.
+
+3.	**Rebuild Native Bindings (if required)**:
+After installing system dependencies, rebuild the canvas bindings:
+`npm rebuild canvas`
+
+4.	**Verify Installation**:
+Run the following code snippet to ensure the canvas module works correctly:
+    ```
+    const { createCanvas } = require('canvas');
+    const canvas = createCanvas(200, 200);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'green';
+    ctx.fillRect(10, 10, 150, 100);
+    console.log('Canvas module is working correctly');
+    ```
+
+If you encounter issues during installation or runtime, refer to the node-canvas installation guide for detailed troubleshooting steps.
+
 ### Setting Up Environment Variables
 
 To run the application, ensure you have an `.env` file in the project root that looks like this:

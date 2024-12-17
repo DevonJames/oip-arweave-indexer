@@ -38,6 +38,7 @@
     "ipfs-http-client": "^49.0.4",
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^2.7.0",
+    "node-html-to-image": "^5.0.0",
     "play-dl": "^1.9.7",
     "progress": "^2.0.3",
     "progress-stream": "^2.0.0",

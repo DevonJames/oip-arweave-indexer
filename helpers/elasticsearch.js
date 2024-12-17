@@ -1,7 +1,7 @@
 const { Client } = require('@elastic/elasticsearch');
 const Arweave = require('arweave');
 const { getTransaction, getBlockHeightFromTxId, getCurrentBlockHeight } = require('./arweave');
-const { resolveRecords } = require('../helpers/utils');
+// const { resolveRecords, getLineNumber } = require('../helpers/utils');
 const { setIsProcessing } = require('../helpers/processingState');  // Adjust the path as needed
 const arweaveConfig = require('../config/arweave.config');
 const arweave = Arweave.init(arweaveConfig);
@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 
 const { gql, request } = require('graphql-request');
-const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber } = require('./utils');
+const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber, resolveRecords } = require('./utils');
 // const { sign } = require('crypto');
 // const { get } = require('http');
 const path = require('path');
@@ -539,8 +539,8 @@ async function deleteRecordFromDB(creatorDid, transaction) {
     // console.log(getFileInfo(), getLineNumber(), 'deleteRecordFromDB:', creatorDid, 'transaction:', transaction)
     try {
 
-        txIdToDelete = JSON.parse(transaction.data).delete.didTx;
-        // console.log(getFileInfo(), getLineNumber(), 'txIdToDelete:', creatorDid, transaction.creator, transaction.data, { txIdToDelete })
+        didTxToDelete = JSON.parse(transaction.data).delete.didTx;
+        // console.log(getFileInfo(), getLineNumber(), 'didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete })
         if (creatorDid === 'did:arweave:' + transaction.creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
 
@@ -549,15 +549,16 @@ async function deleteRecordFromDB(creatorDid, transaction) {
                 body: {
                     query: {
                         match: {
-                            "oip.didTx": txIdToDelete
+                            "oip.didTx": didTxToDelete
                         }
                     }
                 }
             });
 
             if (searchResponse.hits.hits.length === 0) {
-                console.log(getFileInfo(), getLineNumber(), 'No record found with the specified ID:', txIdToDelete);
-                return; // Exit the function early if no record is found
+                console.log(getFileInfo(), getLineNumber(), 'No record found with the specified ID:', didTxToDelete);
+                // return; // Exit the function early if no record is found
+                response = { message: 'No record found with the specified ID:', didTxToDelete }
             }
 
             const recordId = searchResponse.hits.hits[0]._id;
@@ -664,7 +665,9 @@ async function getRecords(queryParams) {
         recordType,
         limit,
         page,
-        search
+        search,
+        inArweaveBlock,
+        hasAudio,
     } = queryParams;
 
     // console.log('get records using:', {template, creator_name, creator_did_address, resolveDepth, url, didTx, didTxRef, tags, sortBy, recordType});
@@ -682,9 +685,26 @@ async function getRecords(queryParams) {
 
         // const totalRecordsInDB = recordsInDB.length;
 
-        console.log('before filtering, there are', qtyRecordsInDB, 'records');
+        console.log('before filtering, there are', qtyRecordsInDB, 'records', hasAudio);
 
 
+
+        if (inArweaveBlock != undefined) {
+            if (inArweaveBlock === 'bad') {
+                records = records.filter(record => {
+                    const inArweaveBlock = record.oip.inArweaveBlock;
+                    return isNaN(inArweaveBlock) || inArweaveBlock === null || inArweaveBlock === undefined || typeof inArweaveBlock !== 'number';
+                });
+                console.log('after filtering by invalid inArweaveBlock, there are', records.length, 'records');
+            }
+            else {
+                // otherwise inArweaveBlock is a number
+                records = records.filter(record => {
+                    return record.oip.inArweaveBlock === inArweaveBlock;
+                });
+                console.log('after filtering by inArweaveBlock, there are', records.length, 'records');
+            }
+        }
 
         if (creator_name != undefined) {
             records = records.filter(record => {
@@ -738,6 +758,8 @@ async function getRecords(queryParams) {
             });
             console.log('after filtering by recordType, there are', records.length, 'records');
         }
+
+    
 
         if (didTxRef != undefined) {
             console.log('didTxRef:', didTxRef);
@@ -911,6 +933,84 @@ async function getRecords(queryParams) {
 
         }
 
+        // Resolve records if resolveDepth is specified
+        let resolvedRecords = await Promise.all(records.map(async (record) => {
+            let resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB);
+            return resolvedRecord;
+        }));
+
+        if (hasAudio) {
+            console.log('Filtering for records with audio...');
+            const initialResolvedRecords = resolvedRecords;
+            resolvedRecords = resolvedRecords.filter(record => {
+                return record.data.some(item => {
+                    // Check for audioItems array and iterate safely
+                    if (item.audioItems) {
+                        return item.audioItems.some(audioItem => 
+                            audioItem?.data?.some(audioData => 
+                                audioData?.audio?.webUrl || audioData?.associatedURLOnWeb?.url
+                            )
+                        );
+                    }
+                    // Check directly for audio data at other possible places
+                    if (item.post?.audioItems) {
+                        return item.post.audioItems.some(audioItem => 
+                            audioItem?.data?.some(audioData =>
+                                audioData?.audio?.webUrl || audioData?.associatedURLOnWeb?.url
+                            )
+                        );
+                    }
+                    // Add a final safety check for `webUrl` at a higher level
+                    return item?.webUrl && item.webUrl.includes('http');
+                });
+            });
+            // console.log('After filtering for audio, there are', resolvedRecords.length, 'records');
+            if (hasAudio === 'false') {
+                console.log('count of resolvedRecords, initialResolvedRecords', resolvedRecords.length, initialResolvedRecords.length);
+                // remove the records in resolvedRecords from initialResolvedRecords and return the remaining records
+                resolvedRecords = initialResolvedRecords.filter(record => !resolvedRecords.includes(record));
+                console.log('After filtering for records without audio, there are', resolvedRecords.length, 'records');
+            }
+            else {
+                console.log('After filtering for records with audio, there are', resolvedRecords.length, 'records');
+            }
+        }
+
+        // if (hasAudio && hasAudio === 'false') {
+        //     console.log('Filtering for records without audio...');
+        //     let initialResolvedRecords = resolvedRecords;
+        //     resolvedRecords = resolvedRecords.filter(record => {
+        //         return !record.data.some(item => {
+        //             // Check for audioItems array and iterate safely
+        //             if (item.audioItems) {
+        //                 return item.audioItems.some(audioItem => 
+        //                     audioItem?.data?.some(audioData => 
+        //                         audioData?.audio?.webUrl || audioData?.associatedURLOnWeb?.url
+        //                     )
+        //                 );
+        //             }
+        //             // Check directly for audio data at other possible places
+        //             if (item.post?.audioItems) {
+        //                 return item.post.audioItems.some(audioItem => 
+        //                     audioItem?.data?.some(audioData =>
+        //                         audioData?.audio?.webUrl || audioData?.associatedURLOnWeb?.url
+        //                     )
+        //                 );
+        //             }
+        //             // Add a final safety check for `webUrl` at a higher level
+        //             return item?.webUrl && item.webUrl.includes('http');
+        //         });
+        //     });
+
+        //     // initialResolvedRecords minus resolvedRecords should be the records without audio
+        //     resolvedRecords = initialResolvedRecords.filter(record => !resolvedRecords.includes(record));
+
+        //     console.log('after filtering by hasAudio === false, there are', resolvedRecords.length, 'records');
+
+        // }
+        console.log('es 982 resolvedRecords:', resolvedRecords.length);
+
+        const searchResults = resolvedRecords.length;
         // Apply Paging
         const pageSize = parseInt(limit) || 20; // Default to 20 if not specified
         const pageNumber = parseInt(page) || 1;  // Default to the first page
@@ -918,14 +1018,8 @@ async function getRecords(queryParams) {
         const startIndex = (pageNumber - 1) * pageSize;
         const endIndex = startIndex + pageSize;
 
-        const paginatedRecords = records.slice(startIndex, endIndex);
-
-        // Resolve records if resolveDepth is specified
-        const resolvedRecords = await Promise.all(paginatedRecords.map(async (record) => {
-            const resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB);
-            return resolvedRecord;
-        }));
-        // console.log('es 896 resolvedRecords:', resolvedRecords);
+        const paginatedRecords = resolvedRecords.slice(startIndex, endIndex);
+        resolvedRecords = paginatedRecords;
 
         let currentBlockHeight = await getCurrentBlockHeight();
         // let startBlockHeight = 1463761;
@@ -937,19 +1031,12 @@ async function getRecords(queryParams) {
             indexingProgress: `${progress}%`,
             // qtyReturned: records.length,
             totalRecords: qtyRecordsInDB,
-            searchResults: records.length,
-            pageSize: pageSize,
+            searchResults: searchResults,
+            displayingResults: pageSize,
             currentPage: pageNumber,
             totalPages: Math.ceil(records.length / pageSize),
             records: resolvedRecords
         };
-        //     records = await Promise.all(records.map(async (record) => {
-        //         const resolvedRecord = await resolveRecords(record, parseInt(resolveDepth),  recordsInDB );
-        //         return resolvedRecord;
-        //     }));
-
-
-        // return records
 
     } catch (error) {
         console.error('Error retrieving records:', error);
@@ -1184,8 +1271,9 @@ const getRecordsInDB = async () => {
                     publicKey
                 };
                 const qtyRecordsInDB = records.length;
-                const maxArweaveBlockInDB = Math.max(...records.map(record => record.oip.inArweaveBlock));
-                const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity);
+                const maxArweaveBlockInDB = Math.max(...records.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)));
+                // console.log(getFileInfo(), getLineNumber(), 'maxArweaveBlockInDB for records:', maxArweaveBlockInDB);
+                const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity) || (maxArweaveBlockInDB === -0) || (maxArweaveBlockInDB === null);
                 const finalMaxRecordArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
                 return { qtyRecordsInDB, finalMaxRecordArweaveBlock, records };
             }
@@ -1531,6 +1619,7 @@ async function keepDBUpToDate(remapTemplates) {
             maxArweaveBlockInDB: maxArweaveCreatorRegBlockInDB,
             recordsInDB: creatorsInDB
         };
+        console.log(getFileInfo(), getLineNumber(), 'Creators:', { maxArweaveCreatorRegBlockInDB, qtyCreatorsInDB });
         if (qtyCreatorsInDB === 0) {
             const hardCodedTxId = 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y';
             const block = 1463761
@@ -1551,7 +1640,9 @@ async function keepDBUpToDate(remapTemplates) {
         };
         // to do standardize these names a bit better
         const { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
-        const { finalMaxRecordArweaveBlock, qtyRecordsInDB, recordsInDB } = await getRecordsInDB();
+        console.log(getFileInfo(), getLineNumber(), 'Templates:', { finalMaxArweaveBlock, qtyTemplatesInDB });
+        const { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB();
+        console.log(getFileInfo(), getLineNumber(), 'Records:', { finalMaxRecordArweaveBlock, qtyRecordsInDB });
         foundInDB.maxArweaveBlockInDB = Math.max(
             maxArweaveCreatorRegBlockInDB || 0,
             finalMaxArweaveBlock || 0,
@@ -1562,11 +1653,22 @@ async function keepDBUpToDate(remapTemplates) {
             qtyTemplatesInDB || 0,
             qtyRecordsInDB || 0
         );
-        foundInDB.recordsInDB = Math.max(
-            creatorsInDB || 0,
-            templatesInDB || 0,
-            recordsInDB || 0
-        );
+        foundInDB.recordsInDB = {
+            creators: creatorsInDB,
+            templates: templatesInDB,
+            records: records
+        };
+        foundInDB.arweaveBlockHeights = {
+            creators: maxArweaveCreatorRegBlockInDB,
+            templates: finalMaxArweaveBlock,
+            records: finalMaxRecordArweaveBlock
+        };
+        foundInDB.qtys = {
+            creators: qtyCreatorsInDB,
+            templates: qtyTemplatesInDB,
+            records: qtyRecordsInDB
+        };
+        console.log(getFileInfo(), getLineNumber(), 'Found in DB:', foundInDB);
 
         const newTransactions = await searchArweaveForNewTransactions(foundInDB);
         if (newTransactions && newTransactions.length > 0) {
@@ -1591,6 +1693,7 @@ async function keepDBUpToDate(remapTemplates) {
 }
 
 async function searchArweaveForNewTransactions(foundInDB) {
+    console.log('foundinDB:', foundInDB);
     await ensureIndexExists();
     const { qtyRecordsInDB, maxArweaveBlockInDB } = foundInDB;
     const min = (qtyRecordsInDB === 0) ? 1463750 : (maxArweaveBlockInDB + 1);
@@ -1775,7 +1878,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 console.log(getFileInfo(), getLineNumber(),'DELETE MESSAGE FOUND, processing', transaction.transactionId);
                 // turning off for now till we implement a security mechanism for this since it can come in over an API
                 // isDeleteMessageFound = true;
-                await deleteRecordFromDB(creatorDid, transaction);
+                isDeleteMessageFound = true;
             }
         } catch (error) {
             console.error(getFileInfo(), getLineNumber(),`Invalid JSON data, skipping: ${transaction.transactionId}`, transaction.data, typeof transaction.data, error);
@@ -1795,6 +1898,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
     let dataArray = [];
     dataArray.push(transactionData);
     if (isDeleteMessageFound) {
+        console.log(getFileInfo(), getLineNumber(),'Delete message found, processing:', transaction.transactionId);
         record = {
             data: dataArray,
             oip: {
@@ -1812,8 +1916,27 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 }
             }
         };
-        await indexRecord(record)
-        console.log(getFileInfo(), getLineNumber(),'Delete message indexed:', transaction.transactionId);
+        // console.log(getFileInfo(), getLineNumber(),'Delete message found:', transaction.transactionId);
+        
+
+
+        if (!record.data || !record.oip) {
+            console.log(getFileInfo(), getLineNumber(),`${record.oip.didTx} is missing required data, cannot be indexed.`);
+        } else {
+            const existingRecord = await elasticClient.exists({
+                index: 'records',
+                id: record.oip.didTx
+            });
+            if (!existingRecord.body) {
+                return await indexRecord(record)
+            }
+        }
+
+        deleteRecordFromDB(creatorDid, transaction);
+
+        console.log(getFileInfo(), getLineNumber(),'Delete message indexed:', transaction.transactionId, 'and referenced record deleted', record.data[0].didTx);
+
+        // await indexRecord(record)
     } else {
         const templates = await getTemplatesInDB();
         const expandedRecordPromises = await expandData(transaction.data, templates.templatesInDB);
