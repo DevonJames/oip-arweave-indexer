@@ -72,7 +72,7 @@ const getCurrentBlockHeight = async () => {
     try {
         const response = await axios.get('https://arweave.net/info');
         const blockHeight = response.data.height;
-        console.log('Current block height:', blockHeight);
+        // console.log('Current block height:', blockHeight);
         return blockHeight;
     } catch (error) {
         console.error('Error fetching current block height:', error);
@@ -125,84 +125,5 @@ module.exports = {
     getCurrentBlockHeight,
     upfrontFunding,
     lazyFunding,
-    arweave
+    arweave,
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-// const { createData, ArweaveSigner, JWKInterface } = require('arbundles');
-// const fs = require('fs');
-// const path = require('path');
-// const crypto = require('crypto');
-// const { gql, request } = require('graphql-request');
-// const templatesConfig = require('../config/templates.config.js');
-// const dotenv = require('dotenv');
-// dotenv.config();
-
-// const arweaveConfig = require('../config/arweave.config.js');
-// const arweave = Arweave.init(arweaveConfig);
-// const walletFileLocation = process.env.WALLET_FILE;
-// const jwk = JSON.parse(fs.readFileSync(walletFileLocation));
-// const signer = new ArweaveSigner(jwk);
-
-// const getIrysArweave = async () => {
-//   const network = "mainnet";
-//   const token = "arweave";
-//   const key = JSON.parse(fs.readFileSync(walletFileLocation).toString());
-//   const irys = new Irys({ network, token, key });
-//   return irys;
-// };
-
-// const signMessage = async (data) => {
-//   const myPublicKey = jwk.n;
-//   const myAddress = crypto.createHash('sha256').update(myPublicKey).digest('base64');
-//   const signatureObject = await arweave.crypto.sign(jwk, data)
-//   const signatureBase64 = Buffer.from(signatureObject).toString('base64');
-//   const isVerified = await ArweaveSigner.verify(myPublicKey, data, signatureObject);
-//   return { signatureBase64, isVerified };
-// };
-
-// const getTransactionData = async (transactionId) => {
-//   try {
-//     const response = await axios.get(`http://localhost:3005/api/transaction/${transactionId}`, {
-//       responseType: 'stream'
-//     });
-//     let data = '';
-//     response.data.on('data', (chunk) => {
-//       data += chunk;
-//     });
-//     return new Promise((resolve, reject) => {
-//       response.data.on('end', () => {
-//         try {
-//           const parsedData = JSON.parse(data);
-//           resolve(parsedData);
-//         } catch (error) {
-//           reject(`Error parsing JSON from transaction ${transactionId}: ${error.message}`);
-//         }
-//       });
-//       response.data.on('error', (error) => {
-//         reject(`Error while receiving chunked data for transaction ${transactionId}: ${error.message}`);
-//       });
-//     });
-//   } catch (error) {
-//     console.warn(`Error retrieving transaction ${transactionId}:`, error.message);
-//     return null;
-//   }
-// };
-
-// module.exports = {
-//   getIrysArweave,
-//   signMessage,
-//   getTransactionData,
-//   arweave
-// };

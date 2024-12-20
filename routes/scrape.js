@@ -799,7 +799,7 @@ const mimeTypes = {
   console.log('this is whats getting published:', recordToPublish)
         
 
-// TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
+    // TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
     // if (youtubeVideoTorrent.length > 0) {
     //   recordToPublish.post.videoItems = [...videoRecords];
     // }
@@ -894,8 +894,6 @@ async function convertBase64ToImage(base64String, scrapeId) {
 
 async function stitchImages(screenshots, totalHeight, scrapeId) {
   console.log('converting screenshot base64 to files before stitching');
-
-
 
   try {
     const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
@@ -1202,7 +1200,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       // **BYLINE**
       if (!articleData.byline) {
         // if (!articleData.byline) {
-          console.log('Byline not found in content. Attempting to extract from screenshot...');
+          console.log('Byline not found in content. Attempting to extract from screenshot...', screenshotURL);
           const extractedByline = await analyzeImageForAuthor(screenshotURL);
           articleData.byline = extractedByline || null; // Fallback to any previously found byline
       // }
@@ -1219,7 +1217,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
         console.log('Byline2:', articleData.byline);
         const repeatedWordsPattern = /\b(\w+)\b\s*\1\b/i; // Check for repeated words
         const excessiveSpacesPattern = /\s{2,}/; // Matches two or more spaces
-        if (articleData.domain === 'zerohedge' ) {
+        if (articleData.domain === 'zerohedge' && !articleData.byline) {
           articleData.byline = await scrapeZeroHedgeByline($);
        }
         if (!articleData.byline || articleData.byline === null || repeatedWordsPattern.test(byline) || excessiveSpacesPattern.test(byline)) {
@@ -1478,7 +1476,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
     console.error('Error fetching parsed article data:', error);
     // res.write(`event: error\n`);
     // res.write(`data: ${JSON.stringify({ error: 'Failed to fetch article data.' })}\n\n`);
-    // res.end();
+    res.end();
   }
 }
 
@@ -1649,5 +1647,8 @@ router.post('/article/stream', async (req, res) => {
     res.end(); // Close the SSE connection
   });
 });
+
+
+
 
 module.exports = router;

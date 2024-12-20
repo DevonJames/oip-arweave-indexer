@@ -7,7 +7,11 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const {getCurrentBlockHeight, getBlockHeightFromTxId, lazyFunding, upfrontFunding, arweave} = require('../helpers/arweave');
-const {generatePodcastFromArticles} = require('../helpers/podcast-generator');
+// const {generatePodcastFromArticles} = require('../helpers/podcast-generator');
+const client = new textToSpeech.TextToSpeechClient({
+  keyFilename: 'config/google-service-account-key.json',
+  projectId: 'gentle-shell-442906-t7',
+});
 
 function generateAudioFileName(text, extension = 'wav') {
   return crypto.createHash('sha256').update(text).digest('hex') + '.' + extension;
@@ -897,7 +901,7 @@ async function identifyAuthorNameFromContent(content) {
   const messages = [
     {
       role: "system",
-      content: `You are a helpful assistant tasked with identifying the author's name from the provided content. Focus on finding the name of the author or writer of the article. It is highly unlikely that the subject of the article is its author.  Respond with JSON containing the author's name and using the key "name".`
+      content: `You are a helpful assistant tasked with identifying the author's name from the provided content. Focus on finding the name of the author or writer of the article. It is highly unlikely that the subject of the article is its author, it will probably be just beneath the headine, often labeled "by" or "written by" or "authored by".  Respond with JSON containing the author's name and using the key "name".`
     },
     {
       role: "user",
@@ -1147,11 +1151,11 @@ async function analyzeImageForAuthor(screenshotURL) {
   const messages = [
       {
           role: "system",
-          content: `You are an AI tasked with extracting the author name from an article's screenshot. Analyze the screenshot, identify the section where the author (byline) is mentioned, and return the extracted author name.`
+          content: `You are an AI tasked with extracting the author name from an article's screenshot. Analyze the screenshot, identify the section where the author (byline) is mentioned, and return the extracted author name in JSON format with the key "name".`
       },
       {
           role: "user",
-          content: `Here's the screenshot of the article: ${screenshotURL}. Please extract the author's name.`
+          content: `Here's the screenshot of the article: ${screenshotURL}. Please extract the author's name and return it in JSON format.`
       }
   ];
 
@@ -1172,7 +1176,10 @@ async function analyzeImageForAuthor(screenshotURL) {
       if (response.data && response.data.choices && response.data.choices[0]) {
           const extractedAuthor = response.data.choices[0].message.content.trim();
           console.log('Extracted author:', extractedAuthor);
-          return extractedAuthor;
+          const rawjson = extractedAuthor.replace(/```json|```/g, '');
+          const parsedContent = JSON.parse(rawjson.trim());
+          const authorName = parsedContent.name;
+          return authorName;
       } else {
           console.error('Unexpected response structure:', response);
           return null;
@@ -1440,6 +1447,61 @@ async function retryAsync(asyncFunction, args = [], options = { maxRetries: 5, d
     return fallbackValue;
 }
 
+async function synthesizeSpeech(text, voiceConfig, outputFileName, api = 'elevenLabs') {
+  if (api === 'google') {
+      const request = {
+          input: { text },
+          voice: voiceConfig.google,
+          audioConfig: { audioEncoding: 'MP3' }
+      };
+      try {
+          const [response] = await client.synthesizeSpeech(request);
+          await fs.promises.writeFile(outputFileName, response.audioContent, 'binary');
+          console.log(`Google TTS: Saved audio to ${outputFileName}`);
+          return outputFileName;
+      } catch (error) {
+          console.error(`Google TTS error: ${error.message}`);
+          throw error;
+      }
+  } else if (api === 'elevenLabs') {
+      try {
+          const response = await axios.post(
+              `https://api.elevenlabs.io/v1/text-to-speech/${voiceConfig.elevenLabs.voice_id}`,
+              {
+                  text,
+                  // model_id: 'eleven_turbo_v2', // Use the best-supported model
+                  model_id: voiceConfig.elevenLabs.model_id,
+                  voice_settings: {
+                    stability: voiceConfig.elevenLabs.stability || 0.75, // Default stability
+                    similarity_boost: voiceConfig.elevenLabs.similarity_boost || 0.75 // Default similarity boost
+                },  
+                  output_format: 'mp3_44100_128', // High-quality audio
+                  apply_text_normalization: 'auto' // Default normalization
+              },
+              {
+                  headers: {
+                      'xi-api-key': process.env.ELEVENLABS_API_KEY,
+                      'Content-Type': 'application/json'
+                  },
+                  responseType: 'arraybuffer'
+              }
+          );
+          await fs.promises.writeFile(outputFileName, response.data, 'binary');
+          console.log(`Eleven Labs: Saved audio to ${outputFileName}`);
+          return outputFileName;
+      } catch (error) {
+          console.error(`Eleven Labs error: ${error.message}`);
+          if (error.response) {
+              console.error(`Response status: ${error.response.status}`);
+              console.error(`Response data: ${Buffer.from(error.response.data).toString('utf-8')}`);
+          }
+          throw error;
+      }
+  } else {
+      throw new Error(`Unsupported API: ${api}`);
+  }
+}
+
 module.exports = {
     // generateSpeech,
     getVoiceModels,
@@ -1450,8 +1512,9 @@ module.exports = {
     analyzeImageForAuthor,
     generateTagsFromContent,
     generateCombinedSummaryFromArticles,
-    generateDialogueFromArticles,
+    // generateDialogueFromArticles,
     generateDateFromRelativeTime,
+    synthesizeSpeech,
     retryAsync
 }
 
