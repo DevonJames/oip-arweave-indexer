@@ -10,12 +10,12 @@ const healthRoutes = require('./routes/health');
 const generateRoutes = require('./routes/generate');
 const userRoutes = require('./routes/user');
 const walletRoutes = require('./routes/wallet');
+const { getIsProcessing, setIsProcessing } = require('./helpers/processingState');
 const { keepDBUpToDate, remapExistingRecords } = require('./helpers/elasticsearch');
 const minimist = require('minimist');
 dotenv.config();
 const cors = require('cors');
 const app = express();
-const { getIsProcessing, setIsProcessing } = require('./helpers/processingState');
 const path = require('path');
 
 
@@ -121,7 +121,9 @@ app.listen(port, async () => {
         //     }, interval * 1000);
         // }, wait * 1000);
         setTimeout(() => {
+            console.log("Starting first cycle...");
             keepDBUpToDate(remapTemplates);
+            setIsProcessing(true);
             setInterval(async () => {
                 // Only start a new process if one isn't already running
                 if (!getIsProcessing()) {
@@ -137,6 +139,7 @@ app.listen(port, async () => {
                 } else {
                     console.log("Skipping new cycle because a previous process is still running.");
                 }
+                console.log('interval over, getIsProcessing:', getIsProcessing());
             }, interval * 1000);
         }, wait * 1000)
 

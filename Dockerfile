@@ -8,6 +8,16 @@ RUN apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium
 # Install chromium for puppeteer
 # RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont libx11 libxcomposite libxdamage libxrandr libxi libxtst libnss alsa-lib at-spi2-core gtk+3.0 libdrm libgbm
 
+# Add dependencies for node-canvas
+RUN apk add --no-cache \
+    build-base \
+    cairo-dev \
+    pango-dev \
+    jpeg-dev \
+    giflib-dev \
+    librsvg \
+    pkgconfig
+
 #     # Install Puppeteer
 RUN npm install puppeteer-extra puppeteer-extra-plugin-stealth
 
@@ -32,8 +42,8 @@ COPY helpers ./helpers
 COPY remapTemplates ./remapTemplates
 COPY routes ./routes
 COPY speech-synthesizer ./speech-synthesizer
-COPY src ./src  
-COPY test ./test  
+# COPY src ./src  
+# COPY test ./test  
 # COPY downloads ./downloads
 
 # Copy the .env file

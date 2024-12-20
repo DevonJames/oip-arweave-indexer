@@ -465,7 +465,7 @@ const indexRecord = async (record) => {
                 body: record,
                 refresh: 'wait_for' // Wait for indexing to be complete before returning
             });
-            console.log(getFileInfo(), getLineNumber, `Record indexed successfully: ${didTx}`);
+            console.log(getFileInfo(), getLineNumber(), `Record indexed successfully: ${didTx}`);
         }
 
         // if (response.result === 'created') {
@@ -478,7 +478,7 @@ const indexRecord = async (record) => {
         //     console.log(getFileInfo(), getLineNumber, `Unexpected response from Elasticsearch: ${JSON.stringify(response)}`);
         // }
     } catch (error) {
-        console.error(getFileInfo(), getLineNumber, `Error indexing record ${record.oip.didTx}:`, error);
+        console.error(getFileInfo(), getLineNumber(), `Error indexing record ${record.oip.didTx}:`, error);
     }
 };
 
@@ -1704,7 +1704,7 @@ async function searchArweaveForNewTransactions(foundInDB) {
     let afterCursor = null;  // Cursor for pagination
 
     const endpoint = 'https://arweave.net/graphql';
-    
+
     while (hasNextPage) {
         const query = gql`
             query {
@@ -1730,29 +1730,112 @@ async function searchArweaveForNewTransactions(foundInDB) {
         `;
 
         let response;
-        try {
-            response = await request(endpoint, query);
-        } catch (error) {
-            console.error(getFileInfo(), getLineNumber(), 'Error fetching new transactions:', error);
-            return [];
+        let retryCount = 0;
+        const maxRetries = 3; // Retry up to 3 times
+
+        while (retryCount < maxRetries) {
+            try {
+                response = await request(endpoint, query);
+                break; // Break the retry loop if the request is successful
+            } catch (error) {
+                retryCount++;
+                console.error(
+                    `Attempt ${retryCount} failed for fetching transactions:`, 
+                    error.message
+                );
+
+                if (retryCount === maxRetries) {
+                    console.error('Max retries reached. Moving to the next page.');
+                } else {
+                    console.log(`Retrying... (${retryCount}/${maxRetries})`);
+                }
+            }
+        }
+
+        // If response is still undefined after retries, move to the next page
+        if (!response) {
+            afterCursor = null; // Move to the next page (skip the current one)
+            continue;
         }
 
         const transactions = response.transactions.edges.map(edge => edge.node);
         allTransactions = allTransactions.concat(transactions);
 
         // Pagination logic
-        hasNextPage = response.transactions.pageInfo.hasNextPage;  // Check if more pages exist
-        afterCursor = response.transactions.edges.length > 0 ? response.transactions.edges[response.transactions.edges.length - 1].cursor : null;  // Get the cursor for the next page
+        hasNextPage = response.transactions.pageInfo.hasNextPage;
+        afterCursor = response.transactions.edges.length > 0
+            ? response.transactions.edges[response.transactions.edges.length - 1].cursor
+            : null;
 
         console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
-
-        // If there's no next page, stop the loop
-        if (!hasNextPage) break;
     }
 
     console.log('Total transactions fetched:', allTransactions.length, getFileInfo(), getLineNumber());
-    return allTransactions.reverse();  // Returning reversed transactions as per your original code
+    return allTransactions.reverse(); // Returning reversed transactions as per your original code
 }
+
+// works great, trying one that adds retries
+// async function searchArweaveForNewTransactions(foundInDB) {
+//     console.log('foundinDB:', foundInDB);
+//     await ensureIndexExists();
+//     const { qtyRecordsInDB, maxArweaveBlockInDB } = foundInDB;
+//     const min = (qtyRecordsInDB === 0) ? 1463750 : (maxArweaveBlockInDB + 1);
+//     console.log('Searching for new OIP data after block:', min, getFileInfo(), getLineNumber());
+
+//     let allTransactions = [];
+//     let hasNextPage = true;
+//     let afterCursor = null;  // Cursor for pagination
+
+//     const endpoint = 'https://arweave.net/graphql';
+    
+//     while (hasNextPage) {
+//         const query = gql`
+//             query {
+//                 transactions(
+//                     block: {min: ${min}},
+//                     tags: [
+//                         { name: "Index-Method", values: ["OIP"] }
+//                     ],
+//                     first: 100,
+//                     after: ${afterCursor ? `"${afterCursor}"` : null}
+//                 ) {
+//                     edges {
+//                         node {
+//                             id
+//                         }
+//                         cursor
+//                     }
+//                     pageInfo {
+//                         hasNextPage
+//                     }
+//                 }
+//             }
+//         `;
+
+//         let response;
+//         try {
+//             response = await request(endpoint, query);
+//         } catch (error) {
+//             console.error(getFileInfo(), getLineNumber(), 'Error fetching new transactions:', error);
+//             return [];
+//         }
+
+//         const transactions = response.transactions.edges.map(edge => edge.node);
+//         allTransactions = allTransactions.concat(transactions);
+
+//         // Pagination logic
+//         hasNextPage = response.transactions.pageInfo.hasNextPage;  // Check if more pages exist
+//         afterCursor = response.transactions.edges.length > 0 ? response.transactions.edges[response.transactions.edges.length - 1].cursor : null;  // Get the cursor for the next page
+
+//         console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
+
+//         // If there's no next page, stop the loop
+//         if (!hasNextPage) break;
+//     }
+
+//     console.log('Total transactions fetched:', allTransactions.length, getFileInfo(), getLineNumber());
+//     return allTransactions.reverse();  // Returning reversed transactions as per your original code
+// }
 
 
 async function processTransaction(tx, remapTemplates) {
