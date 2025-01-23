@@ -745,6 +745,8 @@ async function getRecords(queryParams) {
         dateStart,
         dateEnd,
         includeDeleteMessages = false,
+        includeSigs = true,
+        includePubKeys = true,
     } = queryParams;
 
     // console.log('get records using:', {queryParams});
@@ -932,9 +934,28 @@ async function getRecords(queryParams) {
         }
 
         
+        
         console.log('all filters complete, there are', records.length, 'records', records);
         
         
+    // remove the signature and public key hash data if requested        
+        if (includeSigs === "false" || includeSigs === false) {
+            records = records.map(record => {
+                if (record.oip && record.oip.signature) {
+                    delete record.oip.signature;
+                }
+                return record;
+            });
+        }
+    
+        if (includePubKeys === "false" || includePubKeys === false) {
+            records = records.map(record => {
+                if (record.oip && record.oip.creator && record.oip.creator.publicKey) {
+                    delete record.oip.creator.publicKey;
+                }
+                return record;
+            });
+        }
        
     // Add a dateReadable field to each record that has a timestamp value at ...basic.date
     records = records.map(record => {
