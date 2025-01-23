@@ -23,4 +23,38 @@ router.get('/media', (req, res) => {
     }
 });
 
+router.get('/open-stream', (req, res) => {
+    const { scrapeId } = req.query;
+  
+    if (!scrapeId) {
+      return res.status(400).json({ error: 'scrapeId is required' });
+    }
+  
+    console.log(`Client connected to open-stream for scrapeId: ${scrapeId}`);
+  
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+  
+    // Keep the connection alive
+    const keepAliveInterval = setInterval(() => {
+      res.write('event: ping\n');
+      res.write('data: "Keep connection alive"\n\n');
+    }, 15000);
+  
+    // Store the connection to send updates later
+    if (!ongoingScrapes.has(scrapeId)) {
+      ongoingScrapes.set(scrapeId, res);
+    }
+  
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log(`Client disconnected from stream for scrapeId: ${scrapeId}`);
+      clearInterval(keepAliveInterval);
+      ongoingScrapes.delete(scrapeId);
+      res.end();
+    });
+  });
+
 module.exports = router;
