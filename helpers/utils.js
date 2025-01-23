@@ -124,55 +124,29 @@ const getTemplateTxidByName = (templateName) => {
 };
 
 const resolveRecords = async (record, resolveDepth, recordsInDB) => {
-    // console.log('111 record:', record);
-    // console.log(getFileInfo(), getLineNumber(), 'Resolving record:', record, 'with resolveDepth:', resolveDepth, 'qty of records in db', recordsInDB.length);
-    // console.log(
-    //     getFileInfo(),
-    //     getLineNumber(),
-    //     'Resolving record:',
-    //     record,
-    //     'with resolveDepth:',
-    //     resolveDepth,
-    //     'qty of records in db:',
-    //     recordsInDB.length,
-    //     'list of didTx values:',
-    //     Array.isArray(recordsInDB) ? recordsInDB.map(record => record.oip.didTx) : 'recordsInDB is not an array' // Check if recordsInDB is an array before mapping
-    // );
-
     if (resolveDepth === 0 || !record) {
         return record;
     }
 
-    if (!Array.isArray(record.data)) {
-        console.error(getFileInfo(), getLineNumber(), 'record.data is not an array:', record.data);
+    if (!record.data || typeof record.data !== 'object') {
+        console.error(getFileInfo(), getLineNumber(), 'record.data is not an object:', record.data);
         return record;
     }
 
-    for (const item of record.data) {
-        // console.log(getFileInfo(), getLineNumber(), 'Checking record.data:', record.data);
-        for (const category of Object.keys(item)) {
-            const properties = item[category];
-            for (const key of Object.keys(properties)) {
-                // console.log(getFileInfo(), getLineNumber(), `Checking key ${key} with value ${properties[key]}`);
-                if (typeof properties[key] === 'string' && properties[key].startsWith('did:')) {
-                    // console.log(getFileInfo(), getLineNumber(), `Resolving reference ${properties[key]} for key ${key}`,'record');
-                    const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key]);
-                    // console.log(getFileInfo(), getLineNumber(), `Found refRecord: ${refRecord}`);
-                    if (refRecord) {
-                        properties[key] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB);
-                        // console.log(getFileInfo(), getLineNumber(), `Resolved reference ${properties[key]} for key ${key}`);
-                    }
-                } else if (Array.isArray(properties[key])) {
-                    // console.log(getFileInfo(), getLineNumber(), `Checking array ${key} with values ${properties[key]}`);
-                    for (let i = 0; i < properties[key].length; i++) {
-                        // console.log(getFileInfo(), getLineNumber(), `Checking array value ${properties[key][i]}`);
-                        if (typeof properties[key][i] === 'string' && properties[key][i].startsWith('did:')) {
-                            // console.log(getFileInfo(), getLineNumber(), {recordsInDB});
-                            const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key][i]);
-                            if (refRecord) {
-                                properties[key][i] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB);
-                                // console.log(getFileInfo(), getLineNumber(), `Resolved array reference ${properties[key][i]} for key ${key}`);
-                            }
+    for (const category of Object.keys(record.data)) {
+        const properties = record.data[category];
+        for (const key of Object.keys(properties)) {
+            if (typeof properties[key] === 'string' && properties[key].startsWith('did:')) {
+                const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key]);
+                if (refRecord) {
+                    properties[key] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB);
+                }
+            } else if (Array.isArray(properties[key])) {
+                for (let i = 0; i < properties[key].length; i++) {
+                    if (typeof properties[key][i] === 'string' && properties[key][i].startsWith('did:')) {
+                        const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key][i]);
+                        if (refRecord) {
+                            properties[key][i] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB);
                         }
                     }
                 }

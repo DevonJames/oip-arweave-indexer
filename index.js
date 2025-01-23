@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
-const rootRoute = require('./routes/api')
+const rootRoute = require('./routes/api');
 const recordRoutes = require('./routes/records');
 const templateRoutes = require('./routes/templates');
 const creatorRoutes = require('./routes/creators');
@@ -11,15 +11,14 @@ const generateRoutes = require('./routes/generate');
 const userRoutes = require('./routes/user');
 const walletRoutes = require('./routes/wallet');
 const { getIsProcessing, setIsProcessing } = require('./helpers/processingState');
-const { keepDBUpToDate, remapExistingRecords } = require('./helpers/elasticsearch');
+const { keepDBUpToDate, remapExistingRecords, deleteRecordsByBlock, deleteRecordsByIndexedAt, deleteRecordsByIndex } = require('./helpers/elasticsearch');
 const minimist = require('minimist');
 dotenv.config();
 const cors = require('cors');
 const app = express();
 const path = require('path');
 
-
-// Set higher body size limit (e.g., 10MB)
+// Set higher body size limit (e.g., 50MB)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -32,24 +31,8 @@ const corsOptions = {
     optionsSuccessStatus: 204
 };
 
-// const corsOptions = {
-//     origin: (origin, callback) => {
-//         const allowedOrigins = ['https://api.oip.onl', 'https://13231b78-b445-459d-963b-64064b32e1eb-00-1scoo6awpk8yx.kirk.replit.dev'];
-//         if (!origin || allowedOrigins.includes(origin)) {
-//             callback(null, true);
-//         } else {
-//             callback(new Error('Not allowed by CORS'));
-//         }
-//     },
-//     methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-//     allowedHeaders: ['Content-Type', 'Authorization'],
-//     credentials: true,
-//     optionsSuccessStatus: 204
-// };
-
-// Use CORS middleware
 app.use(cors(corsOptions));
-app.options('*', cors());  // Allow preflight for all routes
+app.options('*', cors()); // Allow preflight for all routes
 
 const port = process.env.PORT || 3005;
 
@@ -60,17 +43,17 @@ app.use((req, res, next) => {
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Define a route to serve the admin page
+// Define routes for static admin pages
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
-// Define a route to serve the admin login page
 app.get('/admin_login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin_login.html'));
 });
 
 app.use(bodyParser.json());
 
+// API routes
 app.use('/api', rootRoute);
 app.use('/api/records', recordRoutes);
 app.use('/api/templates', templateRoutes);
@@ -82,7 +65,7 @@ app.use('/api/generate/media', express.static(path.join(__dirname, 'media')));
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
 
-let isProcessing = false;  // Flag to indicate if the process is running
+let isProcessing = false; // Flag to indicate if the process is running
 
 app.listen(port, async () => {
     console.log(`Server is running on port ${port}`);
@@ -90,42 +73,89 @@ app.listen(port, async () => {
     // Parse command-line arguments
     const args = minimist(process.argv.slice(2));
 
-    // Initialize remapTemplates to an empty array
-    let remapTemplates = [];
+    // CLI functionality for deleting records by block
+    if (args.deleteRecords && args.index && args.blockThreshold) {
+        const index = args.index;
+        const blockThreshold = parseInt(args.blockThreshold, 10);
 
-    // Check if --remapTemplates flag is present and parse its values
+        if (isNaN(blockThreshold)) {
+            console.error('Invalid blockThreshold value. Please provide a valid number.');
+            process.exit(1);
+        }
+
+        try {
+            console.log(`Deleting records from index '${index}' with inArweaveBlock >= ${blockThreshold}...`);
+            const response = await deleteRecordsByBlock(index, blockThreshold);
+            console.log('Deletion completed successfully:', response);
+            process.exit(0);
+        } catch (error) {
+            console.error('Error occurred during deletion:', error);
+            process.exit(1);
+        }
+    }
+
+    // CLI functionality for deleting records by indexedAt timestamp
+    if (args.deleteRecords && args.index && args.indexedAt) {
+        const index = args.index;
+        const indexedAt = args.indexedAt;
+
+        if (isNaN(Date.parse(indexedAt))) {
+            console.error('Invalid indexedAt value. Please provide a valid timestamp.');
+            process.exit(1);
+        }
+
+        try {
+            console.log(`Deleting records from index '${index}' with indexedAt >= ${indexedAt}...`);
+            const response = await deleteRecordsByIndexedAt(index, indexedAt);
+            console.log('Deletion completed successfully:', response);
+            process.exit(0);
+        } catch (error) {
+            console.error('Error occurred during deletion:', error);
+            process.exit(1);
+        }
+    }
+
+    // CLI functionality for deleting all records from a specified index
+    if (args.deleteAllRecords && args.index) {
+        const index = args.index;
+        console.log(`Deleting all records from index '${index}'...`);
+
+        try {
+            console.log(`Deleting all records from index '${index}'...`);
+            const response = await deleteRecordsByIndex(index); 
+            console.log('Deletion of all records completed successfully:', response);
+            process.exit(0);
+        } catch (error) {
+            console.error('Error occurred during deletion of all records:', error);
+            process.exit(1);
+        }
+    }
+
+    // Initialize remapTemplates
+    let remapTemplates = [];
     if (args.remapTemplates) {
         remapTemplates = args.remapTemplates.split(',');
         console.log(`Remap templates enabled for: ${remapTemplates.join(', ')}`);
-
-        // Call the function to remap existing records
-        await remapExistingRecords(remapTemplates); // Pass remapTemplates to remap existing records
+        await remapExistingRecords(remapTemplates);
     }
 
-    // Check if --keepDBUpToDate flag is present
+    // Periodically keep DB up to date
     if (args.keepDBUpToDate) {
-        let wait = 0;
-        if (!isNaN(args._[0])) {
-            wait = Number(args._[0]);
+        const wait = args._[0] ? parseInt(args._[0], 10) : 0; // Delay in seconds
+        const interval = args._[1] ? parseInt(args._[1], 10) : 60; // Interval in seconds
+
+        if (isNaN(wait) || isNaN(interval)) {
+            console.error('Invalid arguments for --keepDBUpToDate. Provide delay and interval as numbers.');
+            process.exit(1);
         }
-        let interval = 60;
-        if (!isNaN(args._[1])) {
-            interval = Number(args._[1]);
-        }
+
         console.log(`After a delay of ${wait} seconds, will check Arweave for new OIP data every ${interval} seconds`);
 
-        // setTimeout(() => {
-        //     keepDBUpToDate(remapTemplates);
-        //     setInterval(async () => {
-        //         keepDBUpToDate(remapTemplates);
-        //     }, interval * 1000);
-        // }, wait * 1000);
         setTimeout(() => {
             console.log("Starting first cycle...");
             keepDBUpToDate(remapTemplates);
             setIsProcessing(true);
             setInterval(async () => {
-                // Only start a new process if one isn't already running
                 if (!getIsProcessing()) {
                     try {
                         console.log("Starting new cycle...");
@@ -139,9 +169,8 @@ app.listen(port, async () => {
                 } else {
                     console.log("Skipping new cycle because a previous process is still running.");
                 }
-                console.log('interval over, getIsProcessing:', getIsProcessing());
+                console.log('Interval over, getIsProcessing:', getIsProcessing());
             }, interval * 1000);
-        }, wait * 1000)
-
+        }, wait * 1000);
     }
 });
