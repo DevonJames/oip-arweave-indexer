@@ -4,6 +4,8 @@ const { createData, ArweaveSigner, JWKInterface } = require('arbundles');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { crypto, createHash } = require('crypto');
+const base64url = require('base64url');
 
 
 const arweaveConfig = require('../config/arweave.config');
@@ -41,7 +43,12 @@ const checkBalance = async () => {
     const irys = await getIrysArweave();
     const atomicBalance = await irys.getLoadedBalance();
     const convertedBalance = irys.utils.fromAtomic(atomicBalance);
-    return convertedBalance;
+    const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+            
+    const myPublicKey = jwk.n;
+    const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
+    // const creatorDid = `did:arweave:${myAddress}`;
+    return {convertedBalance, myAddress};
 };
 
 /**

@@ -5,7 +5,9 @@ const { exec } = require('child_process');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
 const { signMessage, txidToDid, getIrysArweave, getTemplateTxidByName } = require('./utils');
-const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB } = require('./elasticsearch');
+const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, searchCreatorByAddress, indexRecord } = require('./elasticsearch');
+const {getCurrentBlockHeight} = require('../helpers/arweave');
+
 // const templatesConfig = require('../config/templates.config');
 // const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
 
@@ -124,8 +126,8 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 } else {
                                     console.log(`Value not found in enum values for key: ${key}`);
                                 }
-                            } else if (fieldType === 'dref') {
-                                const subRecord = json[key][0] || json[key];
+                            } else if (fieldType === 'dref' && key !== "show" && fieldType === 'dref' && key !== "license") {
+                                const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
                                 const templatesArray = (json[key][0] !== undefined) ? Object.keys(json[key][0]) : Object.keys(json[key]);
                                 recordType = findMatchingString(JSON.stringify(key), templatesArray)
                                 console.log('thx 133', subRecord, templatesArray, { key }, recordType)
@@ -145,13 +147,13 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 subRecordTypes.push(recordType);
                                 // console.log('recordType 143', recordType, {didTxRefs}, {subRecords})
                                 converted[fields[indexKey]] = dref;
-                            } else if (fieldType === 'repeated dref' && key !== "citations") {
+                            } else if (fieldType === 'repeated dref' && key !== "citations" && key !== "hosts" && key !== "ingredient" && key !== tagItems) {
                                 // console.log('149 Processing repeated dref:', json[key], fields[indexKey]);
-                                const subRecord = json[key][0];
+                                const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
                                 // console.log('151b Processing repeated dref:', subRecord);
 
                                 // console.log('th 113 Processing repeated dref for template:', template, json[key][0], subRecord, { key })
-                                const templatesArray = Object.keys(json[key][0]);
+                                const templatesArray = (json[key][0] !== undefined) ? Object.keys(json[key][0]) : Object.keys(json[key]);
                                 recordType = findMatchingString(JSON.stringify(key)[0], templatesArray)
                                 console.log('th 158', templatesArray, recordType)
                                 if (!recordType) {
@@ -170,7 +172,7 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 subRecords.push(subRecord);
                                 didTxRefs.push(dref);
                                 subRecordTypes.push(recordType);
-                                // console.log('recordType 166', recordType, {didTxRefs}, {subRecords})
+                                console.log('recordType 166', recordType, {didTxRefs}, {subRecords})
 
                                 const repeatedDref = [dref];
                                 converted[fields[indexKey]] = repeatedDref;
@@ -178,7 +180,7 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 converted[fields[indexKey]] = json[key];
                             }
                         } else {
-                            console.log('Field not found', { key });
+                            console.log('Field not found', { key }, {fields});
                         }
                     }
                     converted.t = templateTxid;
@@ -253,26 +255,29 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
         }
         let recordData = '';
         console.log(getFileInfo(), getLineNumber(), 'Publishing new record:', { recordType }, record);
-        if (record.delete && typeof record.delete === 'object' && record.delete.didTx) {
+        // handle new delete record
+        if (record.delete !== undefined && typeof record.delete === 'object' && record.delete.didTx) {
             recordType = 'delete';
             const didTx = record.delete.didTx;
             let transaction = {
                 data: record,
-                creator: record.delete.didTx
+                transactionId: didTx
             } 
             const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
             
             const myPublicKey = jwk.n;
             const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
             const creatorDid = `did:arweave:${myAddress}`;
-            deleteRecordFromDB(creatorDid, transaction);
+            transaction.creator = myAddress;
+            await deleteRecordFromDB(creatorDid, transaction);
             console.log(getFileInfo(), getLineNumber(), 'Record deleted:', didTx)
             let stringValue = JSON.stringify(record);
             recordData += stringValue;
             console.log(getFileInfo(), getLineNumber(), 'Publishing new record:', { recordType }, record);
 
         } else {
-            
+
+            // handle creator registration
             if (recordType === 'creatorRegistration') {
                 const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
                 const myPublicKey = jwk.n;
@@ -281,7 +286,6 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                 record.creatorRegistration.address = myAddress;
             }
             const oipData = await translateJSONtoOIPData(record);
-            
             const oipRecord = oipData.convertedTemplates;
             didTxRefs = oipData.didTxRefs;
             subRecords = oipData.subRecords;
@@ -314,7 +318,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
         const tags = [
             { name: 'Content-Type', value: 'application/json' },
             { name: 'Index-Method', value: 'OIP' },
-            { name: 'Ver', value: '0.7.4' },
+            { name: 'Ver', value: '0.8.0' },
             { name: 'Type', value: 'Record' },
             { name: 'RecordType', value: `${recordType}` },
             { name: 'Creator', value: `${myAddress}` }
@@ -330,6 +334,44 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
         console.log(getFileInfo(), getLineNumber(), 'Record published:', receipt.id)
         const transactionId = receipt.id;
         const didTx = txidToDid(transactionId);
+
+        let currentblock = await getCurrentBlockHeight();
+        if (currentblock === null) {
+            currentblock = await getCurrentBlockHeight();
+            if (currentblock === null) {
+            currentblock = latestArweaveBlockInDB;
+            }
+        }
+
+        const creatorDid = `did:arweave:${myAddress}`;
+        const creatorInfo = await searchCreatorByAddress(creatorDid)
+        const creator = {
+            creatorHandle: creatorInfo.data.creatorHandle,
+            didAddress: creatorInfo.data.didAddress,
+            didTx: creatorInfo.data.didTx,
+            publicKey: creatorInfo.data.publicKey
+          }
+
+        let recordToIndex = {
+            "data": 
+                {...record
+                },
+                "oip": {
+                    "didTx": "did:arweave:"+ transactionId,
+                    "inArweaveBlock": currentblock,
+                    "recordType": recordType,
+                    "indexedAt": new Date().toISOString(),
+                    "recordStatus": "pending confirmation in Arweave",
+                    "creator": {
+                        ...creator
+                    }
+                }
+                };
+                
+                console.log('40 indexRecord pending record to index:', recordToIndex);
+                
+                indexRecord(recordToIndex);
+
 
         return { transactionId, didTx, dataForSignature, creatorSig, didTxRefs, subRecords , subRecordTypes};
     } catch (error) {
@@ -351,7 +393,7 @@ async function publishNewTemplate(template) {
         const tags = [
             { name: 'Content-Type', value: 'application/json' },
             { name: 'Index-Method', value: 'OIP' },
-            { name: 'Ver', value: '0.7.2' },
+            { name: 'Ver', value: '0.8.0' },
             { name: 'Type', value: 'Template' },
             { name: 'TemplateName', value: `${templateName}` },
             { name: 'Creator', value: `${myAddress}` }
