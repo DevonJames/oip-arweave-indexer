@@ -34,9 +34,10 @@ router.post('/newRecord', async (req, res) => {
         const youtubeUrl = req.query.youtubeUrl || null;
         const newRecord = await publishNewRecord(record, recordType, publishFiles, addMediaToArweave, addMediaToIPFS, youtubeUrl);
         const transactionId = newRecord.transactionId;
-        const dataForSignature = newRecord.dataForSignature;
-        const creatorSig = newRecord.creatorSig;
-        res.status(200).json(transactionId,{ record });
+        const recordToIndex = newRecord.recordToIndex;
+        // const dataForSignature = newRecord.dataForSignature;
+        // const creatorSig = newRecord.creatorSig;
+        res.status(200).json(transactionId, recordToIndex);
     } catch (error) {
         console.error('Error publishing record:', error);
         res.status(500).json({ error: 'Failed to publish record' });

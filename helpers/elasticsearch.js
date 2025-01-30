@@ -493,6 +493,7 @@ async function indexDocument(index, id, body) {
 }
 
 const indexRecord = async (record) => {
+    console.log(getFileInfo(), getLineNumber(), 'indexing this record:', record);
     try {
         const didTx = record.oip.didTx;
         const existingRecord = await elasticClient.exists({
@@ -512,7 +513,7 @@ const indexRecord = async (record) => {
                 },
                 refresh: 'wait_for'
             });
-            console.log(`Record updated successfully: ${didTx}`, response.result);    
+            console.log(getFileInfo(), getLineNumber(),`Record updated successfully: ${didTx}`, response.result);    
         } else {
             const response = await elasticClient.index({
                 index: 'records',
@@ -918,24 +919,63 @@ async function getRecords(queryParams) {
         }
 
         // search records by search parameter
-        if (search != undefined) {
-            const searchLower = search.toLowerCase();
-            console.log('searching for:', searchLower, 'in records', records[0]);
+        if (search !== undefined) {
+            const searchTerms = search.toLowerCase().split(/\s+|,/).filter(Boolean); // Split on spaces and commas, remove empty strings
+            console.log('searching for:', searchTerms, 'in records');
             records = records.filter(record => {
                 const basicData = record.data.basic;
-                // Match title (basic.name), description (basic.description), and tags (basic.tagItems)
-                const titleMatches = basicData?.basic?.name?.toLowerCase().includes(searchLower) || false;
-                const descriptionMatches = basicData?.basic?.description?.toLowerCase().includes(searchLower) || false;
-                const tagsMatches = basicData?.basic?.tagItems?.some(tag => tag.toLowerCase().includes(searchLower)) || false;
-
-                return titleMatches || descriptionMatches || tagsMatches;
+                return searchTerms.some(term => {
+                    const titleMatches = basicData?.name?.toLowerCase().includes(term) || false;
+                    const descriptionMatches = basicData?.description?.toLowerCase().includes(term) || false;
+                    const tagsMatches = basicData?.tagItems?.some(tag => tag.toLowerCase().includes(term)) || false;
+                    return titleMatches || descriptionMatches || tagsMatches;
+                });
             });
-            console.log('after search filtering, there are', records.length, 'records');
+
+            // Add matchCount to each record
+            records = records.map(record => {
+                const basicData = record.data.basic;
+                let matchCount = 0;
+                searchTerms.forEach(term => {
+                    if (
+                        (basicData?.name?.toLowerCase().includes(term)) ||
+                        (basicData?.description?.toLowerCase().includes(term)) ||
+                        (basicData?.tagItems?.some(tag => tag.toLowerCase().includes(term)))
+                    ) {
+                        matchCount++;
+                    }
+                });
+                return { ...record, matchCount };
+            });
+
+            // Sort records
+            records.sort((a, b) => {
+                // Sort by matchCount descending
+                if (b.matchCount !== a.matchCount) {
+                    return b.matchCount - a.matchCount;
+                }
+                // Then by recordStatus: 'original' before 'pending confirmation in Arweave'
+                const statusOrder = {
+                    'original': 1,
+                    'pending confirmation in Arweave': 2
+                };
+                const statusA = a.oip.recordStatus || '';
+                const statusB = b.oip.recordStatus || '';
+                if (statusOrder[statusA] && statusOrder[statusB]) {
+                    if (statusOrder[statusA] !== statusOrder[statusB]) {
+                        return statusOrder[statusA] - statusOrder[statusB];
+                    }
+                }
+                // Finally by inArweaveBlock descending
+                return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
+            });
+
+            console.log('after search filtering and sorting, there are', records.length, 'records');
         }
 
         
         
-        console.log('all filters complete, there are', records.length, 'records', records);
+        console.log('all filters complete, there are', records.length, 'records');
         
         
     // remove the signature and public key hash data if requested        
