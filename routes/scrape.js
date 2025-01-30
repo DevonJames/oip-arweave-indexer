@@ -20,6 +20,15 @@ const { timeout } = require('../config/arweave.config');
 const { getRecords, indexRecord, searchCreatorByAddress } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { ongoingScrapes } = require('../helpers/sharedState.js'); // Adjust the path to store.js
+
+// const { FirecrawlApp } = require('@mendable/firecrawl-js');
+// const app = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY });
+
+// const cheerio = require('cheerio');
+
+// Initialize FirecrawlApp with your API key
+
 const {
   replaceAcronyms,
   identifyAuthorNameFromContent, 
@@ -30,6 +39,7 @@ const {
 const {getCurrentBlockHeight, getBlockHeightFromTxId, lazyFunding, upfrontFunding, arweave} = require('../helpers/arweave');
 const { exec } = require('child_process');
 const { text } = require('body-parser');
+const { send } = require('process');
 
 console.log('authenticateToken:', authenticateToken);
 
@@ -39,7 +49,7 @@ require('dotenv').config();
 const backendURL = 'https://api.oip.onl';
 
 // Add this line near the top of your file, after your imports
-const ongoingScrapes = new Map();
+// const ongoingScrapes = new Map();
 
 // Create a directory to store the audio files if it doesn't exist
 const audioDirectory = path.join(__dirname, '../media');
@@ -1025,32 +1035,67 @@ async function stitchImages(screenshots, totalHeight, scrapeId) {
 // }
 
 // works perfectly - trying a version that adds screenshot download
-async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res) {
+async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, options) {
   console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
+  const { sendUpdate, res } = options; // Destructure res from options
+
+    // Ensure scrapeId is initialized
+  if (!ongoingScrapes.has(scrapeId)) {
+    ongoingScrapes.set(scrapeId, { clients: [res], data: [] });
+  }
+
+  const streamData = ongoingScrapes.get(scrapeId);
+
+//   const sendUpdate = (event, data) => {
+//     const streamData = ongoingScrapes.get(scrapeId);
+//     if (streamData) {
+//         streamData.data.push({ event, data }); // Store for reconnecting clients
+//         streamData.clients.forEach(client => {
+//             if (typeof client.write === 'function') {
+//                 client.write(`event: ${event}\n`);
+//                 client.write(`data: ${JSON.stringify(data)}\n\n`);
+//                 client.flush && client.flush(); // Ensure data is flushed to the client
+//             }
+//         });
+//     }
+// };
+
+  // const sendUpdate = (event, data) => {
+  //   const clients = streamData.clients || [];
+  //   clients.forEach(client => {
+  //       if (typeof client.write === 'function') {
+  //           client.write(`event: ${event}\n`);
+  //           client.write(`data: ${JSON.stringify(data)}\n\n`);
+  //       } else {
+  //           console.warn('client.write is not a function');
+  //       }
+  //   });
+  // };
+
 
   console.log('converting screenshot to file');
   console.log('stitching images together using totalHeight:', totalHeight); 
   const screenshotMediaId = await stitchImages(screenshots, totalHeight, scrapeId);
   console.log('Full Screenshot saved at:', screenshotMediaId);
-    // Check if a scrape for this identifier is already in progress
-    if (ongoingScrapes.has(scrapeId)) {
-      console.log(`Scrape already in progress for ${url}. Reconnecting to existing stream.`);
-      // Resume sending updates for the ongoing scrape
-      const existingStream = ongoingScrapes.get(scrapeId);
-      existingStream.clients.push(res);
-      
-      // Send existing data if available
-      existingStream.data.forEach(chunk => res.write(chunk));
-      return;
-  }
-  // If this is a new scrape, set up a new entry in ongoingScrapes
-  const streamData = {
-    clients: [res],
-    data: []
-  };
-  ongoingScrapes.set(scrapeId, streamData);
+
+// // Handle reconnection for ongoing scrapes
+//     if (ongoingScrapes.has(scrapeId)) {
+//         console.log(`Scrape already in progress for ${url}. Reconnecting to existing stream. Scrape ID: ${scrapeId}, ongoing scrapes`, ongoingScrapes);
+//         const existingStream = ongoingScrapes.get(scrapeId);
+//         // console.log({existingStream});
+//         existingStream.clients = existingStream.clients || [];
+//         existingStream.data = existingStream.data || [];
+//         existingStream.clients.push(res);
+//         existingStream.data.forEach(chunk => sendUpdate(chunk.event, chunk.data));
+//         return;
+//     }
+
+    // Initialize new scrape entry
+    // const streamData = { clients: [res], data: [] };
+    // ongoingScrapes.set(scrapeId, streamData);
+
   try {
-    console.log('Scrape ID:', scrapeId, 'Checking for articles in archive with URL:', url);
+    console.log('Checking for articles in archive with URL:', url);
     // Attempt to retrieve existing records based on the URL
     // const cleanUrl = (url) => {
     //   const urlObj = new URL(url);
@@ -1139,10 +1184,11 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       };
 
       console.log('Article data found in archive:', articleData);
-      res.write(`event: dataFromIndex\n`);
-      res.write(`data: ${JSON.stringify(articleData)}\n\n`);
-      res.end();
-      ongoingScrapes.delete(scrapeId); // Clear completed scrape
+      sendUpdate('dataFromIndex', articleData);
+      // res.write(`event: dataFromIndex\n`);
+      // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
+      // res.end();
+      // ongoingScrapes.delete(scrapeId); // Clear completed scrape
 
 
     } else {
@@ -1181,10 +1227,11 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
 
 
       // Stream initial article data
+      sendUpdate('initialData', articleData);
       // res.write(`event: initialData\n`);
       // res.write(`data: ${articleData}\n\n`);
       // res.flush(); // Ensures data is flushed to the client immediately
-      console.log('not Sending initialData:', articleData);
+      console.log('Sending initialData:', articleData);
 
       // Optional: Refine with manual scraping of additional fields using Cheerio
       const $ = cheerio.load(html);
@@ -1227,8 +1274,9 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
           const bylineFound = await identifyAuthorNameFromContent(articleData.content);
           articleData.byline = bylineFound
         }
-        res.write(`event: byline\n`);
-        res.write(`data: ${JSON.stringify({ byline: articleData.byline })}\n\n`); // Send only the byline
+        sendUpdate('byline', { byline: articleData.byline });
+        // res.write(`event: byline\n`);
+        // res.write(`data: ${JSON.stringify({ byline: articleData.byline })}\n\n`); // Send only the byline
       }
 
       // **PUBLISH DATE**
@@ -1250,8 +1298,9 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
           const dateFound = await identifyPublishDateFromContent(articleData.content);
           articleData.publishDate = dateFound
         }
-        res.write(`event: publishDate\n`);
-        res.write(`data: ${JSON.stringify({ publishDate: articleData.publishDate })}\n\n`); // Send only the publish date
+        sendUpdate('publishDate', { publishDate: articleData.publishDate });
+        // res.write(`event: publishDate\n`);
+        // res.write(`data: ${JSON.stringify({ publishDate: articleData.publishDate })}\n\n`); // Send only the publish date
       }
 
       // **CONTENT**
@@ -1317,18 +1366,21 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       // Save the audio file locally
       // fs.writeFileSync(filePath, Buffer.from(response.data, 'binary'));
       // Return the URL for the stored file
-      res.write(`event: synthesizedSpeech\n`);
-      res.write(`data: ${url}\n\n`);
+      sendUpdate('synthesizedSpeech', { url: articleData.summaryTTS });
+      // res.write(`event: synthesizedSpeech\n`);
+      // res.write(`data: ${url}\n\n`);
       console.log('Tags:', generatedText.tags);
       const generatedTags = generatedText.tags.split(',').map(tag => tag.trim());
       articleData.tags = generatedTags;
-      res.write(`event: tags\n`);
-      res.write(`data: ${JSON.stringify({ tags: generatedTags })}\n\n`);
+      sendUpdate('tags', { tags: generatedTags });
+      // res.write(`event: tags\n`);
+      // res.write(`data: ${JSON.stringify({ tags: generatedTags })}\n\n`);
       articleData.description = summary;
       console.log('description with Summary:', articleData.description);
       console.log('sending finalData');
-      res.write(`event: finalData\n`);
-      res.write(`data: ${JSON.stringify(articleData)}\n\n`);
+      sendUpdate('finalData', articleData);
+      // res.write(`event: finalData\n`);
+      // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       console.log('Sent finalData:', articleData);
       let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url,html, res);
       let articleTxid = article.transactionId;
@@ -1498,25 +1550,23 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
               record.data.post.audioItems = [audioDidTxRef];
             }
             
-            // console.log('max in db and current:', records, currentblock);
-            // record.oip.inArweaveBlock = currentblock;
-            // record.oip.recordType = 'post';
-            // record.oip.indexedAt = new Date().toISOString();
-            // record.oip.recordStatus = 'pending confirmation in Arweave';
-            // record.oip.creator = creator;
             console.log('40 indexRecord pending record to index:', record);
             
-            indexRecord(record);
+            // indexRecord(record);
             console.log('article archived successfully at didTx', articleDidTx);
+            sendUpdate('archived', { archived: articleDidTx });
       res.end();
       ongoingScrapes.delete(scrapeId); // Clear completed scrape
 
     }
   } catch (error) {
     console.error('Error fetching parsed article data:', error);
+    sendUpdate('error', { message: 'Failed to fetch article data.' });
     // res.write(`event: error\n`);
     // res.write(`data: ${JSON.stringify({ error: 'Failed to fetch article data.' })}\n\n`);
     res.end();
+    ongoingScrapes.delete(scrapeId);
+
   }
 }
 async function getEmbeddedTweets(html) {
@@ -1526,7 +1576,7 @@ async function getEmbeddedTweets(html) {
   // Load the HTML into Cheerio
   const $ = cheerio.load(html);
 
-  console.log('Scraping for embedded tweets in:', html);
+  console.log('Scraping for embedded tweets...');
 
   // Try to scrape tweets in blockquotes (if URLs are available)
   try {
@@ -1580,67 +1630,734 @@ async function getEmbeddedTweets(html) {
 
   return tweetIds;
 }
-// async function getEmbeddedTweets(html) {
-//     // Initialize an empty array for tweet URLs
-//     let tweetUrls = [];
 
-//     // Load the HTML into Cheerio
-//     const $ = cheerio.load(html);
+async function createNewNutritionalInfoRecord(ingredientName) {
+  try {
+    console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
 
-//     console.log('Scraping for embedded tweets');
+    // Construct a Nutritionix search URL
+    const formattedIngredient = ingredientName.replace(/,/g, '').replace(/\s+/g, '-').toLowerCase();
+    const nutritionixUrl = `https://www.nutritionix.com/food/${formattedIngredient}`;
 
-//     // Try to scrape tweets in blockquotes
-//     try {
-//         console.log('Trying to scrape tweets using blockquote.twitter-tweet...');
-//         const tweetsFromBlockquote = $('blockquote.twitter-tweet').map((i, tweet) => {
-//             const tweetLink = $(tweet).find('a[href*="twitter.com"]').attr('href');
-//             return tweetLink ? tweetLink.split('?')[0] : null;  // Remove anything after '?'
-//         }).get();  // Get array of results
-//         tweetUrls = tweetUrls.concat(tweetsFromBlockquote);
-//     } catch (error) {
-//         console.error('Error scraping tweets in blockquotes:', error);
-//     }
+    // Scrape the Nutritionix page using FireCrawl
+    const response = await axios.post(
+      'https://api.firecrawl.dev/v1/scrape',
+      {
+        url: nutritionixUrl,
+        formats: ['html'],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FIRECRAWL}`,
+        },
+      }
+    );
 
-//     // Try to scrape tweets from iframes as a fallback
-//     try {
-//         console.log('Trying to scrape tweets using iframes...');
-//         const tweetsFromIframes = $('iframe[src*="platform.twitter.com"]').map((i, iframe) => {
-//             const tweetLink = $(iframe).attr('src');
-//             if (tweetLink) {
-//                 // Extract the tweet URL from the iframe src attribute
-//                 const match = tweetLink.match(/https:\/\/twitter\.com\/[a-zA-Z0-9_]+\/status\/[0-9]+/);
-//                 return match ? match[0] : null;
-//             }
-//             return null;
-//         }).get();  // Get array of results
-//         tweetUrls = tweetUrls.concat(tweetsFromIframes);
-//     } catch (error) {
-//         console.error('Error scraping tweets from iframes:', error);
-//     }
+    if (!response.data.success) {
+      throw new Error(`Scrape failed for ${ingredientName}: ${response.data.error}`);
+    }
 
-//     // Asynchronous loaded tweets via JavaScript
-//     try {
-//         console.log('Trying to scrape async loaded tweets...');
-//         $('script').each((i, script) => {
-//             const scriptContent = $(script).html();
-//             if (scriptContent && scriptContent.includes('twitter.com')) {
-//                 const match = scriptContent.match(/https:\/\/twitter\.com\/[a-zA-Z0-9_]+\/status\/[0-9]+/);
-//                 if (match) {
-//                     tweetUrls.push(match[0]);
-//                 }
-//             }
-//         });
-//     } catch (error) {
-//         console.error('Error scraping async loaded tweets from scripts:', error);
-//     }
+    // console.log('Scrape successful:', response.data);
+    const html = response.data.data.html;
+    const $ = cheerio.load(html);
 
-//     // Remove duplicate URLs
-//     tweetUrls = [...new Set(tweetUrls)];
+    // Extract basic information
+    const name = $('h1.food-item-name').text().trim() || ingredientName;
+    const date = Math.floor(Date.now() / 1000); // Current timestamp
+    const webUrl = nutritionixUrl;
+    const language = 'en';
 
-//     console.log('Found embedded tweets:', tweetUrls);
+    // Initialize nutritional data object
+    const nutritionTable = {
+      calories: 0,
+      protein_g: 0,
+      fat_g: 0,
+      carbohydrates_g: 0,
+      cholesterol_mg: 0,
+      sodium_mg: 0,
+    };
 
-//     return tweetUrls;
+    // Parse nutritional facts using the HTML structure
+    $('.nf-line').each((_, element) => {
+      const label = $(element).find('span:first-child').text().trim().toLowerCase();
+      const valueRaw = $(element).find('span[itemprop]').text().trim();
+      const value = parseFloat(valueRaw.replace(/[^\d.]/g, '')) || 0;
+
+      // console.log(`Label: ${label}, Raw Value: ${valueRaw}, Parsed Value: ${value}`);
+
+      if (label.includes('calories')) {
+        nutritionTable.calories = value;
+      } else if (label.includes('protein')) {
+        nutritionTable.protein_g = value;
+      } else if (label.includes('fat')) {
+        nutritionTable.fat_g = value;
+      } else if (label.includes('cholesterol')) {
+        nutritionTable.cholesterol_mg = value;
+      } else if (label.includes('sodium')) {
+        nutritionTable.sodium_mg = value;
+      } else if (label.includes('carbohydrates')) {
+        nutritionTable.carbohydrates_g = value;
+      }
+    });
+
+    // Get serving size
+    const servingSizeText = $('.nf-serving-unit-name').text().trim();
+    const servingSizeMatch = servingSizeText.match(/(\d+)\s*(\w+)/);
+    const standardAmount = servingSizeMatch ? parseInt(servingSizeMatch[1], 10) : 1;
+    const standardUnit = servingSizeMatch ? servingSizeMatch[2].toLowerCase() : 'g';
+
+    // Format the extracted data into the required structure
+    const formattedNutritionalInfo = {
+      basic: {
+        name,
+        date,
+        language,
+        nsfw: false,
+        webUrl,
+      },
+      nutritionalInfo: {
+        standard_amount: standardAmount,
+        standard_unit: standardUnit,
+        calories: nutritionTable.calories,
+        protein_g: nutritionTable.protein_g,
+        fat_g: nutritionTable.fat_g,
+        carbohydrates_g: nutritionTable.carbohydrates_g,
+        cholesterol_mg: nutritionTable.cholesterol_mg,
+        sodium_mg: nutritionTable.sodium_mg,
+      },
+    };
+
+    console.log(`Successfully retrieved nutritional info for ${ingredientName}:`, formattedNutritionalInfo);
+
+    return formattedNutritionalInfo;
+  } catch (error) {
+    console.error(`Error fetching nutritional info for ${ingredientName}:`, error);
+    return null; // Return null if fetching fails
+  }
+}
+
+// async function createNewNutritionalInfoRecord(ingredientName) {
+//   try {
+//       console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
+
+//       // Construct a Nutritionix search URL
+//       const formattedIngredient = ingredientName.replace(/,/g, '').replace(/\s+/g, '-').toLowerCase();
+//       const nutritionixUrl = `https://www.nutritionix.com/food/${formattedIngredient}`;
+
+//       // Scrape the Nutritionix page using FireCrawl
+//       const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
+//           url: nutritionixUrl,
+//           formats: ['html'],
+//       }, {
+//           headers: {
+//               Authorization: `Bearer ${process.env.FIRECRAWL}`,
+//           },
+//       });
+
+//       if (!response.data.success) {
+//           throw new Error(`Scrape failed for ${ingredientName}: ${response.data.error}`);
+//       }
+
+//       console.log('Scrape successful:', response.data);
+//       const html = response.data.data.html;
+//       const $ = cheerio.load(html);
+
+//       // Extract basic information
+//       const name = $('h1').text().trim() || ingredientName;
+//       const date = Math.floor(Date.now() / 1000); // Current timestamp
+//       const webUrl = nutritionixUrl;
+//       const language = "en";
+
+//       // Initialize nutritional data object
+//       const nutritionTable = {
+//         calories: 0,
+//         protein_g: 0,
+//         fat_g: 0,
+//         carbohydrates_g: 0,
+//         cholesterol_mg: 0,
+//         sodium_mg: 0
+//       };
+
+//       // Parse nutritional facts table
+//       $('.nutrition-facts__table .nf-calories, .nutrition-facts__table .nf-pr').each((_, element) => {
+//       const label = $(element).find('span').first().text().trim().toLowerCase();
+//       const valueRaw = $(element).find('span.nf-pr').text().trim();
+//       const value = parseFloat(valueRaw.replace(/[^\d.]/g, '')) || 0;
+
+//       console.log(`Label: ${label}, Raw Value: ${valueRaw}, Parsed Value: ${value}`);
+
+//       if (label.includes("calories")) {
+//         nutritionTable.calories = value;
+//       } else if (label.includes("protein")) {
+//         nutritionTable.protein_g = value;
+//       } else if (label.includes("fat")) {
+//         nutritionTable.fat_g = value;
+//       } else if (label.includes("cholesterol")) {
+//         nutritionTable.cholesterol_mg = value;
+//       } else if (label.includes("sodium")) {
+//         nutritionTable.sodium_mg = value;
+//       } else if (label.includes("carbohydrates")) {
+//         nutritionTable.carbohydrates_g = value;
+//       }
+//     });
+
+
+//       // Get serving size
+//       const servingSizeText = $('.nutrition-facts__table thead th').text().trim();
+//       const servingSizeMatch = servingSizeText.match(/(\d+)\s*(\w+)/);
+//       const standardAmount = servingSizeMatch ? parseInt(servingSizeMatch[1], 10) : 1;
+//       const standardUnit = servingSizeMatch ? servingSizeMatch[2].toLowerCase() : "g";
+
+//       // Format the extracted data into the required structure
+//       const formattedNutritionalInfo = {
+//         "basic": {
+//           "name": name,
+//           "date": date,
+//           "language": language,
+//           "nsfw": false,
+//           "webUrl": webUrl
+//         },
+//         "nutritionalInfo": {
+//           "standard_amount": standardAmount,
+//           "standard_unit": standardUnit,
+//           "calories": nutritionTable.calories,
+//           "protein_g": nutritionTable.protein_g,
+//           "fat_g": nutritionTable.fat_g,
+//           "carbohydrates_g": nutritionTable.carbohydrates_g,
+//           "cholesterol_mg": nutritionTable.cholesterol_mg,
+//           "sodium_mg": nutritionTable.sodium_mg
+//         }
+//       };
+
+//       console.log(`Successfully retrieved nutritional info for ${ingredientName}:`, formattedNutritionalInfo);
+
+//       return formattedNutritionalInfo;
+//   } catch (error) {
+//       console.error(`Error fetching nutritional info for ${ingredientName}:`, error);
+//       return null; // Return null if fetching fails
+//   }
 // }
+
+// async function createNewNutritionalInfoRecord(ingredientName) {
+//   try {
+//       console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
+
+//       // Construct a Nutritionix search URL
+//       const formattedIngredient = ingredientName.replace(/,/g, '').replace(/\s+/g, '-').toLowerCase();
+//       const nutritionixUrl = `https://www.nutritionix.com/food/${formattedIngredient}`;
+
+//       // Scrape the Nutritionix page using FireCrawl
+//       const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
+//           url: nutritionixUrl,
+//           formats: ['html'],
+//       }, {
+//           headers: {
+//               Authorization: `Bearer ${process.env.FIRECRAWL}`,
+//           },
+//       });
+
+//       if (!response.data.success) {
+//           throw new Error(`Scrape failed for ${ingredientName}: ${response.data.error}`);
+//       }
+
+//       const html = response.data.data.html;
+//       const $ = cheerio.load(html);
+
+//       // Extract basic information
+//       const name = $('h1').text().trim() || ingredientName;
+//       const date = Math.floor(Date.now() / 1000); // Current timestamp
+//       const webUrl = nutritionixUrl;
+//       const language = "en";
+//       // Extract nutritional data
+//       const nutritionTable = {
+//         calories: 0,
+//         protein_g: 0,
+//         fat_g: 0,
+//         carbohydrates_g: 0,
+//         cholesterol_mg: 0,
+//         sodium_mg: 0
+//       };
+
+//       $('.nutrition-facts__table tbody tr').each((_, row) => {
+//         const label = $(row).find('td:first-child').text().trim().toLowerCase();
+//         const value = $(row).find('td:nth-child(2)').text().trim();
+        
+//         // Add console logs to inspect label and value
+//         console.log(`Label: ${label}, Value: ${value}`);
+
+//         if (label.includes("calories")) {
+//           nutritionTable.calories = parseFloat(value) || 0;
+//         } else if (label.includes("protein")) {
+//           nutritionTable.protein_g = parseFloat(value) || 0;
+//         } else if (label.includes("fat")) {
+//           nutritionTable.fat_g = parseFloat(value) || 0;
+//         } else if (label.includes("cholesterol")) {
+//           nutritionTable.cholesterol_mg = parseFloat(value) || 0;
+//         } else if (label.includes("sodium")) {
+//           nutritionTable.sodium_mg = parseFloat(value) || 0;
+//         } else if (label.includes("carbohydrates")) {
+//           nutritionTable.carbohydrates_g = parseFloat(value) || 0;
+//         }
+//       });
+
+//       // Get serving size
+//       const servingSizeText = $('.nutrition-facts__table thead th').text().trim();
+//       const servingSizeMatch = servingSizeText.match(/(\d+)\s*(\w+)/);
+//       const standardAmount = servingSizeMatch ? parseInt(servingSizeMatch[1], 10) : 1;
+//       const standardUnit = servingSizeMatch ? servingSizeMatch[2].toLowerCase() : "tbsp";
+
+//       // Format the extracted data into the required structure
+//       const formattedNutritionalInfo = {
+//         "basic": {
+//           "name": name,
+//           "date": date,
+//           "language": language,
+//           "nsfw": false,
+//           "webUrl": webUrl
+//         },
+//         "nutritionalInfo": {
+//           "standard_amount": standardAmount,
+//           "standard_unit": standardUnit,
+//           "calories": nutritionTable.calories,
+//           "protein_g": nutritionTable.protein_g,
+//           "fat_g": nutritionTable.fat_g,
+//           "carbohydrates_g": nutritionTable.carbohydrates_g,
+//           "cholesterol_mg": nutritionTable.cholesterol_mg,
+//           "sodium_mg": nutritionTable.sodium_mg
+//         }
+//       };
+
+//       console.log(`Successfully retrieved nutritional info for ${ingredientName}:`, formattedNutritionalInfo);
+
+
+//       return formattedNutritionalInfo;
+//   } catch (error) {
+//       console.error(`Error fetching nutritional info for ${ingredientName}:`, error);
+//       return null; // Return null if fetching fails
+//   }
+// }
+
+async function fetchParsedRecipeData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res) {
+  try {
+    // Parse the recipe data from the HTML
+    console.log('Parsing recipe data from URL:', url);
+
+    // Scrape the website using FireCrawl
+    const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
+      url: url,
+      formats: ['html'], // You can request 'markdown' too
+    }, {
+        headers: {
+            Authorization: `Bearer ${process.env.FIRECRAWL}`,
+        },
+    });
+
+    if (response.data.success) {
+        console.log('Scraped Data type:', typeof response.data.data.html);
+        // return response.data.html; // Process the HTML as needed
+    } else {
+        throw new Error(`Scrape failed: ${response.data.error}`);
+    }
+
+    console.log('Scrape result:', response.data.data);
+    const metadata = response.data.data.metadata;
+    console.log('Metadata:', metadata);
+    const html = response.data.data.html;
+    const $ = cheerio.load(html);  
+
+    console.log('Scraping recipe data from URL:', url);
+
+    // Parse title, description, and metadata
+    const title = $('h1.entry-title').text().trim() || $('h1.recipe-title').text().trim() || null;
+    const description = $('p').first().text().trim() || null;
+    const imageUrl = $('img.wp-image').first().attr('src') || null;
+    const date = Date.now() / 1000;
+
+    const ingredientSections = [];
+    $('.wprm-recipe-ingredient-group').each((i, section) => {
+        const sectionName = $(section).find('.wprm-recipe-group-name').text().trim() || `Section ${i + 1}`;
+        const ingredients = [];
+
+        $(section)
+            .find('.wprm-recipe-ingredient')
+            .each((j, elem) => {
+                const amount = $(elem).find('.wprm-recipe-ingredient-amount').text().trim() || null;
+                const unit = $(elem).find('.wprm-recipe-ingredient-unit').text().trim() || null;
+                const name = $(elem).find('.wprm-recipe-ingredient-name').text().trim() || null;
+
+                if (amount || unit || name) {
+                    ingredients.push({
+                        amount: parseFloat(amount) || null,
+                        unit: unit || '',
+                        name: name || '',
+                    });
+                }
+            });
+
+        if (ingredients.length > 0) {
+            ingredientSections.push({
+                section: sectionName,
+                ingredients,
+            });
+        }
+    });
+
+    console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
+
+    // if there are more than one ingredient sections, identify the primary one - the one with the most ingredients
+    let primaryIngredientSection = ingredientSections[0];
+    if (ingredientSections.length > 1) {
+        primaryIngredientSection = ingredientSections.reduce((prev, current) => {
+            return prev.ingredients.length > current.ingredients.length ? prev : current;
+        });
+    }
+    console.log('Primary ingredient section:', primaryIngredientSection);
+    // sort remaining ingredients sections by the number of ingredients
+    const remainingIngredientSections = ingredientSections.filter(section => section !== primaryIngredientSection);
+    remainingIngredientSections.sort((a, b) => b.ingredients.length - a.ingredients.length);    
+
+  // Extract instructions
+  const instructions = [];
+
+
+  $('.wprm-recipe-instruction').each((i, elem) => {
+    const instruction = $(elem).text().replace(/\s+/g, ' ').trim();
+    if (instruction) instructions.push(instruction);
+  });
+
+  console.log('Instructions:', instructions);
+
+  const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name);
+  const ingredientAmounts = primaryIngredientSection.ingredients.map(ing => ing.amount ?? 1);
+  const ingredientUnits = primaryIngredientSection.ingredients.map(ing => ing.unit);
+
+  console.log('Ingredient units:', ingredientUnits);
+    
+  // Define ingredient synonyms for better matching
+  const synonymMap = {
+      "garlic cloves": "minced garlic",
+      "ground green cardamom": "ground cardamom",
+      "chicken breast": "boneless skinless chicken breast",
+      "chicken thighs": "boneless skinless chicken thighs",
+      "olive oil": "extra virgin olive oil",
+      "vegetable oil": "seed oil",
+      "all-purpose flour": "flour",
+      "green onions": "scallions",
+      "cilantro": "fresh cilantro",
+      "parsley": "fresh parsley",
+      "basil": "fresh basil",
+      "oregano": "fresh oregano",
+      "thyme": "fresh thyme",
+      "rosemary": "fresh rosemary",
+      "sage": "fresh sage",
+      "dill": "fresh dill",
+      "mint": "fresh mint",
+      "chives": "fresh chives",
+      "tarragon": "fresh tarragon",
+      "bay leaves": "dried bay leaves",
+      "red pepper flakes": "crushed red pepper",
+      "red pepper": "red bell pepper",
+      // Add more as needed
+  };
+
+  let recordMap = {};
+    
+  async function fetchIngredientRecordData(primaryIngredientSection) {
+    const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name.toLowerCase());
+
+    // Query for all ingredients in one API call
+    const queryParams = {
+        recordType: 'nutritionalInfo',
+        search: ingredientNames.join(','),
+        limit: 50
+    };
+
+    const searchResults = await getRecords(queryParams);
+
+    // Populate the global recordMap
+    recordMap = {};  // Reset before populating
+    searchResults.records.forEach(record => {
+        const recordName = record.data.basic.name.toLowerCase();
+        recordMap[recordName] = record;
+    });
+
+    const ingredientDidRefs = {};
+    const nutritionalInfo = [];
+
+    for (const name of ingredientNames) {
+        const bestMatch = findBestMatch(name);
+        if (bestMatch) {
+            ingredientDidRefs[name] = bestMatch.oip.didTx;
+            nutritionalInfo.push({
+                ingredientName: bestMatch.data.basic.name,
+                nutritionalInfo: bestMatch.data.nutritionalInfo || {},
+                ingredientSource: bestMatch.data.basic.webUrl,
+                ingredientDidRef: bestMatch.oip.didTx
+            });
+            console.log(`Match found for ${name}:`, nutritionalInfo[nutritionalInfo.length - 1]);
+        } else {
+            ingredientDidRefs[name] = null;
+        }
+    }
+
+    return { ingredientDidRefs, nutritionalInfo };
+}
+
+  
+// Function to find the best match
+function findBestMatch(ingredientName) {
+  if (!recordMap || Object.keys(recordMap).length === 0) {
+      console.error("Error: recordMap is not populated before calling findBestMatch().");
+      return null;
+  }
+
+  const normalizedIngredientName = ingredientName.trim().toLowerCase();
+  const searchTerms = normalizedIngredientName.split(/\s+/).filter(Boolean);
+
+  console.log(`Searching for ingredient: ${normalizedIngredientName}, Search terms:`, searchTerms);
+
+  // Check if the ingredient has a predefined synonym
+  const synonym = synonymMap[normalizedIngredientName];
+  if (synonym && recordMap[synonym]) {
+      console.log(`Found synonym match for ${normalizedIngredientName}: ${synonym}`);
+      return recordMap[synonym];
+  }
+
+  // Direct match
+  if (recordMap[normalizedIngredientName]) {
+      console.log(`Direct match found for ${normalizedIngredientName}, nutritionalInfo:`, recordMap[normalizedIngredientName].data.nutritionalInfo);
+      return recordMap[normalizedIngredientName];
+  }
+
+  // Looser match using search terms
+  const matches = Object.keys(recordMap)
+      .filter(recordName => {
+          const normalizedRecordName = recordName.toLowerCase();
+          return searchTerms.some(term => normalizedRecordName.includes(term));
+      })
+      .map(recordName => recordMap[recordName]);
+
+  if (matches.length > 0) {
+      matches.sort((a, b) => {
+          const aMatchCount = searchTerms.filter(term => a.data.basic.name.toLowerCase().includes(term)).length;
+          const bMatchCount = searchTerms.filter(term => b.data.basic.name.toLowerCase().includes(term)).length;
+          return bMatchCount - aMatchCount;
+      });
+
+      console.log(`Loose matches found for ${normalizedIngredientName}:`, matches);
+      return matches[0];
+  }
+
+  console.log(`No match found for ${normalizedIngredientName}`);
+  return null;
+}
+
+  const ingredientRecords = await fetchIngredientRecordData(primaryIngredientSection);
+  console.log('Ingredient records:', ingredientRecords);
+
+  let missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
+    name => ingredientRecords.ingredientDidRefs[name] === null
+  );
+
+  // Send the names of the missing ingredients through findBestMatch(ingredientName) to get the best match for each
+  const bestMatches = await Promise.all(
+    missingIngredientNames.map(name => findBestMatch(name))
+  );
+  console.log('Best matches for missing ingredients:', bestMatches);
+
+  // Assign matches and update ingredientDidRefs
+  bestMatches.forEach((match, index) => {
+    if (match) {
+      const name = missingIngredientNames[index];
+      ingredientDidRefs[name] = match.oip.didTx;
+      nutritionalInfo.push({
+        ingredientName: match.data.basic.name,
+        nutritionalInfo: match.data.nutritionalInfo || {},
+        ingredientSource: match.data.basic.webUrl,
+        ingredientDidRef: match.oip.didTx
+      });
+    }
+  });
+
+  // Remove matched names from missingIngredientNames
+  let matchedNames = bestMatches
+    .map((match, index) => (match ? missingIngredientNames[index] : null))
+    .filter(name => name !== null);
+  missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
+
+  const nutritionalInfoArray = await Promise.all(
+    missingIngredientNames.map(name => createNewNutritionalInfoRecord(name))
+  );
+  
+  // Check for empty values in ingredientUnits and assign standard_unit from nutritionalInfoArray
+  missingIngredientNames.forEach((name, index) => {
+    const trimmedName = name.trim().replace(/,$/, '');
+    const unitIndex = ingredientNames.findIndex(ingredientName => ingredientName === trimmedName);
+
+    console.log(`Processing missing ingredient: ${trimmedName}, Found at index: ${unitIndex}`);
+
+    if (unitIndex !== -1 && !ingredientUnits[unitIndex]) {
+        const nutritionalInfo = nutritionalInfoArray[index];
+        console.log(`Found nutritional info for: ${trimmedName}`, nutritionalInfo);
+
+        if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
+            ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standard_unit || 'unit';
+            ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standard_amount || 1;
+
+            console.log(`Updated Units: ${ingredientUnits[unitIndex]}, Updated Amounts: ${ingredientAmounts[unitIndex]}`);
+        } else {
+            console.log(`No nutritional info found for: ${trimmedName}`);
+            ingredientUnits[unitIndex] = 'unit'; // Fallback unit
+        }
+    } else {
+        console.log(`Ingredient not found in ingredientNames or already has a unit: ${trimmedName}`);
+    }
+});
+  // You can now use nutritionalInfoArray as needed
+
+  // console.log('Ingredient DidRefs:', ingredientDidRefs);
+
+    // console.log('Ingredient DID References:', ingredientDidRefs);
+    // now we want to look up the record.oip.didTx value from the top ranked record for each ingredient and assign it to ingredientDidRef, we may need to add pagination (there are 20 records limit per page by default) to check all returned records
+    
+    
+    
+
+
+    // now filter each one by the ingredientName matching against this json structure: data: { basic: { name: ,and get the nutritional info
+    // for each ingredient, if it exists
+    // const nutritionalInfo = records.map(record => {
+    //   const ingredientName = record.data.basic.name;
+    //   const nutritionalInfo = record.data.nutritionalInfo || {}; // Ensure it's an object, not undefined
+    //   const ingredientSource = record.data.basic.webUrl;
+    //   const ingredientDidRef = ingredientDidRefs[ingredientName.toLowerCase()] || null; // Ensure case-insensitive lookup
+    //   return {
+    //     ingredientName,
+    //     nutritionalInfo,
+    //     ingredientSource,
+    //     ingredientDidRef
+    //   };
+    // });
+
+    // console.log('Nutritional info:', nutritionalInfo);
+
+
+    // Extract prep time, cook time, total time, cuisine, and course
+
+    const prepTimeMatch = $('.wprm-recipe-prep_time').text().trim().match(/(\d+)\s*mins?/i);
+    const prepTime = prepTimeMatch ? parseInt(prepTimeMatch[1], 10) : null;
+
+    const cookTimeMatch = $('.wprm-recipe-cook_time').text().trim().match(/(\d+)\s*mins?/i);
+    const cookTime = cookTimeMatch ? parseInt(cookTimeMatch[1], 10) : null;
+
+    const totalTimeMatch = $('.wprm-recipe-total_time').text().trim().match(/(\d+)\s*mins?/i);
+    const totalTime = totalTimeMatch ? parseInt(totalTimeMatch[1], 10) : null;
+
+    const servingsStr = $('#wprm-recipe-container-10480').attr('data-servings');
+    const servings = servingsStr ? parseInt(servingsStr, 10) : null;
+
+    const cuisine = $('.tmd-meta_single:contains("Cuisine")')
+    .next()
+    .text()
+    .trim() || null;
+  const course = $('.tmd-meta_single:contains("Course")')
+    .next()
+    .text()
+    .trim() || null;
+
+
+    // Extract notes
+    const notes = $('.wprm-recipe-notes').text().trim() || null;
+
+
+    // Extract description
+    // const description = $('p').first().text().trim() || null;
+
+    // Extract image
+    // const image = $('.wp-block-image img').attr('src') || null;
+
+
+
+
+    console.log('Missing Ingredients:', missingIngredientNames);
+    console.log('Nutritional Info Array:', nutritionalInfoArray);
+ 
+    console.log('Original Ingredient Names:', ingredientNames);
+console.log('Units Before Assignment:', ingredientUnits);
+console.log('Amounts Before Assignment:', ingredientAmounts);
+
+
+
+
+  // Normalize all ingredient names in `ingredientNames` upfront
+  const normalizedIngredientNames = ingredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase());
+
+
+  console.log('Normalized Ingredient Names:', normalizedIngredientNames);
+  console.log('Missing Ingredient Names:', missingIngredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase()));
+
+  // Normalize missing ingredients and process them
+  missingIngredientNames.forEach((name, index) => {
+    const normalizedName = name.trim().replace(/,$/, '').toLowerCase();
+    console.log(`Normalized Missing Ingredient Name: ${normalizedName}`);
+    
+    // Find the matching ingredient in the normalized array
+    const unitIndex = normalizedIngredientNames.findIndex(
+      ingredientName => ingredientName === normalizedName
+    );
+
+    console.log(`Processing ingredient: ${normalizedName}, Index in ingredientNames: ${unitIndex}`);
+    
+    if (unitIndex !== -1 && !ingredientUnits[unitIndex]) {
+      const nutritionalInfo = nutritionalInfoArray[index];
+      console.log(`Found nutritional info for: ${normalizedName}`, nutritionalInfo);
+      
+      if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
+        ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standard_unit || 'unit';
+        ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standard_amount || 1;
+      } else {
+        console.log(`No nutritional info found for: ${normalizedName}`);
+        ingredientUnits[unitIndex] = 'unit'; // Fallback unit
+      }
+    } else {
+      console.log(`Ingredient not found or already has unit: ${normalizedName}`);
+    }
+  });
+
+
+console.log('Units After Assignment:', ingredientUnits);
+console.log('Amounts After Assignment:', ingredientAmounts);
+    
+    // Assign to recipeData
+    const recipeData = {
+      title: metadata.ogTitle || metadata.title || null,
+      date: metadata.publishedTime || null,
+      author: metadata.author || null,
+      image: metadata.ogImage || null,
+      ingredients: {
+        amounts: ingredientAmounts.length ? ingredientAmounts : null,
+        units: ingredientUnits.length ? ingredientUnits : null,
+        names: ingredientNames.length ? ingredientNames : null
+      },
+      instructions: instructions.length ? instructions : null,
+      servings,
+      prepTime,
+      cookTime,
+      totalTime,
+      notes,
+      description,
+      url: url || null
+    };
+
+    console.log('Recipe data:', recipeData);
+
+    ongoingScrapes.delete(scrapeId); // Clear completed scrape
+  } catch (error) {
+    console.error('Error fetching parsed recipe data:', error);
+
+    ongoingScrapes.delete(scrapeId);
+  }
+}
 
 async function fetchTweetDetails(embeddedTweets) {
   const twitterBearerToken = process.env.TWITTER_BEARER_TOKEN;
@@ -1698,51 +2415,51 @@ function generateScrapeId(url, userId) {
 }
 
 // router.post('/article/stream', authenticateToken, async (req, res) => {
-router.post('/article/stream', async (req, res) => {
-  const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body; // Extract HTML and URL from request body
-  // const userId = req.user.userId; // Extract userId from the decoded token
+// router.post('/article/stream', async (req, res) => {
+//   const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body; // Extract HTML and URL from request body
+//   // const userId = req.user.userId; // Extract userId from the decoded token
   
-  if (!html || !url || !userId) {
-    return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
-  }
+//   if (!html || !url || !userId) {
+//     return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
+//   }
   
-  console.log('User ID:', userId);
-  console.log('Received scraping request...', req.body.url);
-  console.log('Total screenshots received:', screenshots?.length);
-  // Generate a unique identifier for this scrape request
-  const scrapeId = generateScrapeId(url, userId);
-  console.log('Scrape ID:', scrapeId);
-  // Set SSE headers for streaming data
-  if (!ongoingScrapes.has(scrapeId)) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-  }
-  res.flushHeaders(); // Flush headers to establish the SSE connection
+//   console.log('User ID:', userId);
+//   console.log('Received scraping request...', req.body.url);
+//   console.log('Total screenshots received:', screenshots?.length);
+//   // Generate a unique identifier for this scrape request
+//   const scrapeId = generateScrapeId(url, userId);
+//   console.log('Scrape ID:', scrapeId);
+//   // Set SSE headers for streaming data
+//   if (!ongoingScrapes.has(scrapeId)) {
+//     res.setHeader('Content-Type', 'text/event-stream');
+//     res.setHeader('Cache-Control', 'no-cache');
+//     res.setHeader('Connection', 'keep-alive');
+//   }
+//   res.flushHeaders(); // Flush headers to establish the SSE connection
 
-  // Keep the connection alive by sending periodic "ping" events
-  const keepAliveInterval = setInterval(() => {
-    res.write(`event: ping\n`);
-    res.write(`data: "Keep connection alive"\n\n`);
-  }, 15000); // Every 15 seconds
+//   // Keep the connection alive by sending periodic "ping" events
+//   const keepAliveInterval = setInterval(() => {
+//     res.write(`event: ping\n`);
+//     res.write(`data: "Keep connection alive"\n\n`);
+//   }, 15000); // Every 15 seconds
 
-  try {
-    // Start scraping and stream data back piece by piece
-    await fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res);
-  } catch (error) {
-    console.error('Error processing scraping:', error);
-    res.write(`event: error\n`);
-    res.write(`data: ${JSON.stringify({ error: 'Failed to scrape article.' })}\n\n`);
-    res.end(); // End the stream in case of an error
-  }
+//   try {
+//     // Start scraping and stream data back piece by piece
+//     await fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res);
+//   } catch (error) {
+//     console.error('Error processing scraping:', error);
+//     res.write(`event: error\n`);
+//     res.write(`data: ${JSON.stringify({ error: 'Failed to scrape article.' })}\n\n`);
+//     res.end(); // End the stream in case of an error
+//   }
 
-  // When the client disconnects
-  req.on('close', () => {
-    console.log('Client disconnected from stream.');
-    clearInterval(keepAliveInterval); // Clear the keep-alive interval
-    res.end(); // Close the SSE connection
-  });
-});
+//   // When the client disconnects
+//   req.on('close', () => {
+//     console.log('Client disconnected from stream.');
+//     clearInterval(keepAliveInterval); // Clear the keep-alive interval
+//     res.end(); // Close the SSE connection
+//   });
+// });
 
 router.post('/article', async (req, res) => {
   const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body;
@@ -1754,16 +2471,165 @@ router.post('/article', async (req, res) => {
   const scrapeId = generateScrapeId(url, userId);
   console.log('Scrape ID:', scrapeId);
 
+  // Respond immediately with the scrapeId
+  res.status(200).json({ scrapeId });
+
+  // Initialize the stream if not already present
+  if (!ongoingScrapes.has(scrapeId)) {
+    ongoingScrapes.set(scrapeId, { clients: [], data: [] });
+  }
+
   try {
-    // Pass the actual `res` object to handle streaming within the function
-    await fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res);
+    // Begin fetching and storing the results to stream later
+    const streamUpdates = (event, data) => {
+      const streamData = ongoingScrapes.get(scrapeId);
+      if (streamData) {
+          streamData.data.push({ event, data });
+          streamData.clients.forEach(client => {
+              if (typeof client.write === 'function') {
+                  client.write(`event: ${event}\n`);
+                  client.write(`data: ${JSON.stringify({ type: event, data })}\n\n`);
+                  client.flush && client.flush(); // Ensure data is flushed to the client
+                  console.log('Sent event:', event, data);
+              } else {
+                  console.warn('client.write is not a function');
+              }
+          });
+      }
+  };
+
+    // Fetch article data and stream updates
+    await fetchParsedArticleData(
+      url, 
+      html, 
+      scrapeId, 
+      screenshotBase64, 
+      screenshots, 
+      totalHeight, 
+      { sendUpdate: streamUpdates, res }
+    );
 
   } catch (error) {
     console.error('Error starting scrape:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to start scrape.' });
+    const streamData = ongoingScrapes.get(scrapeId);
+    if (streamData) {
+      streamData.clients.forEach(client => {
+        client.write(`event: error\n`);
+        client.write(`data: ${JSON.stringify({ message: 'Failed to fetch article data.' })}\n\n`);
+        client.end(); // Close SSE stream
+      });
+      ongoingScrapes.delete(scrapeId); // Clean up
     }
   }
 });
+
+router.post('/recipe', async (req, res) => {
+  const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body;
+
+  if (!url || !userId) {
+    return res.status(400).json({ error: 'URL and User ID are required' });
+  }
+
+  const scrapeId = generateScrapeId(url, userId);
+  console.log('Scrape ID:', scrapeId);
+
+  // Respond immediately with the scrapeId
+  res.status(200).json({ scrapeId });
+
+  // Initialize the stream if not already present
+  if (!ongoingScrapes.has(scrapeId)) {
+    ongoingScrapes.set(scrapeId, { clients: [], data: [] });
+  }
+
+  try {
+    // Begin fetching and storing the results to stream later
+    const streamUpdates = (event, data) => {
+      const streamData = ongoingScrapes.get(scrapeId);
+      if (streamData) {
+          streamData.data.push({ event, data });
+          streamData.clients.forEach(client => {
+              if (typeof client.write === 'function') {
+                  client.write(`event: ${event}\n`);
+                  client.write(`data: ${JSON.stringify({ type: event, data })}\n\n`);
+                  client.flush && client.flush();
+                  console.log('Sent event:', event, data);
+              } else {
+                  console.warn('client.write is not a function');
+              }
+          }
+          );
+      }
+  }
+
+    // Fetch recipe data and stream updates
+    await fetchParsedRecipeData(
+      url, 
+      html,
+      scrapeId, 
+      screenshotBase64, 
+      screenshots, 
+      totalHeight, 
+      { sendUpdate: streamUpdates, res }
+    );
+
+  } catch (error) {
+    console.error('Error starting scrape:', error);
+    const streamData = ongoingScrapes.get(scrapeId);
+    if (streamData) {
+      streamData.clients.forEach(client => {
+        client.write(`event: error\n`);
+        client.write(`data: ${JSON.stringify({ message: 'Failed to fetch recipe data.' })}\n\n`);
+        client.end(); // Close SSE stream
+      });
+      ongoingScrapes.delete(scrapeId); // Clean up
+    }
+  }
+})
+
+// router.post('/article', async (req, res) => {
+//   const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body;
+
+//   if (!html || !url || !userId) {
+//     return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
+//   }
+
+//   const scrapeId = generateScrapeId(url, userId);
+//   console.log('Scrape ID:', scrapeId);
+
+//   // Respond immediately with the scrapeId
+//   res.status(200).json({ scrapeId });
+
+//   // Start the scraping logic
+//   if (!ongoingScrapes.has(scrapeId)) {
+//     ongoingScrapes.set(scrapeId, []);
+//   }
+
+//   try {
+//     // Begin fetching and storing the results to stream later
+//     const streamUpdates = async (update) => {
+//       const clients = ongoingScrapes.get(scrapeId) || [];
+//       clients.forEach(client => {
+//           client.write(`event: ${update.event}\n`);
+//           client.write(`data: ${JSON.stringify(update.data)}\n\n`);
+//       });
+//   };
+
+//     await fetchParsedArticleData(
+//       url, 
+//       html, 
+//       scrapeId, 
+//       screenshotBase64, 
+//       screenshots, 
+//       totalHeight, 
+//       { sendUpdate: streamUpdates }
+//     );
+
+//   } catch (error) {
+//     console.error('Error starting scrape:', error);
+//     if (!res.headersSent) {
+//       res.status(500).json({ error: 'Failed to start scrape.' });
+//     }
+//   }
+// });
 
 module.exports = router;

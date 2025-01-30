@@ -17,6 +17,7 @@
     "@google-cloud/text-to-speech": "^5.6.0",
     "@irys/query": "0.0.6",
     "@irys/sdk": "0.1.21",
+    "@mendable/firecrawl-js": "^1.15.7",
     "@postlight/parser": "^2.2.3",
     "arbundles": "^0.11.0",
     "arweave": "^1.15.0",
