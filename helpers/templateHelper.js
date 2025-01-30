@@ -147,7 +147,7 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 subRecordTypes.push(recordType);
                                 // console.log('recordType 143', recordType, {didTxRefs}, {subRecords})
                                 converted[fields[indexKey]] = dref;
-                            } else if (fieldType === 'repeated dref' && key !== "citations" && key !== "hosts" && key !== "ingredient" && key !== tagItems) {
+                            } else if (fieldType === 'repeated dref' && key !== "citations" && key !== "hosts" && key !== "ingredient") {
                                 // console.log('149 Processing repeated dref:', json[key], fields[indexKey]);
                                 const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
                                 // console.log('151b Processing repeated dref:', subRecord);
@@ -373,7 +373,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                 indexRecord(recordToIndex);
 
 
-        return { transactionId, didTx, dataForSignature, creatorSig, didTxRefs, subRecords , subRecordTypes};
+        return { transactionId, didTx, dataForSignature, creatorSig, didTxRefs, subRecords , subRecordTypes, recordToIndex};
     } catch (error) {
         console.error('Error publishing new record:', error);
     }
