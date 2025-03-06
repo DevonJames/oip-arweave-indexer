@@ -1,6 +1,7 @@
 {
     "Title": "basic.name",
     "Description": "basic.description",
+    "Creator": "image.creator",
     "MimeType": "image.contentType",
     "Height": "image.height",
     "Width": "image.width",

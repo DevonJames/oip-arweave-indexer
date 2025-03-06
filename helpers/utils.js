@@ -92,11 +92,25 @@ const signMessage = async (data) => {
     return signatureBase64;
 };
 
+const isValidDid = (did) => {
+    return /^did:arweave:[a-zA-Z0-9_-]{43}$/.test(did);
+};
+
+const isValidTxId = (txid) => {
+    return /^[a-zA-Z0-9_-]{43}$/.test(txid);
+};
+
 const txidToDid = (txid) => {
+    if (!isValidTxId(txid)) {
+        throw new Error('Invalid transaction ID format');
+    }
     return `did:arweave:${txid}`;
 };
 
 const didToTxid = (did) => {
+    if (!isValidDid(did)) {
+        throw new Error('Invalid DID format');
+    }
     return did.split(':')[2];
 };
 
@@ -157,29 +171,25 @@ const resolveRecords = async (record, resolveDepth, recordsInDB) => {
 };
 
 // Middleware to verify the JWT token
-function authenticateToken(req, res, next) {
-    console.log('Authenticating token...', req.headers);
-    const token = req.headers['authorization']?.split(' ')[1];
+const authenticateToken = (req, res, next) => {
+    console.log('Authenticating token...', req.headers, req.body, req.user);
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
     console.log('token:', token);
+
     if (!token) {
-        console.log('No token provided');
-        return res.status(401).json({ error: 'Access denied. No token provided.' });
+        return res.status(401).json({ error: 'No token provided' });
     }
-    
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) {
-            console.log('Invalid token:', err);
-            return res.status(403).json({ error: 'Invalid token.' });
-        }
-        req.user = decoded; // Attach the decoded token data, including userId, to the request
 
-        // req.user = user; // Store the user info in the request object
-        console.log('Token authenticated');
-        next(); // Proceed to the next middleware or route
-    });
-}
-
-
+    try {
+        const verified = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = verified;
+        next();
+    } catch (error) {
+        console.error('Invalid token:', error);
+        return res.status(403).json({ error: 'Invalid token' });
+    }
+};
 
 let remapTemplatesPromise = loadRemapTemplates();
 
@@ -195,5 +205,7 @@ module.exports = {
     getLineNumber,
     getFileInfo,
     loadRemapTemplates,
-    authenticateToken
+    authenticateToken,
+    isValidDid,
+    isValidTxId
 };

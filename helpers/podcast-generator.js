@@ -233,10 +233,11 @@ const personalities = {
     voices: {
       google: { languageCode: 'en-GB', name: 'en-GB-Journey-D', ssmlGender: 'MALE' },
       elevenLabs: { 
-        voice_id: 'TWOFxz3HmcZPjoBTPVjd', 
+        voice_id:'NwyAvGnfbFoNNEi4UuTq',
+        // voice_id: 'TWOFxz3HmcZPjoBTPVjd', 
         model_id: 'eleven_monolingual_v1',
-        stability: 0.5,
-        similarity_boost: 0.75
+        stability: 0.4,
+        similarity_boost: 0.6
        }
     },
     openingLines: [
@@ -254,6 +255,23 @@ const personalities = {
       "May Zeus and fortune lead you to what is good.",
       "Farewell and remember what has been said."
     ],
+  },
+  oracle: {
+    name: "Oracle",
+    tone: "mysterious and prophetic",
+    humorStyle: "enigmatic and cryptic",
+    interests: ["prophecy", "wisdom", "mystery"],
+    alias: "The Voice of Fate",
+    voices: {
+      google: { languageCode: 'el-GR', name: 'el-GR-Wavenet-A', ssmlGender: 'MALE'},
+      elevenLabs: { 
+        voice_id: 'XDBzexbseIAKtAVaAwm3', 
+          model_id: 'eleven_monolingual_v1',
+          stability: 0.8,
+          similarity_boost: 0.8
+          // exageration: .45
+      } 
+    },
   },
   hypatia: {
     name: "Hypatia",
@@ -656,7 +674,7 @@ const personalities = {
       "Until we meet again, let love guide your path.",
       "Keep searching for the sacred in the ordinary."
     ],
-  }
+  },
   // Repeat for other personalities
 };
 
@@ -829,30 +847,78 @@ function getShowName(hosts) {
 async function synthesizeDialogueTurn(turn, outputDir, personalitiesArray, outputFileName, api = 'google') {
   const textChunks = splitLongText(turn.text, 10000); // Adjust threshold experimentally
   const audioFiles = [];
+
   for (let i = 0; i < textChunks.length; i++) {
-      const chunkFileName = path.join(outputDir, `${outputFileName}-${i}`);
-      const audioFile = await synthesizeSpeech(textChunks[i], personalitiesArray[turn.speaker].voices, chunkFileName, api);
-      audioFiles.push(audioFile);
+      // Ensure the file extension is properly set to .wav
+      const chunkFileName = path.join(outputDir, `${outputFileName}.mp3`);
+      // console.log(`Generating audio file: ${chunkFileName}`);
+
+      const audioFile = await synthesizeSpeech(
+          textChunks[i],
+          personalitiesArray[turn.speaker].voices,
+          chunkFileName,
+          api
+      );
+
+      // Convert to WAV format
+      const wavFileName = chunkFileName.replace(".mp3", ".wav");
+      await convertMp3ToWav(audioFile, wavFileName);
+
+      audioFiles.push(wavFileName);
   }
+
   return audioFiles;
+}
+
+// Function to convert MP3 to true WAV
+async function convertMp3ToWav(inputFile, outputFile) {
+  return new Promise((resolve, reject) => {
+      ffmpeg()
+          .input(inputFile)
+          .output(outputFile)
+          .audioCodec("pcm_s16le") // Forces WAV format
+          .audioFrequency(44100)   // Standard 44.1 kHz
+          .on("end", () => {
+              // console.log(`✅ Converted to WAV: ${outputFile}`);
+              resolve(outputFile);
+          })
+          .on("error", (err) => {
+              console.error(`🚨 FFmpeg conversion error: ${err.message}`);
+              reject(new Error(`FFmpeg conversion failed: ${err.message}`));
+          })
+          .run();
+  });
 }
 
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 
-async function getAudioDuration(audioFile) {
-  try {
-    console.log("audioFile:", audioFile);
-    const { stdout, stderr } = await exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioFile}"`);
-    console.log('ffprobe stdout:', stdout);
-    console.log('ffprobe stderr:', stderr);
-    return parseFloat(stdout);
-  } catch (error) {
-    console.error('ffprobe error:', error);
-    return null;
-  }
-}
+// async function getAudioDuration(audioFile) {
+//   try {
+//     console.log("audioFile:", audioFile);
+//     const { stdout, stderr } = await exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioFile}"`);
+//     console.log('ffprobe stdout:', stdout);
+//     console.log('ffprobe stderr:', stderr);
+//     return parseFloat(stdout);
+//   } catch (error) {
+//     console.error('ffprobe error:', error);
+//     return null;
+//   }
+// }
+
+const getAudioDuration = (audioFile) => {
+      console.log("audioFile:", audioFile);
+  return new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(audioFile, (err, metadata) => {
+          if (err) {
+              reject(err);
+          } else {
+              resolve(metadata.format.duration);
+          }
+      });
+  });
+};
 
 // Generate podcast from dialogue
 async function generatePodcast(dialogue, personalitiesArray, outputFileName) {
@@ -1317,6 +1383,9 @@ indexRecord(record);
 module.exports = {
   personalities,
   generatePodcastFromArticles,
+  synthesizeDialogueTurn,
+  mergeAudioFiles,
+  getAudioDuration
 };
 
 

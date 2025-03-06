@@ -23,7 +23,11 @@ router.post('/joinWaitlist', async (req, res) => {
             index: 'users',
             body: {
                 query: {
-                    match: { email: email }
+                    term: { 
+                        email: {
+                            value: email.toLowerCase() // Ensure case-insensitive matching
+                        }
+                    }
                 }
             }
         });
@@ -71,8 +75,9 @@ router.post('/joinWaitlist', async (req, res) => {
     }
 });
 
+
 // Register endpoint
-router.post('/register', async (req, res) => {
+router.post('/register', authenticateToken, async (req, res) => {
     try {
         const { email, password } = req.body;
         console.log('Registering user...', email);
@@ -85,7 +90,11 @@ router.post('/register', async (req, res) => {
             index: 'users',
             body: {
                 query: {
-                    match: { email: email }
+                    term: { 
+                        email: {
+                            value: email.toLowerCase() // Normalize to lowercase for consistency
+                        }
+                    }
                 }
             }
         });
@@ -119,17 +128,18 @@ router.post('/register', async (req, res) => {
             }
         });
 
-        // Allow direct registration if the registered user count is below 50
-        const userId = existingUser.hits.hits[0]?._id; // Get the user ID if it exists
+        console.log('Registered count...', registeredCount.count);
 
         // Allow direct registration if the registered user count is below 50
         if (registeredCount.count < REGISTRATION_LIMIT) {
-            return await completeRegistration(existingUser.hits.hits[0]?._id, password, email, res);
+            console.log('Registering user...', email);
+            return await completeRegistration(null, password, email, res);
         }
 
         // If the registered count is REGISTRATION_LIMIT or more, check if the user is approved on the waitlist
         if (existingUser.hits.hits.length > 0 && existingUser.hits.hits[0]._source.waitlistStatus === 'approved') {
-            return await completeRegistration(existingUser.hits.hits[0]._id, password, email, res);
+            console.log('Registering user...', existingUser.hits.hits[0]?._id);
+            return await completeRegistration(existingUser.hits.hits[0]?._id, password, email, res);
         } else {
             // If not approved, direct them to join the waitlist
             return res.status(403).json({
@@ -183,9 +193,9 @@ async function completeRegistration(userId, password, email, res) {
 
 
         // Create JWT token for the new user
-        const userId = searchResult.hits.hits[0]._id; // Retrieve the Elasticsearch _id for the user
+        // userId = searchResult.hits.hits[0]._id; // Retrieve the Elasticsearch _id for the user
 
-        const token = jwt.sign({ userId, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '45d' });
+        const token = jwt.sign({ userId, email, isAdmin: false }, JWT_SECRET, { expiresIn: '45d' });
 
         return res.status(201).json({
             success: true,
@@ -198,27 +208,173 @@ async function completeRegistration(userId, password, email, res) {
     }
 }
 
+
+// Create a more robust search for users by email
+async function findUserByEmail(email) {
+    console.log(`Searching for user with email: "${email.toLowerCase()}"`);
+    
+    // Try an exact match first
+    const exactMatchResult = await elasticClient.search({
+        index: 'users',
+        body: {
+            query: {
+                term: { 
+                    email: {
+                        value: email.toLowerCase()
+                    }
+                }
+            }
+        }
+    });
+    
+    if (exactMatchResult.hits.hits.length > 0) {
+        console.log('Found user with exact match');
+        return exactMatchResult;
+    }
+    
+    // If exact match fails, try a match query
+    console.log('Exact match failed, trying fuzzy match');
+    const fuzzyMatchResult = await elasticClient.search({
+        index: 'users',
+        body: {
+            query: {
+                match: {
+                    email: email.toLowerCase()
+                }
+            }
+        }
+    });
+    
+    if (fuzzyMatchResult.hits.hits.length > 0) {
+        console.log('Found user with fuzzy match');
+        return fuzzyMatchResult;
+    }
+    
+    // If all else fails, try a wildcard query
+    console.log('Fuzzy match failed, trying wildcard match');
+    const wildcardMatchResult = await elasticClient.search({
+        index: 'users',
+        body: {
+            query: {
+                wildcard: {
+                    email: `*${email.toLowerCase()}*`
+                }
+            }
+        }
+    });
+    
+    console.log(`Wildcard search results: ${wildcardMatchResult.hits.hits.length} hits`);
+    return wildcardMatchResult;
+}
+
+// async function completeRegistration(userId, password, email, res) {
+//     try {
+//         const saltRounds = 10;
+//         const passwordHash = await bcrypt.hash(password, saltRounds);
+//         // If userId is undefined, create a new user document; otherwise, update existing document
+//         if (userId === null) {
+//             // Handle case where user needs to be created because `userId` is undefined
+//             const newUser = await elasticClient.index({
+//                 index: 'users',
+//                 body: {
+//                     email: email,
+//                     passwordHash: passwordHash,
+//                     createdAt: new Date(),
+//                     waitlistStatus: 'registered',
+//                     subscriptionStatus: 'inactive', // Default subscription status
+//                     paymentMethod: null // Initially, no payment method
+//                 },
+//                 refresh: 'wait_for'
+//             });
+//             userId = newUser._id; // Set the new user ID
+//         } else {
+//         // Update user record with registration details
+//             await elasticClient.update({
+//                 index: 'users',
+//                 id: userId, // Use userId passed as a parameter
+//                 body: {
+//                     doc: {
+//                         passwordHash: passwordHash,
+//                         createdAt: new Date(),
+//                         waitlistStatus: 'registered',
+//                         subscriptionStatus: 'inactive', // Default subscription status
+//                         paymentMethod: null // Initially, no payment method
+//                     }
+//                 },
+//                 refresh: 'wait_for'
+//             });
+//         }
+
+
+//         // Create JWT token for the new user
+//         const userId = searchResult.hits.hits[0]._id; // Retrieve the Elasticsearch _id for the user
+
+//         const token = jwt.sign({ userId, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '45d' });
+
+//         return res.status(201).json({
+//             success: true,
+//             message: 'User registered successfully',
+//             token // Return the JWT token
+//         });
+//     } catch (error) {
+//         console.error('Error completing registration:', error);
+//         res.status(500).json({ error: 'Internal server error' });
+//     }
+// }
+
 // Login endpoint
-router.post('/login', async (req, res) => {
+router.post('/login', authenticateToken, async (req, res) => {
     try {
         const { email, password } = req.body;
 
         // Search for the user in Elasticsearch
-        const searchResult = await elasticClient.search({
-            index: 'users',
-            body: {
-                query: {
-                    match: { email: email }
-                }
-            }
-        });
+        // const exactMatchResult = await elasticClient.search({
+        //     index: 'users',
+        //     body: {
+        //         query: {
+        //             term: { 
+        //                 email: {
+        //                     value: email.toLowerCase() // Ensure case-insensitive matching
+        //                 }
+        //             }
+        //         }
+        //     }
+        // });
 
-        if (searchResult.hits.hits.length === 0) {
-            return res.status(400).json({ 
-                success: false, // Add this line
-                error: 'User not found'
-             });
-        }
+        // if (exactMatchResult.hits.hits.length > 0) {
+        //     console.log('Found user with exact match');
+        //     return exactMatchResult;
+        // }
+
+        // // If exact match fails, try a match query
+        // console.log('Exact match failed, trying fuzzy match');
+        // const fuzzyMatchResult = await elasticClient.search({
+        //     index: 'users',
+        //     body: {
+        //         query: {
+        //             match: {
+        //                 email: email.toLowerCase()
+        //             }
+        //         }
+        //     }
+        // });
+        
+        // if (fuzzyMatchResult.hits.hits.length > 0) {
+        //     console.log('Found user with fuzzy match');
+        //     return fuzzyMatchResult;
+        // }
+
+
+        // if (searchResult.hits.hits.length === 0) {
+        //     return res.status(400).json({ 
+        //         success: false, // Add this line
+        //         error: 'User not found'
+        //      });
+        // }
+
+        const searchResult = await findUserByEmail(email);
+
+        console.log('Search result...', searchResult.hits.hits[0]._source, searchResult.hits.hits[1]._source, searchResult.hits.hits[2]._source);
 
         const user = searchResult.hits.hits[0]._source;
 
@@ -258,7 +414,11 @@ router.post('/reset-password', async (req, res) => {
             index: 'users',
             body: {
                 query: {
-                    match: { email: email }
+                    term: { 
+                        email: {
+                            value: email.toLowerCase() // Ensure case-insensitive matching
+                        }
+                    }
                 }
             }
         });
@@ -317,7 +477,11 @@ router.put('/update-subscription', authenticateToken, async (req, res) => {
             index: 'users',
             body: {
                 query: {
-                    match: { email: email }
+                    term: { 
+                        email: {
+                            value: email.toLowerCase() // Ensure case-insensitive matching
+                        }
+                    }
                 }
             }
         });
@@ -355,7 +519,11 @@ router.put('/update-payment', authenticateToken, async (req, res) => {
             index: 'users',
             body: {
                 query: {
-                    match: { email: email }
+                    term: { 
+                        email: {
+                            value: email.toLowerCase() // Ensure case-insensitive matching
+                        }
+                    }
                 }
             }
         });
@@ -491,7 +659,11 @@ router.post('/admin/reset', async (req, res) => {
             index: 'users',
             body: {
                 query: {
-                    match: { email: email }
+                    term: { 
+                        email: {
+                            value: email.toLowerCase() // Ensure case-insensitive matching
+                        }
+                    }
                 }
             }
         });

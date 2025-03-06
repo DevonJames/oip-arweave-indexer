@@ -10,13 +10,22 @@ const healthRoutes = require('./routes/health');
 const generateRoutes = require('./routes/generate');
 const userRoutes = require('./routes/user');
 const walletRoutes = require('./routes/wallet');
+const publishRecords = require('./routes/publish');
 const { getIsProcessing, setIsProcessing } = require('./helpers/processingState');
 const { keepDBUpToDate, remapExistingRecords, deleteRecordsByBlock, deleteRecordsByIndexedAt, deleteRecordsByIndex } = require('./helpers/elasticsearch');
 const minimist = require('minimist');
-dotenv.config();
 const cors = require('cors');
-const app = express();
 const path = require('path');
+const http = require('http');
+const socket = require('./socket');
+const elevenLabsRoutes = require('./routes/elevenlabs');
+
+dotenv.config();
+const app = express();
+const server = http.createServer(app);
+
+// Initialize socket.io
+socket.init(server);
 
 // Set higher body size limit (e.g., 50MB)
 app.use(express.json({ limit: '50mb' }));
@@ -24,10 +33,10 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // CORS configuration
 const corsOptions = {
-    origin: 'https://api.oip.onl',
-    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,  
+    origin: ['https://api.oip.onl', 'http://localhost:3005', 'http://localhost:3000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true,
     optionsSuccessStatus: 204
 };
 
@@ -56,6 +65,7 @@ app.use(bodyParser.json());
 // API routes
 app.use('/api', rootRoute);
 app.use('/api/records', recordRoutes);
+app.use('/api/publish', publishRecords);
 app.use('/api/templates', templateRoutes);
 app.use('/api/creators', creatorRoutes);
 app.use('/api/scrape', scrapeRoutes);
@@ -64,10 +74,11 @@ app.use('/api/generate', generateRoutes);
 app.use('/api/generate/media', express.static(path.join(__dirname, 'media')));
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/elevenlabs', elevenLabsRoutes);
 
 let isProcessing = false; // Flag to indicate if the process is running
 
-app.listen(port, async () => {
+server.listen(port, async () => {
     console.log(`Server is running on port ${port}`);
 
     // Parse command-line arguments

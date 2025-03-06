@@ -68,6 +68,11 @@ router.get('/', async (req, res) => {
 
 router.post('/newCreator', async (req, res) => {
     console.log('POST /api/creators/newCreator', req.body)
+    const record = req.body;
+    let recordType = 'creatorRegistration';
+    const newRecord = await publishNewRecord(record, recordType);
+    const transactionId = newRecord.transactionId;
+
     // const creator = req.body;
     // const transactionId = await publishNewCreator(creator);
     // res.status(200).json({ transactionId });

@@ -887,8 +887,8 @@ async function getRecords(queryParams) {
         if (url !== undefined) {
             console.log('url to match:', url);
             records = records.filter(record => {
-                // console.log('record.data:', record);
-                return record.data && record.data.basic && record.data.basic.url === url;
+                return record.data && record.data.basic && 
+                       (record.data.basic.url === url || record.data.basic.webUrl === url);
             });
             console.log('after filtering by url:', url, 'there are', records.length, 'records');
         }

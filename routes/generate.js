@@ -1,16 +1,19 @@
 const { TextToSpeechClient } = require('@google-cloud/text-to-speech');
-// const { ClientOptions } = require('@google-cloud/common');
-// const client = new TextToSpeechClient();
+
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
+const ffmpeg = require('fluent-ffmpeg');
+const { ongoingScrapes } = require('../helpers/sharedState');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
-
 const fs = require('fs');
 const crypto = require('crypto');  // For generating a unique hash
 const path = require('path');
-const { generateCombinedSummaryFromArticles, replaceAcronyms, synthesizeSpeech } = require('../helpers/generators');
-const { generatePodcastFromArticles } = require('../helpers/podcast-generator');
+const { generateCombinedSummaryFromArticles, replaceAcronyms, synthesizeSpeech, transcribeAudio, generateStreamingResponse, streamTextToSpeech, getElevenLabsVoices } = require('../helpers/generators');
+const { generatePodcastFromArticles, synthesizeDialogueTurn, getAudioDuration, personalities } = require('../helpers/podcast-generator');
+const e = require('express');
+const multer = require('multer');
+
 // Create a directory to store the audio files if it doesn't exist
 const audioDirectory = path.join(__dirname, '../media');
 
@@ -24,6 +27,24 @@ if (!fs.existsSync(audioDirectory)) {
 function generateAudioFileName(text, extension = 'wav') {
     return crypto.createHash('sha256').update(text).digest('hex') + '.' + extension;
 }
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
+
+// Add this near the top of the file, before any functions
+const defaultPersonality = {
+    voices: {
+        elevenLabs: {
+            voiceId: "21m00Tcm4TlvDq8ikWAM", // Default voice ID
+            modelId: "eleven_monolingual_v1",
+            stability: 0.5,
+            similarityBoost: 0.75
+        }
+    }
+};
 
 // Route for text generation (switches between self-hosted and external models)
 router.post('/text', async (req, res) => {
@@ -211,6 +232,7 @@ router.post('/speech', async (req, res) => {
 
     useSelfHosted = false; // Set to true to use the self-hosted TTS engine
     // const audioDirectory = path.join(__dirname, '../media');
+    
     const audioFileName = generateAudioFileName(text, output_format.toLowerCase());
     const filePath = path.join(audioDirectory, audioFileName);
 
@@ -333,6 +355,237 @@ router.post('/speech', async (req, res) => {
         }
     }
 });
+// // THIS ONE WORKS BUT CUTS OFF THE LAST SPEAKER
+// async function mergeAudioFiles(audioFiles, outputFileName) {
+//     return new Promise(async (resolve, reject) => {
+//         const ffmpegCommand = ffmpeg();
+
+//         // Add all input files
+//         audioFiles.forEach((file) => {
+//             ffmpegCommand.input(file);
+            
+//         });
+
+//         let speaker1Inputs = [];
+//         let speaker2Inputs = [];
+//         let filterGraph = [];
+
+//         // Retrieve actual durations from each file
+//         const durations = await Promise.all(audioFiles.map(getAudioDuration));
+
+//         let lastSpeaker1Duration = 0; // Track last turn duration of Speaker 1
+//         let lastSpeaker2Duration = 0; // Track last turn duration of Speaker 2
+//         let speaker1End = 0; // When Speaker 1's last turn ends
+//         let speaker2End = 0; // When Speaker 2's last turn ends
+
+//         // Process each file
+//         audioFiles.forEach((file, index) => {
+//             let label = `[${index}:a]`;
+
+//             // 🔥 FIXED: Delay is **ONLY** the previous speaker's duration
+//             let delayMs = (index % 2 === 0 ? lastSpeaker2Duration : lastSpeaker1Duration) * 1000;
+//             let delayedLabel = `[delayed${index}]`;
+
+//             filterGraph.push(`${label}adelay=${delayMs}|${delayMs}${delayedLabel}`);
+
+            
+//             if (index % 2 === 0) {
+//                 // Speaker 1's turn
+//                 speaker1Inputs.push(delayedLabel);
+//                 lastSpeaker1Duration = durations[index]; // Store duration for next turn
+//                 speaker1End += lastSpeaker1Duration;
+//             } else {
+//                 // Speaker 2's turn
+//                 speaker2Inputs.push(delayedLabel);
+//                 lastSpeaker2Duration = durations[index]; // Store duration for next turn
+//                 speaker2End += lastSpeaker2Duration;
+//             }
+//         });
+
+//         // Merge sequences properly
+//         if (speaker1Inputs.length > 0) {
+//             filterGraph.push(`${speaker1Inputs.join("")}concat=n=${speaker1Inputs.length}:v=0:a=1[speaker1]`);
+//         } else {
+//             filterGraph.push(`aevalsrc=0:d=1[speaker1]`);
+//         }
+
+//         if (speaker2Inputs.length > 0) {
+//             filterGraph.push(`${speaker2Inputs.join("")}concat=n=${speaker2Inputs.length}:v=0:a=1[speaker2]`);
+//         } else {
+//             filterGraph.push(`aevalsrc=0:d=1[speaker2]`);
+//         }
+
+//         // Merge into stereo with proper channel mapping
+//         filterGraph.push(`[speaker1][speaker2]amerge=inputs=2,pan=stereo|c0=c0|c1=c1[aout]`);
+
+//         const filterComplex = filterGraph.join("; ");
+
+//         console.log("✅ FFmpeg Final Filter Complex:", filterComplex);
+
+//         ffmpegCommand
+//             .complexFilter(filterComplex)
+//             .outputOptions(["-map [aout]", "-c:a flac", "-shortest"])
+//             .on("end", () => {
+//                 console.log("✅ FFmpeg merge completed successfully.");
+//                 resolve(outputFileName);
+//             })
+//             .on("error", (err) => {
+//                 console.error("🚨 FFmpeg error:", err.message);
+//                 reject(new Error(`FFmpeg merge failed: ${err.message}`));
+//             })
+//             .save(outputFileName);
+//     });
+// }
+
+// still truncating the last speaker
+async function mergeAudioFiles(audioFiles, outputFileName) {
+    return new Promise(async (resolve, reject) => {
+        const ffmpegCommand = ffmpeg();
+
+        // Add all input files
+        audioFiles.forEach((file) => {
+            ffmpegCommand.input(file);
+        });
+
+        let speaker1Inputs = [];
+        let speaker2Inputs = [];
+        let filterGraph = [];
+
+        // Retrieve actual durations
+        const durations = await Promise.all(audioFiles.map(getAudioDuration));
+
+        let lastSpeaker1Duration = 0;
+        let lastSpeaker2Duration = 0;
+
+        audioFiles.forEach((file, index) => {
+            let label = `[${index}:a]`;
+            let delayedLabel = `[delayed${index}]`;
+
+            let delayMs = (index % 2 === 0 ? lastSpeaker2Duration : lastSpeaker1Duration) * 1000;
+            filterGraph.push(`${label}adelay=${delayMs}|${delayMs}${delayedLabel}`);
+
+            if (index % 2 === 0) {
+                speaker1Inputs.push(delayedLabel);
+                lastSpeaker1Duration = durations[index];
+            } else {
+                speaker2Inputs.push(delayedLabel);
+                lastSpeaker2Duration = durations[index];
+            }
+        });
+
+        // Merge sequences properly
+        if (speaker1Inputs.length > 0) {
+            filterGraph.push(`${speaker1Inputs.join("")}concat=n=${speaker1Inputs.length}:v=0:a=1[speaker1]`);
+        } else {
+            filterGraph.push(`aevalsrc=0:d=1[speaker1]`);
+        }
+
+        if (speaker2Inputs.length > 0) {
+            filterGraph.push(`${speaker2Inputs.join("")}concat=n=${speaker2Inputs.length}:v=0:a=1[speaker2]`);
+        } else {
+            filterGraph.push(`aevalsrc=0:d=1[speaker2]`);
+        }
+
+        // Merge into stereo with proper channel mapping
+        filterGraph.push(`[speaker1][speaker2]amerge=inputs=2,pan=stereo|c0=c0|c1=c1[aout]`);
+
+        const filterComplex = filterGraph.join("; ");
+        console.log("✅ FFmpeg Final Filter Complex:", filterComplex);
+
+        ffmpegCommand
+            .complexFilter(filterComplex)
+            .outputOptions(["-map [aout]", "-c:a flac"]) // ❌ Removed `-shortest`
+            .on("end", () => {
+                console.log("✅ FFmpeg merge completed successfully.");
+                resolve(outputFileName);
+            })
+            .on("error", (err) => {
+                console.error("🚨 FFmpeg error:", err.message);
+                reject(new Error(`FFmpeg merge failed: ${err.message}`));
+            })
+            .save(outputFileName);
+    });
+}
+
+// async function mergeAudioFiles(audioFiles, outputFileName) {
+//     return new Promise(async (resolve, reject) => {
+//         const ffmpegCommand = ffmpeg();
+
+//         // Add all input files
+//         audioFiles.forEach((file) => {
+//             ffmpegCommand.input(file);
+//         });
+
+//         let speaker1Inputs = [];
+//         let speaker2Inputs = [];
+//         let filterGraph = [];
+
+//         // Retrieve actual durations
+//         const durations = await Promise.all(audioFiles.map(getAudioDuration));
+
+//         let cumulativeDelaySpeaker1 = 0;
+//         let cumulativeDelaySpeaker2 = 0;
+
+//         // Process each file
+//         audioFiles.forEach((file, index) => {
+//             let label = `[${index}:a]`;
+//             let delayedLabel = `[delayed${index}]`;
+
+//             let delayMs = index % 2 === 0 ? cumulativeDelaySpeaker2 * 1000 : cumulativeDelaySpeaker1 * 1000;
+
+//             filterGraph.push(`${label}adelay=${delayMs}:all=true${delayedLabel}`);
+
+//             if (index % 2 === 0) {
+//                 speaker1Inputs.push(delayedLabel);
+//                 cumulativeDelaySpeaker1 += durations[index];
+//             } else {
+//                 speaker2Inputs.push(delayedLabel);
+//                 cumulativeDelaySpeaker2 += durations[index];
+//             }
+//         });
+
+//         // 🔥 Remove apad, just ensure normal concat
+//         if (speaker1Inputs.length > 0) {
+//             filterGraph.push(`${speaker1Inputs.join("")}concat=n=${speaker1Inputs.length}:v=0:a=1[speaker1]`);
+//         } else {
+//             filterGraph.push(`anullsrc=r=44100:cl=mono:d=1[speaker1]`);
+//         }
+
+//         if (speaker2Inputs.length > 0) {
+//             filterGraph.push(`${speaker2Inputs.join("")}concat=n=${speaker2Inputs.length}:v=0:a=1[speaker2]`);
+//         } else {
+//             filterGraph.push(`anullsrc=r=44100:cl=mono:d=1[speaker2]`);
+//         }
+
+//         // Merge into stereo
+//         filterGraph.push(`[speaker1][speaker2]amerge=inputs=2,pan=stereo|c0=c0|c1=c1[aout]`);
+
+//         const filterComplex = filterGraph.join("; ");
+//         console.log("✅ FFmpeg Final Filter Complex:", filterComplex);
+
+//         ffmpegCommand
+//             .complexFilter(filterComplex)
+//             .outputOptions([
+//                 "-map [aout]",
+//                 "-c:a flac",
+//                 "-af aresample=44100"
+//             ])
+//             .on("end", () => {
+//                 console.log("✅ FFmpeg merge completed successfully.");
+//                 resolve(outputFileName);
+//             })
+//             .on("error", (err) => {
+//                 console.error("🚨 FFmpeg error:", err.message);
+//                 reject(new Error(`FFmpeg merge failed: ${err.message}`));
+//             })
+//             .save(outputFileName);
+//     });
+// }
+
+
+
+
+
 
 // Route to serve audio files
 router.get('/media', (req, res) => {
@@ -345,4 +598,761 @@ router.get('/media', (req, res) => {
     }
 });
 
+// Route for real-time conversation with SSE
+router.post('/converse', async (req, res) => {
+    try {
+        const { userInput, model, systemPrompt, temperature } = req.body;
+        
+        // Generate a unique dialogue ID
+        const dialogueId = req.body.dialogueId || `dialogue-${Date.now()}-${Math.random().toString(36).substring(2, 12)}`;
+        console.log('Using dialogueId:', dialogueId);
+        
+        // Get conversation history if provided
+        const conversationHistory = req.body.conversationHistory || [];
+        
+        // Initialize ongoingStream if it doesn't exist
+        if (!ongoingScrapes.has(dialogueId)) {
+            ongoingScrapes.set(dialogueId, {
+                clients: [],
+                data: []
+            });
+        }
+        
+        const ongoingStream = ongoingScrapes.get(dialogueId);
+        
+        // Add the current message to conversation history
+        if (userInput) {
+            conversationHistory.push({
+                role: 'user',
+                content: userInput
+            });
+        }
+        
+        // Return success immediately, client will connect to SSE stream
+        res.json({
+            success: true,
+            dialogueId: dialogueId
+        });
+        
+        // CRITICAL FIX: Break this into separate steps
+        
+        // 1. Define a text handler
+        const handleTextChunk = async (textChunk) => {
+            let responseText = '';
+            let pendingText = '';
+            const textChunkThreshold = 15;
+            
+            responseText += textChunk;
+            pendingText += textChunk;
+            
+            // Send text chunk to client
+            sendEventToAll(dialogueId, 'textChunk', {
+                role: 'assistant',
+                text: textChunk
+            });
+            
+            ongoingStream.data.push({
+                event: 'textChunk',
+                data: {
+                    role: 'assistant',
+                    text: textChunk
+                }
+            });
+            
+            // If we have enough text, generate audio
+            if (pendingText.length >= textChunkThreshold) {
+                const textToProcess = pendingText;
+                pendingText = '';
+                
+                try {
+                    await streamTextToSpeech(
+                        textToProcess,
+                        personality.voices.elevenLabs,
+                        (audioChunk) => {
+                            // Send audio chunk
+                            sendEventToAll(dialogueId, 'audio', {
+                                audio: audioChunk.toString('base64')
+                            });
+                            
+                            ongoingStream.data.push({
+                                event: 'audio',
+                                data: {
+                                    audio: audioChunk.toString('base64')
+                                }
+                            });
+                        }
+                    );
+                } catch (error) {
+                    console.error('Error generating audio:', error);
+                }
+            }
+        };
+        
+        // 2. Call the function with very explicit parameters
+        console.log(`Starting generation with dialogueId: "${dialogueId}" (type: ${typeof dialogueId})`);
+        
+        try {
+            // IMPORTANT: Pass parameters in the correct order with explicit naming
+            await generateStreamingResponse(
+                conversationHistory,             // Parameter 1: conversation history
+                String(dialogueId),              // Parameter 2: dialogueId as a STRING (force conversion)
+                {                                // Parameter 3: options object
+                    temperature: temperature || 0.7,
+                    model: model || 'grok-2',
+                    systemPrompt: systemPrompt
+                },
+                handleTextChunk                 // Parameter 4: callback function
+            );
+        } catch (error) {
+            console.error('Error in generateStreamingResponse:', error);
+        }
+        
+    } catch (error) {
+        console.error('Error in converse endpoint:', error);
+        // If we haven't sent a response yet, send an error
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+});
+
+// Route to get available ElevenLabs voices
+router.get('/voices', async (req, res) => {
+  try {
+    const voices = await getElevenLabsVoices();
+    res.json({ voices });
+  } catch (error) {
+    console.error('Error fetching voices:', error);
+    res.status(500).json({ error: 'Failed to fetch voices: ' + error.message });
+  }
+});
+
+// Text request storage for Safari compatibility
+// const textRequests = new Map();
+
+// Text request endpoint for Safari
+// router.post('/text-request', (req, res) => {
+//     try {
+//         // Generate request ID
+//         const requestId = crypto.randomBytes(16).toString('hex');
+//         console.log(`Created text request with ID: ${requestId}`);
+        
+//         // Store the request data
+//         textRequests.set(requestId, {
+//             text: req.body.text || '',
+//             personality: req.body.personality ? JSON.parse(req.body.personality) : null,
+//             history: req.body.history ? JSON.parse(req.body.history) : [],
+//             timestamp: Date.now()
+//         });
+        
+//         // Set timeout to clean up old requests
+//         setTimeout(() => {
+//             if (textRequests.has(requestId)) {
+//                 console.log(`Cleaning up stale text request: ${requestId}`);
+//                 textRequests.delete(requestId);
+//             }
+//         }, 5 * 60 * 1000); // 5 minutes
+        
+//         // Return success
+//         res.json({ success: true, requestId });
+//     } catch (error) {
+//         console.error('Error processing text request:', error);
+//         res.status(500).json({ success: false, error: error.message });
+//     }
+// });
+
+// Text response endpoint with SSE for Safari
+// router.get('/text-response', (req, res) => {
+//     const requestId = req.query.requestId;
+    
+//     if (!requestId || !textRequests.has(requestId)) {
+//         return res.status(404).json({ error: 'Request not found' });
+//     }
+    
+//     console.log(`Processing text response for request: ${requestId}`);
+    
+//     // Get request data
+//     const requestData = textRequests.get(requestId);
+    
+//     // Set SSE headers
+//     res.setHeader('Content-Type', 'text/event-stream');
+//     res.setHeader('Cache-Control', 'no-cache');
+//     res.setHeader('Connection', 'keep-alive');
+    
+//     // Generate unique session ID
+//     const sessionId = crypto.randomBytes(8).toString('hex');
+//     console.log(`Safari SSE session ID: ${sessionId}`);
+    
+//     // Send initial connection confirmation
+//     res.write(`event: connected\n`);
+//     res.write(`data: ${JSON.stringify({ sessionId })}\n\n`);
+    
+//     // Ping to keep connection alive
+//     const keepAliveInterval = setInterval(() => {
+//         res.write(`event: ping\n`);
+//         res.write(`data: "keep-alive"\n\n`);
+//     }, 15000);
+    
+//     // Handle client disconnect
+//     req.on('close', () => {
+//         console.log(`Safari client disconnected for session: ${sessionId}`);
+//         clearInterval(keepAliveInterval);
+//         // Clean up request data
+//         textRequests.delete(requestId);
+//     });
+    
+//     // Process the text request
+//     (async () => {
+//         try {
+//             const userInput = requestData.text;
+            
+//             // Acknowledge receipt of message
+//             res.write(`event: messageReceived\n`);
+//             res.write(`data: ${JSON.stringify({ text: userInput })}\n\n`);
+            
+//             // Generate streaming response
+//             let responseText = '';
+//             let pendingText = '';
+//             const textChunkThreshold = 25; // Characters
+            
+//             // Get personality or use default
+//             const personality = requestData.personality || {
+//                 name: "Assistant",
+//                 model: "grok-beta",
+//                 voices: {
+//                     elevenLabs: {
+//                         voice_id: "pNInz6obpgDQGcFmaJgB",
+//                         model_id: "eleven_turbo_v2"
+//                     }
+//                 }
+//             };
+            
+//             // Send generating event
+//             res.write(`event: generatingResponse\n`);
+//             res.write(`data: "Generating response..."\n\n`);
+            
+//             // Generate streaming response
+//             await generateStreamingResponse(
+//                 userInput,
+//                 async (textChunk) => {
+//                     // Accumulate response
+//                     responseText += textChunk;
+//                     pendingText += textChunk;
+                    
+//                     // Send text chunk
+//                     res.write(`event: responseChunk\n`);
+//                     res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
+                    
+//                     // If we've accumulated enough text for TTS
+//                     if (pendingText.length >= textChunkThreshold) {
+//                         // Process pending text
+//                         const textToProcess = pendingText;
+//                         pendingText = '';
+                        
+//                         try {
+//                             await streamTextToSpeech(
+//                                 textToProcess,
+//                                 personality.voices.elevenLabs,
+//                                 (audioChunk) => {
+//                                     // Send audio chunk
+//                                     res.write(`event: audioChunk\n`);
+//                                     res.write(`data: ${JSON.stringify({ 
+//                                         chunk: audioChunk.toString('base64'),
+//                                         text: textToProcess
+//                                     })}\n\n`);
+//                                 }
+//                             );
+//                         } catch (error) {
+//                             console.error('TTS streaming error:', error);
+//                         }
+//                     }
+//                 },
+//                 personality,
+//                 requestData.history
+//             );
+            
+//             // Process any remaining text
+//             if (pendingText.length > 0) {
+//                 try {
+//                     await streamTextToSpeech(
+//                         pendingText,
+//                         personality.voices.elevenLabs,
+//                         (audioChunk) => {
+//                             res.write(`event: audioChunk\n`);
+//                             res.write(`data: ${JSON.stringify({ 
+//                                 chunk: audioChunk.toString('base64'),
+//                                 text: pendingText
+//                             })}\n\n`);
+//                         }
+//                     );
+//                 } catch (error) {
+//                     console.error('TTS streaming error for final chunk:', error);
+//                 }
+//             }
+            
+//             // Complete conversation
+//             res.write(`event: done\n`);
+//             res.write(`data: "Conversation complete"\n\n`);
+            
+//             // Cleanup
+//             textRequests.delete(requestId);
+//             clearInterval(keepAliveInterval);
+//             res.end();
+//         } catch (error) {
+//             console.error('Error generating response:', error);
+//             res.write(`event: error\n`);
+//             res.write(`data: ${JSON.stringify({ message: error.message })}\n\n`);
+//             clearInterval(keepAliveInterval);
+//             res.end();
+//         }
+//     })();
+// });
+
+// Chat endpoint for Safari compatibility
+router.post('/chat', upload.single('audio'), async (req, res) => {
+    console.log('Chat request received');
+    
+    try {
+        let userInput = '';
+        
+        // Extract user input from either audio file or text
+        if (req.file) {
+            console.log('Audio file received, size:', req.file.size, 'bytes');
+            userInput = await transcribeAudio(req.file.buffer);
+            console.log('Transcribed text:', userInput);
+        } else if (req.body.userInput) {
+            userInput = req.body.userInput;
+            console.log('Text input received:', userInput);
+        } else {
+            return res.status(400).json({ success: false, error: 'No input provided' });
+        }
+        
+        // Generate unique dialogue ID if not provided
+        const dialogueId = req.body.dialogueId || ('dialogue-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9));
+        console.log('Using dialogueId:', dialogueId);
+        
+        // Parse conversation history - ensure it's an array
+        let conversationHistory = [];
+        if (req.body.conversationHistory) {
+            try {
+                const parsedHistory = JSON.parse(req.body.conversationHistory);
+                
+                // Debug the actual structure
+                console.log('Raw conversation history structure:', 
+                    JSON.stringify(parsedHistory, null, 2).substring(0, 300));
+                
+                // Ensure it's an array with the right format
+                if (Array.isArray(parsedHistory)) {
+                    conversationHistory = parsedHistory.map(msg => ({
+                        role: msg.role || 'user',
+                        content: msg.content || msg.text || ''
+                    }));
+                } else if (typeof parsedHistory === 'object') {
+                    // If it's not an array but an object, try to convert it
+                    conversationHistory = [{
+                        role: parsedHistory.role || 'user',
+                        content: parsedHistory.content || parsedHistory.text || ''
+                    }];
+                }
+                
+                console.log('Formatted conversation history:', 
+                    JSON.stringify(conversationHistory, null, 2).substring(0, 300));
+            } catch (error) {
+                console.error('Error parsing conversation history:', error);
+                // Continue with empty history rather than failing
+            }
+        }
+        
+        // Add the current user input to conversation history
+        if (userInput) {
+            conversationHistory.push({
+                role: 'user',
+                content: userInput
+            });
+        }
+        
+        // Set up streaming context in shared state
+        if (!ongoingScrapes.has(dialogueId)) {
+            ongoingScrapes.set(dialogueId, {
+                id: dialogueId,
+                status: 'processing',
+                clients: [],
+                data: [],
+                startTime: Date.now()
+            });
+        }
+        
+        const ongoingStream = ongoingScrapes.get(dialogueId);
+        
+        // Make sure personality is defined
+        const personality = req.body.personality || defaultPersonality;
+        
+        // Start background processing
+        (async () => {
+            try {
+                // Add the user message to the data
+                ongoingStream.data.push({
+                    event: 'textChunk',
+                    data: {
+                        role: 'user',
+                        text: userInput
+                    }
+                });
+                
+                // Broadcast to all clients
+                sendEventToAll(dialogueId, 'textChunk', {
+                    role: 'user',
+                    text: userInput
+                });
+                
+                // Generate streaming response
+                console.log('Generating streaming response');
+                
+                let responseText = '';
+                let pendingText = '';
+                const textChunkThreshold = 20; // Characters
+                
+                // Parse personality settings
+                let personalitySettings = {
+                    name: "Assistant",
+                    model: "grok-beta",
+                    temperature: 0.7,
+                    systemPrompt: "You are a helpful assistant for a construction company. You provide coordination between customers and the construction company and its subcontractors. Answer questions about scheduling concisely and accurately and do not ever use asterisks or other markdown formatting.",
+                    voices: {
+                        elevenLabs: {
+                            voice_id: "pNInz6obpgDQGcFmaJgB",
+                            model_id: "eleven_turbo_v2",
+                            stability: 0.5,
+                            similarity_boost: 0.75
+                        }
+                    }
+                };
+                
+                if (req.body.personality) {
+                    try {
+                        const customPersonality = JSON.parse(req.body.personality);
+                        personalitySettings = { ...personalitySettings, ...customPersonality };
+                    } catch (error) {
+                        console.error('Error parsing personality:', error);
+                        // Continue with default personality
+                    }
+                }
+                
+                // CRITICAL FIX: Define the text chunk handler separately
+                const handleTextChunk = async (textChunk) => {
+                    responseText += textChunk;
+                    pendingText += textChunk;
+                    
+                    // Send text chunk to client
+                    sendEventToAll(dialogueId, 'textChunk', {
+                        role: 'assistant',
+                        text: textChunk
+                    });
+                    
+                    ongoingStream.data.push({
+                        event: 'textChunk',
+                        data: {
+                            role: 'assistant',
+                            text: textChunk
+                        }
+                    });
+                    
+                    // If we have enough text, generate audio
+                    if (pendingText.length >= textChunkThreshold) {
+                        const textToProcess = pendingText;
+                        pendingText = '';
+                        
+                        try {
+                            await streamTextToSpeech(
+                                textToProcess,
+                                personalitySettings.voices.elevenLabs,
+                                (audioChunk) => {
+                                    // Send audio chunk
+                                    sendEventToAll(dialogueId, 'audio', {
+                                        audio: audioChunk.toString('base64')
+                                    });
+                                    
+                                    ongoingStream.data.push({
+                                        event: 'audio',
+                                        data: {
+                                            audio: audioChunk.toString('base64')
+                                        }
+                                    });
+                                },
+                                String(dialogueId)  // Add explicit dialogueId as string
+                            );
+                        } catch (error) {
+                            console.error('Error generating audio:', error);
+                        }
+                    }
+                };
+                
+                try {
+                    // Debug what we're passing to the generator
+                    console.log('Conversation history length:', conversationHistory.length);
+                    console.log('Conversation history format check:',
+                        Array.isArray(conversationHistory), 
+                        conversationHistory.length > 0 ? 
+                            typeof conversationHistory[0].role : 'empty');
+                    
+                    // CRITICAL FIX: Call generateStreamingResponse with ALL parameters in the correct order
+                    await generateStreamingResponse(
+                        conversationHistory,
+                        String(dialogueId),
+                        {
+                            temperature: personalitySettings.temperature || 0.7,
+                            model: personalitySettings.model || 'grok-2',
+                            systemPrompt: personalitySettings.systemPrompt
+                        },
+                        handleTextChunk
+                    );
+                } catch (error) {
+                    console.error('Error in generateStreamingResponse:', error);
+                    
+                    // Send a default response if the generator fails
+                    const defaultResponse = "I'm sorry, I encountered an error while processing your request. Could you try again?";
+                    
+                    sendEventToAll(dialogueId, 'textChunk', {
+                        role: 'assistant',
+                        text: defaultResponse
+                    });
+                    
+                    ongoingStream.data.push({
+                        event: 'textChunk',
+                        data: {
+                            role: 'assistant',
+                            text: defaultResponse
+                        }
+                    });
+                    
+                    // Generate audio for the default response
+                    try {
+                        await streamTextToSpeech(
+                            defaultResponse,
+                            personalitySettings.voices.elevenLabs,
+                            (audioChunk) => {
+                                sendEventToAll(dialogueId, 'audio', {
+                                    audio: audioChunk.toString('base64')
+                                });
+                                
+                                ongoingStream.data.push({
+                                    event: 'audio',
+                                    data: {
+                                        audio: audioChunk.toString('base64')
+                                    }
+                                });
+                            }
+                        );
+                    } catch (audioError) {
+                        console.error('Error generating audio for default response:', audioError);
+                    }
+                }
+                
+                // Mark conversation as complete
+                ongoingStream.status = 'completed';
+                sendEventToAll(dialogueId, 'done', "Conversation complete");
+                
+                ongoingStream.data.push({
+                    event: 'done',
+                    data: "Conversation complete"
+                });
+                
+                console.log('Streaming response completed');
+                
+            } catch (error) {
+                console.error('Error in streaming process:', error);
+                ongoingStream.status = 'error';
+                
+                sendEventToAll(dialogueId, 'error', {
+                    message: error.message
+                });
+                
+                ongoingStream.data.push({
+                    event: 'error',
+                    data: {
+                        message: error.message
+                    }
+                });
+            }
+        })();
+        
+        // Respond to the client with success and the dialogue ID
+        res.json({
+            success: true,
+            dialogueId
+        });
+        
+    } catch (error) {
+        console.error('Error in chat endpoint:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Helper function to send events to all connected clients
+function sendEventToAll(dialogueId, eventType, data) {
+    // Ensure dialogueId is a string
+    dialogueId = String(dialogueId);
+    
+    // Get the socketManager
+    const socketManager = require('../socket/socketManager');
+    
+    // Send with proper formatting
+    socketManager.sendToClients(dialogueId, {
+        type: eventType,
+        ...data
+    });
+}
+
+// Create an endpoint for SSE (Server-Sent Events)
+router.get('/open-stream', (req, res) => {
+  // Set headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable Nginx buffering if using Nginx
+  
+  // Get the dialogue ID from the request query
+  const dialogueId = req.query.id;
+  console.log(`Client connecting to stream with dialogueId: ${dialogueId}`);
+  
+  if (!dialogueId) {
+    console.error("No dialogue ID provided");
+    res.status(400).end();
+    return;
+  }
+  
+  // Add this client to ongoingStreams map
+  if (!ongoingScrapes.has(dialogueId)) {
+    ongoingScrapes.set(dialogueId, {
+      clients: new Set(),
+      data: []
+    });
+  }
+  
+  // Add this client to the set
+  const stream = ongoingScrapes.get(dialogueId);
+  stream.clients.add(res);
+  
+  // Send an initial connection event
+  const sendEvent = (event, data) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+  
+  // Send confirmation that connection is established
+  sendEvent('connected', { message: 'Connection established' });
+  
+  // Send any existing data from buffer
+  if (stream.data && stream.data.length > 0) {
+    console.log(`Sending ${stream.data.length} buffered events to client for dialogueId: ${dialogueId}`);
+    stream.data.forEach(item => {
+      sendEvent(item.event, item.data);
+    });
+  }
+  
+  // Set up a keep-alive interval
+  const keepAliveInterval = setInterval(() => {
+    if (res.writableEnded) {
+      clearInterval(keepAliveInterval);
+      return;
+    }
+    res.write(': ping\n\n');
+  }, 30000);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    console.log(`Client disconnected from dialogueId: ${dialogueId}`);
+    if (ongoingScrapes.has(dialogueId)) {
+      const stream = ongoingScrapes.get(dialogueId);
+      stream.clients.delete(res);
+      
+      // Clean up if no more clients
+      if (stream.clients.size === 0) {
+        console.log(`No more clients for dialogueId: ${dialogueId}. Cleaning up.`);
+        ongoingScrapes.delete(dialogueId);
+      }
+    }
+    
+    clearInterval(keepAliveInterval);
+  });
+});
+
+// Fix the TTS fallback endpoint with correct URL format and configuration
+router.post('/tts-fallback', express.json(), express.urlencoded({ extended: true }), async (req, res) => {
+    try {
+        // Get text from either JSON or form data
+        const text = req.body.text;
+        
+        if (!text) {
+            return res.status(400).json({ error: 'Text is required' });
+        }
+        
+        console.log('Processing fallback TTS request:', text.substring(0, 50) + '...');
+        
+        // Get API config
+        const elevenLabsConfig = require('../helpers/apiConfig').tts?.elevenLabs || {};
+        const apiKey = elevenLabsConfig.apiKey || process.env.ELEVENLABS_API_KEY;
+        
+        // Use the specified voice ID - UPDATED
+        // const voiceId = 'XDBzexbseIAKtAVaAwm3';
+        const voiceId = 'pwMBn0SsmN1220Aorv15';
+        console.log(`Using voice ID: ${voiceId}`);
+        
+        // Fix the URL format to match the working example
+        const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+        console.log(`Using API URL: ${apiUrl}`);
+        
+        const response = await axios.post(
+            apiUrl,
+            {
+                text: text,
+                model_id: 'eleven_monolingual_v1', 
+                voice_settings: {
+                    stability: 0.75,
+                    similarity_boost: 0.75
+                },
+                output_format: 'mp3_44100_128', // Safari-compatible format
+                apply_text_normalization: 'auto'
+            },
+            {
+                headers: {
+                    'xi-api-key': apiKey,
+                    'Content-Type': 'application/json',
+                    'Accept': 'audio/mp3'
+                },
+                responseType: 'arraybuffer'
+            }
+        );
+        
+        // Send the audio file to the client
+        res.set('Content-Type', 'audio/mp3');
+        res.send(Buffer.from(response.data));
+        
+    } catch (error) {
+        console.error('Error in fallback TTS:', error.message);
+        
+        // Better error response with details
+        if (error.response) {
+            console.error('ElevenLabs API error details:', {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: error.response.data ? error.response.data.toString() : null
+            });
+        }
+        
+        res.status(500).json({ 
+            error: 'Failed to generate speech',
+            message: error.message
+        });
+    }
+});
+
 module.exports = router;
+module.exports.ongoingScrapes = ongoingScrapes;
