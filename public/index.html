@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Assistant</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Remove these as they're no longer needed -->
+    <!-- <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script> -->
+    <!-- <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script> -->
+    <!-- <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script> -->
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Voice Assistant</h1>
+        </header>
+        
+        <main>
+            <div id="voice-assistant-root"></div>
+            
+            <!-- Legacy UI can remain hidden -->
+            <div class="legacy-ui hidden">
+                <div class="waveform-container">
+                    <canvas id="waveform"></canvas>
+                </div>
+                
+                <div class="controls">
+                    <button id="microphone-btn" class="mic-btn">
+                        <span class="mic-icon">🎙️</span>
+                    </button>
+                    <button id="transcript-btn" class="control-btn">
+                        <span>📄 View Transcript</span>
+                    </button>
+                    <button id="stop-btn" class="control-btn">
+                        <span>⏹️ Stop</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+        
+        <div id="transcript-panel" class="transcript-panel hidden">
+            <div class="transcript-header">
+                <h2>Conversation Transcript</h2>
+                <button id="close-transcript" class="close-btn">✕</button>
+            </div>
+            <div id="transcript-content" class="transcript-content"></div>
+        </div>
+    </div>
+    
+    <!-- Change from inline babel script to bundled JS -->
+    <script src="js/bundle.js"></script>
+</body>
+</html> 

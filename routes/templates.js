@@ -104,12 +104,39 @@ router.get('/', async (req, res) => {
 });
 
 
-// router.post('/newTemplate', authenticateToken, async (req, res) => {
-router.post('/newTemplate', async (req, res) => {
-    console.log('POST /api/templates/newTemplate', req.body)
-    const template = req.body;
-    const transactionId = await publishNewTemplate(template);
-    res.status(200).json({ transactionId });
+router.post('/newTemplate', authenticateToken, async (req, res) => {
+    try {
+        const template = req.body;
+        const result = await publishNewTemplate(template);
+
+        // Check if the transaction was confirmed and verified
+        if (!result.status.confirmed) {
+            return res.status(202).json({
+                message: 'Template submitted but not yet confirmed',
+                ...result
+            });
+        }
+
+        if (!result.verification.verified) {
+            return res.status(202).json({
+                message: 'Template submitted but verification failed',
+                ...result
+            });
+        }
+
+        // Template was successfully published and verified
+        res.status(200).json({
+            message: 'Template successfully published and confirmed',
+            ...result
+        });
+
+    } catch (error) {
+        console.error('Error in /newTemplate:', error);
+        res.status(500).json({
+            error: 'Failed to publish template',
+            details: error.message
+        });
+    }
 });
 
 router.post('/newTemplateRemap', authenticateToken, async (req, res) => {

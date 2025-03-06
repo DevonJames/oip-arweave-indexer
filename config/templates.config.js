@@ -13,8 +13,6 @@ module.exports = {
         post: "op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
         podcast: "MojoZlLKaH-cHy_HbaGBlBA7Mxzf8dJl4MQZzFQAkMY",
         nutritionalInfo: "yfBDmC1FPNan0mlixGNGUCGhmYZjM1PuDVXfpr_Cxlo",
-        recipe: "gcLgs6Cloq5s-qNTWHwAl1YRmvr-tXnuEqZfskn7jq0"
+        recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc"
     }
 };
-
-

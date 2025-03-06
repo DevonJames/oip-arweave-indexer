@@ -1,52 +1,56 @@
+require('dotenv').config();
 const { Client } = require('@elastic/elasticsearch');
 const bcrypt = require('bcrypt');
 // const { elasticClient, ensureUserIndexExists } = require('../helpers/elasticsearch');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET must be defined in .env file');
+}
 
-const elasticClient = new Client({
-    node: process.env.ELASTICSEARCHHOST || 'http://0.0.0.0:9200',
-
+const client = new Client({
+    node: process.env.ELASTICSEARCHHOST,
     auth: {
         username: process.env.ELASTICCLIENTUSERNAME,
         password: process.env.ELASTICCLIENTPASSWORD
+    },
+    maxRetries: 5,
+    requestTimeout: 60000,
+    ssl: {
+        rejectUnauthorized: false // Only if you're using self-signed certificates
     }
 });
 
 const ensureUserIndexExists = async () => {
     try {
-        const indexExists = await elasticClient.indices.exists({ index: 'users' });
-        console.log(`Index exists check for 'users':`, indexExists.body);  // Log existence check result
-        
-        if (!indexExists.body) {
-            await elasticClient.indices.create({
+        const indexExists = await client.indices.exists({
+            index: 'users'
+        });
+
+        if (!indexExists) {
+            await client.indices.create({
                 index: 'users',
                 body: {
                     mappings: {
                         properties: {
-                            email: { type: 'text' },
-                            passwordHash: { type: 'text' },
-                            subscriptionStatus: { type: 'text' },
-                            paymentMethod: { type: 'text' },
+                            email: { type: 'keyword' },
+                            passwordHash: { type: 'keyword' },
+                            isAdmin: { type: 'boolean' },
                             createdAt: { type: 'date' },
-                            isAdmin: { type: 'boolean' }
+                            waitlistStatus: { type: 'keyword' },
+                            subscriptionStatus: { type: 'keyword' },
+                            paymentMethod: { type: 'keyword' }
                         }
                     }
                 }
             });
-            console.log('Users index created successfully.');
-        } else {
-            console.log('Users index already exists, skipping creation.');
+            console.log('Users index created successfully');
         }
     } catch (error) {
-        if (error.meta && error.meta.body && error.meta.body.error && error.meta.body.error.type === 'resource_already_exists_exception') {
-            console.log('Users index already exists (caught in error).');
-        } else {
-            console.error('Error creating users index:', error);
-        }
+        console.error('Error creating users index:', error);
+        throw error;
     }
 };
-
 
 const readline = require('readline').createInterface({
     input: process.stdin,
@@ -71,7 +75,7 @@ function prompt(question) {
         await ensureUserIndexExists();
 
         // Check if the admin user already exists
-        const existingAdmin = await elasticClient.search({
+        const existingAdmin = await client.search({
             index: 'users',
             body: {
                 query: {
@@ -93,15 +97,15 @@ function prompt(question) {
         const newAdminUser = {
             email: email,
             passwordHash: passwordHash,
+            isAdmin: true,
             createdAt: new Date().toISOString(),
             waitlistStatus: 'registered',
-            subscriptionStatus: 'inactive', // Default subscription status
-            paymentMethod: null, // Initially, no payment method
-            isAdmin: true // Set the user as admin
+            subscriptionStatus: 'inactive',
+            paymentMethod: null
         };
 
         // Store the new user in Elasticsearch
-        const response = await elasticClient.index({
+        const response = await client.index({
             index: 'users',
             body: newAdminUser,
             refresh: 'wait_for'
@@ -109,12 +113,27 @@ function prompt(question) {
 
         console.log(`Admin user created with ID: ${response._id}`);
 
-        // Optional: Generate a JWT for the new admin (useful for testing)
-        const token = jwt.sign({ userId: response._id, email: email, isAdmin: true }, JWT_SECRET, { expiresIn: '45d' });
-        console.log(`JWT Token for admin (valid for testing): ${token}`);
-        console.log("Store this token securely or login via the interface.");
+        // Generate a JWT for the new admin
+        const token = jwt.sign(
+            { 
+                userId: response._id, 
+                email: email, 
+                isAdmin: true 
+            }, 
+            JWT_SECRET, 
+            { expiresIn: '45d' }
+        );
+        
+        console.log('\nJWT Token for admin (valid for testing):');
+        console.log(token);
+        console.log('\nStore this token securely or login via the interface.');
 
     } catch (error) {
         console.error('Error creating admin account:', error);
+        if (error.stack) {
+            console.error('Stack trace:', error.stack);
+        }
+    } finally {
+        process.exit(0);
     }
 })();

@@ -7,6 +7,7 @@ const base64url = require('base64url');
 const { signMessage, txidToDid, getIrysArweave, getTemplateTxidByName } = require('./utils');
 const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, searchCreatorByAddress, indexRecord } = require('./elasticsearch');
 const {getCurrentBlockHeight} = require('../helpers/arweave');
+const arweaveWallet = require('./arweave-wallet');
 
 // const templatesConfig = require('../config/templates.config');
 // const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
@@ -314,7 +315,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                 const myPublicKey = jwk.n;
                 const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
                 
-        const irys = await getIrysArweave();
+        // const irys = await getIrysArweave();
         const tags = [
             { name: 'Content-Type', value: 'application/json' },
             { name: 'Index-Method', value: 'OIP' },
@@ -330,7 +331,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
 
         console.log(getFileInfo(), getLineNumber(), 'record data and tags', recordData, tags)
 
-        const receipt = await irys.upload(recordData, { tags });
+        const receipt = await arweaveWallet.uploadWithConfirmation(recordData, { tags }, true);
         console.log(getFileInfo(), getLineNumber(), 'Record published:', receipt.id)
         const transactionId = receipt.id;
         const didTx = txidToDid(transactionId);
@@ -381,15 +382,14 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
 
 async function publishNewTemplate(template) {
     try {
-        console.log(getFileInfo(), getLineNumber(), 'publishNewTemplate', template)
+        console.log(getFileInfo(), getLineNumber(), 'publishNewTemplate', template);
 
         const templateName = Object.keys(template)[0];
         const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
 
         const myPublicKey = jwk.n;
-        const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); // need to keep off for now till ready to update
+        const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
 
-        const irys = await getIrysArweave();
         const tags = [
             { name: 'Content-Type', value: 'application/json' },
             { name: 'Index-Method', value: 'OIP' },
@@ -404,11 +404,32 @@ async function publishNewTemplate(template) {
         const dataForSignature = templateString + JSON.stringify(tags);
         const creatorSig = await signMessage(dataForSignature);
         tags.push({ name: 'CreatorSig', value: creatorSig });
-        const receipt = await irys.upload(templateString, { tags });
-        const transactionId = receipt.id;
-        return { transactionId };
+
+        // Use the new Turbo upload with confirmation
+        const result = await arweaveWallet.uploadWithConfirmation(
+            templateString,
+            { tags },
+            true // wait for confirmation
+        );
+
+        // Get detailed transaction status
+        // const status = await arweaveWallet.getTransactionStatus(result.id);
+        
+        // Verify the transaction
+        // const verification = await arweaveWallet.verifyTransaction(result.id);
+
+        return {
+            transactionId: result.id,
+            // status: status,
+            // verification: verification,
+            tags: tags,
+            dataForSignature: dataForSignature,
+            creatorSig: creatorSig
+        };
+
     } catch (error) {
         console.error('Error publishing template:', error);
+        throw error;
     }
 }
 
