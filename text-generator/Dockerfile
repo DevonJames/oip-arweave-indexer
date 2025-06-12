@@ -4,8 +4,8 @@ FROM python:3.9-slim
 # Upgrade pip to the latest version
 RUN pip install --upgrade pip
 
-# Install required dependencies
-RUN pip install --default-timeout=1000 torch transformers flask
+# Install required dependencies including sentencepiece for LlamaTokenizer
+RUN pip install --default-timeout=1000 torch transformers flask sentencepiece
 
 # Copy the app
 COPY . /app
