@@ -79,12 +79,15 @@ COPY ngrok ./ngrok
 # Copy the .env file if it exists
 COPY .env .env
 
-# Set permissions and switch to non-root user first
-RUN chown -R node:node /usr/src/app
-USER node
-
-# Create required media directories as the node user
-RUN mkdir -p ./media/temp_audio ./media/jfk/pdf ./media/jfk/audio ./media/jfk/images
+# Create the complete directory structure that routes/jfk.js expects at startup
+RUN mkdir -p \
+  ./media/temp_audio \
+  ./media/jfk/pdf \
+  ./media/jfk/images \
+  ./media/jfk/analysis \
+  ./media/rfk/pdf \
+  ./media/rfk/images \
+  ./media/rfk/analysis
 
 # Expose all necessary ports
 EXPOSE 3005
