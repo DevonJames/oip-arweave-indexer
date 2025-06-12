@@ -49,6 +49,11 @@ const getTurbo = async () => {
 
 // Function to create new nutritional info records for missing ingredients
 async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave') {
+  // Add Firecrawl token retrieval and validation
+  const firecrawlToken = process.env.FIRECRAWL;
+  if (!firecrawlToken) {
+    throw new Error('FIRECRAWL environment variable is not set – cannot scrape Nutritionix');
+  }
   try {
     console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
 
@@ -65,7 +70,7 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.FIRECRAWL}`,
+          Authorization: `Bearer ${firecrawlToken}`,
         },
       }
     );
@@ -457,6 +462,7 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
 
 
     // Extract prep time, cook time, total time, cuisine, and course
+    const firstRecipeSection = record.recipe[0] || {};
     const prep_time_mins = firstRecipeSection.prep_time_mins || null;
     const cook_time_mins = firstRecipeSection.cook_time_mins || null;
     const total_time_mins = firstRecipeSection.total_time_mins || null;
@@ -521,7 +527,6 @@ console.log('Units After Assignment:', ingredientUnits);
 console.log('Amounts After Assignment:', ingredientAmounts);
 
 // Extract values from the first recipe section for the main recipe data
-const firstRecipeSection = record.recipe[0];
 const recipeDate = record.basic.date || Math.floor(Date.now() / 1000);
 
 // Assign to recipeData
