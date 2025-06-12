@@ -97,7 +97,6 @@ USER node
 # Command to run all services
 CMD ["sh", "-c", "\
   ./wait-for-it.sh elasticsearch:9200 --timeout=90 --strict -- \
-  ./wait-for-it.sh speech-synthesizer:8082 --timeout=600 --strict -- \
   node --inspect=0.0.0.0:9229 index.js --keepDBUpToDate 10 100"]
 
 # Add healthcheck for the app
