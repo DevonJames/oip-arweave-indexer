@@ -4,15 +4,16 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const ffmpeg = require('fluent-ffmpeg');
-const { ongoingScrapes } = require('../helpers/sharedState');
+const { ongoingDialogues } = require('../helpers/sharedState');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const fs = require('fs');
 const crypto = require('crypto');  // For generating a unique hash
 const path = require('path');
 const { generateCombinedSummaryFromArticles, replaceAcronyms, synthesizeSpeech, transcribeAudio, generateStreamingResponse, streamTextToSpeech, getElevenLabsVoices } = require('../helpers/generators');
-const { generatePodcastFromArticles, synthesizeDialogueTurn, getAudioDuration, personalities } = require('../helpers/podcast-generator');
+const { generatePodcastFromArticles, generateInvestigativeReportFromDocuments, synthesizeDialogueTurn, getAudioDuration, personalities } = require('../helpers/podcast-generator');
 const e = require('express');
 const multer = require('multer');
+const socketManager = require('../socket/socketManager');
 
 // Create a directory to store the audio files if it doesn't exist
 const audioDirectory = path.join(__dirname, '../media');
@@ -106,7 +107,7 @@ router.post('/podcast', async (req, res) => {
         res.write(`event: generatingPodcast\n`);
         res.write(`data: "Podcast generation starting for ID: ${podcastId}"\n\n`);
 
-        // Simulate podcast generation (replace this with your actual generation logic)
+        // Generate podcast
         const podcastFile = await generatePodcastFromArticles(
             articles,
             selectedHosts,
@@ -115,24 +116,120 @@ router.post('/podcast', async (req, res) => {
             res
         );
 
-        const audioFileUrl = `/api/generate/media?id=${podcastId}`;
-        console.log('Saving synthesized podcast', podcastId, audioFileUrl);
+        // Only attempt to write completion event if podcast generation didn't return null
+        if (podcastFile) {
+            const audioFileUrl = `/api/generate/media?id=${podcastId}`;
+            console.log('Saving synthesized podcast', podcastId, audioFileUrl);
 
-        res.write(`event: podcastComplete\n`);
-        res.write(`data: ${JSON.stringify({ message: "Podcast generation complete!", podcastFile })}\n\n`);
-        res.end(); // End the stream when the task is complete
+            res.write(`event: podcastComplete\n`);
+            res.write(`data: ${JSON.stringify({ message: "Podcast generation complete!", podcastFile })}\n\n`);
+        }
     } catch (error) {
         console.error('Error generating podcast:', error);
-        res.write(`event: error\n`);
-        res.write(`data: ${JSON.stringify({ message: 'An error occurred during podcast generation.' })}\n\n`);
-        // res.end(); // End the stream on error
+        // Only write error if response is still writable
+        if (!res.writableEnded) {
+            res.write(`event: error\n`);
+            res.write(`data: ${JSON.stringify({ message: 'An error occurred during podcast generation: ' + error.message })}\n\n`);
+        }
+    } finally {
+        // End the response if it hasn't been ended yet
+        if (!res.writableEnded) {
+            res.end();
+        }
+        clearInterval(keepAliveInterval); // Make sure to clear the interval
     }
 
     // Clean up on client disconnect
     req.on('close', () => {
         console.log(`Client disconnected from podcast generation for ID: ${podcastId}`);
         clearInterval(keepAliveInterval); // Stop keep-alive pings
-        res.end();
+        // Only end the response if it's still writable
+        if (!res.writableEnded) {
+            res.end();
+        }
+    });
+});
+
+// New endpoint for investigative reports
+router.post('/investigative-report', async (req, res) => {
+    console.log('Received investigative report generation request');
+    let { documents, metadata, investigation, selectedInvestigators, targetLengthSeconds } = req.body;
+    
+    // Default investigation if not provided
+    investigation = investigation || "The JFK Assassination Investigation";
+    
+    // Default investigators if not provided
+    selectedInvestigators = selectedInvestigators || ["reporter", "privateEye" ];
+    
+    if (!documents) {
+        return res.status(400).json({ error: 'documents are required' });
+    }
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders(); // Flush headers to establish SSE connection
+
+
+    const reportId = generateAudioFileName(
+        (documents.map(doc => doc.id || doc.url || "doc").join(', ') + investigation + JSON.stringify(selectedInvestigators)),
+        'mp3'
+    );
+
+    // Keep connection alive
+    const keepAliveInterval = setInterval(() => {
+        res.write(`event: ping\n`);
+        res.write(`data: "Connection alive for report ID: ${reportId}"\n\n`);
+    }, 15000); // Every 15 seconds
+
+    try {
+        // Send initial event
+        res.write(`event: generatingReport\n`);
+        res.write(`data: "Investigative report generation starting for ID: ${reportId}"\n\n`);
+        console.log('Generating investigative report', investigation, selectedInvestigators, targetLengthSeconds, reportId);
+        // Generate investigative report
+        const reportFile = await generateInvestigativeReportFromDocuments(
+            documents,
+            metadata,
+            investigation,
+            selectedInvestigators,
+            targetLengthSeconds = 3600,
+            reportId,
+            res
+        );
+
+        // Only attempt to write completion event if report generation didn't return null
+        if (reportFile) {
+            const audioFileUrl = `/api/generate/media?id=${reportId}`;
+            console.log('Saving synthesized investigative report', reportId, audioFileUrl);
+
+            res.write(`event: reportComplete\n`);
+            res.write(`data: ${JSON.stringify({ message: "Investigative report generation complete!", reportFile })}\n\n`);
+        }
+    } catch (error) {
+        console.error('Error generating investigative report:', error);
+        // Only write error if response is still writable
+        if (!res.writableEnded) {
+            res.write(`event: error\n`);
+            res.write(`data: ${JSON.stringify({ message: 'An error occurred during report generation: ' + error.message })}\n\n`);
+        }
+    } finally {
+        // End the response if it hasn't been ended yet
+        if (!res.writableEnded) {
+            res.end();
+        }
+        clearInterval(keepAliveInterval); // Make sure to clear the interval
+    }
+
+    // Clean up on client disconnect
+    req.on('close', () => {
+        console.log(`Client disconnected from report generation for ID: ${reportId}`);
+        clearInterval(keepAliveInterval); // Stop keep-alive pings
+        // Only end the response if it's still writable
+        if (!res.writableEnded) {
+            res.end();
+        }
     });
 });
 
@@ -611,14 +708,14 @@ router.post('/converse', async (req, res) => {
         const conversationHistory = req.body.conversationHistory || [];
         
         // Initialize ongoingStream if it doesn't exist
-        if (!ongoingScrapes.has(dialogueId)) {
-            ongoingScrapes.set(dialogueId, {
+        if (!ongoingDialogues.has(dialogueId)) {
+            ongoingDialogues.set(dialogueId, {
                 clients: [],
                 data: []
             });
         }
         
-        const ongoingStream = ongoingScrapes.get(dialogueId);
+        const ongoingStream = ongoingDialogues.get(dialogueId);
         
         // Add the current message to conversation history
         if (userInput) {
@@ -646,7 +743,8 @@ router.post('/converse', async (req, res) => {
             pendingText += textChunk;
             
             // Send text chunk to client
-            sendEventToAll(dialogueId, 'textChunk', {
+            socketManager.sendToClients(dialogueId, {
+                type: 'textChunk',
                 role: 'assistant',
                 text: textChunk
             });
@@ -670,7 +768,8 @@ router.post('/converse', async (req, res) => {
                         personality.voices.elevenLabs,
                         (audioChunk) => {
                             // Send audio chunk
-                            sendEventToAll(dialogueId, 'audio', {
+                            socketManager.sendToClients(dialogueId, {
+                                type: 'audio',
                                 audio: audioChunk.toString('base64')
                             });
                             
@@ -975,17 +1074,23 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         }
         
         // Set up streaming context in shared state
-        if (!ongoingScrapes.has(dialogueId)) {
-            ongoingScrapes.set(dialogueId, {
+        if (!ongoingDialogues.has(dialogueId)) {
+            ongoingDialogues.set(dialogueId, {
                 id: dialogueId,
                 status: 'processing',
-                clients: [],
+                clients: new Set(),
                 data: [],
                 startTime: Date.now()
             });
+        } else {
+            // If it exists, ensure clients is a Set
+            const stream = ongoingDialogues.get(dialogueId);
+            if (!stream.clients || typeof stream.clients.add !== 'function') {
+                stream.clients = new Set();
+            }
         }
         
-        const ongoingStream = ongoingScrapes.get(dialogueId);
+        const ongoingStream = ongoingDialogues.get(dialogueId);
         
         // Make sure personality is defined
         const personality = req.body.personality || defaultPersonality;
@@ -1003,7 +1108,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 });
                 
                 // Broadcast to all clients
-                sendEventToAll(dialogueId, 'textChunk', {
+                socketManager.sendToClients(dialogueId, {
+                    type: 'textChunk',
                     role: 'user',
                     text: userInput
                 });
@@ -1047,7 +1153,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     pendingText += textChunk;
                     
                     // Send text chunk to client
-                    sendEventToAll(dialogueId, 'textChunk', {
+                    socketManager.sendToClients(dialogueId, {
+                        type: 'textChunk',
                         role: 'assistant',
                         text: textChunk
                     });
@@ -1071,7 +1178,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                                 personalitySettings.voices.elevenLabs,
                                 (audioChunk) => {
                                     // Send audio chunk
-                                    sendEventToAll(dialogueId, 'audio', {
+                                    socketManager.sendToClients(dialogueId, {
+                                        type: 'audio',
                                         audio: audioChunk.toString('base64')
                                     });
                                     
@@ -1091,23 +1199,16 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 };
                 
                 try {
-                    // Debug what we're passing to the generator
-                    console.log('Conversation history length:', conversationHistory.length);
-                    console.log('Conversation history format check:',
-                        Array.isArray(conversationHistory), 
-                        conversationHistory.length > 0 ? 
-                            typeof conversationHistory[0].role : 'empty');
-                    
                     // CRITICAL FIX: Call generateStreamingResponse with ALL parameters in the correct order
                     await generateStreamingResponse(
-                        conversationHistory,
-                        String(dialogueId),
+                        conversationHistory,  // Pass the actual conversation history array
+                        String(dialogueId),   // Ensure dialogueId is a string
                         {
                             temperature: personalitySettings.temperature || 0.7,
                             model: personalitySettings.model || 'grok-2',
                             systemPrompt: personalitySettings.systemPrompt
                         },
-                        handleTextChunk
+                        handleTextChunk      // Pass the properly defined text chunk handler
                     );
                 } catch (error) {
                     console.error('Error in generateStreamingResponse:', error);
@@ -1115,7 +1216,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     // Send a default response if the generator fails
                     const defaultResponse = "I'm sorry, I encountered an error while processing your request. Could you try again?";
                     
-                    sendEventToAll(dialogueId, 'textChunk', {
+                    socketManager.sendToClients(dialogueId, {
+                        type: 'textChunk',
                         role: 'assistant',
                         text: defaultResponse
                     });
@@ -1134,7 +1236,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                             defaultResponse,
                             personalitySettings.voices.elevenLabs,
                             (audioChunk) => {
-                                sendEventToAll(dialogueId, 'audio', {
+                                socketManager.sendToClients(dialogueId, {
+                                    type: 'audio',
                                     audio: audioChunk.toString('base64')
                                 });
                                 
@@ -1153,7 +1256,10 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 
                 // Mark conversation as complete
                 ongoingStream.status = 'completed';
-                sendEventToAll(dialogueId, 'done', "Conversation complete");
+                socketManager.sendToClients(dialogueId, {
+                    type: 'done',
+                    data: "Conversation complete"
+                });
                 
                 ongoingStream.data.push({
                     event: 'done',
@@ -1166,8 +1272,11 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 console.error('Error in streaming process:', error);
                 ongoingStream.status = 'error';
                 
-                sendEventToAll(dialogueId, 'error', {
-                    message: error.message
+                socketManager.sendToClients(dialogueId, {
+                    type: 'error',
+                    data: {
+                        message: error.message
+                    }
                 });
                 
                 ongoingStream.data.push({
@@ -1227,61 +1336,83 @@ router.get('/open-stream', (req, res) => {
     return;
   }
   
-  // Add this client to ongoingStreams map
-  if (!ongoingScrapes.has(dialogueId)) {
-    ongoingScrapes.set(dialogueId, {
-      clients: new Set(),
-      data: []
-    });
+  // CRITICAL FIX: Check if ongoingDialogues is defined
+  if (typeof ongoingDialogues === 'undefined') {
+    console.error("ongoingDialogues is undefined! Check imports and initialization.");
+    res.status(500).write(`event: error\n`);
+    res.write(`data: ${JSON.stringify({ message: "Server configuration error" })}\n\n`);
+    res.end();
+    return;
   }
   
-  // Add this client to the set
-  const stream = ongoingScrapes.get(dialogueId);
-  stream.clients.add(res);
-  
-  // Send an initial connection event
-  const sendEvent = (event, data) => {
-    if (res.writableEnded) return;
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-  
-  // Send confirmation that connection is established
-  sendEvent('connected', { message: 'Connection established' });
-  
-  // Send any existing data from buffer
-  if (stream.data && stream.data.length > 0) {
-    console.log(`Sending ${stream.data.length} buffered events to client for dialogueId: ${dialogueId}`);
-    stream.data.forEach(item => {
-      sendEvent(item.event, item.data);
-    });
-  }
-  
-  // Set up a keep-alive interval
-  const keepAliveInterval = setInterval(() => {
-    if (res.writableEnded) {
-      clearInterval(keepAliveInterval);
-      return;
-    }
-    res.write(': ping\n\n');
-  }, 30000);
-  
-  // Handle client disconnect
-  req.on('close', () => {
-    console.log(`Client disconnected from dialogueId: ${dialogueId}`);
-    if (ongoingScrapes.has(dialogueId)) {
-      const stream = ongoingScrapes.get(dialogueId);
-      stream.clients.delete(res);
-      
-      // Clean up if no more clients
-      if (stream.clients.size === 0) {
-        console.log(`No more clients for dialogueId: ${dialogueId}. Cleaning up.`);
-        ongoingScrapes.delete(dialogueId);
+  try {
+    // Fix: Ensure clients is initialized as a Set, not an array
+    if (!ongoingDialogues.has(dialogueId)) {
+      ongoingDialogues.set(dialogueId, {
+        clients: new Set(),
+        data: []
+      });
+    } else {
+      // Fix: If it exists but clients isn't a Set, initialize it
+      const stream = ongoingDialogues.get(dialogueId);
+      if (!stream.clients || typeof stream.clients.add !== 'function') {
+        stream.clients = new Set();
       }
     }
     
-    clearInterval(keepAliveInterval);
-  });
+    // Add this client to the set
+    const stream = ongoingDialogues.get(dialogueId);
+    stream.clients.add(res);
+    
+    // Send an initial connection event
+    const sendEvent = (event, data) => {
+      if (res.writableEnded) return;
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+    
+    // Send confirmation that connection is established
+    sendEvent('connected', { message: 'Connection established' });
+    
+    // Send any existing data from buffer
+    if (stream.data && stream.data.length > 0) {
+      console.log(`Sending ${stream.data.length} buffered events to client for dialogueId: ${dialogueId}`);
+      stream.data.forEach(item => {
+        sendEvent(item.event, item.data);
+      });
+    }
+    
+    // Set up a keep-alive interval
+    const keepAliveInterval = setInterval(() => {
+      if (res.writableEnded) {
+        clearInterval(keepAliveInterval);
+        return;
+      }
+      res.write(': ping\n\n');
+    }, 30000);
+    
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log(`Client disconnected from dialogueId: ${dialogueId}`);
+      if (ongoingDialogues.has(dialogueId)) {
+        const stream = ongoingDialogues.get(dialogueId);
+        stream.clients.delete(res);
+        
+        // Clean up if no more clients
+        if (stream.clients.size === 0) {
+          console.log(`No more clients for dialogueId: ${dialogueId}. Cleaning up.`);
+          ongoingDialogues.delete(dialogueId);
+        }
+      }
+      
+      clearInterval(keepAliveInterval);
+    });
+  } catch (error) {
+    console.error("Error in open-stream handler:", error);
+    res.status(500).write(`event: error\n`);
+    res.write(`data: ${JSON.stringify({ message: "Server error: " + error.message })}\n\n`);
+    res.end();
+  }
 });
 
 // Fix the TTS fallback endpoint with correct URL format and configuration
@@ -1354,5 +1485,24 @@ router.post('/tts-fallback', express.json(), express.urlencoded({ extended: true
     }
 });
 
+// Add a debug route
+router.get('/active-dialogues', (req, res) => {
+    const dialogues = Array.from(ongoingDialogues.keys());
+    const details = dialogues.map(id => {
+        const dialogue = ongoingDialogues.get(id);
+        return {
+            id,
+            clientCount: dialogue.clients ? dialogue.clients.size : 0,
+            status: dialogue.status || 'unknown',
+            startTime: dialogue.startTime || Date.now()
+        };
+    });
+    
+    res.json({
+        count: dialogues.length,
+        dialogues: details
+    });
+});
+
 module.exports = router;
-module.exports.ongoingScrapes = ongoingScrapes;
+module.exports.ongoingDialogues = ongoingDialogues;

@@ -69,8 +69,42 @@ class ArweaveWalletManager {
             return { id: result.id, type: contentType };
         } catch (error) {
             console.error('Error uploading with Turbo:', error);
-            // Keep your fallback approach for direct Arweave upload
-            // ...
+            
+            // Fallback to direct Arweave upload
+            console.log('Attempting fallback to direct Arweave upload...');
+            try {
+                const walletData = await fs.readFile(process.env.WALLET_FILE, 'utf8');
+                const wallet = JSON.parse(walletData);
+                
+                const dataBuffer = Buffer.isBuffer(data) ? data : 
+                                 typeof data === 'string' ? Buffer.from(data) :
+                                 Buffer.from(JSON.stringify(data));
+                
+                // Create Arweave transaction
+                const transaction = await this.arweave.createTransaction({
+                    data: dataBuffer
+                }, wallet);
+                
+                // Add tags
+                transaction.addTag('Content-Type', contentType);
+                transaction.addTag('App-Name', 'OIPArweave');
+                
+                // Sign transaction
+                await this.arweave.transactions.sign(transaction, wallet);
+                
+                // Submit transaction
+                const response = await this.arweave.transactions.post(transaction);
+                
+                if (response.status === 200) {
+                    console.log('Direct Arweave upload successful:', transaction.id);
+                    return { id: transaction.id, type: contentType };
+                } else {
+                    throw new Error(`Direct Arweave upload failed with status: ${response.status}`);
+                }
+            } catch (fallbackError) {
+                console.error('Fallback Arweave upload also failed:', fallbackError);
+                throw new Error(`Both Turbo and direct Arweave uploads failed. Turbo error: ${error.message}, Arweave error: ${fallbackError.message}`);
+            }
         }
     }
 

@@ -3,13 +3,19 @@ const router = express.Router();
 
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const { TurboFactory, ArDriveUploadDriver } = require('@ardrive/turbo-sdk');
-const { encryptContent } = require('../helpers/lit-protocol');
+const { 
+  encryptContent,
+  decryptContent,
+  createBitcoinPaymentCondition 
+} = require('../helpers/lit-protocol');
 const fs = require('fs').promises;
 const path = require('path');
 const { getRecords } = require('../helpers/elasticsearch');
 const { publishNewRecord} = require('../helpers/templateHelper');
 const arweaveWallet = require('../helpers/arweave-wallet');
 const paymentManager = require('../helpers/payment-manager');
+const publisherManager = require('../helpers/publisher-manager');
+const mediaManager = require('../helpers/media-manager');
 
 // Initialize ArDrive Turbo with wallet file
 const initTurbo = async () => {
@@ -42,8 +48,9 @@ const getTurbo = async () => {
 router.post('/newRecipe', async (req, res) => {
 
     try {
-        console.log('POST /api/records/newRecord', req.body)
+        console.log('POST /api/publish/newRecipe', req.body)
         const record = req.body;
+        const blockchain = req.body.blockchain || 'arweave'; // Get blockchain parameter, default to arweave
         let recordType = 'recipe';
 
 
@@ -463,130 +470,230 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1) ||
 
 // console.log('nutritionalInfo:', nutritionalInfo);
     console.log('Recipe data:', recipeData);
-    recipeRecord = await publishNewRecord(recipeData, "recipe");
+    recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
 
 
     // const newRecord = await publishNewRecord(record, recordType, publishFiles, addMediaToArweave, addMediaToIPFS, youtubeUrl);
-    const transactionId = newRecord.transactionId;
-    const recordToIndex = newRecord.recordToIndex;
+    const transactionId = recipeRecord.transactionId;
+    const recordToIndex = recipeRecord.recordToIndex;
     // const dataForSignature = newRecord.dataForSignature;
     // const creatorSig = newRecord.creatorSig;
-    res.status(200).json(transactionId, recordToIndex);
+    res.status(200).json({ transactionId, recordToIndex, blockchain });
 } catch (error) {
     console.error('Error publishing record:', error);
     res.status(500).json({ error: 'Failed to publish record' });
 }
 });
 
+// Add specific video record endpoint with YouTube support
 router.post('/newVideo', async (req, res) => {
     try {
         const {
-            videoFile, // Base64 encoded video file
-            accessControl, // Access control settings
-            basicMetadata // Title, description, etc.
+            youtubeUrl,
+            videoUrl, // Direct video URL
+            videoFile, // Base64 encoded video
+            basicMetadata,
+            blockchain = 'arweave',
+            publishTo = { arweave: true, bittorrent: true }
         } = req.body;
 
-        // 1. Generate payment addresses for supported currencies
-        const btcAddress = await paymentManager.getPaymentAddress('btc');
-        // const zcashAddress = await paymentManager.getPaymentAddress('zcash'); // When implemented
+        // Extract media publishing flags from query params or body
+        const publishFiles = req.query.publishFiles !== 'false' && req.body.publishFiles !== false; // Default to true for video endpoint
+        const addMediaToArweave = req.query.addMediaToArweave !== 'false' && publishTo.arweave !== false;
+        const addMediaToIPFS = req.query.addMediaToIPFS === 'true' || publishTo.ipfs === true;
+        const addMediaToArFleet = req.query.addMediaToArFleet === 'true' || publishTo.arfleet === true;
 
-        // 2. Encrypt video content using Lit Protocol
-        const litConditions = {
-            // We'll define access conditions based on payment verification
-            conditionType: "evmBasic",
-            contractAddress: "",
-            standardContractType: "",
-            chain: "polygon",
-            method: "eth_getBalance",
-            parameters: [":userAddress", "latest"],
-            returnValueTest: {
-                comparator: ">",
-                value: "0"
-            }
+        // Create video record structure
+        const videoRecord = {
+            basic: {
+                name: basicMetadata?.name || 'Video Record',
+                description: basicMetadata?.description || '',
+                language: basicMetadata?.language || 'en',
+                date: Math.floor(Date.now() / 1000),
+                nsfw: basicMetadata?.nsfw || false,
+                tagItems: basicMetadata?.tagItems || []
+            },
+            video: {}
         };
 
-        const { encryptedContent, encryptedSymmetricKey } = await encryptContent(
-            videoFile,
-            litConditions
+        // Add video URL to record structure
+        if (youtubeUrl) {
+            videoRecord.video.webUrl = youtubeUrl;
+            videoRecord.video.contentType = 'video/mp4';
+        } else if (videoUrl) {
+            videoRecord.video.webUrl = videoUrl;
+            videoRecord.video.contentType = 'video/mp4';
+        }
+
+        // Publish the record with media processing
+        const result = await publishNewRecord(
+            videoRecord,
+            'video',
+            publishFiles,
+            addMediaToArweave,
+            addMediaToIPFS,
+            youtubeUrl, // Pass YouTube URL for special processing
+            blockchain,
+            addMediaToArFleet
         );
 
-        // 3. Upload encrypted video to Arweave using Turbo
-        const videoBuffer = Buffer.from(encryptedContent, 'base64');
-        const uploadResult = await arweaveWallet.uploadFile(
-            videoBuffer, 
-            'video/mp4',
-            'high'
+        res.status(200).json({
+            success: true,
+            transactionId: result.transactionId,
+            recordToIndex: result.recordToIndex,
+            blockchain: blockchain,
+            message: 'Video record published successfully'
+        });
+
+    } catch (error) {
+        console.error('Error publishing video record:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to publish video record',
+            details: error.message 
+        });
+    }
+});
+
+// Add specific image record endpoint
+router.post('/newImage', async (req, res) => {
+    try {
+        const {
+            imageUrl, // Direct image URL
+            imageFile, // Base64 encoded image
+            basicMetadata,
+            blockchain = 'arweave',
+            publishTo = { arweave: true, bittorrent: true }
+        } = req.body;
+
+        // Extract media publishing flags from query params or body
+        const publishFiles = req.query.publishFiles !== 'false' && req.body.publishFiles !== false; // Default to true for image endpoint
+        const addMediaToArweave = req.query.addMediaToArweave !== 'false' && publishTo.arweave !== false;
+        const addMediaToIPFS = req.query.addMediaToIPFS === 'true' || publishTo.ipfs === true;
+        const addMediaToArFleet = req.query.addMediaToArFleet === 'true' || publishTo.arfleet === true;
+
+        if (!imageUrl && !imageFile) {
+            return res.status(400).json({
+                success: false,
+                error: 'Either imageUrl or imageFile must be provided'
+            });
+        }
+
+        // Create image record structure
+        const imageRecord = {
+            basic: {
+                name: basicMetadata?.name || 'Image Record',
+                description: basicMetadata?.description || '',
+                language: basicMetadata?.language || 'en',
+                date: Math.floor(Date.now() / 1000),
+                nsfw: basicMetadata?.nsfw || false,
+                tagItems: basicMetadata?.tagItems || []
+            },
+            image: {}
+        };
+
+        // Add image URL or file to record structure
+        if (imageUrl) {
+            imageRecord.image.webUrl = imageUrl;
+            imageRecord.image.contentType = 'image/jpeg'; // Default, will be detected from URL
+        }
+
+        // Publish the record with media processing
+        const result = await publishNewRecord(
+            imageRecord,
+            'image',
+            publishFiles,
+            addMediaToArweave,
+            addMediaToIPFS,
+            null, // No YouTube URL for images
+            blockchain,
+            addMediaToArFleet
         );
 
-        // 4. Create the OIP record with access control and payment info
+        res.status(200).json({
+            success: true,
+            transactionId: result.transactionId,
+            recordToIndex: result.recordToIndex,
+            blockchain: blockchain,
+            message: 'Image record published successfully'
+        });
+
+    } catch (error) {
+        console.error('Error publishing image record:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to publish image record',
+            details: error.message 
+        });
+    }
+});
+
+// Add a new general media publishing endpoint
+router.post('/newMedia', async (req, res) => {
+    try {
+        const {
+            mediaFile, // Base64 encoded file
+            mediaUrl, // Direct URL to media
+            youtubeUrl, // YouTube URL (for videos)
+            contentType, // MIME type
+            basicMetadata, // Title, description, etc.
+            blockchain = 'arweave', // Default to arweave
+            publishTo = { arweave: true, bittorrent: true } // Media publishing options
+        } = req.body;
+
+        let mediaConfig = {
+            publishTo: publishTo,
+            blockchain: blockchain,
+            contentType: contentType
+        };
+
+        // Determine media source
+        if (youtubeUrl) {
+            mediaConfig.source = 'youtube';
+            mediaConfig.data = youtubeUrl;
+            mediaConfig.contentType = 'video/mp4';
+        } else if (mediaUrl) {
+            mediaConfig.source = 'url';
+            mediaConfig.data = mediaUrl;
+        } else if (mediaFile) {
+            mediaConfig.source = 'base64';
+            mediaConfig.data = mediaFile;
+        } else {
+            return res.status(400).json({ error: 'No media source provided' });
+        }
+
+        // Process the media
+        const mediaDIDs = await mediaManager.processMedia(mediaConfig);
+
+        // Create record with media DIDs
         const record = {
             basic: {
                 ...basicMetadata,
                 createdAt: new Date().toISOString(),
             },
-            accessControl: {
-                ...accessControl,
-                encryptedContent: uploadResult.id,
-                litConditions: JSON.stringify(litConditions),
-                encryptedSymmetricKey
-            },
-            payment: {
-                addresses: {
-                    bitcoin: {
-                        address: btcAddress.address,
-                        path: btcAddress.path,
-                        publicKey: btcAddress.publicKey
-                    }
-                    // Add Zcash when implemented
-                },
-                price: accessControl.price || 0,
-                currency: accessControl.currency || 'USD'
+            media: {
+                storageNetworks: mediaDIDs.storageNetworks,
+                originalUrl: youtubeUrl || mediaUrl,
+                contentType: contentType
             }
         };
 
-        // 5. Upload the record to Arweave
-        const recordBuffer = Buffer.from(JSON.stringify(record));
-        const recordResult = await arweaveWallet.uploadFile(
-            recordBuffer,
-            'application/json',
-            'medium'
-        );
-
-        // 6. Store payment tracking info in Elasticsearch
-        const contentDidTx = `did:arweave:${recordResult.id}`; // Convert to DID format
-        await client.index({
-            index: 'content_payments',
-            body: {
-                contentId: contentDidTx, // Use DID format
-                videoTxId: uploadResult.id,
-                userId: req.user.id,
-                createdAt: new Date().toISOString(),
-                paymentAddresses: {
-                    bitcoin: btcAddress.address
-                    // Add other currencies here
-                },
-                payments: [], // Will be populated as payments are received
-                price: accessControl.price || 0,
-                currency: accessControl.currency || 'USD'
-            }
-        });
-
+        const newRecord = await publishNewRecord(record, 'media', false, false, false, null, blockchain);
+        
         res.json({
             status: 'success',
+            blockchain: blockchain,
+            transactionId: newRecord.transactionId,
             data: {
-                recordTx: contentDidTx, // Return DID format
-                videoTx: uploadResult.id,
-                paymentAddresses: {
-                    bitcoin: btcAddress.address
-                    // Add other currencies when implemented
-                }
+                contentId: newRecord.didTx,
+                mediaDIDs: mediaDIDs
             }
         });
 
     } catch (error) {
-        console.error('Error publishing locked video:', error);
+        console.error('Error publishing media:', error);
         res.status(500).json({
-            error: 'Failed to publish locked video',
+            error: 'Failed to publish media',
             details: error.message
         });
     }
@@ -595,7 +702,8 @@ router.post('/newVideo', async (req, res) => {
 // Add template publishing endpoint
 router.post('/newTemplate', authenticateToken, async (req, res) => {
     try {
-        const rawTemplate = req.body;
+        const rawTemplate = req.body.template || req.body;
+        const blockchain = req.body.blockchain || 'arweave'; // Default to arweave
         const sectionName = Object.keys(rawTemplate)[0];
         let currentIndex = 0;
         const processedTemplate = {};
@@ -621,11 +729,18 @@ router.post('/newTemplate', authenticateToken, async (req, res) => {
             }
         });
 
-        // Upload template to Arweave using Turbo
+        // Upload template to blockchain using publisher manager
         const templateBuffer = Buffer.from(JSON.stringify(processedTemplate));
-        const uploadResult = await arweaveWallet.uploadFile(
+        const uploadResult = await publisherManager.publish(
             templateBuffer,
-            'application/json'
+            {
+                blockchain: blockchain,
+                tags: [
+                    { name: 'Content-Type', value: 'application/json' },
+                    { name: 'Type', value: 'Template' },
+                    { name: 'App-Name', value: 'OIPArweave' }
+                ]
+            }
         );
 
         // Create the DID
@@ -645,6 +760,7 @@ router.post('/newTemplate', authenticateToken, async (req, res) => {
 
         res.json({
             status: 'success',
+            blockchain: blockchain,
             data: {
                 templateId: templateDid,
                 txid: uploadResult.id,
@@ -657,6 +773,35 @@ router.post('/newTemplate', authenticateToken, async (req, res) => {
         res.status(500).json({
             error: 'Failed to publish template',
             details: error.message
+        });
+    }
+});
+
+router.post('/testEncrypt', async (req, res) => {
+    try {
+        const { content } = req.body;
+        
+        // Use the test condition for simplicity
+        const testCondition = createTestCondition();
+        
+        // Test encryption with minimal payload
+        const { encryptedContent, encryptedSymmetricKey } = await encryptContent(
+            content || "Test content for encryption",
+            testCondition
+        );
+        
+        res.json({
+            success: true,
+            encryptedContent,
+            encryptedSymmetricKey,
+            accessControlConditions: testCondition
+        });
+    } catch (error) {
+        console.error('Error in test encryption:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            details: error
         });
     }
 });

@@ -17,7 +17,7 @@ services:
       - "9300:9300"
     networks:
       - oip-network
-
+    restart: unless-stopped
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.8
     depends_on:
@@ -28,7 +28,7 @@ services:
       - ELASTICCLIENTHOST=http://elasticsearch:9200
     networks:
       - oip-network
-
+    restart: unless-stopped
   ipfs:
     image: ipfs/go-ipfs:latest
     environment:
@@ -41,31 +41,51 @@ services:
       - ipfsdata:/data/ipfs
     networks:
       - oip-network
-
+    restart: unless-stopped
   oip:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     env_file:
       - .env
     ports:
-      - "3005:3005"  # Make sure this matches the port your app listens on
-      - "9229:9229"  # Expose the debugging port
+      - "3005:3005"
+      - "9229:9229"
     environment:
       - NODE_ENV=production
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
+    volumes:
+      - ./media/jfk:/usr/src/app/media/jfk
     depends_on:
       - elasticsearch
     networks:
-      - oip-network
-
+      oip-network:
+        aliases:
+          - oiparweave
+    restart: unless-stopped
   # Self-hosted Text Generation (LLaMA2)
-  # text-generator:
-  #   build: ./text-generator  # Path to your text generator Dockerfile
-  #   ports:
-  #     - "8081:8081"
-  #   networks:
-  #     - oip-network
+  text-generator:
+    build:
+      context: ./text-generator
+      dockerfile: Dockerfile
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    runtime: nvidia
+    deploy:
+      resources:
+        limits:
+          cpus: "16"
+          memory: "120g"
+        reservations:
+          cpus: "8"
+          memory: "64g"
+    ports:
+      - "8081:8081"
+    networks:
+      - oip-network
+    restart: unless-stopped
 
   # Self-hosted Speech Synthesizer (Coqui TTS)
   speech-synthesizer:
@@ -87,18 +107,38 @@ services:
       - "8082:8082"
     networks:
       - oip-network
+    restart: unless-stopped
+
 
   # Ngrok for public access
   ngrok:
     build:
       context: ./ngrok
-    command: start --config /usr/src/app/ngrok.yml --all
+      dockerfile: Dockerfile
+    volumes:
+      - ./ngrok/ngrok.yml:/usr/src/app/ngrok.yml
     environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}  # Add your Ngrok token to the .env file
-    depends_on:
-      - oip
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     ports:
       - "4040:4040"
+    depends_on:
+      - oip
+    networks:
+      - oip-network
+    restart: unless-stopped
+
+  # Bisq Daemon for exchange functionality
+  bisq:
+    build:
+      context: ./bisq-daemon
+      dockerfile: Dockerfile
+    ports:
+      - "9998:9998"
+    volumes:
+      - bisq-data:/root/.local/share/Bisq
+    environment:
+      - BISQ_APP_NAME=bisq-daemon
+      - BISQ_HOME=/root/.local/share/Bisq
     networks:
       - oip-network
 
@@ -109,3 +149,4 @@ networks:
 volumes:
   esdata:
   ipfsdata:
+  bisq-data: 

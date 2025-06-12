@@ -1,6 +1,7 @@
 // routes/creators.js
 const express = require('express');
 const { getCreatorsInDB } = require('../helpers/elasticsearch');
+const { publishNewRecord } = require('../helpers/templateHelper');
 const { Client } = require('@elastic/elasticsearch');
 require('dotenv').config();
 
@@ -52,10 +53,11 @@ router.get('/', async (req, res) => {
 //             //     record.publicKey = req.query.publicKey;
 //             // }
 //             const publishFiles = req.query.publishFiles === 'true';
-//             const addMediaToArweave = req.query.addMediaToArweave === 'false';
+//             const addMediaToArweave = req.query.addMediaToArweave !== 'false'; // Default to true
 //             const addMediaToIPFS = req.query.addMediaToIPFS === 'true';
+//             const addMediaToArFleet = req.query.addMediaToArFleet === 'true'; // Default to false
 //             const youtubeUrl = req.query.youtubeUrl || null;
-//             const newRecord = await publishNewRecord(record, recordType, publishFiles, addMediaToArweave, addMediaToIPFS, youtubeUrl);
+//             const newRecord = await publishNewRecord(record, recordType, publishFiles, addMediaToArweave, addMediaToIPFS, youtubeUrl, blockchain, addMediaToArFleet);
 //             const transactionId = newRecord.transactionId;
 //             const dataForSignature = newRecord.dataForSignature;
 //             const creatorSig = newRecord.creatorSig;
@@ -67,15 +69,20 @@ router.get('/', async (req, res) => {
 //     });
 
 router.post('/newCreator', async (req, res) => {
-    console.log('POST /api/creators/newCreator', req.body)
-    const record = req.body;
-    let recordType = 'creatorRegistration';
-    const newRecord = await publishNewRecord(record, recordType);
-    const transactionId = newRecord.transactionId;
-
-    // const creator = req.body;
-    // const transactionId = await publishNewCreator(creator);
-    // res.status(200).json({ transactionId });
+    try {
+        console.log('POST /api/creators/newCreator', req.body)
+        const record = req.body;
+        const blockchain = req.body.blockchain || 'arweave'; // Accept blockchain parameter
+        let recordType = 'creatorRegistration';
+        const newRecord = await publishNewRecord(record, recordType, false, false, false, null, blockchain);
+        const transactionId = newRecord.transactionId;
+        const recordToIndex = newRecord.recordToIndex;
+        
+        res.status(200).json({ transactionId, recordToIndex, blockchain });
+    } catch (error) {
+        console.error('Error publishing creator:', error);
+        res.status(500).json({ error: 'Failed to publish creator' });
+    }
 });
 
 module.exports = router;

@@ -93,12 +93,108 @@ async function createNotificationsIndex() {
     }
 }
 
-Promise.all([
-    createContentPaymentsIndex(),
-    createNotificationsIndex()
-])
-.then(() => process.exit(0))
-.catch(error => {
-    console.error(error);
-    process.exit(1);
-}); 
+/**
+ * Creates the index for storing cryptocurrency swap data
+ */
+async function createSwapsIndex() {
+    try {
+        const indexName = 'swaps';
+        
+        console.log(`Checking if ${indexName} index exists...`);
+        
+        // Use the exists API with proper error handling
+        const indexExists = await client.indices.exists({
+            index: indexName
+        }).catch(err => {
+            console.error(`Error checking if index exists: ${err.message}`);
+            return { body: false }; // Return a default value in case of error
+        });
+        
+        // Check if the index exists based on the statusCode
+        if (indexExists.statusCode === 404 || indexExists.body === false) {
+            console.log(`Creating ${indexName} index...`);
+            
+            try {
+                await client.indices.create({
+                    index: indexName,
+                    body: {
+                        mappings: {
+                            properties: {
+                                swapId: { type: 'keyword' },
+                                status: { type: 'keyword' },
+                                fromCurrency: { type: 'keyword' },
+                                toCurrency: { type: 'keyword' },
+                                fromAmount: { type: 'float' },
+                                toAmount: { type: 'float' },
+                                depositAddress: { type: 'keyword' },
+                                depositAmount: { type: 'float' },
+                                toAddress: { type: 'keyword' },
+                                userId: { type: 'keyword' },
+                                tradeId: { type: 'keyword' },
+                                expectedRate: { type: 'float' },
+                                created: { type: 'date' },
+                                updated: { type: 'date' },
+                                completed: { type: 'date' },
+                                logs: {
+                                    type: 'nested',
+                                    properties: {
+                                        time: { type: 'date' },
+                                        status: { type: 'keyword' },
+                                        message: { type: 'text' }
+                                    }
+                                },
+                                customData: { type: 'object', enabled: false }
+                            }
+                        },
+                        settings: {
+                            number_of_shards: 1,
+                            number_of_replicas: 0
+                        }
+                    }
+                });
+                console.log(`Index ${indexName} created successfully`);
+            } catch (createError) {
+                // Check if it's just because the index already exists
+                if (createError.meta && createError.meta.body && 
+                    createError.meta.body.error && 
+                    createError.meta.body.error.type === 'resource_already_exists_exception') {
+                    console.log(`Index ${indexName} already exists (created by another process)`);
+                } else {
+                    // If it's a different error, rethrow it
+                    throw createError;
+                }
+            }
+        } else {
+            console.log(`Index ${indexName} already exists`);
+        }
+    } catch (error) {
+        console.warn(`Warning: Error during swaps index creation: ${error.message}`);
+        // Don't throw the error, just log it to avoid stopping the server startup
+    }
+}
+
+/**
+ * Initialize all indices without exiting the process
+ * @returns {Promise} Promise that resolves when all indices are initialized
+ */
+async function initializeIndices() {
+    try {
+        await Promise.all([
+            createContentPaymentsIndex(),
+            createNotificationsIndex(),
+            createSwapsIndex()
+        ]);
+        console.log('All indices initialized successfully');
+        return true;
+    } catch (error) {
+        console.error('Error initializing indices:', error);
+        throw error;
+    }
+}
+
+module.exports = {
+    createContentPaymentsIndex,
+    createNotificationsIndex,
+    createSwapsIndex,
+    initializeIndices
+}; 

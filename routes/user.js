@@ -77,7 +77,7 @@ router.post('/joinWaitlist', async (req, res) => {
 
 
 // Register endpoint
-router.post('/register', authenticateToken, async (req, res) => {
+router.post('/register', async (req, res) => {
     try {
         const { email, password } = req.body;
         console.log('Registering user...', email);
@@ -323,7 +323,7 @@ async function findUserByEmail(email) {
 // }
 
 // Login endpoint
-router.post('/login', authenticateToken, async (req, res) => {
+router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 

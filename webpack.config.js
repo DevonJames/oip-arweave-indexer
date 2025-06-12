@@ -1,4 +1,17 @@
 const path = require('path');
+const webpack = require('webpack');
+const dotenv = require('dotenv');
+
+// Load environment variables
+const env = dotenv.config().parsed || {};
+
+// Create an object with REACT_APP_ prefixed env vars
+const envKeys = Object.keys(env).reduce((prev, next) => {
+  if (next.startsWith('REACT_APP_')) {
+    prev[`process.env.${next}`] = JSON.stringify(env[next]);
+  }
+  return prev;
+}, {});
 
 module.exports = {
   mode: 'development',  // Always use development mode for testing
@@ -26,6 +39,12 @@ module.exports = {
       }
     ]
   },
+  plugins: [
+    new webpack.DefinePlugin({
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+      ...envKeys
+    })
+  ],
   resolve: {
     extensions: ['.js', '.jsx']
   }

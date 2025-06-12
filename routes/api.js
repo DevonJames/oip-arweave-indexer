@@ -29,6 +29,7 @@ router.get('/media', (req, res) => {
     }
 });
 
+
 // Add or update the ping endpoint with a proper keepalive response
 router.get('/ping', (req, res) => {
   // Set headers to prevent caching

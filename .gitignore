@@ -3,6 +3,7 @@ downloads
 docker-compose.yml
 .DS_Store
 .env
+env
 config/arweave-keyfile.json
 config/google-service-account-key.json
 speech-synthesizer/myenv
@@ -10,3 +11,5 @@ speech-synthesizer/packages
 text-generator/packages
 text-generator/myenv
 media
+.env
+.env

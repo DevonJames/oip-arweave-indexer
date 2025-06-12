@@ -1,439 +1,657 @@
-# OIP Arweave Indexer
+# OIPArweave - Open Index Protocol for Arweave & Irys
 
-This project provides an API to index and interact with records stored on the Arweave blockchain according to the OIP (Open Index Protocol) specification, with data remapped to fit various templates also stored in Arweave. The indexer periodically checks Arweave for new records and templates and updates the local Elasticsearch database, enabling fast and efficient querying.
+OIPArweave is a comprehensive indexing and publishing system for blockchain records following the Open Index Protocol (OIP) specification. It indexes "OIP" records from the Arweave blockchain into a local Elasticsearch database for fast JSON-based interactions, while also supporting record publishing to both Arweave (via Turbo) and Irys networks.
 
-## Features
+## Key Features
 
-- **Blockchain indexing**: Indexes Arweave transactions with the "IndexingSpec": "OIP" tag.
-- **Elasticsearch integration**: Manages records with Elasticsearch.
-- **API Endpoints**: Provides endpoints to interact with records, creators, and templates.
-- **Embedded records**: Supports nested records, allowing media to be published once and referenced in multiple records.
+- **Dual Blockchain Support**: Publish records to either Arweave (via Turbo SDK) or Irys network
+- **Multi-Network Media Publishing**: Store media across multiple decentralized networks with DID addresses
+- **Blockchain Indexing**: Automatically indexes Arweave transactions with OIP tags
+- **Elasticsearch Integration**: Local database for fast querying and JSON interactions
+- **AI-Powered Features**:
+  - Document analysis and summarization
+  - AI-generated podcasts from news records
+  - Automatic author and date extraction from articles
+  - Recipe ingredient analysis and nutritional information lookup
+- **Enhanced Media Support**: Handles images, videos, audio, and text with multiple storage options:
+  - **Arweave/Irys**: Primary blockchain storage
+  - **IPFS**: Content-addressed distributed storage
+  - **ArFleet**: Time-limited decentralized storage
+  - **BitTorrent**: Peer-to-peer distribution (automatic)
+- **DID Addressing**: All media stored with proper Decentralized Identifier (DID) addresses
+- **Embedded Records**: Supports nested records to avoid data duplication
+- **Web Scraping**: Archive web articles and recipes to the permaweb
 
-## Installation
+## System Requirements
 
 ### Prerequisites
 
 - Docker & Docker Compose
 - Node.js (version 16 or higher if running locally without Docker)
+- Arweave wallet (for publishing)
+- API Keys (for AI features):
+  - OpenAI API key
+  - Twitter Bearer Token (for tweet scraping)
+  - ElevenLabs API key (for speech synthesis)
+- Optional: Local IPFS node for IPFS storage
+- Optional: ArFleet client for temporary storage
 
-- ### Installing `canvas` Dependency
+### Canvas Module Dependencies
 
-The `canvas` module is required for certain functionalities, such as rendering or processing images. To use it, ensure the necessary system libraries are installed.
+The `canvas` module is required for image processing. Install system dependencies:
 
-#### Canvas Installation Steps
-
-1. **Install the `canvas` module**:  
-Run the following command to install the `canvas` module:
-   ```bash
-   npm install canvas
-   ```
-
-2.	**System Dependencies**:
-Depending on your operating system, install the necessary system-level libraries:
-	•	Ubuntu/Debian:
-    `sudo apt-get install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev`
-
-    •	Fedora:
-    `sudo yum install gcc-c++ cairo-devel pango-devel libjpeg-turbo-devel giflib-devel`
-
-    •	macOS:
-Install the libraries using Homebrew:
-    `brew install pkg-config cairo pango libpng jpeg giflib librsvg`
-
-    •	Windows:
-Follow the instructions provided in the node-canvas Wiki for Windows setup.
-
-3.	**Rebuild Native Bindings (if required)**:
-After installing system dependencies, rebuild the canvas bindings:
-`npm rebuild canvas`
-
-4.	**Verify Installation**:
-Run the following code snippet to ensure the canvas module works correctly:
-    ```
-    const { createCanvas } = require('canvas');
-    const canvas = createCanvas(200, 200);
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'green';
-    ctx.fillRect(10, 10, 150, 100);
-    console.log('Canvas module is working correctly');
-    ```
-
-If you encounter issues during installation or runtime, refer to the node-canvas installation guide for detailed troubleshooting steps.
-
-### Setting Up Environment Variables
-
-To run the application, ensure you have an `.env` file in the project root that looks like this:
-
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
 ```
+
+**macOS:**
+```bash
+brew install pkg-config cairo pango libpng jpeg giflib librsvg
+```
+
+**Windows:**
+See the [node-canvas Wiki](https://github.com/Automattic/node-canvas/wiki/Installation:-Windows) for setup instructions.
+
+## Installation
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/yourusername/OIPArweave.git
+cd OIPArweave
+```
+
+### 2. Install dependencies
+```bash
+npm install
+```
+
+### 3. Environment Configuration
+
+Create an `.env` file in the project root:
+
+```env
+# Arweave Configuration
 WALLET_FILE=config/arweave-keyfile.json
+TURBO_URL=https://turbo.ardrive.io
+
+# Server Configuration
 PORT=3005
+
+# Elasticsearch Configuration
 ELASTICSEARCHHOST=http://elasticsearch:9200
 ELASTICCLIENTUSERNAME=elastic
 ELASTICCLIENTPASSWORD=tVUsFYYXexZshWT3Jbhx
-OPENAI_API_KEY=
-TWITTER_BEARER_TOKEN=
+
+# API Keys (Required for AI features)
+OPENAI_API_KEY=your-openai-api-key
+TWITTER_BEARER_TOKEN=your-twitter-bearer-token
+ELEVENLABS_API_KEY=your-elevenlabs-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+
+# Optional Services
+FIRECRAWL_API_KEY=your-firecrawl-api-key
+X_API_KEY=your-x-api-key
+
+# Lit Protocol (for content encryption)
+LIT_PKP_PRIVATE_KEY=your-lit-pkp-private-key
+
+# Bitcoin HD Wallet (for payment features)
+BTC_SEED_PHRASE=your-bitcoin-seed-phrase
+
+# Media Storage Configuration (Optional)
+IPFS_HOST=localhost
+IPFS_PORT=5001
+ARFLEET_CLIENT_PATH=./arfleet
 ```
 
-#### Arweave Keyfile Setup
+### 4. Arweave Wallet Setup
 
-1. Follow [this guide](https://docs.arweave.org/developers/wallets/arweave-wallet) to create a new Arweave keyfile using [Arweave.app](https://arweave.app).
-2. After creating the keyfile, click the **Backup Keyfile** button and store it as `config/arweave-keyfile.json` as the `.env` expects.
+1. Create a new Arweave wallet at [Arweave.app](https://arweave.app)
+2. Click **Backup Keyfile** and save as `config/arweave-keyfile.json`
+3. Fund your wallet with AR tokens for publishing
 
-#### Elasticsearch Credentials
+### 5. Docker Setup
 
-If you change the Elasticsearch username and password, update the `.env` file **and** `docker-compose.yml` like this:
-
-```
-yaml
-environment:
-  - NODE_ENV=production
-  - ELASTICSEARCH_HOST=http://elasticsearch:9200
-  - ELASTICCLIENTUSERNAME=elastic
-  - ELASTICCLIENTPASSWORD=your-new-password
+Start all services:
+```bash
+./start.sh
 ```
 
-#### Scrape Route Configuration
+This starts:
+- OIPArweave API server
+- Elasticsearch
+- Kibana (for data visualization)
+- IPFS node (if configured)
 
-To use the /scrape route, you must provide both:
+## Enhanced Media Publishing System
 
-	•	OPENAI_API_KEY
-	•	TWITTER_BEARER_TOKEN
+### Multi-Network Storage with DID Addresses
 
-These keys are required to access OpenAI and Twitter services used by the scrape route.
+The system now properly implements multi-network media publishing with Decentralized Identifier (DID) addresses. Media files are stored across multiple networks and referenced in records with their respective DIDs.
 
-### Docker Setup
+#### Record Structure
 
-1. **Build and start the services**:
+**Before (Legacy):**
+```json
+{
+  "image": {
+    "webUrl": "https://api.oip.onl/api/media?id=hash"
+  }
+}
+```
 
-    ```bash
-    docker-compose up --build
-    ```
-    
-    This will spin up the application, Elasticsearch, Kibana, and IPFS in a Docker network.
+**After (Enhanced):**
+```json
+{
+  "image": {
+    "originalUrl": "https://example.com/original.jpg",
+    "storageNetworks": [
+      {
+        "network": "arweave",
+        "did": "did:arweave:abc123",
+        "url": "https://arweave.net/abc123",
+        "provider": "turbo"
+      },
+      {
+        "network": "ipfs",
+        "did": "did:ipfs:def456",
+        "url": "https://ipfs.io/ipfs/def456",
+        "provider": "ipfs"
+      },
+      {
+        "network": "bittorrent",
+        "did": "did:bittorrent:ghi789",
+        "url": "magnet:?xt=urn:btih:ghi789",
+        "provider": "bittorrent"
+      }
+    ],
+    "contentType": "image/jpeg"
+  }
+}
+```
 
-2. **Stop services**:
+### Media Publishing Flags
 
-    ```bash
-    docker-compose down
-    ```
+Control which networks to use for media storage:
 
-##API Endpoints
+```javascript
+// Available flags:
+publishFiles = true/false        // Whether to process media at all
+addMediaToArweave = true/false   // Publish to Arweave (default: true)
+addMediaToIPFS = true/false      // Publish to IPFS (default: false)
+addMediaToArFleet = true/false   // Publish to ArFleet (default: false)
+// BitTorrent is always enabled for distribution redundancy
+```
 
-1. Records Endpoints
+#### Flag Behavior
 
-	•	/api/records/newRecord: Create a new record and publish it in the blockchain.
-	
-	•	/api/records: Fetch records that have been indexed in the blockchain and saved into the local elasticsearch database.
+- **Without `publishFiles`**: Only metadata JSON published, original URLs preserved
+- **With `publishFiles=true`**: Media processed and published according to flags
+- **Default networks**: Arweave + BitTorrent (if no specific flags set)
 
-2. Creators Endpoints
+## API Endpoints
 
-	•	/api/creators: Manage creator data, including querying records by creator or adding new creator information.
+### Enhanced Publishing Endpoints
 
-3. Templates Endpoints
-
-	•	/api/templates: Define and retrieve templates associated with records, used for standardizing metadata formats.
-
-4. Scrape Endpoint
-
-	•	/api/scrape: Scrape articles from the web and archive them onto the permaweb.
-
-5. Health Endpoint
-
-	•	/api/health: Provides a basic health check for the API and server status.
-
-### Records	    
-### newRecord
-
-Create a new record. 
-
+#### Publish Record with Media Control
 `POST /api/records/newRecord`
 
-Body:
-
-```
+```json
 {
-  "record": {
-    "creatorRegistration": {
-      "handle": "creatorHandle",
-      "surname": "Doe"
-    },
-    "basic": {
-      "name": "Sample Record"
-    }
+  "blockchain": "arweave",
+  "publishFiles": true,
+  "addMediaToArweave": true,
+  "addMediaToIPFS": true,
+  "addMediaToArFleet": false,
+  "basic": {
+    "name": "My Record with Media"
+  },
+  "image": {
+    "webUrl": "https://example.com/image.jpg"
   }
 }
 ```
+
+#### Publish Video with Multi-Network Storage
+`POST /api/publish/newVideo`
+
+```json
+{
+  "youtubeUrl": "https://youtube.com/watch?v=123",
+  "basicMetadata": {
+    "name": "My Video",
+    "description": "Video description"
+  },
+  "publishTo": {
+    "arweave": true,
+    "ipfs": true,
+    "arfleet": false,
+    "bittorrent": true
+  },
+  "blockchain": "arweave"
+}
+```
+
+#### General Media Publishing
+`POST /api/publish/newMedia`
+
+```json
+{
+  "mediaUrl": "https://example.com/document.pdf",
+  "contentType": "application/pdf",
+  "basicMetadata": {
+    "name": "Important Document"
+  },
+  "publishTo": {
+    "arweave": true,
+    "ipfs": true
+  }
+}
+```
+
+### Records Management
+
+#### Create New Record
+`POST /api/records/newRecord`
+
+**New Feature**: Blockchain selection
+```json
+{
+  "blockchain": "arweave",  // or "irys" (optional, defaults to "arweave")
+  "basic": {
+    "name": "Sample Record",
+    "language": "en"
+  }
+}
+```
+
 Query Parameters:
+- `recordType` - Required, template name
+- `blockchain` - Optional, "arweave" or "irys"
+- `publishFiles` - Optional, enable media processing
+- `addMediaToArweave` - Optional, publish media to Arweave
+- `addMediaToIPFS` - Optional, publish media to IPFS
+- `addMediaToArFleet` - Optional, publish media to ArFleet
 
-	•	recordType - Required, must be the name of one of the templates used in the record.
+#### Get Records
+`GET /api/records`
 
-The `newRecord` endpoint allows embedding records inside other records. This can be used to reference a piece of media multiple times without duplicating metadata.
+Query Parameters:
+- `resolveDepth` - Resolve embedded records (0-3)
+- `sortBy` - Sort field (e.g., `inArweaveBlock:desc`)
+- `limit` - Number of results
+- `recordType` - Filter by type
+- `creatorHandle` - Filter by creator
 
-#### Example POST to `/api/records/newRecord?recordType=post`
-body:
+### Publishing Endpoints
 
-```
+#### Publish Recipe
+`POST /api/publish/newRecipe`
+```json
 {
+  "blockchain": "arweave",
+  "recipe": {
     "basic": {
-        "name": "Fmr. AG Barr Says Far-Left Greater Threat To Country Than Trump",
-        "language": "En",
-        "date": 1713783811,
-        "description": "It is a heavy-handed bunch of thugs ... that’s where the threat is",
-        "urlItems": [{
-            "associatedUrlOnWeb": {
-                "url": "https://scnr.com/content/f06bfaec-005c-11ef-9c93-0242ac1c0002"
-            }
-        }],
-        "nsfw": false,
-        "tagItems": ["donald-trump", "bill-barr"]
+      "name": "Chocolate Cake"
     },
-    "post": {
-        "bylineWriter": "Chris Bertman",
-        "articleText": {
-            "text": {
-                "ipfsAddress": "QmY6U4y7JZ2XeZ3VFuqjySQ5xZavUbiGczc9gVbuWUE89H",
-                "filename": "article.md",
-                "contentType": "text/markdown"
-            }
-        },
-        "featuredImage": {
-            "basic": {
-                "name": "Fmr. AG Barr",
-                "date": 0,
-                "language": "en",
-                "nsfw": false
-            },
-            "image": {
-                "height": 409,
-                "width": 720,
-                "size": 510352,
-                "contentType": "image/x-png"
-            },
-            "associatedUrlOnWeb": {
-                "url": "https://scnr.com/image/440f1c8b-a034-11ee-9c93-0242ac1c0002"
-            }
-        }
-    }
-}
-```
-
-#### Compressed Reference Based Records in Blockchain
-On the Arweave blockchain, this record will be stored like this:
-
-```
-[
-  {
-    "0": "Fmr. AG Barr Says Far-Left Greater Threat To Country Than Trump",
-    "1": "'It is a heavy-handed bunch of thugs ... that’s where the threat is'",
-    "2": 1713783811,
-    "3": 37,
-    "6": false,
-    "8": [
-      "donald-trump",
-      "bill-barr"
-    ],
-    "10": [
-      "did:arweave:4wM6oEEMTvMzOHdqj8qur5alN_AQz0pq73Z8BdNcaoE"
-    ],
-    "t": "FqFcGi1eVb4iSwzVihsZi8tcDwQ73wAMNwF3WrPyKFc"
-  },
-  {
-    "0": "Chris Bertman",
-    "1": null,
-    "2": null,
-    "3": "did:arweave:bK0id2osDDR4_6qJfuNcpqbVtdbhSsLXfY8Qm9d9L-Q",
-    "4": "did:arweave:5D40mYttXurPwL2kKBrlCrMA8kajMUTAtnD3TRU8kYg",
-    "t": "Bng-cS49UYxDicfiD5zLqOclFogyqSwSOyczHng3dgM"
-  },
-  {
-    "0": "https://scnr.com/content/f06bfaec-005c-11ef-9c93-0242ac1c0002",
-    "t": "6AiFwK-2g8HgrRU6zSZYup32rz1aEAcppFsewGdig7Y"
+    "recipe": [{
+      "section": "Main",
+      "ingredient": ["flour", "sugar"],
+      "ingredient_amount": [2, 1],
+      "ingredient_unit": ["cups", "cup"]
+    }]
   }
-]
-```
-
-with the tags:
-
-```
-Content-Type: application/json
-Index-Method: OIP
-Ver: 0.7.2
-Type: Record
-RecordType: post
-Creator: u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0
-CreatorSig: pYRF5mNPiHknHh3senyXV3GmVNtQwpmhMOS3w8JdmFJYgKmuycveeGwSs+cDMgyFk9Yj8QGkBdytKg2NYfDZxzVOVknaa0fy2pMK72cgYQMcb5tSyiDV041+h/9+74oauCGyUrzskqeaECzoFlqx8G/enzua1uUwFdQS79DoHBo4/EbiiCVvB5HH43PG19Rq5EpV7HT1W3XDLdkoMfF+gtuLF8SWHwENdArZ166ks/a5OQUqVkra9zfK46OctSqhWg5SO3SUWKE/+sKp5uCPczX0/DmYwAahRw3DSVe+gtN3RR/bHuMbT1A7myqsjYuYOVD30rGOIhLA/BQ+xei4sncW1Sza8j3ypRERdfWQav9WDkcgkYnZoOpAaz/ETg5FOHuCLdIyUySK8lb0CodbSHZFSaAG6Q6qbMZzvujsq/0XvbKpgNWOc72w69fGH0Qof82u4AAqBbaf9++XFjeALZhiuC4ex3O9jj4Axzw1nhrUI7bst7awNQDSj3iK+Y+KRR54a9WIgqrYA3yLhRzZ1m1MT/lc1GWfAdUSonel2k6tQffDiy7zYZ4v/ujjZEE9SY07usJsKuPLppr+9eh9wSKQW34N6RoVE+x4gJ8uBjj17PWojXbAEBoLEB4piEEfEF8FdreqcKo0q0HqVwa/G41z5gJnypsK33yFBZAMj2Q=
-```
-
-### getRecords
-
-`/api/records`
-
-Newly published records are periodically retrieved from the blockchain and expanded back into full JSON objects when they get stored in the local elasticsearch database, as shown below. 
-
-```
-{
-    "data": [
-        {
-            "basic": {
-                "name": "Fmr. AG Barr Says Far-Left Greater Threat To Country Than Trump",
-                "description": "'It is a heavy-handed bunch of thugs ... that’s where the threat is'",
-                "date": 1713783811,
-                "language": "English",
-                "tagItems": [
-                    "donald-trump",
-                    "bill-barr"
-                ],
-                "urlItems": [
-                    "did:arweave:4wM6oEEMTvMzOHdqj8qur5alN_AQz0pq73Z8BdNcaoE"
-                ]
-            }
-        },
-        {
-            "post": {
-                "bylineWriter": "Chris Bertman",
-                "articleText": "did:arweave:bK0id2osDDR4_6qJfuNcpqbVtdbhSsLXfY8Qm9d9L-Q",
-                "featuredImage": "did:arweave:5D40mYttXurPwL2kKBrlCrMA8kajMUTAtnD3TRU8kYg"
-            }
-        }
-    ]
 }
 ```
 
-Note that a number of the fields have values that start with `did:arweave:`, these are DID references to other records, embedding them into the top level record without redundant record data.
-
-####Resolving DID references to embedded records
-
-Adding `resolveDepth=2`, you can resolve embedded records:
-
-```
+#### Publish Video with Access Control
+`POST /api/publish/newVideo`
+```json
 {
-    "data": [
-        {
-            "basic": {
-                "name": "Fmr. AG Barr Says Far-Left Greater Threat To Country Than Trump",
-                "description": "It is a heavy-handed bunch of thugs ... that’s where the threat is",
-                "date": 1713783811,
-                "language": "English",
-                "nsfw": false,
-                "tagItems": ["donald-trump", "bill-barr"],
-                "urlItems": [
-                    {
-                        "associatedURLOnWeb": {
-                            "url": "https://scnr.com/content/f06bfaec-005c-11ef-9c93-0242ac1c0002"
-                        }
-                    }
-                ]
-            }
-        },
-        {
-            "post": {
-                "bylineWriter": "Chris Bertman",
-                "articleText": {
-                    "text": {
-                        "ipfsAddress": "QmY6U4y7JZ2XeZ3VFuqjySQ5xZavUbiGczc9gVbuWUE89H",
-                        "filename": "article.md",
-                        "contentType": "text/markdown"
-                    }
-                },
-                "featuredImage": {
-                    "basic": {
-                        "name": "Fmr. AG Barr",
-                        "date": 0,
-                        "language": "English",
-                        "nsfw": false
-                    },
-                    "image": {
-                        "height": 409,
-                        "width": 720,
-                        "size": 510352,
-                        "contentType": "image/x-png"
-                    }
-                }
-            }
-        }
-    ]
+  "blockchain": "arweave",
+  "videoFile": "base64-encoded-video",
+  "accessControl": {
+    "price": 0.001,
+    "currency": "BTC"
+  },
+  "basicMetadata": {
+    "name": "My Video",
+    "description": "Video description"
+  }
 }
 ```
 
-####Sorting Records
+### AI-Powered Scraping
 
-This endpoint also supports sorting, by using the query param **sortBy** and specifying various fields from the record's OIP metadata, as well as asc or desc, like:
+#### Scrape & Archive Article
+`POST /api/scrape/article`
+```json
+{
+  "url": "https://example.com/article",
+  "html": "optional-html-content",
+  "userId": "user123",
+  "blockchain": "arweave",
+  "screenshots": [],
+  "totalHeight": 1200
+}
+```
 
-`/api/records?sortBy=inArweaveBlock:asc`
+Features:
+- Automatic text summarization
+- AI-generated audio narration
+- Author and date extraction
+- Tag generation
+- Screenshot archival
 
-####Filtering Records
+#### Scrape Recipe
+`POST /api/scrape/recipe`
+```json
+{
+  "url": "https://example.com/recipe",
+  "userId": "user123",
+  "blockchain": "arweave"
+}
+```
 
-It also supports optional filters of OIP metadata like template, creatorHandle, txid, didTx.
+Features:
+- Ingredient extraction and normalization
+- Nutritional information lookup
+- Automatic unit conversion
+- Multi-section recipe support
 
-Example query:
+### AI Generation
 
-`/api/records?resolveDepth=2&sortBy=inArweaveBlock:asc&creatorHandle=Player6&template=post`
+#### Generate Chat Response
+`POST /api/generate/chat`
+```json
+{
+  "userInput": "Tell me about blockchain",
+  "conversationHistory": [],
+  "personality": {
+    "name": "Assistant",
+    "model": "grok-2",
+    "temperature": 0.7
+  }
+}
+```
 
-## Creators
+#### Text-to-Speech
+`POST /api/generate/tts`
+```json
+{
+  "text": "Hello world",
+  "voice": "rachel",
+  "modelId": "eleven_turbo_v2"
+}
+```
 
-### GetCreators
+### Templates
 
-Fetch all registered creators.
-
-`GET /api/creators`
-
-## Templates
-
-### GetTemplates
-
-Fetch all templates stored in the database.
-
-Example query:
+#### Get Templates
 `GET /api/templates`
 
-### NewTemplate
-
-POST /api/templates/newTemplate
-
-Create a new template.
-
-Body
-
-```
+#### Create Template
+`POST /api/templates/newTemplate`
+```json
 {
-  "name": "Sample Template",
-  "fields": {
+  "blockchain": "arweave",
+  "templateName": {
     "field1": "string",
-    "field2": "enum"
+    "field2": "enum",
+    "field2Values": [
+      {"code": "val1", "name": "Value 1"},
+      {"code": "val2", "name": "Value 2"}
+    ]
   }
 }
 ```
 
-### Scrape
+### Creators
 
-* Do not attempt to use this endpoint unless you have filled in your twitter and open ai api keys in your .env:
-
-```
-OPENAI_API_KEY=YOUROPENAIAPIKEY
-TWITTER_BEARER_TOKEN=YOURTWITTERBEARERTOKEN
-```
-#### Get Article
-
-`GET api/scrape/article/stream`
-
-Query Params:
-
-```
-url
+#### Register Creator
+`POST /api/creators/newCreator`
+```json
+{
+  "blockchain": "arweave",
+  "creatorRegistration": {
+    "handle": "myhandle",
+    "surname": "Smith"
+  }
+}
 ```
 
-#### Summarize Articles
+## Blockchain Publishing
 
-`POST api/scrape/articles/summary`
+### Choosing a Blockchain
 
-Body:
+All publishing endpoints accept an optional `blockchain` parameter:
 
+- **`"arweave"`** (default) - Publishes to Arweave using Turbo SDK
+  - Permanent storage
+  - Higher cost
+  - Ideal for long-term archival
+
+- **`"irys"`** - Publishes to Irys network
+  - Different cost structure
+  - Fast data availability
+  - Good for frequently accessed data
+
+Example:
+```bash
+curl -X POST http://localhost:3005/api/records/newRecord \
+  -H "Content-Type: application/json" \
+  -d '{
+    "blockchain": "irys",
+    "recordType": "post",
+    "basic": {"name": "My Post"}
+  }'
 ```
-articles
+
+## Multi-Network Storage System
+
+The enhanced media publishing system supports multiple storage backends with proper DID addressing:
+
+### Supported Networks
+
+1. **Arweave** (via Turbo) - Primary blockchain storage
+   - **DID Format**: `did:arweave:{transaction_id}`
+   - **URL**: `https://arweave.net/{id}`
+   - Permanent storage on the permaweb
+   - Default option for all media
+
+2. **Irys** - Alternative blockchain storage
+   - **DID Format**: `did:irys:{transaction_id}`
+   - **URL**: `https://gateway.irys.xyz/{id}`
+   - Fast data availability
+   - Alternative to Arweave
+
+3. **IPFS** - Content-addressed distributed storage
+   - **DID Format**: `did:ipfs:{cid}`
+   - **URL**: `https://ipfs.io/ipfs/{cid}`
+   - Content deduplication
+   - Distributed network storage
+
+4. **ArFleet** - Time-limited decentralized storage
+   - **DID Format**: `did:arfleet:{arfleet_id}`
+   - **URL**: `arfleet://{id}`
+   - Temporary storage (30 days default)
+   - Cost-effective for temporary content
+
+5. **BitTorrent** - Peer-to-peer distribution
+   - **DID Format**: `did:bittorrent:{info_hash}`
+   - **URL**: `magnet:?xt=urn:btih:{hash}`
+   - Always enabled for redundancy
+   - Excellent for content distribution
+
+### Usage Examples
+
+#### URL-Only Publishing (No Media Processing)
+```javascript
+const record = {
+  basic: { name: "Article" },
+  image: { webUrl: "https://example.com/image.jpg" }
+};
+
+// publishFiles = false, so original URL is preserved
+await publishNewRecord(record, 'post', false);
 ```
 
-### Health
+#### Multi-Network Media Publishing
+```bash
+curl -X POST http://localhost:3005/api/records/newRecord \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recordType": "post",
+    "publishFiles": true,
+    "addMediaToArweave": true,
+    "addMediaToIPFS": true,
+    "addMediaToArFleet": false,
+    "basic": {"name": "My Post"},
+    "image": {"webUrl": "https://example.com/image.jpg"}
+  }'
+```
 
-`GET /api/health`
+#### YouTube Video Processing
+```bash
+curl -X POST http://localhost:3005/api/publish/newVideo \
+  -H "Content-Type: application/json" \
+  -d '{
+    "youtubeUrl": "https://youtube.com/watch?v=123",
+    "publishTo": {
+      "arweave": true,
+      "ipfs": true,
+      "bittorrent": true
+    }
+  }'
+```
 
-Responds with status code 200 and the string `status: 'OK'` if OIPArweave is running properly 
+## Monitoring & Analytics
+
+- **Elasticsearch**: Browse indexed data at http://localhost:9200
+- **Kibana**: Visualize data at http://localhost:5601
+- **Health Check**: `GET /api/health`
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run media publishing tests only
+npm run test:media
+
+# Run publisher manager tests
+npm run test:publisher
+```
+
+### Test Coverage
+
+The test suite includes:
+- **Media Publishing Tests**: Multi-network publishing, DID formatting, error handling
+- **Publisher Manager Tests**: Blockchain publishing, configuration validation
+- **Integration Tests**: Flag behavior, record updating
+- **Error Handling Tests**: Network failures, validation
+
+### Testing Publisher Manager
+```bash
+# Test balance and pricing
+node test/test-publisher.js
+
+# Test Arweave publishing
+node test/test-publisher.js --publish-arweave
+
+# Test Irys publishing  
+node test/test-publisher.js --publish-irys
+```
+
+### Manual Testing
+
+1. **Start the backend services**:
+   ```bash
+   ./start.sh
+   ```
+
+2. **Test basic media publishing**:
+   ```bash
+   curl -X POST http://localhost:3005/api/publish/newMedia \
+     -H "Content-Type: application/json" \
+     -d '{
+       "mediaUrl": "https://example.com/test.jpg",
+       "contentType": "image/jpeg",
+       "basicMetadata": {"name": "Test Image"},
+       "publishTo": {"arweave": true, "ipfs": true}
+     }'
+   ```
+
+## Documentation
+
+Comprehensive documentation is available:
+
+- **Media Publishing System**: `docs/MEDIA_PUBLISHING.md` - Complete guide to the multi-network media system
+- **API Documentation**: Available in endpoint comments and test files
+- **Configuration Guide**: See environment variables section above
+- **Troubleshooting**: Common issues and solutions below
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Canvas module errors**: Ensure system dependencies are installed
+2. **Elasticsearch connection**: Check Docker containers are running with `./start.sh`
+3. **Publishing fails**: Verify wallet has sufficient funds
+4. **AI features not working**: Check API keys in `.env`
+5. **IPFS publishing fails**: Ensure IPFS node is running on localhost:5001
+6. **ArFleet errors**: Check ArFleet client is available and executable
+7. **Media processing timeouts**: Increase timeout or check network connectivity
+
+### Debug Mode
+
+Enable debug logging:
+```bash
+DEBUG=media-manager npm start  # For media publishing debug
+DEBUG=* npm start              # For all debug output
+```
+
+### Media Publishing Debug
+
+Set environment variable for verbose media processing logs:
+```bash
+DEBUG=media-manager npm start
+```
+
+## Migration Notes
+
+### Backward Compatibility
+
+- Existing records continue to work unchanged
+- Old API endpoints maintain current behavior by default
+- New functionality is opt-in via `publishFiles` and network flags
+
+### Gradual Migration
+
+1. **Phase 1**: Deploy new system with default behavior unchanged
+2. **Phase 2**: Enable multi-network publishing for new records
+3. **Phase 3**: Optionally migrate existing records to new format
+
+## License
+
+MIT License - see LICENSE file for details
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Support
+
+For issues and questions:
+- Open an issue on GitHub
+- Check existing documentation in `/docs`
+- Review test files for usage examples
+- See `docs/MEDIA_PUBLISHING.md` for detailed media system documentation

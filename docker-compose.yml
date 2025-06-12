@@ -17,6 +17,7 @@ services:
       - "9300:9300"
     networks:
       - oip-network
+    restart: unless-stopped
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.8
@@ -28,6 +29,7 @@ services:
       - ELASTICCLIENTHOST=http://elasticsearch:9200
     networks:
       - oip-network
+    restart: unless-stopped
 
   ipfs:
     image: ipfs/go-ipfs:latest
@@ -58,6 +60,7 @@ services:
       - elasticsearch
     networks:
       - oip-network
+    restart: unless-stopped
 
   # Self-hosted Text Generation (LLaMA2)
   # text-generator:
@@ -76,6 +79,7 @@ services:
       - "8082:8082"
     networks:
       - oip-network
+    restart: unless-stopped
 
   # Ngrok for public access
   ngrok:
@@ -89,7 +93,22 @@ services:
       - "4040:4040"
     networks:
       - oip-network
+    restart: unless-stopped
 
+  # Bisq Daemon for exchange functionality (disabled due to build issues)
+  # bisq:
+  #   build:
+  #     context: ./bisq-daemon
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "9998:9998"  # REST API port
+  #   volumes:
+  #     - bisq-data:/root/.local/share/Bisq
+  #   environment:
+  #     - BISQ_APP_NAME=bisq-daemon
+  #     - BISQ_HOME=/root/.local/share/Bisq
+  #   networks:
+  #     - oip-network
 
 networks:
    oip-network:
@@ -98,3 +117,4 @@ networks:
 volumes:
   esdata:
   ipfsdata:
+  bisq-data:  # Added for Bisq data persistence

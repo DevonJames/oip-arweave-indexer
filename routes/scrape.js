@@ -20,7 +20,9 @@ const { timeout } = require('../config/arweave.config');
 const { getRecords, indexRecord, searchCreatorByAddress } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
-const { ongoingScrapes } = require('../helpers/sharedState.js'); // Adjust the path to store.js
+const { ongoingScrapes, cleanupScrape } = require('../helpers/sharedState.js'); // Adjust the path to store.js
+// const { retryAsync } = require('../helpers/utils');
+const { uploadToArFleet, publishVideoFiles, publishArticleText, publishImage } = require('../helpers/templateHelper');
 
 // const { FirecrawlApp } = require('@mendable/firecrawl-js');
 // const app = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY });
@@ -445,8 +447,8 @@ const cleanUrl = (url) => {
   return urlObj.origin + urlObj.pathname;
 };
 
-async function publishArticleAndAttachedMedia(articleData, $, url, html, res) {
-  console.log('test test url:', url); 
+async function publishArticleAndAttachedMedia(articleData, $, url, html, res, blockchain = 'arweave') {
+  // console.log('test test url:', url, 'blockchain:', blockchain);
   // Initialize an array to hold YouTube URLs
   let youtubeUrls = [];
 
@@ -504,246 +506,273 @@ const mimeTypes = {
   // console.log({articleTextURL},'articleTextBittorrentAddress', articleTextAddresses.torrent.magnetURI);
   // articleTextBittorrentAddress = articleTextAddresses.torrent.magnetURI;
 // let hostedImageUrl
-  if (articleData.embeddedImage) {
-    const imageUrl = articleData.embeddedImage;
-    console.log('imageUrl', imageUrl);
+  // if (articleData.embeddedImage) {
+  //   const imageUrl = articleData.embeddedImage;
+  //   console.log('imageUrl', imageUrl);
 
-    // Extract the filename and file type from the URL
-    let parsedPath = path.parse(new URL(imageUrl).pathname);
-    let fileName = parsedPath.base;
-    let fileType = parsedPath.ext;
+  //   // Extract the filename and file type from the URL
+  //   let parsedPath = path.parse(new URL(imageUrl).pathname);
+  //   let fileName = parsedPath.base;
+  //   let fileType = parsedPath.ext;
 
-    // Check if the URL contains a query parameter that points to a filename
-    const urlObj = new URL(imageUrl);
-    if (urlObj.searchParams.has('url')) {
-      const queryUrl = urlObj.searchParams.get('url');
-      parsedPath = path.parse(new URL(queryUrl).pathname);
-      fileName = parsedPath.base;
-      fileType = parsedPath.ext;
-    }
+  //   // Check if the URL contains a query parameter that points to a filename
+  //   const urlObj = new URL(imageUrl);
+  //   if (urlObj.searchParams.has('url')) {
+  //     const queryUrl = urlObj.searchParams.get('url');
+  //     parsedPath = path.parse(new URL(queryUrl).pathname);
+  //     fileName = parsedPath.base;
+  //     fileType = parsedPath.ext;
+  //   }
 
-    // Use the extracted filename in the imagePath
-    // const imagePath = path.join(downloadsDir, fileName);
+  //   const imageFileName = await downloadImageFile(imageUrl, url);
+  //   const mediaDownloadsDir = path.resolve(__dirname, '../media');
+  //   console.log('mediaDownloadsDir', mediaDownloadsDir, 'fileName', imageFileName);
+  //   const imagePath = path.join(mediaDownloadsDir, imageFileName);
 
-    const imageFileName = await downloadImageFile(imageUrl, url);
-    // fileName=imageFile.imageFileName
-    const mediaDownloadsDir = path.resolve(__dirname, '../media');
-    console.log('mediaDownloadsDir', mediaDownloadsDir, 'fileName', imageFileName);
-    const imagePath = path.join(mediaDownloadsDir, imageFileName);
+  //   const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
+  //   articleData.embeddedImageUrl = hostedImageUrl;
+    
+  //   // Upload image to ArFleet and BitTorrent
+  //   try {
+  //     const imageStorage = await publishImage(imagePath, false);
+  //     imageBittorrentAddress = imageStorage.bittorrentAddress;
+  //     imageArfleetAddress = imageStorage.arfleetAddress;
+  //     console.log('Image storage addresses:', {
+  //       bittorrent: imageBittorrentAddress,
+  //       arfleet: imageArfleetAddress
+  //     });
+      
+  //     // Get image info
+  //     const imageStats = fs.statSync(imagePath);
+  //     imageSize = imageStats.size;
+  //     imageFileType = mimeTypes[fileType.toLowerCase()] || 'image/jpeg';
 
-    // const imagePath = imageFile.imageFileName
-    // const imagePath = path.join(downloadsDirectory, imageFile.imageFileName);
-    const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
-    articleData.embeddedImageUrl = hostedImageUrl;
-    // TEMPORARILY TURNED OFF FOR FIRST RELEASE
-    // torrent = await publishImage(imageFile.outputPath, null, null, null, false);
-    // imageBittorrentAddress = torrent.magnetURI;
-    // console.log('imageBittorrentAddress', imageBittorrentAddress);
-    // imageFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
+  //     const imageMetadata = await sharp(imagePath).metadata();
+  //     imageWidth = imageMetadata.width;
+  //     imageHeight = imageMetadata.height;
+  //     console.log('Image dimensions:', imageWidth, imageHeight);
+  //   } catch (error) {
+  //     console.error('Error publishing image:', error);
+  //   }
+  // }
 
-    // Get image dimensions and file size using 'sharp'
-    // path.join(downloadsDir, fileName)
-    console.log('Image file:', imagePath);
-    const imageStats = fs.statSync(imagePath);
-    imageSize = imageStats.size;
-    imageFileType = mimeTypes[fileType.toLowerCase()] || 'image/jpeg';
+  // // Process Twitter content and YouTube videos
+  // try {
+  //   let embeddedTweets = await getEmbeddedTweets(html);
+  //   console.log('embeddedTweets', embeddedTweets);
+  //   let tweetDetails = null;
+  //   const tweetVideoArfleet = [];
+  //   const tweetRecords = [];
+  //   const tweetVideoRecords = [];
+  //   const youtubeVideoArfleet = [];
+  //   let videoRecords = [];
 
-    const imageMetadata = await sharp(imagePath).metadata();
-    imageWidth = imageMetadata.width;
-    imageHeight = imageMetadata.height;
-    console.log(articleData.embeddedImageUrl);
+  //   if (embeddedTweets.length > 0) {
+  //     tweetDetails = await fetchTweetDetails(embeddedTweets);
+  //     console.log('Tweet details:', tweetDetails);
+  //   }
+    
+  //   if (tweetDetails && tweetDetails.includes && tweetDetails.includes.media) {
+  //     let tweetMediaUrls = await getTwitterMediaUrls(embeddedTweets);
+  //     await Promise.all(embeddedTweets.map(async (tweet, index) => {
+  //       const tweetId = tweet.match(/status\/(\d+)/)[1]; // Extract tweet ID
+  //       const mediaUrl = tweetMediaUrls[index];
 
-    // console.log('Image dimensions:', imageWidth, imageHeight);
-    // console.log('Image size:', imageSize);
-  }
+  //       if (mediaUrl) {
+  //         outputPath = await downloadMedia(mediaUrl, tweetId); // Pass media URL and tweet ID
+  //         console.log('Media downloaded to:', outputPath);
+          
+  //         // Upload media to ArFleet
+  //         const mediaFiles = await publishVideoFiles(outputPath, tweetId, false);
+  //         tweetVideoRecords[index] = {
+  //           "media": {
+  //             "arfleetAddress": mediaFiles.arfleetAddress,
+  //             "arfleetId": mediaFiles.arfleetId
+  //           }
+  //         };
+          
+  //         // Keep torrent as fallback if available
+  //         if (mediaFiles.torrentAddress) {
+  //           tweetVideoRecords[index].media.bittorrentAddress = mediaFiles.torrentAddress;
+  //         }
+          
+  //         tweetVideoArfleet.push(mediaFiles.arfleetAddress);
+  //       } else {
+  //         tweetVideoRecords[index] = null; // No media for this tweet
+  //       }
+  //     }));
+  //   }
 
-  // TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
-  // Fetch and download Twitter videos
-    try {
-      let embeddedTweets = await getEmbeddedTweets(html);
-      console.log('embeddedTweets', embeddedTweets);
-      let tweetDetails = null;
-      const tweetVideoTorrent = [];
-      const tweetRecords = [];
-      const tweetVideoRecords = [];
-      const youtubeVideoTorrent = [];
-      let videoRecords = [];
+  //   for (let i = 0; i < embeddedTweets.length; i++) {
+  //     const tweetRecord = {
+  //       "basic": {
+  //         "name": tweetDetails.data[i].id,
+  //         "language": "en",
+  //         "date": tweetDetails.data[i].created_at,
+  //         "description": tweetDetails.data[i].text,
+  //         "urlItems": [
+  //           {
+  //             "associatedUrlOnWeb": {
+  //               "url": embeddedTweets[i]
+  //             }
+  //           }
+  //         ]
+  //       },
+  //       "post": {
+  //         "bylineWriter": tweetDetails.data[i].author_id,
+  //         "videoItems": tweetVideoRecords[i] ? [tweetVideoRecords[i]] : [] // Add video record or empty array
+  //       }
+  //     };
+  //     tweetRecords.push(tweetRecord);
+  //   }
 
-      if (embeddedTweets.length > 0) {
-        tweetDetails = await fetchTweetDetails(embeddedTweets);
-        console.log('Tweet details:', tweetDetails);
-      }
-      if (tweetDetails && tweetDetails.includes && tweetDetails.includes.media) {
-        let tweetMediaUrls = await getTwitterMediaUrls(embeddedTweets);
-        await Promise.all(embeddedTweets.map(async (tweet, index) => {
-          const tweetId = tweet.match(/status\/(\d+)/)[1]; // Extract tweet ID
-          const mediaUrl = tweetMediaUrls[index];
+  //   console.log('tweetRecords', tweetRecords);
+    
+  //   if (tweetVideoArfleet.length > 0) {
+  //     console.log('Twitter video ArFleet links:', tweetVideoArfleet);
+  //     if (res && typeof res.write === 'function') {
+  //       res.write(`event: tweets\n`);
+  //       res.write(`data: ${JSON.stringify(tweetVideoArfleet)}\n\n`);
+  //     }
+  //   }
+    
+  //   // Scrape YouTube iframes using Cheerio
+  //   const youtubeIframeUrls = [];
 
-          if (mediaUrl) {
-            outputPath = await downloadMedia(mediaUrl, tweetId); // Pass media URL and tweet ID
-            console.log('Media downloaded to:', outputPath);
-            // mediaFiles = await publishMediaFiles(outputPath, tweetId, false);
-            // tweetMediaRecords[index] = {
-            //   "media": {
-            //     "bittorrentAddress": mediaFiles.torrentAddress
-            //   }
-            // };
-            // tweetMediaTorrent.push(mediaFiles.torrentAddress);
-          } else {
-            // tweetMediaRecords[index] = null; // No media for this tweet
-          }
-        }));
-        // }
+  //   $('iframe[src*="youtube.com"]').each((i, elem) => {
+  //     const iframeSrc = $(elem).attr('src');
+  //     if (iframeSrc) {
+  //       youtubeIframeUrls.push(iframeSrc);
+  //     }
+  //   });
+    
+  //   // Also look for YouTube videos embedded in iframes
+  //   if (youtubeIframeUrls.length > 0) {
+  //     youtubeIframeUrls.forEach(iframeSrc => {
+  //       const youtubeUrlMatch = iframeSrc.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/)[\w-]+)/);
+  //       if (youtubeUrlMatch) {
+  //         const videoUrl = youtubeUrlMatch[0].replace("/embed/", "/watch?v=");
+  //         youtubeUrls.push(videoUrl);
+  //       }
+  //     });
+  //   }
+    
+  //   // Direct YouTube URL search (in the content)
+  //   const youtubeUrlMatches = [...html.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)];
+  //   youtubeUrlMatches.forEach(match => youtubeUrls.push(match[0]));
+    
+  //   // Remove duplicates
+  //   youtubeUrls = [...new Set(youtubeUrls)];
+    
+  //   for (const videoUrl of youtubeUrls) {
+  //     const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)[1]; // Extract YouTube video ID
+  //     const metadata = await getYouTubeMetadata(videoUrl);
+  //     videoOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.mp4`);
+      
+  //     await downloadVideo(videoUrl, videoId); // Pass video URL and YouTube video ID
+      
+  //     // Process captions if available
+  //     let transcriptBittorrentAddress = null;
+  //     let transcriptArfleetAddress = null;
+      
+  //     if (metadata.automatic_captions && metadata.automatic_captions.en) {
+  //       // Find the URL for the caption with the 'vtt' extension
+  //       const captions = metadata.automatic_captions.en;
+  //       const vttCaption = captions.find(caption => caption.ext === 'vtt');
 
-        for (let i = 0; i < embeddedTweets.length; i++) {
-          // console.log('tweetDetails from index', tweetDetails[i], 'tweetdetails', tweetDetails);
-          const tweetRecord = {
-            "basic": {
-              "name": tweetDetails.data[i].id,
-              "language": "en",
-              "date": tweetDetails.data[i].created_at,
-              "description": tweetDetails.data[i].text,
-              "urlItems": [
-                {
-                  "associatedUrlOnWeb": {
-                    "url": embeddedTweets[i]
-                  }
-                }
-              ]
-            },
-            "post": {
-              "bylineWriter": tweetDetails.data[i].author_id,
-              "videoItems": tweetVideoRecords[i] ? [tweetVideoRecords[i]] : [] // Add video record or empty array
-            }
-          };
-          tweetRecords.push(tweetRecord);
-        }
-
-        console.log('tweetRecords', tweetRecords);
-      }
-    } catch (error) {
-      console.error('Error processing embedded tweets:', error);
-    }
-
-
-
-
-    // if (tweetVideoTorrent.length > 0) {
-    //   console.log('Twitter video torrents:', tweetVideoTorrent);
-    //   res.write(`event: tweets\n`);
-    //   res.write(`data: ${JSON.stringify(tweetVideoTorrent)}\n\n`);
-    // }
-    // // Scrape YouTube iframes using Cheerio
-    // const youtubeIframeUrls = [];
-
-    // $('iframe[src*="youtube.com"]').each((i, elem) => {
-    //   const iframeSrc = $(elem).attr('src');
-    //   if (iframeSrc) {
-    //     youtubeIframeUrls.push(iframeSrc);
-    //   }
-    // });
-    // // Also look for YouTube videos embedded in iframes
-    // if (youtubeIframeUrls.length > 0) {
-    //   youtubeIframeUrls.forEach(iframeSrc => {
-    //     const youtubeUrlMatch = iframeSrc.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/)[\w-]+)/);
-    //     if (youtubeUrlMatch) {
-    //       const videoUrl = youtubeUrlMatch[0].replace("/embed/", "/watch?v=");
-    //       youtubeUrls.push(videoUrl);
-    //     }
-    //   });
-    // }
-    // // Direct YouTube URL search (in the content)
-    // const youtubeUrlMatches = [...html.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)];
-    // youtubeUrlMatches.forEach(match => youtubeUrls.push(match[0]));
-    // // Remove duplicates
-    // youtubeUrls = [...new Set(youtubeUrls)];
-    // for (const videoUrl of youtubeUrls) {
-    //   const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)[1]; // Extract YouTube video ID
-    //   const metadata = await getYouTubeMetadata(videoUrl);
-    //   videoOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.mp4`);
-    //   // videoMetadata.push(metadata);
-    //   await downloadVideo(videoUrl, videoId); // Pass video URL and YouTube video ID
-    //   // Assuming metadata.automatic_captions.en is your array
-    //   const captions = metadata.automatic_captions.en;
-    //   let vttUrl;
-    //   if (captions) {
-    //     // Find the URL for the caption with the 'vtt' extension
-    //     const vttCaption = captions.find(caption => caption.ext === 'vtt');
-
-    //     if (vttCaption) {
-    //       vttUrl = vttCaption.url;
-    //       console.log('VTT Caption URL:', vttUrl);
-    //     } else {
-    //       console.log('No VTT captions found.');
-    //     }
-    //     await downloadFile(vttUrl, path.join(downloadsDir, `${videoId}/${videoId}.vtt`));
-    //     transcriptOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.vtt`)
-    //     console.log('Transcript downloaded to:', transcriptOutputPath);
-    //     transriptAddresses = await publishArticleText(transcriptOutputPath, null, null, null, false);
-    //     console.log('transcriptBittorrentAddress', transriptAddresses.torrent.magnetURI);
-    //     transcriptBittorrentAddress = transriptAddresses.torrent.magnetURI;
-    //   }
-    //   const videoFiles = await publishVideoFiles(videoOutputPath, videoId, false);
-    //   let fileType = path.extname(videoOutputPath);
-    //   let videoFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
-    //   let fileName = `${videoId}.mp4`
-    //   youtubeVideoTorrent.push(videoFiles.torrentAddress);
-    //   videoRecordData = {
-    //     "basic": {
-    //       "name": metadata.title,
-    //       "language": "en",
-    //       "date": metadata.timestamp,
-    //       "description": metadata.description,
-    //       "urlItems": [
-    //         {
-    //           "associatedUrlOnWeb": {
-    //             "url": videoUrl
-    //           }
-    //         }
-    //       ],
-    //       "nsfw": false,
-    //       "tagItems": [...(metadata.tags || []), ...(metadata.categories || [])]
-    //     },
-    //     "video": {
-    //       "arweaveAddress": "",
-    //       "ipfsAddress": "",
-    //       "bittorrentAddress": youtubeVideoTorrent,
-    //       "filename": fileName,
-    //       "size": metadata.filesize || 0,
-    //       "width": metadata.width,
-    //       "height": metadata.height,
-    //       "duration": metadata.duration,
-    //       "contentType": videoFileType
-    //     },
-    //     "text": {
-    //       "bittorrentAddress": transcriptBittorrentAddress,
-    //       "contentType": "text/text"
-    //     }
-
-    //   };
-    //   videoRecords.push(videoRecordData);
-    // }
-    // if (youtubeUrls.length > 0) {
-    //   console.log('YouTube video URLs:', youtubeUrls);
-    //   console.log('YouTube video torrents:', youtubeVideoTorrent);
-    //   res.write(`event: youtube\n`);
-    //   res.write(`data: ${JSON.stringify(youtubeVideoTorrent)}\n\n`);
-    // }
+  //       if (vttCaption) {
+  //         const vttUrl = vttCaption.url;
+  //         console.log('VTT Caption URL:', vttUrl);
+          
+  //         await downloadFile(vttUrl, path.join(downloadsDir, `${videoId}/${videoId}.vtt`));
+  //         const transcriptOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.vtt`);
+  //         console.log('Transcript downloaded to:', transcriptOutputPath);
+          
+  //         // Upload transcript to ArFleet
+  //         try {
+  //           const transcriptArfleet = await uploadToArFleet(transcriptOutputPath, 30);
+  //           transcriptArfleetAddress = transcriptArfleet.arfleetUrl;
+            
+  //           // Fallback to BitTorrent
+  //           const transcriptAddresses = await publishArticleText(transcriptOutputPath, null, null, null, false);
+  //           transcriptBittorrentAddress = transcriptAddresses.bittorrentAddress;
+  //         } catch (error) {
+  //           console.error("Error uploading transcript:", error);
+  //         }
+  //       }
+  //     }
+      
+  //     // Upload video to ArFleet
+  //     const videoFiles = await publishVideoFiles(videoOutputPath, videoId, false);
+  //     let fileType = path.extname(videoOutputPath);
+  //     let videoFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
+  //     let fileName = `${videoId}.mp4`;
+      
+  //     if (videoFiles.arfleetAddress) {
+  //       youtubeVideoArfleet.push(videoFiles.arfleetAddress);
+  //     } else if (videoFiles.torrentAddress) {
+  //       youtubeVideoArfleet.push(videoFiles.torrentAddress);
+  //     }
+      
+  //     videoRecordData = {
+  //       "basic": {
+  //         "name": metadata.title,
+  //         "language": "en",
+  //         "date": metadata.timestamp,
+  //         "description": metadata.description,
+  //         "urlItems": [
+  //           {
+  //             "associatedUrlOnWeb": {
+  //               "url": videoUrl
+  //             }
+  //           }
+  //         ],
+  //         "nsfw": false,
+  //         "tagItems": [...(metadata.tags || []), ...(metadata.categories || [])]
+  //       },
+  //       "video": {
+  //         "arfleetAddress": videoFiles.arfleetAddress || "",
+  //         "arfleetId": videoFiles.arfleetId || "",
+  //         "bittorrentAddress": videoFiles.torrentAddress || "",
+  //         "filename": fileName,
+  //         "size": metadata.filesize || 0,
+  //         "width": metadata.width,
+  //         "height": metadata.height,
+  //         "duration": metadata.duration,
+  //         "contentType": videoFileType
+  //       }
+  //     };
+      
+  //     // Add transcript if available
+  //     if (transcriptArfleetAddress || transcriptBittorrentAddress) {
+  //       videoRecordData.text = {
+  //         "arfleetAddress": transcriptArfleetAddress || "",
+  //         "bittorrentAddress": transcriptBittorrentAddress || "",
+  //         "contentType": "text/text"
+  //       };
+  //     }
+      
+  //     videoRecords.push(videoRecordData);
+  //   }
+    
+  //   if (youtubeUrls.length > 0) {
+  //     console.log('YouTube video URLs:', youtubeUrls);
+  //     console.log('YouTube video ArFleet links:', youtubeVideoArfleet);
+  //     if (res && typeof res.write === 'function') {
+  //       res.write(`event: youtube\n`);
+  //       res.write(`data: ${JSON.stringify(youtubeVideoArfleet)}\n\n`);
+  //     }
+  //   }
+  // } catch (error) {
+  //   console.error('Error processing embedded media:', error);
+  // }
 
   if (articleData.summaryTTS) {
     const fullUrl = backendURL + articleData.summaryTTS;
     articleData.summaryTTS = fullUrl;
   }
-  // console.log('Final article data:', articleData);
-  // res.write(`event: finalData\n`);
-  // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
 
-  // res.end();
-  // audioUrl = `https://api.oip.onl/api/generate/media?id=${articleData.summaryTTSid}`
-  // const cleanUrl = (url) => {
-  //   const urlObj = new URL(url);
-  //   return urlObj.origin + urlObj.pathname;
-  // };
+  // ... existing code for basic record building ...
 
   const recordToPublish = {
     "basic": {
@@ -762,94 +791,52 @@ const mimeTypes = {
             "webUrl": articleTextURL,
             "contentType": "text/text"
           }
-          // "associatedUrlOnWeb": {
-          //   "url": articleTextURL
-          // }
         }
       ,
       "webUrl": cleanUrl(articleData.url),
     },
-    // "associatedUrlOnWeb": {
-    //   "url": cleanUrl(articleData.url)
-    // }
   };
+  
+  // ... existing image handling code ...
+  
   if (articleData.embeddedImage) {
-    recordToPublish.post.featuredImage = 
-      {
-        "basic": {
-          "name": articleData.title,
-          "language": "en",
-          "nsfw": false,
-          // "urlItems": [
-          //   {
-          //     "associatedUrlOnWeb": {
-          //       "url": articleData.embeddedImage
-          //     }
-          //   }
-          // ]
-        },
-        // "associatedUrlOnWeb": {
-        //   "url": articleData.embeddedImageUrl
-        // },
-        "image": {
-          "webUrl": articleData.embeddedImageUrl,
-          // "bittorrentAddress": imageBittorrentAddress,
-          "height": imageHeight,
-          "width": imageWidth,
-          "size": imageSize,
-          "contentType": imageFileType
-        }
+    recordToPublish.post.featuredImage = {
+      "basic": {
+        "name": articleData.title,
+        "language": "en",
+        "nsfw": false,
+      },
+      "image": {
+        "webUrl": articleData.embeddedImageUrl,
+        // "arfleetAddress": imageArfleetAddress || "",
+        // "bittorrentAddress": imageBittorrentAddress || "",
+        "height": imageHeight,
+        "width": imageWidth,
+        "size": imageSize,
+        "contentType": imageFileType
       }
-    
+    };
   }
 
   if (articleData.summaryTTS) {
-    recordToPublish.post.audioItems = [
-      { 
-        "audio": {
-          "webUrl": articleData.summaryTTS,
-          "contentType" : "audio/mp3"
-        }
-      }
-    ]
+    // ... existing code ...
   }
 
   console.log('this is whats getting published:', recordToPublish)
-        
 
-    // TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
-    // if (youtubeVideoTorrent.length > 0) {
-    //   recordToPublish.post.videoItems = [...videoRecords];
-    // }
-    // if (imageBittorrentAddress) {
-    //   recordToPublish.post.featuredImage = [{
-    //   "basic": {
-    //     "name": articleData.title,
-    //     "language": "en",
-    //     "nsfw": false,
-    //     "urlItems": [
-    //     {
-    //       "associatedUrlOnWeb": {
-    //       "url": articleData.embeddedImage
-    //       }
-    //     }
-    //     ]
-    //   },
-    //   "image": {
-    //     "bittorrentAddress": imageBittorrentAddress,
-    //     "height": imageHeight,
-    //     "width": imageWidth,
-    //     "size": imageSize,
-    //     "contentType": imageFileType
-    //   }
-    //   }];
-    // }
-    // if (tweetRecords.length > 0) {
-    //   recordToPublish.post.citations = [...tweetRecords];
-    // }
-    record = await publishNewRecord(recordToPublish, "post")
-    console.log('Record published XYZ:', record);
-    return record;
+  // Add YouTube videos if found
+  // if (videoRecords && videoRecords.length > 0) {
+  //   recordToPublish.post.videoItems = videoRecords;
+  // }
+  
+  // Add tweet citations if found
+  // if (tweetRecords && tweetRecords.length > 0) {
+  //   recordToPublish.post.citations = tweetRecords;
+  // }
+  
+  record = await publishNewRecord(recordToPublish, "post", false, false, false, null, blockchain)
+  console.log('Record published XYZ:', record);
+  return record;
 }
 
 function cleanArticleContent(content) {
@@ -977,7 +964,7 @@ async function stitchImages(screenshots, totalHeight, scrapeId) {
 //       res.write(`event: dataFromIndex\n`);
 //       res.write(`data: ${JSON.stringify(records.records[0])}\n\n`);
 //       res.end();
-//       ongoingScrapes.delete(scrapeId);
+//       cleanupScrape(scrapeId);
 //     } else {
 //       console.log('Not found in Archive, fetching as a new article...');
 //       const parsedData = await Parser.parse(url, { html });
@@ -1005,7 +992,7 @@ async function stitchImages(screenshots, totalHeight, scrapeId) {
 //       res.write(`data: ${JSON.stringify(articleData)}\n\n`);
 //       res.end();
 
-//       ongoingScrapes.delete(scrapeId);
+//       cleanupScrape(scrapeId);
 //     }
 //   } catch (error) {
 //     console.error('Error fetching parsed article data:', error);
@@ -1039,7 +1026,7 @@ async function stitchImages(screenshots, totalHeight, scrapeId) {
 // works perfectly - trying a version that adds screenshot download
 async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, options) {
   console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
-  const { sendUpdate, res } = options; // Destructure res from options
+  const { sendUpdate, res, blockchain = 'arweave' } = options; // Destructure res and blockchain from options
 
     // Ensure scrapeId is initialized
   if (!ongoingScrapes.has(scrapeId)) {
@@ -1190,7 +1177,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       // res.write(`event: dataFromIndex\n`);
       // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       // res.end();
-      // ongoingScrapes.delete(scrapeId); // Clear completed scrape
+      // cleanupScrape(scrapeId); // Clear completed scrape
 
 
     } else {
@@ -1262,8 +1249,23 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
           articleData.byline = byline ? byline.trim().replace(/^by\s*/i, '').replace(/\s+/g, ' ').replace(/\n|\t/g, '').split('by').map(name => name.trim()).filter(Boolean).join(', ') : articleData.byline;
           console.log('Byline2:', articleData.byline);
           const repeatedWordsPattern = /\b(\w+)\b\s*\1\b/i; // Check for repeated words
+          if (repeatedWordsPattern.test(articleData.byline)) {
+            console.log('Repeated words found in byline:', articleData.byline);
+            // Fix for repeated words with commas between them
+            // First, we'll clean up the pattern to handle words separated by commas
+            articleData.byline = articleData.byline
+              .replace(/\b(\w+)[,\s]+(?:\1[,\s]+)+/gi, '$1, ')
+              .replace(/,\s*,/g, ',')
+              .replace(/,\s*$/,'');
+            console.log('Fixed byline:', articleData.byline);
+            
+            // If we've removed too much and the byline is too short, set to null
+            if (articleData.byline.length < 2) {
+              articleData.byline = null;
+            }
+          }
           const excessiveSpacesPattern = /\s{2,}/; // Matches two or more spaces
-            if (!articleData.byline || articleData.byline === null || repeatedWordsPattern.test(byline) || excessiveSpacesPattern.test(byline)) {
+            if (!articleData.byline || articleData.byline === null || excessiveSpacesPattern.test(byline)) {
               const bylineFound = await identifyAuthorNameFromContent(articleData.content);
               articleData.byline = bylineFound
             }
@@ -1374,7 +1376,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       // res.write(`event: finalData\n`);
       // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       console.log('Sent finalData:', articleData);
-      let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url,html, res);
+      let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url,html, res, blockchain);
       let articleTxid = article.transactionId;
       let articleDidTx = article.didTx;
       // this is the audio url
@@ -1548,7 +1550,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
             console.log('article archived successfully at didTx', articleDidTx);
             sendUpdate('archived', { archived: articleDidTx });
       res.end();
-      ongoingScrapes.delete(scrapeId); // Clear completed scrape
+      cleanupScrape(scrapeId); // Clear completed scrape
 
     }
 
@@ -1559,7 +1561,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
     // res.write(`event: error\n`);
     // res.write(`data: ${JSON.stringify({ error: 'Failed to fetch article data.' })}\n\n`);
     res.end();
-    ongoingScrapes.delete(scrapeId);
+    cleanupScrape(scrapeId);
 
   }
 }
@@ -1625,7 +1627,7 @@ async function getEmbeddedTweets(html) {
   return tweetIds;
 }
 
-async function createNewNutritionalInfoRecord(ingredientName) {
+async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave') {
   try {
     console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
 
@@ -1721,7 +1723,7 @@ async function createNewNutritionalInfoRecord(ingredientName) {
       },
     };
 
-    ingredientTx = await publishNewRecord(formattedNutritionalInfo, "nutritionalInfo")
+    ingredientTx = await publishNewRecord(formattedNutritionalInfo, "nutritionalInfo", false, false, false, null, blockchain)
     // formattedNutritionalInfo.oip = formattedNutritionalInfo.oip || {};
     // formattedNutritionalInfo.oip.didTx = ingredientTx.didTx;
     console.log(`Successfully retrieved and published nutritional info for ${ingredientName}:`, formattedNutritionalInfo, ingredientTx);
@@ -1936,7 +1938,8 @@ async function createNewNutritionalInfoRecord(ingredientName) {
 
 // try at generalized for all sites BUT HAS NO PUBLISHING CAPABILITY
 async function fetchParsedRecipeData(url, html, scrapeId, screenshots, totalHeight, options) {
-  const { sendUpdate, res } = options;
+  console.log('Scrape ID:', scrapeId, 'Fetching parsed recipe data from', url);
+  const { sendUpdate, res, blockchain = 'arweave' } = options; // Destructure blockchain from options
 
   if (!ongoingScrapes.has(scrapeId)) {
     ongoingScrapes.set(scrapeId, { clients: [res], data: [] });
@@ -2105,11 +2108,11 @@ const totalTime = parseInt(extractText($, siteSelectors.totalTime)?.match(/\d+/)
     const extractedRecipeData = await analyzeImageForRecipe(screenshotURL);
     console.log('extractedRecipeData:', extractedRecipeData);
 
-    ongoingScrapes.delete(scrapeId);
+    cleanupScrape(scrapeId);
     return recipeData;
   } catch (error) {
     console.error('Error parsing recipe data:', error);
-    ongoingScrapes.delete(scrapeId);
+    cleanupScrape(scrapeId);
   }
 }
 
@@ -2399,7 +2402,7 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
 // console.error('Error fetching parsed recipe data:', error);
 // sendUpdate('error', { message: 'Failed to fetch recipe data.' });
 // res.end();
-// ongoingScrapes.delete(scrapeId);
+// cleanupScrape(scrapeId);
 // }
 
 
@@ -2491,7 +2494,7 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
 
     const nutritionalInfoArray = await Promise.all(
-      missingIngredientNames.map(name => createNewNutritionalInfoRecord(name))
+      missingIngredientNames.map(name => createNewNutritionalInfoRecord(name, blockchain))
     );
 
     // Restart the function now that all ingredients have nutritional info
@@ -2703,17 +2706,17 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1) ||
 
 // console.log('nutritionalInfo:', nutritionalInfo);
     console.log('Recipe data:', recipeData);
-    recipeRecord = await publishNewRecord(recipeData, "recipe");
+    recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain)
     console.log('Recipe record:', recipeRecord);
 
-    ongoingScrapes.delete(scrapeId); // Clear completed scrape
+    cleanupScrape(scrapeId); // Clear completed scrape
 
 
   }
   } catch (error) {
     console.error('Error fetching parsed recipe data:', error);
 
-    ongoingScrapes.delete(scrapeId);
+    cleanupScrape(scrapeId);
   }
 }
 
@@ -2806,55 +2809,8 @@ function generateScrapeId(url, userId) {
   return crypto.createHash('sha256').update(data).digest('hex');
 }
 
-// router.post('/article/stream', authenticateToken, async (req, res) => {
-// router.post('/article/stream', async (req, res) => {
-//   const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body; // Extract HTML and URL from request body
-//   // const userId = req.user.userId; // Extract userId from the decoded token
-  
-//   if (!html || !url || !userId) {
-//     return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
-//   }
-  
-//   console.log('User ID:', userId);
-//   console.log('Received scraping request...', req.body.url);
-//   console.log('Total screenshots received:', screenshots?.length);
-//   // Generate a unique identifier for this scrape request
-//   const scrapeId = generateScrapeId(url, userId);
-//   console.log('Scrape ID:', scrapeId);
-//   // Set SSE headers for streaming data
-//   if (!ongoingScrapes.has(scrapeId)) {
-//     res.setHeader('Content-Type', 'text/event-stream');
-//     res.setHeader('Cache-Control', 'no-cache');
-//     res.setHeader('Connection', 'keep-alive');
-//   }
-//   res.flushHeaders(); // Flush headers to establish the SSE connection
-
-//   // Keep the connection alive by sending periodic "ping" events
-//   const keepAliveInterval = setInterval(() => {
-//     res.write(`event: ping\n`);
-//     res.write(`data: "Keep connection alive"\n\n`);
-//   }, 15000); // Every 15 seconds
-
-//   try {
-//     // Start scraping and stream data back piece by piece
-//     await fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res);
-//   } catch (error) {
-//     console.error('Error processing scraping:', error);
-//     res.write(`event: error\n`);
-//     res.write(`data: ${JSON.stringify({ error: 'Failed to scrape article.' })}\n\n`);
-//     res.end(); // End the stream in case of an error
-//   }
-
-//   // When the client disconnects
-//   req.on('close', () => {
-//     console.log('Client disconnected from stream.');
-//     clearInterval(keepAliveInterval); // Clear the keep-alive interval
-//     res.end(); // Close the SSE connection
-//   });
-// });
-
 router.post('/article', async (req, res) => {
-  const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body;
+  const { html, url, userId, screenshotBase64, screenshots, totalHeight, blockchain = 'arweave' } = req.body;
 
   if (!html || !url || !userId) {
     return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
@@ -2864,7 +2820,7 @@ router.post('/article', async (req, res) => {
   console.log('Scrape ID:', scrapeId);
 
   // Respond immediately with the scrapeId
-  res.status(200).json({ scrapeId });
+  res.status(200).json({ scrapeId, blockchain });
 
   // Initialize the stream if not already present
   if (!ongoingScrapes.has(scrapeId)) {
@@ -2877,8 +2833,8 @@ router.post('/article', async (req, res) => {
       console.log('sending event over stream', event, data);
       const streamData = ongoingScrapes.get(scrapeId);
       if (streamData) {
+        streamData.data.push({ event, data });
         console.log('streamData', streamData);
-          streamData.data.push({ event, data });
           streamData.clients.forEach(client => {
               if (typeof client.write === 'function') {
                 console.log('writing event to client', event, data);
@@ -2901,7 +2857,7 @@ router.post('/article', async (req, res) => {
       screenshotBase64, 
       screenshots, 
       totalHeight, 
-      { sendUpdate: streamUpdates, res }
+      { sendUpdate: streamUpdates, res, blockchain }
     );
 
   } catch (error) {
@@ -2913,29 +2869,13 @@ router.post('/article', async (req, res) => {
         client.write(`data: ${JSON.stringify({ message: 'Failed to fetch article data.' })}\n\n`);
         client.end(); // Close SSE stream
       });
-      ongoingScrapes.delete(scrapeId); // Clean up
+      cleanupScrape(scrapeId); // Clean up
     }
   }
 });
-// const streamUpdates = (event, data) => {
-//   const streamData = ongoingScrapes.get(scrapeId);
-//   if (streamData) {
-//       streamData.data.push({ event, data });
-//       streamData.clients.forEach(client => {
-//           if (typeof client.write === 'function') {
-//               client.write(`event: ${event}\n`);
-//               client.write(`data: ${JSON.stringify({ type: event, data })}\n\n`);
-//               client.flush && client.flush();
-//               console.log('Sent event:', event, data);
-//           } else {
-//               console.warn('client.write is not a function');
-//           }
-//       }
-//       );
-//   }
-// }
+
 router.post('/recipe', async (req, res) => {
-  const { html, url, screenshots, totalHeight, userId } = req.body;
+  const { html, url, screenshots, totalHeight, userId, blockchain = 'arweave' } = req.body;
 
   if (!url || !userId) {
     return res.status(400).json({ error: 'URL and User ID are required' });
@@ -2945,7 +2885,7 @@ router.post('/recipe', async (req, res) => {
   console.log('Scrape ID:', scrapeId);
 
   // Respond immediately with the scrapeId
-  res.status(200).json({ scrapeId });
+  res.status(200).json({ scrapeId, blockchain });
 
   // Initialize the stream if not already present
   if (!ongoingScrapes.has(scrapeId)) {
@@ -2993,7 +2933,7 @@ router.post('/recipe', async (req, res) => {
       scrapeId, 
       screenshots, 
       totalHeight,
-      { sendUpdate, res }
+      { sendUpdate, res, blockchain }
     );
 
   } catch (error) {
@@ -3005,7 +2945,7 @@ router.post('/recipe', async (req, res) => {
         client.write(`data: ${JSON.stringify({ message: 'Failed to fetch recipe data.' })}\n\n`);
         client.end(); // Close SSE stream
       });
-      ongoingScrapes.delete(scrapeId); // Clean up
+      cleanupScrape(scrapeId); // Clean up
     }
   }
 })
@@ -3096,7 +3036,7 @@ router.get('/open-stream', (req, res) => {
       
       // If no more clients, clean up resources
       if (clients.length === 0) {
-        ongoingScrapes.delete(streamId);
+        cleanupScrape(streamId);
         console.log(`No more clients for streamId: ${streamId}. Cleaning up.`);
       }
     }

@@ -993,7 +993,7 @@ async function synthesizeSpeech(text, voiceConfig, outputFileName, api = 'eleven
       }
   } else if (api === 'elevenLabs') {
     try {
-      // const output_format = 'mp3_44100_128'; // Safari-compatible format
+      // Use a standard MP3 format that's more compatible with ffmpeg
       const output_format = 'mp3_44100_128'; 
           const response = await axios.post(
               `https://api.elevenlabs.io/v1/text-to-speech/${voiceConfig.elevenLabs.voice_id}`,
@@ -1005,7 +1005,6 @@ async function synthesizeSpeech(text, voiceConfig, outputFileName, api = 'eleven
                     similarity_boost: voiceConfig.elevenLabs.similarity_boost || 0.75
                   },  
                   output_format: output_format
-                  // apply_text_normalization: 'auto'
               },
               {
                   headers: {
@@ -1016,19 +1015,39 @@ async function synthesizeSpeech(text, voiceConfig, outputFileName, api = 'eleven
               }
           );
           console.log('synthesized speech response:', response.data);
-          const audioDirectory = path.join(__dirname, '../media');
-          const audioFilepath = path.join(audioDirectory, outputFileName);
-          await fs.promises.writeFile(audioFilepath, response.data, 'binary');
+          
+          // Fix path duplication issue by checking if outputFileName is already absolute
+          let audioFilepath;
+          if (path.isAbsolute(outputFileName)) {
+              // If outputFileName is already absolute, use it directly
+              audioFilepath = outputFileName;
+              console.log(`Using absolute path: ${audioFilepath}`);
+          } else {
+              // If it's a relative path, join with the media directory
+              const audioDirectory = path.resolve(__dirname, '../media');
+              audioFilepath = path.resolve(audioDirectory, outputFileName);
+              console.log(`Constructed path: ${audioFilepath}`);
+          }
+          
+          // Create directory if it doesn't exist
+          const fileDir = path.dirname(audioFilepath);
+          if (!fs.existsSync(fileDir)) {
+              console.log(`Creating directory: ${fileDir}`);
+              await fs.promises.mkdir(fileDir, { recursive: true });
+          }
 
-          // await fs.promises.writeFile(audioFilepath, response.data, 'binary')
-          // const outputFileName = 'media/' + filePath;
-          // remove media/ from filePath
-          // const audioFileName = filePath.replace('media/', '');
-          // console.log(`Eleven Labs: Saved audio to ${outputFileName}`);
+          // Write the audio file and verify it was written successfully
+          await fs.promises.writeFile(audioFilepath, response.data, 'binary');
+          
+          // Verify file was written successfully
+          const stats = await fs.promises.stat(audioFilepath);
+          console.log(`Written file size: ${stats.size} bytes`);
+          
+          // Return data with properly formatted paths
           const data = {
             format: output_format,
             url: `/api/generate/media?id=${outputFileName}`,
-            outputFileName: outputFileName
+            outputFileName: audioFilepath  // Use the absolute path that was actually written
           }
           console.log('synthesized speech data:', data);
           return data;

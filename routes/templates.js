@@ -17,14 +17,14 @@ router.get('/', async (req, res) => {
         const { sortBy, creatorHandle, creatorDidAddress, didTx, templateName } = req.query;
 
         // Filter by creatorHandle
-        if (creatorHandle) {
-            templates = templates.filter(template => template.creatorHandle === creatorHandle);
-            console.log('after filtering by creatorHandle, there are', templates.length, 'templates');
-        }
+        // if (creatorHandle) {
+        //     templates = templates.filter(template => template.oip.creatorHandle === creatorHandle);
+        //     console.log('after filtering by creatorHandle, there are', templates.length, 'templates');
+        // }
 
         // Filter by creatorDidAddress
         if (creatorDidAddress) {
-            templates = templates.filter(template => template.creatorDidAddress === creatorDidAddress);
+            templates = templates.filter(template => template.oip.creator.didAddress === creatorDidAddress);
             console.log('after filtering by creatorDidAddress, there are', templates.length, 'templates');
         }
 
@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
 
         // Filter by template name
         if (templateName) {
-            templates = templates.filter(template => template.name.toLowerCase().includes(templateName.toLowerCase()));
+            templates = templates.filter(template => template.data.template.toLowerCase().includes(templateName.toLowerCase()));
             console.log('after filtering by templateName, there are', templates.length, 'templates');
         }
 
@@ -46,9 +46,9 @@ router.get('/', async (req, res) => {
             if (field === 'inArweaveBlock') {
                 templates.sort((a, b) => {
                     if (order === 'asc') {
-                        return a.inArweaveBlock - b.inArweaveBlock;
+                        return a.oip.inArweaveBlock - b.oip.inArweaveBlock;
                     } else {
-                        return b.inArweaveBlock - a.inArweaveBlock;
+                        return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
                     }
                 });
             }
@@ -74,7 +74,7 @@ router.get('/', async (req, res) => {
                 index: fieldsInTemplate[key].index
             };
             });
-            template.data.fieldsInTemplateArray = fieldsInTemplateArray;
+            template.data.fieldsInTemplateCount = fieldsInTemplateArray.length;
 
             // Move creator and creatorSig from data to oip
             if (!template.oip) {
@@ -104,38 +104,17 @@ router.get('/', async (req, res) => {
 });
 
 
-router.post('/newTemplate', authenticateToken, async (req, res) => {
+// router.post('/newTemplate', authenticateToken, async (req, res) => {
+router.post('/newTemplate', async (req, res) => {
     try {
+        console.log('POST /api/templates/newTemplate', req.body)
         const template = req.body;
-        const result = await publishNewTemplate(template);
-
-        // Check if the transaction was confirmed and verified
-        if (!result.status.confirmed) {
-            return res.status(202).json({
-                message: 'Template submitted but not yet confirmed',
-                ...result
-            });
-        }
-
-        if (!result.verification.verified) {
-            return res.status(202).json({
-                message: 'Template submitted but verification failed',
-                ...result
-            });
-        }
-
-        // Template was successfully published and verified
-        res.status(200).json({
-            message: 'Template successfully published and confirmed',
-            ...result
-        });
-
+        const blockchain = req.body.blockchain || 'arweave'; // Accept blockchain parameter
+        const newTemplate = await publishNewTemplate(template, blockchain);
+        res.status(200).json({ newTemplate, blockchain });
     } catch (error) {
-        console.error('Error in /newTemplate:', error);
-        res.status(500).json({
-            error: 'Failed to publish template',
-            details: error.message
-        });
+        console.error('Error publishing template:', error);
+        res.status(500).json({ error: 'Failed to publish template' });
     }
 });
 

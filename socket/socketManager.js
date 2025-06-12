@@ -2,6 +2,7 @@
  * Socket Manager Module for streaming responses
  */
 const WebSocket = require('ws');
+const { ongoingScrapes, ongoingDialogues } = require('../helpers/sharedState');
 
 // Store active connections
 const connections = new Map();
@@ -46,43 +47,48 @@ function initSocketServer(server) {
 }
 
 /**
- * Send messages to clients associated with a specific ID
- * @param {string} id - The ID associated with clients
+ * Send messages to clients associated with a specific dialogue ID
+ * @param {string} dialogueId - The dialogue ID
  * @param {Object} data - The data to send
  */
-function sendToClients(id, data) {
-    // IMPORTANT FIX: Import the shared Map from your application
-    const ongoingScrapes = require('../routes/generate').ongoingScrapes;
+function sendToClients(dialogueId, data) {
+    console.log(`Socket Manager checking for clients: dialogueId=${dialogueId}`);
     
-    // IMPORTANT FIX: Ensure id is a string and handle all cases
-    const idString = String(id); // Force conversion to string
-    
-    if (typeof id !== 'string') {
-        console.error(`sendToClients received non-string ID (converted): ${typeof id} -> ${idString}`);
+    // CRITICAL FIX: Check if ongoingDialogues is defined
+    if (typeof ongoingDialogues === 'undefined') {
+      console.error("ongoingDialogues is undefined in socketManager! Check imports.");
+      return false;
     }
     
-    // CRITICAL FIX: Use ongoingScrapes instead of streams
-    const stream = ongoingScrapes.get(idString);
-    
-    if (!stream || !stream.clients || stream.clients.length === 0) {
-        console.log(`No clients found for id: ${idString}`);
-        return;
-    }
-    
-    console.log(`Sending to ${stream.clients.length} clients for id: ${idString}`);
-    
-    stream.clients.forEach(client => {
-        try {
-            // Format the data as an SSE event
-            const eventName = data.type || 'message';
-            const eventData = JSON.stringify(data);
+    // Get the dialogue stream from the open-stream endpoint
+    if (ongoingDialogues.has(dialogueId)) {
+        const stream = ongoingDialogues.get(dialogueId);
+        
+        if (stream.clients && stream.clients.size > 0) {
+            console.log(`Found ${stream.clients.size} clients for dialogueId=${dialogueId}`);
             
-            client.write(`event: ${eventName}\n`);
-            client.write(`data: ${eventData}\n\n`);
-        } catch (error) {
-            console.error('Error sending to client:', error);
+            stream.clients.forEach(client => {
+                if (!client.writableEnded) {
+                    try {
+                        // Format the message correctly for SSE
+                        client.write(`event: ${data.type}\n`);
+                        // Make a copy of data without the type to avoid modifying the original
+                        const eventData = {...data};
+                        delete eventData.type;
+                        client.write(`data: ${JSON.stringify(eventData)}\n\n`);
+                    } catch (error) {
+                        console.error(`Error sending to client: ${error.message}`);
+                    }
+                }
+            });
+        } else {
+            console.log(`No clients found in the stream for dialogueId=${dialogueId}`);
         }
-    });
+    } else {
+        console.log(`No stream found for dialogueId=${dialogueId}`);
+    }
+    
+    return true;
 }
 
 /**
@@ -114,16 +120,16 @@ function closeConnections(id) {
  */
 function addClient(id, client) {
     // IMPORTANT FIX: Import the shared Map from your application
-    const ongoingScrapes = require('../routes/generate').ongoingScrapes;
+    const ongoingDialogues = require('../helpers/sharedState').ongoingDialogues;
     
-    if (!ongoingScrapes.has(id)) {
-        ongoingScrapes.set(id, {
+    if (!ongoingDialogues.has(id)) {
+        ongoingDialogues.set(id, {
             clients: [],
             data: []
         });
     }
     
-    const stream = ongoingScrapes.get(id);
+    const stream = ongoingDialogues.get(id);
     stream.clients.push(client);
     
     console.log(`Client added to stream ${id}, total clients: ${stream.clients.length}`);
@@ -136,13 +142,13 @@ function addClient(id, client) {
  */
 function removeClient(id, client) {
     // IMPORTANT FIX: Import the shared Map from your application
-    const ongoingScrapes = require('../routes/generate').ongoingScrapes;
+    const ongoingDialogues = require('../helpers/sharedState').ongoingDialogues;
     
-    if (!ongoingScrapes.has(id)) {
+    if (!ongoingDialogues.has(id)) {
         return;
     }
     
-    const stream = ongoingScrapes.get(id);
+    const stream = ongoingDialogues.get(id);
     const index = stream.clients.indexOf(client);
     
     if (index !== -1) {
@@ -153,7 +159,7 @@ function removeClient(id, client) {
     // Clean up if no more clients
     if (stream.clients.length === 0) {
         console.log(`No more clients for stream ${id}, removing...`);
-        ongoingScrapes.delete(id);
+        ongoingDialogues.delete(id);
     }
 }
 
@@ -315,4 +321,7 @@ class SocketManager {
 
 // Create a singleton instance
 const socketManager = new SocketManager();
-module.exports = socketManager; 
+module.exports = {
+  sendToClients,
+  // ... other functions
+}; 
