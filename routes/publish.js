@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const { TurboFactory, ArDriveUploadDriver } = require('@ardrive/turbo-sdk');
@@ -44,6 +46,112 @@ const getTurbo = async () => {
     }
     return turboInstance;
 };
+
+// Function to create new nutritional info records for missing ingredients
+async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave') {
+  try {
+    console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
+
+    // Construct a Nutritionix search URL
+    const formattedIngredient = ingredientName.replace(/,/g, '').replace(/\s+/g, '-').toLowerCase();
+    const nutritionixUrl = `https://www.nutritionix.com/food/${formattedIngredient}`;
+
+    // Scrape the Nutritionix page using FireCrawl
+    const response = await axios.post(
+      'https://api.firecrawl.dev/v1/scrape',
+      {
+        url: nutritionixUrl,
+        formats: ['html'],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.FIRECRAWL}`,
+        },
+      }
+    );
+
+    if (!response.data.success) {
+      throw new Error(`Scrape failed for ${ingredientName}: ${response.data.error}`);
+    }
+
+    // console.log('Scrape successful:', response.data);
+    const html = response.data.data.html;
+    const $ = cheerio.load(html);
+
+    // Extract basic information
+    const name = $('h1.food-item-name').text().trim() || ingredientName;
+    const date = Math.floor(Date.now() / 1000); // Current timestamp
+    const webUrl = nutritionixUrl;
+    const language = 'en';
+
+    // Initialize nutritional data object
+    const nutritionTable = {
+      calories: 0,
+      protein_g: 0,
+      fat_g: 0,
+      carbohydrates_g: 0,
+      cholesterol_mg: 0,
+      sodium_mg: 0,
+    };
+
+    // Parse nutritional facts using the HTML structure
+    $('.nf-line').each((_, element) => {
+      const label = $(element).find('span:first-child').text().trim().toLowerCase();
+      const valueRaw = $(element).find('span[itemprop]').text().trim();
+      const value = parseFloat(valueRaw.replace(/[^\d.]/g, '')) || 0;
+
+      // console.log(`Label: ${label}, Raw Value: ${valueRaw}, Parsed Value: ${value}`);
+
+      if (label.includes('calories')) {
+        nutritionTable.calories = value;
+      } else if (label.includes('protein')) {
+        nutritionTable.protein_g = value;
+      } else if (label.includes('fat')) {
+        nutritionTable.fat_g = value;
+      } else if (label.includes('cholesterol')) {
+        nutritionTable.cholesterol_mg = value;
+      } else if (label.includes('sodium')) {
+        nutritionTable.sodium_mg = value;
+      } else if (label.includes('carbohydrates')) {
+        nutritionTable.carbohydrates_g = value;
+      }
+    });
+
+    // Get serving size
+    const servingSizeText = $('.nf-serving-unit-name').text().trim();
+    const servingSizeMatch = servingSizeText.match(/(\d+)\s*(\w+)/);
+    const standardAmount = servingSizeMatch ? parseInt(servingSizeMatch[1], 10) : 1;
+    const standardUnit = servingSizeMatch ? servingSizeMatch[2].toLowerCase() : 'g';
+
+    // Format the extracted data into the required structure
+    const formattedNutritionalInfo = {
+      basic: {
+        name,
+        date,
+        language,
+        nsfw: false,
+        webUrl,
+      },
+      nutritionalInfo: {
+        standard_amount: standardAmount,
+        standard_unit: standardUnit,
+        calories: nutritionTable.calories,
+        protein_g: nutritionTable.protein_g,
+        fat_g: nutritionTable.fat_g,
+        carbohydrates_g: nutritionTable.carbohydrates_g,
+        cholesterol_mg: nutritionTable.cholesterol_mg,
+        sodium_mg: nutritionTable.sodium_mg,
+      },
+    };
+
+    ingredientTx = await publishNewRecord(formattedNutritionalInfo, "nutritionalInfo", false, false, false, null, blockchain)
+    console.log(`Successfully retrieved and published nutritional info for ${ingredientName}:`, formattedNutritionalInfo, ingredientTx);
+    return ingredientTx.recordToIndex;
+  } catch (error) {
+    console.error(`Error fetching nutritional info for ${ingredientName}:`, error);
+    return null; // Return null if fetching fails
+  }
+}
 
 router.post('/newRecipe', async (req, res) => {
 
@@ -258,8 +366,8 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     bestMatches.forEach((match, index) => {
       if (match) {
         const name = missingIngredientNames[index];
-        ingredientDidRefs[name] = match.oip.didTx;
-        nutritionalInfo.push({
+        ingredientRecords.ingredientDidRefs[name] = match.oip.didTx;
+        ingredientRecords.nutritionalInfo.push({
           ingredientName: match.data.basic.name,
           nutritionalInfo: match.data.nutritionalInfo || {},
           ingredientSource: match.data.basic.webUrl,
@@ -275,11 +383,25 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
 
     const nutritionalInfoArray = await Promise.all(
-      missingIngredientNames.map(name => createNewNutritionalInfoRecord(name))
+      missingIngredientNames.map(name => createNewNutritionalInfoRecord(name, blockchain))
     );
 
-    // Restart the function now that all ingredients have nutritional info
-    return await fetchParsedRecipeData(url, scrapeId, options);
+    // Update ingredientDidRefs with the newly created nutritional info records
+    nutritionalInfoArray.forEach((newRecord, index) => {
+      if (newRecord) {
+        const name = missingIngredientNames[index];
+        ingredientRecords.ingredientDidRefs[name] = newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`;
+        ingredientRecords.nutritionalInfo.push({
+          ingredientName: newRecord.data?.basic?.name || name,
+          nutritionalInfo: newRecord.data?.nutritionalInfo || {},
+          ingredientSource: newRecord.data?.basic?.webUrl || '',
+          ingredientDidRef: newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`
+        });
+      }
+    });
+
+    // Update missingIngredientNames to remove those that were successfully created
+    missingIngredientNames = missingIngredientNames.filter((name, index) => !nutritionalInfoArray[index]);
   }
   // Check for empty values in ingredientUnits and assign standard_unit from nutritionalInfoArray
   missingIngredientNames.forEach((name, index) => {
@@ -307,9 +429,9 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
 });
   // You can now use nutritionalInfoArray as needed
 
-  // console.log('Ingredient DidRefs:', ingredientDidRefs);
+  console.log('Ingredient Did Refs:', ingredientRecords);
 
-    // console.log('Ingredient DID References:', ingredientDidRefs);
+    // console.log('Ingredient DID References:', ingredientRecords.ingredientDidRefs);
     // now we want to look up the record.oip.didTx value from the top ranked record for each ingredient and assign it to ingredientDidRef, we may need to add pagination (there are 20 records limit per page by default) to check all returned records
     
     
@@ -335,25 +457,22 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
 
 
     // Extract prep time, cook time, total time, cuisine, and course
-    const prep_time_mins = record.recipe.prep_time_mins || null;
-    const cook_time_mins = record.recipe.cook_time_mins || null;
-    const total_time_mins = record.recipe.total_time_mins || null;
-    const servings = record.recipe.servings || null;
-    const cuisine = record.recipe.cuisine || null;
-    const course = record.recipe.course || null;
-    const notes = record.recipe.notes || null;
+    const prep_time_mins = firstRecipeSection.prep_time_mins || null;
+    const cook_time_mins = firstRecipeSection.cook_time_mins || null;
+    const total_time_mins = firstRecipeSection.total_time_mins || null;
+    const servings = firstRecipeSection.servings || null;
+    const cuisine = firstRecipeSection.cuisine || null;
+    const course = firstRecipeSection.course || null;
+    const notes = firstRecipeSection.notes || null;
 
     console.log('Missing Ingredients:', missingIngredientNames);
-    // console.log('Nutritional Info Array:', nutritionalInfoArray);
- 
     console.log('Original Ingredient Names:', ingredientNames);
-console.log('Units Before Assignment:', ingredientUnits);
-console.log('Amounts Before Assignment:', ingredientAmounts);
-console.log('Ingredient Did Refs:', ingredientRecords);
+    console.log('Units Before Assignment:', ingredientUnits);
+    console.log('Amounts Before Assignment:', ingredientAmounts);
+    console.log('Ingredient Did Refs:', ingredientRecords);
 
   // Normalize all ingredient names in `ingredientNames` upfront
   const normalizedIngredientNames = ingredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase());
-
 
   console.log('Normalized Ingredient Names:', normalizedIngredientNames);
   console.log('Missing Ingredient Names:', missingIngredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase()));
@@ -401,76 +520,46 @@ console.log('Final Amounts:', ingredientAmounts);
 console.log('Units After Assignment:', ingredientUnits);
 console.log('Amounts After Assignment:', ingredientAmounts);
 
-const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1) || Date.now() / 1;
-     
-    
-    // Assign to recipeData
-    const recipeData = {
-      basic: {
-        name: metadata.ogTitle || metadata.title || null,
-        language: "En",
-        date: recipeDate,
-        description,
-        webUrl: url || null,
-        nsfw: false,
-        // tagItems: [],
-      },
-      recipe: {
-        prep_time_mins,
-        cook_time_mins,
-        total_time_mins,
-        servings,
-        ingredient_amount: ingredientAmounts.length ? ingredientAmounts : null,
-        ingredient_unit: ingredientUnits.length ? ingredientUnits : null,
-        ingredient: ingredientDRefs,
-        instructions: instructions.length ? instructions : null,
-        notes,
-        cuisine,
-        course,
-        author: metadata.author || null
-      },
-      image: {
-        webUrl: imageUrl,
-        // contentType: imageFileType
-      },
-    };
+// Extract values from the first recipe section for the main recipe data
+const firstRecipeSection = record.recipe[0];
+const recipeDate = record.basic.date || Math.floor(Date.now() / 1000);
 
-    // TO DO, use this so that it doesnt break if there is no image included
-    // if (articleData.embeddedImage) {
-    //   recordToPublish.post.featuredImage = 
-    //     {
-    //       "basic": {
-    //         "name": articleData.title,
-    //         "language": "en",
-    //         "nsfw": false,
-    //         // "urlItems": [
-    //         //   {
-    //         //     "associatedUrlOnWeb": {
-    //         //       "url": articleData.embeddedImage
-    //         //     }
-    //         //   }
-    //         // ]
-    //       },
-    //       // "associatedUrlOnWeb": {
-    //       //   "url": articleData.embeddedImageUrl
-    //       // },
-    //       "image": {
-    //         "webUrl": articleData.embeddedImageUrl,
-    //         // "bittorrentAddress": imageBittorrentAddress,
-    //         "height": imageHeight,
-    //         "width": imageWidth,
-    //         "size": imageSize,
-    //         "contentType": imageFileType
-    //       }
-    //     }
-      
-    // }
+// Assign to recipeData
+const recipeData = {
+  basic: {
+    name: record.basic.name,
+    language: record.basic.language || "En",
+    date: recipeDate,
+    description: record.basic.description,
+    webUrl: record.basic.webUrl,
+    nsfw: record.basic.nsfw || false,
+    tagItems: record.basic.tagItems || [],
+  },
+  recipe: {
+    prep_time_mins: firstRecipeSection.prep_time_mins,
+    cook_time_mins: firstRecipeSection.cook_time_mins,
+    total_time_mins: firstRecipeSection.total_time_mins,
+    servings: firstRecipeSection.servings,
+    ingredient_amount: ingredientAmounts.length ? ingredientAmounts : null,
+    ingredient_unit: ingredientUnits.length ? ingredientUnits : null,
+    ingredient: ingredientDRefs,
+    instructions: firstRecipeSection.instructions,
+    notes: firstRecipeSection.notes,
+    cuisine: firstRecipeSection.cuisine,
+    course: firstRecipeSection.course,
+    author: firstRecipeSection.author || null
+  },
+  image: {
+    webUrl: record.image?.webUrl,
+    contentType: record.image?.contentType
+  },
+};
 
+// Remove any null ingredients from the final arrays
+ingredientDRefs = ingredientDRefs.filter(ref => ref !== null);
 
-
-// console.log('nutritionalInfo:', nutritionalInfo);
-    console.log('Recipe data:', recipeData);
-    recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
+console.log('Recipe data:', recipeData);
+recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
 
 
     // const newRecord = await publishNewRecord(record, recordType, publishFiles, addMediaToArweave, addMediaToIPFS, youtubeUrl);
