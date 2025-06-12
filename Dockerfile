@@ -76,11 +76,15 @@ COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
 
-# Create required media directories with proper permissions
-RUN mkdir -p ./media/temp_audio ./media/jfk/pdf ./media/jfk/audio ./media/jfk/images
-
 # Copy the .env file if it exists
 COPY .env .env
+
+# Set permissions and switch to non-root user first
+RUN chown -R node:node /usr/src/app
+USER node
+
+# Create required media directories as the node user
+RUN mkdir -p ./media/temp_audio ./media/jfk/pdf ./media/jfk/audio ./media/jfk/images
 
 # Expose all necessary ports
 EXPOSE 3005
@@ -89,10 +93,6 @@ EXPOSE 8081
 EXPOSE 8082
 EXPOSE 4040 
 EXPOSE 5555
-
-# Set permissions and switch to non-root user
-RUN chown -R node:node /usr/src/app
-USER node
 
 # Command to run all services
 CMD ["sh", "-c", "\
