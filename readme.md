@@ -111,18 +111,49 @@ ARFLEET_CLIENT_PATH=./arfleet
 2. Click **Backup Keyfile** and save as `config/arweave-keyfile.json`
 3. Fund your wallet with AR tokens for publishing
 
-### 5. Docker Setup
+### 5. Docker Deployment
 
-Start all services:
+#### Quick Start (Minimal Setup)
+
+For a lightweight installation with just the core services (Elasticsearch, Kibana, and OIP API):
+
 ```bash
-./start.sh
+# Make deployment script executable
+chmod +x deploy.sh
+
+# Start minimal deployment (recommended for first-time users)
+./deploy.sh up minimal
 ```
 
-This starts:
-- OIPArweave API server
-- Elasticsearch
-- Kibana (for data visualization)
-- IPFS node (if configured)
+This starts only the essential services:
+- ✅ **Elasticsearch** (database)
+- ✅ **Kibana** (data visualization) 
+- ✅ **OIP API server** (core functionality)
+
+Your OIP API will be available at: `http://localhost:3005`
+
+#### Other Deployment Options
+
+Need additional services like IPFS, Speech Synthesis, Text Generation, or GPU support? 
+
+📖 **See [DEPLOYMENT.md](DEPLOYMENT.md) for all deployment options:**
+- `minimal` - Core services only (recommended for beginners)
+- `standard` - Full distributed stack with all services
+- `full` - All services in one container (monolithic)
+- `gpu` - GPU-optimized deployment for RTX 4090 machines
+- `gpu-only` - Minimal GPU service for existing stacks
+- `full-gpu` - Full distributed stack with GPU features
+
+#### Alternative Commands
+
+You can also use:
+```bash
+# Using Make
+make minimal
+
+# Using Docker Compose directly  
+docker-compose --profile minimal up -d
+```
 
 ## Enhanced Media Publishing System
 
