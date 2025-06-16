@@ -34,8 +34,37 @@ const getTransaction = async (transactionId) => {
             console.log(`Found ${tags.length} tags for transaction ${transactionId}`);
         } catch (txError) {
             console.log(`Could not get transaction info from Arweave: ${txError.message}`);
-            // For bundled transactions, we might not be able to get tags this way
-            // We'll continue and try to get the data directly
+            
+            // For bundled transactions, try using GraphQL to get tags
+            try {
+                const gqlQuery = `
+                    query($txId: ID!) {
+                        transaction(id: $txId) {
+                            id
+                            tags {
+                                name
+                                value
+                            }
+                        }
+                    }
+                `;
+                
+                const gqlResponse = await axios.post('https://arweave.net/graphql', {
+                    query: gqlQuery,
+                    variables: { txId: transactionId }
+                });
+                
+                if (gqlResponse.data?.data?.transaction?.tags) {
+                    tags = gqlResponse.data.data.transaction.tags;
+                    console.log(`Found ${tags.length} tags via GraphQL for ${transactionId}`);
+                } else {
+                    console.log(`No tags found via GraphQL for ${transactionId}`);
+                }
+            } catch (gqlError) {
+                console.log(`GraphQL query also failed: ${gqlError.message}`);
+                // Continue without tags - this will be a problem for OIP functionality
+                console.warn(`⚠️  WARNING: No tags available for transaction ${transactionId}. This may cause OIP processing issues.`);
+            }
         }
         
         // Get the transaction data
