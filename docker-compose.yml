@@ -145,6 +145,20 @@ services:
     profiles:
       - standard
 
+  # GPU-enabled Speech Synthesizer (Coqui TTS with CUDA) - for GPU deployments
+  speech-synthesizer-gpu:
+    build:
+      context: ./speech-synthesizer
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "8082:8082"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - gpu
+      - full-gpu
+
   # Text generator for GPU machines - for distributed deployments
   text-generator:
     build: ./text-generator
@@ -184,4 +198,3 @@ networks:
 volumes:
   esdata:
   ipfsdata:
-  bisq-data:

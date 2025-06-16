@@ -134,7 +134,7 @@ Your OIP API will be available at: `http://localhost:3005`
 
 #### Other Deployment Options
 
-Need additional services like IPFS, Speech Synthesis, Text Generation, or GPU support? 
+Need additional services like IPFS, Speech Synthesis, Text Generation, GPU acceleration, or GPU-optimized AI services? 
 
 📖 **See [DEPLOYMENT.md](DEPLOYMENT.md) for all deployment options:**
 - `minimal` - Core services only (recommended for beginners)
@@ -602,7 +602,7 @@ node test/test-publisher.js --publish-irys
 
 1. **Start the backend services**:
    ```bash
-   ./start.sh
+   ./deploy.sh up minimal
    ```
 
 2. **Test basic media publishing**:
@@ -631,7 +631,7 @@ Comprehensive documentation is available:
 ### Common Issues
 
 1. **Canvas module errors**: Ensure system dependencies are installed
-2. **Elasticsearch connection**: Check Docker containers are running with `./start.sh`
+2. **Elasticsearch connection**: Check Docker containers are running with `./deploy.sh status`
 3. **Publishing fails**: Verify wallet has sufficient funds
 4. **AI features not working**: Check API keys in `.env`
 5. **IPFS publishing fails**: Ensure IPFS node is running on localhost:5001

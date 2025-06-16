@@ -13,7 +13,6 @@ const { createSwapsIndex, initializeIndices } = require('./config/createIndices'
 const { validateEnvironment } = require('./config/checkEnvironment');
 const dotenv = require('dotenv');
 const rootRoute = require('./routes/api');
-const swapRoutes = require('./routes/swap');
 const recordRoutes = require('./routes/records');
 const templateRoutes = require('./routes/templates');
 const creatorRoutes = require('./routes/creators');
@@ -124,7 +123,6 @@ app.use(bodyParser.json());
 
 // API routes
 app.use('/api', rootRoute);
-app.use('/api/swap', swapRoutes);
 app.use('/api/records', recordRoutes);
 app.use('/api/publish', publishRecords);
 app.use('/api/templates', templateRoutes);

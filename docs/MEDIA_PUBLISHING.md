@@ -267,7 +267,7 @@ npm run test:media         # Run media publishing tests only
 ### Manual Testing
 1. **Start the backend services**:
    ```bash
-   ./start.sh
+   ./deploy.sh up minimal
    ```
 
 2. **Test basic media publishing**:
