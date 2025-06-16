@@ -76,6 +76,14 @@ build: validate-profile check-env check-network ## Build and start services with
 	@echo "$(GREEN)Services built and started successfully$(NC)"
 	@make status
 
+rebuild: validate-profile check-env check-network ## Force rebuild (no cache) and start services with specified profile
+	@echo "$(BLUE)Force rebuilding and starting OIP Arweave with profile: $(PROFILE)$(NC)"
+	docker-compose --profile $(PROFILE) down
+	docker-compose --profile $(PROFILE) build --no-cache
+	docker-compose --profile $(PROFILE) up -d
+	@echo "$(GREEN)Services rebuilt and started successfully$(NC)"
+	@make status
+
 down: ## Stop all services
 	@echo "$(BLUE)Stopping all OIP Arweave services...$(NC)"
 	docker-compose down
@@ -127,6 +135,9 @@ gpu-only: ## Quick deploy: GPU OIP service only
 
 full-gpu: ## Quick deploy: Distributed stack with GPU features
 	@make up PROFILE=full-gpu
+
+rebuild-minimal: ## Quick rebuild: Force rebuild minimal profile
+	@make rebuild PROFILE=minimal
 
 # Development helpers
 dev-build: ## Development: Build without cache
