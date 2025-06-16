@@ -14,7 +14,6 @@ function checkRequiredEnvVars() {
   ];
   
   const recommendedVars = [
-    'BISQ_API_PASSWORD',
     'ELASTICCLIENTUSERNAME', 
     'ELASTICCLIENTPASSWORD'
   ];
