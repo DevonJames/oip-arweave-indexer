@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Client } = require('@elastic/elasticsearch');
+const { ensureIndexExists, ensureUserIndexExists } = require('../helpers/elasticsearch');
 
 const client = new Client({
     node: process.env.ELASTICSEARCHHOST,
@@ -179,11 +180,23 @@ async function createSwapsIndex() {
  */
 async function initializeIndices() {
     try {
+        console.log('Initializing Elasticsearch indices...');
+        
+        // Initialize core OIP indices first (records, templates, creatorregistrations)
+        await ensureIndexExists();
+        console.log('Core OIP indices (records, templates, creatorregistrations) initialized');
+        
+        // Initialize users index
+        await ensureUserIndexExists();
+        console.log('Users index initialized');
+        
+        // Initialize additional indices
         await Promise.all([
             createContentPaymentsIndex(),
             createNotificationsIndex(),
             createSwapsIndex()
         ]);
+        
         console.log('All indices initialized successfully');
         return true;
     } catch (error) {
