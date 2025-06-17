@@ -20,22 +20,21 @@ const getTransaction = async (transactionId) => {
     try {
         console.log(`Fetching transaction: ${transactionId}`);
         
-        // First try to get the transaction metadata and tags from Arweave
         let tags = [];
-        let transactionInfo = null;
+        let data = null;
         
         try {
-            // Try to get transaction info from Arweave
-            transactionInfo = await arweave.transactions.get(transactionId);
+            // Try to get transaction info and tags from Arweave
+            const transactionInfo = await arweave.transactions.get(transactionId);
             tags = transactionInfo.tags.map(tag => ({
                 name: tag.get('name', { decode: true, string: true }),
                 value: tag.get('value', { decode: true, string: true })
             }));
             console.log(`Found ${tags.length} tags for transaction ${transactionId}`);
         } catch (txError) {
-            console.log(`Could not get transaction info from Arweave: ${txError.message}`);
+            console.log(`Could not get transaction info from Arweave (likely bundled): ${txError.message}`);
             
-            // For bundled transactions, try using GraphQL to get tags
+            // For bundled transactions, try GraphQL to get tags
             try {
                 const gqlQuery = `
                     query($txId: ID!) {
@@ -57,49 +56,29 @@ const getTransaction = async (transactionId) => {
                 if (gqlResponse.data?.data?.transaction?.tags) {
                     tags = gqlResponse.data.data.transaction.tags;
                     console.log(`Found ${tags.length} tags via GraphQL for ${transactionId}`);
-                } else {
-                    console.log(`No tags found via GraphQL for ${transactionId}`);
                 }
             } catch (gqlError) {
-                console.log(`GraphQL query also failed: ${gqlError.message}`);
-                // Continue without tags - this will be a problem for OIP functionality
-                console.warn(`⚠️  WARNING: No tags available for transaction ${transactionId}. This may cause OIP processing issues.`);
+                console.log(`GraphQL query failed: ${gqlError.message}`);
             }
         }
         
-        // Get the transaction data
-        let data = null;
         try {
-            // Try using Arweave client first
+            // Get transaction data using the updated Arweave client
             data = await arweave.transactions.getData(transactionId, { decode: true, string: true });
-            console.log(`Successfully fetched data from Arweave client for ${transactionId}`);
-        } catch (arweaveError) {
-            console.log(`Arweave client failed: ${arweaveError.message}, trying direct HTTP request`);
+            console.log(`Successfully fetched data for ${transactionId}, type: ${typeof data}`);
             
-            // If Arweave client fails, try direct HTTP request
-            try {
-                const response = await axios.get(`https://arweave.net/${transactionId}`, {
-                    timeout: 10000,
-                    headers: {
-                        'Accept': 'application/json, text/plain, */*'
-                    }
-                });
-                data = response.data;
-                console.log(`Successfully fetched data via direct HTTP for ${transactionId}`);
-                
-                // If data is a string, try to parse it as JSON
-                if (typeof data === 'string') {
-                    try {
-                        data = JSON.parse(data);
-                    } catch (parseError) {
-                        // If it's not JSON, keep as string
-                        console.log('Data is not JSON, keeping as string');
-                    }
+            // Parse JSON if it's a JSON string
+            if (typeof data === 'string' && (data.trim().startsWith('[') || data.trim().startsWith('{'))) {
+                try {
+                    data = JSON.parse(data);
+                    console.log(`Parsed JSON data for ${transactionId}`);
+                } catch (parseError) {
+                    console.log(`Data is not valid JSON, keeping as string`);
                 }
-            } catch (httpError) {
-                console.error(`HTTP request also failed: ${httpError.message}`);
-                throw new Error(`Failed to fetch transaction data for ${transactionId}: ${httpError.message}`);
             }
+        } catch (dataError) {
+            console.error(`Failed to fetch transaction data: ${dataError.message}`);
+            throw new Error(`Failed to fetch transaction data for ${transactionId}: ${dataError.message}`);
         }
         
         if (!data) {
