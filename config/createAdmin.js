@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client } = require('@elastic/elasticsearch');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 // const { elasticClient, ensureUserIndexExists } = require('../helpers/elasticsearch');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;

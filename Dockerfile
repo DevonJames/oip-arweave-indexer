@@ -54,8 +54,9 @@ RUN npm install --production --verbose --ignore-scripts || \
     (echo "Second install failed, trying basic install..." && \
      npm install --production --ignore-scripts --no-optional --no-fund --no-audit)
 
-# Try to rebuild native modules, but don't fail if some can't be built
-RUN npm rebuild || echo "Some native modules failed to rebuild, continuing..."
+# Rebuild native modules that need it (canvas, puppeteer, etc.)
+# bcryptjs doesn't need rebuilding since it's pure JavaScript
+RUN npm rebuild canvas sharp || echo "Some optional native modules failed to rebuild, continuing..."
 
 # Move node_modules to parent directory
 RUN mv node_modules ../

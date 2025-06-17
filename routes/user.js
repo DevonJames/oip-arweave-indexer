@@ -1,5 +1,5 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { elasticClient, ensureUserIndexExists, verifyAdmin } = require('../helpers/elasticsearch');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
