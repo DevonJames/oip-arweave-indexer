@@ -63,9 +63,9 @@ const getTransaction = async (transactionId) => {
         }
         
         try {
-            // Get transaction data using the updated Arweave client
+            // Try the Arweave client first
             data = await arweave.transactions.getData(transactionId, { decode: true, string: true });
-            console.log(`Successfully fetched data for ${transactionId}, type: ${typeof data}`);
+            console.log(`Successfully fetched data via Arweave client for ${transactionId}, type: ${typeof data}`);
             
             // Parse JSON if it's a JSON string
             if (typeof data === 'string' && (data.trim().startsWith('[') || data.trim().startsWith('{'))) {
@@ -77,8 +77,24 @@ const getTransaction = async (transactionId) => {
                 }
             }
         } catch (dataError) {
-            console.error(`Failed to fetch transaction data: ${dataError.message}`);
-            throw new Error(`Failed to fetch transaction data for ${transactionId}: ${dataError.message}`);
+            console.log(`Arweave client failed: ${dataError.message}, trying direct HTTP`);
+            
+            // Fallback to direct HTTP request (this works as you confirmed)
+            try {
+                const response = await axios.get(`https://arweave.net/${transactionId}`, {
+                    timeout: 10000,
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*'
+                    }
+                });
+                data = response.data;
+                console.log(`Successfully fetched data via direct HTTP for ${transactionId}, type: ${typeof data}`);
+                
+                // Data from arweave.net is already parsed by axios, don't parse again
+            } catch (httpError) {
+                console.error(`Direct HTTP also failed: ${httpError.message}`);
+                throw new Error(`Failed to fetch transaction data for ${transactionId}: ${httpError.message}`);
+            }
         }
         
         if (!data) {
