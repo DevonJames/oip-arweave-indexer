@@ -1944,7 +1944,6 @@ async function processNewTemplate(transaction) {
         console.log(getFileInfo(), getLineNumber(),'cannnot find transaction (or tags or fields), skipping txid:', transaction.transactionId);
         return null;
     }
-    const templateName = transaction.tags.find(tag => tag.name === 'TemplateName')?.value;
     let parsedData;
     try {
         parsedData = JSON.parse(transaction.data);
@@ -1954,16 +1953,31 @@ async function processNewTemplate(transaction) {
         return null;
     }
     const fieldsString = JSON.stringify(parsedData);
-    const tags = transaction.tags.slice(0, -1);
-    const dataForSignature = fieldsString + JSON.stringify(tags);
     const isValid = validateTemplateFields(fieldsString);
     if (!isValid) {
         console.log(getFileInfo(), getLineNumber(),`Template failed - Field formatting validation failed for transaction ${transaction.transactionId}`);
         return null;
     }
-    const message = dataForSignature;
-    // Extract Creator from tags array since it might not be directly on transaction object
+    
+    // Extract all necessary variables first
+    const templateName = transaction.tags.find(tag => tag.name === 'TemplateName')?.value;
     const creator = transaction.creator || transaction.tags.find(tag => tag.name === 'Creator')?.value;
+    const ver = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
+    
+    // Reconstruct tags in the exact same order as during signature creation
+    // to ensure JSON.stringify produces the same string
+    const reconstructedTags = [
+        { name: 'Content-Type', value: 'application/json' },
+        { name: 'Index-Method', value: 'OIP' },
+        { name: 'Ver', value: ver || '0.8.0' },
+        { name: 'Type', value: 'Template' },
+        { name: 'TemplateName', value: templateName },
+        { name: 'Creator', value: creator }
+    ];
+    
+    const dataForSignature = fieldsString + JSON.stringify(reconstructedTags);
+    console.log(getFileInfo(), getLineNumber(), 'Reconstructed tags for verification:', reconstructedTags);
+    const message = dataForSignature;
     
     if (!creator) {
         console.error(getFileInfo(), getLineNumber(), `No Creator found for transaction ${transaction.transactionId}`);
@@ -2013,9 +2027,6 @@ async function processNewTemplate(transaction) {
             template: templateName,
             fields: fieldsString
         };
-        // Extract Ver from tags array since it might not be directly on transaction object
-        const ver = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
-        
         if (!ver) {
             console.error(getFileInfo(), getLineNumber(), `No Ver found for transaction ${transaction.transactionId}`);
             console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
@@ -2105,7 +2116,6 @@ async function processNewRecord(transaction, remapTemplates = []) {
     }
     else {
     // handle records
-    dataForSignature = JSON.stringify(tags) + transaction.data;
     // Extract Creator from tags array since it might not be directly on transaction object
     const creator = transaction.creator || transaction.tags.find(tag => tag.name === 'Creator')?.value;
     
