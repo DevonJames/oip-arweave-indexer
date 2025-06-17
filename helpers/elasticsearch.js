@@ -16,8 +16,8 @@ const path = require('path');
 const fs = require('fs');
 const e = require('express');
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
-let startBlockHeight = 1463762
-// 1579580;
+// let startBlockHeight = 1463762
+let startBlockHeight = 1579580; // a few blocks before the first proper record
 
 const elasticClient = new Client({
     node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
@@ -670,7 +670,7 @@ async function searchCreatorByAddress(didAddress) {
             if (didAddress === 'did:arweave:u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0') {
                 console.log(getFileInfo(), getLineNumber(), 'Exception - creator is u4B6..., looking up registration data from hard-coded txid');
                 const hardCodedTxId = 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y';
-                const inArweaveBlock = startBlockHeight;
+                const inArweaveBlock = 1463761;
                 const transaction = await getTransaction(hardCodedTxId);
                 const creatorSig = transaction.creatorSig;
                 const transactionData = JSON.parse(transaction.data);
@@ -1808,10 +1808,14 @@ async function searchArweaveForNewTransactions(foundInDB) {
     await ensureIndexExists();
     const { qtyRecordsInDB, maxArweaveBlockInDB } = foundInDB;
     // const min = (qtyRecordsInDB === 0) ? 1463750 : (maxArweaveBlockInDB + 1);
-    const min = (qtyRecordsInDB === 0) ? 1579580 : (maxArweaveBlockInDB + 1); // before todays templates
+    // const min = (qtyRecordsInDB === 0) ? 1579580 : (maxArweaveBlockInDB + 1); // before todays templates
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
-    console.log('Searching for new OIP data after block:', min, getFileInfo(), getLineNumber());
+    // Use startBlockHeight as minimum search block, ensuring we never search below it
+    // even after the bootstrap creator has been indexed
+    const min = Math.max(startBlockHeight, (maxArweaveBlockInDB + 1));
+    
+    console.log('Searching for new OIP data after block:', min, `(startBlockHeight: ${startBlockHeight}, maxArweaveBlockInDB: ${maxArweaveBlockInDB})`, getFileInfo(), getLineNumber());
 
     let allTransactions = [];
     let hasNextPage = true;
