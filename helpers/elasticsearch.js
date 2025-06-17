@@ -598,8 +598,10 @@ async function deleteRecordFromDB(creatorDid, transaction) {
         didTxToDelete = typeof transaction.data === 'string' 
             ? JSON.parse(transaction.data).delete.didTx 
             : transaction.data.delete.didTx;
-        console.log(getFileInfo(), getLineNumber(), 'didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete })
-        if (creatorDid === 'did:arweave:' + transaction.creator) {
+        // Extract Creator from tags array since it might not be directly on transaction object
+        const creator = transaction.creator || transaction.tags.find(tag => tag.name === 'Creator')?.value;
+        console.log(getFileInfo(), getLineNumber(), 'didTxToDelete:', creatorDid, creator, transaction.data, { didTxToDelete })
+        if (creatorDid === 'did:arweave:' + creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
 
             const searchResponse = await elasticClient.search({
@@ -672,8 +674,9 @@ async function searchCreatorByAddress(didAddress) {
                 const hardCodedTxId = 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y';
                 const inArweaveBlock = 1463761;
                 const transaction = await getTransaction(hardCodedTxId);
-                const creatorSig = transaction.creatorSig;
-                const transactionData = JSON.parse(transaction.data);
+                        // Extract CreatorSig from tags array since it might not be directly on transaction object
+        const creatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+        const transactionData = JSON.parse(transaction.data);
                 const creatorPublicKey = transactionData[0]["1"];
                 const handle = transactionData[0]["2"];
                 const surname = transactionData[0]["3"]
@@ -699,7 +702,7 @@ async function searchCreatorByAddress(didAddress) {
                         didTx: 'did:arweave:' + hardCodedTxId,
                         inArweaveBlock,
                         indexedAt: new Date(),
-                        ver: transaction.ver,
+                        ver: transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value,
                         signature: creatorSig,
                         creator: {
                             creatorHandle: creatorHandle,
@@ -1579,8 +1582,8 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                         didTx: result.didTx,
                         inArweaveBlock: inArweaveBlock,
                         indexedAt: new Date(),
-                        ver: transaction.ver,
-                        signature: transaction.creatorSig,
+                        ver: transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value,
+                        signature: transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value,
                         creator: {
                             creatorHandle: result.creatorHandle,
                             didAddress: result.didAddress,
@@ -1939,8 +1942,17 @@ async function processNewTemplate(transaction) {
         return null;
     }
     const message = dataForSignature;
-    const didAddress = 'did:arweave:' + transaction.creator;
-    console.log(getFileInfo(), getLineNumber(), didAddress);
+    // Extract Creator from tags array since it might not be directly on transaction object
+    const creator = transaction.creator || transaction.tags.find(tag => tag.name === 'Creator')?.value;
+    
+    if (!creator) {
+        console.error(getFileInfo(), getLineNumber(), `No Creator found for transaction ${transaction.transactionId}`);
+        console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+        return null;
+    }
+    
+    const didAddress = 'did:arweave:' + creator;
+    console.log(getFileInfo(), getLineNumber(), didAddress, 'creator:', creator);
     const creatorInfo = await searchCreatorByAddress(didAddress);
     if (!creatorInfo) {
         console.error(`Creator data not found for DID address: ${didAddress}`);
@@ -1951,8 +1963,16 @@ async function processNewTemplate(transaction) {
     const publicKey = creatorInfo.data.publicKey;
     console.log(getFileInfo(), getLineNumber(), publicKey);
 
-    const signatureBase64 = transaction.creatorSig;
-    console.log(getFileInfo(), getLineNumber()), signatureBase64;
+    // Extract CreatorSig from tags array since it might not be directly on transaction object
+    const signatureBase64 = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+    console.log(getFileInfo(), getLineNumber(), 'signatureBase64:', signatureBase64);
+    
+    if (!signatureBase64) {
+        console.error(getFileInfo(), getLineNumber(), `No CreatorSig found for transaction ${transaction.transactionId}`);
+        console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+        return null;
+    }
+    
     const isVerified = await verifySignature(message, signatureBase64, publicKey, didAddress);
     console.log(getFileInfo(), getLineNumber());
     if (!isVerified) {
@@ -1964,16 +1984,25 @@ async function processNewTemplate(transaction) {
         const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
         const data = {
             TxId: transaction.transactionId,
-            creator: transaction.creator,
-            creatorSig: transaction.creatorSig,
+            creator: creator,
+            creatorSig: signatureBase64,
             template: templateName,
             fields: fieldsString
         };
+        // Extract Ver from tags array since it might not be directly on transaction object
+        const ver = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
+        
+        if (!ver) {
+            console.error(getFileInfo(), getLineNumber(), `No Ver found for transaction ${transaction.transactionId}`);
+            console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+            return null;
+        }
+        
         const oip = {
             didTx: 'did:arweave:' + transaction.transactionId,
             inArweaveBlock: inArweaveBlock,
             indexedAt: new Date().toISOString(),
-            ver: transaction.ver,
+            ver: ver,
             creator: {
                 creatorHandle: creatorInfo.data.creatorHandle,
                 didAddress: creatorInfo.data.didAddress,
@@ -2019,7 +2048,10 @@ async function processNewRecord(transaction, remapTemplates = []) {
     const transactionId = transaction.transactionId;
     const tags = transaction.tags.slice(0, -1);
     const recordType = tags.find(tag => tag.name === 'RecordType')?.value;
-    console.log(getFileInfo(), getLineNumber(), 'Record type:', recordType);
+    
+    // Extract CreatorSig from tags array since it might not be directly on transaction object
+    const creatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+    console.log(getFileInfo(), getLineNumber(), 'Record type:', recordType, 'CreatorSig:', creatorSig ? 'found' : 'NOT FOUND');
     // handle creator registration
     let creatorInfo;
     if (recordType && recordType === 'creatorRegistration') {
@@ -2047,8 +2079,17 @@ async function processNewRecord(transaction, remapTemplates = []) {
     else {
     // handle records
     dataForSignature = JSON.stringify(tags) + transaction.data;
-    let creatorDid = txidToDid(transaction.creator);
-    console.log(getFileInfo(), getLineNumber());
+    // Extract Creator from tags array since it might not be directly on transaction object
+    const creator = transaction.creator || transaction.tags.find(tag => tag.name === 'Creator')?.value;
+    
+    if (!creator) {
+        console.error(getFileInfo(), getLineNumber(), `No Creator found for transaction ${transaction.transactionId}`);
+        console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+        return { records: newRecords, recordsToDelete };
+    }
+    
+    let creatorDid = txidToDid(creator);
+    console.log(getFileInfo(), getLineNumber(), 'creator:', creator, 'creatorDid:', creatorDid);
     
     creatorInfo = (!creatorInfo) ? await searchCreatorByAddress(creatorDid) : creatorInfo;
     console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
@@ -2083,6 +2124,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
     // handle delete message
     if (isDeleteMessageFound) {
         console.log(getFileInfo(), getLineNumber(), 'Delete message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
+        // Extract Ver from tags array since it might not be directly on transaction object
+        const deleteVersion = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
         record = {
             data: {...transactionData},
             oip: {
@@ -2090,8 +2133,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 didTx: 'did:arweave:' + transaction.transactionId,
                 inArweaveBlock: inArweaveBlock,
                 indexedAt: new Date().toISOString(),
-                ver: transaction.ver,
-                signature: transaction.creatorSig,
+                ver: deleteVersion,
+                signature: creatorSig,
                 creator: {
                     ...creatorInfo.data
                     // creatorHandle: creatorInfo.data.creatorHandle,
@@ -2122,7 +2165,15 @@ async function processNewRecord(transaction, remapTemplates = []) {
         // handle new records
         console.log(getFileInfo(), getLineNumber());
         // Filter for minimum OIP version (0.8.0 or above)
-        const version = transaction.ver;
+        // Extract Ver from tags array since it might not be directly on transaction object
+        const version = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
+        
+        if (!version) {
+            console.error(getFileInfo(), getLineNumber(), `No Ver found for transaction ${transaction.transactionId}`);
+            console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+            return { records: newRecords, recordsToDelete };
+        }
+        
         const versionParts = version.split('.').map(Number);
         const minimumVersionParts = [0, 8, 0];
 
@@ -2155,8 +2206,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
                     didTx: 'did:arweave:' + transaction.transactionId,
                     inArweaveBlock: inArweaveBlock,
                     indexedAt: new Date().toISOString(),
-                    ver: transaction.ver,
-                    signature: transaction.creatorSig,
+                    ver: version,
+                    signature: creatorSig,
                     creator: {
                         creatorHandle: creatorInfo.data.creatorHandle,
                         didAddress: creatorInfo.data.didAddress,
