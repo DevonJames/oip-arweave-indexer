@@ -67,15 +67,9 @@ const getTransaction = async (transactionId) => {
             data = await arweave.transactions.getData(transactionId, { decode: true, string: true });
             console.log(`Successfully fetched data via Arweave client for ${transactionId}, type: ${typeof data}`);
             
-            // Parse JSON if it's a JSON string
-            if (typeof data === 'string' && (data.trim().startsWith('[') || data.trim().startsWith('{'))) {
-                try {
-                    data = JSON.parse(data);
-                    console.log(`Parsed JSON data for ${transactionId}`);
-                } catch (parseError) {
-                    console.log(`Data is not valid JSON, keeping as string`);
-                }
-            }
+            // Keep data as string for compatibility with elasticsearch.js
+            // Don't parse it here - let the consuming code decide when to parse
+            console.log(`Arweave client returned string data for ${transactionId}`)
         } catch (dataError) {
             console.log(`Arweave client failed: ${dataError.message}, trying direct HTTP`);
             
@@ -87,10 +81,15 @@ const getTransaction = async (transactionId) => {
                         'Accept': 'application/json, text/plain, */*'
                     }
                 });
-                data = response.data;
-                console.log(`Successfully fetched data via direct HTTP for ${transactionId}, type: ${typeof data}`);
                 
-                // Data from arweave.net is already parsed by axios, don't parse again
+                // Convert back to JSON string for compatibility with elasticsearch.js
+                // The elasticsearch code expects transaction.data to be a JSON string
+                if (typeof response.data === 'object') {
+                    data = JSON.stringify(response.data);
+                } else {
+                    data = response.data;
+                }
+                console.log(`Successfully fetched data via direct HTTP for ${transactionId}, converted to string`)
             } catch (httpError) {
                 console.error(`Direct HTTP also failed: ${httpError.message}`);
                 throw new Error(`Failed to fetch transaction data for ${transactionId}: ${httpError.message}`);
