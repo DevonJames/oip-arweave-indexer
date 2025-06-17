@@ -35,6 +35,25 @@ function getFileInfo() {
 }
 
 /**
+ * Converts URL-safe base64 (used by Arweave) to regular base64 format
+ * @param {string} urlSafeBase64 - The URL-safe base64 string
+ * @returns {string} Regular base64 string with proper padding
+ */
+function convertUrlSafeBase64ToBase64(urlSafeBase64) {
+    if (!urlSafeBase64) return null;
+    
+    // Convert URL-safe base64 characters to regular base64
+    let base64 = urlSafeBase64.replace(/-/g, '+').replace(/_/g, '/');
+    
+    // Add padding if necessary
+    while (base64.length % 4) {
+        base64 += '=';
+    }
+    
+    return base64;
+}
+
+/**
  * Function to load remap templates from the file system.
  * @param {String} templateName - The name of the template to load.
  * @returns {Object|null} - The remap template object or null if not found.
@@ -675,7 +694,8 @@ async function searchCreatorByAddress(didAddress) {
                 const inArweaveBlock = 1463761;
                 const transaction = await getTransaction(hardCodedTxId);
                         // Extract CreatorSig from tags array since it might not be directly on transaction object
-        const creatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+        const rawCreatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+        const creatorSig = convertUrlSafeBase64ToBase64(rawCreatorSig);
         const transactionData = JSON.parse(transaction.data);
                 const creatorPublicKey = transactionData[0]["1"];
                 const handle = transactionData[0]["2"];
@@ -1480,7 +1500,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 inArweaveBlock: block,
                 indexedAt: new Date(),
                 ver: transaction.ver,
-                signature: transaction.creatorSig,
+                                        signature: creatorSig,
                 creator: {
                     creatorHandle,
                     didAddress: creatorInfo.data.didAddress,
@@ -1583,7 +1603,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                         inArweaveBlock: inArweaveBlock,
                         indexedAt: new Date(),
                         ver: transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value,
-                        signature: transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value,
+                        signature: creatorSig,
                         creator: {
                             creatorHandle: result.creatorHandle,
                             didAddress: result.didAddress,
@@ -1964,14 +1984,18 @@ async function processNewTemplate(transaction) {
     console.log(getFileInfo(), getLineNumber(), publicKey);
 
     // Extract CreatorSig from tags array since it might not be directly on transaction object
-    const signatureBase64 = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
-    console.log(getFileInfo(), getLineNumber(), 'signatureBase64:', signatureBase64);
+    const rawSignature = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+    console.log(getFileInfo(), getLineNumber(), 'rawSignature:', rawSignature);
     
-    if (!signatureBase64) {
+    if (!rawSignature) {
         console.error(getFileInfo(), getLineNumber(), `No CreatorSig found for transaction ${transaction.transactionId}`);
         console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
         return null;
     }
+    
+    // Convert from URL-safe base64 (used by Arweave) to regular base64 (expected by verifySignature)
+    const signatureBase64 = convertUrlSafeBase64ToBase64(rawSignature);
+    console.log(getFileInfo(), getLineNumber(), 'converted signatureBase64:', signatureBase64);
     
     const isVerified = await verifySignature(message, signatureBase64, publicKey, didAddress);
     console.log(getFileInfo(), getLineNumber());
@@ -2050,7 +2074,10 @@ async function processNewRecord(transaction, remapTemplates = []) {
     const recordType = tags.find(tag => tag.name === 'RecordType')?.value;
     
     // Extract CreatorSig from tags array since it might not be directly on transaction object
-    const creatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+    const rawCreatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+    
+    // Convert from URL-safe base64 (used by Arweave) to regular base64 if needed
+    const creatorSig = convertUrlSafeBase64ToBase64(rawCreatorSig);
     console.log(getFileInfo(), getLineNumber(), 'Record type:', recordType, 'CreatorSig:', creatorSig ? 'found' : 'NOT FOUND');
     // handle creator registration
     let creatorInfo;

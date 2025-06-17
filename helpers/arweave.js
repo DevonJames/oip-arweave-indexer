@@ -14,7 +14,7 @@ const arweave = Arweave.init(arweaveConfig);
 /**
  * Retrieves a transaction from Arweave with its tags and data.
  * @param {string} transactionId 
- * @returns {Object} Transaction data and tags
+ * @returns {Object} Transaction data and tagsƒ
  */
 const getTransaction = async (transactionId) => {
     try {
@@ -105,7 +105,7 @@ const getTransaction = async (transactionId) => {
         const creator = tags.find(tag => tag.name === 'Creator')?.value;
         const creatorSig = tags.find(tag => tag.name === 'CreatorSig')?.value;
         
-        console.log(`Successfully retrieved transaction ${transactionId} with ${tags.length} tags`);
+        console.log(`Successfully retrieved transaction ${transactionId} with ${tags.length} tags: ${tags.map(tag => `${tag.name}: ${tag.value}`).join(', ')}`);
         return { transactionId, tags, ver, creator, creatorSig, data };
         
     } catch (error) {
