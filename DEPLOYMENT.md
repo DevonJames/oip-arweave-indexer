@@ -120,6 +120,7 @@ docker-compose --profile gpu up -d
 **Services Included**:
 - ✅ OIP service optimized for GPU (connects to external network)
 - ✅ Text Generator with GPU support
+- ✅ Speech Synthesizer with GPU acceleration (CUDA)
 
 **Dockerfile**: Uses `Dockerfile` but connects to external `oiparweave_oip-network`
 
@@ -138,11 +139,12 @@ docker-compose --profile gpu up -d
 - External Docker network `oiparweave_oip-network`
 
 ### `full-gpu` - Distributed with GPU
-**Use Case**: Full distributed stack with GPU text generation
+**Use Case**: Full distributed stack with GPU text generation and speech synthesis
 
 **Services Included**:
 - ✅ All services from `standard` profile
 - ✅ GPU-enabled Text Generator
+- ✅ GPU-enabled Speech Synthesizer (replaces standard speech synthesizer)
 
 ## 🔧 Dockerfile Variants
 
@@ -277,8 +279,9 @@ Different profiles expose different ports:
 - `minimal`: 3005, 9229, 9200, 5601
 - `standard`: 3005, 9229, 9200, 5601, 8082, 4040
 - `full`: 3005, 9229, 9200, 5601, 8081, 8082, 4040 (all in oip-full)
-- `gpu`: 3005, 9229, 8081
+- `gpu`: 3005, 9229, 8081, 8082
 - `gpu-only`: 3005, 9229
+- `full-gpu`: 3005, 9229, 9200, 5601, 8081, 8082, 4040
 
 ### Network Issues
 ```bash
