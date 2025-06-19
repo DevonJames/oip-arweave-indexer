@@ -84,11 +84,27 @@ const verifySignature = async (message, signatureBase64, publicKey, creatorAddre
 };
 
 const signMessage = async (data) => {
+    console.log('\n=== SIGN MESSAGE FUNCTION START ===');
+    console.log('INPUT DATA TO SIGN:', data);
+    console.log('INPUT DATA LENGTH:', data.length);
+    console.log('INPUT DATA TYPE:', typeof data);
+    
     const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
     const myPublicKey = jwk.n;
     const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
+    console.log('SIGNER ADDRESS:', myAddress);
+    console.log('SIGNER PUBLIC KEY (first 50 chars):', myPublicKey.substring(0, 50) + '...');
+    
+    console.log('ABOUT TO CALL arweave.crypto.sign...');
     const signatureObject = await arweave.crypto.sign(jwk, data);
+    console.log('SIGNATURE OBJECT TYPE:', typeof signatureObject);
+    console.log('SIGNATURE OBJECT LENGTH:', signatureObject.length);
+    
     const signatureBase64 = Buffer.from(signatureObject).toString('base64');
+    console.log('FINAL SIGNATURE BASE64:', signatureBase64);
+    console.log('FINAL SIGNATURE LENGTH:', signatureBase64.length);
+    console.log('=== SIGN MESSAGE FUNCTION END ===\n');
+    
     return signatureBase64;
 };
 

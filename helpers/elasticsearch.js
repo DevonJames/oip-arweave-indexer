@@ -42,8 +42,16 @@ function getFileInfo() {
 function convertUrlSafeBase64ToBase64(urlSafeBase64) {
     if (!urlSafeBase64) return null;
     
-    // Convert URL-safe base64 characters to regular base64
-    let base64 = urlSafeBase64.replace(/-/g, '+').replace(/_/g, '/');
+    // First, fix any corruption from GraphQL retrieval (spaces that should be plus signs)
+    let base64 = urlSafeBase64;
+    if (urlSafeBase64.includes(' ')) {
+        console.log('SIGNATURE CONTAINS SPACES (GraphQL corruption), fixing...');
+        base64 = urlSafeBase64.replace(/ /g, '+');
+        console.log('FIXED SIGNATURE (first 50 chars):', base64.substring(0, 50) + '...');
+    }
+    
+    // Then convert URL-safe base64 characters to regular base64
+    base64 = base64.replace(/-/g, '+').replace(/_/g, '/');
     
     // Add padding if necessary
     while (base64.length % 4) {
@@ -1952,7 +1960,13 @@ async function processNewTemplate(transaction) {
         console.error(getFileInfo(), getLineNumber(),`Invalid JSON data: ${transaction.data}`);
         return null;
     }
+    
+    // Debug: Log what we're working with
+    console.log(getFileInfo(), getLineNumber(), 'Raw transaction.data:', transaction.data);
+    console.log(getFileInfo(), getLineNumber(), 'Parsed data:', parsedData);
+    
     const fieldsString = JSON.stringify(parsedData);
+    console.log(getFileInfo(), getLineNumber(), 'fieldsString that will be used for signature:', fieldsString);
     const isValid = validateTemplateFields(fieldsString);
     if (!isValid) {
         console.log(getFileInfo(), getLineNumber(),`Template failed - Field formatting validation failed for transaction ${transaction.transactionId}`);
@@ -1964,12 +1978,17 @@ async function processNewTemplate(transaction) {
     const creator = transaction.creator || transaction.tags.find(tag => tag.name === 'Creator')?.value;
     const ver = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
     
+    // Debug: Log original tags for comparison
+    console.log(getFileInfo(), getLineNumber(), 'Original transaction tags:', transaction.tags);
+    console.log(getFileInfo(), getLineNumber(), 'Extracted values - templateName:', templateName, 'creator:', creator, 'ver:', ver);
+    
     // Reconstruct tags in the exact same order as during signature creation
     // to ensure JSON.stringify produces the same string
+    // Note: Using '0.8.0' exactly as hardcoded in template creation for consistency
     const reconstructedTags = [
         { name: 'Content-Type', value: 'application/json' },
         { name: 'Index-Method', value: 'OIP' },
-        { name: 'Ver', value: ver || '0.8.0' },
+        { name: 'Ver', value: '0.8.0' },
         { name: 'Type', value: 'Template' },
         { name: 'TemplateName', value: templateName },
         { name: 'Creator', value: creator }
@@ -1977,6 +1996,8 @@ async function processNewTemplate(transaction) {
     
     const dataForSignature = fieldsString + JSON.stringify(reconstructedTags);
     console.log(getFileInfo(), getLineNumber(), 'Reconstructed tags for verification:', reconstructedTags);
+    console.log(getFileInfo(), getLineNumber(), 'JSON.stringify(reconstructedTags):', JSON.stringify(reconstructedTags));
+    console.log(getFileInfo(), getLineNumber(), 'Final dataForSignature for verification:', dataForSignature);
     const message = dataForSignature;
     
     if (!creator) {
@@ -2011,8 +2032,14 @@ async function processNewTemplate(transaction) {
     const signatureBase64 = convertUrlSafeBase64ToBase64(rawSignature);
     console.log(getFileInfo(), getLineNumber(), 'converted signatureBase64:', signatureBase64);
     
+    console.log(getFileInfo(), getLineNumber(), 'About to verify signature with:');
+    console.log(getFileInfo(), getLineNumber(), '- message:', message);
+    console.log(getFileInfo(), getLineNumber(), '- signatureBase64:', signatureBase64);
+    console.log(getFileInfo(), getLineNumber(), '- publicKey:', publicKey);
+    console.log(getFileInfo(), getLineNumber(), '- didAddress:', didAddress);
+    
     const isVerified = await verifySignature(message, signatureBase64, publicKey, didAddress);
-    console.log(getFileInfo(), getLineNumber());
+    console.log(getFileInfo(), getLineNumber(), 'Signature verification result:', isVerified);
     if (!isVerified) {
         console.log(getFileInfo(), getLineNumber());
         console.error(getFileInfo(), getLineNumber(),`Signature verification failed for transaction ${transaction.transactionId}`);
