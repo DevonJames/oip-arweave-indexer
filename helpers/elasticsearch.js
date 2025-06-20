@@ -1611,11 +1611,15 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 
                 console.log(`DEBUG: transaction.data length: ${transaction.data?.length}`);
                 console.log(`DEBUG: transaction.data (first 200 chars): ${transaction.data?.substring(0, 200)}...`);
+                console.log(`DEBUG: transaction.data (last 100 chars): ...${transaction.data?.substring(transaction.data.length - 100)}`);
                 
-                const dataForSignature = JSON.stringify(reconstructedTags) + transaction.data;
+                const tagsJson = JSON.stringify(reconstructedTags);
+                console.log(`DEBUG: JSON.stringify(reconstructedTags): ${tagsJson}`);
+                
+                const dataForSignature = tagsJson + transaction.data;
                 console.log(`DEBUG: dataForSignature length: ${dataForSignature.length}`);
-                console.log(`DEBUG: dataForSignature (first 200 chars): ${dataForSignature.substring(0, 200)}...`);
-                console.log(`DEBUG: JSON.stringify(reconstructedTags) length: ${JSON.stringify(reconstructedTags).length}`);
+                console.log(`DEBUG: dataForSignature (first 300 chars): ${dataForSignature.substring(0, 300)}...`);
+                console.log(`DEBUG: dataForSignature (last 100 chars): ...${dataForSignature.substring(dataForSignature.length - 100)}`);
                 
                 console.log(`DEBUG: About to verify signature with:`);
                 console.log(`DEBUG: - dataForSignature length: ${dataForSignature.length}`);
@@ -1623,10 +1627,23 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 console.log(`DEBUG: - publicKey length: ${publicKey.length}`);
                 console.log(`DEBUG: - creatorAddress: ${creatorAddress}`);
                 
+                // Let's also try the format that regular records use (non-reconstructed tags)
+                const originalTagsWithoutSig = transaction.tags.filter(tag => tag.name !== 'CreatorSig');
+                const originalDataForSignature = JSON.stringify(originalTagsWithoutSig) + transaction.data;
+                console.log(`DEBUG: Original tags approach - dataForSignature length: ${originalDataForSignature.length}`);
+                console.log(`DEBUG: Original tags approach - dataForSignature (first 300 chars): ${originalDataForSignature.substring(0, 300)}...`);
+                
                 let isVerified = false;
                 try {
                     isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, creatorAddress);
-                    console.log(`DEBUG: Signature verification result: ${isVerified}`);
+                    console.log(`DEBUG: Signature verification result (reconstructed tags): ${isVerified}`);
+                    
+                    if (!isVerified) {
+                        // Try with original tags order from transaction
+                        console.log(`DEBUG: Trying verification with original tags order...`);
+                        isVerified = await verifySignature(originalDataForSignature, signatureBase64, publicKey, creatorAddress);
+                        console.log(`DEBUG: Signature verification result (original tags): ${isVerified}`);
+                    }
                 } catch (error) {
                     console.error(`DEBUG: Error during signature verification:`, error);
                     console.error(`Creator registration signature verification failed for transaction ${transaction.transactionId}`);
