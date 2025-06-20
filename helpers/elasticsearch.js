@@ -1593,13 +1593,45 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 const signatureBase64 = convertUrlSafeBase64ToBase64(rawSignature);
                 console.log(`DEBUG: Signature after URL-safe conversion (first 50 chars): ${signatureBase64.substring(0, 50)}...`);
                 
-                let tags = transaction.tags.slice(0, -1);
-                const dataForSignature = JSON.stringify(tags) + transaction.data;
+                // Reconstruct tags in the exact same order as during signature creation
+                const txRecordType = transaction.tags.find(tag => tag.name === 'RecordType')?.value;
+                const txCreatorValue = transaction.tags.find(tag => tag.name === 'Creator')?.value;
+                
+                const reconstructedTags = [
+                    { name: 'Content-Type', value: 'application/json' },
+                    { name: 'Index-Method', value: 'OIP' },
+                    { name: 'Ver', value: '0.8.0' },
+                    { name: 'Type', value: 'Record' },
+                    { name: 'RecordType', value: txRecordType },
+                    { name: 'Creator', value: txCreatorValue }
+                ];
+                
+                console.log(`DEBUG: All transaction tags (${transaction.tags.length}):`, transaction.tags.map(t => `${t.name}=${t.value?.substring(0, 50)}`));
+                console.log(`DEBUG: Reconstructed tags for signature (${reconstructedTags.length}):`, reconstructedTags.map(t => `${t.name}=${t.value?.substring(0, 50)}...`));
+                
+                console.log(`DEBUG: transaction.data length: ${transaction.data?.length}`);
+                console.log(`DEBUG: transaction.data (first 200 chars): ${transaction.data?.substring(0, 200)}...`);
+                
+                const dataForSignature = JSON.stringify(reconstructedTags) + transaction.data;
                 console.log(`DEBUG: dataForSignature length: ${dataForSignature.length}`);
                 console.log(`DEBUG: dataForSignature (first 200 chars): ${dataForSignature.substring(0, 200)}...`);
+                console.log(`DEBUG: JSON.stringify(reconstructedTags) length: ${JSON.stringify(reconstructedTags).length}`);
                 
-                const isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, creatorAddress);
-                console.log(`DEBUG: Signature verification result: ${isVerified}`);
+                console.log(`DEBUG: About to verify signature with:`);
+                console.log(`DEBUG: - dataForSignature length: ${dataForSignature.length}`);
+                console.log(`DEBUG: - signatureBase64 length: ${signatureBase64.length}`);
+                console.log(`DEBUG: - publicKey length: ${publicKey.length}`);
+                console.log(`DEBUG: - creatorAddress: ${creatorAddress}`);
+                
+                let isVerified = false;
+                try {
+                    isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, creatorAddress);
+                    console.log(`DEBUG: Signature verification result: ${isVerified}`);
+                } catch (error) {
+                    console.error(`DEBUG: Error during signature verification:`, error);
+                    console.error(`Creator registration signature verification failed for transaction ${transaction.transactionId}`);
+                    return;
+                }
         
                 if (!isVerified) {
                     console.error(`Creator registration signature verification failed for transaction ${transaction.transactionId}`);
