@@ -1570,8 +1570,16 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 // Get signature from CreatorSig tag (not from oip.signature in JSON data)
                 const rawSignature = transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
                 
+                // Extract public key from transaction data to compare
+                const transactionDataArray = JSON.parse(transaction.data);
+                const publicKeyFromTxData = transactionDataArray[0]["1"];
+                
                 console.log(`DEBUG: Creator reg verification for ${transaction.transactionId}`);
-                console.log(`DEBUG: publicKey exists: ${!!publicKey}`);
+                console.log(`DEBUG: publicKey from creator DB exists: ${!!publicKey}, length: ${publicKey?.length}`);
+                console.log(`DEBUG: publicKey from tx data exists: ${!!publicKeyFromTxData}, length: ${publicKeyFromTxData?.length}`);
+                console.log(`DEBUG: Public keys match: ${publicKey === publicKeyFromTxData}`);
+                console.log(`DEBUG: DB publicKey (first 50): ${publicKey?.substring(0, 50)}...`);
+                console.log(`DEBUG: TX publicKey (first 50): ${publicKeyFromTxData?.substring(0, 50)}...`);
                 console.log(`DEBUG: rawSignature from CreatorSig tag exists: ${!!rawSignature}, length: ${rawSignature?.length}`);
                 console.log(`DEBUG: creatorAddress: ${creatorAddress}`);
                 
@@ -1656,7 +1664,14 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 let isVerified = false;
                 try {
                     isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, creatorAddress);
-                    console.log(`DEBUG: Signature verification result (reconstructed tags): ${isVerified}`);
+                    console.log(`DEBUG: Signature verification result (reconstructed tags, DB pubkey): ${isVerified}`);
+                    
+                    if (!isVerified && publicKeyFromTxData && publicKeyFromTxData !== publicKey) {
+                        // Try with public key from transaction data
+                        console.log(`DEBUG: Trying verification with public key from transaction data...`);
+                        isVerified = await verifySignature(dataForSignature, signatureBase64, publicKeyFromTxData, creatorAddress);
+                        console.log(`DEBUG: Signature verification result (reconstructed tags, TX pubkey): ${isVerified}`);
+                    }
                     
                     if (!isVerified && recreatedRecordData) {
                         // Try with recreated recordData format
