@@ -3,7 +3,9 @@ const path = require('path');
 const dotenv = require('dotenv');
 const { ArweaveSigner } = require('arbundles');
 const Irys = require('@irys/sdk');
-const arweave = require('arweave');
+const Arweave = require('arweave');
+const arweaveConfig = require('../config/arweave.config');
+const arweave = Arweave.init(arweaveConfig);
 const {crypto, createHash} = require('crypto');
 const jwt = require('jsonwebtoken');
 const base64url = require('base64url');
@@ -67,20 +69,44 @@ const validateTemplateFields = (fieldsJson) => {
 };
 
 const verifySignature = async (message, signatureBase64, publicKey, creatorAddress = null) => {
-    // console.log('Verifying signature... for creatorAddress', creatorAddress, 'publicKey', publicKey);
+    console.log('\n=== VERIFY SIGNATURE FUNCTION START ===');
+    console.log('INPUT MESSAGE LENGTH:', message.length);
+    console.log('INPUT MESSAGE (first 100 chars):', message.substring(0, 100));
+    console.log('INPUT MESSAGE (last 50 chars):', message.substring(message.length - 50));
+    console.log('INPUT SIGNATURE BASE64 LENGTH:', signatureBase64.length);
+    console.log('INPUT SIGNATURE (first 50 chars):', signatureBase64.substring(0, 50));
+    console.log('INPUT PUBLIC KEY LENGTH:', publicKey.length);
+    console.log('INPUT PUBLIC KEY (first 50 chars):', publicKey.substring(0, 50));
+    console.log('CREATOR ADDRESS:', creatorAddress);
+    
     if (publicKey === null && creatorAddress !== null) {
         const creatorData = await searchCreatorByAddress(creatorAddress);
         if (creatorData) {
             publicKey = creatorData.creatorPublicKey;
         } else {
+            console.log('VERIFY SIGNATURE: No creator data found, returning false');
             return false;
         }
     }
 
-    const messageData = new TextEncoder().encode(message);
-    const signature = Buffer.from(signatureBase64, 'base64');
-    const isVerified = await ArweaveSigner.verify(publicKey, messageData, signature);
-    return isVerified;
+    try {
+        const messageData = new TextEncoder().encode(message);
+        console.log('MESSAGE DATA ENCODED LENGTH:', messageData.length);
+        
+        const signature = Buffer.from(signatureBase64, 'base64');
+        console.log('SIGNATURE BUFFER LENGTH:', signature.length);
+        
+        console.log('ABOUT TO CALL arweave.crypto.verify...');
+        const isVerified = await arweave.crypto.verify(publicKey, messageData, signature);
+        console.log('ARWEAVE CRYPTO VERIFY RESULT:', isVerified);
+        console.log('=== VERIFY SIGNATURE FUNCTION END ===\n');
+        
+        return isVerified;
+    } catch (error) {
+        console.error('ERROR IN VERIFY SIGNATURE:', error);
+        console.log('=== VERIFY SIGNATURE FUNCTION END (ERROR) ===\n');
+        return false;
+    }
 };
 
 const signMessage = async (data) => {
