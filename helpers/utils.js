@@ -96,9 +96,9 @@ const verifySignature = async (message, signatureBase64, publicKey, creatorAddre
         const signature = Buffer.from(signatureBase64, 'base64');
         console.log('SIGNATURE BUFFER LENGTH:', signature.length);
         
-        console.log('ABOUT TO CALL arweave.crypto.verify...');
-        const isVerified = await arweave.crypto.verify(publicKey, messageData, signature);
-        console.log('ARWEAVE CRYPTO VERIFY RESULT:', isVerified);
+        console.log('ABOUT TO CALL ArweaveSigner.verify...');
+        const isVerified = await ArweaveSigner.verify(publicKey, messageData, signature);
+        console.log('ARWEAVE SIGNER VERIFY RESULT:', isVerified);
         console.log('=== VERIFY SIGNATURE FUNCTION END ===\n');
         
         return isVerified;
