@@ -1627,22 +1627,25 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 // let isVerified = await verifySignature(dataForSignature, transaction.creatorSig, publicKey, transaction.creator);
                 // console.log(getFileInfo(), getLineNumber(), {isVerified});
                 
-                publicKey = creator.oip.creator.publicKey;
-                signature = creator.oip.signature;
-                creatorAddress = creator.oip.creator.didAddress;
-                // tags = transaction.tags.slice(0, -1);
-                // dataForSignature = JSON.stringify(tags) + transaction.data;
-                console.log(getFileInfo(), getLineNumber());
+                // Verify creator registration signature
+                const publicKey = creator.oip.creator.publicKey;
+                const rawSignature = creator.oip.signature;
+                const creatorAddress = creator.oip.creator.didAddress;
+                
+                // Convert signature from URL-safe base64 to regular base64
+                const signatureBase64 = convertUrlSafeBase64ToBase64(rawSignature);
                 
                 let tags = transaction.tags.slice(0, -1);
-                dataForSignature = JSON.stringify(tags) + transaction.data;
-                isVerified = await verifySignature(dataForSignature, signature, publicKey, creatorAddress);
-                console.log(getFileInfo(), getLineNumber(), {isVerified});
+                const dataForSignature = JSON.stringify(tags) + transaction.data;
+                const isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, creatorAddress);
         
                 if (!isVerified) {
-                    console.error(getFileInfo(), getLineNumber(), `Signature verification failed for transaction ${transactionId}`);
+                    console.error(`Creator registration signature verification failed for transaction ${transaction.transactionId}`);
                     return;
                 }
+                
+                // Update the signature in the creator object with the properly formatted one
+                creator.oip.signature = signatureBase64;
 
                 newCreators.push(creator);
 
@@ -1934,7 +1937,7 @@ async function processTransaction(tx, remapTemplates) {
     // console.log(getFileInfo(), getLineNumber(),'processing transaction:', tx.id, 'block:', tx.blockHeight)
     const transaction = await getTransaction(tx.id);
     if (!transaction || !transaction.tags) {
-        console.log(getFileInfo(), getLineNumber(),'CANT FIND TX OR TAGS IN CHAIN, skipping:', tx.id);
+        console.log('CANT FIND TX OR TAGS IN CHAIN, skipping:', tx.id);
         return;
     }
     
@@ -1953,33 +1956,28 @@ async function processTransaction(tx, remapTemplates) {
         await processNewTemplate(transaction);
     }
 } catch (error) {
-    console.error(getFileInfo(), getLineNumber(),'Error processing transaction:', tx.id);
+    console.error('Error processing transaction:', tx.id);
 }
 }
 
 async function processNewTemplate(transaction) {
     if (!transaction || !transaction.tags || !transaction.data) {
-        console.log(getFileInfo(), getLineNumber(),'cannnot find transaction (or tags or fields), skipping txid:', transaction.transactionId);
+        console.log('cannot find transaction (or tags or fields), skipping txid:', transaction.transactionId);
         return null;
     }
     let parsedData;
     try {
         parsedData = JSON.parse(transaction.data);
     } catch (error) {
-        console.error(getFileInfo(), getLineNumber(),`Error parsing JSON from transaction data: ${error.message}`);
-        console.error(getFileInfo(), getLineNumber(),`Invalid JSON data: ${transaction.data}`);
+        console.error(`Error parsing JSON from transaction data: ${error.message}`);
+        console.error(`Invalid JSON data: ${transaction.data}`);
         return null;
     }
     
-    // Debug: Log what we're working with
-    console.log(getFileInfo(), getLineNumber(), 'Raw transaction.data:', transaction.data);
-    console.log(getFileInfo(), getLineNumber(), 'Parsed data:', parsedData);
-    
     const fieldsString = JSON.stringify(parsedData);
-    console.log(getFileInfo(), getLineNumber(), 'fieldsString that will be used for signature:', fieldsString);
     const isValid = validateTemplateFields(fieldsString);
     if (!isValid) {
-        console.log(getFileInfo(), getLineNumber(),`Template failed - Field formatting validation failed for transaction ${transaction.transactionId}`);
+        console.log(`Template failed - Field formatting validation failed for transaction ${transaction.transactionId}`);
         return null;
     }
     
@@ -1988,13 +1986,7 @@ async function processNewTemplate(transaction) {
     const creator = transaction.creator || transaction.tags.find(tag => tag.name === 'Creator')?.value;
     const ver = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
     
-    // Debug: Log original tags for comparison
-    console.log(getFileInfo(), getLineNumber(), 'Original transaction tags:', transaction.tags);
-    console.log(getFileInfo(), getLineNumber(), 'Extracted values - templateName:', templateName, 'creator:', creator, 'ver:', ver);
-    
     // Reconstruct tags in the exact same order as during signature creation
-    // to ensure JSON.stringify produces the same string
-    // Note: Using '0.8.0' exactly as hardcoded in template creation for consistency
     const reconstructedTags = [
         { name: 'Content-Type', value: 'application/json' },
         { name: 'Index-Method', value: 'OIP' },
@@ -2005,57 +1997,40 @@ async function processNewTemplate(transaction) {
     ];
     
     const dataForSignature = fieldsString + JSON.stringify(reconstructedTags);
-    console.log(getFileInfo(), getLineNumber(), 'Reconstructed tags for verification:', reconstructedTags);
-    console.log(getFileInfo(), getLineNumber(), 'JSON.stringify(reconstructedTags):', JSON.stringify(reconstructedTags));
-    console.log(getFileInfo(), getLineNumber(), 'Final dataForSignature for verification:', dataForSignature);
     const message = dataForSignature;
     
     if (!creator) {
-        console.error(getFileInfo(), getLineNumber(), `No Creator found for transaction ${transaction.transactionId}`);
-        console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+        console.error(`No Creator found for transaction ${transaction.transactionId}`);
+        console.log('Available tags:', transaction.tags.map(tag => tag.name));
         return null;
     }
     
     const didAddress = 'did:arweave:' + creator;
-    console.log(getFileInfo(), getLineNumber(), didAddress, 'creator:', creator);
     const creatorInfo = await searchCreatorByAddress(didAddress);
     if (!creatorInfo) {
         console.error(`Creator data not found for DID address: ${didAddress}`);
         return null;
     }
-    console.log(getFileInfo(), getLineNumber(), creatorInfo);
 
     const publicKey = creatorInfo.data.publicKey;
-    console.log(getFileInfo(), getLineNumber(), publicKey);
 
     // Extract CreatorSig from tags array since it might not be directly on transaction object
     const rawSignature = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
-    console.log(getFileInfo(), getLineNumber(), 'rawSignature:', rawSignature);
     
     if (!rawSignature) {
-        console.error(getFileInfo(), getLineNumber(), `No CreatorSig found for transaction ${transaction.transactionId}`);
-        console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+        console.error(`No CreatorSig found for transaction ${transaction.transactionId}`);
+        console.log('Available tags:', transaction.tags.map(tag => tag.name));
         return null;
     }
     
     // Convert from URL-safe base64 (used by Arweave) to regular base64 (expected by verifySignature)
     const signatureBase64 = convertUrlSafeBase64ToBase64(rawSignature);
-    console.log(getFileInfo(), getLineNumber(), 'converted signatureBase64:', signatureBase64);
-    
-    console.log(getFileInfo(), getLineNumber(), 'About to verify signature with:');
-    console.log(getFileInfo(), getLineNumber(), '- message:', message);
-    console.log(getFileInfo(), getLineNumber(), '- signatureBase64:', signatureBase64);
-    console.log(getFileInfo(), getLineNumber(), '- publicKey:', publicKey);
-    console.log(getFileInfo(), getLineNumber(), '- didAddress:', didAddress);
     
     const isVerified = await verifySignature(message, signatureBase64, publicKey, didAddress);
-    console.log(getFileInfo(), getLineNumber(), 'Signature verification result:', isVerified);
     if (!isVerified) {
-        console.log(getFileInfo(), getLineNumber());
-        console.error(getFileInfo(), getLineNumber(),`Signature verification failed for transaction ${transaction.transactionId}`);
+        console.error(`Signature verification failed for transaction ${transaction.transactionId}`);
         return null;
     } else {
-        console.log(getFileInfo(), getLineNumber());
         const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
         const data = {
             TxId: transaction.transactionId,
@@ -2065,8 +2040,8 @@ async function processNewTemplate(transaction) {
             fields: fieldsString
         };
         if (!ver) {
-            console.error(getFileInfo(), getLineNumber(), `No Ver found for transaction ${transaction.transactionId}`);
-            console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+            console.error(`No Ver found for transaction ${transaction.transactionId}`);
+            console.log('Available tags:', transaction.tags.map(tag => tag.name));
             return null;
         }
         
@@ -2086,7 +2061,7 @@ async function processNewTemplate(transaction) {
             data,
             oip
         };
-        console.log(getFileInfo(), getLineNumber(), template);
+
 
         try {
 
@@ -2109,11 +2084,10 @@ async function processNewTemplate(transaction) {
 }
 
 async function processNewRecord(transaction, remapTemplates = []) {
-    console.log(getFileInfo(), getLineNumber(), 'Processing record:', transaction.transactionId);
     const newRecords = [];
     const recordsToDelete = [];
     if (!transaction || !transaction.tags) {
-        console.log(getFileInfo(), getLineNumber(), 'Cannot find transaction (or data or tags) in chain, skipping:', transaction.transactionId);
+        console.log('Cannot find transaction (or data or tags) in chain, skipping:', transaction.transactionId);
         return { records: newRecords, recordsToDelete };
     }
 
@@ -2126,13 +2100,11 @@ async function processNewRecord(transaction, remapTemplates = []) {
     
     // Convert from URL-safe base64 (used by Arweave) to regular base64 if needed
     const creatorSig = convertUrlSafeBase64ToBase64(rawCreatorSig);
-    console.log(getFileInfo(), getLineNumber(), 'Record type:', recordType, 'CreatorSig:', creatorSig ? 'found' : 'NOT FOUND');
+
     // handle creator registration
     let creatorInfo;
     if (recordType && recordType === 'creatorRegistration') {
         // does not apply
-        console.log(getFileInfo(), getLineNumber(), 'Processing creator registration:', transactionId, transaction);
-        
         const creatorHandle = await convertToCreatorHandle(transactionId, JSON.parse(transaction.data)[0]["2"]);
         const data = {
             publicKey: JSON.parse(transaction.data)[0]["1"],
@@ -2140,11 +2112,9 @@ async function processNewRecord(transaction, remapTemplates = []) {
             didAddress: 'did:arweave:' + JSON.parse(transaction.data)[0]["0"],
             didTx: 'did:arweave:' + transactionId,
         }
-        console.log(getFileInfo(), getLineNumber(), 'Creator data:', data);
         creatorInfo = {
             data,
-        } 
-        console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
+        };
         const creatorRegistrationParams = {
             transaction,
             creatorInfo
@@ -2157,16 +2127,13 @@ async function processNewRecord(transaction, remapTemplates = []) {
     const creator = transaction.creator || transaction.tags.find(tag => tag.name === 'Creator')?.value;
     
     if (!creator) {
-        console.error(getFileInfo(), getLineNumber(), `No Creator found for transaction ${transaction.transactionId}`);
-        console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+        console.error(`No Creator found for transaction ${transaction.transactionId}`);
+        console.log('Available tags:', transaction.tags.map(tag => tag.name));
         return { records: newRecords, recordsToDelete };
     }
     
     let creatorDid = txidToDid(creator);
-    console.log(getFileInfo(), getLineNumber(), 'creator:', creator, 'creatorDid:', creatorDid);
-    
     creatorInfo = (!creatorInfo) ? await searchCreatorByAddress(creatorDid) : creatorInfo;
-    console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
     let transactionData;
     let isDeleteMessageFound = false;
 
@@ -2174,25 +2141,24 @@ async function processNewRecord(transaction, remapTemplates = []) {
         try {
             transactionData = JSON.parse(transaction.data);
             if (transactionData.hasOwnProperty('delete')) {
-                console.log(getFileInfo(), getLineNumber(), 'DELETE MESSAGE FOUND, processing', transaction.transactionId);
+                console.log('DELETE MESSAGE FOUND, processing', transaction.transactionId);
                 isDeleteMessageFound = true;
             }
         } catch (error) {
-            console.error(getFileInfo(), getLineNumber(), `Invalid JSON data, skipping: ${transaction.transactionId}`, transaction.data, typeof transaction.data, error);
+            console.error(`Invalid JSON data, skipping: ${transaction.transactionId}`, transaction.data, typeof transaction.data, error);
             return { records: newRecords, recordsToDelete };
         }
     } else if (typeof transaction.data === 'object') {
         transactionData = transaction.data;
     } else {
-        console.log(getFileInfo(), getLineNumber(), 'UNSUPPORTED DATA TYPE, skipping:', transaction.transactionId, typeof transaction.data);
+        console.log('UNSUPPORTED DATA TYPE, skipping:', transaction.transactionId, typeof transaction.data);
         return { records: newRecords, recordsToDelete };
     }
-    console.log(getFileInfo(), getLineNumber());
     let record;
     let currentBlockHeight = await getCurrentBlockHeight();
     let inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
     let progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
-    console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}%`);
+    console.log(`Indexing Progress: ${progress}%`);
     // let dataArray = [];
     // dataArray.push(transactionData);
     // handle delete message
@@ -2243,8 +2209,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
         const version = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
         
         if (!version) {
-            console.error(getFileInfo(), getLineNumber(), `No Ver found for transaction ${transaction.transactionId}`);
-            console.log(getFileInfo(), getLineNumber(), 'Available tags:', transaction.tags.map(tag => tag.name));
+            console.error(`No Ver found for transaction ${transaction.transactionId}`);
+            console.log('Available tags:', transaction.tags.map(tag => tag.name));
             return { records: newRecords, recordsToDelete };
         }
         
@@ -2253,17 +2219,13 @@ async function processNewRecord(transaction, remapTemplates = []) {
 
         const isVersionValid = versionParts.length >= 3 && versionParts.every((part, index) => part >= (minimumVersionParts[index] || 0));
         if (!isVersionValid) {
-            console.log(getFileInfo(), getLineNumber(), `Skipping transaction ${transactionId} due to OIP version (${version}) below minimum required (0.8.0).`);
+            console.log(`Skipping transaction ${transactionId} due to OIP version (${version}) below minimum required (0.8.0).`);
             return { records: newRecords, recordsToDelete };
         }
-        console.log(getFileInfo(), getLineNumber());
 
         const templates = await getTemplatesInDB();
-        // console.log(getFileInfo(), getLineNumber(), transaction.data);
         const expandedRecordPromises = await expandData(transaction.data, templates.templatesInDB);
-        // console.log(getFileInfo(), getLineNumber(), expandedRecordPromises);
         const expandedRecord = await Promise.all(expandedRecordPromises);
-        console.log(getFileInfo(), getLineNumber(), expandedRecord, creatorInfo, transaction, inArweaveBlock );
         const combinedRecords = {};
         expandedRecord.forEach(record => {
             Object.keys(record).forEach(key => {
@@ -2271,7 +2233,24 @@ async function processNewRecord(transaction, remapTemplates = []) {
             });
         });
         if (expandedRecord !== null && expandedRecord.length > 0) {
-            console.log(getFileInfo(), getLineNumber(), creatorInfo)
+            // Verify record signature before indexing
+            const publicKey = creatorInfo.data.publicKey;
+            const didAddress = creatorInfo.data.didAddress;
+            
+            // Reconstruct message for signature verification (tags without CreatorSig + data)
+            const tagsForSignature = transaction.tags.filter(tag => tag.name !== 'CreatorSig');
+            const dataForSignature = JSON.stringify(tagsForSignature) + transaction.data;
+            
+            // Convert signature from URL-safe base64 to regular base64
+            const signatureBase64 = convertUrlSafeBase64ToBase64(rawCreatorSig);
+            
+            const isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, didAddress);
+            
+            if (!isVerified) {
+                console.error(`Record signature verification failed for transaction ${transaction.transactionId}`);
+                return { records: newRecords, recordsToDelete };
+            }
+            
             record = {
                 data: combinedRecords,
                 oip: {
@@ -2281,7 +2260,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                     inArweaveBlock: inArweaveBlock,
                     indexedAt: new Date().toISOString(),
                     ver: version,
-                    signature: creatorSig,
+                    signature: signatureBase64,
                     creator: {
                         creatorHandle: creatorInfo.data.creatorHandle,
                         didAddress: creatorInfo.data.didAddress,
@@ -2290,19 +2269,17 @@ async function processNewRecord(transaction, remapTemplates = []) {
                     }
                 }
             };
-            console.log(getFileInfo(), getLineNumber(), record)
 
             if (!record.data || !record.oip) {
-                
-                console.log(getFileInfo(), getLineNumber(), `${record.oip.didTx} is missing required data, cannot be indexed.`);
+                console.log(`${record.oip.didTx} is missing required data, cannot be indexed.`);
             } else {
-                console.log(getFileInfo(), getLineNumber());
                 const existingRecord = await elasticClient.exists({
                     index: 'records',
                     id: record.oip.didTx
                 });
                 if (!existingRecord.body) {
                     await indexRecord(record);
+                    console.log(`Record indexed successfully: ${record.oip.didTx}`);
                 }
             }
         }
