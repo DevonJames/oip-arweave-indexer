@@ -1565,8 +1565,15 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 
                 // Verify creator registration signature
                 const publicKey = creator.oip.creator.publicKey;
-                const rawSignature = creator.oip.signature;
                 const creatorAddress = creator.oip.creator.didAddress;
+                
+                // Get signature from CreatorSig tag (not from oip.signature in JSON data)
+                const rawSignature = transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+                
+                console.log(`DEBUG: Creator reg verification for ${transaction.transactionId}`);
+                console.log(`DEBUG: publicKey exists: ${!!publicKey}`);
+                console.log(`DEBUG: rawSignature from CreatorSig tag exists: ${!!rawSignature}, length: ${rawSignature?.length}`);
+                console.log(`DEBUG: creatorAddress: ${creatorAddress}`);
                 
                 // Defensive checks
                 if (!publicKey) {
@@ -1574,7 +1581,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                     return;
                 }
                 if (!rawSignature) {
-                    console.error(`No signature found for creator registration ${transaction.transactionId}`);
+                    console.error(`No CreatorSig tag found for creator registration ${transaction.transactionId}`);
                     return;
                 }
                 if (!creatorAddress) {
@@ -1584,10 +1591,15 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 
                 // Convert signature from URL-safe base64 to regular base64
                 const signatureBase64 = convertUrlSafeBase64ToBase64(rawSignature);
+                console.log(`DEBUG: Signature after URL-safe conversion (first 50 chars): ${signatureBase64.substring(0, 50)}...`);
                 
                 let tags = transaction.tags.slice(0, -1);
                 const dataForSignature = JSON.stringify(tags) + transaction.data;
+                console.log(`DEBUG: dataForSignature length: ${dataForSignature.length}`);
+                console.log(`DEBUG: dataForSignature (first 200 chars): ${dataForSignature.substring(0, 200)}...`);
+                
                 const isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, creatorAddress);
+                console.log(`DEBUG: Signature verification result: ${isVerified}`);
         
                 if (!isVerified) {
                     console.error(`Creator registration signature verification failed for transaction ${transaction.transactionId}`);

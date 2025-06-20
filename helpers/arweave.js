@@ -110,6 +110,12 @@ const getTransaction = async (transactionId) => {
             console.log('SIGNATURE CONTAINS SPACES (GraphQL corruption), fixing...');
             creatorSig = creatorSig.replace(/\s+/g, '');
             console.log(`FIXED SIGNATURE (first 50 chars): ${creatorSig.substring(0, 50)}...`);
+            
+            // Also fix it in the tags array
+            const creatorSigTag = tags.find(tag => tag.name === 'CreatorSig');
+            if (creatorSigTag) {
+                creatorSigTag.value = creatorSig;
+            }
         }
         
         console.log(`Successfully retrieved transaction ${transactionId} with ${tags.length} tags: ${tags.map(tag => `${tag.name}: ${tag.value}`).join(', ')}`);
