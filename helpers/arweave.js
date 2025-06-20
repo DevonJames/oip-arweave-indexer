@@ -103,7 +103,14 @@ const getTransaction = async (transactionId) => {
         // Extract common tag values
         const ver = tags.find(tag => tag.name === 'Ver')?.value || tags.find(tag => tag.name === 'ver')?.value;
         const creator = tags.find(tag => tag.name === 'Creator')?.value;
-        const creatorSig = tags.find(tag => tag.name === 'CreatorSig')?.value;
+        let creatorSig = tags.find(tag => tag.name === 'CreatorSig')?.value;
+        
+        // Fix signature corruption from GraphQL (spaces inserted)
+        if (creatorSig && creatorSig.includes(' ')) {
+            console.log('SIGNATURE CONTAINS SPACES (GraphQL corruption), fixing...');
+            creatorSig = creatorSig.replace(/\s+/g, '');
+            console.log(`FIXED SIGNATURE (first 50 chars): ${creatorSig.substring(0, 50)}...`);
+        }
         
         console.log(`Successfully retrieved transaction ${transactionId} with ${tags.length} tags: ${tags.map(tag => `${tag.name}: ${tag.value}`).join(', ')}`);
         return { transactionId, tags, ver, creator, creatorSig, data };

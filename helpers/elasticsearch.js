@@ -1407,18 +1407,19 @@ const convertToCreatorHandle = async (txId, handle) => {
 
 // add some kind of history of registrations
 async function indexNewCreatorRegistration(creatorRegistrationParams) {
-    let { transaction, creatorInfo, creatorHandle, block } = creatorRegistrationParams;
-    
-    const newCreators = [];
-    let creator;
+    try {
+        let { transaction, creatorInfo, creatorHandle, block } = creatorRegistrationParams;
+        
+        const newCreators = [];
+        let creator;
 
-    if (!transaction || !transaction.tags) {
-        console.log('INDEXNEWCREATORREGISTRATION CANT FIND TRANSACTION DATA OR TAGS IN CHAIN, skipping');
-        return
-    }
-    
-    // Extract signature using consistent pattern
-    const rawCreatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
+        if (!transaction || !transaction.tags) {
+            console.log('INDEXNEWCREATORREGISTRATION CANT FIND TRANSACTION DATA OR TAGS IN CHAIN, skipping');
+            return
+        }
+        
+        // Extract signature using consistent pattern
+        const rawCreatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
 
     let transactionData;
     if (typeof transaction.data === 'string') {
@@ -1567,6 +1568,20 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 const rawSignature = creator.oip.signature;
                 const creatorAddress = creator.oip.creator.didAddress;
                 
+                // Defensive checks
+                if (!publicKey) {
+                    console.error(`No public key found for creator registration ${transaction.transactionId}`);
+                    return;
+                }
+                if (!rawSignature) {
+                    console.error(`No signature found for creator registration ${transaction.transactionId}`);
+                    return;
+                }
+                if (!creatorAddress) {
+                    console.error(`No creator address found for creator registration ${transaction.transactionId}`);
+                    return;
+                }
+                
                 // Convert signature from URL-safe base64 to regular base64
                 const signatureBase64 = convertUrlSafeBase64ToBase64(rawSignature);
                 
@@ -1601,45 +1616,52 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
        
     // }
 // }
-    newCreators.forEach(async (creator) => {
-        const existingCreator = await elasticClient.exists({
-            index: 'creatorregistrations',
-            id: creator.oip.didTx
-        });
+    for (const creator of newCreators) {
+        try {
+            const existingCreator = await elasticClient.exists({
+                index: 'creatorregistrations',
+                id: creator.oip.didTx
+            });
 
-        if (!existingCreator.body) {
-            try {
-                await elasticClient.index({
-                    index: 'creatorregistrations',
-                    id: creator.oip.didTx,
-                    body: creator,
-                });
-                console.log(`Creator registration indexed successfully: ${creator.oip.didTx}`);
-            } catch (error) {
-                console.error(`Error indexing creator: ${creator.oip.didTx}`, error);
+            if (!existingCreator.body) {
+                try {
+                    await elasticClient.index({
+                        index: 'creatorregistrations',
+                        id: creator.oip.didTx,
+                        body: creator,
+                    });
+                    console.log(`Creator registration indexed successfully: ${creator.oip.didTx}`);
+                } catch (error) {
+                    console.error(`Error indexing creator: ${creator.oip.didTx}`, error);
+                }
+
+            } else {
+                try {
+                    await elasticClient.delete({
+                        index: 'creatorregistrations',
+                        id: creator.oip.didTx
+                    });
+
+                    await elasticClient.index({
+                        index: 'creatorregistrations',
+                        body: creator,
+                        id: creator.oip.didTx,
+                    });
+                    console.log(`Creator registration updated successfully: ${creator.oip.didTx}`);
+                } catch (error) {
+                    console.error(`Error updating creator: ${creator.oip.didTx}`, error);
+                }
             }
-
-        } else {
-            try {
-                await elasticClient.delete({
-                    index: 'creatorregistrations',
-                    id: creator.oip.didTx
-                });
-
-                await elasticClient.index({
-                    index: 'creatorregistrations',
-                    body: creator,
-                    id: creator.oip.didTx,
-                });
-                console.log(`Creator registration updated successfully: ${creator.oip.didTx}`);
-            } catch (error) {
-                console.error(`Error updating creator: ${creator.oip.didTx}`, error);
-            }
+        } catch (error) {
+            console.error(`Error processing creator: ${creator.oip.didTx}`, error);
         }
-    });
+    }
     
-    // }
-// }
+    } catch (error) {
+        console.error(`Error in indexNewCreatorRegistration for transaction ${creatorRegistrationParams.transaction?.transactionId}:`, error.message);
+        // Log the full error for debugging
+        console.error('Full error:', error);
+    }
 }
 
 // maybe implement this
@@ -1876,7 +1898,8 @@ async function processTransaction(tx, remapTemplates) {
         await processNewTemplate(transaction);
     }
 } catch (error) {
-    console.error('Error processing transaction:', tx.id);
+    console.error('Error processing transaction:', tx.id, error.message);
+    // Continue processing other transactions instead of crashing
 }
 }
 
