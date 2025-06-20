@@ -1409,79 +1409,36 @@ const convertToCreatorHandle = async (txId, handle) => {
 async function indexNewCreatorRegistration(creatorRegistrationParams) {
     let { transaction, creatorInfo, creatorHandle, block } = creatorRegistrationParams;
     
-    
-    // console.log(getFileInfo(), getLineNumber(), creatorInfo);
-    // if (creatorInfo) {
-        // creatorDid = creatorInfo.data.didAddress
-        // const existingCreator = await elasticClient.search({
-        //     index: 'creatorregistrations',
-        //     body: {
-        //     query: {
-        //         match: {
-        //         "data.didAddress": creatorDid
-        //         }
-        //     }
-        //     }
-        // });
-        // console.log(getFileInfo(), getLineNumber(), existingCreator.hits.hits.length);
-
-        // if (existingCreator.hits.hits.length > 0) {
-        //     const creatorId = existingCreator.hits.hits[0]._id;
-        //     try {
-        //         await elasticClient.delete({
-        //             index: 'creatorregistrations',
-        //             id: creatorId
-        //         });
-        //         console.log(getFileInfo(), getLineNumber(), `Creator deleted successfully: ${creatorInfo.data.didAddress}`);
-        //     } catch (error) {
-        //         console.error(getFileInfo(), getLineNumber(), `Error deleting creatorInfo: ${creatorInfo.data.didAddress}`, error);
-        //     }
-        //  }
-        //  console.log(getFileInfo(), getLineNumber());
-
-        //     try {
-        //         await elasticClient.index({
-        //             index: 'creatorregistrations',
-        //             body: creatorInfo,
-        //             id: creatorInfo.data.didAddress,
-        //         });
-        //         console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creatorInfo.data.didAddress}`);
-        //     } catch (error) {
-        //         console.error(getFileInfo(), getLineNumber(), `Error indexing creatorInfo: ${creatorInfo.data.didAddress}`, error);
-        //     }
-    // } else 
-    // {
     const newCreators = [];
     let creator;
-    console.log(getFileInfo(), getLineNumber());
 
     if (!transaction || !transaction.tags) {
-        console.log(getFileInfo(), getLineNumber(), 'INDEXNEWCREATORREGISTRATION CANT FIND TRANSACTION DATA OR TAGS IN CHAIN, skipping');
+        console.log('INDEXNEWCREATORREGISTRATION CANT FIND TRANSACTION DATA OR TAGS IN CHAIN, skipping');
         return
     }
-    console.log(getFileInfo(), getLineNumber());
+    
+    // Extract signature using consistent pattern
+    const rawCreatorSig = transaction.creatorSig || transaction.tags.find(tag => tag.name === 'CreatorSig')?.value;
 
     let transactionData;
-        // console.log(getFileInfo(), getLineNumber(),'transaction:', transaction, 'transaction.data:', transaction.data, 'type of transaction.data:', typeof transaction.data);
     if (typeof transaction.data === 'string') {
         try {
             // Attempt to parse the JSON string directly
             transactionData = JSON.parse(`[${transaction.data.replace(/}{/g, '},{')}]`);
         } catch (error) {
-            console.error(getFileInfo(), getLineNumber(), `Invalid JSON data, skipping: ${transactionId}`);
+            console.error(`Invalid JSON data, skipping: ${transaction.transactionId}`);
             return
         }
     } else if (typeof transaction.data === 'object') {
         transactionData = transaction.data;
     } else {
-        console.log(getFileInfo(), getLineNumber(), 'getNewCreatorRegistrations UNSUPPORTED DATA TYPE, skipping:', transactionId);
+        console.log('getNewCreatorRegistrations UNSUPPORTED DATA TYPE, skipping:', transaction.transactionId);
         return
     }
-        console.log(getFileInfo(), getLineNumber());
 
     // Check if the parsed JSON contains a delete property
     if (transactionData.hasOwnProperty('delete')) {
-        console.log(getFileInfo(), getLineNumber(), 'getNewCreatorRegistrations DELETE MESSAGE FOUND, skipping', transactionId);
+        console.log('getNewCreatorRegistrations DELETE MESSAGE FOUND, skipping', transaction.transactionId);
         return  // Return early if it's a delete message
     }
     // const creatorDid = txidToDid(transaction.creator);
@@ -1495,7 +1452,6 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         // creator = creatorInfo;
         creatorHandle = (creatorHandle !== undefined) ? creatorHandle : await convertToCreatorHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["2"]);
         block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
-        console.log('1402 transaction:', transaction);
         creator = {
             data: {
                 name: JSON.parse(transaction.data)[0]["3"],
@@ -1507,8 +1463,8 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 didTx: creatorInfo.data.didTx,
                 inArweaveBlock: block,
                 indexedAt: new Date(),
-                ver: transaction.ver,
-                                        signature: creatorSig,
+                ver: transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value,
+                signature: convertUrlSafeBase64ToBase64(rawCreatorSig),
                 creator: {
                     creatorHandle,
                     didAddress: creatorInfo.data.didAddress,
@@ -1519,72 +1475,51 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         }
     }
     else {
-        console.log(getFileInfo(), getLineNumber());
-
         const templates = await getTemplatesInDB();
-        console.log(getFileInfo(), getLineNumber());
         const expandedRecordPromises = await expandData(transaction.data, templates.templatesInDB);
-        console.log(getFileInfo(), getLineNumber());
         const expandedRecord = await Promise.all(expandedRecordPromises);
-        console.log(getFileInfo(), getLineNumber());
         const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
-        console.log(getFileInfo(), getLineNumber());
 
         if (expandedRecord !== null) {
-            console.log(getFileInfo(), getLineNumber(), expandedRecord);
             const creatorRegistration = expandedRecord.find(item => item.creatorRegistration !== undefined);
             if (creatorRegistration) {
-                console.log(getFileInfo(), getLineNumber());
                 const basic = expandedRecord.find(item => item.basic !== undefined);
                 const result = {};
                 if (creatorRegistration.creatorRegistration.address) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.didAddress = 'did:arweave:' + creatorRegistration.creatorRegistration.address;
                 }
                 if (creatorRegistration.creatorRegistration.publicKey) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.creatorPublicKey = creatorRegistration.creatorRegistration.publicKey;
                 }
                 if (creatorRegistration.creatorRegistration.handle) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.creatorHandle = await convertToCreatorHandle(transaction.transactionId, creatorRegistration.creatorRegistration.handle);
                 }
                 if (transaction.transactionId) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.didTx = 'did:arweave:' + transaction.transactionId;
                 }
                 if (creatorRegistration.creatorRegistration.surname) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.surname = creatorRegistration.creatorRegistration.surname;
                 }
                 if (creatorRegistration.creatorRegistration.description) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.description = creatorRegistration.creatorRegistration.description;
                 }
                 if (creatorRegistration.creatorRegistration.youtube) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.youtube = creatorRegistration.creatorRegistration.youtube;
                 }
                 if (creatorRegistration.creatorRegistration.x) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.x = creatorRegistration.creatorRegistration.x;
                 }
                 if (creatorRegistration.creatorRegistration.instagram) {
-                    console.log(getFileInfo(), getLineNumber());
                     result.instagram = creatorRegistration.creatorRegistration.instagram;
                 }
                 if (basic) {
-                    console.log(getFileInfo(), getLineNumber());
                     if (basic.basic.name) {
-                        console.log(getFileInfo(), getLineNumber());
                         result.name = basic.basic.name;
                     }
                     if (basic.basic.language) {
-                        console.log(getFileInfo(), getLineNumber());
                         result.language = basic.basic.language;
                     }
                 }
-                console.log(getFileInfo(), getLineNumber());
 
                 creator = {
                     data: {
@@ -1611,7 +1546,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                         inArweaveBlock: inArweaveBlock,
                         indexedAt: new Date(),
                         ver: transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value,
-                        signature: creatorSig,
+                        signature: convertUrlSafeBase64ToBase64(rawCreatorSig),
                         creator: {
                             creatorHandle: result.creatorHandle,
                             didAddress: result.didAddress,
@@ -1666,15 +1601,11 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
        
     // }
 // }
-    console.log(getFileInfo(), getLineNumber());
-
-    
     newCreators.forEach(async (creator) => {
         const existingCreator = await elasticClient.exists({
             index: 'creatorregistrations',
             id: creator.oip.didTx
         });
-        console.log(getFileInfo(), getLineNumber(), { existingCreator });
 
         if (!existingCreator.body) {
             try {
@@ -1683,38 +1614,27 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                     id: creator.oip.didTx,
                     body: creator,
                 });
-                console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creator.oip.didTx}`);
+                console.log(`Creator registration indexed successfully: ${creator.oip.didTx}`);
             } catch (error) {
-                console.error(getFileInfo(), getLineNumber(), `Error indexing creator: ${creator.oip.didTx}`, error);
+                console.error(`Error indexing creator: ${creator.oip.didTx}`, error);
             }
-            console.log(getFileInfo(), getLineNumber());
 
         } else {
-            console.log(getFileInfo(), getLineNumber(), `Creator already exists: ${result.oip.didTx}`);
-            // const creatorId = existingCreator.hits.hits[0]._id;
             try {
                 await elasticClient.delete({
                     index: 'creatorregistrations',
                     id: creator.oip.didTx
                 });
-                console.log(getFileInfo(), getLineNumber());
 
-                console.log(getFileInfo(), getLineNumber(), `Creator deleted successfully: ${creatorInfo.data.didAddress}`);
+                await elasticClient.index({
+                    index: 'creatorregistrations',
+                    body: creator,
+                    id: creator.oip.didTx,
+                });
+                console.log(`Creator registration updated successfully: ${creator.oip.didTx}`);
             } catch (error) {
-                console.error(getFileInfo(), getLineNumber(), `Error deleting creatorInfo: ${creatorInfo.data.didAddress}`, error);
+                console.error(`Error updating creator: ${creator.oip.didTx}`, error);
             }
-        }
-        console.log(getFileInfo(), getLineNumber());
-
-        try {
-            await elasticClient.index({
-                index: 'creatorregistrations',
-                body: creator,
-                id: creator.oip.didTx,
-            });
-            console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creator.oip.didTx}`);
-        } catch (error) {
-            console.error(getFileInfo(), getLineNumber(), `Error indexing creatorInfo: ${creator.oip.didTx}`, error);
         }
     });
     
@@ -2163,7 +2083,24 @@ async function processNewRecord(transaction, remapTemplates = []) {
     // dataArray.push(transactionData);
     // handle delete message
     if (isDeleteMessageFound) {
-        console.log(getFileInfo(), getLineNumber(), 'Delete message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
+        // Verify delete message signature before processing
+        const publicKey = creatorInfo.data.publicKey;
+        const didAddress = creatorInfo.data.didAddress;
+        
+        // Reconstruct message for signature verification (tags without CreatorSig + data)
+        const tagsForSignature = transaction.tags.filter(tag => tag.name !== 'CreatorSig');
+        const dataForSignature = JSON.stringify(tagsForSignature) + transaction.data;
+        
+        // Convert signature from URL-safe base64 to regular base64
+        const signatureBase64 = convertUrlSafeBase64ToBase64(rawCreatorSig);
+        
+        const isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, didAddress);
+        
+        if (!isVerified) {
+            console.error(`Delete message signature verification failed for transaction ${transaction.transactionId}`);
+            return { records: newRecords, recordsToDelete };
+        }
+        
         // Extract Ver from tags array since it might not be directly on transaction object
         const deleteVersion = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
         record = {
@@ -2174,20 +2111,15 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 inArweaveBlock: inArweaveBlock,
                 indexedAt: new Date().toISOString(),
                 ver: deleteVersion,
-                signature: creatorSig,
+                signature: signatureBase64,
                 creator: {
                     ...creatorInfo.data
-                    // creatorHandle: creatorInfo.data.creatorHandle,
-                    // didAddress: creatorInfo.data.didAddress,
-                    // didTx: creatorInfo.oip.didTx,
-                    // publicKey: creatorInfo.data.publicKey
                 }
             }
         };
-        console.log(getFileInfo(), getLineNumber(), 'record:', record);
 
         if (!record.data || !record.oip) {
-            console.log(getFileInfo(), getLineNumber(), `${record.oip.didTx} is missing required data, cannot be indexed.`);
+            console.log(`${record.oip.didTx} is missing required data, cannot be indexed.`);
         } else {
             const existingRecord = await elasticClient.exists({
                 index: 'records',
@@ -2195,15 +2127,14 @@ async function processNewRecord(transaction, remapTemplates = []) {
             });
             if (!existingRecord.body) {
                 await indexRecord(record);
+                console.log(`Delete message indexed successfully: ${record.oip.didTx}`);
             }
         }
-        console.log(getFileInfo(), getLineNumber(), creatorDid, transaction);
         await deleteRecordFromDB(creatorDid, transaction);
-        console.log(getFileInfo(), getLineNumber(), 'Delete message indexed:', transaction.transactionId, 'and referenced record deleted', record.data.didTx);
+        console.log('Delete message processed and referenced record deleted:', record.data.didTx);
 
     } else {
         // handle new records
-        console.log(getFileInfo(), getLineNumber());
         // Filter for minimum OIP version (0.8.0 or above)
         // Extract Ver from tags array since it might not be directly on transaction object
         const version = transaction.ver || transaction.tags.find(tag => tag.name === 'Ver')?.value;
