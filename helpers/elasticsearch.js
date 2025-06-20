@@ -1633,10 +1633,38 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                 console.log(`DEBUG: Original tags approach - dataForSignature length: ${originalDataForSignature.length}`);
                 console.log(`DEBUG: Original tags approach - dataForSignature (first 300 chars): ${originalDataForSignature.substring(0, 300)}...`);
                 
+                // Try to recreate the exact recordData format used during publishing
+                let recreatedRecordData;
+                try {
+                    const parsedData = JSON.parse(transaction.data);
+                    if (Array.isArray(parsedData)) {
+                        // Recreate the exact format: [stringify(record1),stringify(record2)]
+                        const stringifiedRecords = parsedData.map(record => JSON.stringify(record));
+                        recreatedRecordData = `[${stringifiedRecords.join(',')}]`;
+                        console.log(`DEBUG: Recreated recordData length: ${recreatedRecordData.length}`);
+                        console.log(`DEBUG: Recreated recordData (first 300 chars): ${recreatedRecordData.substring(0, 300)}...`);
+                        console.log(`DEBUG: Recreated recordData (last 100 chars): ...${recreatedRecordData.substring(recreatedRecordData.length - 100)}`);
+                        
+                        const recreatedDataForSignature = tagsJson + recreatedRecordData;
+                        console.log(`DEBUG: Recreated dataForSignature length: ${recreatedDataForSignature.length}`);
+                        console.log(`DEBUG: Recreated vs original data match: ${recreatedRecordData === transaction.data}`);
+                    }
+                } catch (error) {
+                    console.error(`DEBUG: Error recreating recordData format:`, error);
+                }
+
                 let isVerified = false;
                 try {
                     isVerified = await verifySignature(dataForSignature, signatureBase64, publicKey, creatorAddress);
                     console.log(`DEBUG: Signature verification result (reconstructed tags): ${isVerified}`);
+                    
+                    if (!isVerified && recreatedRecordData) {
+                        // Try with recreated recordData format
+                        console.log(`DEBUG: Trying verification with recreated recordData format...`);
+                        const recreatedDataForSignature = tagsJson + recreatedRecordData;
+                        isVerified = await verifySignature(recreatedDataForSignature, signatureBase64, publicKey, creatorAddress);
+                        console.log(`DEBUG: Signature verification result (recreated format): ${isVerified}`);
+                    }
                     
                     if (!isVerified) {
                         // Try with original tags order from transaction
