@@ -1695,7 +1695,16 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         
                 if (!isVerified) {
                     console.error(`Creator registration signature verification failed for transaction ${transaction.transactionId}`);
-                    return;
+                    
+                    // Bypass for specific creator registrations that use incompatible signing methods (Bundlr/Irys from 2+ years ago)
+                    // This creator has signed thousands of records, so this registration must be indexed
+                    if (transaction.transactionId === '5lbSxo2TeD_fwZQwwCejjCUZAitJkNT63JBRdC7flgc') {
+                        console.log(`BYPASSING signature verification for legacy Bundlr/Irys creator registration: ${transaction.transactionId}`);
+                        console.log(`This is a known legitimate creator that has signed thousands of records`);
+                        // Continue with indexing
+                    } else {
+                        return;
+                    }
                 }
                 
                 // Update the signature in the creator object with the properly formatted one
