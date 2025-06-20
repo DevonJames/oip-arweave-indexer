@@ -139,7 +139,7 @@ async function getBlockHeightFromTxId(txId) {
     try {
         console.log(`Getting block height for transaction: ${txId}`);
         
-        // Try to get block height directly from Arweave
+        // Try to get block height directly from Arweave status endpoint
         try {
             const arweaveResponse = await axios.get(`https://arweave.net/tx/${txId}/status`);
             const blockHeight = arweaveResponse.data.block_height;
@@ -148,11 +148,40 @@ async function getBlockHeightFromTxId(txId) {
         } catch (directError) {
             console.log(`Direct Arweave status check failed: ${directError.message}`);
             
-            // For bundled transactions, try using the Arweave client
+            // Try GraphQL query as alternative approach
+            try {
+                console.log(`Trying GraphQL query for transaction: ${txId}`);
+                const gqlQuery = `
+                    query($txId: ID!) {
+                        transaction(id: $txId) {
+                            id
+                            block {
+                                height
+                            }
+                        }
+                    }
+                `;
+                
+                const gqlResponse = await axios.post('https://arweave.net/graphql', {
+                    query: gqlQuery,
+                    variables: { txId: txId }
+                });
+                
+                const blockHeight = gqlResponse.data?.data?.transaction?.block?.height;
+                if (blockHeight) {
+                    console.log(`Block height via GraphQL for ${txId}: ${blockHeight}`);
+                    return blockHeight;
+                }
+                
+                console.log(`No block height found via GraphQL for ${txId}`);
+            } catch (gqlError) {
+                console.log(`GraphQL query failed: ${gqlError.message}`);
+            }
+            
+            // Last resort: try using the Arweave client
             try {
                 const transaction = await arweave.transactions.get(txId);
                 // If we can get the transaction, it means it's confirmed, but we may not have block height
-                // Return a default block height or try to get current block height
                 console.log(`Transaction found via Arweave client, but no block height available`);
                 
                 // For bundled transactions, we might not have block height info

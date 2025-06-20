@@ -1494,7 +1494,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
     if (transaction.transactionId === 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y' || transaction.transactionId === '5lbSxo2TeD_fwZQwwCejjCUZAitJkNT63JBRdC7flgc' || transaction.transactionId === 'VPOc02NjJfJ-dYklnMTWWm3tEddEQPlmYRmJdDyzuP4') {
         // creator = creatorInfo;
         creatorHandle = (creatorHandle !== undefined) ? creatorHandle : await convertToCreatorHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["2"]);
-        block = (block !== undefined) ? block : await getBlockHeightFromTxId(transaction.transactionId);
+        block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
         console.log('1402 transaction:', transaction);
         creator = {
             data: {
@@ -1527,7 +1527,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         console.log(getFileInfo(), getLineNumber());
         const expandedRecord = await Promise.all(expandedRecordPromises);
         console.log(getFileInfo(), getLineNumber());
-        const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+        const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
         console.log(getFileInfo(), getLineNumber());
 
         if (expandedRecord !== null) {
@@ -1868,6 +1868,9 @@ async function searchArweaveForNewTransactions(foundInDB) {
                     edges {
                         node {
                             id
+                            block {
+                                height
+                            }
                         }
                         cursor
                     }
@@ -1907,7 +1910,10 @@ async function searchArweaveForNewTransactions(foundInDB) {
             continue;
         }
 
-        const transactions = response.transactions.edges.map(edge => edge.node);
+        const transactions = response.transactions.edges.map(edge => ({
+            id: edge.node.id,
+            blockHeight: edge.node.block?.height || null
+        }));
         allTransactions = allTransactions.concat(transactions);
 
         // Pagination logic
@@ -1925,12 +1931,16 @@ async function searchArweaveForNewTransactions(foundInDB) {
 
 async function processTransaction(tx, remapTemplates) {
     try {
-    // console.log(getFileInfo(), getLineNumber(),'processing transaction:', tx.id, 'block:', tx)
+    // console.log(getFileInfo(), getLineNumber(),'processing transaction:', tx.id, 'block:', tx.blockHeight)
     const transaction = await getTransaction(tx.id);
     if (!transaction || !transaction.tags) {
         console.log(getFileInfo(), getLineNumber(),'CANT FIND TX OR TAGS IN CHAIN, skipping:', tx.id);
         return;
     }
+    
+    // Add block height to transaction object so it can be used by processing functions
+    transaction.blockHeight = tx.blockHeight;
+    
     const tags = transaction.tags.reduce((acc, tag) => {
         acc[tag.name] = tag.value;
         return acc;
@@ -2046,7 +2056,7 @@ async function processNewTemplate(transaction) {
         return null;
     } else {
         console.log(getFileInfo(), getLineNumber());
-        const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+        const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
         const data = {
             TxId: transaction.transactionId,
             creator: creator,
@@ -2180,7 +2190,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
     console.log(getFileInfo(), getLineNumber());
     let record;
     let currentBlockHeight = await getCurrentBlockHeight();
-    let inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+    let inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
     let progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
     console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}%`);
     // let dataArray = [];
