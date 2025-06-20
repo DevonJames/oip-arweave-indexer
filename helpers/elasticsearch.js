@@ -2223,9 +2223,19 @@ async function processNewRecord(transaction, remapTemplates = []) {
         const publicKey = creatorInfo.data.publicKey;
         const didAddress = creatorInfo.data.didAddress;
         
-        // Reconstruct message for signature verification (tags without CreatorSig + data)
-        const tagsForSignature = transaction.tags.filter(tag => tag.name !== 'CreatorSig');
-        const dataForSignature = JSON.stringify(tagsForSignature) + transaction.data;
+        // Extract actual tag values from transaction
+        const deleteRecordType = transaction.tags.find(tag => tag.name === 'RecordType')?.value || 'delete';
+        
+        // Reconstruct tags in the exact same order as during signature creation
+        const reconstructedTags = [
+            { name: 'Content-Type', value: 'application/json' },
+            { name: 'Index-Method', value: 'OIP' },
+            { name: 'Ver', value: '0.8.0' },
+            { name: 'Type', value: 'Record' },
+            { name: 'RecordType', value: deleteRecordType },
+            { name: 'Creator', value: creator }
+        ];
+        const dataForSignature = JSON.stringify(reconstructedTags) + transaction.data;
         
         // Convert signature from URL-safe base64 to regular base64
         const signatureBase64 = convertUrlSafeBase64ToBase64(rawCreatorSig);
@@ -2304,9 +2314,16 @@ async function processNewRecord(transaction, remapTemplates = []) {
             const publicKey = creatorInfo.data.publicKey;
             const didAddress = creatorInfo.data.didAddress;
             
-            // Reconstruct message for signature verification (tags without CreatorSig + data)
-            const tagsForSignature = transaction.tags.filter(tag => tag.name !== 'CreatorSig');
-            const dataForSignature = JSON.stringify(tagsForSignature) + transaction.data;
+            // Reconstruct tags in the exact same order as during signature creation
+            const reconstructedTags = [
+                { name: 'Content-Type', value: 'application/json' },
+                { name: 'Index-Method', value: 'OIP' },
+                { name: 'Ver', value: '0.8.0' },
+                { name: 'Type', value: 'Record' },
+                { name: 'RecordType', value: recordType },
+                { name: 'Creator', value: creator }
+            ];
+            const dataForSignature = JSON.stringify(reconstructedTags) + transaction.data;
             
             // Convert signature from URL-safe base64 to regular base64
             const signatureBase64 = convertUrlSafeBase64ToBase64(rawCreatorSig);
