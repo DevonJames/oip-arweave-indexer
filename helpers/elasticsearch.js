@@ -1464,7 +1464,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
     if (transaction.transactionId === 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y' || transaction.transactionId === '5lbSxo2TeD_fwZQwwCejjCUZAitJkNT63JBRdC7flgc' || transaction.transactionId === 'VPOc02NjJfJ-dYklnMTWWm3tEddEQPlmYRmJdDyzuP4') {
         // creator = creatorInfo;
         creatorHandle = (creatorHandle !== undefined) ? creatorHandle : await convertToCreatorHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["2"]);
-        block = (block !== undefined) ? block : await getBlockHeightFromTxId(transaction.transactionId);
+        block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
         console.log('1402 transaction:', transaction);
         creator = {
             data: {
@@ -1497,7 +1497,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         console.log(getFileInfo(), getLineNumber());
         const expandedRecord = await Promise.all(expandedRecordPromises);
         console.log(getFileInfo(), getLineNumber());
-        const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+        const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
         console.log(getFileInfo(), getLineNumber());
 
         if (expandedRecord !== null) {
@@ -2079,6 +2079,12 @@ async function processNewRecord(transaction, remapTemplates = []) {
     
     creatorInfo = (!creatorInfo) ? await searchCreatorByAddress(creatorDid) : creatorInfo;
     console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
+    
+    // If creator is not found, skip this record for now
+    if (!creatorInfo) {
+        console.log(getFileInfo(), getLineNumber(), `Skipping record ${transaction.transactionId} - creator ${creatorDid} not found in database yet`);
+        return { records: newRecords, recordsToDelete };
+    }
     let transactionData;
     let isDeleteMessageFound = false;
 
@@ -2102,9 +2108,10 @@ async function processNewRecord(transaction, remapTemplates = []) {
     console.log(getFileInfo(), getLineNumber());
     let record;
     let currentBlockHeight = await getCurrentBlockHeight();
-    let inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+    // Use block height from GraphQL data instead of making additional API calls
+    let inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
     let progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
-    console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}%`);
+    console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}% (Block: ${inArweaveBlock})`);
     // let dataArray = [];
     // dataArray.push(transactionData);
     // handle delete message
