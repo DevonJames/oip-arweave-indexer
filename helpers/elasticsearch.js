@@ -1948,7 +1948,7 @@ async function processNewTemplate(transaction) {
     console.log(getFileInfo(), getLineNumber(), publicKey);
 
     const signatureBase64 = transaction.creatorSig;
-    console.log(getFileInfo(), getLineNumber()), signatureBase64;
+    console.log(getFileInfo(), getLineNumber(), signatureBase64);
     const isVerified = await verifySignature(message, signatureBase64, publicKey, didAddress);
     console.log(getFileInfo(), getLineNumber());
     if (!isVerified) {

@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
 const { ArweaveSigner } = require('arbundles');
-const Irys = require('@irys/sdk');
+const { TurboFactory } = require('@ardrive/turbo-sdk');
 const arweave = require('arweave');
 const {crypto, createHash} = require('crypto');
 const jwt = require('jsonwebtoken');
@@ -11,13 +11,11 @@ const templatesConfig = require('../config/templates.config.js');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 dotenv.config();
 
-const getIrysArweave = async () => {
-    const network = "mainnet";
-    const token = "arweave";
+const getTurboArweave = async () => {
     const walletFileLocation = process.env.WALLET_FILE;
     const key = JSON.parse(fs.readFileSync(walletFileLocation).toString());
-    const irys = new Irys({ network, token, key });
-    return irys;
+    const turbo = TurboFactory.authenticated({ privateKey: key });
+    return turbo;
 };
 
 const getFileInfo = () => {
@@ -194,7 +192,7 @@ const authenticateToken = (req, res, next) => {
 let remapTemplatesPromise = loadRemapTemplates();
 
 module.exports = {
-    getIrysArweave,
+    getTurboArweave,
     verifySignature,
     signMessage,
     txidToDid,

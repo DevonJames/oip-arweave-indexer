@@ -230,7 +230,7 @@ initializeIndices()
       // Periodically keep DB up to date
       if (args.keepDBUpToDate) {
           const wait = args._[0] ? parseInt(args._[0], 10) : 0; // Delay in seconds
-          const interval = args._[1] ? parseInt(args._[1], 10) : 60; // Interval in seconds
+          const interval = args._[1] ? parseInt(args._[1], 10) : 120; // Interval in seconds
 
           if (isNaN(wait) || isNaN(interval)) {
               console.error('Invalid arguments for --keepDBUpToDate. Provide delay and interval as numbers.');

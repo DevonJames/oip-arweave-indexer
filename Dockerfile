@@ -100,7 +100,7 @@ EXPOSE 5555
 # Command to run all services
 CMD ["sh", "-c", "\
   ./wait-for-it.sh elasticsearch:9200 --timeout=90 --strict -- \
-  node --inspect=0.0.0.0:9229 index.js --keepDBUpToDate 10 100"]
+  node --inspect=0.0.0.0:9229 index.js --keepDBUpToDate 10 10"]
 
 # Add healthcheck for the app
 HEALTHCHECK --interval=75s --timeout=5s --start-period=10s --retries=3 \

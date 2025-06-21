@@ -4,7 +4,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
-const { signMessage, txidToDid, getIrysArweave, getTemplateTxidByName } = require('./utils');
+const { signMessage, txidToDid, getTurboArweave, getTemplateTxidByName } = require('./utils');
 const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, searchCreatorByAddress, indexRecord } = require('./elasticsearch');
 const {getCurrentBlockHeight} = require('../helpers/arweave');
 const arweaveWallet = require('./arweave-wallet');
@@ -753,11 +753,18 @@ async function publishVideoFiles(videoPath, videoID, uploadToArweave = true, upl
       // Step 1: Upload to Arweave for permanent storage (default)
       if (uploadToArweave) {
         try {
-          const irys = await getIrysArweave();
+          const turbo = await getTurboArweave();
           const fileBuffer = fs.readFileSync(videoFile);
-          const arweaveReceipt = await irys.upload(fileBuffer, { 
-            tags: [{ name: 'Content-Type', value: 'video/mp4' }] 
-          });
+          const arweaveReceipt = await turbo.upload({
+            data: fileBuffer,
+            dataItemOpts: {
+                tags: [
+                    { name: 'Content-Type', value: 'application/octet-stream' },
+                    { name: 'App-Name', value: 'OIPArweave' },
+                    { name: 'App-Version', value: '0.0.1' }
+                ]
+            }
+        });
           videoFiles.arweaveAddress = `ar://${arweaveReceipt.id}`;
           console.log(`Video uploaded to Arweave. ID: ${arweaveReceipt.id}`);
         } catch (arweaveError) {
@@ -812,10 +819,17 @@ async function publishArticleText(outputPath, articleTitle, articleAuthor, artic
         // Step 1: Upload to Arweave for permanent storage (default)
         if (uploadToArweave) {
             try {
-                const irys = await getIrysArweave();
+                const turbo = await getTurboArweave();
                 const fileBuffer = fs.readFileSync(outputPath);
-                const arweaveReceipt = await irys.upload(fileBuffer, { 
-                    tags: [{ name: 'Content-Type', value: 'text/plain' }] 
+                const arweaveReceipt = await turbo.upload({
+                    data: fileBuffer,
+                    dataItemOpts: {
+                        tags: [
+                            { name: 'Content-Type', value: 'application/octet-stream' },
+                            { name: 'App-Name', value: 'OIPArweave' },
+                            { name: 'App-Version', value: '0.0.1' }
+                        ]
+                    }
                 });
                 textStorage.arweaveAddress = `ar://${arweaveReceipt.id}`;
                 console.log(`Article text uploaded to Arweave. ID: ${arweaveReceipt.id}`);
@@ -863,7 +877,7 @@ async function publishImage(imagePath, uploadToArweave = true, uploadToArFleet =
         // Step 1: Upload to Arweave for permanent storage (default)
         if (uploadToArweave) {
             try {
-                const irys = await getIrysArweave();
+                const turbo = await getTurboArweave();
                 
                 // Get image MIME type
                 const fileExt = path.extname(imagePath).toLowerCase();
@@ -876,8 +890,15 @@ async function publishImage(imagePath, uploadToArweave = true, uploadToArFleet =
                     '.svg': 'image/svg+xml'
                 }[fileExt] || 'image/jpeg';
                 
-                const arweaveReceipt = await irys.upload(imageFile, { 
-                    tags: [{ name: 'Content-Type', value: mimeType }] 
+                const arweaveReceipt = await turbo.upload({
+                    data: imageFile,
+                    dataItemOpts: {
+                        tags: [
+                            { name: 'Content-Type', value: 'image/jpeg' },
+                            { name: 'App-Name', value: 'OIPArweave' },
+                            { name: 'App-Version', value: '0.0.1' }
+                        ]
+                    }
                 });
                 imageStorage.arweaveAddress = `ar://${arweaveReceipt.id}`;
                 console.log(`Image uploaded to Arweave. ID: ${arweaveReceipt.id}`);

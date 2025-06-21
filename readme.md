@@ -1,10 +1,10 @@
 # OIPArweave - Open Index Protocol for Arweave & Irys
 
-OIPArweave is a comprehensive indexing and publishing system for blockchain records following the Open Index Protocol (OIP) specification. It indexes "OIP" records from the Arweave blockchain into a local Elasticsearch database for fast JSON-based interactions, while also supporting record publishing to both Arweave (via Turbo) and Irys networks.
+OIPArweave is a comprehensive indexing and publishing system for blockchain records following the Open Index Protocol (OIP) specification. It indexes "OIP" records from the Arweave blockchain into a local Elasticsearch database for fast JSON-based interactions, while also supporting record publishing to both Arweave (via ArDrive Turbo SDK) and Irys networks.
 
 ## Key Features
 
-- **Dual Blockchain Support**: Publish records to either Arweave (via Turbo SDK) or Irys network
+- **Dual Blockchain Support**: Publish records to either Arweave (via ArDrive Turbo SDK) or Irys network
 - **Multi-Network Media Publishing**: Store media across multiple decentralized networks with DID addresses
 - **Blockchain Indexing**: Automatically indexes Arweave transactions with OIP tags
 - **Elasticsearch Integration**: Local database for fast querying and JSON interactions
@@ -73,7 +73,7 @@ Create an `.env` file in the project root:
 ```env
 # Arweave Configuration
 WALLET_FILE=config/arweave-keyfile.json
-TURBO_URL=https://turbo.ardrive.io
+# Turbo SDK will use default endpoints
 
 # Server Configuration
 PORT=3005

@@ -1,4 +1,4 @@
-const { getIrysArweave } = require('./utils');
+const { getTurboArweave } = require('./utils');
 const arweaveWallet = require('./arweave-wallet');
 
 class PublisherManager {
@@ -42,21 +42,33 @@ class PublisherManager {
     }
 
     /**
-     * Publish to Arweave using Turbo
+     * Publish to Arweave using Turbo SDK
      */
     async publishToArweave(data, tags, waitForConfirmation) {
         console.log('Publishing to Arweave via Turbo...');
-        const result = await arweaveWallet.uploadWithConfirmation(
-            data,
-            { tags },
-            waitForConfirmation
-        );
+        const turbo = await getTurboArweave();
         
+        // Ensure data is a buffer
+        const dataBuffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+        
+        // Convert tags to Turbo format
+        const turboTags = tags.map(tag => ({
+            name: tag.name,
+            value: tag.value
+        }));
+
+        const receipt = await turbo.upload({
+            data: dataBuffer,
+            dataItemOpts: {
+                tags: turboTags
+            }
+        });
+
         return {
-            id: result.id,
+            id: receipt.id,
             blockchain: 'arweave',
             provider: 'turbo',
-            url: `https://arweave.net/${result.id}`
+            url: `https://arweave.net/${receipt.id}`
         };
     }
 
@@ -65,21 +77,24 @@ class PublisherManager {
      */
     async publishToIrys(data, tags) {
         console.log('Publishing to Irys network...');
-        const irys = await getIrysArweave();
+        const turbo = await getTurboArweave();
         
-        // Convert data to Buffer if it's not already
-        const dataBuffer = Buffer.isBuffer(data) ? data : 
-                          typeof data === 'string' ? Buffer.from(data) :
-                          Buffer.from(JSON.stringify(data));
-
+        // Ensure data is a buffer
+        const dataBuffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+        
         // Convert tags to Irys format
         const irysTagsObject = {};
         tags.forEach(tag => {
             irysTagsObject[tag.name] = tag.value;
         });
 
-        const receipt = await irys.upload(dataBuffer, { tags: irysTagsObject });
-        
+        const receipt = await turbo.upload({
+            data: dataBuffer,
+            dataItemOpts: {
+                tags: irysTagsObject
+            }
+        });
+
         return {
             id: receipt.id,
             blockchain: 'irys',
@@ -91,47 +106,55 @@ class PublisherManager {
     /**
      * Get the balance for the specified blockchain
      */
-    async getBalance(blockchain = 'arweave') {
+    async getBalance(blockchain) {
         if (blockchain === 'arweave') {
-            return await arweaveWallet.getBalance();
-        } else if (blockchain === 'irys') {
-            const irys = await getIrysArweave();
-            const balance = await irys.getLoadedBalance();
+            const turbo = await getTurboArweave();
+            const balance = await turbo.getBalance();
             return {
-                balance: balance.toString(),
-                formatted: irys.utils.fromAtomic(balance)
+                raw: balance.winc,
+                formatted: balance.winc / 1000000000000 // Convert Winston to AR
             };
-        } else {
-            throw new Error(`Unsupported blockchain: ${blockchain}`);
+        } else if (blockchain === 'irys') {
+            const turbo = await getTurboArweave();
+            const balance = await turbo.getBalance();
+            return {
+                raw: balance.winc,
+                formatted: balance.winc / 1000000000000
+            };
         }
+        throw new Error(`Unsupported blockchain: ${blockchain}`);
     }
 
     /**
      * Fund the wallet for the specified blockchain
      */
-    async fund(amount, blockchain = 'arweave') {
+    async fundWallet(blockchain, amount) {
         if (blockchain === 'arweave') {
-            return await arweaveWallet.fund(amount);
+            const turbo = await getTurboArweave();
+            const atomicAmount = Math.floor(amount * 1000000000000); // Convert AR to Winston
+            return await turbo.topUpWithTokens({ tokenAmount: atomicAmount });
         } else if (blockchain === 'irys') {
-            const irys = await getIrysArweave();
-            return await irys.fund(amount);
-        } else {
-            throw new Error(`Unsupported blockchain: ${blockchain}`);
+            const turbo = await getTurboArweave();
+            const atomicAmount = Math.floor(amount * 1000000000000);
+            return await turbo.topUpWithTokens({ tokenAmount: atomicAmount });
         }
+        throw new Error(`Unsupported blockchain: ${blockchain}`);
     }
 
     /**
      * Get price estimate for data size
      */
-    async getPrice(size, blockchain = 'arweave') {
+    async getPrice(blockchain, size) {
         if (blockchain === 'arweave') {
-            return await arweaveWallet.getPrice(size);
+            const turbo = await getTurboArweave();
+            const costs = await turbo.getUploadCosts({ bytes: [size] });
+            return costs[0].winc;
         } else if (blockchain === 'irys') {
-            const irys = await getIrysArweave();
-            return await irys.getPrice(size);
-        } else {
-            throw new Error(`Unsupported blockchain: ${blockchain}`);
+            const turbo = await getTurboArweave();
+            const costs = await turbo.getUploadCosts({ bytes: [size] });
+            return costs[0].winc;
         }
+        throw new Error(`Unsupported blockchain: ${blockchain}`);
     }
 }
 
