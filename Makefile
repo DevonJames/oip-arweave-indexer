@@ -76,6 +76,13 @@ build: validate-profile check-env check-network ## Build and start services with
 	@echo "$(GREEN)Services built and started successfully$(NC)"
 	@make status
 
+rebuild: validate-profile check-env check-network ## Rebuild and start services with --no-cache and specified profile
+	@echo "$(BLUE)Rebuilding OIP Arweave with --no-cache and profile: $(PROFILE)$(NC)"
+	docker-compose --profile $(PROFILE) build --no-cache
+	docker-compose --profile $(PROFILE) up -d
+	@echo "$(GREEN)Services rebuilt and started successfully$(NC)"
+	@make status
+
 down: ## Stop all services
 	@echo "$(BLUE)Stopping all OIP Arweave services...$(NC)"
 	docker-compose down
