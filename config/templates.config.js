@@ -14,9 +14,9 @@ module.exports = {
         podcast: "MojoZlLKaH-cHy_HbaGBlBA7Mxzf8dJl4MQZzFQAkMY",
         nutritionalInfo: "yfBDmC1FPNan0mlixGNGUCGhmYZjM1PuDVXfpr_Cxlo",
         recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
-        exercise: "PLACEHOLDER_EXERCISE_TEMPLATE_TXID", // Will be set when exercise template is published
-        workout: "PLACEHOLDER_WORKOUT_TEMPLATE_TXID", // Will be set when workout template is published
         jfkFilesPageOfDocument: "WP-tZ5nwxrMwr5wKHazTFUtGLRd6nQWRBl8E63Kqufg",
         jfkFilesDocument: "d3xoxXQ8hUlrgKTo1UZc4_GqaKTaApJs0tLFuK6Hxqk",
+        exercise: "H9yER_vA4LBL2gP2R_qTa4j0lekVckiV3cYbvH1sy8c",
+        workout: "ZcpqKJQOfqrWsc_EvbDs6aFOazDfSfJzkdg42H0yDYk",
     }
 };
