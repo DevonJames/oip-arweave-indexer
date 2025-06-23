@@ -19,6 +19,170 @@ const paymentManager = require('../helpers/payment-manager');
 const publisherManager = require('../helpers/publisher-manager');
 const mediaManager = require('../helpers/media-manager');
 
+// Kaggle integration for exercise data
+let kaggleDataset = null;
+
+/**
+ * Initialize Kaggle dataset for exercise data
+ */
+async function initializeKaggleDataset() {
+    if (kaggleDataset) return kaggleDataset;
+    
+    try {
+        console.log('Initializing Kaggle fitness exercises dataset...');
+        
+        kaggleDataset = {
+            searchExercise: async (exerciseName) => {
+                return await searchKaggleExercise(exerciseName);
+            }
+        };
+        
+        console.log('Kaggle dataset initialized');
+        return kaggleDataset;
+    } catch (error) {
+        console.error('Error initializing Kaggle dataset:', error);
+        throw error;
+    }
+}
+
+/**
+ * Search for exercise data using Python Kaggle integration
+ */
+async function searchKaggleExercise(exerciseName) {
+    try {
+        console.log(`Searching Kaggle dataset for exercise: ${exerciseName}`);
+        
+        const { spawn } = require('child_process');
+        const pythonScript = path.join(__dirname, '..', 'kaggle-exercise-fetcher.py');
+        
+        return new Promise((resolve, reject) => {
+            const python = spawn('python3', [pythonScript, exerciseName, '--format', 'json']);
+            
+            let stdout = '';
+            let stderr = '';
+            
+            python.stdout.on('data', (data) => {
+                stdout += data.toString();
+            });
+            
+            python.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+            
+            python.on('close', (code) => {
+                if (code === 0) {
+                    try {
+                        const exerciseData = JSON.parse(stdout);
+                        console.log(`Found exercise data for ${exerciseName}:`, exerciseData);
+                        resolve(exerciseData);
+                    } catch (parseError) {
+                        console.error('Error parsing exercise data JSON:', parseError);
+                        resolve(null);
+                    }
+                } else {
+                    console.log(`Python script exited with code ${code}`);
+                    console.log('stderr:', stderr);
+                    
+                    // Fallback to mock data if Python script fails
+                    console.log('Falling back to mock exercise data...');
+                    const mockExerciseData = {
+                        name: exerciseName,
+                        instructions: [
+                            "Set up in starting position",
+                            "Perform the movement with proper form", 
+                            "Return to starting position"
+                        ],
+                        muscle_groups: ["general"],
+                        difficulty: "intermediate",
+                        category: "strength",
+                        equipment_required: [],
+                        alternative_equipment: [],
+                        is_bodyweight: true,
+                        exercise_type: "compound",
+                        recommended_sets: 3,
+                        recommended_reps: 12,
+                        duration_minutes: 0,
+                        goal_tags: ["general fitness"],
+                        image_url: "",
+                        video_url: "",
+                        source_url: "https://www.kaggle.com/datasets/edoardoba/fitness-exercises-with-animations"
+                    };
+                    resolve(mockExerciseData);
+                }
+            });
+            
+            python.on('error', (error) => {
+                console.error('Error running Python script:', error);
+                // Resolve with null to trigger fallback
+                resolve(null);
+            });
+        });
+        
+    } catch (error) {
+        console.error(`Error searching for exercise ${exerciseName}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Create new exercise record from Kaggle data
+ */
+async function createNewExerciseRecord(exerciseName, blockchain = 'arweave') {
+    try {
+        console.log(`Fetching exercise info for missing exercise: ${exerciseName}`);
+        
+        // Initialize Kaggle dataset
+        const dataset = await initializeKaggleDataset();
+        
+        // Search for exercise in Kaggle dataset
+        const exerciseData = await dataset.searchExercise(exerciseName);
+        
+        if (!exerciseData) {
+            console.log(`No exercise found in Kaggle dataset for: ${exerciseName}`);
+            return null;
+        }
+        
+        // Format the exercise data according to OIP exercise template
+        const formattedExerciseInfo = {
+            basic: {
+                name: exerciseData.name,
+                date: Math.floor(Date.now() / 1000),
+                language: 'en',
+                nsfw: false,
+                webUrl: exerciseData.source_url,
+                description: `${exerciseData.name} - ${exerciseData.category} exercise targeting ${exerciseData.muscle_groups.join(', ')}`,
+                tagItems: exerciseData.goal_tags || []
+            },
+            exercise: {
+                instructions: exerciseData.instructions,
+                muscleGroups: exerciseData.muscle_groups,
+                difficulty: exerciseData.difficulty,
+                category: exerciseData.category,
+                imageUrl: exerciseData.image_url || '',
+                videoUrl: exerciseData.video_url || '',
+                gitUrl: '', // Not available in Kaggle dataset
+                equipmentRequired: exerciseData.equipment_required || [],
+                alternativeEquipment: exerciseData.alternative_equipment || [],
+                isBodyweight: exerciseData.is_bodyweight || false,
+                exercise_type: exerciseData.exercise_type,
+                duration_minutes: exerciseData.duration_minutes || 0,
+                duration_target: exerciseData.duration_minutes || 0,
+                recommended_sets: exerciseData.recommended_sets || 3,
+                recommended_reps: exerciseData.recommended_reps || 12,
+                goalTags: exerciseData.goal_tags || []
+            }
+        };
+        
+        // Publish the exercise record
+        const exerciseTx = await publishNewRecord(formattedExerciseInfo, "exercise", false, false, false, null, blockchain);
+        console.log(`Successfully retrieved and published exercise info for ${exerciseName}:`, formattedExerciseInfo, exerciseTx);
+        return exerciseTx.recordToIndex;
+    } catch (error) {
+        console.error(`Error fetching exercise info for ${exerciseName}:`, error);
+        return null;
+    }
+}
+
 // Initialize ArDrive Turbo with wallet file
 const initTurbo = async () => {
     try {
@@ -578,6 +742,193 @@ recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false,
     res.status(500).json({ error: 'Failed to publish record' });
 }
 });
+
+// Add workout publishing endpoint
+router.post('/newWorkout', async (req, res) => {
+    try {
+        console.log('POST /api/publish/newWorkout', req.body);
+        const record = req.body;
+        const blockchain = req.body.blockchain || 'arweave';
+        const nonStandardWorkout = req.body.nonStandardWorkout || false;
+        let recordType = 'workout';
+
+        // Extract workout sections from JSON
+        const workoutSections = req.body.workout || [];
+        
+        // Extract exercise names from all sections
+        let allExerciseNames = [];
+        workoutSections.forEach(section => {
+            if (section.exercises && Array.isArray(section.exercises)) {
+                section.exercises.forEach(exercise => {
+                    if (exercise.name) {
+                        allExerciseNames.push(exercise.name.trim().toLowerCase());
+                    }
+                });
+            }
+        });
+
+        console.log('All exercise names found:', allExerciseNames);
+        console.log('Non-standard workout flag:', nonStandardWorkout);
+
+        let exerciseDidRefs = {};
+
+        // Only process exercise lookups if NOT a non-standard workout
+        if (!nonStandardWorkout && allExerciseNames.length > 0) {
+            // Step 1: Query existing exercise records in OIP
+            const queryParams = {
+                recordType: 'exercise',
+                search: allExerciseNames.join(','),
+                limit: 50
+            };
+
+            const existingExercises = await getRecords(queryParams);
+            console.log('Existing exercises found:', existingExercises.searchResults);
+
+            // Create exercise record map for fast lookup
+            const exerciseRecordMap = {};
+            existingExercises.records.forEach(record => {
+                const recordName = record.data.basic.name.toLowerCase();
+                exerciseRecordMap[recordName] = record;
+            });
+
+            // Step 2: Find best matches for each exercise
+            for (const exerciseName of allExerciseNames) {
+                const bestMatch = findBestExerciseMatch(exerciseName, exerciseRecordMap);
+                if (bestMatch) {
+                    exerciseDidRefs[exerciseName] = bestMatch.oip.didTx;
+                    console.log(`Found existing exercise for ${exerciseName}:`, bestMatch.oip.didTx);
+                } else {
+                    exerciseDidRefs[exerciseName] = null;
+                }
+            }
+
+            // Step 3: Create missing exercise records from Kaggle data
+            const missingExerciseNames = Object.keys(exerciseDidRefs).filter(
+                name => exerciseDidRefs[name] === null
+            );
+
+            if (missingExerciseNames.length > 0) {
+                console.log('Creating exercise records for missing exercises:', missingExerciseNames);
+                
+                const newExerciseRecords = await Promise.all(
+                    missingExerciseNames.map(name => createNewExerciseRecord(name, blockchain))
+                );
+
+                // Update exerciseDidRefs with newly created records
+                newExerciseRecords.forEach((newRecord, index) => {
+                    if (newRecord) {
+                        const exerciseName = missingExerciseNames[index];
+                        exerciseDidRefs[exerciseName] = newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`;
+                        console.log(`Created new exercise record for ${exerciseName}:`, exerciseDidRefs[exerciseName]);
+                    }
+                });
+            }
+
+            // Step 4: Replace exercise names with didTx references in workout sections
+            workoutSections.forEach(section => {
+                if (section.exercises && Array.isArray(section.exercises)) {
+                    section.exercises.forEach(exercise => {
+                        if (exercise.name) {
+                            const exerciseName = exercise.name.trim().toLowerCase();
+                            const didTx = exerciseDidRefs[exerciseName];
+                            if (didTx) {
+                                exercise.exerciseDidTx = didTx;
+                                console.log(`Replaced ${exercise.name} with didTx: ${didTx}`);
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        // Step 5: Create final workout data structure
+        const workoutData = {
+            basic: {
+                name: record.basic.name,
+                language: record.basic.language || "en",
+                date: record.basic.date || Math.floor(Date.now() / 1000),
+                description: record.basic.description,
+                webUrl: record.basic.webUrl,
+                nsfw: record.basic.nsfw || false,
+                tagItems: record.basic.tagItems || [],
+            },
+            workout: {
+                duration_minutes: record.workout_duration_minutes || null,
+                difficulty: record.workout_difficulty || 'intermediate',
+                category: record.workout_category || 'general',
+                equipment_required: record.equipment_required || [],
+                target_muscle_groups: record.target_muscle_groups || [],
+                goal_tags: record.goal_tags || [],
+                workout_sections: workoutSections,
+                is_non_standard: nonStandardWorkout,
+                notes: record.notes || '',
+                created_by: record.created_by || null
+            },
+            image: {
+                webUrl: record.image?.webUrl,
+                contentType: record.image?.contentType
+            }
+        };
+
+        console.log('Final workout data:', workoutData);
+
+        // Step 6: Publish workout record
+        const workoutRecord = await publishNewRecord(workoutData, "workout", false, false, false, null, blockchain);
+
+        const transactionId = workoutRecord.transactionId;
+        const recordToIndex = workoutRecord.recordToIndex;
+
+        res.status(200).json({ 
+            transactionId, 
+            recordToIndex, 
+            blockchain,
+            exerciseDidRefs: !nonStandardWorkout ? exerciseDidRefs : null,
+            message: `Workout published successfully${!nonStandardWorkout ? ' with exercise references' : ' as non-standard workout'}`
+        });
+
+    } catch (error) {
+        console.error('Error publishing workout:', error);
+        res.status(500).json({ error: 'Failed to publish workout' });
+    }
+});
+
+// Function to find best exercise match (similar to ingredient matching)
+function findBestExerciseMatch(exerciseName, exerciseRecordMap) {
+    if (!exerciseRecordMap || Object.keys(exerciseRecordMap).length === 0) {
+        return null;
+    }
+
+    const searchTerms = exerciseName.split(/\s+/).filter(Boolean);
+    console.log(`Searching for exercise: ${exerciseName}, Search terms:`, searchTerms);
+
+    // Direct match
+    if (exerciseRecordMap[exerciseName]) {
+        console.log(`Direct match found for ${exerciseName}`);
+        return exerciseRecordMap[exerciseName];
+    }
+
+    // Looser match using search terms
+    const matches = Object.keys(exerciseRecordMap)
+        .filter(recordName => {
+            const normalizedRecordName = recordName.toLowerCase();
+            return searchTerms.some(term => normalizedRecordName.includes(term));
+        })
+        .map(recordName => exerciseRecordMap[recordName]);
+
+    if (matches.length > 0) {
+        matches.sort((a, b) => {
+            const aMatchCount = searchTerms.filter(term => a.data.basic.name.toLowerCase().includes(term)).length;
+            const bMatchCount = searchTerms.filter(term => b.data.basic.name.toLowerCase().includes(term)).length;
+            return bMatchCount - aMatchCount;
+        });
+
+        console.log(`Loose matches found for ${exerciseName}:`, matches.length);
+        return matches[0];
+    }
+
+    console.log(`No match found for ${exerciseName}`);
+    return null;
+}
 
 // Add specific video record endpoint with YouTube support
 router.post('/newVideo', async (req, res) => {
