@@ -104,8 +104,8 @@ router.get('/', async (req, res) => {
 });
 
 
-// router.post('/newTemplate', authenticateToken, async (req, res) => {
-router.post('/newTemplate', async (req, res) => {
+router.post('/newTemplate', authenticateToken, async (req, res) => {
+// router.post('/newTemplate', async (req, res) => {
     try {
         console.log('POST /api/templates/newTemplate', req.body)
         const template = req.body;

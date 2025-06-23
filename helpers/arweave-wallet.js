@@ -218,8 +218,16 @@ class ArweaveWalletManager {
     // Enhanced upload methods with status checking
     async uploadWithConfirmation(data, options = {}, waitForConfirmation = true) {
         try {
-            // Just call uploadFile directly, ignore the waitForConfirmation parameter
-            const result = await this.uploadFile(data, options.tags?.[0]?.value || 'application/json');
+            console.log('uploadWithConfirmation called with data size:', Buffer.byteLength(data, 'utf8'));
+            console.log('uploadWithConfirmation options:', options);
+            
+            // Extract content type from tags
+            const contentType = options.tags?.find(tag => tag.name === 'Content-Type')?.value || 'application/json';
+            
+            // Call uploadFile directly
+            const result = await this.uploadFile(data, contentType);
+            
+            console.log('Upload result:', result);
             
             // Return a simplified result without status
             return {
@@ -227,6 +235,7 @@ class ArweaveWalletManager {
             };
         } catch (error) {
             console.error('Error in upload with confirmation:', error);
+            console.error('Error details:', error.message);
             throw error;
         }
     }
