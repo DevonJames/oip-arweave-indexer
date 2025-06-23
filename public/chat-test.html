@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>JFK Chat Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .message-container { 
+      height: 400px; 
+      overflow: auto; 
+      border: 1px solid #ccc; 
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #f9f9f9;
+      border-radius: 5px;
+    }
+    .input-container {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    input { 
+      flex: 1; 
+      padding: 8px; 
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 16px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      margin-left: 10px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:disabled {
+      background: #ccc;
+    }
+    .message {
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      border-radius: 18px;
+      max-width: 80%;
+    }
+    .user { 
+      background: #4285f4; 
+      color: white;
+      align-self: flex-end;
+      margin-left: auto;
+    }
+    .assistant { 
+      background: #e9e9e9; 
+      color: #333;
+    }
+    .system { 
+      color: #666; 
+      font-style: italic;
+      text-align: center;
+      background: #f1f1f1;
+      padding: 5px;
+      margin: 5px 0;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    .flex-container {
+      display: flex;
+      flex-direction: column;
+    }
+    #status {
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #666;
+    }
+    #audio-container audio {
+      width: 100%;
+      margin-top: 10px;
+    }
+    .mic-button {
+      background-color: #ff4081;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 10px;
+    }
+    .mic-button.recording {
+      animation: pulse 1.5s infinite;
+      background-color: #f44336;
+    }
+    .mic-button svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+    .controls-container {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>JFK Chat Test</h1>
+    <div id="status">Disconnected</div>
+    <div id="messages" class="message-container flex-container"></div>
+    <div id="audio-container"></div>
+    
+    <div class="controls-container">
+      <input type="text" id="message-input" placeholder="Type your message">
+      <button id="send-btn">Send</button>
+      <button id="mic-btn" class="mic-button">
+        <svg viewBox="0 0 24 24">
+          <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
+        </svg>
+      </button>
+    </div>
+    
+    <div>
+      <button id="check-dialogues">Check Active Dialogues</button>
+      <pre id="dialogues-info" style="background:#f1f1f1;padding:10px;overflow:auto;max-height:200px;"></pre>
+    </div>
+  </div>
+
+  <script>
+    const messagesContainer = document.getElementById('messages');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-btn');
+    const micButton = document.getElementById('mic-btn');
+    const statusElement = document.getElementById('status');
+    const audioContainer = document.getElementById('audio-container');
+    const checkDialoguesButton = document.getElementById('check-dialogues');
+    const dialoguesInfo = document.getElementById('dialogues-info');
+    
+    let dialogueId = null;
+    let eventSource = null;
+    let isConnecting = false;
+    
+    // Audio recording variables
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let audioStream = null;
+
+    // Add this near the top with other variables
+    let conversationHistory = [];
+
+    function updateStatus(text) {
+      statusElement.textContent = text;
+    }
+
+    // Audio recording functions
+    async function startRecording() {
+      try {
+        audioChunks = [];
+        
+        // Request microphone access
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // Create media recorder
+        mediaRecorder = new MediaRecorder(audioStream);
+        
+        // Add event listeners
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+        
+        mediaRecorder.onstop = async () => {
+          // Create a single blob from all chunks
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          await sendAudioToServer(audioBlob);
+          
+          // Stop all tracks
+          audioStream.getTracks().forEach(track => track.stop());
+          audioStream = null;
+        };
+        
+        // Start recording
+        mediaRecorder.start();
+        isRecording = true;
+        micButton.classList.add('recording');
+        updateStatus('Recording...');
+        
+      } catch (error) {
+        console.error('Error starting recording:', error);
+        updateStatus('Microphone access denied or error');
+      }
+    }
+    
+    function stopRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        micButton.classList.remove('recording');
+        updateStatus('Processing audio...');
+      }
+    }
+    
+    async function sendAudioToServer(audioBlob) {
+      try {
+        // Create form data
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        
+        // Add dialogue ID if we have one
+        if (dialogueId) {
+          formData.append('dialogueId', dialogueId);
+        }
+        
+        // Add the FULL conversation history from our tracked array
+        formData.append('conversationHistory', JSON.stringify(conversationHistory));
+        
+        // Add personality settings
+        formData.append('personality', JSON.stringify({
+          name: "Assistant",
+          model: "grok-2",
+          temperature: 0.7,
+          systemPrompt: "You are a helpful assistant.",
+          voices: {
+            elevenLabs: {
+              voice_id: "pNInz6obpgDQGcFmaJgB",
+              model_id: "eleven_turbo_v2",
+              stability: 0.5,
+              similarity_boost: 0.75
+            }
+          }
+        }));
+        
+        // Send to server
+        updateStatus('Sending audio to server...');
+        const response = await fetch('/api/generate/chat', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          dialogueId = data.dialogueId;
+          connectToEventStream(dialogueId);
+          
+          // Add placeholder for speech input
+          addMessage('user', 'Speech input: (processing...)');
+          
+          // We'll update the content when we get the transcription
+        } else {
+          updateStatus('Error: ' + (data.error || 'Unknown error'));
+          addMessage('system', 'Error processing audio');
+        }
+      } catch (error) {
+        console.error('Error sending audio:', error);
+        updateStatus('Error sending audio');
+        addMessage('system', 'Error sending audio');
+      }
+    }
+
+    function connectToEventStream(id) {
+      if (isConnecting) return;
+      isConnecting = true;
+      
+      updateStatus('Connecting...');
+      console.log(`Connecting to event stream for id: ${id}`);
+      
+      // Close existing connection
+      if (eventSource) {
+        eventSource.close();
+      }
+      
+      // Create event source with relative URL - avoids CORS
+      eventSource = new EventSource(`/api/generate/open-stream?id=${id}`);
+      
+      eventSource.onopen = () => {
+        console.log('EventSource connection opened');
+        updateStatus('Connected');
+      };
+      
+      eventSource.addEventListener('connected', (event) => {
+        console.log('Connected:', event.data);
+        addMessage('system', 'Connected to event stream');
+        isConnecting = false;
+      });
+      
+      eventSource.addEventListener('textChunk', (event) => {
+        console.log('Text chunk received');
+        const data = JSON.parse(event.data);
+        
+        if (data.role === 'assistant') {
+          // Create a message ID that's unique for each conversation turn
+          if (!window.currentResponseId) {
+            window.currentResponseId = `${id}-${Date.now()}`;
+            // Initialize content for this response
+            window.currentResponseContent = '';
+          }
+          
+          // Accumulate the response content
+          window.currentResponseContent += data.text;
+          
+          // Find or create message element with this unique ID
+          let msgElem = document.querySelector(`.assistant[data-id="${window.currentResponseId}"]`);
+          
+          if (!msgElem) {
+            msgElem = document.createElement('div');
+            msgElem.className = 'message assistant';
+            msgElem.dataset.id = window.currentResponseId;
+            messagesContainer.appendChild(msgElem);
+          }
+          
+          // Update content
+          msgElem.textContent = window.currentResponseContent;
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else if (data.role === 'user') {
+          // This is the transcribed text from audio
+          const userMessages = document.querySelectorAll('.user');
+          const lastUserMessage = userMessages[userMessages.length - 1];
+          
+          if (lastUserMessage && lastUserMessage.textContent.includes('Speech input:')) {
+            // Update the placeholder with actual transcription
+            lastUserMessage.textContent = data.text;
+            
+            // Update conversation history with transcribed text
+            // Find the last user message in the history
+            const lastIndex = conversationHistory.findIndex(msg => 
+              msg.role === 'user' && msg.content.includes('Speech input:')
+            );
+            
+            if (lastIndex !== -1) {
+              // Update with transcribed text
+              conversationHistory[lastIndex].content = data.text;
+            } else {
+              // Add as new entry if not found
+              conversationHistory.push({
+                role: 'user',
+                content: data.text
+              });
+            }
+          }
+        }
+      });
+      
+      eventSource.addEventListener('audio', (event) => {
+        try {
+          console.log('Audio chunk received');
+          const data = JSON.parse(event.data);
+          
+          if (data.audio) {
+            const audioBlob = base64ToBlob(data.audio, 'audio/mp3');
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            // Create audio element
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = audioUrl;
+            
+            // Remove previous audio if exists
+            while (audioContainer.firstChild) {
+              audioContainer.removeChild(audioContainer.firstChild);
+            }
+            
+            audioContainer.appendChild(audio);
+            
+            // Auto-play
+            audio.play().catch(e => console.error('Auto-play failed:', e));
+          }
+        } catch (error) {
+          console.error('Error processing audio:', error);
+        }
+      });
+      
+      eventSource.addEventListener('done', (event) => {
+        console.log('Conversation complete:', event.data);
+        addMessage('system', 'Conversation complete');
+        
+        // Add the complete assistant response to the conversation history
+        if (window.currentResponseContent) {
+          conversationHistory.push({
+            role: 'assistant',
+            content: window.currentResponseContent
+          });
+          
+          // Reset for next response
+          window.currentResponseContent = '';
+        }
+        
+        // Reset the current response ID
+        window.currentResponseId = null;
+        
+        // Optional: Save conversation to localStorage
+        localStorage.setItem('chatHistory', JSON.stringify(conversationHistory));
+        localStorage.setItem('dialogueId', dialogueId);
+      });
+      
+      eventSource.addEventListener('error', (event) => {
+        console.error('EventSource error:', event);
+        updateStatus('Connection error');
+        
+        if (eventSource.readyState === EventSource.CLOSED) {
+          addMessage('system', 'Connection closed. Reconnecting...');
+          
+          // Auto-reconnect after delay
+          setTimeout(() => {
+            isConnecting = false;
+            connectToEventStream(id);
+          }, 3000);
+        }
+      });
+    }
+
+    function base64ToBlob(base64, type = 'audio/mp3') {
+      const binaryString = window.atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return new Blob([bytes], { type });
+    }
+
+    function addMessage(role, text) {
+      const msgElem = document.createElement('div');
+      msgElem.className = `message ${role}`;
+      msgElem.textContent = text;
+      messagesContainer.appendChild(msgElem);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const message = messageInput.value.trim();
+      if (!message) return;
+      
+      // Add to UI
+      addMessage('user', message);
+      messageInput.value = '';
+      sendButton.disabled = true;
+      
+      // Add to conversation history
+      conversationHistory.push({
+        role: 'user',
+        content: message
+      });
+      
+      try {
+        updateStatus('Sending message...');
+        const response = await fetch('/api/generate/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userInput: message,
+            dialogueId: dialogueId,
+            // Send the full conversation history
+            conversationHistory: JSON.stringify(conversationHistory),
+            personality: JSON.stringify({
+              name: "Assistant",
+              model: "grok-2",
+              temperature: 0.7,
+              systemPrompt: "You are a helpful assistant.",
+              voices: {
+                elevenLabs: {
+                  voice_id: "pNInz6obpgDQGcFmaJgB",
+                  model_id: "eleven_turbo_v2",
+                  stability: 0.5,
+                  similarity_boost: 0.75
+                }
+              }
+            })
+          })
+        });
+        
+        const data = await response.json();
+        console.log('Response:', data);
+        
+        if (data.success) {
+          dialogueId = data.dialogueId;
+          connectToEventStream(dialogueId);
+        } else {
+          updateStatus('Error: ' + (data.error || 'Unknown error'));
+          addMessage('system', 'Error sending message');
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+        updateStatus('Connection error');
+        addMessage('system', 'Error sending message');
+      } finally {
+        sendButton.disabled = false;
+      }
+    }
+
+    async function checkActiveDialogues() {
+      try {
+        updateStatus('Checking active dialogues...');
+        const response = await fetch('/api/generate/active-dialogues');
+        const data = await response.json();
+        dialoguesInfo.textContent = JSON.stringify(data, null, 2);
+        updateStatus(`Found ${data.count} active dialogues`);
+      } catch (error) {
+        console.error('Error checking dialogues:', error);
+        dialoguesInfo.textContent = 'Error checking dialogues: ' + error.message;
+      }
+    }
+
+    // Event handlers
+    micButton.addEventListener('click', () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+    
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+    checkDialoguesButton.addEventListener('click', checkActiveDialogues);
+
+    // Initialize
+    checkActiveDialogues();
+    
+    // Auto-unlock audio on Safari
+    function unlockAudio() {
+      const silentAudio = new Audio("data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAc0AAAAAAAAAABSAJAi4QgAAQAAAA0JLYJzQAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB8P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZDYP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV");
+      silentAudio.play().catch(e => {
+        console.log("Silent audio play failed, but that's expected:", e);
+      });
+      document.removeEventListener('touchstart', unlockAudio);
+    }
+    document.addEventListener('touchstart', unlockAudio);
+
+    // Add this at the end of the script to restore conversation on page load
+    // Restore conversation history from localStorage if available
+    try {
+      const savedHistory = localStorage.getItem('chatHistory');
+      const savedDialogueId = localStorage.getItem('dialogueId');
+      
+      if (savedHistory) {
+        conversationHistory = JSON.parse(savedHistory);
+        
+        // Restore messages in the UI
+        conversationHistory.forEach(msg => {
+          addMessage(msg.role, msg.content);
+        });
+        
+        // Restore dialogue ID
+        if (savedDialogueId) {
+          dialogueId = savedDialogueId;
+          
+          // Connect to the existing dialogue
+          connectToEventStream(dialogueId);
+        }
+      }
+    } catch (error) {
+      console.error('Error restoring conversation:', error);
+    }
+  </script>
+</body>
+</html> 

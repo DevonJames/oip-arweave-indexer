@@ -16,8 +16,9 @@ const path = require('path');
 const fs = require('fs');
 const e = require('express');
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
-let startBlockHeight = 1463762
-// 1579580;
+// let startBlockHeight = 1463762
+
+let startBlockHeight = 1579580;
 
 const elasticClient = new Client({
     node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
@@ -551,7 +552,18 @@ const getTemplatesInDB = async () => {
         });
         const templatesInDB = searchResponse.hits.hits.map(hit => hit._source);
         const qtyTemplatesInDB = templatesInDB.length;
-        const maxArweaveBlockInDB = Math.max(...templatesInDB.map(template => template.oip.inArweaveBlock)) || 0;
+        
+        // Filter out templates with "pending confirmation in Arweave" status when calculating max block height
+        const confirmedTemplates = templatesInDB.filter(template => 
+            template.oip.recordStatus !== "pending confirmation in Arweave"
+        );
+        const pendingTemplatesCount = templatesInDB.length - confirmedTemplates.length;
+        if (pendingTemplatesCount > 0) {
+            console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingTemplatesCount} pending templates from max block calculation`);
+        }
+        const maxArweaveBlockInDB = confirmedTemplates.length > 0 
+            ? Math.max(...confirmedTemplates.map(template => template.oip.inArweaveBlock)) || 0
+            : 0;
         const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity);
         const finalMaxArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
         console.log(getFileInfo(), getLineNumber(), 'qtyTemplatesInDB:', qtyTemplatesInDB, 'finalMaxArweaveBlock:', finalMaxArweaveBlock);
@@ -887,8 +899,8 @@ async function getRecords(queryParams) {
         if (url !== undefined) {
             console.log('url to match:', url);
             records = records.filter(record => {
-                // console.log('record.data:', record);
-                return record.data && record.data.basic && record.data.basic.url === url;
+                return record.data && record.data.basic && 
+                       (record.data.basic.url === url || record.data.basic.webUrl === url);
             });
             console.log('after filtering by url:', url, 'there are', records.length, 'records');
         }
@@ -1237,7 +1249,18 @@ const getCreatorsInDB = async () => {
         } else {
             console.log(getFileInfo(), getLineNumber(),  'Creators found in DB:', creatorsInDB.length);
             const qtyCreatorsInDB = creatorsInDB.length;
-            const maxArweaveCreatorRegBlockInDB = Math.max(...creatorsInDB.map(creator => creator.oip.inArweaveBlock));
+            
+            // Filter out creators with "pending confirmation in Arweave" status when calculating max block height
+            const confirmedCreators = creatorsInDB.filter(creator => 
+                creator.oip.recordStatus !== "pending confirmation in Arweave"
+            );
+            const pendingCreatorsCount = creatorsInDB.length - confirmedCreators.length;
+            if (pendingCreatorsCount > 0) {
+                console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingCreatorsCount} pending creators from max block calculation`);
+            }
+            const maxArweaveCreatorRegBlockInDB = confirmedCreators.length > 0 
+                ? Math.max(...confirmedCreators.map(creator => creator.oip.inArweaveBlock))
+                : 0;
             // console.log(getFileInfo(), getLineNumber(),  'maxArweaveCreatorRegBlockInDB:', maxArweaveCreatorRegBlockInDB);
             return { qtyCreatorsInDB, maxArweaveCreatorRegBlockInDB, creatorsInDB };
         }
@@ -1301,7 +1324,18 @@ const getRecordsInDB = async () => {
                     publicKey
                 };
                 const qtyRecordsInDB = records.length;
-                const maxArweaveBlockInDB = Math.max(...records.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)));
+                
+                // Filter out records with "pending confirmation in Arweave" status when calculating max block height
+                const confirmedRecords = records.filter(record => 
+                    record.oip.recordStatus !== "pending confirmation in Arweave"
+                );
+                const pendingRecordsCount = records.length - confirmedRecords.length;
+                if (pendingRecordsCount > 0) {
+                    console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingRecordsCount} pending records from max block calculation`);
+                }
+                const maxArweaveBlockInDB = confirmedRecords.length > 0 
+                    ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
+                    : 0;
                 // console.log(getFileInfo(), getLineNumber(), 'maxArweaveBlockInDB for records:', maxArweaveBlockInDB);
                 const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity) || (maxArweaveBlockInDB === -0) || (maxArweaveBlockInDB === null);
                 const finalMaxRecordArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
@@ -1463,7 +1497,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
     if (transaction.transactionId === 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y' || transaction.transactionId === '5lbSxo2TeD_fwZQwwCejjCUZAitJkNT63JBRdC7flgc' || transaction.transactionId === 'VPOc02NjJfJ-dYklnMTWWm3tEddEQPlmYRmJdDyzuP4') {
         // creator = creatorInfo;
         creatorHandle = (creatorHandle !== undefined) ? creatorHandle : await convertToCreatorHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["2"]);
-        block = (block !== undefined) ? block : await getBlockHeightFromTxId(transaction.transactionId);
+        block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
         console.log('1402 transaction:', transaction);
         creator = {
             data: {
@@ -1496,7 +1530,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         console.log(getFileInfo(), getLineNumber());
         const expandedRecord = await Promise.all(expandedRecordPromises);
         console.log(getFileInfo(), getLineNumber());
-        const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+        const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
         console.log(getFileInfo(), getLineNumber());
 
         if (expandedRecord !== null) {
@@ -1808,7 +1842,9 @@ async function searchArweaveForNewTransactions(foundInDB) {
     await ensureIndexExists();
     const { qtyRecordsInDB, maxArweaveBlockInDB } = foundInDB;
     // const min = (qtyRecordsInDB === 0) ? 1463750 : (maxArweaveBlockInDB + 1);
-    const min = (qtyRecordsInDB === 0) ? 1579580 : (maxArweaveBlockInDB + 1); // before todays templates
+    // const min = (qtyRecordsInDB === 0) ? 1579580 : (maxArweaveBlockInDB + 1); // before todays templates
+    const min = Math.max(startBlockHeight, (maxArweaveBlockInDB + 1));
+
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
     console.log('Searching for new OIP data after block:', min, getFileInfo(), getLineNumber());
@@ -1914,9 +1950,10 @@ async function processTransaction(tx, remapTemplates) {
 
 async function processNewTemplate(transaction) {
     if (!transaction || !transaction.tags || !transaction.data) {
-        console.log(getFileInfo(), getLineNumber(),'cannnot find transaction (or tags or fields), skipping txid:', transaction.transactionId);
+        console.log(getFileInfo(), getLineNumber(),'cannot find transaction (or tags or fields), skipping txid:', transaction.transactionId);
         return null;
     }
+    
     const templateName = transaction.tags.find(tag => tag.name === 'TemplateName')?.value;
     let parsedData;
     try {
@@ -1926,45 +1963,67 @@ async function processNewTemplate(transaction) {
         console.error(getFileInfo(), getLineNumber(),`Invalid JSON data: ${transaction.data}`);
         return null;
     }
+    
     const fieldsString = JSON.stringify(parsedData);
-    const tags = transaction.tags.slice(0, -1);
-    const dataForSignature = fieldsString + JSON.stringify(tags);
     const isValid = validateTemplateFields(fieldsString);
     if (!isValid) {
         console.log(getFileInfo(), getLineNumber(),`Template failed - Field formatting validation failed for transaction ${transaction.transactionId}`);
         return null;
     }
+    
+    // For templates: DATA + TAGS (different from creators/records which use TAGS + DATA)
+    const tags = transaction.tags.slice(0, -1); // Remove signature tag
+    const dataForSignature = fieldsString + JSON.stringify(tags);
     const message = dataForSignature;
+    
     const didAddress = 'did:arweave:' + transaction.creator;
-    console.log(getFileInfo(), getLineNumber(), didAddress);
+    console.log(getFileInfo(), getLineNumber(), 'Template creator DID:', didAddress);
+    
     const creatorInfo = await searchCreatorByAddress(didAddress);
     if (!creatorInfo) {
         console.error(`Creator data not found for DID address: ${didAddress}`);
         return null;
     }
-    console.log(getFileInfo(), getLineNumber(), creatorInfo);
+    console.log(getFileInfo(), getLineNumber(), 'Creator info found:', creatorInfo.data.creatorHandle);
 
     const publicKey = creatorInfo.data.publicKey;
-    console.log(getFileInfo(), getLineNumber(), publicKey);
+    console.log(getFileInfo(), getLineNumber(), 'Public key:', publicKey ? 'found' : 'missing');
 
-    const signatureBase64 = transaction.creatorSig;
-    console.log(getFileInfo(), getLineNumber()), signatureBase64;
-    const isVerified = await verifySignature(message, signatureBase64, publicKey, didAddress);
-    console.log(getFileInfo(), getLineNumber());
-    if (!isVerified) {
-        console.log(getFileInfo(), getLineNumber());
-        console.error(getFileInfo(), getLineNumber(),`Signature verification failed for transaction ${transaction.transactionId}`);
+    // Fix CreatorSig format - convert spaces back to + characters for proper base64
+    const templateCreatorSigRaw = transaction.creatorSig;
+    const templateSignatureBase64 = templateCreatorSigRaw ? templateCreatorSigRaw.replace(/ /g, '+') : undefined;
+    
+    if (templateCreatorSigRaw && templateCreatorSigRaw !== templateSignatureBase64) {
+        console.log(getFileInfo(), getLineNumber(), `Fixed CreatorSig format: converted ${(templateCreatorSigRaw.match(/ /g) || []).length} spaces to + characters`);
+    }
+    
+    console.log(getFileInfo(), getLineNumber(), 'Signature:', templateSignatureBase64 ? 'found' : 'missing');
+    
+    if (!templateSignatureBase64) {
+        console.error(getFileInfo(), getLineNumber(), `No signature found for template ${transaction.transactionId}`);
+        return null;
+    }
+    
+    const templateIsVerified = await verifySignature(message, templateSignatureBase64, publicKey, didAddress);
+    console.log(getFileInfo(), getLineNumber(), 'Signature verification result:', templateIsVerified);
+    
+    if (!templateIsVerified) {
+        console.error(getFileInfo(), getLineNumber(),`Signature verification failed for template ${transaction.transactionId}`);
         return null;
     } else {
-        console.log(getFileInfo(), getLineNumber());
-        const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+        console.log(getFileInfo(), getLineNumber(), `✅ Template signature verified successfully for ${transaction.transactionId}`);
+        
+        // Use the same block height approach as successful creator verification
+        const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
+        
         const data = {
             TxId: transaction.transactionId,
             creator: transaction.creator,
-            creatorSig: transaction.creatorSig,
+            creatorSig: templateSignatureBase64, // Use the corrected signature
             template: templateName,
             fields: fieldsString
         };
+        
         const oip = {
             didTx: 'did:arweave:' + transaction.transactionId,
             inArweaveBlock: inArweaveBlock,
@@ -1977,28 +2036,33 @@ async function processNewTemplate(transaction) {
                 publicKey: creatorInfo.data.publicKey
             }
         }
+        
         const template = {
             data,
             oip
         };
-        console.log(getFileInfo(), getLineNumber(), template);
+        
+        console.log(getFileInfo(), getLineNumber(), 'Template ready for indexing:', template.data.TxId);
 
         try {
-
             const existingTemplate = await elasticClient.exists({
                 index: 'templates',
                 id: oip.didTx
             });
+            
             if (!existingTemplate.body) {
                 await elasticClient.index({
                     index: 'templates',
                     body: template,
                 });
+                console.log(`✅ Template indexed successfully: ${template.data.TxId}`);
+            } else {
+                console.log(`Template already exists in DB: ${template.data.TxId}`);
             }
-            console.log(`Template indexed successfully: ${template.data.TxId}`);
         } catch (error) {
-            console.error(`Error indexing template: ${template.TxId}`, error);
+            console.error(`Error indexing template: ${template.data.TxId}`, error);
         }
+        
         return template;
     }
 }
@@ -2048,6 +2112,12 @@ async function processNewRecord(transaction, remapTemplates = []) {
     
     creatorInfo = (!creatorInfo) ? await searchCreatorByAddress(creatorDid) : creatorInfo;
     console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
+    
+    // If creator is not found, skip this record for now
+    if (!creatorInfo) {
+        console.log(getFileInfo(), getLineNumber(), `Skipping record ${transaction.transactionId} - creator ${creatorDid} not found in database yet`);
+        return { records: newRecords, recordsToDelete };
+    }
     let transactionData;
     let isDeleteMessageFound = false;
 
@@ -2071,9 +2141,10 @@ async function processNewRecord(transaction, remapTemplates = []) {
     console.log(getFileInfo(), getLineNumber());
     let record;
     let currentBlockHeight = await getCurrentBlockHeight();
-    let inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
+    // Use block height from GraphQL data instead of making additional API calls
+    let inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
     let progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
-    console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}%`);
+    console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}% (Block: ${inArweaveBlock})`);
     // let dataArray = [];
     // dataArray.push(transactionData);
     // handle delete message

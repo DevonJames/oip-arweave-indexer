@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const { getTemplatesInDB } = require('../helpers/elasticsearch');
-const { publishNewTemplate } = require('../helpers/templateHelper');
+const { publishNewTemplate, indexTemplate } = require('../helpers/templateHelper');
 
 
 router.get('/', async (req, res) => {
@@ -17,14 +17,14 @@ router.get('/', async (req, res) => {
         const { sortBy, creatorHandle, creatorDidAddress, didTx, templateName } = req.query;
 
         // Filter by creatorHandle
-        if (creatorHandle) {
-            templates = templates.filter(template => template.creatorHandle === creatorHandle);
-            console.log('after filtering by creatorHandle, there are', templates.length, 'templates');
-        }
+        // if (creatorHandle) {
+        //     templates = templates.filter(template => template.oip.creatorHandle === creatorHandle);
+        //     console.log('after filtering by creatorHandle, there are', templates.length, 'templates');
+        // }
 
         // Filter by creatorDidAddress
         if (creatorDidAddress) {
-            templates = templates.filter(template => template.creatorDidAddress === creatorDidAddress);
+            templates = templates.filter(template => template.oip.creator.didAddress === creatorDidAddress);
             console.log('after filtering by creatorDidAddress, there are', templates.length, 'templates');
         }
 
@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
 
         // Filter by template name
         if (templateName) {
-            templates = templates.filter(template => template.name.toLowerCase().includes(templateName.toLowerCase()));
+            templates = templates.filter(template => template.data.template.toLowerCase().includes(templateName.toLowerCase()));
             console.log('after filtering by templateName, there are', templates.length, 'templates');
         }
 
@@ -46,9 +46,9 @@ router.get('/', async (req, res) => {
             if (field === 'inArweaveBlock') {
                 templates.sort((a, b) => {
                     if (order === 'asc') {
-                        return a.inArweaveBlock - b.inArweaveBlock;
+                        return a.oip.inArweaveBlock - b.oip.inArweaveBlock;
                     } else {
-                        return b.inArweaveBlock - a.inArweaveBlock;
+                        return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
                     }
                 });
             }
@@ -74,7 +74,7 @@ router.get('/', async (req, res) => {
                 index: fieldsInTemplate[key].index
             };
             });
-            template.data.fieldsInTemplateArray = fieldsInTemplateArray;
+            template.data.fieldsInTemplateCount = fieldsInTemplateArray.length;
 
             // Move creator and creatorSig from data to oip
             if (!template.oip) {
@@ -104,12 +104,37 @@ router.get('/', async (req, res) => {
 });
 
 
-// router.post('/newTemplate', authenticateToken, async (req, res) => {
-router.post('/newTemplate', async (req, res) => {
-    console.log('POST /api/templates/newTemplate', req.body)
-    const template = req.body;
-    const transactionId = await publishNewTemplate(template);
-    res.status(200).json({ transactionId });
+router.post('/newTemplate', authenticateToken, async (req, res) => {
+// router.post('/newTemplate', async (req, res) => {
+    try {
+        console.log('POST /api/templates/newTemplate', req.body)
+        const template = req.body;
+        const blockchain = req.body.blockchain || 'arweave'; // Accept blockchain parameter
+        
+        // Publish template to Arweave
+        const newTemplate = await publishNewTemplate(template, blockchain);
+        
+        // Index template to Elasticsearch with pending status
+        if (newTemplate.templateToIndex) {
+            await indexTemplate(newTemplate.templateToIndex);
+            console.log('Template indexed with pending status:', newTemplate.didTx);
+        }
+        
+        res.status(200).json({ 
+            newTemplate: {
+                transactionId: newTemplate.transactionId,
+                didTx: newTemplate.didTx,
+                blockchain: newTemplate.blockchain,
+                provider: newTemplate.provider,
+                url: newTemplate.url,
+                indexedToPendingStatus: true
+            }, 
+            blockchain 
+        });
+    } catch (error) {
+        console.error('Error publishing template:', error);
+        res.status(500).json({ error: 'Failed to publish template' });
+    }
 });
 
 router.post('/newTemplateRemap', authenticateToken, async (req, res) => {

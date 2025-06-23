@@ -1,15 +1,31 @@
-WALLET_FILE=config/arweave-keyfile.json
+# OIP Configuration
+REGISTRATION_LIMIT=50
 PORT=3005
-ELASTICSEARCHHOST=http://localhost:9200
+JWT_SECRET=
+
+# Arweave Configuration
+WALLET_FILE=config/arweave-keyfile.json
+
+# Elasticsearch Configuration
+ELASTICSEARCHHOST=http://elasticsearch:9200
 ELASTICCLIENTUSERNAME=elastic
 ELASTICCLIENTPASSWORD=yourpassword
+
+# API Keys
 OPENAI_API_KEY=
 XAI_API_KEY=
 XAI_BEARER_TOKEN=
+TWITTER_BEARER_TOKEN=
 NGROK_AUTH_TOKEN=
-JWT_SECRET=
-REGISTRATION_LIMIT=50
 GOOGLE_CLOUD_API_KEY=
 GOOGLE_APPLICATION_CREDENTIALS=config/google-service-account-key.json
 GOOGLE_API_TOKEN=
 ELEVENLABS_API_KEY=
+FIRECRAWL=
+
+# LLaMA Text Generation Configuration
+LLAMA_MODEL=11b
+# Options: 3b (fast, 6GB VRAM) or 11b (high-quality, 13GB VRAM)
+# HuggingFace token (get from: https://huggingface.co/settings/tokens)
+# Needs "Read" permissions to download LLaMA models
+HUGGINGFACE_TOKEN=

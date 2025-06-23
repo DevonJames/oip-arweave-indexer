@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.8
@@ -17,6 +19,11 @@ services:
       - "9300:9300"
     networks:
       - oip-network
+    restart: unless-stopped
+    profiles:
+      - full
+      - standard
+      - minimal
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.8
@@ -28,6 +35,11 @@ services:
       - ELASTICCLIENTHOST=http://elasticsearch:9200
     networks:
       - oip-network
+    restart: unless-stopped
+    profiles:
+      - full
+      - standard
+      - minimal
 
   ipfs:
     image: ipfs/go-ipfs:latest
@@ -41,14 +53,24 @@ services:
       - ipfsdata:/data/ipfs
     networks:
       - oip-network
+    profiles:
+      - full
+      - standard
 
+  # Standard OIP service (for distributed deployments)
   oip:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     env_file:
       - .env
     ports:
-      - "3005:3005"  # Make sure this matches the port your app listens on
-      - "9229:9229"  # Expose the debugging port
+      - "3005:3005"
+      - "9229:9229"
+    volumes:
+      - ./config:/usr/src/app/config
+      - ./helpers:/usr/src/app/helpers
+      - ./routes:/usr/src/app/routes
     environment:
       - NODE_ENV=production
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
@@ -58,16 +80,70 @@ services:
       - elasticsearch
     networks:
       - oip-network
+    restart: unless-stopped
+    profiles:
+      - standard
+      - minimal
 
-  # Self-hosted Text Generation (LLaMA2)
-  # text-generator:
-  #   build: ./text-generator  # Path to your text generator Dockerfile
-  #   ports:
-  #     - "8081:8081"
-  #   networks:
-  #     - oip-network
+  # Full monolithic OIP service (all services in one container)
+  oip-full:
+    build:
+      context: .
+      dockerfile: Dockerfile-full
+    env_file:
+      - .env
+    ports:
+      - "3005:3005"
+      - "9229:9229"
+      - "8081:8081"  # Text generator
+      - "8082:8082"  # Speech synthesizer
+      - "4040:4040"  # Ngrok dashboard
+    volumes:
+      - ./config:/usr/src/app/config
+      - ./helpers:/usr/src/app/helpers
+      - ./routes:/usr/src/app/routes
+    environment:
+      - NODE_ENV=production
+      - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
+      - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
+      - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+    depends_on:
+      - elasticsearch
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - full
 
-  # Self-hosted Speech Synthesizer (Coqui TTS)
+  # GPU-optimized OIP service (connects to external network)
+  oip-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "3005:3005"
+      - "9229:9229"
+    volumes:
+      - ./media/jfk:/usr/src/app/media/jfk
+      - ./config:/usr/src/app/config
+      - ./helpers:/usr/src/app/helpers
+      - ./routes:/usr/src/app/routes
+    environment:
+      - NODE_ENV=production
+      - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
+      - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
+      - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
+    networks:
+      - existing-oip-network
+    restart: unless-stopped
+    profiles:
+      - gpu
+      - gpu-only
+
+  # Self-hosted Speech Synthesizer (Coqui TTS) - for distributed deployments
   speech-synthesizer:
     build:
       context: ./speech-synthesizer
@@ -76,24 +152,64 @@ services:
       - "8082:8082"
     networks:
       - oip-network
+    restart: unless-stopped
+    profiles:
+      - standard
 
-  # Ngrok for public access
+  # GPU-enabled Speech Synthesizer (Coqui TTS with CUDA) - for GPU deployments
+  speech-synthesizer-gpu:
+    build:
+      context: ./speech-synthesizer
+      dockerfile: Dockerfile.gpu
+    ports:
+      - "8082:8082"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - gpu
+      - full-gpu
+
+  # Text generator for GPU machines - for distributed deployments
+  text-generator:
+    build: ./text-generator
+    env_file:
+      - .env
+    environment:
+      - LLAMA_MODEL=${LLAMA_MODEL}
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+    ports:
+      - "8081:8081"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - full-gpu
+      - gpu
+
+  # Ngrok for public access - for distributed deployments
   ngrok:
     image: ngrok/ngrok
-    command: http oip:3005  # Tunnel OIP server on port 3005
+    command: http oip:3005
     environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}  # Add your Ngrok token to the .env file
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
       - oip
     ports:
       - "4040:4040"
     networks:
       - oip-network
-
+    restart: unless-stopped
+    profiles:
+      - standard
 
 networks:
-   oip-network:
+  oip-network:
     driver: bridge
+    name: oiparweave_oip-network
+  existing-oip-network:
+    external: true
+    name: oiparweave_oip-network
 
 volumes:
   esdata:
