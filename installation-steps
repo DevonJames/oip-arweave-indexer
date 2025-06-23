@@ -1,0 +1,9 @@
+# Remove existing node_modules and lock file
+rm -rf node_modules
+rm package-lock.json
+
+# Reinstall all dependencies
+npm install
+
+# Install turbo-sdk specifically
+npm install @ardrive/turbo-sdk --save 

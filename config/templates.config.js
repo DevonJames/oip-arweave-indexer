@@ -13,8 +13,10 @@ module.exports = {
         post: "op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
         podcast: "MojoZlLKaH-cHy_HbaGBlBA7Mxzf8dJl4MQZzFQAkMY",
         nutritionalInfo: "yfBDmC1FPNan0mlixGNGUCGhmYZjM1PuDVXfpr_Cxlo",
-        recipe: "gcLgs6Cloq5s-qNTWHwAl1YRmvr-tXnuEqZfskn7jq0"
+        recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
+        jfkFilesPageOfDocument: "WP-tZ5nwxrMwr5wKHazTFUtGLRd6nQWRBl8E63Kqufg",
+        jfkFilesDocument: "d3xoxXQ8hUlrgKTo1UZc4_GqaKTaApJs0tLFuK6Hxqk",
+        exercise: "H9yER_vA4LBL2gP2R_qTa4j0lekVckiV3cYbvH1sy8c",
+        workout: "ZcpqKJQOfqrWsc_EvbDs6aFOazDfSfJzkdg42H0yDYk",
     }
 };
-
-

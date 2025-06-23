@@ -1,3 +1,4 @@
+# Development and IDE files
 **/.classpath
 **/.dockerignore
 **/.git
@@ -10,6 +11,8 @@
 **/*.*proj.user
 **/*.dbmdl
 **/*.jfm
+
+# Build and dependency directories
 **/charts
 **/compose*
 **/node_modules
@@ -17,10 +20,62 @@
 **/obj
 **/secrets.dev.yaml
 **/values.dev.yaml
+
+# Documentation
 LICENSE
 README.md
+
+# Service directories to ignore
+speech-synthesizer/**
+text-generator/**
+ngrok/**
+elasticsearch/**
+kibana/**
+ipfs/**
+
+# Service files to ignore
 speech-synthesizer/Dockerfile
 speech-synthesizer/Dockerfilelinux
 speech-synthesizer/myenv
 text-generator/Dockerfile
 
+# Base images
+node:20.11.1-alpine
+node:lts-alpine
+
+# Large data directories
+**/media/**
+**/downloads/**
+**/temp/**
+**/cache/**
+**/packages/**
+**/meta-llama/**
+**/myenv/**
+
+# Python virtual environments
+**/venv/**
+**/env/**
+**/ENV/**
+
+# Logs and databases
+**/*.log
+**/*.sqlite
+**/*.db
+
+# Build artifacts
+**/dist/**
+**/build/**
+**/out/**
+
+# Test files
+**/test/**
+**/tests/**
+**/__tests__/**
+
+# Source maps
+**/*.map
+
+# Docker files
+**/Dockerfile*
+**/docker-compose*.yml
+**/.docker/**

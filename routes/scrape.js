@@ -1,9 +1,9 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt'); // Temporarily disabled due to native module compilation issues
 const jwt = require('jsonwebtoken');
 // const { crypto } = require('crypto');
 const base64url = require('base64url');
-const { createCanvas, loadImage, Image } = require('canvas');
+// const { createCanvas, loadImage, Image } = require('canvas'); // Temporarily disabled due to native module compilation issues
 const nodeHtmlToImage = require('node-html-to-image');
 const router = express.Router();
 const path = require('path');
@@ -20,7 +20,9 @@ const { timeout } = require('../config/arweave.config');
 const { getRecords, indexRecord, searchCreatorByAddress } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
-const { ongoingScrapes } = require('../helpers/sharedState.js'); // Adjust the path to store.js
+const { ongoingScrapes, cleanupScrape } = require('../helpers/sharedState.js'); // Adjust the path to store.js
+// const { retryAsync } = require('../helpers/utils');
+const { uploadToArFleet, publishVideoFiles, publishArticleText, publishImage } = require('../helpers/templateHelper');
 
 // const { FirecrawlApp } = require('@mendable/firecrawl-js');
 // const app = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY });
@@ -34,7 +36,9 @@ const {
   identifyAuthorNameFromContent, 
   identifyPublishDateFromContent, 
   generateSummaryFromContent,
-  analyzeImageForAuthor
+  analyzeImageForRecipe,
+  analyzeImageForAuthor,
+  synthesizeSpeech
 } = require('../helpers/generators');
 const {getCurrentBlockHeight, getBlockHeightFromTxId, lazyFunding, upfrontFunding, arweave} = require('../helpers/arweave');
 const { exec } = require('child_process');
@@ -99,8 +103,8 @@ async function retryAsync(asyncFunction, args = [], options = { maxRetries: 5, d
 }
 
 // Utility function to create a unique hash based on the URL or text
-function generateAudioFileName(text) {
-  return crypto.createHash('sha256').update(text).digest('hex') + '.wav';
+function generateAudioFileName(text, fileType = 'mp3') {
+  return crypto.createHash('sha256').update(text).digest('hex') + '.' + fileType;
 }
 
 // Utility function to create a unique hash based on the URL or text for a text file
@@ -318,7 +322,7 @@ async function getTwitterVideoUrls(tweetUrls) {
     // Extract tweet IDs from the URLs
     const tweetIds = tweetUrls.map((tweetUrl) => {
       const tweetIdMatch = tweetUrl.match(/status\/(\d+)/);
-      return tweetIdMatch ? tweetIdMatch[1] : null;
+      return tweetIdMatch ? tweetIdMatch[1] : null; // Filter out any null or invalid IDs
     }).filter(Boolean); // Filter out any null or invalid IDs
 
     if (tweetIds.length === 0) {
@@ -443,8 +447,8 @@ const cleanUrl = (url) => {
   return urlObj.origin + urlObj.pathname;
 };
 
-async function publishArticleAndAttachedMedia(articleData, $, url, html, res) {
-  console.log('test test url:', url); 
+async function publishArticleAndAttachedMedia(articleData, $, url, html, res, blockchain = 'arweave') {
+  // console.log('test test url:', url, 'blockchain:', blockchain);
   // Initialize an array to hold YouTube URLs
   let youtubeUrls = [];
 
@@ -502,246 +506,273 @@ const mimeTypes = {
   // console.log({articleTextURL},'articleTextBittorrentAddress', articleTextAddresses.torrent.magnetURI);
   // articleTextBittorrentAddress = articleTextAddresses.torrent.magnetURI;
 // let hostedImageUrl
-  if (articleData.embeddedImage) {
-    const imageUrl = articleData.embeddedImage;
-    console.log('imageUrl', imageUrl);
+  // if (articleData.embeddedImage) {
+  //   const imageUrl = articleData.embeddedImage;
+  //   console.log('imageUrl', imageUrl);
 
-    // Extract the filename and file type from the URL
-    let parsedPath = path.parse(new URL(imageUrl).pathname);
-    let fileName = parsedPath.base;
-    let fileType = parsedPath.ext;
+  //   // Extract the filename and file type from the URL
+  //   let parsedPath = path.parse(new URL(imageUrl).pathname);
+  //   let fileName = parsedPath.base;
+  //   let fileType = parsedPath.ext;
 
-    // Check if the URL contains a query parameter that points to a filename
-    const urlObj = new URL(imageUrl);
-    if (urlObj.searchParams.has('url')) {
-      const queryUrl = urlObj.searchParams.get('url');
-      parsedPath = path.parse(new URL(queryUrl).pathname);
-      fileName = parsedPath.base;
-      fileType = parsedPath.ext;
-    }
+  //   // Check if the URL contains a query parameter that points to a filename
+  //   const urlObj = new URL(imageUrl);
+  //   if (urlObj.searchParams.has('url')) {
+  //     const queryUrl = urlObj.searchParams.get('url');
+  //     parsedPath = path.parse(new URL(queryUrl).pathname);
+  //     fileName = parsedPath.base;
+  //     fileType = parsedPath.ext;
+  //   }
 
-    // Use the extracted filename in the imagePath
-    // const imagePath = path.join(downloadsDir, fileName);
+  //   const imageFileName = await downloadImageFile(imageUrl, url);
+  //   const mediaDownloadsDir = path.resolve(__dirname, '../media');
+  //   console.log('mediaDownloadsDir', mediaDownloadsDir, 'fileName', imageFileName);
+  //   const imagePath = path.join(mediaDownloadsDir, imageFileName);
 
-    const imageFileName = await downloadImageFile(imageUrl, url);
-    // fileName=imageFile.imageFileName
-    const mediaDownloadsDir = path.resolve(__dirname, '../media');
-    console.log('mediaDownloadsDir', mediaDownloadsDir, 'fileName', imageFileName);
-    const imagePath = path.join(mediaDownloadsDir, imageFileName);
+  //   const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
+  //   articleData.embeddedImageUrl = hostedImageUrl;
+    
+  //   // Upload image to ArFleet and BitTorrent
+  //   try {
+  //     const imageStorage = await publishImage(imagePath, false);
+  //     imageBittorrentAddress = imageStorage.bittorrentAddress;
+  //     imageArfleetAddress = imageStorage.arfleetAddress;
+  //     console.log('Image storage addresses:', {
+  //       bittorrent: imageBittorrentAddress,
+  //       arfleet: imageArfleetAddress
+  //     });
+      
+  //     // Get image info
+  //     const imageStats = fs.statSync(imagePath);
+  //     imageSize = imageStats.size;
+  //     imageFileType = mimeTypes[fileType.toLowerCase()] || 'image/jpeg';
 
-    // const imagePath = imageFile.imageFileName
-    // const imagePath = path.join(downloadsDirectory, imageFile.imageFileName);
-    const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
-    articleData.embeddedImageUrl = hostedImageUrl;
-    // TEMPORARILY TURNED OFF FOR FIRST RELEASE
-    // torrent = await publishImage(imageFile.outputPath, null, null, null, false);
-    // imageBittorrentAddress = torrent.magnetURI;
-    // console.log('imageBittorrentAddress', imageBittorrentAddress);
-    // imageFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
+  //     const imageMetadata = await sharp(imagePath).metadata();
+  //     imageWidth = imageMetadata.width;
+  //     imageHeight = imageMetadata.height;
+  //     console.log('Image dimensions:', imageWidth, imageHeight);
+  //   } catch (error) {
+  //     console.error('Error publishing image:', error);
+  //   }
+  // }
 
-    // Get image dimensions and file size using 'sharp'
-    // path.join(downloadsDir, fileName)
-    console.log('Image file:', imagePath);
-    const imageStats = fs.statSync(imagePath);
-    imageSize = imageStats.size;
-    imageFileType = mimeTypes[fileType.toLowerCase()] || 'image/jpeg';
+  // // Process Twitter content and YouTube videos
+  // try {
+  //   let embeddedTweets = await getEmbeddedTweets(html);
+  //   console.log('embeddedTweets', embeddedTweets);
+  //   let tweetDetails = null;
+  //   const tweetVideoArfleet = [];
+  //   const tweetRecords = [];
+  //   const tweetVideoRecords = [];
+  //   const youtubeVideoArfleet = [];
+  //   let videoRecords = [];
 
-    const imageMetadata = await sharp(imagePath).metadata();
-    imageWidth = imageMetadata.width;
-    imageHeight = imageMetadata.height;
-    console.log(articleData.embeddedImageUrl);
+  //   if (embeddedTweets.length > 0) {
+  //     tweetDetails = await fetchTweetDetails(embeddedTweets);
+  //     console.log('Tweet details:', tweetDetails);
+  //   }
+    
+  //   if (tweetDetails && tweetDetails.includes && tweetDetails.includes.media) {
+  //     let tweetMediaUrls = await getTwitterMediaUrls(embeddedTweets);
+  //     await Promise.all(embeddedTweets.map(async (tweet, index) => {
+  //       const tweetId = tweet.match(/status\/(\d+)/)[1]; // Extract tweet ID
+  //       const mediaUrl = tweetMediaUrls[index];
 
-    // console.log('Image dimensions:', imageWidth, imageHeight);
-    // console.log('Image size:', imageSize);
-  }
+  //       if (mediaUrl) {
+  //         outputPath = await downloadMedia(mediaUrl, tweetId); // Pass media URL and tweet ID
+  //         console.log('Media downloaded to:', outputPath);
+          
+  //         // Upload media to ArFleet
+  //         const mediaFiles = await publishVideoFiles(outputPath, tweetId, false);
+  //         tweetVideoRecords[index] = {
+  //           "media": {
+  //             "arfleetAddress": mediaFiles.arfleetAddress,
+  //             "arfleetId": mediaFiles.arfleetId
+  //           }
+  //         };
+          
+  //         // Keep torrent as fallback if available
+  //         if (mediaFiles.torrentAddress) {
+  //           tweetVideoRecords[index].media.bittorrentAddress = mediaFiles.torrentAddress;
+  //         }
+          
+  //         tweetVideoArfleet.push(mediaFiles.arfleetAddress);
+  //       } else {
+  //         tweetVideoRecords[index] = null; // No media for this tweet
+  //       }
+  //     }));
+  //   }
 
-  // TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
-  // Fetch and download Twitter videos
-    try {
-      let embeddedTweets = await getEmbeddedTweets(html);
-      console.log('embeddedTweets', embeddedTweets);
-      let tweetDetails = null;
-      const tweetVideoTorrent = [];
-      const tweetRecords = [];
-      const tweetVideoRecords = [];
-      const youtubeVideoTorrent = [];
-      let videoRecords = [];
+  //   for (let i = 0; i < embeddedTweets.length; i++) {
+  //     const tweetRecord = {
+  //       "basic": {
+  //         "name": tweetDetails.data[i].id,
+  //         "language": "en",
+  //         "date": tweetDetails.data[i].created_at,
+  //         "description": tweetDetails.data[i].text,
+  //         "urlItems": [
+  //           {
+  //             "associatedUrlOnWeb": {
+  //               "url": embeddedTweets[i]
+  //             }
+  //           }
+  //         ]
+  //       },
+  //       "post": {
+  //         "bylineWriter": tweetDetails.data[i].author_id,
+  //         "videoItems": tweetVideoRecords[i] ? [tweetVideoRecords[i]] : [] // Add video record or empty array
+  //       }
+  //     };
+  //     tweetRecords.push(tweetRecord);
+  //   }
 
-      if (embeddedTweets.length > 0) {
-        tweetDetails = await fetchTweetDetails(embeddedTweets);
-        console.log('Tweet details:', tweetDetails);
-      }
-      if (tweetDetails && tweetDetails.includes && tweetDetails.includes.media) {
-        let tweetMediaUrls = await getTwitterMediaUrls(embeddedTweets);
-        await Promise.all(embeddedTweets.map(async (tweet, index) => {
-          const tweetId = tweet.match(/status\/(\d+)/)[1]; // Extract tweet ID
-          const mediaUrl = tweetMediaUrls[index];
+  //   console.log('tweetRecords', tweetRecords);
+    
+  //   if (tweetVideoArfleet.length > 0) {
+  //     console.log('Twitter video ArFleet links:', tweetVideoArfleet);
+  //     if (res && typeof res.write === 'function') {
+  //       res.write(`event: tweets\n`);
+  //       res.write(`data: ${JSON.stringify(tweetVideoArfleet)}\n\n`);
+  //     }
+  //   }
+    
+  //   // Scrape YouTube iframes using Cheerio
+  //   const youtubeIframeUrls = [];
 
-          if (mediaUrl) {
-            outputPath = await downloadMedia(mediaUrl, tweetId); // Pass media URL and tweet ID
-            console.log('Media downloaded to:', outputPath);
-            // mediaFiles = await publishMediaFiles(outputPath, tweetId, false);
-            // tweetMediaRecords[index] = {
-            //   "media": {
-            //     "bittorrentAddress": mediaFiles.torrentAddress
-            //   }
-            // };
-            // tweetMediaTorrent.push(mediaFiles.torrentAddress);
-          } else {
-            // tweetMediaRecords[index] = null; // No media for this tweet
-          }
-        }));
-        // }
+  //   $('iframe[src*="youtube.com"]').each((i, elem) => {
+  //     const iframeSrc = $(elem).attr('src');
+  //     if (iframeSrc) {
+  //       youtubeIframeUrls.push(iframeSrc);
+  //     }
+  //   });
+    
+  //   // Also look for YouTube videos embedded in iframes
+  //   if (youtubeIframeUrls.length > 0) {
+  //     youtubeIframeUrls.forEach(iframeSrc => {
+  //       const youtubeUrlMatch = iframeSrc.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/)[\w-]+)/);
+  //       if (youtubeUrlMatch) {
+  //         const videoUrl = youtubeUrlMatch[0].replace("/embed/", "/watch?v=");
+  //         youtubeUrls.push(videoUrl);
+  //       }
+  //     });
+  //   }
+    
+  //   // Direct YouTube URL search (in the content)
+  //   const youtubeUrlMatches = [...html.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)];
+  //   youtubeUrlMatches.forEach(match => youtubeUrls.push(match[0]));
+    
+  //   // Remove duplicates
+  //   youtubeUrls = [...new Set(youtubeUrls)];
+    
+  //   for (const videoUrl of youtubeUrls) {
+  //     const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)[1]; // Extract YouTube video ID
+  //     const metadata = await getYouTubeMetadata(videoUrl);
+  //     videoOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.mp4`);
+      
+  //     await downloadVideo(videoUrl, videoId); // Pass video URL and YouTube video ID
+      
+  //     // Process captions if available
+  //     let transcriptBittorrentAddress = null;
+  //     let transcriptArfleetAddress = null;
+      
+  //     if (metadata.automatic_captions && metadata.automatic_captions.en) {
+  //       // Find the URL for the caption with the 'vtt' extension
+  //       const captions = metadata.automatic_captions.en;
+  //       const vttCaption = captions.find(caption => caption.ext === 'vtt');
 
-        for (let i = 0; i < embeddedTweets.length; i++) {
-          // console.log('tweetDetails from index', tweetDetails[i], 'tweetdetails', tweetDetails);
-          const tweetRecord = {
-            "basic": {
-              "name": tweetDetails.data[i].id,
-              "language": "en",
-              "date": tweetDetails.data[i].created_at,
-              "description": tweetDetails.data[i].text,
-              "urlItems": [
-                {
-                  "associatedUrlOnWeb": {
-                    "url": embeddedTweets[i]
-                  }
-                }
-              ]
-            },
-            "post": {
-              "bylineWriter": tweetDetails.data[i].author_id,
-              "videoItems": tweetVideoRecords[i] ? [tweetVideoRecords[i]] : [] // Add video record or empty array
-            }
-          };
-          tweetRecords.push(tweetRecord);
-        }
-
-        console.log('tweetRecords', tweetRecords);
-      }
-    } catch (error) {
-      console.error('Error processing embedded tweets:', error);
-    }
-
-
-
-
-    // if (tweetVideoTorrent.length > 0) {
-    //   console.log('Twitter video torrents:', tweetVideoTorrent);
-    //   res.write(`event: tweets\n`);
-    //   res.write(`data: ${JSON.stringify(tweetVideoTorrent)}\n\n`);
-    // }
-    // // Scrape YouTube iframes using Cheerio
-    // const youtubeIframeUrls = [];
-
-    // $('iframe[src*="youtube.com"]').each((i, elem) => {
-    //   const iframeSrc = $(elem).attr('src');
-    //   if (iframeSrc) {
-    //     youtubeIframeUrls.push(iframeSrc);
-    //   }
-    // });
-    // // Also look for YouTube videos embedded in iframes
-    // if (youtubeIframeUrls.length > 0) {
-    //   youtubeIframeUrls.forEach(iframeSrc => {
-    //     const youtubeUrlMatch = iframeSrc.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/)[\w-]+)/);
-    //     if (youtubeUrlMatch) {
-    //       const videoUrl = youtubeUrlMatch[0].replace("/embed/", "/watch?v=");
-    //       youtubeUrls.push(videoUrl);
-    //     }
-    //   });
-    // }
-    // // Direct YouTube URL search (in the content)
-    // const youtubeUrlMatches = [...html.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)];
-    // youtubeUrlMatches.forEach(match => youtubeUrls.push(match[0]));
-    // // Remove duplicates
-    // youtubeUrls = [...new Set(youtubeUrls)];
-    // for (const videoUrl of youtubeUrls) {
-    //   const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)[1]; // Extract YouTube video ID
-    //   const metadata = await getYouTubeMetadata(videoUrl);
-    //   videoOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.mp4`);
-    //   // videoMetadata.push(metadata);
-    //   await downloadVideo(videoUrl, videoId); // Pass video URL and YouTube video ID
-    //   // Assuming metadata.automatic_captions.en is your array
-    //   const captions = metadata.automatic_captions.en;
-    //   let vttUrl;
-    //   if (captions) {
-    //     // Find the URL for the caption with the 'vtt' extension
-    //     const vttCaption = captions.find(caption => caption.ext === 'vtt');
-
-    //     if (vttCaption) {
-    //       vttUrl = vttCaption.url;
-    //       console.log('VTT Caption URL:', vttUrl);
-    //     } else {
-    //       console.log('No VTT captions found.');
-    //     }
-    //     await downloadFile(vttUrl, path.join(downloadsDir, `${videoId}/${videoId}.vtt`));
-    //     transcriptOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.vtt`)
-    //     console.log('Transcript downloaded to:', transcriptOutputPath);
-    //     transriptAddresses = await publishArticleText(transcriptOutputPath, null, null, null, false);
-    //     console.log('transcriptBittorrentAddress', transriptAddresses.torrent.magnetURI);
-    //     transcriptBittorrentAddress = transriptAddresses.torrent.magnetURI;
-    //   }
-    //   const videoFiles = await publishVideoFiles(videoOutputPath, videoId, false);
-    //   let fileType = path.extname(videoOutputPath);
-    //   let videoFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
-    //   let fileName = `${videoId}.mp4`
-    //   youtubeVideoTorrent.push(videoFiles.torrentAddress);
-    //   videoRecordData = {
-    //     "basic": {
-    //       "name": metadata.title,
-    //       "language": "en",
-    //       "date": metadata.timestamp,
-    //       "description": metadata.description,
-    //       "urlItems": [
-    //         {
-    //           "associatedUrlOnWeb": {
-    //             "url": videoUrl
-    //           }
-    //         }
-    //       ],
-    //       "nsfw": false,
-    //       "tagItems": [...(metadata.tags || []), ...(metadata.categories || [])]
-    //     },
-    //     "video": {
-    //       "arweaveAddress": "",
-    //       "ipfsAddress": "",
-    //       "bittorrentAddress": youtubeVideoTorrent,
-    //       "filename": fileName,
-    //       "size": metadata.filesize || 0,
-    //       "width": metadata.width,
-    //       "height": metadata.height,
-    //       "duration": metadata.duration,
-    //       "contentType": videoFileType
-    //     },
-    //     "text": {
-    //       "bittorrentAddress": transcriptBittorrentAddress,
-    //       "contentType": "text/text"
-    //     }
-
-    //   };
-    //   videoRecords.push(videoRecordData);
-    // }
-    // if (youtubeUrls.length > 0) {
-    //   console.log('YouTube video URLs:', youtubeUrls);
-    //   console.log('YouTube video torrents:', youtubeVideoTorrent);
-    //   res.write(`event: youtube\n`);
-    //   res.write(`data: ${JSON.stringify(youtubeVideoTorrent)}\n\n`);
-    // }
+  //       if (vttCaption) {
+  //         const vttUrl = vttCaption.url;
+  //         console.log('VTT Caption URL:', vttUrl);
+          
+  //         await downloadFile(vttUrl, path.join(downloadsDir, `${videoId}/${videoId}.vtt`));
+  //         const transcriptOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.vtt`);
+  //         console.log('Transcript downloaded to:', transcriptOutputPath);
+          
+  //         // Upload transcript to ArFleet
+  //         try {
+  //           const transcriptArfleet = await uploadToArFleet(transcriptOutputPath, 30);
+  //           transcriptArfleetAddress = transcriptArfleet.arfleetUrl;
+            
+  //           // Fallback to BitTorrent
+  //           const transcriptAddresses = await publishArticleText(transcriptOutputPath, null, null, null, false);
+  //           transcriptBittorrentAddress = transcriptAddresses.bittorrentAddress;
+  //         } catch (error) {
+  //           console.error("Error uploading transcript:", error);
+  //         }
+  //       }
+  //     }
+      
+  //     // Upload video to ArFleet
+  //     const videoFiles = await publishVideoFiles(videoOutputPath, videoId, false);
+  //     let fileType = path.extname(videoOutputPath);
+  //     let videoFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
+  //     let fileName = `${videoId}.mp4`;
+      
+  //     if (videoFiles.arfleetAddress) {
+  //       youtubeVideoArfleet.push(videoFiles.arfleetAddress);
+  //     } else if (videoFiles.torrentAddress) {
+  //       youtubeVideoArfleet.push(videoFiles.torrentAddress);
+  //     }
+      
+  //     videoRecordData = {
+  //       "basic": {
+  //         "name": metadata.title,
+  //         "language": "en",
+  //         "date": metadata.timestamp,
+  //         "description": metadata.description,
+  //         "urlItems": [
+  //           {
+  //             "associatedUrlOnWeb": {
+  //               "url": videoUrl
+  //             }
+  //           }
+  //         ],
+  //         "nsfw": false,
+  //         "tagItems": [...(metadata.tags || []), ...(metadata.categories || [])]
+  //       },
+  //       "video": {
+  //         "arfleetAddress": videoFiles.arfleetAddress || "",
+  //         "arfleetId": videoFiles.arfleetId || "",
+  //         "bittorrentAddress": videoFiles.torrentAddress || "",
+  //         "filename": fileName,
+  //         "size": metadata.filesize || 0,
+  //         "width": metadata.width,
+  //         "height": metadata.height,
+  //         "duration": metadata.duration,
+  //         "contentType": videoFileType
+  //       }
+  //     };
+      
+  //     // Add transcript if available
+  //     if (transcriptArfleetAddress || transcriptBittorrentAddress) {
+  //       videoRecordData.text = {
+  //         "arfleetAddress": transcriptArfleetAddress || "",
+  //         "bittorrentAddress": transcriptBittorrentAddress || "",
+  //         "contentType": "text/text"
+  //       };
+  //     }
+      
+  //     videoRecords.push(videoRecordData);
+  //   }
+    
+  //   if (youtubeUrls.length > 0) {
+  //     console.log('YouTube video URLs:', youtubeUrls);
+  //     console.log('YouTube video ArFleet links:', youtubeVideoArfleet);
+  //     if (res && typeof res.write === 'function') {
+  //       res.write(`event: youtube\n`);
+  //       res.write(`data: ${JSON.stringify(youtubeVideoArfleet)}\n\n`);
+  //     }
+  //   }
+  // } catch (error) {
+  //   console.error('Error processing embedded media:', error);
+  // }
 
   if (articleData.summaryTTS) {
     const fullUrl = backendURL + articleData.summaryTTS;
     articleData.summaryTTS = fullUrl;
   }
-  // console.log('Final article data:', articleData);
-  // res.write(`event: finalData\n`);
-  // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
 
-  // res.end();
-  // audioUrl = `https://api.oip.onl/api/generate/media?id=${articleData.summaryTTSid}`
-  // const cleanUrl = (url) => {
-  //   const urlObj = new URL(url);
-  //   return urlObj.origin + urlObj.pathname;
-  // };
+  // ... existing code for basic record building ...
 
   const recordToPublish = {
     "basic": {
@@ -760,94 +791,52 @@ const mimeTypes = {
             "webUrl": articleTextURL,
             "contentType": "text/text"
           }
-          // "associatedUrlOnWeb": {
-          //   "url": articleTextURL
-          // }
         }
       ,
       "webUrl": cleanUrl(articleData.url),
     },
-    // "associatedUrlOnWeb": {
-    //   "url": cleanUrl(articleData.url)
-    // }
   };
+  
+  // ... existing image handling code ...
+  
   if (articleData.embeddedImage) {
-    recordToPublish.post.featuredImage = 
-      {
-        "basic": {
-          "name": articleData.title,
-          "language": "en",
-          "nsfw": false,
-          // "urlItems": [
-          //   {
-          //     "associatedUrlOnWeb": {
-          //       "url": articleData.embeddedImage
-          //     }
-          //   }
-          // ]
-        },
-        // "associatedUrlOnWeb": {
-        //   "url": articleData.embeddedImageUrl
-        // },
-        "image": {
-          "webUrl": articleData.embeddedImageUrl,
-          // "bittorrentAddress": imageBittorrentAddress,
-          "height": imageHeight,
-          "width": imageWidth,
-          "size": imageSize,
-          "contentType": imageFileType
-        }
+    recordToPublish.post.featuredImage = {
+      "basic": {
+        "name": articleData.title,
+        "language": "en",
+        "nsfw": false,
+      },
+      "image": {
+        "webUrl": articleData.embeddedImageUrl,
+        // "arfleetAddress": imageArfleetAddress || "",
+        // "bittorrentAddress": imageBittorrentAddress || "",
+        "height": imageHeight,
+        "width": imageWidth,
+        "size": imageSize,
+        "contentType": imageFileType
       }
-    
+    };
   }
 
   if (articleData.summaryTTS) {
-    recordToPublish.post.audioItems = [
-      { 
-        "audio": {
-          "webUrl": articleData.summaryTTS,
-          "contentType" : "audio/mp3"
-        }
-      }
-    ]
+    // ... existing code ...
   }
 
   console.log('this is whats getting published:', recordToPublish)
-        
 
-    // TEMPORARILY DISABLING TWEETS AND YT VIDEOS - DO NOT DELETE
-    // if (youtubeVideoTorrent.length > 0) {
-    //   recordToPublish.post.videoItems = [...videoRecords];
-    // }
-    // if (imageBittorrentAddress) {
-    //   recordToPublish.post.featuredImage = [{
-    //   "basic": {
-    //     "name": articleData.title,
-    //     "language": "en",
-    //     "nsfw": false,
-    //     "urlItems": [
-    //     {
-    //       "associatedUrlOnWeb": {
-    //       "url": articleData.embeddedImage
-    //       }
-    //     }
-    //     ]
-    //   },
-    //   "image": {
-    //     "bittorrentAddress": imageBittorrentAddress,
-    //     "height": imageHeight,
-    //     "width": imageWidth,
-    //     "size": imageSize,
-    //     "contentType": imageFileType
-    //   }
-    //   }];
-    // }
-    // if (tweetRecords.length > 0) {
-    //   recordToPublish.post.citations = [...tweetRecords];
-    // }
-    record = await publishNewRecord(recordToPublish, "post")
-    console.log('Record published XYZ:', record);
-    return record;
+  // Add YouTube videos if found
+  // if (videoRecords && videoRecords.length > 0) {
+  //   recordToPublish.post.videoItems = videoRecords;
+  // }
+  
+  // Add tweet citations if found
+  // if (tweetRecords && tweetRecords.length > 0) {
+  //   recordToPublish.post.citations = tweetRecords;
+  // }
+  
+  record = await publishNewRecord(recordToPublish, "post", false, false, false, null, blockchain)
+  console.log('Record published XYZ:', record);
+  return record;
 }
 
 function cleanArticleContent(content) {
@@ -975,7 +964,7 @@ async function stitchImages(screenshots, totalHeight, scrapeId) {
 //       res.write(`event: dataFromIndex\n`);
 //       res.write(`data: ${JSON.stringify(records.records[0])}\n\n`);
 //       res.end();
-//       ongoingScrapes.delete(scrapeId);
+//       cleanupScrape(scrapeId);
 //     } else {
 //       console.log('Not found in Archive, fetching as a new article...');
 //       const parsedData = await Parser.parse(url, { html });
@@ -1003,7 +992,7 @@ async function stitchImages(screenshots, totalHeight, scrapeId) {
 //       res.write(`data: ${JSON.stringify(articleData)}\n\n`);
 //       res.end();
 
-//       ongoingScrapes.delete(scrapeId);
+//       cleanupScrape(scrapeId);
 //     }
 //   } catch (error) {
 //     console.error('Error fetching parsed article data:', error);
@@ -1037,7 +1026,7 @@ async function stitchImages(screenshots, totalHeight, scrapeId) {
 // works perfectly - trying a version that adds screenshot download
 async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, options) {
   console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
-  const { sendUpdate, res } = options; // Destructure res from options
+  const { sendUpdate, res, blockchain = 'arweave' } = options; // Destructure res and blockchain from options
 
     // Ensure scrapeId is initialized
   if (!ongoingScrapes.has(scrapeId)) {
@@ -1188,14 +1177,14 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       // res.write(`event: dataFromIndex\n`);
       // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       // res.end();
-      // ongoingScrapes.delete(scrapeId); // Clear completed scrape
+      // cleanupScrape(scrapeId); // Clear completed scrape
 
 
     } else {
       // Handle new article scraping if no archived data is found
       console.log('Not found in Archive, fetching as a new article...');
       const data = await Parser.parse(url, { html: html });
-      console.log('Parsed data:', data);
+      // console.log('Parsed data:', data);
 
       let content = data.content
         .replace(/<[^>]+>/g, '') // Remove HTML tags
@@ -1231,7 +1220,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       // res.write(`event: initialData\n`);
       // res.write(`data: ${articleData}\n\n`);
       // res.flush(); // Ensures data is flushed to the client immediately
-      console.log('Sending initialData:', articleData);
+      // console.log('Sending initialData:', articleData);
 
       // Optional: Refine with manual scraping of additional fields using Cheerio
       const $ = cheerio.load(html);
@@ -1248,35 +1237,50 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
 
       // **BYLINE**
       if (!articleData.byline) {
-        // if (!articleData.byline) {
-          console.log('Byline not found in content. Attempting to extract from screenshot...', screenshotURL);
-          const extractedByline = await analyzeImageForAuthor(screenshotURL);
-          articleData.byline = extractedByline || null; // Fallback to any previously found byline
-      // }
-        const authorSelector = [
-          '.author', '.author-name', '.byline', '.by-author', '.byline__name', '.post-author', '.auth-name', '.ArticleFull_headerFooter__author',
-          '.entry-author', '.post-author-name', '.post-meta-author', '.article__author', '.author-link', '.article__byline', '.content-author',
-          '.meta-author', '.contributor', '.by', '.opinion-author', '.author-block', '.author-wrapper', '.news-author', '.header-byline',
-          '.byline-name', '.post-byline', '.metadata__byline', '.author-box', '.bio-name', '.auth-link', 'ArticleFull_headerFooter__author__pC2tR'
-        ];
-
-        const byline = await manualScrapeWithSelectors($, authorSelector);
-        console.log('Byline1:', articleData.byline);
-        articleData.byline = byline ? byline.trim().replace(/^by\s*/i, '').replace(/\s+/g, ' ').replace(/\n|\t/g, '').split('by').map(name => name.trim()).filter(Boolean).join(', ') : articleData.byline;
-        console.log('Byline2:', articleData.byline);
-        const repeatedWordsPattern = /\b(\w+)\b\s*\1\b/i; // Check for repeated words
-        const excessiveSpacesPattern = /\s{2,}/; // Matches two or more spaces
-        if (articleData.domain === 'zerohedge' && !articleData.byline || articleData.byline === "John Smith" ) {
-          const bylineFound = await scrapeZeroHedgeByline($);
-          articleData.byline = bylineFound
-       }
-        if (!articleData.byline || articleData.byline === null || repeatedWordsPattern.test(byline) || excessiveSpacesPattern.test(byline)) {
-          const bylineFound = await identifyAuthorNameFromContent(articleData.content);
-          articleData.byline = bylineFound
-        }
-        sendUpdate('byline', { byline: articleData.byline });
-        // res.write(`event: byline\n`);
-        // res.write(`data: ${JSON.stringify({ byline: articleData.byline })}\n\n`); // Send only the byline
+          const authorSelector = [
+            '.ArticleFull_headerFooter__author__pC2tR',
+            '.author', '.author-name', '.byline', '.by-author', '.byline__name', '.post-author', '.auth-name', '.ArticleFull_headerFooter__author',
+            '.entry-author', '.post-author-name', '.post-meta-author', '.article__author', '.author-link', '.article__byline', '.content-author',
+            '.meta-author', '.contributor', '.by', '.opinion-author', '.author-block', '.author-wrapper', '.news-author', '.header-byline',
+            '.byline-name', '.post-byline', '.metadata__byline', '.author-box', '.bio-name', '.auth-link'
+          ];
+          const byline = await manualScrapeWithSelectors($, authorSelector);
+          console.log('Byline1:', articleData.byline);
+          articleData.byline = byline ? byline.trim().replace(/^by\s*/i, '').replace(/\s+/g, ' ').replace(/\n|\t/g, '').split('by').map(name => name.trim()).filter(Boolean).join(', ') : articleData.byline;
+          console.log('Byline2:', articleData.byline);
+          const repeatedWordsPattern = /\b(\w+)\b\s*\1\b/i; // Check for repeated words
+          if (repeatedWordsPattern.test(articleData.byline)) {
+            console.log('Repeated words found in byline:', articleData.byline);
+            // Fix for repeated words with commas between them
+            // First, we'll clean up the pattern to handle words separated by commas
+            articleData.byline = articleData.byline
+              .replace(/\b(\w+)[,\s]+(?:\1[,\s]+)+/gi, '$1, ')
+              .replace(/,\s*,/g, ',')
+              .replace(/,\s*$/,'');
+            console.log('Fixed byline:', articleData.byline);
+            
+            // If we've removed too much and the byline is too short, set to null
+            if (articleData.byline.length < 2) {
+              articleData.byline = null;
+            }
+          }
+          const excessiveSpacesPattern = /\s{2,}/; // Matches two or more spaces
+            if (!articleData.byline || articleData.byline === null || excessiveSpacesPattern.test(byline)) {
+              const bylineFound = await identifyAuthorNameFromContent(articleData.content);
+              articleData.byline = bylineFound
+            }
+              if (!articleData.byline) {
+                console.log('Byline not found in content. Attempting to extract from screenshot...', screenshotURL);
+                const extractedByline = await analyzeImageForAuthor(screenshotURL);
+                console.log('analyzed image for author name:', extractedByline);
+                articleData.byline = extractedByline || null; // Fallback to any previously found byline
+              }
+                if (articleData.domain === 'zerohedge' && !articleData.byline || articleData.byline === "John Smith" ) {
+                  const bylineFound = await scrapeZeroHedgeByline($);
+                  articleData.byline = bylineFound
+                }
+      
+                sendUpdate('byline', { byline: articleData.byline });
       }
 
       // **PUBLISH DATE**
@@ -1336,39 +1340,29 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       }
       console.log('Generated Text:', generatedText);
       const summary = generatedText.summary;
-      const script = replaceAcronyms(summary);
+      const text = replaceAcronyms(summary);
       // **create audio of summary**
       const audioFileName = generateAudioFileName(url);
       const filePath = path.join(audioDirectory, audioFileName);
-      // Check if the file already exists
-      // if (fs.existsSync(filePath)) {
-        // If the file already exists, return the URL
-        // articleData.summaryTTS = `/api/generate/media?id=${audioFileName}`;
-        // articleData.summaryTTSid = audioFileName; 
-      // } else {
-      // const response = await axios.post('http://localhost:8082/synthesize', 
-      // const response = await axios.post('http://speech-synthesizer:8082/synthesize', 
-      //   { text: script, model_name, vocoder_name: 'vocoder_name' }, 
-      //   { responseType: 'arraybuffer' });
-
-      const response = await axios
-        .post
-        (
-          `${backendURL}/api/generate/speech`,
-          { text: script }
-        );
-        // { responseType: 'arraybuffer' });
-      console.log('saving Synthesized speech', response.data);
-      // summaryTTS = response.data.url;
-      format = response.data.format;
-      articleData.summaryTTS = response.data.url;
-      console.log('Synthesized speech:', articleData.summaryTTS, format);
-      // Save the audio file locally
-      // fs.writeFileSync(filePath, Buffer.from(response.data, 'binary'));
-      // Return the URL for the stored file
-      sendUpdate('synthesizedSpeech', { url: articleData.summaryTTS });
-      // res.write(`event: synthesizedSpeech\n`);
-      // res.write(`data: ${url}\n\n`);
+      const defaultVoiceConfig = {
+        google: { languageCode: 'en-GB', name: 'en-GB-Journey-D', ssmlGender: 'MALE' },
+        elevenLabs: {
+            voice_id: 'TWOFxz3HmcZPjoBTPVjd',
+            model_id: 'eleven_monolingual_v1',
+            stability: 0.5,
+            similarity_boost: 0.75,
+        },
+    };
+    // const chunkFileName = path.join(outputDir, `${outputFileName}.mp3`);
+    const response = await synthesizeSpeech(text, defaultVoiceConfig, audioFileName, api = 'elevenLabs');
+      // synthesizeSpeech(text, defaultVoiceConfig, audioFileName, api = 'elevenLabs').then(response => {
+        console.log('synthesized speech response:', response);
+              format = response.format;
+              articleData.summaryTTS = response.url;
+              console.log('Synthesized speech:', articleData.summaryTTS, format);
+              sendUpdate('synthesizedSpeech', { url: articleData.summaryTTS });
+      // });
+     
       console.log('Tags:', generatedText.tags);
       const generatedTags = generatedText.tags.split(',').map(tag => tag.trim());
       articleData.tags = generatedTags;
@@ -1382,7 +1376,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       // res.write(`event: finalData\n`);
       // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       console.log('Sent finalData:', articleData);
-      let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url,html, res);
+      let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url,html, res, blockchain);
       let articleTxid = article.transactionId;
       let articleDidTx = article.didTx;
       // this is the audio url
@@ -1552,20 +1546,22 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
             
             console.log('40 indexRecord pending record to index:', record);
             
-            // indexRecord(record);
+            indexRecord(record);
             console.log('article archived successfully at didTx', articleDidTx);
             sendUpdate('archived', { archived: articleDidTx });
       res.end();
-      ongoingScrapes.delete(scrapeId); // Clear completed scrape
+      cleanupScrape(scrapeId); // Clear completed scrape
 
     }
+
+  // });
   } catch (error) {
     console.error('Error fetching parsed article data:', error);
     sendUpdate('error', { message: 'Failed to fetch article data.' });
     // res.write(`event: error\n`);
     // res.write(`data: ${JSON.stringify({ error: 'Failed to fetch article data.' })}\n\n`);
     res.end();
-    ongoingScrapes.delete(scrapeId);
+    cleanupScrape(scrapeId);
 
   }
 }
@@ -1631,7 +1627,7 @@ async function getEmbeddedTweets(html) {
   return tweetIds;
 }
 
-async function createNewNutritionalInfoRecord(ingredientName) {
+async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave') {
   try {
     console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
 
@@ -1727,9 +1723,12 @@ async function createNewNutritionalInfoRecord(ingredientName) {
       },
     };
 
-    console.log(`Successfully retrieved nutritional info for ${ingredientName}:`, formattedNutritionalInfo);
-
-    return formattedNutritionalInfo;
+    ingredientTx = await publishNewRecord(formattedNutritionalInfo, "nutritionalInfo", false, false, false, null, blockchain)
+    // formattedNutritionalInfo.oip = formattedNutritionalInfo.oip || {};
+    // formattedNutritionalInfo.oip.didTx = ingredientTx.didTx;
+    console.log(`Successfully retrieved and published nutritional info for ${ingredientName}:`, formattedNutritionalInfo, ingredientTx);
+    // console.log('formattedNutritionalInfo:', formattedNutritionalInfo);
+    return ingredientTx.recordToIndex;
   } catch (error) {
     console.error(`Error fetching nutritional info for ${ingredientName}:`, error);
     return null; // Return null if fetching fails
@@ -1937,8 +1936,214 @@ async function createNewNutritionalInfoRecord(ingredientName) {
 //   }
 // }
 
-async function fetchParsedRecipeData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res) {
+// try at generalized for all sites BUT HAS NO PUBLISHING CAPABILITY
+async function fetchParsedRecipeData(url, html, scrapeId, screenshots, totalHeight, options) {
+  console.log('Scrape ID:', scrapeId, 'Fetching parsed recipe data from', url);
+  const { sendUpdate, res, blockchain = 'arweave' } = options; // Destructure blockchain from options
+
+  if (!ongoingScrapes.has(scrapeId)) {
+    ongoingScrapes.set(scrapeId, { clients: [res], data: [] });
+  }
+
+  const streamData = ongoingScrapes.get(scrapeId);
+  sendUpdate('scrapeId', { scrapeId });
+
+
+  console.log('converting screenshot to file');
+  console.log('stitching images together using totalHeight:', totalHeight); 
+  const screenshotMediaId = await stitchImages(screenshots, totalHeight, scrapeId);
+  const screenshotURL = `${backendURL}/api/media?id=${screenshotMediaId}`;
+  console.log('Full Screenshot saved at:', screenshotURL);
+
+
+  // Site-specific selectors configuration
+  const selectors = {
+    default: {
+      title: ['h1.entry-title', 'h1.recipe-title'],
+      description: ['meta[name="description"]', 'p:first-of-type'],
+      imageUrl: ['meta[property="og:image"]', 'img.wp-image:first-of-type'],
+      ingredientSection: ['[class*="ingredient-group"]', '[class*="ingredients-group"]'],
+      ingredientName: ['[class*="name"]'],
+      ingredientAmount: ['[class*="amount"]'],
+      ingredientUnit: ['[class*="unit"]'],
+      instruction: ['.wprm-recipe-instruction'],
+      servings: ['[data-servings]', '[class*="wprm-recipe-servings"]'],
+      cuisine: ['.wprm-recipe-cuisine'],
+      course: ['.wprm-recipe-course'],
+      prepTime: ['.wprm-recipe-prep_time'],
+      cookTime: ['.wprm-recipe-cook_time'],
+      totalTime: ['.wprm-recipe-total_time'],
+    },
+    'themediterraneandish.com': {
+      title: ['h1.entry-title'],
+      servings: ['[data-servings]'],
+    },
+    'wholelifestylenutrition.com': {
+      title: ['.tasty-recipes-title'],
+      servings: ['.tasty-recipes-yield span'],
+      prepTime: ['.tasty-recipes-prep-time span'],
+      cookTime: ['.tasty-recipes-cook-time span'],
+      totalTime: ['.tasty-recipes-total-time span'],
+      ingredientSection: ['.tasty-recipes-ingredients ul'],
+      ingredientName: ['li span:last-child'],
+      ingredientAmount: ['li span[data-amount]'],
+      ingredientUnit: ['li span[data-unit]'], // Adjust if units are encoded differently
+      instruction: ['.tasty-recipes-instructions ol li'],
+      imageUrl: ['meta[property="og:image"]'],
+    },
+  };
+
+  // Identify the site and get the specific selectors
+  const domain = new URL(url).hostname;
+
+  const siteSelectors = selectors[domain] || selectors.default;
+
   try {
+    console.log('Fetching recipe data from URL:', url);
+    let htmlContent = html;
+
+    if (!htmlContent) {
+      // Fetch HTML using FireCrawl
+      const response = await axios.post(
+      'https://api.firecrawl.dev/v1/scrape',
+      { url, formats: ['html'] },
+      { headers: { Authorization: `Bearer ${process.env.FIRECRAWL}` } }
+      );
+
+      if (!response.data.success) throw new Error(`Scrape failed: ${response.data.error}`);
+
+      htmlContent = response.data.data.html;
+      const metadata = response.data.data.metadata;
+    }
+    const $ = cheerio.load(html);
+
+    // Helper function for extracting text using selectors
+    function extractText($, selectorList) {
+      if (!Array.isArray(selectorList)) {
+        throw new TypeError('selectorList must be an array');
+      }
+      for (const selector of selectorList) {
+        const text = $(selector).text().trim();
+        if (text) return text; // Return the first non-empty text found
+      }
+      return null; // Fallback if no text found
+    }
+
+    // Parse title, description, and image URL
+    const title = extractText($, siteSelectors.title);
+const description = extractText($, siteSelectors.description);
+const imageUrl = extractText($, siteSelectors.imageUrl);
+
+const cuisine = extractText($, siteSelectors.cuisine) || null;
+const course = extractText($, siteSelectors.course) || null;
+const prepTime = parseInt(extractText($, siteSelectors.prepTime)?.match(/\d+/)?.[0], 10) || null;
+const cookTime = parseInt(extractText($, siteSelectors.cookTime)?.match(/\d+/)?.[0], 10) || null;
+const totalTime = parseInt(extractText($, siteSelectors.totalTime)?.match(/\d+/)?.[0], 10) || null;
+
+    // Parse servings
+    let servingsStr = $(siteSelectors.servings[0]).attr('data-servings') || extractText($, siteSelectors.servings);
+    const servings = servingsStr ? parseInt(servingsStr.match(/\d+/)?.[0], 10) : null;
+
+    // Parse ingredient sections
+    const ingredientSections = [];
+    $(siteSelectors.ingredientSection.join(',')).each((i, section) => {
+      const ingredients = [];
+      $(section)
+        .find(siteSelectors.ingredientName.join(','))
+        .each((j, elem) => {
+          const amount = $(elem).find(siteSelectors.ingredientAmount.join(',')).text().trim() || null;
+          const unit = $(elem).find(siteSelectors.ingredientUnit.join(',')).text().trim() || null;
+          const name = $(elem).text().trim() || null;
+          if (name) {
+            ingredients.push({
+              amount: parseFloat(amount) || null,
+              unit: unit || '',
+              name: name || '',
+            });
+          }
+        });
+      if (ingredients.length) {
+        ingredientSections.push({ section: `Section ${i + 1}`, ingredients });
+      }
+    });
+
+    const primaryIngredientSection = ingredientSections.length > 1
+      ? ingredientSections.reduce((prev, current) => (prev.ingredients.length > current.ingredients.length ? prev : current))
+      : ingredientSections[0];
+
+    // Parse instructions
+    const instructions = [];
+    $(siteSelectors.instruction.join(',')).each((i, elem) => {
+      const instruction = $(elem).text().trim();
+      if (instruction) instructions.push(instruction);
+    });
+
+
+    // Build the recipe data object
+    const recipeData = {
+      basic: {
+        name: title,
+        language: 'en',
+        description,
+        webUrl: url,
+      },
+      recipe: {
+        servings,
+        prep_time_mins: prepTime,
+        cook_time_mins: cookTime,
+        total_time_mins: totalTime,
+        instructions,
+        cuisine,
+        course,
+        ingredients: primaryIngredientSection?.ingredients || [],
+      },
+      image: {
+        webUrl: imageUrl,
+      },
+    };
+
+    console.log('Parsed Recipe Data:', recipeData);
+
+    // if basic.name is null or empty or ingredients is empty, run analyzeImageForRecipe()
+    const extractedRecipeData = await analyzeImageForRecipe(screenshotURL);
+    console.log('extractedRecipeData:', extractedRecipeData);
+
+    cleanupScrape(scrapeId);
+    return recipeData;
+  } catch (error) {
+    console.error('Error parsing recipe data:', error);
+    cleanupScrape(scrapeId);
+  }
+}
+
+
+// works well for mediteranean site, trying another version that might generalize to all sites DO NOT DELETE TILL MOST OF ITS FUNCTIONALITY IS MIGRATED OVER
+async function fetchParsedRecipeData(url, scrapeId, options) {
+  const { sendUpdate, res } = options; // Destructure res from options
+    // Ensure scrapeId is initialized
+    if (!ongoingScrapes.has(scrapeId)) {
+      ongoingScrapes.set(scrapeId, { clients: [res], data: [] });
+    }
+    const streamData = ongoingScrapes.get(scrapeId);
+    sendUpdate('scrapeId', { scrapeId });
+
+  try {
+    console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
+
+
+    const sortBy = 'inArweaveBlock:desc';
+    const queryParams = { resolveDepth: 1, url, sortBy: 'inArweaveBlock:desc', limit:1 };
+    const records = await getRecords(queryParams);
+    // const latestArweaveBlockInDB = records.latestArweaveBlockInDB;
+    console.log('919 searchResults:', records);
+if (records.searchResults > 0) {
+ 
+    const recipeInDB = records
+    console.log('Recipe found in DB:', recipeInDB.records[0]);
+    // { ingredientDidRefs, nutritionalInfo }
+
+   } else {
+
     // Parse the recipe data from the HTML
     console.log('Parsing recipe data from URL:', url);
 
@@ -1961,7 +2166,7 @@ async function fetchParsedRecipeData(url, html, scrapeId, screenshotBase64, scre
 
     console.log('Scrape result:', response.data.data);
     const metadata = response.data.data.metadata;
-    console.log('Metadata:', metadata);
+    // console.log('Metadata:', metadata);
     const html = response.data.data.html;
     const $ = cheerio.load(html);  
 
@@ -1969,49 +2174,134 @@ async function fetchParsedRecipeData(url, html, scrapeId, screenshotBase64, scre
 
     // Parse title, description, and metadata
     const title = $('h1.entry-title').text().trim() || $('h1.recipe-title').text().trim() || null;
-    const description = $('p').first().text().trim() || null;
-    const imageUrl = $('img.wp-image').first().attr('src') || null;
-    const date = Date.now() / 1000;
+    const description = metadata.ogDescription || $('p').first().text().trim() || null;
+    const imageUrl = metadata.ogImage || $('img.wp-image').first().attr('src') || null;
+    // const date = Date.now() / 1000;
 
+    // Parse ingredient sections
     const ingredientSections = [];
-    $('.wprm-recipe-ingredient-group').each((i, section) => {
-        const sectionName = $(section).find('.wprm-recipe-group-name').text().trim() || `Section ${i + 1}`;
-        const ingredients = [];
+    $('[class*="ingredient-group"], [class*="ingredients-group"]').each((i, section) => {
+      const sectionName = $(section).find('[class*="group-name"], [class*="section-title"]').text().trim() || `Section ${i + 1}`;
+      const ingredients = [];
 
-        $(section)
-            .find('.wprm-recipe-ingredient')
-            .each((j, elem) => {
-                const amount = $(elem).find('.wprm-recipe-ingredient-amount').text().trim() || null;
-                const unit = $(elem).find('.wprm-recipe-ingredient-unit').text().trim() || null;
-                const name = $(elem).find('.wprm-recipe-ingredient-name').text().trim() || null;
+      $(section)
+        .find('[class*="ingredient"]')
+        .each((j, elem) => {
+          const amount = $(elem).find('[class*="amount"]').text().trim() || null;
+          const unit = $(elem).find('[class*="unit"]').text().trim() || null;
+          const name = $(elem).find('[class*="name"]').text().trim() || null;
 
-                if (amount || unit || name) {
-                    ingredients.push({
-                        amount: parseFloat(amount) || null,
-                        unit: unit || '',
-                        name: name || '',
-                    });
-                }
+          // Ensure that at least `name` is present and valid to include the ingredient
+          if (name && (amount || unit || name)) {
+            ingredients.push({
+              amount: parseFloat(amount) || null,
+              unit: unit || '',
+              name: name || '',
             });
+          }
+        });
 
-        if (ingredients.length > 0) {
-            ingredientSections.push({
-                section: sectionName,
-                ingredients,
-            });
-        }
+      if (ingredients.length > 0) {
+        ingredientSections.push({
+          section: sectionName,
+          ingredients,
+        });
+      }
     });
 
-    console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
-
-    // if there are more than one ingredient sections, identify the primary one - the one with the most ingredients
+    // Primary ingredient section logic
     let primaryIngredientSection = ingredientSections[0];
     if (ingredientSections.length > 1) {
-        primaryIngredientSection = ingredientSections.reduce((prev, current) => {
-            return prev.ingredients.length > current.ingredients.length ? prev : current;
-        });
+      primaryIngredientSection = ingredientSections.reduce((prev, current) =>
+        prev.ingredients.length > current.ingredients.length ? prev : current
+      );
     }
+
+    console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
     console.log('Primary ingredient section:', primaryIngredientSection);
+
+
+    // works well for two sections but breaks with one section - trying test above for both cases
+    // // Parse ingredient sections
+    // const ingredientSections = [];
+    // $('[class*="ingredient-group"], [class*="ingredients-group"]').each((i, section) => {
+    //   const sectionName = $(section).find('[class*="group-name"], [class*="section-title"]').text().trim() || `Section ${i + 1}`;
+    //   const ingredients = [];
+
+    //   $(section)
+    //     .find('[class*="ingredient"]')
+    //     .each((j, elem) => {
+    //       const amount = $(elem).find('[class*="amount"]').text().trim() || null;
+    //       const unit = $(elem).find('[class*="unit"]').text().trim() || null;
+    //       const name = $(elem).find('[class*="name"]').text().trim() || null;
+
+    //       if (amount || unit || name) {
+    //         ingredients.push({
+    //           amount: parseFloat(amount) || null,
+    //           unit: unit || '',
+    //           name: name || '',
+    //         });
+    //       }
+    //     });
+
+    //   if (ingredients.length > 0) {
+    //     ingredientSections.push({
+    //       section: sectionName,
+    //       ingredients,
+    //     });
+    //   }
+    // });
+
+    // // Primary ingredient section logic
+    // let primaryIngredientSection = ingredientSections[0];
+    // if (ingredientSections.length > 1) {
+    //   primaryIngredientSection = ingredientSections.reduce((prev, current) =>
+    //     prev.ingredients.length > current.ingredients.length ? prev : current
+    //   );
+    // }
+
+    // console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
+    // console.log('Primary ingredient section:', primaryIngredientSection);
+
+    // const ingredientSections = [];
+    // $('.wprm-recipe-ingredient-group').each((i, section) => {
+    //     const sectionName = $(section).find('.wprm-recipe-group-name').text().trim() || `Section ${i + 1}`;
+    //     const ingredients = [];
+
+    //     $(section)
+    //         .find('.wprm-recipe-ingredient')
+    //         .each((j, elem) => {
+    //             const amount = $(elem).find('.wprm-recipe-ingredient-amount').text().trim() || null;
+    //             const unit = $(elem).find('.wprm-recipe-ingredient-unit').text().trim() || null;
+    //             const name = $(elem).find('.wprm-recipe-ingredient-name').text().trim() || null;
+
+    //             if (amount || unit || name) {
+    //                 ingredients.push({
+    //                     amount: parseFloat(amount) || null,
+    //                     unit: unit || '',
+    //                     name: name || '',
+    //                 });
+    //             }
+    //         });
+
+    //     if (ingredients.length > 0) {
+    //         ingredientSections.push({
+    //             section: sectionName,
+    //             ingredients,
+    //         });
+    //     }
+    // });
+
+    // console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
+
+    // // if there are more than one ingredient sections, identify the primary one - the one with the most ingredients
+    // let primaryIngredientSection = ingredientSections[0];
+    // if (ingredientSections.length > 1) {
+    //     primaryIngredientSection = ingredientSections.reduce((prev, current) => {
+    //         return prev.ingredients.length > current.ingredients.length ? prev : current;
+    //     });
+    // }
+    // console.log('Primary ingredient section:', primaryIngredientSection);
     // sort remaining ingredients sections by the number of ingredients
     const remainingIngredientSections = ingredientSections.filter(section => section !== primaryIngredientSection);
     remainingIngredientSections.sort((a, b) => b.ingredients.length - a.ingredients.length);    
@@ -2027,9 +2317,12 @@ async function fetchParsedRecipeData(url, html, scrapeId, screenshotBase64, scre
 
   console.log('Instructions:', instructions);
 
-  const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name);
+  const ingredientNames = primaryIngredientSection.ingredients.map(ing => {
+    const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
+    return normalizedIngredientName;
+  });
   const ingredientAmounts = primaryIngredientSection.ingredients.map(ing => ing.amount ?? 1);
-  const ingredientUnits = primaryIngredientSection.ingredients.map(ing => ing.unit);
+const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
 
   console.log('Ingredient units:', ingredientUnits);
     
@@ -2063,7 +2356,7 @@ async function fetchParsedRecipeData(url, html, scrapeId, screenshotBase64, scre
   let recordMap = {};
     
   async function fetchIngredientRecordData(primaryIngredientSection) {
-    const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name.toLowerCase());
+    const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name.trim().toLowerCase().replace(/,$/, ''));
 
     // Query for all ingredients in one API call
     const queryParams = {
@@ -2072,11 +2365,11 @@ async function fetchParsedRecipeData(url, html, scrapeId, screenshotBase64, scre
         limit: 50
     };
 
-    const searchResults = await getRecords(queryParams);
-
+    const recordsInDB = await getRecords(queryParams);
+    console.log('quantity of results:', recordsInDB.searchResults);
     // Populate the global recordMap
     recordMap = {};  // Reset before populating
-    searchResults.records.forEach(record => {
+    recordsInDB.records.forEach(record => {
         const recordName = record.data.basic.name.toLowerCase();
         recordMap[recordName] = record;
     });
@@ -2101,94 +2394,112 @@ async function fetchParsedRecipeData(url, html, scrapeId, screenshotBase64, scre
     }
 
     return { ingredientDidRefs, nutritionalInfo };
-}
 
+    
+  }
+
+// } catch (error) {
+// console.error('Error fetching parsed recipe data:', error);
+// sendUpdate('error', { message: 'Failed to fetch recipe data.' });
+// res.end();
+// cleanupScrape(scrapeId);
+// }
+
+
+
+    
+  // Function to find the best match
+  function findBestMatch(ingredientName) {
+    if (!recordMap || Object.keys(recordMap).length === 0) {
+        console.error("Error: recordMap is not populated before calling findBestMatch().");
+        return null;
+    }
+    // const ingredientNames = primaryIngredientSection.ingredients.map(ing => {
+    //   const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
+    //   return normalizedIngredientName;
+    // });
   
-// Function to find the best match
-function findBestMatch(ingredientName) {
-  if (!recordMap || Object.keys(recordMap).length === 0) {
-      console.error("Error: recordMap is not populated before calling findBestMatch().");
-      return null;
+    // const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
+    const searchTerms = ingredientName.split(/\s+/).filter(Boolean);
+
+    console.log(`Searching for ingredient: ${ingredientName}, Search terms:`, searchTerms);
+
+    // Check if the ingredient has a predefined synonym
+    const synonym = synonymMap[ingredientName];
+    if (synonym && recordMap[synonym]) {
+        console.log(`Found synonym match for ${ingredientName}: ${synonym}`);
+        return recordMap[synonym];
+    }
+
+    // Direct match
+    if (recordMap[ingredientName]) {
+        console.log(`Direct match found for ${ingredientName}, nutritionalInfo:`, recordMap[ingredientName].data.nutritionalInfo);
+        return recordMap[ingredientName];
+    }
+
+    // Looser match using search terms
+    const matches = Object.keys(recordMap)
+        .filter(recordName => {
+            const normalizedRecordName = recordName.toLowerCase();
+            return searchTerms.some(term => normalizedRecordName.includes(term));
+        })
+        .map(recordName => recordMap[recordName]);
+
+    if (matches.length > 0) {
+        matches.sort((a, b) => {
+            const aMatchCount = searchTerms.filter(term => a.data.basic.name.toLowerCase().includes(term)).length;
+            const bMatchCount = searchTerms.filter(term => b.data.basic.name.toLowerCase().includes(term)).length;
+            return bMatchCount - aMatchCount;
+        });
+
+        console.log(`Loose matches found for ${ingredientName}:`, matches);
+        return matches[0];
+    }
+
+    console.log(`No match found for ${ingredientName}`);
+    return null;
   }
-
-  const normalizedIngredientName = ingredientName.trim().toLowerCase();
-  const searchTerms = normalizedIngredientName.split(/\s+/).filter(Boolean);
-
-  console.log(`Searching for ingredient: ${normalizedIngredientName}, Search terms:`, searchTerms);
-
-  // Check if the ingredient has a predefined synonym
-  const synonym = synonymMap[normalizedIngredientName];
-  if (synonym && recordMap[synonym]) {
-      console.log(`Found synonym match for ${normalizedIngredientName}: ${synonym}`);
-      return recordMap[synonym];
-  }
-
-  // Direct match
-  if (recordMap[normalizedIngredientName]) {
-      console.log(`Direct match found for ${normalizedIngredientName}, nutritionalInfo:`, recordMap[normalizedIngredientName].data.nutritionalInfo);
-      return recordMap[normalizedIngredientName];
-  }
-
-  // Looser match using search terms
-  const matches = Object.keys(recordMap)
-      .filter(recordName => {
-          const normalizedRecordName = recordName.toLowerCase();
-          return searchTerms.some(term => normalizedRecordName.includes(term));
-      })
-      .map(recordName => recordMap[recordName]);
-
-  if (matches.length > 0) {
-      matches.sort((a, b) => {
-          const aMatchCount = searchTerms.filter(term => a.data.basic.name.toLowerCase().includes(term)).length;
-          const bMatchCount = searchTerms.filter(term => b.data.basic.name.toLowerCase().includes(term)).length;
-          return bMatchCount - aMatchCount;
-      });
-
-      console.log(`Loose matches found for ${normalizedIngredientName}:`, matches);
-      return matches[0];
-  }
-
-  console.log(`No match found for ${normalizedIngredientName}`);
-  return null;
-}
 
   const ingredientRecords = await fetchIngredientRecordData(primaryIngredientSection);
   console.log('Ingredient records:', ingredientRecords);
-
+  
   let missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
     name => ingredientRecords.ingredientDidRefs[name] === null
   );
+  if (missingIngredientNames.length > 0) {
+    // Send the names of the missing ingredients through findBestMatch(ingredientName) to get the best match for each
+    const bestMatches = await Promise.all(
+      missingIngredientNames.map(name => findBestMatch(name))
+    );
+    console.log('Best matches for missing ingredients:', bestMatches);
 
-  // Send the names of the missing ingredients through findBestMatch(ingredientName) to get the best match for each
-  const bestMatches = await Promise.all(
-    missingIngredientNames.map(name => findBestMatch(name))
-  );
-  console.log('Best matches for missing ingredients:', bestMatches);
+    // Assign matches and update ingredientDidRefs
+    bestMatches.forEach((match, index) => {
+      if (match) {
+        const name = missingIngredientNames[index];
+        ingredientDidRefs[name] = match.oip.didTx;
+        nutritionalInfo.push({
+          ingredientName: match.data.basic.name,
+          nutritionalInfo: match.data.nutritionalInfo || {},
+          ingredientSource: match.data.basic.webUrl,
+          ingredientDidRef: match.oip.didTx
+        });
+      }
+    });
 
-  // Assign matches and update ingredientDidRefs
-  bestMatches.forEach((match, index) => {
-    if (match) {
-      const name = missingIngredientNames[index];
-      ingredientDidRefs[name] = match.oip.didTx;
-      nutritionalInfo.push({
-        ingredientName: match.data.basic.name,
-        nutritionalInfo: match.data.nutritionalInfo || {},
-        ingredientSource: match.data.basic.webUrl,
-        ingredientDidRef: match.oip.didTx
-      });
-    }
-  });
+    // Remove matched names from missingIngredientNames
+    let matchedNames = bestMatches
+      .map((match, index) => (match ? missingIngredientNames[index] : null))
+      .filter(name => name !== null);
+    missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
 
-  // Remove matched names from missingIngredientNames
-  let matchedNames = bestMatches
-    .map((match, index) => (match ? missingIngredientNames[index] : null))
-    .filter(name => name !== null);
-  missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
+    const nutritionalInfoArray = await Promise.all(
+      missingIngredientNames.map(name => createNewNutritionalInfoRecord(name, blockchain))
+    );
 
-  const nutritionalInfoArray = await Promise.all(
-    missingIngredientNames.map(name => createNewNutritionalInfoRecord(name))
-  );
-  
+    // Restart the function now that all ingredients have nutritional info
+    return await fetchParsedRecipeData(url, scrapeId, options);
+  }
   // Check for empty values in ingredientUnits and assign standard_unit from nutritionalInfoArray
   missingIngredientNames.forEach((name, index) => {
     const trimmedName = name.trim().replace(/,$/, '');
@@ -2245,49 +2556,36 @@ function findBestMatch(ingredientName) {
     // Extract prep time, cook time, total time, cuisine, and course
 
     const prepTimeMatch = $('.wprm-recipe-prep_time').text().trim().match(/(\d+)\s*mins?/i);
-    const prepTime = prepTimeMatch ? parseInt(prepTimeMatch[1], 10) : null;
+    const prep_time_mins = prepTimeMatch ? parseInt(prepTimeMatch[1], 10) : null;
 
     const cookTimeMatch = $('.wprm-recipe-cook_time').text().trim().match(/(\d+)\s*mins?/i);
-    const cookTime = cookTimeMatch ? parseInt(cookTimeMatch[1], 10) : null;
+    const cook_time_mins = cookTimeMatch ? parseInt(cookTimeMatch[1], 10) : null;
 
     const totalTimeMatch = $('.wprm-recipe-total_time').text().trim().match(/(\d+)\s*mins?/i);
-    const totalTime = totalTimeMatch ? parseInt(totalTimeMatch[1], 10) : null;
+    const total_time_mins = totalTimeMatch ? parseInt(totalTimeMatch[1], 10) : null;
 
-    const servingsStr = $('#wprm-recipe-container-10480').attr('data-servings');
-    const servings = servingsStr ? parseInt(servingsStr, 10) : null;
+    let servingsStr = $('#wprm-recipe-container-10480').attr('data-servings');
+    // Fallback if data-servings is not found
+    if (!servingsStr) {
+      servingsStr = $('[class*="wprm-recipe-servings"]').text().trim() || null;
+    }
+    // Extract numerical value from servingsStr if possible
+    const servings = servingsStr ? parseInt(servingsStr.match(/\d+/)?.[0], 10) : null;
 
-    const cuisine = $('.tmd-meta_single:contains("Cuisine")')
-    .next()
-    .text()
-    .trim() || null;
-  const course = $('.tmd-meta_single:contains("Course")')
-    .next()
-    .text()
-    .trim() || null;
+    const cuisine = $('.wprm-recipe-cuisine').text().trim() || null;
+    const course = $('.wprm-recipe-course').text().trim() || null;
 
 
     // Extract notes
     const notes = $('.wprm-recipe-notes').text().trim() || null;
 
-
-    // Extract description
-    // const description = $('p').first().text().trim() || null;
-
-    // Extract image
-    // const image = $('.wp-block-image img').attr('src') || null;
-
-
-
-
     console.log('Missing Ingredients:', missingIngredientNames);
-    console.log('Nutritional Info Array:', nutritionalInfoArray);
+    // console.log('Nutritional Info Array:', nutritionalInfoArray);
  
     console.log('Original Ingredient Names:', ingredientNames);
 console.log('Units Before Assignment:', ingredientUnits);
 console.log('Amounts Before Assignment:', ingredientAmounts);
-
-
-
+console.log('Ingredient Did Refs:', ingredientRecords);
 
   // Normalize all ingredient names in `ingredientNames` upfront
   const normalizedIngredientNames = ingredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase());
@@ -2324,70 +2622,167 @@ console.log('Amounts Before Assignment:', ingredientAmounts);
     }
   });
 
+let ingredientDRefs = [];
+ingredientNames.forEach((name, index) => {
+  // get the ingredientDidRef for each ingredient and put it in an array so that we can use it in the recipeData object
+  const ingredientDidRef = ingredientRecords.ingredientDidRefs[name] || null;
+  ingredientDRefs.push(ingredientDidRef);
+  console.log(`Ingredient DID Ref for ${name}:`, ingredientDidRef);
+});
+
+console.log('Final Units:', ingredientUnits);
+console.log('Final Amounts:', ingredientAmounts);
+
 
 console.log('Units After Assignment:', ingredientUnits);
 console.log('Amounts After Assignment:', ingredientAmounts);
+
+const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1) || Date.now() / 1;
+     
     
     // Assign to recipeData
     const recipeData = {
-      title: metadata.ogTitle || metadata.title || null,
-      date: metadata.publishedTime || null,
-      author: metadata.author || null,
-      image: metadata.ogImage || null,
-      ingredients: {
-        amounts: ingredientAmounts.length ? ingredientAmounts : null,
-        units: ingredientUnits.length ? ingredientUnits : null,
-        names: ingredientNames.length ? ingredientNames : null
+      basic: {
+        name: metadata.ogTitle || metadata.title || null,
+        language: "En",
+        date: recipeDate,
+        description,
+        webUrl: url || null,
+        nsfw: false,
+        // tagItems: [],
       },
-      instructions: instructions.length ? instructions : null,
-      servings,
-      prepTime,
-      cookTime,
-      totalTime,
-      notes,
-      description,
-      url: url || null
+      recipe: {
+        prep_time_mins,
+        cook_time_mins,
+        total_time_mins,
+        servings,
+        ingredient_amount: ingredientAmounts.length ? ingredientAmounts : null,
+        ingredient_unit: ingredientUnits.length ? ingredientUnits : null,
+        ingredient: ingredientDRefs,
+        instructions: instructions.length ? instructions : null,
+        notes,
+        cuisine,
+        course,
+        author: metadata.author || null
+      },
+      image: {
+        webUrl: imageUrl,
+        // contentType: imageFileType
+      },
     };
 
-    console.log('Recipe data:', recipeData);
+    // TO DO, use this so that it doesnt break if there is no image included
+    // if (articleData.embeddedImage) {
+    //   recordToPublish.post.featuredImage = 
+    //     {
+    //       "basic": {
+    //         "name": articleData.title,
+    //         "language": "en",
+    //         "nsfw": false,
+    //         // "urlItems": [
+    //         //   {
+    //         //     "associatedUrlOnWeb": {
+    //         //       "url": articleData.embeddedImage
+    //         //     }
+    //         //   }
+    //         // ]
+    //       },
+    //       // "associatedUrlOnWeb": {
+    //       //   "url": articleData.embeddedImageUrl
+    //       // },
+    //       "image": {
+    //         "webUrl": articleData.embeddedImageUrl,
+    //         // "bittorrentAddress": imageBittorrentAddress,
+    //         "height": imageHeight,
+    //         "width": imageWidth,
+    //         "size": imageSize,
+    //         "contentType": imageFileType
+    //       }
+    //     }
+      
+    // }
 
-    ongoingScrapes.delete(scrapeId); // Clear completed scrape
+
+
+// console.log('nutritionalInfo:', nutritionalInfo);
+    console.log('Recipe data:', recipeData);
+    recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain)
+    console.log('Recipe record:', recipeRecord);
+
+    cleanupScrape(scrapeId); // Clear completed scrape
+
+
+  }
   } catch (error) {
     console.error('Error fetching parsed recipe data:', error);
 
-    ongoingScrapes.delete(scrapeId);
+    cleanupScrape(scrapeId);
   }
 }
 
-async function fetchTweetDetails(embeddedTweets) {
-  const twitterBearerToken = process.env.TWITTER_BEARER_TOKEN;
-
-  if (embeddedTweets.length === 0) {
-    console.log('No valid tweet IDs found.');
-    return [];
-  }
-
-  console.log('Tweet IDs:', embeddedTweets);
-
-  try {
-    const response = await axios.get(`https://api.twitter.com/2/tweets`, {
-      headers: {
-        'Authorization': `Bearer ${twitterBearerToken}`,
-      },
-      params: {
-        ids: embeddedTweets.join(','),  // Join the tweet IDs into a comma-separated list
-        'tweet.fields': 'attachments,created_at,author_id',
-        'expansions': 'attachments.media_keys',
-        'media.fields': 'url,preview_image_url,type'
-      }
-    });
-
-    // Process and return the tweet details, including media
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching tweet details:', error.response ? error.response.data : error.message);
-    return [];
-  }
+async function fetchTweetDetails(tweetUrl) {
+    try {
+        // Update URL format for X.com if needed
+        if (tweetUrl.includes('twitter.com')) {
+            tweetUrl = tweetUrl.replace('twitter.com', 'x.com');
+        }
+        
+        console.log(`Fetching tweet from: ${tweetUrl}`);
+        
+        // Use a browser-like user agent to avoid detection
+        const response = await axios.get(tweetUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            },
+            timeout: 10000,
+            maxRedirects: 5
+        });
+        
+        if (response.status !== 200) {
+            throw new Error(`Failed to fetch tweet. Status: ${response.status}`);
+        }
+        
+        const $ = cheerio.load(response.data);
+        
+        // Updated selectors for X.com
+        const tweetText = $('article[data-testid="tweet"] div[data-testid="tweetText"]').text().trim();
+        const tweetAuthor = $('article[data-testid="tweet"] div[data-testid="User-Name"] a span').first().text().trim();
+        const tweetDate = $('article[data-testid="tweet"] time').attr('datetime');
+        
+        // Try to get images from the tweet
+        const imageUrls = [];
+        $('article[data-testid="tweet"] img[alt="Image"]').each((i, img) => {
+            const imgSrc = $(img).attr('src');
+            if (imgSrc && !imgSrc.includes('profile') && !imageUrls.includes(imgSrc)) {
+                imageUrls.push(imgSrc);
+            }
+        });
+        
+        console.log(`Tweet fetched successfully: ${tweetText.substring(0, 50)}...`);
+        
+        return {
+            text: tweetText,
+            author: tweetAuthor,
+            date: tweetDate,
+            url: tweetUrl,
+            images: imageUrls
+        };
+    } catch (error) {
+        console.error(`Error fetching tweet: ${error.message}`);
+        
+        // Check for rate limiting
+        if (error.response && error.response.status === 429) {
+            console.log('Rate limited by Twitter. Adding delay before retrying...');
+            await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay
+            return fetchTweetDetails(tweetUrl); // Retry
+        }
+        
+        throw new Error(`Failed to retrieve tweet details: ${error.message}`);
+    }
 }
 
 async function manualScrapeWithSelectors($, selectors) {
@@ -2414,55 +2809,8 @@ function generateScrapeId(url, userId) {
   return crypto.createHash('sha256').update(data).digest('hex');
 }
 
-// router.post('/article/stream', authenticateToken, async (req, res) => {
-// router.post('/article/stream', async (req, res) => {
-//   const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body; // Extract HTML and URL from request body
-//   // const userId = req.user.userId; // Extract userId from the decoded token
-  
-//   if (!html || !url || !userId) {
-//     return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
-//   }
-  
-//   console.log('User ID:', userId);
-//   console.log('Received scraping request...', req.body.url);
-//   console.log('Total screenshots received:', screenshots?.length);
-//   // Generate a unique identifier for this scrape request
-//   const scrapeId = generateScrapeId(url, userId);
-//   console.log('Scrape ID:', scrapeId);
-//   // Set SSE headers for streaming data
-//   if (!ongoingScrapes.has(scrapeId)) {
-//     res.setHeader('Content-Type', 'text/event-stream');
-//     res.setHeader('Cache-Control', 'no-cache');
-//     res.setHeader('Connection', 'keep-alive');
-//   }
-//   res.flushHeaders(); // Flush headers to establish the SSE connection
-
-//   // Keep the connection alive by sending periodic "ping" events
-//   const keepAliveInterval = setInterval(() => {
-//     res.write(`event: ping\n`);
-//     res.write(`data: "Keep connection alive"\n\n`);
-//   }, 15000); // Every 15 seconds
-
-//   try {
-//     // Start scraping and stream data back piece by piece
-//     await fetchParsedArticleData(url, html, scrapeId, screenshotBase64, screenshots, totalHeight, res);
-//   } catch (error) {
-//     console.error('Error processing scraping:', error);
-//     res.write(`event: error\n`);
-//     res.write(`data: ${JSON.stringify({ error: 'Failed to scrape article.' })}\n\n`);
-//     res.end(); // End the stream in case of an error
-//   }
-
-//   // When the client disconnects
-//   req.on('close', () => {
-//     console.log('Client disconnected from stream.');
-//     clearInterval(keepAliveInterval); // Clear the keep-alive interval
-//     res.end(); // Close the SSE connection
-//   });
-// });
-
 router.post('/article', async (req, res) => {
-  const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body;
+  const { html, url, userId, screenshotBase64, screenshots, totalHeight, blockchain = 'arweave' } = req.body;
 
   if (!html || !url || !userId) {
     return res.status(400).json({ error: 'HTML, URL, and User ID are required' });
@@ -2472,7 +2820,7 @@ router.post('/article', async (req, res) => {
   console.log('Scrape ID:', scrapeId);
 
   // Respond immediately with the scrapeId
-  res.status(200).json({ scrapeId });
+  res.status(200).json({ scrapeId, blockchain });
 
   // Initialize the stream if not already present
   if (!ongoingScrapes.has(scrapeId)) {
@@ -2482,11 +2830,14 @@ router.post('/article', async (req, res) => {
   try {
     // Begin fetching and storing the results to stream later
     const streamUpdates = (event, data) => {
+      console.log('sending event over stream', event, data);
       const streamData = ongoingScrapes.get(scrapeId);
       if (streamData) {
-          streamData.data.push({ event, data });
+        streamData.data.push({ event, data });
+        console.log('streamData', streamData);
           streamData.clients.forEach(client => {
               if (typeof client.write === 'function') {
+                console.log('writing event to client', event, data);
                   client.write(`event: ${event}\n`);
                   client.write(`data: ${JSON.stringify({ type: event, data })}\n\n`);
                   client.flush && client.flush(); // Ensure data is flushed to the client
@@ -2506,7 +2857,7 @@ router.post('/article', async (req, res) => {
       screenshotBase64, 
       screenshots, 
       totalHeight, 
-      { sendUpdate: streamUpdates, res }
+      { sendUpdate: streamUpdates, res, blockchain }
     );
 
   } catch (error) {
@@ -2518,13 +2869,13 @@ router.post('/article', async (req, res) => {
         client.write(`data: ${JSON.stringify({ message: 'Failed to fetch article data.' })}\n\n`);
         client.end(); // Close SSE stream
       });
-      ongoingScrapes.delete(scrapeId); // Clean up
+      cleanupScrape(scrapeId); // Clean up
     }
   }
 });
 
 router.post('/recipe', async (req, res) => {
-  const { html, url, userId, screenshotBase64, screenshots, totalHeight } = req.body;
+  const { html, url, screenshots, totalHeight, userId, blockchain = 'arweave' } = req.body;
 
   if (!url || !userId) {
     return res.status(400).json({ error: 'URL and User ID are required' });
@@ -2534,42 +2885,55 @@ router.post('/recipe', async (req, res) => {
   console.log('Scrape ID:', scrapeId);
 
   // Respond immediately with the scrapeId
-  res.status(200).json({ scrapeId });
+  res.status(200).json({ scrapeId, blockchain });
 
   // Initialize the stream if not already present
   if (!ongoingScrapes.has(scrapeId)) {
     ongoingScrapes.set(scrapeId, { clients: [], data: [] });
   }
+      const streamData = ongoingScrapes.get(scrapeId);
+
+
+  const sendUpdate = (event, data) => {
+    console.log('sendUpdate', event, data);
+    if (streamData) {
+        streamData.data.push({ event, data });
+        streamData.clients.forEach((client) => {
+            client.write(`event: ${event}\n`);
+            client.write(`data: ${JSON.stringify(data)}\n\n`);
+            client.flush && client.flush();
+        });
+    }
+};
 
   try {
     // Begin fetching and storing the results to stream later
-    const streamUpdates = (event, data) => {
-      const streamData = ongoingScrapes.get(scrapeId);
-      if (streamData) {
-          streamData.data.push({ event, data });
-          streamData.clients.forEach(client => {
-              if (typeof client.write === 'function') {
-                  client.write(`event: ${event}\n`);
-                  client.write(`data: ${JSON.stringify({ type: event, data })}\n\n`);
-                  client.flush && client.flush();
-                  console.log('Sent event:', event, data);
-              } else {
-                  console.warn('client.write is not a function');
-              }
-          }
-          );
-      }
-  }
+  //   const streamUpdates = (event, data) => {
+  //     const streamData = ongoingScrapes.get(scrapeId);
+  //     if (streamData) {
+  //         streamData.data.push({ event, data });
+  //         streamData.clients.forEach(client => {
+  //             if (typeof client.write === 'function') {
+  //                 client.write(`event: ${event}\n`);
+  //                 client.write(`data: ${JSON.stringify({ type: event, data })}\n\n`);
+  //                 client.flush && client.flush();
+  //                 console.log('Sent event:', event, data);
+  //             } else {
+  //                 console.warn('client.write is not a function');
+  //             }
+  //         }
+  //         );
+  //     }
+  // }
 
     // Fetch recipe data and stream updates
     await fetchParsedRecipeData(
       url, 
       html,
       scrapeId, 
-      screenshotBase64, 
       screenshots, 
-      totalHeight, 
-      { sendUpdate: streamUpdates, res }
+      totalHeight,
+      { sendUpdate, res, blockchain }
     );
 
   } catch (error) {
@@ -2581,7 +2945,7 @@ router.post('/recipe', async (req, res) => {
         client.write(`data: ${JSON.stringify({ message: 'Failed to fetch recipe data.' })}\n\n`);
         client.end(); // Close SSE stream
       });
-      ongoingScrapes.delete(scrapeId); // Clean up
+      cleanupScrape(scrapeId); // Clean up
     }
   }
 })
@@ -2631,5 +2995,52 @@ router.post('/recipe', async (req, res) => {
 //     }
 //   }
 // });
+
+// In your open-stream endpoint
+router.get('/open-stream', (req, res) => {
+  const streamId = req.query.streamId;
+  
+  // Set up SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no' // Important for nginx proxying
+  });
+  
+  // Send an initial ping to establish the connection
+  res.write(`event: ping\n`);
+  res.write(`data: ${JSON.stringify({timestamp: Date.now()})}\n\n`);
+  
+  // Setup periodic pings to keep the connection alive
+  const pingInterval = setInterval(() => {
+    res.write(`event: ping\n`);
+    res.write(`data: ${JSON.stringify({timestamp: Date.now()})}\n\n`);
+  }, 30000); // Every 30 seconds
+  
+  // Store the client connection
+  if (!ongoingScrapes.has(streamId)) {
+    ongoingScrapes.set(streamId, []);
+  }
+  ongoingScrapes.get(streamId).push(res);
+  
+  // Clean up on client disconnect
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    const clients = ongoingScrapes.get(streamId);
+    if (clients) {
+      const index = clients.indexOf(res);
+      if (index !== -1) {
+        clients.splice(index, 1);
+      }
+      
+      // If no more clients, clean up resources
+      if (clients.length === 0) {
+        cleanupScrape(streamId);
+        console.log(`No more clients for streamId: ${streamId}. Cleaning up.`);
+      }
+    }
+  });
+});
 
 module.exports = router;
