@@ -42,34 +42,29 @@ class PublisherManager {
     }
 
     /**
-     * Publish to Arweave using Turbo SDK
+     * Publish to Arweave using Turbo via arweaveWallet wrapper
      */
     async publishToArweave(data, tags, waitForConfirmation) {
         console.log('Publishing to Arweave via Turbo...');
-        const turbo = await getTurboArweave();
         
-        // Ensure data is a buffer
-        const dataBuffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
-        
-        // Convert tags to Turbo format
-        const turboTags = tags.map(tag => ({
-            name: tag.name,
-            value: tag.value
-        }));
-
-        const receipt = await turbo.upload({
-            data: dataBuffer,
-            dataItemOpts: {
-                tags: turboTags
-            }
-        });
-
-        return {
-            id: receipt.id,
-            blockchain: 'arweave',
-            provider: 'turbo',
-            url: `https://arweave.net/${receipt.id}`
-        };
+        try {
+            const result = await arweaveWallet.uploadWithConfirmation(
+                data,
+                { tags },
+                waitForConfirmation
+            );
+            
+            return {
+                id: result.id,
+                blockchain: 'arweave',
+                provider: 'turbo',
+                url: `https://arweave.net/${result.id}`
+            };
+        } catch (error) {
+            console.error('Error in Turbo upload:', error);
+            console.error('Error details:', error.message);
+            throw error;
+        }
     }
 
     /**
