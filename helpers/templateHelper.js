@@ -5,7 +5,7 @@ const { exec } = require('child_process');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
 const { signMessage, txidToDid, getTurboArweave, getTemplateTxidByName } = require('./utils');
-const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, searchCreatorByAddress, indexRecord } = require('./elasticsearch');
+const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, searchCreatorByAddress, indexRecord, elasticClient } = require('./elasticsearch');
 const {getCurrentBlockHeight} = require('../helpers/arweave');
 const arweaveWallet = require('./arweave-wallet');
 const publisherManager = require('./publisher-manager');
@@ -622,6 +622,33 @@ async function publishNewTemplate(template, blockchain = 'arweave') {
             waitForConfirmation: true
         });
 
+        // Get current block height for indexing
+        const currentBlock = await getCurrentBlockHeight();
+        
+        // Prepare template data structure for indexing
+        const templateData = {
+            TxId: publishResult.id,
+            creator: myAddress,
+            creatorSig: creatorSig,
+            template: templateName,
+            fields: templateString
+        };
+
+        const templateToIndex = {
+            data: templateData,
+            oip: {
+                didTx: `did:arweave:${publishResult.id}`,
+                inArweaveBlock: currentBlock, // Use current block height as estimate
+                indexedAt: new Date().toISOString(),
+                recordStatus: "pending confirmation in Arweave",
+                ver: "0.8.0",
+                creator: {
+                    didAddress: `did:arweave:${myAddress}`,
+                    creatorSig: creatorSig
+                }
+            }
+        };
+
         return {
             transactionId: publishResult.id,
             didTx: `did:arweave:${publishResult.id}`,
@@ -630,11 +657,51 @@ async function publishNewTemplate(template, blockchain = 'arweave') {
             url: publishResult.url,
             tags: tags,
             dataForSignature: dataForSignature,
-            creatorSig: creatorSig
+            creatorSig: creatorSig,
+            templateToIndex: templateToIndex
         };
 
     } catch (error) {
         console.error('Error publishing template:', error);
+        throw error;
+    }
+}
+
+/**
+ * Index a template to Elasticsearch with pending status
+ */
+async function indexTemplate(templateToIndex) {
+    try {
+        console.log('Indexing template with pending status:', templateToIndex.oip.didTx);
+        
+        const existingTemplate = await elasticClient.exists({
+            index: 'templates',
+            id: templateToIndex.oip.didTx
+        });
+        
+        if (existingTemplate.body) {
+            // Update existing template
+            const response = await elasticClient.update({
+                index: 'templates',
+                id: templateToIndex.oip.didTx,
+                body: {
+                    doc: templateToIndex
+                },
+                refresh: 'wait_for'
+            });
+            console.log(`Template updated successfully: ${templateToIndex.oip.didTx}`, response.result);
+        } else {
+            // Create new template
+            const response = await elasticClient.index({
+                index: 'templates',
+                id: templateToIndex.oip.didTx,
+                body: templateToIndex,
+                refresh: 'wait_for'
+            });
+            console.log(`Template indexed successfully: ${templateToIndex.oip.didTx}`, response.result);
+        }
+    } catch (error) {
+        console.error(`Error indexing template ${templateToIndex.oip.didTx}:`, error);
         throw error;
     }
 }
@@ -1409,6 +1476,7 @@ module.exports = {
     resolveRecords,
     publishNewRecord,
     publishNewTemplate,
+    indexTemplate,
     publishVideoFiles,
     publishArticleText,
     publishImage,

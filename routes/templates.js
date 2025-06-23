@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const { getTemplatesInDB } = require('../helpers/elasticsearch');
-const { publishNewTemplate } = require('../helpers/templateHelper');
+const { publishNewTemplate, indexTemplate } = require('../helpers/templateHelper');
 
 
 router.get('/', async (req, res) => {
@@ -110,8 +110,27 @@ router.post('/newTemplate', authenticateToken, async (req, res) => {
         console.log('POST /api/templates/newTemplate', req.body)
         const template = req.body;
         const blockchain = req.body.blockchain || 'arweave'; // Accept blockchain parameter
+        
+        // Publish template to Arweave
         const newTemplate = await publishNewTemplate(template, blockchain);
-        res.status(200).json({ newTemplate, blockchain });
+        
+        // Index template to Elasticsearch with pending status
+        if (newTemplate.templateToIndex) {
+            await indexTemplate(newTemplate.templateToIndex);
+            console.log('Template indexed with pending status:', newTemplate.didTx);
+        }
+        
+        res.status(200).json({ 
+            newTemplate: {
+                transactionId: newTemplate.transactionId,
+                didTx: newTemplate.didTx,
+                blockchain: newTemplate.blockchain,
+                provider: newTemplate.provider,
+                url: newTemplate.url,
+                indexedToPendingStatus: true
+            }, 
+            blockchain 
+        });
     } catch (error) {
         console.error('Error publishing template:', error);
         res.status(500).json({ error: 'Failed to publish template' });
