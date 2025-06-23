@@ -552,7 +552,18 @@ const getTemplatesInDB = async () => {
         });
         const templatesInDB = searchResponse.hits.hits.map(hit => hit._source);
         const qtyTemplatesInDB = templatesInDB.length;
-        const maxArweaveBlockInDB = Math.max(...templatesInDB.map(template => template.oip.inArweaveBlock)) || 0;
+        
+        // Filter out templates with "pending confirmation in Arweave" status when calculating max block height
+        const confirmedTemplates = templatesInDB.filter(template => 
+            template.oip.recordStatus !== "pending confirmation in Arweave"
+        );
+        const pendingTemplatesCount = templatesInDB.length - confirmedTemplates.length;
+        if (pendingTemplatesCount > 0) {
+            console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingTemplatesCount} pending templates from max block calculation`);
+        }
+        const maxArweaveBlockInDB = confirmedTemplates.length > 0 
+            ? Math.max(...confirmedTemplates.map(template => template.oip.inArweaveBlock)) || 0
+            : 0;
         const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity);
         const finalMaxArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
         console.log(getFileInfo(), getLineNumber(), 'qtyTemplatesInDB:', qtyTemplatesInDB, 'finalMaxArweaveBlock:', finalMaxArweaveBlock);
@@ -1238,7 +1249,18 @@ const getCreatorsInDB = async () => {
         } else {
             console.log(getFileInfo(), getLineNumber(),  'Creators found in DB:', creatorsInDB.length);
             const qtyCreatorsInDB = creatorsInDB.length;
-            const maxArweaveCreatorRegBlockInDB = Math.max(...creatorsInDB.map(creator => creator.oip.inArweaveBlock));
+            
+            // Filter out creators with "pending confirmation in Arweave" status when calculating max block height
+            const confirmedCreators = creatorsInDB.filter(creator => 
+                creator.oip.recordStatus !== "pending confirmation in Arweave"
+            );
+            const pendingCreatorsCount = creatorsInDB.length - confirmedCreators.length;
+            if (pendingCreatorsCount > 0) {
+                console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingCreatorsCount} pending creators from max block calculation`);
+            }
+            const maxArweaveCreatorRegBlockInDB = confirmedCreators.length > 0 
+                ? Math.max(...confirmedCreators.map(creator => creator.oip.inArweaveBlock))
+                : 0;
             // console.log(getFileInfo(), getLineNumber(),  'maxArweaveCreatorRegBlockInDB:', maxArweaveCreatorRegBlockInDB);
             return { qtyCreatorsInDB, maxArweaveCreatorRegBlockInDB, creatorsInDB };
         }
@@ -1302,7 +1324,18 @@ const getRecordsInDB = async () => {
                     publicKey
                 };
                 const qtyRecordsInDB = records.length;
-                const maxArweaveBlockInDB = Math.max(...records.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)));
+                
+                // Filter out records with "pending confirmation in Arweave" status when calculating max block height
+                const confirmedRecords = records.filter(record => 
+                    record.oip.recordStatus !== "pending confirmation in Arweave"
+                );
+                const pendingRecordsCount = records.length - confirmedRecords.length;
+                if (pendingRecordsCount > 0) {
+                    console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingRecordsCount} pending records from max block calculation`);
+                }
+                const maxArweaveBlockInDB = confirmedRecords.length > 0 
+                    ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
+                    : 0;
                 // console.log(getFileInfo(), getLineNumber(), 'maxArweaveBlockInDB for records:', maxArweaveBlockInDB);
                 const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity) || (maxArweaveBlockInDB === -0) || (maxArweaveBlockInDB === null);
                 const finalMaxRecordArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
