@@ -58,8 +58,8 @@ RUN npm install --verbose --ignore-scripts || \
 # Try to rebuild native modules, but don't fail if some can't be built
 RUN npm rebuild || echo "Some native modules failed to rebuild, continuing..."
 
-# Move node_modules to parent directory
-RUN mv node_modules ../
+# Install webpack and webpack-cli before moving node_modules
+RUN npm install webpack@5.75.0 webpack-cli@5.0.1 --no-save
 
 # Copy wait-for-it.sh script and make it executable
 COPY wait-for-it.sh wait-for-it.sh
@@ -77,11 +77,11 @@ COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
 
-# Install webpack and webpack-cli for building React bundle
-RUN npm install webpack@5.75.0 webpack-cli@5.0.1 --no-save
-
-# Build React frontend bundle using direct webpack path
+# Build React frontend bundle using local webpack
 RUN ./node_modules/.bin/webpack --config webpack.config.js
+
+# Move node_modules to parent directory after building
+RUN mv node_modules ../
 
 # Copy the .env file if it exists
 COPY .env .env
