@@ -6,6 +6,18 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  sources?: Source[];
+  context_used?: boolean;
+  search_results_count?: number;
+}
+
+interface Source {
+  type: string;
+  title: string;
+  creator: string;
+  didTx: string;
+  recordType: string;
+  preview: string;
 }
 
 interface Voice {
@@ -324,7 +336,10 @@ export default function VoiceAssistant() {
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.response_text,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        sources: data.sources || [],
+        context_used: data.context_used || false,
+        search_results_count: data.search_results_count || 0
       };
       
       setTranscript(prev => [...prev, assistantMessage]);
@@ -551,20 +566,56 @@ export default function VoiceAssistant() {
                   flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}
                 `}
               >
-                <div 
-                  className={`
-                    max-w-[70%] px-4 py-2 rounded-lg
-                    ${message.role === 'user' 
-                      ? 'bg-blue-500 text-white' 
-                      : 'bg-white text-gray-800 border border-gray-200'
-                    }
-                  `}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <span className="text-xs opacity-70">
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
+                               <div 
+                 className={`
+                   max-w-[70%] px-4 py-2 rounded-lg
+                   ${message.role === 'user' 
+                     ? 'bg-blue-500 text-white' 
+                     : 'bg-white text-gray-800 border border-gray-200'
+                   }
+                 `}
+               >
+                 <p className="text-sm">{message.content}</p>
+                 
+                 {/* RAG Sources for assistant messages */}
+                 {message.role === 'assistant' && message.sources && message.sources.length > 0 && (
+                   <div className="mt-2 pt-2 border-t border-gray-200">
+                     <p className="text-xs text-gray-600 mb-1">
+                       📚 Sources ({message.search_results_count} found):
+                     </p>
+                     <div className="space-y-1">
+                       {message.sources.slice(0, 3).map((source, idx) => (
+                         <div key={idx} className="text-xs bg-gray-50 p-2 rounded">
+                           <div className="font-medium">{source.title}</div>
+                           <div className="text-gray-500">
+                             by {source.creator} • {source.recordType}
+                           </div>
+                           {source.preview && (
+                             <div className="text-gray-600 mt-1">{source.preview}</div>
+                           )}
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 )}
+                 
+                 {/* Context indicator */}
+                 {message.role === 'assistant' && message.context_used && (
+                   <div className="mt-2 flex items-center text-xs text-green-600">
+                     <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                     Context from knowledge base used
+                   </div>
+                 )}
+                 
+                 <div className="flex justify-between items-center mt-2">
+                   <span className="text-xs opacity-70">
+                     {new Date(message.timestamp).toLocaleTimeString()}
+                   </span>
+                   {message.role === 'assistant' && !message.context_used && (
+                     <span className="text-xs text-yellow-600">No context found</span>
+                   )}
+                 </div>
+               </div>
               </div>
             ))
           )}

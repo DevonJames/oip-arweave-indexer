@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const socketManager = require('../socket/socketManager');
+const ragService = require('../helpers/ragService'); // Add RAG service
 
 const router = express.Router();
 const mediaDirectory = path.join(__dirname, '../media');
@@ -13,6 +14,37 @@ router.use(express.static(path.join(__dirname, '../public')));
 
 router.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+// Simple RAG test endpoint
+router.post('/test-rag', async (req, res) => {
+    try {
+        const { question = "What records do I have?" } = req.body;
+        
+        console.log(`[API] Testing RAG with question: ${question}`);
+        
+        const ragResponse = await ragService.query(question, {
+            model: 'llama3.2:3b',
+            searchParams: { limit: 3 }
+        });
+        
+        res.json({
+            success: true,
+            question,
+            answer: ragResponse.answer,
+            sources: ragResponse.sources,
+            context_used: ragResponse.context_used,
+            search_results_count: ragResponse.search_results_count,
+            model: ragResponse.model
+        });
+        
+    } catch (error) {
+        console.error('[API] RAG test error:', error);
+        res.status(500).json({
+            error: 'RAG test failed',
+            details: error.message
+        });
+    }
 });
 
 // const ongoingScrapes = new Map();
