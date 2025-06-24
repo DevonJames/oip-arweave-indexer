@@ -1,5 +1,4 @@
 version: "2"
-authtoken_from_env: true
 tunnels:
   oip-gpu:
     proto: http
