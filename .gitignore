@@ -15,4 +15,6 @@ media
 **-fromOlderServer.yml
 **-fromOlderServer
 **-fromOldServer
+text-generator/packages
+text-generator/myenv
 

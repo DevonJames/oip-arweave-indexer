@@ -2028,6 +2028,7 @@ async function processNewTemplate(transaction) {
             didTx: 'did:arweave:' + transaction.transactionId,
             inArweaveBlock: inArweaveBlock,
             indexedAt: new Date().toISOString(),
+            recordStatus: "original",
             ver: transaction.ver,
             creator: {
                 creatorHandle: creatorInfo.data.creatorHandle,
