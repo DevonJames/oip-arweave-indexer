@@ -60,13 +60,7 @@ RUN mkdir -p /root/.cache/torch/hub
 RUN mkdir -p /root/.local/share/tts
 
 # Pre-download Silero models for faster startup
-RUN python3 -c "
-import torch
-import torchaudio
-# Download Silero TTS models
-torch.hub.load(repo_or_dir='snakers4/silero-models', model='silero_tts', language='en', speaker='v3_en')
-print('GPU TTS models pre-loaded successfully')
-" || echo "Failed to pre-load models, will download on first use"
+RUN python3 download_models.py || echo "Failed to pre-load models, will download on first use"
 
 # Expose port
 EXPOSE 8005
