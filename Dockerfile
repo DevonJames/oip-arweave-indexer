@@ -47,12 +47,12 @@ COPY package*.json ./
 RUN echo "python=/usr/bin/python3" > .npmrc && \
     echo "node_gyp=/usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js" >> .npmrc
 
-# Install dependencies with progressive fallback strategy
-RUN npm install --production --verbose --ignore-scripts || \
+# Install dependencies with progressive fallback strategy (including dev deps for frontend build)
+RUN npm install --verbose --ignore-scripts || \
     (echo "First install failed, trying without optional dependencies..." && \
-     npm install --production --verbose --ignore-scripts --no-optional) || \
+     npm install --verbose --ignore-scripts --no-optional) || \
     (echo "Second install failed, trying basic install..." && \
-     npm install --production --ignore-scripts --no-optional --no-fund --no-audit)
+     npm install --ignore-scripts --no-optional --no-fund --no-audit)
 
 # Try to rebuild native modules, but don't fail if some can't be built
 RUN npm rebuild || echo "Some native modules failed to rebuild, continuing..."
@@ -75,6 +75,9 @@ COPY routes ./routes
 COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
+
+# Build React frontend bundle
+RUN npm run build-react
 
 # Copy the .env file if it exists
 COPY .env .env
