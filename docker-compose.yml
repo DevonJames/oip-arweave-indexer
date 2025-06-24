@@ -142,7 +142,7 @@ services:
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
       - STT_SERVICE_URL=http://stt-service-gpu:8003
-      - TTS_SERVICE_URL=http://tts-service-gpu:8005
+      - TTS_SERVICE_URL=http://tts-service-gpu:5002
       - TEXT_GENERATOR_URL=http://text-generator:8081
     depends_on:
       - elasticsearch
@@ -176,7 +176,7 @@ services:
       context: ./text-to-speech
       dockerfile: Dockerfile.gpu
     ports:
-      - "8005:8005"
+      - "5002:5002"
     environment:
       - CUDA_VISIBLE_DEVICES=0
       - TTS_GPU_ENABLED=true

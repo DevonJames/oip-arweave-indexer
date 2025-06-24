@@ -32,7 +32,7 @@ HUGGINGFACE_TOKEN=
 
 # Voice Services Configuration
 STT_SERVICE_URL=http://stt-service:8003
-TTS_SERVICE_URL=http://tts-service:8005
+TTS_SERVICE_URL=http://tts-service:5002
 TEXT_GENERATOR_URL=http://text-generator:8081
 
 # Whisper STT Configuration

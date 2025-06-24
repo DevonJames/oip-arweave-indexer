@@ -20,8 +20,6 @@ RUN apt-get update && apt-get install -y \
     cmake \
     git \
     curl \
-    ffmpeg \
-    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -34,7 +32,7 @@ RUN pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 
-# Install TTS dependencies with GPU support
+# Install core packages without complex ML dependencies
 RUN pip3 install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn==0.24.0 \
@@ -47,12 +45,11 @@ RUN pip3 install --no-cache-dir \
     numpy \
     scipy \
     librosa \
-    soundfile \
-    TTS==0.14.3
+    soundfile
 
-# Install additional high-quality TTS engines
+# Install lightweight neural TTS - try Silero directly
 RUN pip3 install --no-cache-dir \
-    silero-models
+    omegaconf || echo "omegaconf install failed, continuing..."
 
 # Copy service files
 COPY . .
@@ -65,11 +62,11 @@ RUN mkdir -p /root/.local/share/tts
 RUN python3 download_models.py || echo "Failed to pre-load models, will download on first use"
 
 # Expose port
-EXPOSE 8005
+EXPOSE 5002
 
 # Set environment variables for GPU
 ENV CUDA_VISIBLE_DEVICES=0
 ENV TTS_GPU_ENABLED=true
 
 # Run the service with GPU support
-CMD ["uvicorn", "tts_service_gpu:app", "--host", "0.0.0.0", "--port", "8005"] 
+CMD ["python3", "tts_service_gpu.py"] 
