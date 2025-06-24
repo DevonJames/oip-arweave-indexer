@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const axios = require('axios');
+const ragService = require('../helpers/ragService');
 const router = express.Router();
 
 // Configure multer for audio file uploads
@@ -181,30 +182,34 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             return res.status(400).json({ error: 'No text to process' });
         }
 
-        // Step 2: Generate text response using LLM
+        // Step 2: Generate text response using RAG (search + LLM)
         const {
             model = 'llama3.2:3b',
             voice_id = 'default',
             speed = 1.0,
-            return_audio = true
+            return_audio = true,
+            creator_filter = null,
+            record_type_filter = null,
+            tag_filter = null
         } = req.body;
 
-        const generateResponse = await axios.post(
-            `${TEXT_GENERATOR_URL}/generate`,
-            {
-                prompt: inputText,
-                model,
-                max_tokens: 512,
-                temperature: 0.7
-            },
-            { timeout: 60000 }
-        );
+        // Use RAG service to get context-aware response
+        const ragOptions = {
+            model,
+            searchParams: {
+                creatorHandle: creator_filter,
+                recordType: record_type_filter,
+                tags: tag_filter
+            }
+        };
 
-        const responseText = generateResponse.data.response || generateResponse.data.text;
+        const ragResponse = await ragService.query(inputText, ragOptions);
 
-        if (!responseText) {
+        if (!ragResponse.answer) {
             return res.status(500).json({ error: 'No response generated' });
         }
+
+        const responseText = ragResponse.answer;
 
         // Step 3: Convert response to speech if requested
         if (return_audio) {
@@ -222,7 +227,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     }
                 );
 
-                // Return combined response
+                // Return combined response with RAG metadata
                 res.json({
                     success: true,
                     input_text: inputText,
@@ -230,7 +235,10 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     model_used: model,
                     voice_id,
                     has_audio: true,
-                    engine_used: ttsResponse.headers['x-engine-used'] || 'unknown'
+                    engine_used: ttsResponse.headers['x-engine-used'] || 'unknown',
+                    sources: ragResponse.sources,
+                    context_used: ragResponse.context_used,
+                    search_results_count: ragResponse.search_results_count
                 });
 
                 // Note: In a production setup, you might want to:
@@ -248,17 +256,23 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     response_text: responseText,
                     model_used: model,
                     has_audio: false,
-                    tts_error: 'Speech synthesis failed'
+                    tts_error: 'Speech synthesis failed',
+                    sources: ragResponse.sources,
+                    context_used: ragResponse.context_used,
+                    search_results_count: ragResponse.search_results_count
                 });
             }
         } else {
-            // Text-only response
+            // Text-only response with RAG metadata
             res.json({
                 success: true,
                 input_text: inputText,
                 response_text: responseText,
                 model_used: model,
-                has_audio: false
+                has_audio: false,
+                sources: ragResponse.sources,
+                context_used: ragResponse.context_used,
+                search_results_count: ragResponse.search_results_count
             });
         }
 
@@ -333,6 +347,63 @@ router.get('/models', async (req, res) => {
         
         res.status(500).json({
             error: 'Failed to fetch STT models',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/voice/rag
+ * Direct RAG query without TTS (for testing and text-only use)
+ */
+router.post('/rag', async (req, res) => {
+    try {
+        const { 
+            text, 
+            model = 'llama3.2:3b',
+            creator_filter = null,
+            record_type_filter = null,
+            tag_filter = null,
+            date_start = null,
+            date_end = null,
+            max_results = 5
+        } = req.body;
+
+        if (!text || !text.trim()) {
+            return res.status(400).json({ error: 'Text query is required' });
+        }
+
+        // Configure RAG search parameters
+        const ragOptions = {
+            model,
+            searchParams: {
+                creatorHandle: creator_filter,
+                recordType: record_type_filter,
+                tags: tag_filter,
+                dateStart: date_start,
+                dateEnd: date_end,
+                limit: max_results
+            }
+        };
+
+        console.log(`[Voice RAG] Processing query: ${text}`);
+        const ragResponse = await ragService.query(text, ragOptions);
+
+        res.json({
+            success: true,
+            query: text,
+            answer: ragResponse.answer,
+            sources: ragResponse.sources,
+            context_used: ragResponse.context_used,
+            search_results_count: ragResponse.search_results_count,
+            model_used: ragResponse.model,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('RAG query error:', error.message);
+        res.status(500).json({
+            error: 'RAG query failed',
             details: error.message
         });
     }
