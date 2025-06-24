@@ -79,7 +79,7 @@ COPY ngrok ./ngrok
 
 # Build Next.js frontend (replaces webpack entirely)
 WORKDIR /usr/src/app/frontend
-RUN npm install && npm run build
+RUN npm ci && npm run build
 
 # Return to main app directory
 WORKDIR /usr/src/app
