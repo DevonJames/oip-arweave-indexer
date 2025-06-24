@@ -1,9 +1,9 @@
-FROM node:18-alpine
+FROM node:18-alpine3.20
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
 # Install necessary packages for all services
-RUN apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium cmake ffmpeg poppler-utils \
+RUN apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium cmake ffmpeg poppler-utils \
     openssl-dev \
     openssl-libs-static \
     libssl3 \
@@ -13,15 +13,16 @@ RUN apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium c
     git \
     pkgconfig
 
-# Add dependencies for node-canvas
+# Add dependencies for node-canvas (optional - continue if they fail)
 RUN apk add --no-cache \
     build-base \
     cairo-dev \
     pango-dev \
     jpeg-dev \
     giflib-dev \
-    librsvg \
-    pkgconfig
+    librsvg-dev \
+    pkgconfig \
+    || echo "Canvas dependencies failed to install, continuing without them..."
 
 #     # Install Puppeteer
 # RUN npm install puppeteer-extra puppeteer-extra-plugin-stealth
