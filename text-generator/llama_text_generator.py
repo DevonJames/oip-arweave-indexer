@@ -1,161 +1,231 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from flask import Flask, request, jsonify
-import torch
 import os
+import requests
+import time
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Configuration - can be overridden by environment variables
-DEFAULT_MODEL = os.getenv('LLAMA_MODEL', '11b')  # '3b' or '11b'
-MODEL_BASE_PATH = '/app/models'
+# Configuration
+OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+DEFAULT_MODEL = os.getenv('LLAMA_MODEL', 'llama3.2:3b')
 
-# Model configurations
-MODELS = {
-    '3b': {
-        'local_path': f'{MODEL_BASE_PATH}/llama-3.2-3b',
-        'hf_name': 'meta-llama/Llama-3.2-3B',
-        'vram_gb': 6  # Approximate VRAM usage
-    },
-    '11b': {
-        'local_path': f'{MODEL_BASE_PATH}/llama-3.2-11b', 
-        'hf_name': 'meta-llama/Llama-3.2-11B',
-        'vram_gb': 13  # Approximate VRAM usage
-    }
+# Available models (will be auto-detected from Ollama)
+AVAILABLE_MODELS = {
+    'llama3.2:3b': {'name': 'LLaMA 3.2 3B', 'size': '2.0 GB', 'description': 'Fast, efficient model'},
+    'mistral': {'name': 'Mistral 7B', 'size': '4.1 GB', 'description': 'Balanced performance'},
+    'llama2': {'name': 'LLaMA 2 7B', 'size': '3.8 GB', 'description': 'Creative and analytical'},
+    'tinyllama': {'name': 'TinyLlama', 'size': '637 MB', 'description': 'Ultra-fast, minimal resources'}
 }
 
-def load_model(model_size=DEFAULT_MODEL):
-    """Load the specified model (3b or 11b)"""
-    config = MODELS.get(model_size, MODELS['11b'])
-    
-    print(f"Loading LLaMA 3.2 {model_size.upper()} model...")
-    
-    # Try local model first, then HuggingFace
-    model_path = config['local_path'] if os.path.exists(config['local_path']) else config['hf_name']
-    
+def check_ollama_health():
+    """Check if Ollama service is available."""
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=torch.float16,
-            device_map="auto",
-            trust_remote_code=True
-        )
-        print(f"✅ Successfully loaded {model_size.upper()} model (~{config['vram_gb']}GB VRAM)")
-        return tokenizer, model, model_size
-    except Exception as e:
-        print(f"❌ Failed to load {model_size.upper()} model: {e}")
-        if model_size != '3b':
-            print("🔄 Falling back to 3B model...")
-            return load_model('3b')
-        else:
-            raise e
+        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
 
-# Load the model
-tokenizer, model, current_model_size = load_model()
+def get_installed_models():
+    """Get list of installed models from Ollama."""
+    try:
+        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            models = []
+            for model in data.get('models', []):
+                model_name = model.get('name', '').split(':')[0]  # Remove version tag
+                models.append({
+                    'name': model.get('name', ''),
+                    'size': f"{model.get('size', 0) / (1024**3):.1f} GB",
+                    'modified': model.get('modified', ''),
+                    'digest': model.get('digest', '')
+                })
+            return models
+        return []
+    except Exception as e:
+        print(f"Error getting models: {e}")
+        return []
+
+def generate_with_ollama(prompt, model_name, max_tokens=512, temperature=0.7):
+    """Generate text using Ollama API."""
+    try:
+        payload = {
+            "model": model_name,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens
+            }
+        }
+        
+        response = requests.post(
+            f"{OLLAMA_HOST}/api/generate",
+            json=payload,
+            timeout=60  # Longer timeout for generation
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("response", "").strip()
+        else:
+            return f"Error: HTTP {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        return f"Error generating text: {str(e)}"
 
 @app.route("/generate", methods=["POST"])
 def generate_text():
-    global tokenizer, model, current_model_size  # Declare global variables first
-    
+    """Generate text using the specified model."""
     data = request.json
     prompt = data.get("prompt", "")
     max_length = data.get("max_length", 512)
     temperature = data.get("temperature", 0.7)
-    requested_model = data.get("model", current_model_size)  # Allow per-request model selection
+    model = data.get("model", DEFAULT_MODEL)
     
-    # Switch model if requested (and different from current)
-    if requested_model != current_model_size and requested_model in MODELS:
-        try:
-            print(f"🔄 Switching from {current_model_size.upper()} to {requested_model.upper()} model...")
-            tokenizer, model, current_model_size = load_model(requested_model)
-        except Exception as e:
-            print(f"❌ Failed to switch to {requested_model.upper()} model: {e}")
-            # Continue with current model
+    if not prompt:
+        return jsonify({"error": "No prompt provided"}), 400
     
-    # Tokenize input
-    inputs = tokenizer(prompt, return_tensors="pt")
-    
-    # Move inputs to same device as model
-    device = next(model.parameters()).device
-    inputs = {k: v.to(device) for k, v in inputs.items()}
+    # Check if Ollama is available
+    if not check_ollama_health():
+        return jsonify({
+            "error": "Ollama service is not available",
+            "suggestion": "Please ensure Ollama is running and models are installed"
+        }), 503
     
     # Generate text
-    with torch.no_grad():
-        outputs = model.generate(
-            inputs["input_ids"],
-            max_length=max_length,
-            temperature=temperature,
-            do_sample=True,
-            pad_token_id=tokenizer.eos_token_id,
-            attention_mask=inputs.get("attention_mask")
-        )
-    
-    # Decode response (skip the input prompt)
-    generated_ids = outputs[0][inputs["input_ids"].shape[1]:]
-    response = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    start_time = time.time()
+    generated_text = generate_with_ollama(prompt, model, max_length, temperature)
+    generation_time = time.time() - start_time
     
     return jsonify({
-        "generated_text": response,
-        "full_response": tokenizer.decode(outputs[0], skip_special_tokens=True),
-        "model_used": current_model_size,
-        "vram_usage_gb": MODELS[current_model_size]['vram_gb']
+        "generated_text": generated_text,
+        "model_used": model,
+        "generation_time": f"{generation_time:.2f}s",
+        "prompt_length": len(prompt),
+        "response_length": len(generated_text)
     })
 
 @app.route("/models", methods=["GET"])
 def list_models():
-    """List available models and their status"""
-    global current_model_size  # Declare global variable first
+    """List available models."""
+    installed_models = get_installed_models()
     
-    model_status = {}
-    for size, config in MODELS.items():
-        model_status[size] = {
-            "available": os.path.exists(config['local_path']) or True,  # HF fallback always available
-            "vram_gb": config['vram_gb'],
-            "currently_loaded": size == current_model_size,
-            "local_path_exists": os.path.exists(config['local_path'])
-        }
+    # Merge with known model info
+    models_info = []
+    for model in installed_models:
+        model_key = model['name'].split(':')[0]  # Remove version tag
+        info = AVAILABLE_MODELS.get(model_key, {
+            'name': model['name'],
+            'description': 'Custom model'
+        })
+        
+        models_info.append({
+            'name': model['name'],
+            'display_name': info.get('name', model['name']),
+            'size': model['size'],
+            'description': info.get('description', 'Local model'),
+            'modified': model.get('modified', ''),
+            'available': True
+        })
     
     return jsonify({
-        "current_model": current_model_size,
-        "available_models": model_status
+        "current_model": DEFAULT_MODEL,
+        "available_models": models_info,
+        "ollama_status": "healthy" if check_ollama_health() else "unavailable",
+        "total_models": len(models_info)
+    })
+
+@app.route("/install", methods=["POST"])
+def install_model():
+    """Install a model via Ollama."""
+    data = request.json
+    model_name = data.get("model", "")
+    
+    if not model_name:
+        return jsonify({"error": "No model name provided"}), 400
+    
+    try:
+        # Start model pull
+        payload = {"name": model_name}
+        response = requests.post(f"{OLLAMA_HOST}/api/pull", json=payload, timeout=300)
+        
+        if response.status_code == 200:
+            return jsonify({
+                "message": f"Successfully installed model: {model_name}",
+                "model": model_name,
+                "status": "installed"
+            })
+        else:
+            return jsonify({
+                "error": f"Failed to install model: {response.text}",
+                "status": "failed"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "error": f"Error installing model: {str(e)}",
+            "status": "error"
+        }), 500
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    """Health check endpoint."""
+    ollama_healthy = check_ollama_health()
+    installed_models = get_installed_models() if ollama_healthy else []
+    
+    return jsonify({
+        "status": "healthy" if ollama_healthy else "degraded",
+        "ollama_available": ollama_healthy,
+        "ollama_host": OLLAMA_HOST,
+        "models_installed": len(installed_models),
+        "default_model": DEFAULT_MODEL,
+        "models": [m['name'] for m in installed_models] if ollama_healthy else []
     })
 
 @app.route("/switch", methods=["POST"])
 def switch_model():
-    """Switch to a different model"""
-    global tokenizer, model, current_model_size  # Declare global variables first
+    """Switch default model."""
+    global DEFAULT_MODEL
     
     data = request.json
-    target_model = data.get("model", "11b")
+    model_name = data.get("model", "")
     
-    if target_model not in MODELS:
-        return jsonify({"error": f"Unknown model: {target_model}"}), 400
+    if not model_name:
+        return jsonify({"error": "No model name provided"}), 400
     
-    if target_model == current_model_size:
-        return jsonify({"message": f"Already using {target_model.upper()} model"})
-    try:
-        print(f"🔄 Switching to {target_model.upper()} model...")
-        tokenizer, model, current_model_size = load_model(target_model)
+    # Verify model exists
+    installed_models = get_installed_models()
+    model_names = [m['name'] for m in installed_models]
+    
+    if model_name not in model_names:
         return jsonify({
-            "message": f"Successfully switched to {target_model.upper()} model",
-            "model": current_model_size,
-            "vram_gb": MODELS[current_model_size]['vram_gb']
-        })
-    except Exception as e:
-        return jsonify({"error": f"Failed to switch to {target_model.upper()} model: {str(e)}"}), 500
-
-@app.route("/health", methods=["GET"])
-def health_check():
-    """Health check endpoint"""
-    global current_model_size, model  # Declare global variables first
+            "error": f"Model '{model_name}' not found",
+            "available_models": model_names
+        }), 404
+    
+    DEFAULT_MODEL = model_name
     
     return jsonify({
-        "status": "healthy",
-        "current_model": current_model_size,
-        "model_loaded": model is not None,
-        "cuda_available": torch.cuda.is_available(),
-        "gpu_memory": torch.cuda.get_device_properties(0).total_memory // (1024**3) if torch.cuda.is_available() else None
+        "message": f"Switched to model: {model_name}",
+        "current_model": DEFAULT_MODEL
     })
 
 if __name__ == "__main__":
+    print(f"🚀 Starting Text Generator with Ollama backend")
+    print(f"📡 Ollama host: {OLLAMA_HOST}")
+    print(f"🤖 Default model: {DEFAULT_MODEL}")
+    
+    # Wait for Ollama to be available
+    max_retries = 30
+    for i in range(max_retries):
+        if check_ollama_health():
+            print("✅ Ollama service is available")
+            break
+        else:
+            print(f"⏳ Waiting for Ollama service... ({i+1}/{max_retries})")
+            time.sleep(2)
+    else:
+        print("⚠️  Starting without Ollama connection")
+    
     app.run(host="0.0.0.0", port=8081)

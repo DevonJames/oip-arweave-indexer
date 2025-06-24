@@ -23,11 +23,12 @@ GOOGLE_API_TOKEN=
 ELEVENLABS_API_KEY=
 FIRECRAWL=
 
-# LLaMA Text Generation Configuration
-LLAMA_MODEL=11b
-# Options: 3b (fast, 6GB VRAM) or 11b (high-quality, 13GB VRAM)
-# HuggingFace token (get from: https://huggingface.co/settings/tokens)
-# Needs "Read" permissions to download LLaMA models
+# LLM Configuration (Ollama-based)
+OLLAMA_HOST=http://ollama:11434
+LLAMA_MODEL=llama3.2:3b
+# Available models: tinyllama, mistral, llama2, llama3.2:3b
+# Models are managed by Ollama - run ./install_llm_models.sh to install
+# HuggingFace token (optional - for some restricted models)
 HUGGINGFACE_TOKEN=
 
 # Voice Services Configuration

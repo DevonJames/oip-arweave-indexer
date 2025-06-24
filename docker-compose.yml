@@ -194,17 +194,13 @@ services:
               count: 1
               capabilities: [gpu]
 
-  # Text generator for GPU machines - for distributed deployments
-  text-generator:
-    build: ./text-generator
-    env_file:
-      - .env
-    environment:
-      - LLAMA_MODEL=${LLAMA_MODEL}
-      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
-      - CUDA_VISIBLE_DEVICES=0
+  # Ollama LLM service (manages local models)
+  ollama:
+    image: ollama/ollama:latest
     ports:
-      - "8081:8081"
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama  # Persistent model storage
     networks:
       - oip-network
     restart: unless-stopped
@@ -218,6 +214,25 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+
+  # Text generator for GPU machines - now uses Ollama API
+  text-generator:
+    build: ./text-generator
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - ollama
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - full-gpu
+      - gpu
 
   # Speech-to-Text Service (Whisper)
   stt-service:
