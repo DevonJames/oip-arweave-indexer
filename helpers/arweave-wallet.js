@@ -36,7 +36,7 @@ class ArweaveWalletManager {
         return this.turboInstance;
     }
 
-    async uploadFile(data, contentType) {
+    async uploadFile(data, contentType, tags = []) {
         try {
             const turbo = await this.getTurbo();
             
@@ -45,6 +45,7 @@ class ArweaveWalletManager {
                              Buffer.from(JSON.stringify(data));
 
             console.log('Uploading file with Turbo, size:', dataBuffer.length);
+            console.log('Upload file tags received:', tags);
             
             // Create all required factories
             const fileStreamFactory = () => {
@@ -52,16 +53,26 @@ class ArweaveWalletManager {
                 return Readable.from(dataBuffer);
             };
 
+            // Use provided tags if available, otherwise fall back to default tags
+            let uploadTags;
+            if (tags && tags.length > 0) {
+                uploadTags = tags;
+                console.log('Using provided tags for upload:', uploadTags);
+            } else {
+                uploadTags = [
+                    { name: 'Content-Type', value: contentType },
+                    { name: 'App-Name', value: 'OIPArweave' }
+                ];
+                console.log('Using default tags for upload:', uploadTags);
+            }
+
             // Simplified upload with all required parameters
             const result = await turbo.uploadFile({
                 fileStreamFactory,
                 fileSizeFactory: () => dataBuffer.length,
                 dataItemSizeFactory: () => dataBuffer.length + 2048, // Add extra for metadata
                 dataItemOpts: {
-                    tags: [
-                        { name: 'Content-Type', value: contentType },
-                        { name: 'App-Name', value: 'OIPArweave' }
-                    ]
+                    tags: uploadTags
                 }
             });
             
@@ -86,8 +97,16 @@ class ArweaveWalletManager {
                 }, wallet);
                 
                 // Add tags
-                transaction.addTag('Content-Type', contentType);
-                transaction.addTag('App-Name', 'OIPArweave');
+                if (tags && tags.length > 0) {
+                    console.log('Adding provided tags to direct Arweave transaction:', tags);
+                    tags.forEach(tag => {
+                        transaction.addTag(tag.name, tag.value);
+                    });
+                } else {
+                    console.log('Adding default tags to direct Arweave transaction');
+                    transaction.addTag('Content-Type', contentType);
+                    transaction.addTag('App-Name', 'OIPArweave');
+                }
                 
                 // Sign transaction
                 await this.arweave.transactions.sign(transaction, wallet);
@@ -111,7 +130,8 @@ class ArweaveWalletManager {
     // Update the upload method for more compatibility
     async upload(data, options = {}) {
         try {
-            return await this.uploadFile(data, options.tags?.[0]?.value || 'application/json');
+            const contentType = options.tags?.find(tag => tag.name === 'Content-Type')?.value || 'application/json';
+            return await this.uploadFile(data, contentType, options.tags);
         } catch (error) {
             console.error('Error in upload method:', error);
             throw error;
@@ -224,8 +244,8 @@ class ArweaveWalletManager {
             // Extract content type from tags
             const contentType = options.tags?.find(tag => tag.name === 'Content-Type')?.value || 'application/json';
             
-            // Call uploadFile directly
-            const result = await this.uploadFile(data, contentType);
+            // Pass the tags to uploadFile
+            const result = await this.uploadFile(data, contentType, options.tags);
             
             console.log('Upload result:', result);
             
@@ -240,9 +260,9 @@ class ArweaveWalletManager {
         }
     }
 
-    async uploadFileWithConfirmation(data, contentType, waitForConfirmation = true) {
+    async uploadFileWithConfirmation(data, contentType, waitForConfirmation = true, tags = []) {
         try {
-            const result = await this.uploadFile(data, contentType);
+            const result = await this.uploadFile(data, contentType, tags);
             
             if (waitForConfirmation) {
                 console.log(`Waiting for confirmation of transaction ${result.id}...`);
