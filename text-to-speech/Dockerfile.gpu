@@ -48,13 +48,11 @@ RUN pip3 install --no-cache-dir \
     scipy \
     librosa \
     soundfile \
-    TTS==0.22.0
+    TTS==0.14.3
 
 # Install additional high-quality TTS engines
 RUN pip3 install --no-cache-dir \
-    silero-models \
-    tortoise-tts \
-    bark-tts
+    silero-models
 
 # Copy service files
 COPY . .
