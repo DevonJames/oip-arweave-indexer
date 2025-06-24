@@ -29,7 +29,8 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
 	@echo "  make up PROFILE=minimal"
-	@echo "  make up PROFILE=standard"
+	@echo "  make rebuild PROFILE=full-gpu"
+	@echo "  make rebuild-full-gpu          # Same as above, convenience syntax"
 	@echo "  make build PROFILE=gpu"
 	@echo "  make logs SERVICE=oip-gpu"
 
@@ -136,6 +137,28 @@ full-gpu: ## Quick deploy: Complete stack with GPU acceleration (ALL services)
 
 voice: ## Quick deploy: Voice AI services (STT, TTS, core)
 	@make up PROFILE=voice
+
+# Quick rebuild targets for common scenarios
+rebuild-minimal: ## Quick rebuild: Core services only (elasticsearch, kibana, oip)
+	@make rebuild PROFILE=minimal
+
+rebuild-standard: ## Quick rebuild: Distributed full stack
+	@make rebuild PROFILE=standard
+
+rebuild-full: ## Quick rebuild: Monolithic (all services in one container)
+	@make rebuild PROFILE=full
+
+rebuild-gpu: ## Quick rebuild: GPU-optimized deployment
+	@make rebuild PROFILE=gpu
+
+rebuild-gpu-only: ## Quick rebuild: GPU OIP service only
+	@make rebuild PROFILE=gpu-only
+
+rebuild-full-gpu: ## Quick rebuild: Complete stack with GPU acceleration (ALL services)
+	@make rebuild PROFILE=full-gpu
+
+rebuild-voice: ## Quick rebuild: Voice AI services (STT, TTS, core)
+	@make rebuild PROFILE=voice
 
 # Development helpers
 dev-build: ## Development: Build without cache
