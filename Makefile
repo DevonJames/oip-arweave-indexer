@@ -28,11 +28,10 @@ help: ## Show this help message
 	@echo "  $(GREEN)voice$(NC)       - Voice AI services: STT, TTS, and core services"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
-	@echo "  make up PROFILE=minimal"
-	@echo "  make rebuild PROFILE=full-gpu"
-	@echo "  make rebuild-full-gpu          # Same as above, convenience syntax"
-	@echo "  make build PROFILE=gpu"
-	@echo "  make logs SERVICE=oip-gpu"
+	@echo "  make rebuild-full-gpu          # Build complete stack + install all LLM models"
+	@echo "  make install-models            # Install LLM models only (if already running)"
+	@echo "  make status                    # Check service status"
+	@echo "  make logs SERVICE=oip-gpu      # View specific service logs"
 
 # Default profile
 PROFILE ?= standard
@@ -132,8 +131,10 @@ gpu: ## Quick deploy: GPU-optimized deployment
 gpu-only: ## Quick deploy: GPU OIP service only
 	@make up PROFILE=gpu-only
 
-full-gpu: ## Quick deploy: Complete stack with GPU acceleration (ALL services)
+full-gpu: ## Quick deploy: Complete stack with GPU acceleration (ALL services) + install models
 	@make up PROFILE=full-gpu
+	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
+	@make install-models
 
 voice: ## Quick deploy: Voice AI services (STT, TTS, core)
 	@make up PROFILE=voice
@@ -154,11 +155,19 @@ rebuild-gpu: ## Quick rebuild: GPU-optimized deployment
 rebuild-gpu-only: ## Quick rebuild: GPU OIP service only
 	@make rebuild PROFILE=gpu-only
 
-rebuild-full-gpu: ## Quick rebuild: Complete stack with GPU acceleration (ALL services)
+rebuild-full-gpu: ## Quick rebuild: Complete stack with GPU acceleration (ALL services) + install models
 	@make rebuild PROFILE=full-gpu
+	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
+	@make install-models
 
 rebuild-voice: ## Quick rebuild: Voice AI services (STT, TTS, core)
 	@make rebuild PROFILE=voice
+
+# LLM Model Management
+install-models: ## Install LLM models using Ollama
+	@echo "$(BLUE)Installing LLM models for Voice Assistant...$(NC)"
+	@chmod +x ./install_llm_models.sh
+	@./install_llm_models.sh
 
 # Development helpers
 dev-build: ## Development: Build without cache

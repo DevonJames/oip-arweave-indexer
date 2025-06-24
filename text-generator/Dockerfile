@@ -1,26 +1,18 @@
 # Dockerfile for LLaMA2 Text Generator
 FROM python:3.9-slim
 
-# Upgrade pip to the latest version
-RUN pip install --upgrade pip
-
-# Install required dependencies including sentencepiece for LlamaTokenizer
-RUN pip install --default-timeout=1000 torch transformers flask sentencepiece wget protobuf
-
-# Copy the app
-COPY . /app
-
-# Set the working directory
 WORKDIR /app
 
-# Create directories for models
-RUN mkdir -p /app/models/llama-3.2-3b /app/models/llama-3.2-11b
+# Install basic dependencies only (no heavy ML libraries needed)
+RUN pip install --no-cache-dir \
+    flask==2.3.3 \
+    requests==2.31.0
 
-# Download LLaMA 3.2 models from HuggingFace (now that you have access)
-RUN python download_models.py
+# Copy service files
+COPY . .
 
-# Expose the port for the API
+# Expose port
 EXPOSE 8081
 
-# Run the text generation API
+# Run the service
 CMD ["python", "llama_text_generator.py"]
