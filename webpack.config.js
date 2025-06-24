@@ -1,5 +1,5 @@
 const path = require('path');
-const webpack = require('webpack');
+// const webpack = require('webpack');  // Comment this out temporarily
 const dotenv = require('dotenv');
 
 // Load environment variables
@@ -40,10 +40,11 @@ module.exports = {
     ]
   },
   plugins: [
-    new webpack.DefinePlugin({
-      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
-      ...envKeys
-    })
+    // Temporarily comment out DefinePlugin to get build working
+    // new webpack.DefinePlugin({
+    //   'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    //   ...envKeys
+    // })
   ],
   resolve: {
     extensions: ['.js', '.jsx']
