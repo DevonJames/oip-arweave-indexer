@@ -76,6 +76,9 @@ COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
 
+# Install webpack and webpack-cli for building React bundle
+RUN npm install webpack@5.75.0 webpack-cli@5.0.1 --no-save
+
 # Build React frontend bundle
 RUN npm run build-react
 
