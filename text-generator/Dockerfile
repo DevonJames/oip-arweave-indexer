@@ -5,7 +5,7 @@ FROM python:3.9-slim
 RUN pip install --upgrade pip
 
 # Install required dependencies including sentencepiece for LlamaTokenizer
-RUN pip install --default-timeout=1000 torch transformers flask sentencepiece wget
+RUN pip install --default-timeout=1000 torch transformers flask sentencepiece wget protobuf
 
 # Copy the app
 COPY . /app

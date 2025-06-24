@@ -24,6 +24,8 @@ services:
       - full
       - standard
       - minimal
+      - gpu
+      - full-gpu
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.8
@@ -40,6 +42,8 @@ services:
       - full
       - standard
       - minimal
+      - gpu
+      - full-gpu
 
   ipfs:
     image: ipfs/go-ipfs:latest
@@ -56,6 +60,7 @@ services:
     profiles:
       - full
       - standard
+      - full-gpu
 
   # Standard OIP service (for distributed deployments)
   oip:
@@ -116,7 +121,7 @@ services:
     profiles:
       - full
 
-  # GPU-optimized OIP service (connects to external network)
+  # GPU-optimized OIP service
   oip-gpu:
     build:
       context: .
@@ -136,12 +141,21 @@ services:
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
+      - STT_SERVICE_URL=http://stt-service-gpu:8003
+      - TTS_SERVICE_URL=http://tts-service-gpu:8005
+      - TEXT_GENERATOR_URL=http://text-generator:8081
+    depends_on:
+      - elasticsearch
+      - text-generator
+      - tts-service-gpu
+      - stt-service-gpu
     networks:
-      - existing-oip-network
+      - oip-network
     restart: unless-stopped
     profiles:
       - gpu
       - gpu-only
+      - full-gpu
 
   # Self-hosted Speech Synthesizer (Coqui TTS) - for distributed deployments
   speech-synthesizer:
@@ -156,19 +170,29 @@ services:
     profiles:
       - standard
 
-  # GPU-enabled Speech Synthesizer (Coqui TTS with CUDA) - for GPU deployments
-  speech-synthesizer-gpu:
+  # GPU-accelerated TTS Service (Neural Models with CUDA)
+  tts-service-gpu:
     build:
-      context: ./speech-synthesizer
+      context: ./text-to-speech
       dockerfile: Dockerfile.gpu
     ports:
-      - "8082:8082"
+      - "8005:8005"
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - TTS_GPU_ENABLED=true
     networks:
       - oip-network
     restart: unless-stopped
     profiles:
       - gpu
       - full-gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # Text generator for GPU machines - for distributed deployments
   text-generator:
@@ -178,6 +202,7 @@ services:
     environment:
       - LLAMA_MODEL=${LLAMA_MODEL}
       - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+      - CUDA_VISIBLE_DEVICES=0
     ports:
       - "8081:8081"
     networks:
@@ -186,6 +211,13 @@ services:
     profiles:
       - full-gpu
       - gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # Speech-to-Text Service (Whisper)
   stt-service:
@@ -204,21 +236,47 @@ services:
     profiles:
       - full
       - standard
-      - full-gpu
       - voice
+
+  # GPU-accelerated Speech-to-Text Service (Whisper with CUDA)
+  stt-service-gpu:
+    build:
+      context: ./speech-to-text
+      dockerfile: Dockerfile.gpu
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_DEVICE=cuda
+      - WHISPER_COMPUTE_TYPE=float16
+      - CUDA_VISIBLE_DEVICES=0
+    ports:
+      - "8003:8003"
+    volumes:
+      - whisper_models:/app/models
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - full-gpu
+      - gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # Text-to-Speech Service (Multi-engine)
   tts-service:
     build: ./text-to-speech
     ports:
-      - "8005:8005"
+      - "8006:8005"  # Different port to avoid conflict with GPU service
     networks:
       - oip-network
     restart: unless-stopped
     profiles:
       - full
       - standard
-      - full-gpu
       - voice
 
   # Ngrok for public access - for distributed deployments
@@ -237,12 +295,25 @@ services:
     profiles:
       - standard
 
+  # Ngrok for GPU deployments
+  ngrok-gpu:
+    image: ngrok/ngrok
+    command: http oip-gpu:3005
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+    depends_on:
+      - oip-gpu
+    ports:
+      - "4040:4040"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - full-gpu
+
 networks:
   oip-network:
     driver: bridge
-    name: oiparweave_oip-network
-  existing-oip-network:
-    external: true
     name: oiparweave_oip-network
 
 volumes:
