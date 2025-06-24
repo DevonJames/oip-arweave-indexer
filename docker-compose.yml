@@ -187,6 +187,40 @@ services:
       - full-gpu
       - gpu
 
+  # Speech-to-Text Service (Whisper)
+  stt-service:
+    build: ./speech-to-text
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+    ports:
+      - "8003:8003"
+    volumes:
+      - whisper_models:/app/models
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - full
+      - standard
+      - full-gpu
+      - voice
+
+  # Text-to-Speech Service (Multi-engine)
+  tts-service:
+    build: ./text-to-speech
+    ports:
+      - "8005:8005"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - full
+      - standard
+      - full-gpu
+      - voice
+
   # Ngrok for public access - for distributed deployments
   ngrok:
     image: ngrok/ngrok
@@ -214,3 +248,4 @@ networks:
 volumes:
   esdata:
   ipfsdata:
+  whisper_models:
