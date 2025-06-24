@@ -24,7 +24,7 @@ help: ## Show this help message
 	@echo "  $(GREEN)full$(NC)        - Monolithic: All services in one container"
 	@echo "  $(GREEN)gpu$(NC)         - GPU-optimized deployment"
 	@echo "  $(GREEN)gpu-only$(NC)    - Only GPU OIP service"
-	@echo "  $(GREEN)full-gpu$(NC)    - Full distributed stack with GPU features"
+	@echo "  $(GREEN)full-gpu$(NC)    - Complete stack: all services + GPU acceleration"
 	@echo "  $(GREEN)voice$(NC)       - Voice AI services: STT, TTS, and core services"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
@@ -56,13 +56,11 @@ check-env:
 		fi \
 	fi
 
-# Ensure network exists for GPU profiles
+# Check if Docker network exists
 check-network:
-	@if echo "$(PROFILE)" | grep -q "gpu"; then \
-		if ! docker network inspect oiparweave_oip-network >/dev/null 2>&1; then \
-			echo "$(BLUE)Creating external network 'oiparweave_oip-network'...$(NC)"; \
-			docker network create oiparweave_oip-network; \
-		fi \
+	@if ! docker network inspect oiparweave_oip-network >/dev/null 2>&1; then \
+		echo "$(BLUE)Creating network 'oiparweave_oip-network'...$(NC)"; \
+		docker network create oiparweave_oip-network; \
 	fi
 
 up: validate-profile check-env check-network ## Start services with specified profile
@@ -133,7 +131,7 @@ gpu: ## Quick deploy: GPU-optimized deployment
 gpu-only: ## Quick deploy: GPU OIP service only
 	@make up PROFILE=gpu-only
 
-full-gpu: ## Quick deploy: Distributed stack with GPU features
+full-gpu: ## Quick deploy: Complete stack with GPU acceleration (ALL services)
 	@make up PROFILE=full-gpu
 
 voice: ## Quick deploy: Voice AI services (STT, TTS, core)
