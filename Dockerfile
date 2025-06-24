@@ -58,8 +58,8 @@ RUN npm install --verbose --ignore-scripts || \
 # Try to rebuild native modules, but don't fail if some can't be built
 RUN npm rebuild || echo "Some native modules failed to rebuild, continuing..."
 
-# Install webpack and webpack-cli before moving node_modules
-RUN npm install webpack@5.75.0 webpack-cli@5.0.1 --no-save
+# Move node_modules to parent directory
+RUN mv node_modules ../
 
 # Copy wait-for-it.sh script and make it executable
 COPY wait-for-it.sh wait-for-it.sh
@@ -77,11 +77,12 @@ COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
 
-# Build React frontend bundle using local webpack
-RUN ./node_modules/.bin/webpack --config webpack.config.js
+# Build Next.js frontend (replaces webpack entirely)
+WORKDIR /usr/src/app/frontend
+RUN npm install && npm run build
 
-# Move node_modules to parent directory after building
-RUN mv node_modules ../
+# Return to main app directory
+WORKDIR /usr/src/app
 
 # Copy the .env file if it exists
 COPY .env .env
@@ -97,6 +98,7 @@ RUN mkdir -p \
   ./media/rfk/analysis
 
 # Expose all necessary ports
+EXPOSE 3000
 EXPOSE 3005
 EXPOSE 9229
 EXPOSE 8081
@@ -104,9 +106,10 @@ EXPOSE 8082
 EXPOSE 4040 
 EXPOSE 5555
 
-# Command to run all services
+# Command to run all services (API + Next.js frontend)
 CMD ["sh", "-c", "\
   ./wait-for-it.sh elasticsearch:9200 --timeout=90 --strict -- \
+  (cd frontend && npm start &) && \
   node --inspect=0.0.0.0:9229 index.js --keepDBUpToDate 10 10"]
 
 # Add healthcheck for the app
