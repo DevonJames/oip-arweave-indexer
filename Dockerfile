@@ -79,8 +79,8 @@ COPY ngrok ./ngrok
 # Install webpack and webpack-cli for building React bundle
 RUN npm install webpack@5.75.0 webpack-cli@5.0.1 --no-save
 
-# Build React frontend bundle
-RUN npm run build-react
+# Build React frontend bundle using direct webpack path
+RUN ./node_modules/.bin/webpack --config webpack.config.js
 
 # Copy the .env file if it exists
 COPY .env .env
