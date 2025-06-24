@@ -55,6 +55,8 @@ tokenizer, model, current_model_size = load_model()
 
 @app.route("/generate", methods=["POST"])
 def generate_text():
+    global tokenizer, model, current_model_size  # Declare global variables first
+    
     data = request.json
     prompt = data.get("prompt", "")
     max_length = data.get("max_length", 512)
@@ -62,7 +64,6 @@ def generate_text():
     requested_model = data.get("model", current_model_size)  # Allow per-request model selection
     
     # Switch model if requested (and different from current)
-    global tokenizer, model, current_model_size
     if requested_model != current_model_size and requested_model in MODELS:
         try:
             print(f"🔄 Switching from {current_model_size.upper()} to {requested_model.upper()} model...")
@@ -103,6 +104,8 @@ def generate_text():
 @app.route("/models", methods=["GET"])
 def list_models():
     """List available models and their status"""
+    global current_model_size  # Declare global variable first
+    
     model_status = {}
     for size, config in MODELS.items():
         model_status[size] = {
@@ -120,6 +123,8 @@ def list_models():
 @app.route("/switch", methods=["POST"])
 def switch_model():
     """Switch to a different model"""
+    global tokenizer, model, current_model_size  # Declare global variables first
+    
     data = request.json
     target_model = data.get("model", "11b")
     
@@ -128,8 +133,6 @@ def switch_model():
     
     if target_model == current_model_size:
         return jsonify({"message": f"Already using {target_model.upper()} model"})
-    
-    global tokenizer, model, current_model_size
     try:
         print(f"🔄 Switching to {target_model.upper()} model...")
         tokenizer, model, current_model_size = load_model(target_model)
@@ -144,6 +147,8 @@ def switch_model():
 @app.route("/health", methods=["GET"])
 def health_check():
     """Health check endpoint"""
+    global current_model_size, model  # Declare global variables first
+    
     return jsonify({
         "status": "healthy",
         "current_model": current_model_size,
