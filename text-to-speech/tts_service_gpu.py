@@ -15,12 +15,14 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 import numpy as np
 import subprocess
+from pathlib import Path
+import uvicorn
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="GPU-Accelerated TTS Service", version="2.0.0")
+app = FastAPI(title="GPU TTS Service", version="1.0.0")
 
 # CORS middleware
 app.add_middleware(
@@ -33,562 +35,317 @@ app.add_middleware(
 
 class TTSRequest(BaseModel):
     text: str
-    voice_id: str = "default"
-    speed: float = 1.0
-    language: str = "en"
+    voice: str = "male_1"
+    engine: str = "auto"
 
-class VoiceInfo(BaseModel):
-    id: str
-    name: str
-    language: str
-    gender: str
-    engine: str
-    description: str
+class TTSResponse(BaseModel):
+    audio_file: str
+    engine_used: str
+    voice_used: str
 
-# Check GPU availability
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-logger.info(f"Using device: {DEVICE}")
-
-if torch.cuda.is_available():
-    logger.info(f"GPU: {torch.cuda.get_device_name()}")
-    logger.info(f"CUDA Version: {torch.version.cuda}")
-    logger.info(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
-
-# Abstract TTS Engine Base Class
-class TTSEngine(ABC):
-    def __init__(self, name: str):
-        self.name = name
-        self.available = False
-        self._initialize()
-    
-    @abstractmethod
-    def _initialize(self):
-        """Initialize the TTS engine."""
-        pass
-    
-    @abstractmethod
-    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
-        """Synthesize text to speech and return audio bytes."""
-        pass
-    
-    @abstractmethod
-    def get_voices(self) -> List[VoiceInfo]:
-        """Return available voices for this engine."""
-        pass
-
-# Silero TTS Engine (Primary - GPU Accelerated)
-class SileroEngine(TTSEngine):
+class GPUTTSService:
     def __init__(self):
-        super().__init__("silero")
-        
-    def _initialize(self):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.chatterbox_engine = None
+        self.silero_model = None
+        self.silero_speakers = {}
+        logger.info(f"Initializing TTS service on device: {self.device}")
+        self._initialize_chatterbox()
+        self._initialize_silero()
+    
+    def _initialize_chatterbox(self):
+        """Initialize Chatterbox (pyttsx3) TTS engine"""
         try:
-            # Load Silero TTS model
-            self.model, self.example_text = torch.hub.load(
+            import pyttsx3
+            
+            self.chatterbox_engine = pyttsx3.init()
+            
+            # Configure voice settings
+            voices = self.chatterbox_engine.getProperty('voices')
+            self.chatterbox_voices = {}
+            
+            if voices:
+                # Map our voice names to available system voices
+                for i, voice in enumerate(voices):
+                    voice_name = voice.name.lower()
+                    if 'female' in voice_name or 'woman' in voice_name:
+                        if 'female_1' not in self.chatterbox_voices:
+                            self.chatterbox_voices['female_1'] = voice.id
+                        elif 'female_2' not in self.chatterbox_voices:
+                            self.chatterbox_voices['female_2'] = voice.id
+                    elif 'male' in voice_name or 'man' in voice_name:
+                        if 'male_1' not in self.chatterbox_voices:
+                            self.chatterbox_voices['male_1'] = voice.id
+                        elif 'male_2' not in self.chatterbox_voices:
+                            self.chatterbox_voices['male_2'] = voice.id
+                
+                # Set defaults if we don't have specific gender voices
+                if not self.chatterbox_voices:
+                    self.chatterbox_voices = {
+                        'female_1': voices[0].id if len(voices) > 0 else None,
+                        'female_2': voices[1].id if len(voices) > 1 else voices[0].id,
+                        'male_1': voices[0].id if len(voices) > 0 else None,
+                        'male_2': voices[1].id if len(voices) > 1 else voices[0].id,
+                        'expressive': voices[0].id if len(voices) > 0 else None,
+                        'calm': voices[0].id if len(voices) > 0 else None,
+                        'cheerful': voices[0].id if len(voices) > 0 else None,
+                        'sad': voices[0].id if len(voices) > 0 else None
+                    }
+            
+            # Set speech rate and volume
+            self.chatterbox_engine.setProperty('rate', 150)  # Speed
+            self.chatterbox_engine.setProperty('volume', 1.0)  # Volume
+            
+            logger.info("Chatterbox (pyttsx3) TTS engine initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize Chatterbox engine: {e}")
+            self.chatterbox_engine = None
+    
+    def _initialize_silero(self):
+        """Initialize Silero TTS model as secondary engine"""
+        try:
+            import silero
+            
+            # Load the multilingual model
+            self.silero_model, _ = torch.hub.load(
                 repo_or_dir='snakers4/silero-models',
                 model='silero_tts',
                 language='en',
                 speaker='v3_en'
             )
+            self.silero_model.to(self.device)
             
-            # Move model to GPU if available
-            self.model = self.model.to(DEVICE)
-            
-            # Available speakers
-            self.speakers = {
-                "default": "en_0",
-                "female_1": "en_0",     # Clear female voice
-                "female_2": "en_1",     # Expressive female voice  
-                "male_1": "en_2",       # Deep male voice
-                "male_2": "en_3",       # Friendly male voice
-                "expressive": "en_1",   # Most expressive
-                "calm": "en_0",         # Most calm
-                "announcer": "en_2",    # Announcer style
-                "storyteller": "en_3",  # Storytelling style
+            # Define available speakers
+            self.silero_speakers = {
+                'female_1': 'en_0',
+                'female_2': 'en_1', 
+                'male_1': 'en_2',
+                'male_2': 'en_3',
+                'expressive': 'en_4',
+                'calm': 'en_5',
+                'cheerful': 'en_6',
+                'sad': 'en_7'
             }
             
-            self.sample_rate = 48000
-            self.available = True
-            logger.info("Silero GPU engine initialized successfully")
+            logger.info("Silero TTS model loaded successfully")
             
         except Exception as e:
-            logger.error(f"Failed to initialize Silero engine: {str(e)}")
-            self.available = False
-    
-    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
-        try:
-            speaker = self.speakers.get(voice_id, self.speakers["default"])
+            logger.error(f"Failed to load Silero model: {e}")
+            self.silero_model = None
+
+    async def synthesize_with_chatterbox(self, text: str, voice: str) -> Optional[str]:
+        """Synthesize speech using Chatterbox (pyttsx3)"""
+        if not self.chatterbox_engine:
+            return None
             
-            # Generate audio with GPU acceleration
+        try:
+            # Set voice if available
+            voice_id = self.chatterbox_voices.get(voice)
+            if voice_id:
+                self.chatterbox_engine.setProperty('voice', voice_id)
+            
+            # Generate audio to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                self.chatterbox_engine.save_to_file(text, tmp_file.name)
+                self.chatterbox_engine.runAndWait()
+                return tmp_file.name
+                
+        except Exception as e:
+            logger.error(f"Chatterbox TTS error: {e}")
+            return None
+
+    async def synthesize_with_silero(self, text: str, voice: str) -> Optional[str]:
+        """Synthesize speech using Silero TTS"""
+        if not self.silero_model:
+            return None
+            
+        try:
+            speaker = self.silero_speakers.get(voice, 'en_0')
+            
+            # Generate audio
             with torch.no_grad():
-                audio = self.model.apply_tts(
+                audio = self.silero_model.apply_tts(
                     text=text,
                     speaker=speaker,
-                    sample_rate=self.sample_rate,
+                    sample_rate=48000,
                     put_accent=True,
                     put_yo=True
                 )
             
-            # Move to CPU for processing
-            audio = audio.cpu()
-            
-            # Apply speed adjustment
-            if speed != 1.0:
-                # Time-stretch the audio
-                audio = torchaudio.functional.time_stretch(
-                    audio.unsqueeze(0), 
-                    1.0 / speed, 
-                    n_fft=1024
-                ).squeeze(0)
-            
-            # Convert to wav bytes
+            # Save to temporary file
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                torchaudio.save(
-                    tmp_file.name,
-                    audio.unsqueeze(0),
-                    self.sample_rate,
-                    format='wav'
-                )
-                
-                with open(tmp_file.name, 'rb') as f:
-                    audio_data = f.read()
-                
-                os.unlink(tmp_file.name)
-                return audio_data
+                torchaudio.save(tmp_file.name, audio.unsqueeze(0), 48000)
+                return tmp_file.name
                 
         except Exception as e:
-            logger.error(f"Silero synthesis error: {str(e)}")
-            raise
-    
-    def get_voices(self) -> List[VoiceInfo]:
-        return [
-            VoiceInfo(
-                id="female_1",
-                name="Silero Female Clear",
-                language="en",
-                gender="female",
-                engine="silero",
-                description="Clear, professional female voice (GPU accelerated)"
-            ),
-            VoiceInfo(
-                id="female_2",
-                name="Silero Female Expressive",
-                language="en",
-                gender="female",
-                engine="silero",
-                description="Expressive, dynamic female voice (GPU accelerated)"
-            ),
-            VoiceInfo(
-                id="male_1",
-                name="Silero Male Deep",
-                language="en",
-                gender="male",
-                engine="silero",
-                description="Deep, authoritative male voice (GPU accelerated)"
-            ),
-            VoiceInfo(
-                id="male_2",
-                name="Silero Male Friendly",
-                language="en",
-                gender="male",
-                engine="silero",
-                description="Friendly, warm male voice (GPU accelerated)"
-            ),
-            VoiceInfo(
-                id="expressive",
-                name="Silero Expressive",
-                language="en",
-                gender="female",
-                engine="silero",
-                description="Most expressive voice with natural intonation (GPU accelerated)"
-            ),
-            VoiceInfo(
-                id="calm",
-                name="Silero Calm",
-                language="en",
-                gender="female",
-                engine="silero",
-                description="Calm, soothing voice for relaxation (GPU accelerated)"
-            ),
-            VoiceInfo(
-                id="announcer",
-                name="Silero Announcer",
-                language="en",
-                gender="male",
-                engine="silero",
-                description="Professional announcer voice (GPU accelerated)"
-            ),
-            VoiceInfo(
-                id="storyteller",
-                name="Silero Storyteller",
-                language="en",
-                gender="male",
-                engine="silero",
-                description="Engaging storytelling voice (GPU accelerated)"
-            )
-        ]
+            logger.error(f"Silero TTS error: {e}")
+            return None
 
-# Coqui TTS Engine (High Quality - GPU Accelerated)
-class CoquiEngine(TTSEngine):
-    def __init__(self):
-        super().__init__("coqui")
-        
-    def _initialize(self):
-        try:
-            from TTS.api import TTS
-            
-            # Use GPU if available
-            device_name = "cuda" if torch.cuda.is_available() else "cpu"
-            
-            # Load high-quality VITS model
-            self.tts = TTS(
-                model_name="tts_models/en/ljspeech/vits",
-                gpu=torch.cuda.is_available()
-            ).to(device_name)
-            
-            self.available = True
-            logger.info("Coqui GPU engine initialized successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize Coqui engine: {str(e)}")
-            self.available = False
-    
-    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
-        try:
-            # Generate audio with GPU acceleration
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                self.tts.tts_to_file(
-                    text=text,
-                    file_path=tmp_file.name,
-                    speed=speed
-                )
-                
-                with open(tmp_file.name, 'rb') as f:
-                    audio_data = f.read()
-                
-                os.unlink(tmp_file.name)
-                return audio_data
-                
-        except Exception as e:
-            logger.error(f"Coqui synthesis error: {str(e)}")
-            raise
-    
-    def get_voices(self) -> List[VoiceInfo]:
-        return [
-            VoiceInfo(
-                id="default",
-                name="Coqui VITS",
-                language="en",
-                gender="female",
-                engine="coqui",
-                description="High-quality neural voice synthesis (GPU accelerated)"
-            )
-        ]
-
-# Enhanced Edge TTS Engine
-class EdgeTTSEngine(TTSEngine):
-    def __init__(self):
-        super().__init__("edge_tts")
-        
-    def _initialize(self):
+    async def synthesize_with_edge_tts(self, text: str, voice: str) -> Optional[str]:
+        """Synthesize speech using Edge TTS"""
         try:
             import edge_tts
-            self.voice_map = {
-                "default": "en-US-AriaNeural",
-                "female_1": "en-US-AriaNeural",
-                "female_2": "en-US-JennyNeural",
-                "male_1": "en-US-GuyNeural",
-                "male_2": "en-US-DavisNeural",
-                "expressive": "en-US-JennyNeural",
-                "calm": "en-US-SaraNeural",
-                "announcer": "en-US-GuyNeural",
-                "storyteller": "en-US-DavisNeural"
+            
+            voice_map = {
+                'female_1': 'en-US-JennyNeural',
+                'female_2': 'en-US-AriaNeural', 
+                'male_1': 'en-US-GuyNeural',
+                'male_2': 'en-US-DavisNeural',
+                'expressive': 'en-US-AriaNeural',
+                'calm': 'en-US-SaraNeural',
+                'cheerful': 'en-US-JennyNeural',
+                'sad': 'en-US-AriaNeural'
             }
-            self.available = True
-            logger.info("Edge TTS engine initialized successfully")
+            
+            edge_voice = voice_map.get(voice, 'en-US-JennyNeural')
+            
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                communicate = edge_tts.Communicate(text, edge_voice)
+                await communicate.save(tmp_file.name)
+                return tmp_file.name
+                
         except Exception as e:
-            logger.error(f"Failed to initialize Edge TTS engine: {str(e)}")
-            self.available = False
-    
-    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
-        try:
-            import edge_tts
-            voice = self.voice_map.get(voice_id, self.voice_map["default"])
-            
-            # Calculate rate adjustment
-            rate_adjust = "+0%" if speed == 1.0 else f"+{int((speed - 1) * 100)}%"
-            
-            communicate = edge_tts.Communicate(text, voice, rate=rate_adjust)
-            
-            # Generate audio
-            audio_data = b""
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_data += chunk["data"]
-            
-            return audio_data
-            
-        except Exception as e:
-            logger.error(f"Edge TTS synthesis error: {str(e)}")
-            raise
-    
-    def get_voices(self) -> List[VoiceInfo]:
-        return [
-            VoiceInfo(
-                id="female_1",
-                name="Edge Aria",
-                language="en",
-                gender="female", 
-                engine="edge_tts",
-                description="Microsoft Aria neural voice"
-            ),
-            VoiceInfo(
-                id="female_2",
-                name="Edge Jenny",
-                language="en",
-                gender="female",
-                engine="edge_tts",
-                description="Microsoft Jenny neural voice"
-            ),
-            VoiceInfo(
-                id="male_1",
-                name="Edge Guy",
-                language="en",
-                gender="male",
-                engine="edge_tts",
-                description="Microsoft Guy neural voice"
-            ),
-            VoiceInfo(
-                id="male_2",
-                name="Edge Davis",
-                language="en",
-                gender="male",
-                engine="edge_tts",
-                description="Microsoft Davis neural voice"
-            )
-        ]
+            logger.error(f"Edge TTS error: {e}")
+            return None
 
-# Fallback engines (same as before)
-class GTTSEngine(TTSEngine):
-    def __init__(self):
-        super().__init__("gtts")
-        
-    def _initialize(self):
+    async def synthesize_with_gtts(self, text: str) -> Optional[str]:
+        """Synthesize speech using gTTS"""
         try:
             from gtts import gTTS
-            self.available = True
-            logger.info("gTTS engine initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize gTTS engine: {str(e)}")
-            self.available = False
-    
-    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
-        try:
-            from gtts import gTTS
-            tts = gTTS(text=text, lang='en', slow=(speed < 0.8))
+            
+            tts = gTTS(text=text, lang='en', slow=False)
             
             with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp_file:
                 tts.save(tmp_file.name)
-                
-                with open(tmp_file.name, 'rb') as f:
-                    audio_data = f.read()
-                
-                os.unlink(tmp_file.name)
-                return audio_data
+                return tmp_file.name
                 
         except Exception as e:
-            logger.error(f"gTTS synthesis error: {str(e)}")
-            raise
-    
-    def get_voices(self) -> List[VoiceInfo]:
-        return [
-            VoiceInfo(
-                id="default",
-                name="Google TTS",
-                language="en",
-                gender="neutral",
-                engine="gtts",
-                description="Google Text-to-Speech"
-            )
-        ]
+            logger.error(f"gTTS error: {e}")
+            return None
 
-class ESpeakEngine(TTSEngine):
-    def __init__(self):
-        super().__init__("espeak")
-        
-    def _initialize(self):
+    async def synthesize_with_espeak(self, text: str) -> Optional[str]:
+        """Synthesize speech using eSpeak"""
         try:
-            result = subprocess.run(['espeak', '--version'], 
-                                  capture_output=True, text=True)
-            if result.returncode == 0:
-                self.available = True
-                logger.info("eSpeak engine initialized successfully")
-            else:
-                self.available = False
-        except Exception as e:
-            logger.error(f"Failed to initialize eSpeak engine: {str(e)}")
-            self.available = False
-    
-    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
-        try:
-            wpm = int(175 * speed)
+            import subprocess
             
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                cmd = ['espeak', '-w', tmp_file.name, '-s', str(wpm), text]
-                subprocess.run(cmd, check=True)
+                cmd = [
+                    'espeak',
+                    '-w', tmp_file.name,
+                    '-s', '150',  # Speed
+                    '-a', '100',  # Amplitude
+                    text
+                ]
                 
-                with open(tmp_file.name, 'rb') as f:
-                    audio_data = f.read()
-                
-                os.unlink(tmp_file.name)
-                return audio_data
+                subprocess.run(cmd, check=True, capture_output=True)
+                return tmp_file.name
                 
         except Exception as e:
-            logger.error(f"eSpeak synthesis error: {str(e)}")
-            raise
-    
-    def get_voices(self) -> List[VoiceInfo]:
-        return [
-            VoiceInfo(
-                id="default",
-                name="eSpeak",
-                language="en",
-                gender="neutral",
-                engine="espeak",
-                description="eSpeak offline voice"
-            )
-        ]
+            logger.error(f"eSpeak error: {e}")
+            return None
 
-# Initialize engines in priority order (GPU-optimized first)
-engines = []
-
-# Add GPU-accelerated engines first
-silero_engine = SileroEngine()
-if silero_engine.available:
-    engines.append(silero_engine)
-
-coqui_engine = CoquiEngine()
-if coqui_engine.available:
-    engines.append(coqui_engine)
-
-# Add cloud engines
-edge_tts_engine = EdgeTTSEngine()
-if edge_tts_engine.available:
-    engines.append(edge_tts_engine)
-
-gtts_engine = GTTSEngine()
-if gtts_engine.available:
-    engines.append(gtts_engine)
-
-# Add offline fallback
-espeak_engine = ESpeakEngine()
-if espeak_engine.available:
-    engines.append(espeak_engine)
-
-logger.info(f"Initialized {len(engines)} TTS engines: {[e.name for e in engines]}")
-if torch.cuda.is_available():
-    logger.info("🚀 GPU acceleration enabled for neural TTS models")
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    gpu_info = {}
-    if torch.cuda.is_available():
-        gpu_info = {
-            "gpu_available": True,
-            "gpu_name": torch.cuda.get_device_name(),
-            "cuda_version": torch.version.cuda,
-            "gpu_memory_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1)
-        }
-    
-    return {
-        "status": "healthy",
-        "engines": [{"name": e.name, "available": e.available} for e in engines],
-        "primary_engine": engines[0].name if engines else "none",
-        "gpu_info": gpu_info,
-        "device": str(DEVICE)
-    }
-
-@app.post("/synthesize")
-async def synthesize_text(request: TTSRequest):
-    """Synthesize text to speech using the best available engine."""
-    
-    if not request.text.strip():
-        raise HTTPException(status_code=400, detail="Text cannot be empty")
-    
-    last_error = None
-    
-    # Try engines in priority order
-    for engine in engines:
-        if not engine.available:
-            continue
+    async def synthesize(self, text: str, voice: str = "male_1", engine: str = "auto") -> TTSResponse:
+        """Main synthesis method with engine fallbacks"""
+        
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Text cannot be empty")
+        
+        engines_to_try = []
+        
+        if engine == "auto":
+            # Try engines in order of preference (Chatterbox first)
+            engines_to_try = [
+                ("chatterbox", self.synthesize_with_chatterbox),
+                ("silero", self.synthesize_with_silero),
+                ("edge_tts", self.synthesize_with_edge_tts),
+                ("gtts", self.synthesize_with_gtts),
+                ("espeak", self.synthesize_with_espeak)
+            ]
+        else:
+            # Try specific engine first, then fallbacks
+            engine_methods = {
+                "chatterbox": self.synthesize_with_chatterbox,
+                "silero": self.synthesize_with_silero,
+                "edge_tts": self.synthesize_with_edge_tts,
+                "gtts": self.synthesize_with_gtts,
+                "espeak": self.synthesize_with_espeak
+            }
             
-        try:
-            logger.info(f"Attempting synthesis with {engine.name}")
-            audio_data = await engine.synthesize(
-                request.text, 
-                request.voice_id, 
-                request.speed
-            )
+            if engine in engine_methods:
+                engines_to_try.append((engine, engine_methods[engine]))
+                # Add fallbacks
+                for fallback_engine, method in engine_methods.items():
+                    if fallback_engine != engine:
+                        engines_to_try.append((fallback_engine, method))
+        
+        # Try each engine until one succeeds
+        for engine_name, method in engines_to_try:
+            try:
+                logger.info(f"Trying {engine_name} for synthesis")
+                
+                if engine_name in ["chatterbox", "silero", "edge_tts"]:
+                    audio_file = await method(text, voice)
+                else:
+                    audio_file = await method(text)
+                
+                if audio_file:
+                    logger.info(f"Successfully synthesized with {engine_name}")
+                    return TTSResponse(
+                        audio_file=audio_file,
+                        engine_used=engine_name,
+                        voice_used=voice
+                    )
+                    
+            except Exception as e:
+                logger.warning(f"Engine {engine_name} failed: {e}")
+                continue
+        
+        # If all engines fail, create silence
+        logger.warning("All TTS engines failed, creating silence")
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+            # Create 1 second of silence
+            silence = torch.zeros(1, 16000)  # 1 second at 16kHz
+            torchaudio.save(tmp_file.name, silence, 16000)
             
-            logger.info(f"Successfully synthesized with {engine.name}")
-            return Response(
-                content=audio_data,
-                media_type="audio/wav",
-                headers={
-                    "X-Engine-Used": engine.name,
-                    "X-Voice-ID": request.voice_id,
-                    "X-GPU-Accelerated": str(engine.name in ["silero", "coqui"] and torch.cuda.is_available())
-                }
+            return TTSResponse(
+                audio_file=tmp_file.name,
+                engine_used="silence",
+                voice_used=voice
             )
-            
-        except Exception as e:
-            last_error = str(e)
-            logger.warning(f"Engine {engine.name} failed: {str(e)}")
-            continue
-    
-    # If all engines failed
-    raise HTTPException(
-        status_code=500, 
-        detail=f"All TTS engines failed. Last error: {last_error}"
+
+# Initialize service
+tts_service = GPUTTSService()
+
+@app.post("/synthesize", response_model=TTSResponse)
+async def synthesize_speech(request: TTSRequest):
+    """Synthesize speech from text"""
+    return await tts_service.synthesize(
+        text=request.text,
+        voice=request.voice,
+        engine=request.engine
     )
 
 @app.get("/voices")
-async def list_voices():
-    """List all available voices from all engines."""
-    all_voices = []
-    
-    for engine in engines:
-        if engine.available:
-            voices = engine.get_voices()
-            all_voices.extend(voices)
-    
+async def get_voices():
+    """Get available voices"""
     return {
-        "voices": all_voices,
-        "primary_engine": engines[0].name if engines else "none",
-        "engine_count": len([e for e in engines if e.available]),
-        "gpu_accelerated": torch.cuda.is_available()
+        "voices": ["female_1", "female_2", "male_1", "male_2", 
+                  "expressive", "calm", "cheerful", "sad"],
+        "engines": ["chatterbox", "silero", "edge_tts", "gtts", "espeak", "auto"]
     }
 
-@app.get("/engines")
-async def list_engines():
-    """List all TTS engines and their status."""
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
     return {
-        "engines": [
-            {
-                "name": e.name,
-                "available": e.available,
-                "voice_count": len(e.get_voices()) if e.available else 0,
-                "gpu_accelerated": e.name in ["silero", "coqui"] and torch.cuda.is_available()
-            }
-            for e in engines
-        ],
-        "gpu_info": {
-            "available": torch.cuda.is_available(),
-            "device": str(DEVICE)
-        }
+        "status": "healthy",
+        "device": tts_service.device,
+        "chatterbox_available": tts_service.chatterbox_engine is not None,
+        "silero_available": tts_service.silero_model is not None,
+        "gpu_available": torch.cuda.is_available(),
+        "primary_engine": "chatterbox"
     }
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8005) 
+    uvicorn.run(app, host="0.0.0.0", port=5002) 
