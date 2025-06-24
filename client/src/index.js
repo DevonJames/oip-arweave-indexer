@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import ElevenLabsConversation from './components/ElevenLabsConversation';
+import VoiceAssistant from './components/ElevenLabsConversation';
 import './styles/elevenlabs-conversation.css';
 
 // When the DOM is loaded
@@ -10,6 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (rootElement) {
     const root = createRoot(rootElement);
-    root.render(<ElevenLabsConversation />);
+    root.render(<VoiceAssistant />);
   }
 }); 

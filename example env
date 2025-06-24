@@ -29,3 +29,16 @@ LLAMA_MODEL=11b
 # HuggingFace token (get from: https://huggingface.co/settings/tokens)
 # Needs "Read" permissions to download LLaMA models
 HUGGINGFACE_TOKEN=
+
+# Voice Services Configuration
+STT_SERVICE_URL=http://stt-service:8003
+TTS_SERVICE_URL=http://tts-service:8005
+TEXT_GENERATOR_URL=http://text-generator:8081
+
+# Whisper STT Configuration
+WHISPER_MODEL=base
+# Options: tiny, base, small, medium, large (larger = better quality, more resource usage)
+WHISPER_DEVICE=cpu
+# Options: cpu, cuda (for GPU acceleration)
+WHISPER_COMPUTE_TYPE=int8
+# Options: int8, int16, float16, float32 (int8 is fastest)

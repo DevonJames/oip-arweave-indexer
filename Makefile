@@ -25,6 +25,7 @@ help: ## Show this help message
 	@echo "  $(GREEN)gpu$(NC)         - GPU-optimized deployment"
 	@echo "  $(GREEN)gpu-only$(NC)    - Only GPU OIP service"
 	@echo "  $(GREEN)full-gpu$(NC)    - Full distributed stack with GPU features"
+	@echo "  $(GREEN)voice$(NC)       - Voice AI services: STT, TTS, and core services"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
 	@echo "  make up PROFILE=minimal"
@@ -38,8 +39,8 @@ PROFILE ?= standard
 # Validate profile
 validate-profile:
 	@case "$(PROFILE)" in \
-		minimal|standard|full|gpu|gpu-only|full-gpu) ;; \
-		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, standard, full, gpu, gpu-only, or full-gpu$(NC)"; exit 1 ;; \
+		minimal|standard|full|gpu|gpu-only|full-gpu|voice) ;; \
+		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, standard, full, gpu, gpu-only, full-gpu, or voice$(NC)"; exit 1 ;; \
 	esac
 
 # Check if .env file exists
@@ -134,6 +135,9 @@ gpu-only: ## Quick deploy: GPU OIP service only
 
 full-gpu: ## Quick deploy: Distributed stack with GPU features
 	@make up PROFILE=full-gpu
+
+voice: ## Quick deploy: Voice AI services (STT, TTS, core)
+	@make up PROFILE=voice
 
 # Development helpers
 dev-build: ## Development: Build without cache
