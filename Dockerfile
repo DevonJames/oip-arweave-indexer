@@ -106,11 +106,12 @@ EXPOSE 8082
 EXPOSE 4040 
 EXPOSE 5555
 
+# Copy and set up the startup script
+COPY start-services.sh ./start-services.sh
+RUN chmod +x start-services.sh
+
 # Command to run all services (API + Next.js frontend)
-CMD ["sh", "-c", "\
-  ./wait-for-it.sh elasticsearch:9200 --timeout=90 --strict -- \
-  (cd frontend && npm start &) && \
-  node --inspect=0.0.0.0:9229 index.js --keepDBUpToDate 10 10"]
+CMD ["./start-services.sh"]
 
 # Add healthcheck for the app
 HEALTHCHECK --interval=75s --timeout=5s --start-period=10s --retries=3 \
