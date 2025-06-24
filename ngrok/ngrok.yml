@@ -1,17 +1,7 @@
 version: "2"
-authtoken: 2nGiS7QiXhXKCin8ouPKLIArdOq_3j1URh6srmYH6ZN1MZwgP
+authtoken_from_env: true
 tunnels:
-  oip:
+  oip-gpu:
     proto: http
-    addr: oip:3005  # Using Tailscale IP
-    hostname: api.oip.onl  # The custom domain you're using
-
-  librairian:
-    proto: http
-    addr: 100.124.42.82:3000  # Your second app's port
-    # addr: host.docker.internal:3000  # Host machine address for non-Docker app
-    hostname: librairian.net  # Your domain from ngrok dashboard
-
-  ssh:
-    proto: tcp
-    addr: 22
+    addr: oip-gpu:3005
+    hostname: api.oip.onl  # Comment this line out if domain issues persist
