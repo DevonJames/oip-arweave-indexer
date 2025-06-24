@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.8-runtime-ubuntu20.04
+FROM nvidia/cuda:11.7.1-runtime-ubuntu20.04
 
 # Install system dependencies for TTS engines with GPU support
 RUN apt-get update && apt-get install -y \
@@ -26,9 +26,9 @@ WORKDIR /app
 # Install Python dependencies with GPU acceleration
 RUN pip3 install --upgrade pip
 
-# Install PyTorch with CUDA support for GPU acceleration
+# Install PyTorch with CUDA support for GPU acceleration (CUDA 11.7)
 RUN pip3 install --no-cache-dir \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 
 # Install TTS dependencies with GPU support
 RUN pip3 install --no-cache-dir \
