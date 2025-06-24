@@ -297,17 +297,14 @@ services:
 
   # Ngrok for GPU deployments
   ngrok-gpu:
-    build:
-      context: ./ngrok
-      dockerfile: Dockerfile
+    image: ngrok/ngrok:latest
+    command: http --domain=api.oip.onl oip-gpu:3005
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
       - oip-gpu
     ports:
       - "4040:4040"
-    volumes:
-      - ./ngrok/ngrok.yml:/usr/src/app/ngrok.yml
     networks:
       - oip-network
     restart: unless-stopped
