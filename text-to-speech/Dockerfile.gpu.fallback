@@ -1,5 +1,9 @@
 FROM nvidia/cuda:11.7.1-runtime-ubuntu20.04
 
+# Set timezone to avoid interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
 # Install system dependencies for TTS engines with GPU support
 RUN apt-get update && apt-get install -y \
     espeak \
