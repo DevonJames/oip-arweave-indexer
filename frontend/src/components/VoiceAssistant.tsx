@@ -26,20 +26,49 @@ interface Voice {
   engine: string;
 }
 
+// Custom Microphone Icon Component
+const MicrophoneIcon = ({ isRecording, isListening, className = "" }: { 
+  isRecording: boolean; 
+  isListening: boolean; 
+  className?: string;
+}) => {
+  let color = '#6B7280'; // Default gray
+  if (isRecording && isListening) {
+    color = '#EF4444'; // Red when actively listening
+  } else if (isRecording) {
+    color = '#F59E0B'; // Amber when recording but not listening
+  } else {
+    color = '#3B82F6'; // Blue when ready
+  }
+
+  return (
+    <svg 
+      width="32" 
+      height="32" 
+      viewBox="0 0 1200 1200" 
+      className={className}
+      fill={color}
+    >
+      <path d="m420.84 524.53v16.922c0 64.547 34.312 121.22 85.547 152.76 18.703 11.531 39.844 19.688 62.297 23.625 10.219 1.7812 20.625 2.7656 31.312 2.7656s21.141-0.9375 31.312-2.7656c22.453-3.9375 43.547-12.141 62.297-23.625 51.234-31.547 85.547-88.219 85.547-152.76v-242.2c0-64.547-34.312-121.22-85.547-152.63-0.60938-0.375-1.2188-0.70312-1.7812-1.0781h-0.23438c-18.234-11.062-38.625-18.844-60.234-22.547-10.219-1.7812-20.625-2.7656-31.312-2.7656s-21.141 0.9375-31.312 2.7656c-21.609 3.8438-42 11.625-60.234 22.547h-0.23438c-0.60938 0.375-1.2188 0.60938-1.7812 1.0781-51.234 31.453-85.547 88.078-85.547 152.63v225.28zm24 12h90.469c6.6094 0 12-5.3906 12-12s-5.3906-12-12-12h-90.469v-47.062h90.469c6.6094 0 12-5.3906 12-12s-5.3906-12-12-12h-90.469v-47.062h90.469c6.6094 0 12-5.3906 12-12s-5.3906-12-12-12h-90.469v-47.062h90.469c6.6094 0 12-5.3906 12-12s-5.3906-12-12-12h-90.469v-0.23438c0-48 21.938-90.938 56.297-119.39v60.609c0 6.6094 5.3906 12 12 12s12-5.3906 12-12v-77.062c10.688-5.8594 22.078-10.547 33.938-13.781v90.844c0 6.6094 5.3906 12 12 12s12-5.3906 12-12v-95.391c5.5312-0.60938 11.156-0.9375 16.922-0.9375s11.391 0.375 16.922 0.9375v95.391c0 6.6094 5.3906 12 12 12s12-5.3906 12-12v-90.844c11.859 3.2344 23.297 7.9219 33.938 13.781v77.062c0 6.6094 5.3906 12 12 12s12-5.3906 12-12v-60.609c34.312 28.453 56.297 71.391 56.297 119.39v0.23438h-90.469c-6.6094 0-12 5.3906-12 12s5.3906 12 12 12h90.469v47.062h-90.469c-6.6094 0-12 5.3906-12 12s5.3906 12 12 12h90.469v47.062h-90.469c-6.6094 0-12 5.3906-12 12s5.3906 12 12 12h90.469v47.062h-90.469c-6.6094 0-12 5.3906-12 12s5.3906 12 12 12h90.469v4.9219c0 48-21.938 90.938-56.297 119.39v-60.469c0-6.6094-5.3906-12-12-12s-12 5.3906-12 12v76.922c-10.688 5.8594-22.078 10.547-33.938 13.781v-90.703c0-6.6094-5.3906-12-12-12s-12 5.3906-12 12v95.297c-5.5312 0.60938-11.156 0.9375-16.922 0.9375s-11.391-0.375-16.922-0.9375v-95.297c0-6.6094-5.3906-12-12-12s-12 5.3906-12 12v90.703c-11.859-3.2344-23.297-7.9219-33.938-13.781v-76.922c0-6.6094-5.3906-12-12-12s-12 5.3906-12 12v60.469c-34.312-28.453-56.297-71.391-56.297-119.39z"/>
+      <path d="m338.16 444.37c-11.531 0-22.453 4.4531-30.703 12.703-8.1562 8.1562-12.703 19.219-12.703 30.703v53.625c0 152.76 111.7 280.78 261.71 302.16v126.94h-85.453c-31.219 0-56.531 25.312-56.531 56.391v28.781c0 13.312 10.922 24.234 24.375 24.234h322.31c13.453 0 24.375-10.922 24.375-24.234v-28.781c0-31.078-25.312-56.391-56.531-56.391h-85.453v-126.94c150-21.375 261.71-149.39 261.71-302.16v-53.625c0-11.531-4.5469-22.547-12.703-30.703-8.2969-8.2969-19.219-12.703-30.703-12.703-24 0-43.547 19.453-43.547 43.453v48c0 119.06-94.219 219.47-209.86 223.78-60 2.2969-116.53-19.453-159.71-60.938-43.219-41.531-66.938-97.312-66.938-157.22v-53.625c0-24-19.547-43.453-43.547-43.453zm93.844 271.55c47.859 46.078 110.86 70.078 177.24 67.688 128.53-4.7812 233.06-116.06 233.06-247.78v-48c0-10.688 8.7656-19.453 19.547-19.453 5.1562 0 10.078 2.0625 13.781 5.625 3.6094 3.7031 5.625 8.625 5.625 13.781v53.625c0 144.14-107.86 264.37-251.06 279.71l-10.688 1.0781v172.31h109.45c17.859 0 32.531 14.531 32.531 32.391l-0.375 29.062-322.69-0.23438v-28.781c0-17.859 14.625-32.391 32.531-32.391h109.45v-172.31l-10.688-1.0781c-143.16-15.375-251.06-135.61-251.06-279.71v-53.625c0-5.1562 2.0625-10.078 5.625-13.781 3.7031-3.6094 8.625-5.625 13.781-5.625 10.781 0 19.547 8.7656 19.547 19.453v53.625c0 66.375 26.391 128.39 74.297 174.47z"/>
+    </svg>
+  );
+};
+
 export default function VoiceAssistant() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isInConversationMode, setIsInConversationMode] = useState(false);
   const [transcript, setTranscript] = useState<Message[]>([]);
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState('female_1');
   const [selectedModel, setSelectedModel] = useState('llama3.2:3b');
+  const [isBrowserSupported, setIsBrowserSupported] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -52,6 +81,7 @@ export default function VoiceAssistant() {
   const isInConversationModeRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const mountedRef = useRef(true);
 
   // Voice Activity Detection configuration
   const VAD_CONFIG = {
@@ -62,61 +92,96 @@ export default function VoiceAssistant() {
   };
 
   // API endpoints
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
-  const STT_ENDPOINT = `${API_BASE}/api/voice/transcribe`;
-  const TTS_ENDPOINT = `${API_BASE}/api/voice/synthesize`;
-  const CHAT_ENDPOINT = `${API_BASE}/api/voice/chat`;
-  const VOICES_ENDPOINT = `${API_BASE}/api/voice/voices`;
+  const API_BASE = '/api';
+  const STT_ENDPOINT = `${API_BASE}/voice/transcribe`;
+  const TTS_ENDPOINT = `${API_BASE}/voice/synthesize`;
+  const CHAT_ENDPOINT = `${API_BASE}/voice/chat`;
+  const VOICES_ENDPOINT = `${API_BASE}/voice/voices`;
 
-  // Initialize audio context on user interaction
+  // Check browser support
+  const checkBrowserSupport = useCallback(() => {
+    if (typeof window === 'undefined') return false;
+    
+    const hasMediaDevices = !!(navigator?.mediaDevices?.getUserMedia);
+    const hasMediaRecorder = typeof MediaRecorder !== 'undefined';
+    const hasAudioContext = !!(window.AudioContext || (window as any).webkitAudioContext);
+    
+    return hasMediaDevices && hasMediaRecorder && hasAudioContext;
+  }, []);
+
+  // Initialize audio context safely
   const initializeAudioContext = useCallback(() => {
     if (!audioContextRef.current && typeof window !== 'undefined') {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AudioContextClass();
-      setAudioContext(audioContextRef.current);
-      
-      if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContextClass();
+        
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume().catch(console.warn);
+        }
+      } catch (err) {
+        console.warn('Failed to initialize AudioContext:', err);
       }
     }
   }, []);
 
   useEffect(() => {
-    loadAvailableVoices();
+    // Only run on client side
+    if (typeof window === 'undefined') return;
+    
+    const supported = checkBrowserSupport();
+    setIsBrowserSupported(supported);
+    
+    if (supported) {
+      loadAvailableVoices();
+      setIsInitialized(true);
+    } else {
+      setError('Your browser does not support voice features. Please use a modern browser like Chrome, Firefox, or Safari.');
+    }
     
     return () => {
+      mountedRef.current = false;
       cleanup();
     };
-  }, []);
+  }, [checkBrowserSupport]);
 
-  const cleanup = () => {
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
+  const cleanup = useCallback(() => {
+    try {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+      
+      if (vadIntervalRef.current) {
+        clearInterval(vadIntervalRef.current);
+        vadIntervalRef.current = null;
+      }
+      
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(console.warn);
+        audioContextRef.current = null;
+      }
+      
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    } catch (err) {
+      console.warn('Cleanup error:', err);
     }
-    
-    if (vadIntervalRef.current) {
-      clearInterval(vadIntervalRef.current);
-      vadIntervalRef.current = null;
-    }
-    
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
-    
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-  };
+  }, []);
 
   const loadAvailableVoices = async () => {
     try {
       const response = await fetch(VOICES_ENDPOINT);
       const data = await response.json();
       
-      if (response.ok && data.voices) {
+      if (response.ok && data.voices && mountedRef.current) {
         setAvailableVoices(data.voices);
         if (data.voices.length > 0 && !selectedVoice) {
           setSelectedVoice(data.voices[0].id);
@@ -132,58 +197,63 @@ export default function VoiceAssistant() {
       initializeAudioContext();
     }
 
-    const audioContext = audioContextRef.current!;
-    analyserRef.current = audioContext.createAnalyser();
-    analyserRef.current.fftSize = 512;
-    
-    const source = audioContext.createMediaStreamSource(stream);
-    source.connect(analyserRef.current);
+    if (!audioContextRef.current) return;
 
-    const bufferLength = analyserRef.current.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    try {
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 512;
+      
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      source.connect(analyserRef.current);
 
-    const monitorAudio = () => {
-      if (!analyserRef.current) return;
-      
-      analyserRef.current.getByteFrequencyData(dataArray);
-      
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i] * dataArray[i];
-      }
-      const rms = Math.sqrt(sum / bufferLength) / 255;
-      
-      const now = Date.now();
-      
-      if (rms > VAD_CONFIG.volumeThreshold) {
-        lastSpeechTimeRef.current = now;
-        setIsListening(true);
+      const bufferLength = analyserRef.current.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      const monitorAudio = () => {
+        if (!analyserRef.current || !mountedRef.current) return;
         
-        if (silenceTimeoutRef.current) {
-          clearTimeout(silenceTimeoutRef.current);
-          silenceTimeoutRef.current = null;
+        analyserRef.current.getByteFrequencyData(dataArray);
+        
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i] * dataArray[i];
         }
-      } else {
-        const recordingDuration = now - (lastSpeechTimeRef.current || now);
+        const rms = Math.sqrt(sum / bufferLength) / 255;
         
-        if (recordingDuration > VAD_CONFIG.minRecordingMs && lastSpeechTimeRef.current > 0) {
-          if (!silenceTimeoutRef.current) {
-            silenceTimeoutRef.current = setTimeout(() => {
-              if (isInConversationModeRef.current) {
-                stopRecordingAndSend();
-              }
-            }, VAD_CONFIG.silenceTimeoutMs);
+        const now = Date.now();
+        
+        if (rms > VAD_CONFIG.volumeThreshold) {
+          lastSpeechTimeRef.current = now;
+          if (mountedRef.current) setIsListening(true);
+          
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
           }
+        } else {
+          const recordingDuration = now - (lastSpeechTimeRef.current || now);
+          
+          if (recordingDuration > VAD_CONFIG.minRecordingMs && lastSpeechTimeRef.current > 0) {
+            if (!silenceTimeoutRef.current) {
+              silenceTimeoutRef.current = setTimeout(() => {
+                if (isInConversationModeRef.current && mountedRef.current) {
+                  stopRecordingAndSend();
+                }
+              }, VAD_CONFIG.silenceTimeoutMs);
+            }
+          }
+          
+          if (mountedRef.current) setIsListening(false);
         }
-        
-        setIsListening(false);
-      }
-    };
-    
-    vadIntervalRef.current = setInterval(monitorAudio, 100);
-  }, []);
+      };
+      
+      vadIntervalRef.current = setInterval(monitorAudio, 100);
+    } catch (err) {
+      console.warn('VAD setup failed:', err);
+    }
+  }, [initializeAudioContext]);
 
-  const cleanupVAD = () => {
+  const cleanupVAD = useCallback(() => {
     if (vadIntervalRef.current) {
       clearInterval(vadIntervalRef.current);
       vadIntervalRef.current = null;
@@ -197,9 +267,11 @@ export default function VoiceAssistant() {
     if (analyserRef.current) {
       analyserRef.current = null;
     }
-  };
+  }, []);
 
   const startRecording = async () => {
+    if (!isBrowserSupported || !mountedRef.current) return;
+    
     try {
       initializeAudioContext();
       
@@ -211,6 +283,11 @@ export default function VoiceAssistant() {
           sampleRate: 16000
         } 
       });
+      
+      if (!mountedRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       
       mediaStreamRef.current = stream;
       await setupVAD(stream);
@@ -229,7 +306,7 @@ export default function VoiceAssistant() {
       };
       
       mediaRecorder.onstop = async () => {
-        if (audioChunksRef.current.length > 0) {
+        if (audioChunksRef.current.length > 0 && mountedRef.current) {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           await processAudioBlob(audioBlob);
         }
@@ -237,19 +314,21 @@ export default function VoiceAssistant() {
       
       mediaRecorder.start();
       isRecordingRef.current = true;
-      setIsRecording(true);
+      if (mountedRef.current) setIsRecording(true);
       
     } catch (err) {
       console.error('Error starting recording:', err);
-      setError('Microphone access denied or not available');
+      if (mountedRef.current) {
+        setError('Microphone access denied or not available');
+      }
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecordingRef.current) {
       mediaRecorderRef.current.stop();
       isRecordingRef.current = false;
-      setIsRecording(false);
+      if (mountedRef.current) setIsRecording(false);
     }
     
     cleanupVAD();
@@ -258,13 +337,15 @@ export default function VoiceAssistant() {
       mediaStreamRef.current.getTracks().forEach(track => track.stop());
       mediaStreamRef.current = null;
     }
-  };
+  }, [cleanupVAD]);
 
-  const stopRecordingAndSend = () => {
+  const stopRecordingAndSend = useCallback(() => {
     stopRecording();
-  };
+  }, [stopRecording]);
 
   const processAudioBlob = async (audioBlob: Blob) => {
+    if (!mountedRef.current) return;
+    
     try {
       setIsTranscribing(true);
       
@@ -283,7 +364,7 @@ export default function VoiceAssistant() {
       const sttData = await sttResponse.json();
       const transcribedText = sttData.text?.trim();
       
-      if (!transcribedText) {
+      if (!transcribedText || !mountedRef.current) {
         console.warn('No text transcribed from audio');
         return;
       }
@@ -299,13 +380,17 @@ export default function VoiceAssistant() {
       
     } catch (err) {
       console.error('Error processing audio:', err);
-      setError('Failed to process audio: ' + (err as Error).message);
+      if (mountedRef.current) {
+        setError('Failed to process audio: ' + (err as Error).message);
+      }
     } finally {
-      setIsTranscribing(false);
+      if (mountedRef.current) setIsTranscribing(false);
     }
   };
 
   const processTextWithLLM = async (text: string) => {
+    if (!mountedRef.current) return;
+    
     try {
       setIsLoading(true);
       
@@ -329,7 +414,7 @@ export default function VoiceAssistant() {
       
       const data = await response.json();
       
-      if (!data.response_text) {
+      if (!data.response_text || !mountedRef.current) {
         throw new Error('No response generated');
       }
       
@@ -347,13 +432,17 @@ export default function VoiceAssistant() {
       
     } catch (err) {
       console.error('Error processing with LLM:', err);
-      setError('Failed to generate response: ' + (err as Error).message);
+      if (mountedRef.current) {
+        setError('Failed to generate response: ' + (err as Error).message);
+      }
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   };
 
   const speak = async (text: string) => {
+    if (!mountedRef.current) return;
+    
     try {
       setIsSpeaking(true);
       
@@ -381,29 +470,39 @@ export default function VoiceAssistant() {
       }
       
       const audioBlob = await response.blob();
+      
+      if (!mountedRef.current) return;
+      
       const audioUrl = URL.createObjectURL(audioBlob);
       
       audioRef.current = new Audio(audioUrl);
       
       audioRef.current.onended = () => {
-        setIsSpeaking(false);
+        if (mountedRef.current) setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
         
-        if (wasInConversationMode && isInConversationModeRef.current) {
+        if (wasInConversationMode && isInConversationModeRef.current && mountedRef.current) {
           setTimeout(() => {
-            if (isInConversationModeRef.current && !isRecordingRef.current) {
+            if (isInConversationModeRef.current && !isRecordingRef.current && mountedRef.current) {
               startRecording();
             }
           }, 1000);
         }
       };
       
+      audioRef.current.onerror = () => {
+        if (mountedRef.current) setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
       await audioRef.current.play();
       
     } catch (err) {
       console.error('Error synthesizing speech:', err);
-      setError('Failed to synthesize speech: ' + (err as Error).message);
-      setIsSpeaking(false);
+      if (mountedRef.current) {
+        setError('Failed to synthesize speech: ' + (err as Error).message);
+        setIsSpeaking(false);
+      }
     }
   };
 
@@ -430,6 +529,40 @@ export default function VoiceAssistant() {
   const clearTranscript = () => {
     setTranscript([]);
   };
+
+  // Show loading state while initializing
+  if (!isInitialized) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-800 mb-4">AI Voice Assistant</h2>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="text-gray-600 mt-4">Initializing voice features...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if browser not supported
+  if (!isBrowserSupported) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-800 mb-4">AI Voice Assistant</h2>
+          <div className="p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            <h3 className="text-xl font-semibold mb-2">Browser Not Supported</h3>
+            <p>Your browser does not support voice features. Please use a modern browser like:</p>
+            <ul className="list-disc list-inside mt-2">
+              <li>Google Chrome (recommended)</li>
+              <li>Mozilla Firefox</li>
+              <li>Safari (macOS/iOS)</li>
+              <li>Microsoft Edge</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
@@ -471,9 +604,11 @@ export default function VoiceAssistant() {
             `}
             disabled={isLoading || isTranscribing || isSpeaking}
           >
-            <span className="text-2xl mb-1">
-              {isRecording ? (isListening ? '🎙️' : '🔴') : '🎤'}
-            </span>
+            <MicrophoneIcon 
+              isRecording={isRecording} 
+              isListening={isListening}
+              className={isListening ? 'animate-pulse' : ''}
+            />
             <span className="text-sm">
               {isRecording ? 'Stop Recording' : 'Start Recording'}
             </span>
@@ -501,147 +636,134 @@ export default function VoiceAssistant() {
         </div>
         
         {/* Settings */}
-        <div className="flex justify-center gap-6">
-          <div className="flex flex-col">
-            <label htmlFor="voice-select" className="text-sm font-medium text-gray-700 mb-1">
-              Voice:
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Voice Model
             </label>
             <select 
-              id="voice-select"
-              value={selectedVoice} 
-              onChange={(e) => setSelectedVoice(e.target.value)}
-              disabled={isRecording || isSpeaking}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isLoading || isRecording}
             >
-              {availableVoices.map(voice => (
+              <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
+              <option value="mistral:latest">Mistral 7B (Balanced)</option>
+              <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
+              <option value="tinyllama:latest">TinyLlama (Ultra Fast)</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Voice Style
+            </label>
+            <select 
+              value={selectedVoice}
+              onChange={(e) => setSelectedVoice(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isLoading || isRecording}
+            >
+              {availableVoices.map((voice) => (
                 <option key={voice.id} value={voice.id}>
                   {voice.name} ({voice.engine})
                 </option>
               ))}
             </select>
           </div>
-          
-          <div className="flex flex-col">
-            <label htmlFor="model-select" className="text-sm font-medium text-gray-700 mb-1">
-              Model:
-            </label>
-            <select 
-              id="model-select"
-              value={selectedModel} 
-              onChange={(e) => setSelectedModel(e.target.value)}
-              disabled={isRecording || isSpeaking}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="llama3.2:3b">Llama 3.2 3B</option>
-              <option value="mistral:7b">Mistral 7B</option>
-              <option value="llama2:7b">Llama 2 7B</option>
-              <option value="tinyllama">TinyLlama</option>
-            </select>
-          </div>
         </div>
       </div>
-      
+
+      {/* Loading States */}
+      {(isLoading || isTranscribing || isSpeaking) && (
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+            {isTranscribing && 'Transcribing speech...'}
+            {isLoading && 'Processing with AI...'}
+            {isSpeaking && 'Speaking response...'}
+          </div>
+        </div>
+      )}
+
       {/* Transcript */}
-      <div className="bg-gray-50 rounded-lg p-4">
+      <div className="bg-gray-50 rounded-lg p-4 min-h-[300px] max-h-[500px] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-800">Conversation</h3>
-          <button 
-            onClick={clearTranscript}
-            className="px-3 py-1 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded"
-          >
-            Clear
-          </button>
-        </div>
-        
-        <div className="space-y-3 max-h-96 overflow-y-auto">
-          {transcript.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">
-              No conversation yet. Start recording to begin!
-            </p>
-          ) : (
-            transcript.map((message, index) => (
-              <div 
-                key={index}
-                className={`
-                  flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}
-                `}
-              >
-                               <div 
-                 className={`
-                   max-w-[70%] px-4 py-2 rounded-lg
-                   ${message.role === 'user' 
-                     ? 'bg-blue-500 text-white' 
-                     : 'bg-white text-gray-800 border border-gray-200'
-                   }
-                 `}
-               >
-                 <p className="text-sm">{message.content}</p>
-                 
-                 {/* RAG Sources for assistant messages */}
-                 {message.role === 'assistant' && message.sources && message.sources.length > 0 && (
-                   <div className="mt-2 pt-2 border-t border-gray-200">
-                     <p className="text-xs text-gray-600 mb-1">
-                       📚 Sources ({message.search_results_count} found):
-                     </p>
-                     <div className="space-y-1">
-                       {message.sources.slice(0, 3).map((source, idx) => (
-                         <div key={idx} className="text-xs bg-gray-50 p-2 rounded">
-                           <div className="font-medium">{source.title}</div>
-                           <div className="text-gray-500">
-                             by {source.creator} • {source.recordType}
-                           </div>
-                           {source.preview && (
-                             <div className="text-gray-600 mt-1">{source.preview}</div>
-                           )}
-                         </div>
-                       ))}
-                     </div>
-                   </div>
-                 )}
-                 
-                 {/* Context indicator */}
-                 {message.role === 'assistant' && message.context_used && (
-                   <div className="mt-2 flex items-center text-xs text-green-600">
-                     <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                     Context from knowledge base used
-                   </div>
-                 )}
-                 
-                 <div className="flex justify-between items-center mt-2">
-                   <span className="text-xs opacity-70">
-                     {new Date(message.timestamp).toLocaleTimeString()}
-                   </span>
-                   {message.role === 'assistant' && !message.context_used && (
-                     <span className="text-xs text-yellow-600">No context found</span>
-                   )}
-                 </div>
-               </div>
-              </div>
-            ))
+          {transcript.length > 0 && (
+            <button
+              onClick={clearTranscript}
+              className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 rounded transition-colors"
+            >
+              Clear
+            </button>
           )}
         </div>
+        
+        {transcript.length === 0 ? (
+          <div className="text-center text-gray-500 py-8">
+            <p>No conversation yet. Click the microphone to start!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {transcript.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`
+                    max-w-xs lg:max-w-md px-4 py-2 rounded-lg
+                    ${message.role === 'user'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white text-gray-800 border border-gray-200'
+                    }
+                  `}
+                >
+                  <p className="text-sm">{message.content}</p>
+                  <p className="text-xs opacity-70 mt-1">
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                  </p>
+                  
+                  {/* Show sources for assistant messages */}
+                  {message.role === 'assistant' && message.sources && message.sources.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-200">
+                      <p className="text-xs font-medium text-gray-600 mb-1">
+                        Sources ({message.sources.length}):
+                      </p>
+                      <div className="space-y-1">
+                        {message.sources.slice(0, 3).map((source, idx) => (
+                          <div key={idx} className="text-xs bg-gray-100 p-2 rounded">
+                            <div className="font-medium">{source.title}</div>
+                            <div className="text-gray-600">by {source.creator}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show context info */}
+                  {message.role === 'assistant' && message.context_used && (
+                    <div className="mt-1 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                      ✓ Used knowledge base ({message.search_results_count} results)
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       
-      {/* Status Indicators */}
-      <div className="mt-4 flex justify-center gap-4 text-sm">
-        <div className={`flex items-center gap-1 ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
-          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-          {isConnected ? 'Connected' : 'Disconnected'}
-        </div>
-        
-        {isLoading && (
-          <div className="flex items-center gap-1 text-blue-600">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-            Processing...
-          </div>
-        )}
-        
-        {isTranscribing && (
-          <div className="flex items-center gap-1 text-purple-600">
-            <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
-            Transcribing...
-          </div>
-        )}
+      {/* Instructions */}
+      <div className="mt-6 text-sm text-gray-600 bg-blue-50 p-4 rounded-lg">
+        <h4 className="font-medium mb-2">How to use:</h4>
+        <ul className="list-disc list-inside space-y-1">
+          <li><strong>Single Recording:</strong> Click microphone to record once, click again to stop</li>
+          <li><strong>Conversation Mode:</strong> Automatic voice detection - speaks and listens continuously</li>
+          <li><strong>Model Selection:</strong> Choose AI model based on speed vs quality preference</li>
+          <li><strong>Voice Style:</strong> Select from multiple TTS voices and engines</li>
+        </ul>
       </div>
     </div>
   );
