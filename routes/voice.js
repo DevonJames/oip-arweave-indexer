@@ -33,6 +33,7 @@ const upload = multer({
 
 // Service URLs
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || 'http://localhost:8003';
+const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
 const TEXT_GENERATOR_URL = process.env.TEXT_GENERATOR_URL || 'http://localhost:8002';
 
 // Embedded TTS using espeak (available in Alpine container)
@@ -153,38 +154,67 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
 /**
  * POST /api/voice/synthesize
- * Convert text to speech audio using embedded TTS
+ * Convert text to speech audio using Chatterbox TTS service
  */
 router.post('/synthesize', async (req, res) => {
     try {
-        const { text, voice_id = 'default', speed = 1.0, language = 'en' } = req.body;
+        const { text, voice_id = 'chatterbox', speed = 1.0, language = 'en' } = req.body;
 
         if (!text || !text.trim()) {
             return res.status(400).json({ error: 'Text is required' });
         }
 
-        console.log(`[TTS] Synthesizing: "${text.substring(0, 50)}..." with voice ${voice_id}`);
+        console.log(`[TTS] Synthesizing with Chatterbox: "${text.substring(0, 50)}..." with voice ${voice_id}`);
 
-        // Use embedded espeak TTS
-        const audioData = await synthesizeWithEspeak(text.trim(), voice_id, speed);
+        // Use Chatterbox TTS service
+        const ttsResponse = await axios.post(
+            `${TTS_SERVICE_URL}/synthesize`,
+            {
+                text: text.trim(),
+                voice_id,
+                speed,
+                language
+            },
+            {
+                timeout: 30000,
+                responseType: 'arraybuffer'
+            }
+        );
 
         // Set appropriate headers
         res.set({
             'Content-Type': 'audio/wav',
-            'X-Engine-Used': 'espeak',
+            'X-Engine-Used': 'chatterbox',
             'X-Voice-ID': voice_id,
-            'Content-Length': audioData.length.toString()
+            'Content-Length': ttsResponse.data.length.toString()
         });
 
         // Send audio data directly
-        res.send(audioData);
+        res.send(ttsResponse.data);
 
     } catch (error) {
         console.error('TTS Error:', error.message);
-        res.status(500).json({
-            error: 'Speech synthesis failed',
-            details: error.message
-        });
+        
+        // Fallback to eSpeak if Chatterbox service fails
+        try {
+            console.log('[TTS] Falling back to eSpeak...');
+            const audioData = await synthesizeWithEspeak(text.trim(), voice_id, speed);
+            
+            res.set({
+                'Content-Type': 'audio/wav',
+                'X-Engine-Used': 'espeak-fallback',
+                'X-Voice-ID': voice_id,
+                'Content-Length': audioData.length.toString()
+            });
+            
+            res.send(audioData);
+        } catch (fallbackError) {
+            console.error('Fallback TTS also failed:', fallbackError.message);
+            res.status(500).json({
+                error: 'Speech synthesis failed',
+                details: error.message
+            });
+        }
     }
 });
 
@@ -227,7 +257,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         // Step 2: Generate text response using RAG (search + LLM)
         const {
             model = 'llama3.2:3b',
-            voice_id = 'default',
+            voice_id = 'chatterbox',
             speed = 1.0,
             return_audio = true,
             creator_filter = null,
@@ -256,10 +286,35 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         // Step 3: Convert response to speech if requested
         if (return_audio) {
             try {
-                console.log(`[Voice Chat] Synthesizing response audio with voice ${voice_id}`);
+                console.log(`[Voice Chat] Synthesizing response audio with Chatterbox voice ${voice_id}`);
                 
-                // Use embedded TTS instead of external service
-                const audioData = await synthesizeWithEspeak(responseText, voice_id, speed);
+                // Use Chatterbox TTS service first
+                let audioData;
+                let engineUsed = 'chatterbox';
+                
+                try {
+                    const ttsResponse = await axios.post(
+                        `${TTS_SERVICE_URL}/synthesize`,
+                        {
+                            text: responseText,
+                            voice_id,
+                            speed,
+                            language: 'en'
+                        },
+                        {
+                            timeout: 30000,
+                            responseType: 'arraybuffer'
+                        }
+                    );
+                    
+                    audioData = Buffer.from(ttsResponse.data);
+                    console.log(`[Voice Chat] Successfully synthesized with Chatterbox: ${audioData.length} bytes`);
+                    
+                } catch (chatterboxError) {
+                    console.warn(`[Voice Chat] Chatterbox failed, falling back to eSpeak:`, chatterboxError.message);
+                    audioData = await synthesizeWithEspeak(responseText, voice_id, speed);
+                    engineUsed = 'espeak-fallback';
+                }
 
                 // Return combined response with RAG metadata  
                 res.json({
@@ -269,7 +324,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     model_used: model,
                     voice_id,
                     has_audio: true,
-                    engine_used: 'espeak',
+                    engine_used: engineUsed,
                     audio_data: audioData.toString('base64'), // Include audio as base64
                     sources: ragResponse.sources,
                     context_used: ragResponse.context_used,
@@ -277,7 +332,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 });
 
             } catch (ttsError) {
-                console.warn('TTS failed, returning text only:', ttsError.message);
+                console.warn('All TTS methods failed, returning text only:', ttsError.message);
                 
                 // Return text response even if TTS fails
                 res.json({
@@ -318,34 +373,56 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
 
 /**
  * GET /api/voice/voices
- * List available TTS voices (embedded)
+ * List available TTS voices from Chatterbox service
  */
 router.get('/voices', async (req, res) => {
-    // Return embedded eSpeak voices
-    const embeddedVoices = {
-        voices: [
-            { id: 'default', name: 'Default English', engine: 'eSpeak' },
-            { id: 'female_1', name: 'Female Voice 1', engine: 'eSpeak' },
-            { id: 'male_1', name: 'Male Voice 1', engine: 'eSpeak' },
-            { id: 'female_2', name: 'Female Voice 2', engine: 'eSpeak' },
-            { id: 'male_2', name: 'Male Voice 2', engine: 'eSpeak' }
-        ]
-    };
-    
-    console.log('[TTS] Returning embedded eSpeak voices');
-    res.json(embeddedVoices);
+    try {
+        // Try to get voices from Chatterbox TTS service
+        const response = await axios.get(`${TTS_SERVICE_URL}/voices`, {
+            timeout: 10000
+        });
+        
+        console.log('[TTS] Returning Chatterbox voices from TTS service');
+        res.json(response.data);
+        
+    } catch (error) {
+        console.warn('[TTS] Chatterbox service unavailable, returning fallback voices:', error.message);
+        
+        // Fallback voices if service is down
+        const fallbackVoices = {
+            voices: [
+                { id: 'chatterbox', name: 'Chatterbox (Default)', engine: 'Chatterbox' },
+                { id: 'female_1', name: 'Female Voice 1 (eSpeak)', engine: 'eSpeak' },
+                { id: 'male_1', name: 'Male Voice 1 (eSpeak)', engine: 'eSpeak' },
+                { id: 'female_2', name: 'Female Voice 2 (eSpeak)', engine: 'eSpeak' },
+                { id: 'male_2', name: 'Male Voice 2 (eSpeak)', engine: 'eSpeak' }
+            ]
+        };
+        
+        res.json(fallbackVoices);
+    }
 });
 
 /**
  * GET /api/voice/engines
- * List available TTS engines (embedded)
+ * List available TTS engines
  */
 router.get('/engines', async (req, res) => {
-    res.json({
-        engines: [
-            { id: 'espeak', name: 'eSpeak TTS', available: true }
-        ]
-    });
+    const engines = [
+        { id: 'chatterbox', name: 'Chatterbox TTS (Default)', available: true, preferred: true },
+        { id: 'espeak', name: 'eSpeak TTS (Fallback)', available: true, preferred: false }
+    ];
+    
+    // Check if TTS service is available
+    try {
+        await axios.get(`${TTS_SERVICE_URL}/health`, { timeout: 5000 });
+        engines[0].status = 'healthy';
+    } catch (error) {
+        engines[0].status = 'unavailable';
+        engines[0].available = false;
+    }
+    
+    res.json({ engines });
 });
 
 /**
@@ -434,12 +511,12 @@ router.post('/rag', async (req, res) => {
 router.get('/health', async (req, res) => {
     const services = {
         stt: { url: STT_SERVICE_URL, status: 'unknown' },
-        tts: { embedded: true, status: 'healthy' }, // Embedded TTS
+        tts: { url: TTS_SERVICE_URL, status: 'unknown', engine: 'chatterbox' },
         text_generator: { url: TEXT_GENERATOR_URL, status: 'unknown' }
     };
 
     // Check external services
-    const healthChecks = ['stt', 'text_generator'].map(async (serviceName) => {
+    const healthChecks = ['stt', 'tts', 'text_generator'].map(async (serviceName) => {
         try {
             const response = await axios.get(
                 `${services[serviceName].url}/health`,
@@ -461,9 +538,13 @@ router.get('/health', async (req, res) => {
         service => service.status === 'healthy'
     );
 
+    // Add fallback info for TTS
+    const ttsStatus = services.tts.status === 'healthy' ? 'Chatterbox Available' : 'eSpeak Fallback Active';
+
     res.json({
         status: allHealthy ? 'healthy' : 'degraded',
         services,
+        tts_status: ttsStatus,
         timestamp: new Date().toISOString()
     });
 });
