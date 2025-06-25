@@ -290,8 +290,29 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
             let transaction = {
                 data: record,
                 transactionId: didTx
-            } 
-            const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+            }
+            
+            // Debug: Check wallet file path and existence (DELETE RECORD CASE)
+            const walletPath = process.env.WALLET_FILE;
+            console.log('[DEBUG DELETE] WALLET_FILE env var:', walletPath);
+            console.log('[DEBUG DELETE] Current working directory:', process.cwd());
+            console.log('[DEBUG DELETE] Attempting to read wallet from:', path.resolve(walletPath || 'undefined'));
+            
+            if (!walletPath) {
+                console.error('[ERROR DELETE] WALLET_FILE environment variable is not set!');
+                throw new Error('WALLET_FILE environment variable is not set');
+            }
+            
+            if (!fs.existsSync(walletPath)) {
+                console.error('[ERROR DELETE] Wallet file not found at:', walletPath);
+                console.error('[ERROR DELETE] Directory contents:', fs.readdirSync('.'));
+                if (fs.existsSync('config')) {
+                    console.error('[ERROR DELETE] Config directory contents:', fs.readdirSync('config'));
+                }
+                throw new Error(`Wallet file not found: ${walletPath}`);
+            }
+            
+            const jwk = JSON.parse(fs.readFileSync(walletPath));
             
             const myPublicKey = jwk.n;
             const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
