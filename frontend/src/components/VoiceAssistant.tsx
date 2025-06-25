@@ -65,7 +65,7 @@ export default function VoiceAssistant() {
   const [isInConversationMode, setIsInConversationMode] = useState(false);
   const [transcript, setTranscript] = useState<Message[]>([]);
   const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
-  const [selectedVoice, setSelectedVoice] = useState('chatterbox');
+  const [selectedVoice, setSelectedVoice] = useState('female_1');
   const [selectedModel, setSelectedModel] = useState('llama3.2:3b');
   const [isBrowserSupported, setIsBrowserSupported] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
