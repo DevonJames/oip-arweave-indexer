@@ -25,13 +25,24 @@ class RAGService {
         
         // Define keywords for each record type based on their descriptions
         const typeKeywords = {
-            recipe: ['recipe', 'cook', 'food', 'ingredient', 'meal', 'dish', 'kitchen', 'eat', 'nutrition', 'cooking'],
-            exercise: ['exercise', 'workout', 'fitness', 'gym', 'muscle', 'training', 'sport', 'physical', 'cardio', 'strength'],
-            post: ['news', 'article', 'politics', 'election', 'government', 'policy', 'social', 'current', 'event', 'opinion', 'blog', 'discussion'],
-            podcast: ['podcast', 'audio', 'interview', 'conversation', 'talk', 'speaker', 'listen', 'episode'],
-            jfkFilesDocument: ['jfk', 'kennedy', 'assassination', 'document', 'classified', 'cia', 'fbi', 'government', 'conspiracy'],
-            image: ['photo', 'picture', 'image', 'visual', 'gallery', 'photography'],
-            video: ['video', 'watch', 'film', 'movie', 'youtube', 'streaming', 'visual']
+            recipe: ['recipe', 'cook', 'food', 'ingredient', 'meal', 'dish', 'kitchen', 'eat', 'nutrition', 'cooking', 'bake', 'chef'],
+            exercise: ['exercise', 'workout', 'fitness', 'gym', 'muscle', 'training', 'sport', 'physical', 'cardio', 'strength', 'yoga', 'pilates'],
+            post: [
+                // News and current events
+                'news', 'article', 'politics', 'election', 'government', 'policy', 'social', 'current', 'event', 'opinion', 'blog', 'discussion',
+                'latest', 'today', 'recent', 'now', 'happening', 'update', 'breaking',
+                // Countries and regions (high-relevance for news)
+                'iran', 'china', 'russia', 'ukraine', 'israel', 'palestine', 'syria', 'afghanistan', 'turkey', 'venezuela', 'belarus',
+                'america', 'usa', 'europe', 'asia', 'africa', 'middle east',
+                // Political and economic terms
+                'president', 'congress', 'senate', 'parliament', 'minister', 'prime minister', 'democracy', 'dictatorship',
+                'economy', 'market', 'inflation', 'recession', 'covid', 'pandemic', 'climate', 'war', 'peace', 'treaty',
+                'sanctions', 'trade', 'tariff', 'diplomacy', 'summit', 'crisis', 'protest', 'revolution'
+            ],
+            podcast: ['podcast', 'audio', 'interview', 'conversation', 'talk', 'speaker', 'listen', 'episode', 'radio', 'show'],
+            jfkFilesDocument: ['jfk', 'kennedy', 'assassination', 'document', 'classified', 'cia', 'fbi', 'government', 'conspiracy', 'file', 'secret'],
+            image: ['photo', 'picture', 'image', 'visual', 'gallery', 'photography', 'camera', 'snapshot'],
+            video: ['video', 'watch', 'film', 'movie', 'youtube', 'streaming', 'visual', 'documentary', 'clip']
         };
         
         // Check each record type for keyword matches
@@ -53,10 +64,26 @@ class RAGService {
             }
         }
         
-        // If no specific matches found, include high-priority general types
+        // If no specific matches found, use intelligent fallback based on question context
         if (relevantTypes.length === 0) {
-            console.log('[RAG] No specific record type matches, using high-priority types');
-            const highPriorityTypes = getRecordTypesByPriority().slice(0, 3); // Top 3
+            console.log('[RAG] No specific record type matches, using intelligent fallback');
+            
+            // For news/current events/politics questions, default to posts only
+            const newsKeywords = ['latest', 'news', 'current', 'today', 'recent', 'now', 'happening', 'update', 'politics', 'government', 'election', 'policy', 'iran', 'china', 'russia', 'ukraine', 'israel', 'palestine', 'covid', 'economy', 'market'];
+            const isNewsQuery = newsKeywords.some(keyword => lowerQuestion.includes(keyword));
+            
+            if (isNewsQuery && isRecordTypeEnabled('post')) {
+                console.log('[RAG] News/current events query detected, using posts only');
+                return [{
+                    type: 'post',
+                    score: 1,
+                    priority: recordTypesForRAG.post?.priority || 5,
+                    description: 'News and current events content'
+                }];
+            }
+            
+            // For other general queries, use top 2 highest priority types (but still be selective)
+            const highPriorityTypes = getRecordTypesByPriority().slice(0, 2);
             return highPriorityTypes.map(item => ({
                 type: item.type,
                 score: 0,
@@ -87,12 +114,15 @@ class RAGService {
             try {
                 console.log(`[RAG] Searching ${typeInfo.type} records for: ${question}`);
                 
-                // Use direct database call instead of HTTP
+                // Use direct database call with proper summarizeTags parameters
                 const searchParams = {
                     search: question,
                     recordType: typeInfo.type,
                     sortBy: 'date:desc',
-                    resolveDepth: 1,
+                    resolveDepth: 3, // Use proper resolve depth like the user's API call
+                    summarizeTags: true, // CRITICAL: Enable tag summarization for relevance
+                    tagCount: 5, // Get top 5 tags for context
+                    tagPage: 1,
                     limit: this.maxResults,
                     page: 1,
                     includeSigs: false,
@@ -185,7 +215,10 @@ class RAGService {
             search: question,
             limit: this.maxResults * 2, // Get more results since we'll filter by record type
             page: 1,
-            resolveDepth: 1,
+            resolveDepth: 3, // Use proper resolve depth like the user's API call
+            summarizeTags: true, // CRITICAL: Enable tag summarization for relevance
+            tagCount: 5, // Get top 5 tags for context
+            tagPage: 1,
             includeSigs: false,
             includePubKeys: false,
             sortBy: 'date:desc',
