@@ -284,14 +284,18 @@ class RAGService {
         const contextParts = [];
         let currentLength = 0;
 
-        // Add record content
+        // Add record content with clear numbering
         if (searchResults.records && searchResults.records.length > 0) {
-            contextParts.push("=== RELEVANT RECORDS ===");
+            contextParts.push("📚 RELEVANT INFORMATION FROM YOUR DATA:");
+            contextParts.push("");
             
-            for (const record of searchResults.records) {
+            for (let i = 0; i < searchResults.records.length; i++) {
+                const record = searchResults.records[i];
                 const recordContext = this.extractRecordContext(record);
                 if (currentLength + recordContext.length < this.maxContextLength) {
+                    contextParts.push(`RECORD ${i + 1}:`);
                     contextParts.push(recordContext);
+                    contextParts.push("");
                     currentLength += recordContext.length;
                 } else {
                     break;
@@ -303,8 +307,9 @@ class RAGService {
         if (searchResults.templates && searchResults.templates.length > 0) {
             const templateContext = this.extractTemplateContext(searchResults.templates);
             if (currentLength + templateContext.length < this.maxContextLength) {
-                contextParts.push("=== RELEVANT TEMPLATES ===");
+                contextParts.push("📋 RELEVANT TEMPLATES:");
                 contextParts.push(templateContext);
+                contextParts.push("");
             }
         }
 
@@ -312,12 +317,13 @@ class RAGService {
         if (searchResults.creators && searchResults.creators.length > 0) {
             const creatorContext = this.extractCreatorContext(searchResults.creators);
             if (currentLength + creatorContext.length < this.maxContextLength) {
-                contextParts.push("=== RELEVANT CREATORS ===");
+                contextParts.push("👥 RELEVANT CREATORS:");
                 contextParts.push(creatorContext);
+                contextParts.push("");
             }
         }
 
-        return contextParts.join('\n\n');
+        return contextParts.join('\n');
     }
 
     /**
@@ -334,40 +340,42 @@ class RAGService {
         // Get configured context fields for this record type
         const contextFields = getContextFields(recordType);
         
-        // Always include basic information
+        // Always include basic information with clear formatting
         if (basic.name) {
-            parts.push(`Title: ${basic.name}`);
+            parts.push(`TITLE: ${basic.name}`);
         }
         
         if (basic.description) {
-            parts.push(`Description: ${basic.description}`);
+            // Use full description for better context
+            parts.push(`CONTENT: ${basic.description}`);
+        }
+        
+        // Add publication date for timing context
+        if (basic.dateReadable) {
+            parts.push(`PUBLISHED: ${basic.dateReadable}`);
+        }
+        
+        // Add relevant tags (limit to most important ones)
+        if (basic.tagItems && basic.tagItems.length > 0) {
+            parts.push(`TAGS: ${basic.tagItems.slice(0, 8).join(', ')}`);
         }
         
         // Add record type with relevance score if available
         if (recordType) {
             if (ragTypeInfo && ragTypeInfo.score > 0) {
-                parts.push(`Type: ${recordType} (relevance: ${ragTypeInfo.score})`);
+                parts.push(`SOURCE: ${recordType} (relevance: ${ragTypeInfo.score})`);
             } else {
-                parts.push(`Type: ${recordType}`);
+                parts.push(`SOURCE: ${recordType}`);
             }
         }
         
         // Add creator info
         if (oip.creator?.creatorHandle) {
-            parts.push(`Creator: ${oip.creator.creatorHandle}`);
+            parts.push(`CREATOR: ${oip.creator.creatorHandle}`);
         }
         
         // Add record type specific fields
         this.addRecordTypeSpecificContext(parts, record, recordType, contextFields);
-        
-        // Add common fields
-        if (basic.tagItems && basic.tagItems.length > 0) {
-            parts.push(`Tags: ${basic.tagItems.join(', ')}`);
-        }
-        
-        if (basic.dateReadable) {
-            parts.push(`Date: ${basic.dateReadable}`);
-        }
         
         if (basic.webUrl || basic.url) {
             parts.push(`URL: ${basic.webUrl || basic.url}`);
@@ -542,14 +550,23 @@ Please respond helpfully, acknowledging that you don't have specific information
 Response:`;
         }
 
-        return `You are an AI assistant for an OIP (Open Index Protocol) system. Use the following context from the user's data to answer their question. Be specific and cite information from the context when possible. If the context doesn't contain enough information to fully answer the question, say so honestly.
+        return `You are an AI assistant for an OIP (Open Index Protocol) system. You have been provided with relevant information from the user's data to answer their question. 
 
-Context from OIP Database:
+IMPORTANT: You MUST use the information provided in the context below to answer the user's question. The context contains factual information that directly relates to their query. Analyze the titles, content, tags, and publication dates to provide an accurate, informative response.
+
+CONTEXT FROM OIP DATABASE:
 ${context}
 
-Question: ${question}
+USER QUESTION: ${question}
 
-Based on the context above, provide a helpful and accurate response:`;
+INSTRUCTIONS:
+1. Read through ALL the provided context carefully
+2. Extract the key facts that answer the user's question
+3. Provide a clear, direct answer based on the information
+4. Reference specific details from the context (titles, dates, key facts)
+5. If multiple sources provide information, synthesize them into a comprehensive answer
+
+ANSWER:`;
     }
 
     /**
