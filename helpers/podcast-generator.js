@@ -12,6 +12,7 @@ const { host } = require('../config/arweave.config');
 const {getCurrentBlockHeight} = require('../helpers/arweave');
 const { indexRecord, searchCreatorByAddress } = require('../helpers/elasticsearch');
 const base64url = require('base64url');
+const { getWalletFilePath } = require('./utils');
 
 
 // Initialize Text-to-Speech client
@@ -1560,7 +1561,7 @@ async function generatePodcastFromArticles(articles, selectedHosts, targetLength
       }
     }
     
-    const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE)); 
+    const jwk = JSON.parse(fs.readFileSync(getWalletFilePath())); 
     const myPublicKey = jwk.n;
     const myAddress = base64url(crypto.createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
     const creatorDid = `did:arweave:${myAddress}`

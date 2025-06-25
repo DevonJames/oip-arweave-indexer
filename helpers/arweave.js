@@ -1,5 +1,5 @@
 const Arweave = require('arweave');
-const { getTurboArweave } = require('./utils');
+const { getTurboArweave, getWalletFilePath } = require('./utils');
 const { createData, ArweaveSigner, JWKInterface } = require('arbundles');
 const fs = require('fs');
 const path = require('path');
@@ -143,7 +143,7 @@ const checkBalance = async () => {
     const turbo = await getTurboArweave();
     const balance = await turbo.getBalance();
     const convertedBalance = turbo.utils ? turbo.utils.fromAtomic(balance.winc) : balance.winc;
-    const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+    const jwk = JSON.parse(fs.readFileSync(getWalletFilePath()));
             
     const myPublicKey = jwk.n;
     const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 

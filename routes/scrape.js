@@ -19,7 +19,7 @@ const sharp = require('sharp');
 const { timeout } = require('../config/arweave.config');
 const { getRecords, indexRecord, searchCreatorByAddress } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
-const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateToken, getWalletFilePath } = require('../helpers/utils'); // Import the authentication middleware
 const { ongoingScrapes, cleanupScrape } = require('../helpers/sharedState.js'); // Adjust the path to store.js
 // const { retryAsync } = require('../helpers/utils');
 const { uploadToArFleet, publishVideoFiles, publishArticleText, publishImage } = require('../helpers/templateHelper');
@@ -1404,7 +1404,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       }
       console.log('SUPER IMPORTANT currentblock:', currentblock);
       
-      const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE)); 
+      const jwk = JSON.parse(fs.readFileSync(getWalletFilePath())); 
       const myPublicKey = jwk.n;
       const myAddress = base64url(crypto.createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
       const creatorDid = `did:arweave:${myAddress}`;
