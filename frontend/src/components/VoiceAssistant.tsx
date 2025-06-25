@@ -65,7 +65,7 @@ export default function VoiceAssistant() {
   const [isInConversationMode, setIsInConversationMode] = useState(false);
   const [transcript, setTranscript] = useState<Message[]>([]);
   const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
-  const [selectedVoice, setSelectedVoice] = useState('female_1');
+  const [selectedVoice, setSelectedVoice] = useState('chatterbox');
   const [selectedModel, setSelectedModel] = useState('llama3.2:3b');
   const [isBrowserSupported, setIsBrowserSupported] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -183,7 +183,19 @@ export default function VoiceAssistant() {
       
       if (response.ok && data.voices && mountedRef.current) {
         setAvailableVoices(data.voices);
-        if (data.voices.length > 0 && !selectedVoice) {
+        
+        // Prefer Chatterbox voices over eSpeak
+        const chatterboxVoice = data.voices.find((v: Voice) => v.id === 'chatterbox' || v.engine === 'Chatterbox');
+        const femaleChatterboxVoice = data.voices.find((v: Voice) => v.name.includes('Female') && v.name.includes('Chatterbox'));
+        
+        if (chatterboxVoice) {
+          console.log('Setting default voice to Chatterbox:', chatterboxVoice.id);
+          setSelectedVoice(chatterboxVoice.id);
+        } else if (femaleChatterboxVoice) {
+          console.log('Setting default voice to Female Chatterbox:', femaleChatterboxVoice.id);
+          setSelectedVoice(femaleChatterboxVoice.id);
+        } else if (data.voices.length > 0) {
+          console.log('Using first available voice:', data.voices[0].id);
           setSelectedVoice(data.voices[0].id);
         }
       }

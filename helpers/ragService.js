@@ -30,14 +30,18 @@ class RAGService {
             post: [
                 // News and current events
                 'news', 'article', 'politics', 'election', 'government', 'policy', 'social', 'current', 'event', 'opinion', 'blog', 'discussion',
-                'latest', 'today', 'recent', 'now', 'happening', 'update', 'breaking',
-                // Countries and regions (high-relevance for news)
-                'iran', 'china', 'russia', 'ukraine', 'israel', 'palestine', 'syria', 'afghanistan', 'turkey', 'venezuela', 'belarus',
-                'america', 'usa', 'europe', 'asia', 'africa', 'middle east',
+                'latest', 'today', 'recent', 'now', 'happening', 'update', 'breaking', 'report', 'analysis', 'story',
+                // Countries and regions (high-relevance for news) - improved Iran matching
+                'iran', 'iranian', 'tehran', 'china', 'chinese', 'russia', 'russian', 'ukraine', 'ukrainian', 'israel', 'israeli', 
+                'palestine', 'palestinian', 'syria', 'syrian', 'afghanistan', 'turkey', 'turkish', 'venezuela', 'belarus',
+                'america', 'american', 'usa', 'united states', 'europe', 'european', 'asia', 'asian', 'africa', 'african', 'middle east',
                 // Political and economic terms
                 'president', 'congress', 'senate', 'parliament', 'minister', 'prime minister', 'democracy', 'dictatorship',
-                'economy', 'market', 'inflation', 'recession', 'covid', 'pandemic', 'climate', 'war', 'peace', 'treaty',
-                'sanctions', 'trade', 'tariff', 'diplomacy', 'summit', 'crisis', 'protest', 'revolution'
+                'economy', 'economic', 'market', 'inflation', 'recession', 'covid', 'pandemic', 'climate', 'war', 'peace', 'treaty',
+                'sanctions', 'trade', 'tariff', 'diplomacy', 'diplomatic', 'summit', 'crisis', 'protest', 'revolution',
+                // Military and international relations
+                'nuclear', 'military', 'defense', 'security', 'nato', 'un', 'united nations', 'strike', 'attack', 'conflict',
+                'preemptive', 'missile', 'enrichment', 'weapons', 'biden', 'trump', 'administration'
             ],
             podcast: ['podcast', 'audio', 'interview', 'conversation', 'talk', 'speaker', 'listen', 'episode', 'radio', 'show'],
             jfkFilesDocument: ['jfk', 'kennedy', 'assassination', 'document', 'classified', 'cia', 'fbi', 'government', 'conspiracy', 'file', 'secret'],
@@ -110,7 +114,10 @@ class RAGService {
     async searchWithTagSummarization(question, relevantTypes, options = {}) {
         const allResults = [];
         
-        for (const typeInfo of relevantTypes.slice(0, 2)) { // Limit to top 2 relevant types
+        // First try a broader search across all enabled types if specific types yield no results
+        let searchTypes = relevantTypes.slice(0, 2); // Start with top 2 relevant types
+        
+        for (const typeInfo of searchTypes) {
             try {
                 console.log(`[RAG] Searching ${typeInfo.type} records for: ${question}`);
                 
@@ -150,7 +157,47 @@ class RAGService {
             }
         }
         
-        console.log(`[RAG] Total results after direct search: ${allResults.length}`);
+        // If no results and we have a clear search term, try broader search without record type filter
+        if (allResults.length === 0 && question.trim().length > 2) {
+            console.log(`[RAG] No results with type filtering, trying broader search for: ${question}`);
+            try {
+                const broadSearchParams = {
+                    search: question,
+                    // Remove recordType filter for broader search
+                    sortBy: 'date:desc',
+                    resolveDepth: 3,
+                    summarizeTags: true,
+                    tagCount: 5,
+                    tagPage: 1,
+                    limit: this.maxResults,
+                    page: 1,
+                    includeSigs: false,
+                    includePubKeys: false
+                };
+                
+                console.log(`[RAG] Broad search params:`, broadSearchParams);
+                const broadResults = await getRecords(broadSearchParams);
+                
+                if (broadResults && broadResults.records) {
+                    const records = broadResults.records.slice(0, this.maxResults);
+                    console.log(`[RAG] Found ${records.length} records in broad search`);
+                    
+                    // Filter to only enabled record types after the search
+                    const enabledTypes = getEnabledRecordTypes();
+                    const filteredRecords = records.filter(record => {
+                        const recordType = record.oip?.recordType;
+                        return recordType && enabledTypes.includes(recordType);
+                    });
+                    
+                    console.log(`[RAG] After filtering by enabled types: ${filteredRecords.length} records`);
+                    allResults.push(...filteredRecords);
+                }
+            } catch (error) {
+                console.warn(`[RAG] Error in broad search:`, error.message);
+            }
+        }
+        
+        console.log(`[RAG] Total results after search: ${allResults.length}`);
         return allResults;
     }
 
