@@ -158,7 +158,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
  */
 router.post('/synthesize', async (req, res) => {
     try {
-        const { text, voice_id = 'chatterbox', speed = 1.0, language = 'en' } = req.body;
+        const { text, voice_id = 'female_1', speed = 1.0, language = 'en' } = req.body;
 
         if (!text || !text.trim()) {
             return res.status(400).json({ error: 'Text is required' });
@@ -179,13 +179,23 @@ router.post('/synthesize', async (req, res) => {
         }
 
         // Use Chatterbox TTS service
-        const ttsResponse = await axios.post(
-            `${TTS_SERVICE_URL}/synthesize`,
-            {
-                text: finalText,
-                voice: voice_id,
-                engine: 'chatterbox'  // Explicitly request chatterbox engine
-            },
+                            // Map voice names to potentially better quality alternatives
+                    const voiceMapping = {
+                        'chatterbox': 'female_1',
+                        'female': 'female_1', 
+                        'male': 'male_1',
+                        'default': 'female_1'
+                    };
+                    
+                    const mappedVoice = voiceMapping[voice_id] || voice_id;
+                    
+                    const ttsResponse = await axios.post(
+                        `${TTS_SERVICE_URL}/synthesize`,
+                        {
+                            text: finalText,
+                            voice: mappedVoice,
+                            engine: 'chatterbox'  // Explicitly request chatterbox engine
+                        },
             {
                 timeout: 30000,
                 responseType: 'arraybuffer'
@@ -289,7 +299,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         // Step 2: Generate text response using RAG (search + LLM)
         const {
             model = 'llama3.2:3b',
-            voice_id = 'chatterbox',
+            voice_id = 'female_1',
             speed = 1.0,
             return_audio = true,
             creator_filter = null,
@@ -337,11 +347,21 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         console.log(`[Voice Chat] Text truncated from ${responseText.length} to ${textForTTS.length} characters`);
                     }
                     
+                    // Map voice names to potentially better quality alternatives
+                    const voiceMapping = {
+                        'chatterbox': 'female_1',
+                        'female': 'female_1', 
+                        'male': 'male_1',
+                        'default': 'female_1'
+                    };
+                    
+                    const mappedVoice = voiceMapping[voice_id] || voice_id;
+                    
                     const ttsResponse = await axios.post(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
                             text: textForTTS,
-                            voice: voice_id,
+                            voice: mappedVoice,
                             engine: 'chatterbox'  // Explicitly request chatterbox engine
                         },
                         {

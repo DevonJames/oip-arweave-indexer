@@ -667,23 +667,13 @@ Please respond helpfully, acknowledging that you don't have specific information
 Response:`;
         }
 
-        return `You are an AI assistant for an OIP (Open Index Protocol) system. You have been provided with relevant information from the user's data to answer their question. 
+        return `Here is relevant information:
 
-IMPORTANT: You MUST use the information provided in the context below to answer the user's question. The context contains factual information that directly relates to their query. Analyze the titles, content, tags, and publication dates to provide an accurate, informative response.
-
-CONTEXT FROM OIP DATABASE:
 ${context}
 
-USER QUESTION: ${question}
+Question: ${question}
 
-INSTRUCTIONS:
-1. Read through ALL the provided context carefully
-2. Extract the key facts that answer the user's question
-3. Provide a clear, direct answer based on the information
-4. Reference specific details from the context (titles, dates, key facts)
-5. If multiple sources provide information, synthesize them into a comprehensive answer
-
-ANSWER:`;
+Answer the question using the information above:`;
     }
 
     /**
