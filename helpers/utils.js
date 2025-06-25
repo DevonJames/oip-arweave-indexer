@@ -1,6 +1,36 @@
 const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
+
+/**
+ * Helper function to find wallet file in both Docker and local development environments
+ * @returns {string} The correct path to the wallet file
+ */
+const getWalletFilePath = () => {
+    const walletFile = process.env.WALLET_FILE;
+    if (!walletFile) {
+        throw new Error('WALLET_FILE environment variable is not set');
+    }
+    
+    // Try Docker absolute path first
+    const dockerPath = path.resolve('/usr/src/app', walletFile);
+    if (fs.existsSync(dockerPath)) {
+        return dockerPath;
+    }
+    
+    // Try local development relative path
+    const localPath = path.resolve(process.cwd(), walletFile);
+    if (fs.existsSync(localPath)) {
+        return localPath;
+    }
+    
+    // Try just the environment variable as-is
+    if (fs.existsSync(walletFile)) {
+        return walletFile;
+    }
+    
+    throw new Error(`Wallet file not found at any of these locations:\n- ${dockerPath}\n- ${localPath}\n- ${walletFile}`);
+};
 const { ArweaveSigner } = require('arbundles');
 const { TurboFactory } = require('@ardrive/turbo-sdk');
 const arweave = require('arweave');
@@ -12,7 +42,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 dotenv.config();
 
 const getTurboArweave = async () => {
-    const walletFileLocation = process.env.WALLET_FILE;
+    const walletFileLocation = getWalletFilePath();
     const key = JSON.parse(fs.readFileSync(walletFileLocation).toString());
     const turbo = TurboFactory.authenticated({ privateKey: key });
     return turbo;
@@ -82,7 +112,8 @@ const verifySignature = async (message, signatureBase64, publicKey, creatorAddre
 };
 
 const signMessage = async (data) => {
-    const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+    const walletPath = getWalletFilePath();
+    const jwk = JSON.parse(fs.readFileSync(walletPath));
     const myPublicKey = jwk.n;
     const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
     const signatureObject = await arweave.crypto.sign(jwk, data);
@@ -205,5 +236,6 @@ module.exports = {
     loadRemapTemplates,
     authenticateToken,
     isValidDid,
-    isValidTxId
+    isValidTxId,
+    getWalletFilePath
 };
