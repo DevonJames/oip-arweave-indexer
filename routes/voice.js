@@ -301,10 +301,18 @@ router.get('/voices', async (req, res) => {
     } catch (error) {
         console.error('Error fetching voices:', error.message);
         
-        res.status(500).json({
-            error: 'Failed to fetch voices',
-            details: error.message
-        });
+        // Fallback to default voices if TTS service is unavailable
+        const fallbackVoices = {
+            voices: [
+                { id: 'female_1', name: 'Female Voice 1', engine: 'Chatterbox' },
+                { id: 'male_1', name: 'Male Voice 1', engine: 'Chatterbox' },
+                { id: 'female_2', name: 'Female Voice 2', engine: 'Silero' },
+                { id: 'male_2', name: 'Male Voice 2', engine: 'Silero' }
+            ]
+        };
+        
+        console.log('TTS service unavailable, returning fallback voices');
+        res.json(fallbackVoices);
     }
 });
 
