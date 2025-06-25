@@ -26,7 +26,6 @@ const { getIsProcessing, setIsProcessing } = require('./helpers/processingState'
 const { keepDBUpToDate, remapExistingRecords, deleteRecordsByBlock, deleteRecordsByIndexedAt, deleteRecordsByIndex } = require('./helpers/elasticsearch');
 const minimist = require('minimist');
 const socket = require('./socket');
-const elevenLabsRoutes = require('./routes/elevenlabs');
 const litRoutes = require('./routes/lit');
 const jfkRoutes = require('./routes/jfk');
 const voiceRoutes = require('./routes/voice');
@@ -134,7 +133,6 @@ app.use('/api/generate', generateRoutes);
 app.use('/api/generate/media', express.static(path.join(__dirname, 'media')));
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
-app.use('/api/elevenlabs', elevenLabsRoutes);
 app.use('/api/lit', litRoutes);
 app.use('/api/jfk', jfkRoutes);
 app.use('/api/voice', voiceRoutes);
