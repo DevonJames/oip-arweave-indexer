@@ -296,7 +296,39 @@ router.get('/voices', async (req, res) => {
             timeout: 10000
         });
 
-        res.json(response.data);
+        // Transform the response to the expected format
+        const voiceData = response.data;
+        
+        // If the TTS service returns arrays, transform them into objects
+        if (voiceData.voices && Array.isArray(voiceData.voices)) {
+            const transformedVoices = voiceData.voices.map((voiceId, index) => {
+                // Create a readable name from the voice ID
+                const name = voiceId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                
+                // Determine engine based on voice pattern or use default
+                let engine = 'Default';
+                if (voiceId.includes('female') || voiceId.includes('male')) {
+                    engine = 'Chatterbox';
+                } else if (voiceId.includes('silero')) {
+                    engine = 'Silero';
+                } else if (voiceData.engines && voiceData.engines.length > 0) {
+                    engine = voiceData.engines[index % voiceData.engines.length];
+                }
+                
+                return {
+                    id: voiceId,
+                    name: name,
+                    engine: engine
+                };
+            });
+            
+            res.json({
+                voices: transformedVoices
+            });
+        } else {
+            // If already in the correct format, pass it through
+            res.json(voiceData);
+        }
 
     } catch (error) {
         console.error('Error fetching voices:', error.message);
