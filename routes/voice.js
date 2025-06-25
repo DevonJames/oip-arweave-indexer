@@ -165,6 +165,7 @@ router.post('/synthesize', async (req, res) => {
         }
 
         console.log(`[TTS] Synthesizing with Chatterbox: "${text.substring(0, 50)}..." with voice ${voice_id}`);
+        console.log(`[TTS] Using TTS service URL: ${TTS_SERVICE_URL}`);
 
         // Use Chatterbox TTS service
         const ttsResponse = await axios.post(
@@ -172,7 +173,7 @@ router.post('/synthesize', async (req, res) => {
             {
                 text: text.trim(),
                 voice: voice_id,
-                engine: 'auto'
+                engine: 'chatterbox'  // Explicitly request chatterbox engine
             },
             {
                 timeout: 30000,
@@ -192,26 +193,35 @@ router.post('/synthesize', async (req, res) => {
         res.send(ttsResponse.data);
 
     } catch (error) {
-        console.error('TTS Error:', error.message);
+        console.error('[TTS] Chatterbox TTS Error:', error.message);
+        if (error.response) {
+            console.error('[TTS] Response status:', error.response.status);
+            console.error('[TTS] Response data:', error.response.data);
+        }
+        if (error.code) {
+            console.error('[TTS] Error code:', error.code);
+        }
         
         // Fallback to eSpeak if Chatterbox service fails
         try {
-            console.log('[TTS] Falling back to eSpeak...');
+            console.log('[TTS] Chatterbox failed, falling back to eSpeak...');
             const audioData = await synthesizeWithEspeak(text.trim(), voice_id, speed);
             
             res.set({
                 'Content-Type': 'audio/wav',
                 'X-Engine-Used': 'espeak-fallback',
                 'X-Voice-ID': voice_id,
-                'Content-Length': audioData.length.toString()
+                'Content-Length': audioData.length.toString(),
+                'X-Fallback-Reason': 'chatterbox-unavailable'
             });
             
             res.send(audioData);
         } catch (fallbackError) {
-            console.error('Fallback TTS also failed:', fallbackError.message);
+            console.error('[TTS] Fallback TTS also failed:', fallbackError.message);
             res.status(500).json({
                 error: 'Speech synthesis failed',
-                details: error.message
+                details: `Chatterbox: ${error.message}, eSpeak: ${fallbackError.message}`,
+                service_url: TTS_SERVICE_URL
             });
         }
     }
@@ -292,12 +302,13 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 let engineUsed = 'chatterbox';
                 
                 try {
+                    console.log(`[Voice Chat] Attempting TTS with service at: ${TTS_SERVICE_URL}`);
                     const ttsResponse = await axios.post(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
                             text: responseText,
                             voice: voice_id,
-                            engine: 'auto'
+                            engine: 'chatterbox'  // Explicitly request chatterbox engine
                         },
                         {
                             timeout: 30000,
