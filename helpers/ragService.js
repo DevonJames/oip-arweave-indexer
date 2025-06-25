@@ -92,7 +92,7 @@ class RAGService {
                 const searchTerms = question.replace(/[^\w\s]/g, '').replace(/\s+/g, '+');
                 
                 // Use the records API with tag summarization
-                const searchUrl = `${this.baseUrl}/api/records?recordType=${typeInfo.type}&sortBy=date:desc&resolveDepth=1&summarizeTags=true&tagCount=5&tagPage=1&search=${searchTerms}&limit=${this.maxResults}`;
+                const searchUrl = `${this.baseUrl}/api/records?recordType=${typeInfo.type}&sortBy=date:desc&resolveDepth=1&summarizeTags=true&tagCount=5&tagPage=1&search=${searchTerms}&limit=${this.maxResults}&page=1`;
                 
                 console.log(`[RAG] API call: ${searchUrl}`);
                 
