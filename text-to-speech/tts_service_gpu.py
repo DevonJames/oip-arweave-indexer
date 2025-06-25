@@ -35,7 +35,7 @@ app.add_middleware(
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "male_1"
+    voice: str = "chatterbox"
     engine: str = "auto"
 
 class TTSResponse(BaseModel):
@@ -140,6 +140,10 @@ class GPUTTSService:
             return None
             
         try:
+            # Map "chatterbox" to a sensible default
+            if voice == "chatterbox":
+                voice = "female_1"  # Use female_1 as default for "chatterbox"
+            
             # Set voice if available
             voice_id = self.chatterbox_voices.get(voice)
             if voice_id:
@@ -161,6 +165,10 @@ class GPUTTSService:
             return None
             
         try:
+            # Map "chatterbox" to a sensible default
+            if voice == "chatterbox":
+                voice = "female_1"
+                
             speaker = self.silero_speakers.get(voice, 'en_0')
             
             # Generate audio
@@ -188,6 +196,7 @@ class GPUTTSService:
             import edge_tts
             
             voice_map = {
+                'chatterbox': 'en-US-JennyNeural',
                 'female_1': 'en-US-JennyNeural',
                 'female_2': 'en-US-AriaNeural', 
                 'male_1': 'en-US-GuyNeural',
@@ -245,7 +254,7 @@ class GPUTTSService:
             logger.error(f"eSpeak error: {e}")
             return None
 
-    async def synthesize(self, text: str, voice: str = "male_1", engine: str = "auto") -> TTSResponse:
+    async def synthesize(self, text: str, voice: str = "chatterbox", engine: str = "auto") -> TTSResponse:
         """Main synthesis method with engine fallbacks"""
         
         if not text.strip():
@@ -330,8 +339,17 @@ async def synthesize_speech(request: TTSRequest):
 async def get_voices():
     """Get available voices"""
     return {
-        "voices": ["female_1", "female_2", "male_1", "male_2", 
-                  "expressive", "calm", "cheerful", "sad"],
+        "voices": [
+            {"id": "chatterbox", "name": "Chatterbox (Default)", "engine": "Chatterbox"},
+            {"id": "female_1", "name": "Female Voice 1 (Chatterbox)", "engine": "Chatterbox"},
+            {"id": "female_2", "name": "Female Voice 2 (Chatterbox)", "engine": "Chatterbox"},
+            {"id": "male_1", "name": "Male Voice 1 (Chatterbox)", "engine": "Chatterbox"},
+            {"id": "male_2", "name": "Male Voice 2 (Chatterbox)", "engine": "Chatterbox"},
+            {"id": "expressive", "name": "Expressive (Chatterbox)", "engine": "Chatterbox"},
+            {"id": "calm", "name": "Calm (Chatterbox)", "engine": "Chatterbox"},
+            {"id": "cheerful", "name": "Cheerful (Chatterbox)", "engine": "Chatterbox"},
+            {"id": "sad", "name": "Sad (Chatterbox)", "engine": "Chatterbox"}
+        ],
         "engines": ["chatterbox", "silero", "edge_tts", "gtts", "espeak", "auto"]
     }
 
