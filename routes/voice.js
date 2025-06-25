@@ -164,14 +164,25 @@ router.post('/synthesize', async (req, res) => {
             return res.status(400).json({ error: 'Text is required' });
         }
 
-        console.log(`[TTS] Synthesizing with Chatterbox: "${text.substring(0, 50)}..." with voice ${voice_id}`);
+        const textToSynthesize = text.trim();
+        console.log(`[TTS] Synthesizing with Chatterbox: "${textToSynthesize.substring(0, 50)}..." (${textToSynthesize.length} chars) with voice ${voice_id}`);
         console.log(`[TTS] Using TTS service URL: ${TTS_SERVICE_URL}`);
+
+        // Limit text length to prevent TTS service overload
+        const maxTextLength = 1000; // Adjust as needed
+        const finalText = textToSynthesize.length > maxTextLength 
+            ? textToSynthesize.substring(0, maxTextLength) + '...'
+            : textToSynthesize;
+
+        if (textToSynthesize.length > maxTextLength) {
+            console.log(`[TTS] Text truncated from ${textToSynthesize.length} to ${finalText.length} characters`);
+        }
 
         // Use Chatterbox TTS service
         const ttsResponse = await axios.post(
             `${TTS_SERVICE_URL}/synthesize`,
             {
-                text: text.trim(),
+                text: finalText,
                 voice: voice_id,
                 engine: 'chatterbox'  // Explicitly request chatterbox engine
             },
@@ -189,6 +200,11 @@ router.post('/synthesize', async (req, res) => {
             'Content-Length': ttsResponse.data.length.toString()
         });
 
+        // Check if audio data is empty
+        if (!ttsResponse.data || ttsResponse.data.length === 0) {
+            throw new Error('Chatterbox returned empty audio data');
+        }
+
         // Send audio data directly
         res.send(ttsResponse.data);
 
@@ -205,12 +221,19 @@ router.post('/synthesize', async (req, res) => {
         // Fallback to eSpeak if Chatterbox service fails
         try {
             console.log('[TTS] Chatterbox failed, falling back to eSpeak...');
-            const audioData = await synthesizeWithEspeak(text.trim(), voice_id, speed);
+            // Safely access text from req.body in case of scope issues
+            const { text: requestText, voice_id: requestVoiceId = 'chatterbox', speed: requestSpeed = 1.0 } = req.body;
+            
+            if (!requestText || !requestText.trim()) {
+                throw new Error('No text available for eSpeak fallback');
+            }
+            
+            const audioData = await synthesizeWithEspeak(requestText.trim(), requestVoiceId, requestSpeed);
             
             res.set({
                 'Content-Type': 'audio/wav',
                 'X-Engine-Used': 'espeak-fallback',
-                'X-Voice-ID': voice_id,
+                'X-Voice-ID': requestVoiceId,
                 'Content-Length': audioData.length.toString(),
                 'X-Fallback-Reason': 'chatterbox-unavailable'
             });
@@ -303,10 +326,21 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 
                 try {
                     console.log(`[Voice Chat] Attempting TTS with service at: ${TTS_SERVICE_URL}`);
+                    
+                    // Limit text length for TTS
+                    const maxTextLength = 1000;
+                    const textForTTS = responseText.length > maxTextLength 
+                        ? responseText.substring(0, maxTextLength) + '...'
+                        : responseText;
+                        
+                    if (responseText.length > maxTextLength) {
+                        console.log(`[Voice Chat] Text truncated from ${responseText.length} to ${textForTTS.length} characters`);
+                    }
+                    
                     const ttsResponse = await axios.post(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
-                            text: responseText,
+                            text: textForTTS,
                             voice: voice_id,
                             engine: 'chatterbox'  // Explicitly request chatterbox engine
                         },
@@ -319,9 +353,27 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     audioData = Buffer.from(ttsResponse.data);
                     console.log(`[Voice Chat] Successfully synthesized with Chatterbox: ${audioData.length} bytes`);
                     
+                    // Check for empty audio
+                    if (!audioData || audioData.length === 0) {
+                        throw new Error('Chatterbox returned empty audio data');
+                    }
+                    
                 } catch (chatterboxError) {
                     console.warn(`[Voice Chat] Chatterbox failed, falling back to eSpeak:`, chatterboxError.message);
-                    audioData = await synthesizeWithEspeak(responseText, voice_id, speed);
+                    if (chatterboxError.response) {
+                        console.warn(`[Voice Chat] Chatterbox response status:`, chatterboxError.response.status);
+                    }
+                    if (chatterboxError.code) {
+                        console.warn(`[Voice Chat] Chatterbox error code:`, chatterboxError.code);
+                    }
+                    
+                    // Use the same text truncation for eSpeak
+                    const maxTextLength = 1000;
+                    const textForEspeak = responseText.length > maxTextLength 
+                        ? responseText.substring(0, maxTextLength) + '...'
+                        : responseText;
+                    
+                    audioData = await synthesizeWithEspeak(textForEspeak, voice_id, speed);
                     engineUsed = 'espeak-fallback';
                 }
 

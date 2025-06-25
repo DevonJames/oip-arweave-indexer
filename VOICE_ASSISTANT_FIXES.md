@@ -21,7 +21,10 @@
    - Added service URL logging for debugging
    - Enhanced fallback error messages with more detail
 
-3. **Better Error Diagnostics**:
+3. **Better Error Diagnostics and Text Handling**:
+   - **NEW**: Added text length limiting (1000 chars) to prevent TTS service overload
+   - **NEW**: Added detection of 0-byte audio responses from Chatterbox
+   - **NEW**: Fixed eSpeak fallback by safely accessing request parameters
    - Added response status and data logging for TTS errors
    - Included fallback reason in response headers
    - More descriptive error messages showing both Chatterbox and eSpeak failure reasons
@@ -34,31 +37,50 @@
 
 **Fixes Applied**:
 
-1. **Enhanced Search Strategy** (`helpers/ragService.js`):
+1. **Keyword Extraction** (`helpers/ragService.js`):
+   - **NEW**: Added `extractSearchKeywords()` function to extract meaningful terms from questions
+   - Removes stop words like "what", "is", "the", "latest", "news", "on"
+   - Prioritizes important terms like country names, political figures, and key topics
+   - Converts "What is the latest news on Iran?" to just "Iran" for search
+
+2. **Enhanced Search Strategy**:
+   - Uses extracted keywords instead of full question for database search
    - Added fallback to broader search when type-specific search yields no results
-   - Improved to search without record type filter if initial search fails
    - Better handling of enabled record types after broad search
 
-2. **Expanded Keyword Matching**:
+3. **Expanded Keyword Matching**:
    - Added more Iran-related keywords: `'iranian'`, `'tehran'`
    - Enhanced country and nationality keywords (e.g., `'chinese'`, `'russian'`, `'israeli'`)
    - Added military/political terms: `'nuclear'`, `'preemptive'`, `'enrichment'`, `'weapons'`
    - Included administration terms: `'biden'`, `'trump'`, `'administration'`
 
-3. **Improved Search Logic**:
+4. **Improved Search Logic**:
    - Better handling of search parameter passing
    - Maintains `summarizeTags: true` for relevance scoring
    - Preserves all critical search parameters like the working API call
 
 ## Debugging Tools Created
 
+### 0. Complete Test Suite (`run_all_tests.js`) - **RECOMMENDED**
+
+Run all tests at once for comprehensive diagnostics:
+
+```bash
+# Make sure you're in the project directory with dependencies installed
+cd /path/to/oip-arweave-indexer
+node run_all_tests.js
+```
+
+**What it does**:
+- Runs all tests below in sequence
+- Provides comprehensive diagnosis of both issues
+- Shows summary and next steps
+
 ### 1. Service Health Check (`check_services.js`)
 
 Run this to diagnose TTS and other service issues:
 
 ```bash
-# Make sure you're in the project directory with dependencies installed
-cd /path/to/oip-arweave-indexer
 node check_services.js
 ```
 
@@ -84,6 +106,33 @@ node test_iran_search.js
 - Direct Elasticsearch search functionality
 - Full RAG pipeline with Iran search
 - Shows exactly what's happening at each step
+
+### 3. Keyword Extraction Test (`test_keyword_extraction.js`)
+
+Test the new keyword extraction functionality:
+
+```bash
+node test_keyword_extraction.js
+```
+
+**What it tests**:
+- Extraction of key terms from natural language questions
+- Removal of stop words and question phrases
+- Prioritization of important terms like country names
+
+### 4. TTS Direct Test (`test_tts_directly.js`)
+
+Test the TTS service directly to diagnose audio issues:
+
+```bash
+node test_tts_directly.js
+```
+
+**What it tests**:
+- TTS service health and voices endpoints
+- Direct synthesis with different text lengths
+- Identifies 0-byte audio responses
+- Tests Chatterbox engine specifically
 
 ## Troubleshooting Steps
 
@@ -112,6 +161,16 @@ node test_iran_search.js
      --output test.wav
    ```
 
+5. **Test TTS service directly**:
+   ```bash
+   node test_tts_directly.js
+   ```
+
+6. **Check for 0-byte audio responses**:
+   - Look for "Successfully synthesized with Chatterbox: 0 bytes" in logs
+   - This indicates Chatterbox is responding but not generating audio
+   - May indicate GPU memory issues or service configuration problems
+
 ### For Search Issues:
 
 1. **Test Iran search directly**:
@@ -134,14 +193,17 @@ node test_iran_search.js
 ### TTS (Voice):
 - Should default to Chatterbox voices in the dropdown
 - Should use high-quality neural TTS instead of robotic eSpeak
+- Should handle long text by truncating to 1000 characters
+- Should detect and handle 0-byte responses from Chatterbox
+- Should fall back to eSpeak with proper error handling
 - Should show detailed error messages if TTS service fails
-- Should include service status information in responses
 
 ### RAG Search:
-- Should find Iran-related records when they exist
+- **NEW**: Should extract keywords from questions ("What's the latest on Iran?" → "Iran")
+- Should find Iran-related records when they exist using keyword search
 - Should fall back to broader search if type-specific search fails
 - Should include relevant record types in search results
-- Should maintain proper search parameter passing
+- Should maintain proper search parameter passing with `summarizeTags=true`
 
 ## Verification Steps
 
@@ -152,10 +214,12 @@ node test_iran_search.js
    - Check browser developer tools for any fallback headers
 
 2. **Test Iran Search**:
-   - Ask "What's the latest on Iran?" or similar
-   - Should return relevant Iran-related articles
+   - Ask "What's the latest on Iran?" or similar natural language question
+   - Should extract "Iran" from the question (check logs for keyword extraction)
+   - Should return relevant Iran-related articles from your database
    - Check sources section for Iran-related content
    - Verify context is being used (green indicator)
+   - Test the keyword extraction: `node test_keyword_extraction.js`
 
 3. **Monitor Logs**:
    - Check for "[TTS]" log messages indicating successful Chatterbox usage
@@ -168,12 +232,46 @@ node test_iran_search.js
 - **Environment**: Check that `TTS_SERVICE_URL=http://tts-service-gpu:5002` is set correctly
 - **Dependencies**: Verify all GPU services are running: `ollama`, `tts-service-gpu`, `stt-service-gpu`
 
+## Summary of Key Changes Made
+
+### 🔍 **Search Issue - SOLVED**
+**Problem**: System was searching for entire question "What is the latest news on Iran?"
+**Solution**: Added keyword extraction that converts questions to key terms ("Iran")
+
+**Files Modified**:
+- `helpers/ragService.js`: Added `extractSearchKeywords()` function
+- Extracts meaningful terms, removes stop words
+- Prioritizes important terms like country names
+- Now searches for "Iran" instead of full question
+
+### 🎤 **TTS Issue - IMPROVED** 
+**Problem**: Chatterbox returning 0 bytes, eSpeak fallback failing
+**Solutions Applied**:
+- Added text length limiting (1000 chars) to prevent service overload
+- Added detection of 0-byte responses
+- Fixed eSpeak fallback parameter access
+- Added comprehensive error logging
+
+**Files Modified**:
+- `routes/voice.js`: Enhanced error handling, text truncation, fallback fixes
+- `frontend/src/components/VoiceAssistant.tsx`: Better voice selection defaults
+
+### 🛠️ **Debugging Tools Created**
+- `test_keyword_extraction.js`: Test keyword extraction
+- `test_tts_directly.js`: Test TTS service directly  
+- `test_iran_search.js`: Test Iran search functionality
+- `check_services.js`: Health check all services
+
 ## Next Steps
 
-If issues persist:
+**To test the fixes**:
+1. **Search**: Ask "What's the latest on Iran?" - should now find relevant records
+2. **TTS**: Check logs for text truncation and 0-byte detection
+3. **Debug**: Use the test scripts to verify functionality
 
+**If issues persist**:
 1. Run the debugging tools to get detailed diagnostics
-2. Check Docker container health and logs
+2. Check Docker container health and logs  
 3. Verify the correct docker-compose profile is being used
 4. Ensure GPU services have proper GPU access if using GPU profile
-5. Test individual services manually with curl commands 
+5. For TTS 0-byte issues: Check GPU memory and restart TTS container 
