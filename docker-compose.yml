@@ -261,8 +261,8 @@ services:
       dockerfile: Dockerfile.gpu
     environment:
       - WHISPER_MODEL=${WHISPER_MODEL:-base}
-      - WHISPER_DEVICE=cuda
-      - WHISPER_COMPUTE_TYPE=float16
+      - WHISPER_DEVICE=cpu
+      - WHISPER_COMPUTE_TYPE=int8
       - CUDA_VISIBLE_DEVICES=0
     ports:
       - "8003:8003"
