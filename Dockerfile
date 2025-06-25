@@ -12,8 +12,7 @@ RUN apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip c
     linux-headers \
     git \
     pkgconfig \
-    espeak \
-    espeak-data
+    espeak
 
 # Add dependencies for node-canvas (optional - continue if they fail)
 RUN apk add --no-cache \
