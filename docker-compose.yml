@@ -314,7 +314,7 @@ services:
   # Ngrok for GPU deployments
   ngrok-gpu:
     image: ngrok/ngrok:latest
-    command: http --domain=api.oip.onl oip-gpu:3000
+    command: http --domain=api.oip.onl oip-gpu:3005
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
