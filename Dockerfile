@@ -66,17 +66,22 @@ RUN mv node_modules ../
 COPY wait-for-it.sh wait-for-it.sh
 RUN chmod +x wait-for-it.sh
 
-# Copy all application code including services
-COPY . .
-
-# Include all necessary directories
-COPY config ./config
+# Copy specific application directories (config will be volume-mounted at runtime)
 COPY helpers ./helpers
 COPY remapTemplates ./remapTemplates
 COPY routes ./routes
 COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
+COPY public ./public
+COPY frontend ./frontend
+COPY middleware ./middleware
+COPY socket ./socket
+COPY services ./services
+COPY utils ./utils
+COPY *.js ./
+COPY *.json ./
+COPY *.md ./
 
 # Build Next.js frontend (replaces webpack entirely)
 WORKDIR /usr/src/app/frontend
@@ -85,8 +90,8 @@ RUN npm ci && npm run build
 # Return to main app directory
 WORKDIR /usr/src/app
 
-# Copy the .env file if it exists
-COPY .env .env
+# Note: .env file is loaded by docker-compose via env_file directive at runtime
+# No need to copy .env during build since it's mounted/loaded at runtime
 
 # Create the complete directory structure that routes/jfk.js expects at startup
 RUN mkdir -p \
