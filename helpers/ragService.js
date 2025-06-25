@@ -109,21 +109,55 @@ class RAGService {
     }
 
     /**
+     * Extract key search terms from a natural language question
+     */
+    extractSearchKeywords(question) {
+        // Remove common question words and extract meaningful terms
+        const stopWords = ['what', 'is', 'are', 'the', 'latest', 'news', 'on', 'about', 'tell', 'me', 'can', 'you', 'how', 'where', 'when', 'why', 'who', 'which', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'any', 'some', 'all', 'no', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'now', 'and', 'or', 'but', 'if', 'then', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further', 'once', 'here', 'there', 'everywhere', 'anywhere', 'somewhere', 'nowhere'];
+        
+        // Clean and split the question
+        const cleaned = question.toLowerCase()
+            .replace(/[^\w\s]/g, ' ') // Remove punctuation
+            .replace(/\s+/g, ' ') // Normalize spaces
+            .trim();
+        
+        const words = cleaned.split(' ')
+            .filter(word => word.length > 2) // Remove very short words
+            .filter(word => !stopWords.includes(word)); // Remove stop words
+        
+        // Prioritize important terms (countries, proper nouns, etc.)
+        const importantTerms = words.filter(word => {
+            // Check if it's a country, organization, or important term
+            const importantPatterns = ['iran', 'china', 'russia', 'ukraine', 'israel', 'palestine', 'syria', 'afghanistan', 'turkey', 'venezuela', 'belarus', 'america', 'usa', 'europe', 'asia', 'africa', 'biden', 'trump', 'nuclear', 'war', 'peace', 'economy', 'covid', 'climate', 'election', 'congress', 'senate', 'president'];
+            return importantPatterns.some(pattern => word.includes(pattern) || pattern.includes(word));
+        });
+        
+        // Return important terms first, then all remaining words, but limit to top 3-5 terms
+        const keyTerms = [...new Set([...importantTerms, ...words])].slice(0, 5);
+        
+        console.log(`[RAG] Extracted keywords from "${question}":`, keyTerms);
+        return keyTerms.join(' ');
+    }
+
+    /**
      * Use tag summarization to get the most relevant results for specific record types
      */
     async searchWithTagSummarization(question, relevantTypes, options = {}) {
         const allResults = [];
+        
+        // Extract keywords from the question instead of using the full question
+        const searchKeywords = this.extractSearchKeywords(question);
         
         // First try a broader search across all enabled types if specific types yield no results
         let searchTypes = relevantTypes.slice(0, 2); // Start with top 2 relevant types
         
         for (const typeInfo of searchTypes) {
             try {
-                console.log(`[RAG] Searching ${typeInfo.type} records for: ${question}`);
+                console.log(`[RAG] Searching ${typeInfo.type} records for keywords: "${searchKeywords}" (from question: "${question}")`);
                 
                 // Use direct database call with proper summarizeTags parameters
                 const searchParams = {
-                    search: question,
+                    search: searchKeywords, // Use extracted keywords instead of full question
                     recordType: typeInfo.type,
                     sortBy: 'date:desc',
                     resolveDepth: 3, // Use proper resolve depth like the user's API call
@@ -158,11 +192,11 @@ class RAGService {
         }
         
         // If no results and we have a clear search term, try broader search without record type filter
-        if (allResults.length === 0 && question.trim().length > 2) {
-            console.log(`[RAG] No results with type filtering, trying broader search for: ${question}`);
+        if (allResults.length === 0 && searchKeywords.trim().length > 2) {
+            console.log(`[RAG] No results with type filtering, trying broader search for keywords: "${searchKeywords}"`);
             try {
                 const broadSearchParams = {
-                    search: question,
+                    search: searchKeywords, // Use extracted keywords for broad search too
                     // Remove recordType filter for broader search
                     sortBy: 'date:desc',
                     resolveDepth: 3,
