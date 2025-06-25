@@ -66,7 +66,8 @@ RUN mv node_modules ../
 COPY wait-for-it.sh wait-for-it.sh
 RUN chmod +x wait-for-it.sh
 
-# Copy specific application directories (config will be volume-mounted at runtime)
+# Copy specific application directories and config
+COPY config ./config
 COPY helpers ./helpers
 COPY remapTemplates ./remapTemplates
 COPY routes ./routes
