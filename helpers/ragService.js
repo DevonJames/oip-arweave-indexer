@@ -1,5 +1,11 @@
 const { getRecords, getTemplatesInDB, getCreatorsInDB } = require('./elasticsearch');
 const axios = require('axios');
+const { 
+    getEnabledRecordTypes, 
+    getRecordTypesByPriority, 
+    isRecordTypeEnabled, 
+    getContextFields 
+} = require('../config/recordTypesForRAG');
 
 class RAGService {
     constructor() {
@@ -50,7 +56,7 @@ class RAGService {
     async searchElasticsearch(question, options = {}) {
         const searchParams = {
             search: question,
-            limit: this.maxResults,
+            limit: this.maxResults * 2, // Get more results since we'll filter by record type
             page: 1,
             resolveDepth: 1,
             includeSigs: false,
@@ -63,15 +69,62 @@ class RAGService {
         
         const results = await getRecords(searchParams);
         
+        // Filter results by enabled record types
+        const filteredRecords = this.filterRecordsByType(results.records || []);
+        
         // Also search templates and creators if query seems relevant
         const additionalResults = await this.searchAdditionalSources(question, options);
         
         return {
-            records: results.records || [],
-            totalResults: results.searchResults || 0,
+            records: filteredRecords,
+            totalResults: filteredRecords.length,
             templates: additionalResults.templates || [],
             creators: additionalResults.creators || []
         };
+    }
+
+    /**
+     * Filter records by enabled record types and prioritize them
+     */
+    filterRecordsByType(records) {
+        const enabledTypes = getEnabledRecordTypes();
+        const priorityOrder = getRecordTypesByPriority();
+        
+        console.log(`[RAG] Filtering records by enabled types:`, enabledTypes);
+        
+        // Filter records to only include enabled types
+        const filteredRecords = records.filter(record => {
+            const recordType = record.oip?.recordType;
+            if (!recordType) return false;
+            
+            const isEnabled = isRecordTypeEnabled(recordType);
+            if (!isEnabled) {
+                console.log(`[RAG] Excluding record type: ${recordType}`);
+            }
+            return isEnabled;
+        });
+        
+        // Sort by priority and then by date
+        filteredRecords.sort((a, b) => {
+            const typeA = a.oip?.recordType;
+            const typeB = b.oip?.recordType;
+            
+            const priorityA = priorityOrder.find(p => p.type === typeA)?.config.priority || 0;
+            const priorityB = priorityOrder.find(p => p.type === typeB)?.config.priority || 0;
+            
+            // First sort by priority (higher first)
+            if (priorityA !== priorityB) {
+                return priorityB - priorityA;
+            }
+            
+            // Then by date (newer first)
+            const dateA = new Date(a.data?.basic?.dateCreated || 0);
+            const dateB = new Date(b.data?.basic?.dateCreated || 0);
+            return dateB - dateA;
+        });
+        
+        // Limit to maxResults
+        return filteredRecords.slice(0, this.maxResults);
     }
 
     /**
@@ -144,22 +197,30 @@ class RAGService {
     }
 
     /**
-     * Extract context from a record
+     * Extract context from a record using configured context fields
      */
     extractRecordContext(record) {
         const basic = record.data?.basic || {};
         const oip = record.oip || {};
+        const recordType = oip.recordType;
         
         const parts = [];
         
-        // Add record title/name
+        // Get configured context fields for this record type
+        const contextFields = getContextFields(recordType);
+        
+        // Always include basic information
         if (basic.name) {
             parts.push(`Title: ${basic.name}`);
         }
         
-        // Add description
         if (basic.description) {
             parts.push(`Description: ${basic.description}`);
+        }
+        
+        // Add record type
+        if (recordType) {
+            parts.push(`Type: ${recordType}`);
         }
         
         // Add creator info
@@ -167,27 +228,120 @@ class RAGService {
             parts.push(`Creator: ${oip.creator.creatorHandle}`);
         }
         
-        // Add tags
+        // Add record type specific fields
+        this.addRecordTypeSpecificContext(parts, record, recordType, contextFields);
+        
+        // Add common fields
         if (basic.tagItems && basic.tagItems.length > 0) {
             parts.push(`Tags: ${basic.tagItems.join(', ')}`);
         }
         
-        // Add date if available
         if (basic.dateReadable) {
             parts.push(`Date: ${basic.dateReadable}`);
         }
         
-        // Add record type
-        if (oip.recordType) {
-            parts.push(`Type: ${oip.recordType}`);
-        }
-
-        // Add URL if available
         if (basic.webUrl || basic.url) {
             parts.push(`URL: ${basic.webUrl || basic.url}`);
         }
 
         return parts.join('\n') + '\n---';
+    }
+
+    /**
+     * Add record type specific context fields
+     */
+    addRecordTypeSpecificContext(parts, record, recordType, contextFields) {
+        const basic = record.data?.basic || {};
+        
+        // Add specific fields based on record type
+        switch (recordType) {
+            case 'recipe':
+                if (basic.ingredients && contextFields.includes('ingredients')) {
+                    parts.push(`Ingredients: ${Array.isArray(basic.ingredients) ? basic.ingredients.join(', ') : basic.ingredients}`);
+                }
+                if (basic.instructions && contextFields.includes('instructions')) {
+                    parts.push(`Instructions: ${basic.instructions.substring(0, 200)}...`);
+                }
+                if (basic.cookingTime && contextFields.includes('cookingTime')) {
+                    parts.push(`Cooking Time: ${basic.cookingTime}`);
+                }
+                if (basic.servings && contextFields.includes('servings')) {
+                    parts.push(`Servings: ${basic.servings}`);
+                }
+                break;
+                
+            case 'exercise':
+                if (basic.muscleGroups && contextFields.includes('muscleGroups')) {
+                    parts.push(`Muscle Groups: ${Array.isArray(basic.muscleGroups) ? basic.muscleGroups.join(', ') : basic.muscleGroups}`);
+                }
+                if (basic.equipment && contextFields.includes('equipment')) {
+                    parts.push(`Equipment: ${basic.equipment}`);
+                }
+                if (basic.difficulty && contextFields.includes('difficulty')) {
+                    parts.push(`Difficulty: ${basic.difficulty}`);
+                }
+                if (basic.duration && contextFields.includes('duration')) {
+                    parts.push(`Duration: ${basic.duration}`);
+                }
+                break;
+                
+            case 'post':
+                if (basic.content && contextFields.includes('content')) {
+                    parts.push(`Content: ${basic.content.substring(0, 300)}...`);
+                }
+                if (basic.category && contextFields.includes('category')) {
+                    parts.push(`Category: ${basic.category}`);
+                }
+                break;
+                
+            case 'podcast':
+                if (basic.transcript && contextFields.includes('transcript')) {
+                    parts.push(`Transcript: ${basic.transcript.substring(0, 300)}...`);
+                }
+                if (basic.speakers && contextFields.includes('speakers')) {
+                    parts.push(`Speakers: ${Array.isArray(basic.speakers) ? basic.speakers.join(', ') : basic.speakers}`);
+                }
+                if (basic.duration && contextFields.includes('duration')) {
+                    parts.push(`Duration: ${basic.duration}`);
+                }
+                if (basic.topics && contextFields.includes('topics')) {
+                    parts.push(`Topics: ${Array.isArray(basic.topics) ? basic.topics.join(', ') : basic.topics}`);
+                }
+                break;
+                
+            case 'jfkFilesDocument':
+                if (basic.content && contextFields.includes('content')) {
+                    parts.push(`Content: ${basic.content.substring(0, 300)}...`);
+                }
+                if (basic.documentType && contextFields.includes('documentType')) {
+                    parts.push(`Document Type: ${basic.documentType}`);
+                }
+                if (basic.classification && contextFields.includes('classification')) {
+                    parts.push(`Classification: ${basic.classification}`);
+                }
+                break;
+                
+            case 'video':
+                if (basic.transcript && contextFields.includes('transcript')) {
+                    parts.push(`Transcript: ${basic.transcript.substring(0, 300)}...`);
+                }
+                if (basic.duration && contextFields.includes('duration')) {
+                    parts.push(`Duration: ${basic.duration}`);
+                }
+                if (basic.category && contextFields.includes('category')) {
+                    parts.push(`Category: ${basic.category}`);
+                }
+                break;
+                
+            case 'image':
+                if (basic.location && contextFields.includes('location')) {
+                    parts.push(`Location: ${basic.location}`);
+                }
+                if (basic.dateCreated && contextFields.includes('dateCreated')) {
+                    parts.push(`Date Created: ${basic.dateCreated}`);
+                }
+                break;
+        }
     }
 
     /**
