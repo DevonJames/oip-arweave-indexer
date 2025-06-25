@@ -14,7 +14,6 @@ class RAGService {
         this.defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
         this.maxContextLength = 2000; // Max characters for context
         this.maxResults = 5; // Max search results to include
-        this.baseUrl = process.env.API_BASE_URL || 'http://localhost:3005'; // For direct API calls
     }
 
     /**
@@ -88,20 +87,24 @@ class RAGService {
             try {
                 console.log(`[RAG] Searching ${typeInfo.type} records for: ${question}`);
                 
-                // Prepare search terms (replace spaces with + for URL encoding)
-                const searchTerms = question.replace(/[^\w\s]/g, '').replace(/\s+/g, '+');
+                // Use direct database call instead of HTTP
+                const searchParams = {
+                    search: question,
+                    recordType: typeInfo.type,
+                    sortBy: 'date:desc',
+                    resolveDepth: 1,
+                    limit: this.maxResults,
+                    page: 1,
+                    includeSigs: false,
+                    includePubKeys: false
+                };
                 
-                // Use the records API with tag summarization
-                const searchUrl = `${this.baseUrl}/api/records?recordType=${typeInfo.type}&sortBy=date:desc&resolveDepth=1&summarizeTags=true&tagCount=5&tagPage=1&search=${searchTerms}&limit=${this.maxResults}&page=1`;
+                console.log(`[RAG] Direct DB search params:`, searchParams);
                 
-                console.log(`[RAG] API call: ${searchUrl}`);
+                const dbResults = await getRecords(searchParams);
                 
-                const response = await axios.get(searchUrl, {
-                    timeout: 10000
-                });
-                
-                if (response.data && response.data.records) {
-                    const records = response.data.records.slice(0, this.maxResults);
+                if (dbResults && dbResults.records) {
+                    const records = dbResults.records.slice(0, this.maxResults);
                     console.log(`[RAG] Found ${records.length} ${typeInfo.type} records`);
                     
                     // Add type info to each record for context
@@ -117,7 +120,7 @@ class RAGService {
             }
         }
         
-        console.log(`[RAG] Total results after tag summarization: ${allResults.length}`);
+        console.log(`[RAG] Total results after direct search: ${allResults.length}`);
         return allResults;
     }
 

@@ -2,6 +2,10 @@ const express = require('express');
 const multer = require('multer');
 const axios = require('axios');
 const ragService = require('../helpers/ragService');
+const fs = require('fs');
+const path = require('path');
+const { spawn } = require('child_process');
+const os = require('os');
 const router = express.Router();
 
 // Configure multer for audio file uploads
@@ -29,8 +33,63 @@ const upload = multer({
 
 // Service URLs
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || 'http://localhost:8003';
-const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
 const TEXT_GENERATOR_URL = process.env.TEXT_GENERATOR_URL || 'http://localhost:8002';
+
+// Embedded TTS using espeak (available in Alpine container)
+async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
+    return new Promise((resolve, reject) => {
+        const tempFile = path.join(os.tmpdir(), `tts_${Date.now()}.wav`);
+        
+        // Voice mapping
+        const voiceMap = {
+            'default': 'en',
+            'female_1': 'en+f3',
+            'male_1': 'en+m3',
+            'female_2': 'en+f4',
+            'male_2': 'en+m4'
+        };
+        
+        const voice = voiceMap[voiceId] || 'en';
+        const espeakSpeed = Math.max(80, Math.min(400, Math.round(175 * speed)));
+        
+        const args = [
+            '-v', voice,
+            '-s', espeakSpeed.toString(),
+            '-w', tempFile,
+            text
+        ];
+        
+        console.log(`[TTS] Synthesizing with espeak: voice=${voice}, speed=${espeakSpeed}`);
+        
+        const espeak = spawn('espeak', args);
+        
+        espeak.on('close', (code) => {
+            if (code === 0) {
+                fs.readFile(tempFile, (err, data) => {
+                    // Clean up temp file
+                    fs.unlink(tempFile, () => {});
+                    
+                    if (err) {
+                        reject(new Error(`Failed to read audio file: ${err.message}`));
+                    } else {
+                        console.log(`[TTS] Successfully synthesized ${data.length} bytes`);
+                        resolve(data);
+                    }
+                });
+            } else {
+                // Clean up temp file on error
+                fs.unlink(tempFile, () => {});
+                reject(new Error(`espeak failed with code ${code}`));
+            }
+        });
+        
+        espeak.on('error', (err) => {
+            // Clean up temp file on error
+            fs.unlink(tempFile, () => {});
+            reject(new Error(`espeak error: ${err.message}`));
+        });
+    });
+}
 
 /**
  * POST /api/voice/transcribe
@@ -94,7 +153,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
 /**
  * POST /api/voice/synthesize
- * Convert text to speech audio
+ * Convert text to speech audio using embedded TTS
  */
 router.post('/synthesize', async (req, res) => {
     try {
@@ -104,45 +163,28 @@ router.post('/synthesize', async (req, res) => {
             return res.status(400).json({ error: 'Text is required' });
         }
 
-        // Forward to TTS service
-        const response = await axios.post(
-            `${TTS_SERVICE_URL}/synthesize`,
-            {
-                text: text.trim(),
-                voice_id,
-                speed,
-                language
-            },
-            {
-                responseType: 'stream',
-                timeout: 30000,
-            }
-        );
+        console.log(`[TTS] Synthesizing: "${text.substring(0, 50)}..." with voice ${voice_id}`);
+
+        // Use embedded espeak TTS
+        const audioData = await synthesizeWithEspeak(text.trim(), voice_id, speed);
 
         // Set appropriate headers
         res.set({
             'Content-Type': 'audio/wav',
-            'X-Engine-Used': response.headers['x-engine-used'] || 'unknown',
-            'X-Voice-ID': response.headers['x-voice-id'] || voice_id
+            'X-Engine-Used': 'espeak',
+            'X-Voice-ID': voice_id,
+            'Content-Length': audioData.length.toString()
         });
 
-        // Stream audio back to client
-        response.data.pipe(res);
+        // Send audio data directly
+        res.send(audioData);
 
     } catch (error) {
         console.error('TTS Error:', error.message);
-        
-        if (error.response) {
-            res.status(error.response.status).json({
-                error: 'Speech synthesis failed',
-                details: error.response.data
-            });
-        } else {
-            res.status(500).json({
-                error: 'TTS service unavailable',
-                details: error.message
-            });
-        }
+        res.status(500).json({
+            error: 'Speech synthesis failed',
+            details: error.message
+        });
     }
 });
 
@@ -214,20 +256,12 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         // Step 3: Convert response to speech if requested
         if (return_audio) {
             try {
-                const ttsResponse = await axios.post(
-                    `${TTS_SERVICE_URL}/synthesize`,
-                    {
-                        text: responseText,
-                        voice_id,
-                        speed
-                    },
-                    {
-                        responseType: 'stream',
-                        timeout: 30000,
-                    }
-                );
+                console.log(`[Voice Chat] Synthesizing response audio with voice ${voice_id}`);
+                
+                // Use embedded TTS instead of external service
+                const audioData = await synthesizeWithEspeak(responseText, voice_id, speed);
 
-                // Return combined response with RAG metadata
+                // Return combined response with RAG metadata  
                 res.json({
                     success: true,
                     input_text: inputText,
@@ -235,16 +269,12 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     model_used: model,
                     voice_id,
                     has_audio: true,
-                    engine_used: ttsResponse.headers['x-engine-used'] || 'unknown',
+                    engine_used: 'espeak',
+                    audio_data: audioData.toString('base64'), // Include audio as base64
                     sources: ragResponse.sources,
                     context_used: ragResponse.context_used,
                     search_results_count: ragResponse.search_results_count
                 });
-
-                // Note: In a production setup, you might want to:
-                // 1. Save audio to temporary file/storage
-                // 2. Return audio URL instead of streaming
-                // 3. Implement WebSocket for real-time streaming
 
             } catch (ttsError) {
                 console.warn('TTS failed, returning text only:', ttsError.message);
@@ -288,86 +318,34 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
 
 /**
  * GET /api/voice/voices
- * List available TTS voices
+ * List available TTS voices (embedded)
  */
 router.get('/voices', async (req, res) => {
-    try {
-        const response = await axios.get(`${TTS_SERVICE_URL}/voices`, {
-            timeout: 10000
-        });
-
-        // Transform the response to the expected format
-        const voiceData = response.data;
-        
-        // If the TTS service returns arrays, transform them into objects
-        if (voiceData.voices && Array.isArray(voiceData.voices)) {
-            const transformedVoices = voiceData.voices.map((voiceId, index) => {
-                // Create a readable name from the voice ID
-                const name = voiceId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                
-                // Determine engine based on voice pattern or use default
-                let engine = 'Default';
-                if (voiceId.includes('female') || voiceId.includes('male')) {
-                    engine = 'Chatterbox';
-                } else if (voiceId.includes('silero')) {
-                    engine = 'Silero';
-                } else if (voiceData.engines && voiceData.engines.length > 0) {
-                    engine = voiceData.engines[index % voiceData.engines.length];
-                }
-                
-                return {
-                    id: voiceId,
-                    name: name,
-                    engine: engine
-                };
-            });
-            
-            res.json({
-                voices: transformedVoices
-            });
-        } else {
-            // If already in the correct format, pass it through
-            res.json(voiceData);
-        }
-
-    } catch (error) {
-        console.error('Error fetching voices:', error.message);
-        
-        // Fallback to default voices if TTS service is unavailable
-        const fallbackVoices = {
-            voices: [
-                { id: 'female_1', name: 'Female Voice 1', engine: 'Chatterbox' },
-                { id: 'male_1', name: 'Male Voice 1', engine: 'Chatterbox' },
-                { id: 'female_2', name: 'Female Voice 2', engine: 'Silero' },
-                { id: 'male_2', name: 'Male Voice 2', engine: 'Silero' }
-            ]
-        };
-        
-        console.log('TTS service unavailable, returning fallback voices');
-        res.json(fallbackVoices);
-    }
+    // Return embedded eSpeak voices
+    const embeddedVoices = {
+        voices: [
+            { id: 'default', name: 'Default English', engine: 'eSpeak' },
+            { id: 'female_1', name: 'Female Voice 1', engine: 'eSpeak' },
+            { id: 'male_1', name: 'Male Voice 1', engine: 'eSpeak' },
+            { id: 'female_2', name: 'Female Voice 2', engine: 'eSpeak' },
+            { id: 'male_2', name: 'Male Voice 2', engine: 'eSpeak' }
+        ]
+    };
+    
+    console.log('[TTS] Returning embedded eSpeak voices');
+    res.json(embeddedVoices);
 });
 
 /**
  * GET /api/voice/engines
- * List available TTS engines
+ * List available TTS engines (embedded)
  */
 router.get('/engines', async (req, res) => {
-    try {
-        const response = await axios.get(`${TTS_SERVICE_URL}/engines`, {
-            timeout: 10000
-        });
-
-        res.json(response.data);
-
-    } catch (error) {
-        console.error('Error fetching engines:', error.message);
-        
-        res.status(500).json({
-            error: 'Failed to fetch engines',
-            details: error.message
-        });
-    }
+    res.json({
+        engines: [
+            { id: 'espeak', name: 'eSpeak TTS', available: true }
+        ]
+    });
 });
 
 /**
@@ -456,12 +434,12 @@ router.post('/rag', async (req, res) => {
 router.get('/health', async (req, res) => {
     const services = {
         stt: { url: STT_SERVICE_URL, status: 'unknown' },
-        tts: { url: TTS_SERVICE_URL, status: 'unknown' },
+        tts: { embedded: true, status: 'healthy' }, // Embedded TTS
         text_generator: { url: TEXT_GENERATOR_URL, status: 'unknown' }
     };
 
-    // Check each service
-    const healthChecks = Object.keys(services).map(async (serviceName) => {
+    // Check external services
+    const healthChecks = ['stt', 'text_generator'].map(async (serviceName) => {
         try {
             const response = await axios.get(
                 `${services[serviceName].url}/health`,
