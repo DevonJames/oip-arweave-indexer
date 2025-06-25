@@ -73,7 +73,6 @@ services:
       - "3005:3005"
       - "9229:9229"
     volumes:
-      - ./config:/usr/src/app/config
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
     environment:
@@ -104,7 +103,6 @@ services:
       - "8082:8082"  # Speech synthesizer
       - "4040:4040"  # Ngrok dashboard
     volumes:
-      - ./config:/usr/src/app/config
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
     environment:
@@ -134,7 +132,6 @@ services:
       - "9229:9229"
     volumes:
       - ./media/jfk:/usr/src/app/media/jfk
-      - ./config:/usr/src/app/config
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
     environment:

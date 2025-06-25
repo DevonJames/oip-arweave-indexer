@@ -72,17 +72,6 @@ services:
     build:
       context: ./speech-synthesizer
       dockerfile: Dockerfile
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-    runtime: nvidia
-    deploy:
-      resources:
-        limits:
-          cpus: "16"
-          memory: "120g"
-        reservations:
-          cpus: "8"
-          memory: "64g"
     ports:
       - "8082:8082"
     networks:
