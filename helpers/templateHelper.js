@@ -337,7 +337,23 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                     recordData = `[${recordDataArray.join(',')}]`; // Final serialized string of all records
                     // console.log(getFileInfo(), getLineNumber(), 'recordData', recordData);
                 }
-                const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+                
+                // Debug: Check wallet file path and existence
+                const walletPath = process.env.WALLET_FILE;
+                console.log('[DEBUG] WALLET_FILE env var:', walletPath);
+                console.log('[DEBUG] Current working directory:', process.cwd());
+                console.log('[DEBUG] Attempting to read wallet from:', path.resolve(walletPath));
+                
+                if (!fs.existsSync(walletPath)) {
+                    console.error('[ERROR] Wallet file not found at:', walletPath);
+                    console.error('[ERROR] Directory contents:', fs.readdirSync('.'));
+                    if (fs.existsSync('config')) {
+                        console.error('[ERROR] Config directory contents:', fs.readdirSync('config'));
+                    }
+                    throw new Error(`Wallet file not found: ${walletPath}`);
+                }
+                
+                const jwk = JSON.parse(fs.readFileSync(walletPath));
                 
                 const myPublicKey = jwk.n;
                 const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
