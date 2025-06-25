@@ -171,9 +171,8 @@ router.post('/synthesize', async (req, res) => {
             `${TTS_SERVICE_URL}/synthesize`,
             {
                 text: text.trim(),
-                voice_id,
-                speed,
-                language
+                voice: voice_id,
+                engine: 'auto'
             },
             {
                 timeout: 30000,
@@ -297,9 +296,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
                             text: responseText,
-                            voice_id,
-                            speed,
-                            language: 'en'
+                            voice: voice_id,
+                            engine: 'auto'
                         },
                         {
                             timeout: 30000,
