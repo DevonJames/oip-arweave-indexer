@@ -428,7 +428,14 @@ export default function VoiceAssistant() {
       };
       
       setTranscript(prev => [...prev, assistantMessage]);
-      await speak(data.response_text);
+      
+      // Handle audio if included in response
+      if (data.has_audio && data.audio_data) {
+        await speakFromBase64(data.audio_data);
+      } else {
+        // Fallback to separate TTS call if no audio in response
+        await speak(data.response_text);
+      }
       
     } catch (err) {
       console.error('Error processing with LLM:', err);
@@ -437,6 +444,68 @@ export default function VoiceAssistant() {
       }
     } finally {
       if (mountedRef.current) setIsLoading(false);
+    }
+  };
+
+  const speakFromBase64 = async (audioBase64: string) => {
+    if (!mountedRef.current) return;
+    
+    try {
+      setIsSpeaking(true);
+      
+      const wasRecording = isRecordingRef.current;
+      const wasInConversationMode = isInConversationModeRef.current;
+      
+      if (wasRecording) {
+        stopRecording();
+      }
+      
+      // Convert base64 to audio blob
+      const audioBytes = atob(audioBase64);
+      const arrayBuffer = new ArrayBuffer(audioBytes.length);
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      for (let i = 0; i < audioBytes.length; i++) {
+        uint8Array[i] = audioBytes.charCodeAt(i);
+      }
+      
+      const audioBlob = new Blob([arrayBuffer], { type: 'audio/wav' });
+      
+      if (!mountedRef.current) return;
+      
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      audioRef.current = new Audio(audioUrl);
+      
+      audioRef.current.onended = () => {
+        if (mountedRef.current) setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+        
+        if (wasInConversationMode && isInConversationModeRef.current && mountedRef.current) {
+          setTimeout(() => {
+            if (isInConversationModeRef.current && !isRecordingRef.current && mountedRef.current) {
+              startRecording();
+            }
+          }, 1000);
+        }
+      };
+      
+      audioRef.current.onerror = () => {
+        if (mountedRef.current) setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+        if (mountedRef.current) {
+          setError('Failed to play synthesized audio');
+        }
+      };
+      
+      await audioRef.current.play();
+      
+    } catch (err) {
+      console.error('Error playing base64 audio:', err);
+      if (mountedRef.current) {
+        setError('Failed to play audio: ' + (err as Error).message);
+        setIsSpeaking(false);
+      }
     }
   };
 
