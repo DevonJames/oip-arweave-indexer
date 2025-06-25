@@ -66,7 +66,7 @@ const translateJSONtoOIPData = async (record, recordType) => {
     // console.log('61 templates', templates)
     if (qtyTemplatesInDB === 0) {
         console.log('No templates found in DB, using hardcoded translation');
-        const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+        const jwk = JSON.parse(fs.readFileSync(path.resolve('/usr/src/app', process.env.WALLET_FILE)));
 
         const myPublicKey = jwk.n
         const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
@@ -292,27 +292,29 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                 transactionId: didTx
             }
             
-            // Debug: Check wallet file path and existence (DELETE RECORD CASE)
+            // Fix: Use absolute path since working directory is wrong
             const walletPath = process.env.WALLET_FILE;
+            const absoluteWalletPath = path.resolve('/usr/src/app', walletPath);
+            
             console.log('[DEBUG DELETE] WALLET_FILE env var:', walletPath);
             console.log('[DEBUG DELETE] Current working directory:', process.cwd());
-            console.log('[DEBUG DELETE] Attempting to read wallet from:', path.resolve(walletPath || 'undefined'));
+            console.log('[DEBUG DELETE] Absolute wallet path:', absoluteWalletPath);
             
             if (!walletPath) {
                 console.error('[ERROR DELETE] WALLET_FILE environment variable is not set!');
                 throw new Error('WALLET_FILE environment variable is not set');
             }
             
-            if (!fs.existsSync(walletPath)) {
-                console.error('[ERROR DELETE] Wallet file not found at:', walletPath);
-                console.error('[ERROR DELETE] Directory contents:', fs.readdirSync('.'));
-                if (fs.existsSync('config')) {
-                    console.error('[ERROR DELETE] Config directory contents:', fs.readdirSync('config'));
+            if (!fs.existsSync(absoluteWalletPath)) {
+                console.error('[ERROR DELETE] Wallet file not found at:', absoluteWalletPath);
+                console.error('[ERROR DELETE] App directory contents:', fs.readdirSync('/usr/src/app'));
+                if (fs.existsSync('/usr/src/app/config')) {
+                    console.error('[ERROR DELETE] Config directory contents:', fs.readdirSync('/usr/src/app/config'));
                 }
-                throw new Error(`Wallet file not found: ${walletPath}`);
+                throw new Error(`Wallet file not found: ${absoluteWalletPath}`);
             }
             
-            const jwk = JSON.parse(fs.readFileSync(walletPath));
+            const jwk = JSON.parse(fs.readFileSync(absoluteWalletPath));
             
             const myPublicKey = jwk.n;
             const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
@@ -328,7 +330,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
 
             // handle creator registration
             if (recordType === 'creatorRegistration') {
-                const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+                const jwk = JSON.parse(fs.readFileSync(path.resolve('/usr/src/app', process.env.WALLET_FILE)));
                 const myPublicKey = jwk.n;
                 const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
                 record.creatorRegistration.publicKey = myPublicKey;
@@ -359,22 +361,24 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                     // console.log(getFileInfo(), getLineNumber(), 'recordData', recordData);
                 }
                 
-                // Debug: Check wallet file path and existence
+                // Fix: Use absolute path since working directory is wrong
                 const walletPath = process.env.WALLET_FILE;
+                const absoluteWalletPath = path.resolve('/usr/src/app', walletPath);
+                
                 console.log('[DEBUG] WALLET_FILE env var:', walletPath);
                 console.log('[DEBUG] Current working directory:', process.cwd());
-                console.log('[DEBUG] Attempting to read wallet from:', path.resolve(walletPath));
+                console.log('[DEBUG] Absolute wallet path:', absoluteWalletPath);
                 
-                if (!fs.existsSync(walletPath)) {
-                    console.error('[ERROR] Wallet file not found at:', walletPath);
-                    console.error('[ERROR] Directory contents:', fs.readdirSync('.'));
-                    if (fs.existsSync('config')) {
-                        console.error('[ERROR] Config directory contents:', fs.readdirSync('config'));
+                if (!fs.existsSync(absoluteWalletPath)) {
+                    console.error('[ERROR] Wallet file not found at:', absoluteWalletPath);
+                    console.error('[ERROR] App directory contents:', fs.readdirSync('/usr/src/app'));
+                    if (fs.existsSync('/usr/src/app/config')) {
+                        console.error('[ERROR] Config directory contents:', fs.readdirSync('/usr/src/app/config'));
                     }
-                    throw new Error(`Wallet file not found: ${walletPath}`);
+                    throw new Error(`Wallet file not found: ${absoluteWalletPath}`);
                 }
                 
-                const jwk = JSON.parse(fs.readFileSync(walletPath));
+                const jwk = JSON.parse(fs.readFileSync(absoluteWalletPath));
                 
                 const myPublicKey = jwk.n;
                 const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
@@ -632,7 +636,7 @@ async function publishNewTemplate(template, blockchain = 'arweave') {
         // console.log(getFileInfo(), getLineNumber(), 'publishNewTemplate', template, { blockchain });
 
         const templateName = Object.keys(template)[0];
-        const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE));
+        const jwk = JSON.parse(fs.readFileSync(path.resolve('/usr/src/app', process.env.WALLET_FILE)));
 
         const myPublicKey = jwk.n;
         const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
