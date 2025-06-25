@@ -326,9 +326,47 @@ class GPUTTSService:
 # Initialize service
 tts_service = GPUTTSService()
 
-@app.post("/synthesize", response_model=TTSResponse)
+@app.post("/synthesize")
 async def synthesize_speech(request: TTSRequest):
-    """Synthesize speech from text"""
+    """Synthesize speech from text - returns raw audio data"""
+    try:
+        # Get the synthesis result
+        result = await tts_service.synthesize(
+            text=request.text,
+            voice=request.voice,
+            engine=request.engine
+        )
+        
+        # Read the actual audio file and return as binary data
+        audio_file_path = result.audio_file
+        
+        with open(audio_file_path, 'rb') as f:
+            audio_data = f.read()
+        
+        # Clean up temporary file
+        try:
+            os.unlink(audio_file_path)
+        except:
+            pass
+        
+        # Return raw audio data with proper headers
+        return Response(
+            content=audio_data,
+            media_type="audio/wav",
+            headers={
+                "X-Engine-Used": result.engine_used,
+                "X-Voice-Used": result.voice_used,
+                "Content-Length": str(len(audio_data))
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Synthesis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Synthesis failed: {str(e)}")
+
+@app.post("/synthesize_json", response_model=TTSResponse)
+async def synthesize_speech_json(request: TTSRequest):
+    """Synthesize speech from text - returns JSON response with file path (for compatibility)"""
     return await tts_service.synthesize(
         text=request.text,
         voice=request.voice,
