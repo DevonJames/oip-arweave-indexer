@@ -32,7 +32,7 @@ const recordTypesForRAG = {
     post: {
         enabled: true,
         priority: 9,
-        description: 'Blog posts, articles, and general text content',
+        description: 'Blog posts, news articles, and general text content',
         contextFields: ['name', 'description', 'content', 'tags', 'category']
     },
     
@@ -53,20 +53,20 @@ const recordTypesForRAG = {
     },
     
     // Image records - photos and visual content (lower priority for text-based RAG)
-    image: {
-        enabled: true,
-        priority: 3,
-        description: 'Images and visual content with metadata',
-        contextFields: ['name', 'description', 'tags', 'location', 'dateCreated']
-    },
+    // image: {
+    //     enabled: true,
+    //     priority: 3,
+    //     description: 'Images and visual content with metadata',
+    //     contextFields: ['name', 'description', 'tags', 'location', 'dateCreated']
+    // },
     
-    // Video records - video content
-    video: {
-        enabled: true,
-        priority: 4,
-        description: 'Video content and metadata',
-        contextFields: ['name', 'description', 'transcript', 'duration', 'tags', 'category']
-    }
+    // // Video records - video content
+    // video: {
+    //     enabled: true,
+    //     priority: 4,
+    //     description: 'Video content and metadata',
+    //     contextFields: ['name', 'description', 'transcript', 'duration', 'tags', 'category']
+    // }
 };
 
 /**

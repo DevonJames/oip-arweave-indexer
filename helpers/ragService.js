@@ -4,7 +4,8 @@ const {
     getEnabledRecordTypes, 
     getRecordTypesByPriority, 
     isRecordTypeEnabled, 
-    getContextFields 
+    getContextFields,
+    recordTypesForRAG
 } = require('../config/recordTypesForRAG');
 
 class RAGService {
@@ -13,6 +14,111 @@ class RAGService {
         this.defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
         this.maxContextLength = 2000; // Max characters for context
         this.maxResults = 5; // Max search results to include
+        this.baseUrl = process.env.API_BASE_URL || 'http://localhost:3005'; // For direct API calls
+    }
+
+    /**
+     * Analyze question context to determine relevant record types
+     */
+    analyzeQuestionForRecordTypes(question) {
+        const lowerQuestion = question.toLowerCase();
+        const relevantTypes = [];
+        
+        // Define keywords for each record type based on their descriptions
+        const typeKeywords = {
+            recipe: ['recipe', 'cook', 'food', 'ingredient', 'meal', 'dish', 'kitchen', 'eat', 'nutrition', 'cooking'],
+            exercise: ['exercise', 'workout', 'fitness', 'gym', 'muscle', 'training', 'sport', 'physical', 'cardio', 'strength'],
+            post: ['news', 'article', 'politics', 'election', 'government', 'policy', 'social', 'current', 'event', 'opinion', 'blog', 'discussion'],
+            podcast: ['podcast', 'audio', 'interview', 'conversation', 'talk', 'speaker', 'listen', 'episode'],
+            jfkFilesDocument: ['jfk', 'kennedy', 'assassination', 'document', 'classified', 'cia', 'fbi', 'government', 'conspiracy'],
+            image: ['photo', 'picture', 'image', 'visual', 'gallery', 'photography'],
+            video: ['video', 'watch', 'film', 'movie', 'youtube', 'streaming', 'visual']
+        };
+        
+        // Check each record type for keyword matches
+        for (const [recordType, keywords] of Object.entries(typeKeywords)) {
+            if (!isRecordTypeEnabled(recordType)) continue;
+            
+            const matchScore = keywords.reduce((score, keyword) => {
+                return score + (lowerQuestion.includes(keyword) ? 1 : 0);
+            }, 0);
+            
+            if (matchScore > 0) {
+                const config = recordTypesForRAG[recordType];
+                relevantTypes.push({
+                    type: recordType,
+                    score: matchScore,
+                    priority: config.priority,
+                    description: config.description
+                });
+            }
+        }
+        
+        // If no specific matches found, include high-priority general types
+        if (relevantTypes.length === 0) {
+            console.log('[RAG] No specific record type matches, using high-priority types');
+            const highPriorityTypes = getRecordTypesByPriority().slice(0, 3); // Top 3
+            return highPriorityTypes.map(item => ({
+                type: item.type,
+                score: 0,
+                priority: item.config.priority,
+                description: item.config.description
+            }));
+        }
+        
+        // Sort by match score first, then by priority
+        relevantTypes.sort((a, b) => {
+            if (a.score !== b.score) return b.score - a.score;
+            return b.priority - a.priority;
+        });
+        
+        console.log(`[RAG] Relevant record types for "${question}":`, 
+            relevantTypes.map(rt => `${rt.type} (score: ${rt.score}, priority: ${rt.priority})`));
+        
+        return relevantTypes;
+    }
+
+    /**
+     * Use tag summarization to get the most relevant results for specific record types
+     */
+    async searchWithTagSummarization(question, relevantTypes, options = {}) {
+        const allResults = [];
+        
+        for (const typeInfo of relevantTypes.slice(0, 2)) { // Limit to top 2 relevant types
+            try {
+                console.log(`[RAG] Searching ${typeInfo.type} records for: ${question}`);
+                
+                // Prepare search terms (replace spaces with + for URL encoding)
+                const searchTerms = question.replace(/[^\w\s]/g, '').replace(/\s+/g, '+');
+                
+                // Use the records API with tag summarization
+                const searchUrl = `${this.baseUrl}/api/records?recordType=${typeInfo.type}&sortBy=date:desc&resolveDepth=1&summarizeTags=true&tagCount=5&tagPage=1&search=${searchTerms}&limit=${this.maxResults}`;
+                
+                console.log(`[RAG] API call: ${searchUrl}`);
+                
+                const response = await axios.get(searchUrl, {
+                    timeout: 10000
+                });
+                
+                if (response.data && response.data.records) {
+                    const records = response.data.records.slice(0, this.maxResults);
+                    console.log(`[RAG] Found ${records.length} ${typeInfo.type} records`);
+                    
+                    // Add type info to each record for context
+                    records.forEach(record => {
+                        record._ragTypeInfo = typeInfo;
+                    });
+                    
+                    allResults.push(...records);
+                }
+                
+            } catch (error) {
+                console.warn(`[RAG] Error searching ${typeInfo.type}:`, error.message);
+            }
+        }
+        
+        console.log(`[RAG] Total results after tag summarization: ${allResults.length}`);
+        return allResults;
     }
 
     /**
@@ -22,13 +128,30 @@ class RAGService {
         try {
             console.log(`[RAG] Processing query: ${question}`);
             
-            // Step 1: Search Elasticsearch for relevant content
-            const searchResults = await this.searchElasticsearch(question, options);
+            // Step 1: Analyze question to determine relevant record types
+            const relevantTypes = this.analyzeQuestionForRecordTypes(question);
             
-            // Step 2: Build context from search results
+            // Step 2: Use smart search with tag summarization
+            const smartResults = await this.searchWithTagSummarization(question, relevantTypes, options);
+            
+            // Step 3: Fallback to traditional search if smart search yields no results
+            let searchResults;
+            if (smartResults.length > 0) {
+                searchResults = {
+                    records: smartResults,
+                    totalResults: smartResults.length,
+                    templates: [],
+                    creators: []
+                };
+            } else {
+                console.log('[RAG] Smart search yielded no results, falling back to traditional search');
+                searchResults = await this.searchElasticsearch(question, options);
+            }
+            
+            // Step 4: Build context from search results
             const context = this.buildContext(searchResults);
             
-            // Step 3: Generate LLM response with context
+            // Step 5: Generate LLM response with context
             const response = await this.generateResponse(question, context, options.model);
             
             return {
@@ -36,7 +159,8 @@ class RAGService {
                 sources: this.extractSources(searchResults),
                 context_used: context.length > 0,
                 model: options.model || this.defaultModel,
-                search_results_count: searchResults.totalResults || 0
+                search_results_count: searchResults.totalResults || 0,
+                relevant_types: relevantTypes.map(rt => rt.type) // Add this for debugging
             };
             
         } catch (error) {
@@ -203,6 +327,7 @@ class RAGService {
         const basic = record.data?.basic || {};
         const oip = record.oip || {};
         const recordType = oip.recordType;
+        const ragTypeInfo = record._ragTypeInfo; // Added by smart search
         
         const parts = [];
         
@@ -218,9 +343,13 @@ class RAGService {
             parts.push(`Description: ${basic.description}`);
         }
         
-        // Add record type
+        // Add record type with relevance score if available
         if (recordType) {
-            parts.push(`Type: ${recordType}`);
+            if (ragTypeInfo && ragTypeInfo.score > 0) {
+                parts.push(`Type: ${recordType} (relevance: ${ragTypeInfo.score})`);
+            } else {
+                parts.push(`Type: ${recordType}`);
+            }
         }
         
         // Add creator info
