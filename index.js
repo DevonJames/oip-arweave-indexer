@@ -62,6 +62,7 @@ const corsOptions = {
       'http://localhost:3000',
       'http://localhost:3005',
       'http://localhost:8080',
+      'https://api.oip.onl',
       'https://api.elevenlabs.io',
       'wss://api.elevenlabs.io',
       'https://api.fitnessally.io'
