@@ -1578,8 +1578,11 @@
             let imageHtml = '';
             let imageUrl = null;
             
+            // Check various image field locations in order of preference
             if (basicData.featuredImage) {
                 imageUrl = basicData.featuredImage;
+            } else if (specificData.featuredImage?.data?.image?.webUrl) {
+                imageUrl = specificData.featuredImage.data.image.webUrl;
             } else if (record.data?.image?.webUrl) {
                 imageUrl = record.data.image.webUrl;
             } else if (basicData.imageItems && basicData.imageItems.length > 0) {
@@ -1607,30 +1610,45 @@
                 `;
             }
             
-            // Get full text content for collapsible view
-            let fullTextContent = '';
-            if (specificData.articleText) {
-                fullTextContent = specificData.articleText;
-            } else if (specificData.instructions) {
-                fullTextContent = specificData.instructions;
-            } else if (specificData.content) {
-                fullTextContent = specificData.content;
-            } else if (basicData.description) {
-                fullTextContent = basicData.description;
+            // Determine text content source and type
+            let textSourceUrl = null;
+            let textSourceType = 'static'; // 'static' or 'fetch'
+            let staticTextContent = '';
+            
+            // Check for text file URLs first (highest priority)
+            if (specificData.articleText?.data?.text?.webUrl) {
+                textSourceUrl = specificData.articleText.data.text.webUrl;
+                textSourceType = 'fetch';
+            } else if (specificData.articleText?.webUrl) {
+                textSourceUrl = specificData.articleText.webUrl;
+                textSourceType = 'fetch';
+            } else if (record.data?.text?.webUrl) {
+                textSourceUrl = record.data.text.webUrl;
+                textSourceType = 'fetch';
+            } else if (specificData.instructions && typeof specificData.instructions === 'string' && specificData.instructions.length > 200) {
+                staticTextContent = specificData.instructions;
+                textSourceType = 'static';
+            } else if (specificData.content && typeof specificData.content === 'string' && specificData.content.length > 200) {
+                staticTextContent = specificData.content;
+                textSourceType = 'static';
+            } else if (basicData.description && basicData.description.length > 200) {
+                staticTextContent = basicData.description;
+                textSourceType = 'static';
             }
             
             // Text content toggle button
             let textToggleHtml = '';
-            if (fullTextContent && fullTextContent.length > 200) {
+            if (textSourceType === 'fetch' || (textSourceType === 'static' && staticTextContent)) {
+                const buttonText = textSourceType === 'fetch' ? '📄 Load Full Article' : '📄 Show Full Text';
                 textToggleHtml = `
                     <div style="margin: 10px 0;">
-                        <button onclick="toggleTextContent(${recordIndex})" 
+                        <button onclick="toggleTextContent(${recordIndex}, '${textSourceType}', '${textSourceUrl || ''}')" 
                                 id="textBtn-${recordIndex}" 
                                 class="toggle-text-btn">
-                            📄 Show Full Text
+                            ${buttonText}
                         </button>
-                        <div id="textContent-${recordIndex}" class="text-content-preview hidden">
-                            ${escapeHtml(fullTextContent)}
+                        <div id="textContent-${recordIndex}" class="text-content-preview hidden" data-static-content="${textSourceType === 'static' ? escapeHtml(staticTextContent) : ''}">
+                            ${textSourceType === 'static' ? escapeHtml(staticTextContent) : '<div class="loading">Loading...</div>'}
                         </div>
                     </div>
                 `;
@@ -2389,16 +2407,60 @@
         }
 
         // Text content toggle function
-        function toggleTextContent(recordIndex) {
+        async function toggleTextContent(recordIndex, sourceType, sourceUrl) {
             const textContent = document.getElementById(`textContent-${recordIndex}`);
             const toggleBtn = document.getElementById(`textBtn-${recordIndex}`);
             
             if (textContent.classList.contains('hidden')) {
+                // Show content
                 textContent.classList.remove('hidden');
-                toggleBtn.textContent = '📄 Hide Full Text';
+                
+                if (sourceType === 'fetch' && sourceUrl) {
+                    // Check if we already fetched the content
+                    if (!textContent.dataset.fetched) {
+                        try {
+                            toggleBtn.textContent = '📄 Loading...';
+                            toggleBtn.disabled = true;
+                            
+                            const response = await fetch(sourceUrl);
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            }
+                            const text = await response.text();
+                            
+                            textContent.innerHTML = `<div style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(text)}</div>`;
+                            textContent.dataset.fetched = 'true';
+                            toggleBtn.textContent = '📄 Hide Full Article';
+                            toggleBtn.disabled = false;
+                        } catch (error) {
+                            console.error('Error fetching text content:', error);
+                            textContent.innerHTML = `<div style="color: #dc3545; padding: 10px;">
+                                <strong>Error loading article:</strong><br>
+                                ${escapeHtml(error.message)}<br>
+                                <small>URL: ${escapeHtml(sourceUrl)}</small>
+                            </div>`;
+                            toggleBtn.textContent = '❌ Failed to Load';
+                            toggleBtn.disabled = false;
+                        }
+                    } else {
+                        toggleBtn.textContent = '📄 Hide Full Article';
+                    }
+                } else if (sourceType === 'static') {
+                    // Static content - just show it
+                    const staticContent = textContent.dataset.staticContent;
+                    if (staticContent) {
+                        textContent.innerHTML = staticContent;
+                    }
+                    toggleBtn.textContent = '📄 Hide Full Text';
+                }
             } else {
+                // Hide content
                 textContent.classList.add('hidden');
-                toggleBtn.textContent = '📄 Show Full Text';
+                if (sourceType === 'fetch') {
+                    toggleBtn.textContent = '📄 Load Full Article';
+                } else {
+                    toggleBtn.textContent = '📄 Show Full Text';
+                }
             }
         }
 
