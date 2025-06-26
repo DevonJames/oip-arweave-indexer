@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OIP Publishing Platform - Reference Client</title>
+    <title>OIP Explorer - Browse & Publish Records</title>
     <style>
         * {
             margin: 0;
@@ -13,46 +13,201 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f7fa;
             min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 20px;
+        }
+
+        .nav-tab {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .nav-tab:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .nav-tab.active {
+            background: white;
+            color: #667eea;
+            border-color: white;
+        }
+
+        .auth-section {
             display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 20px;
+            gap: 10px;
         }
 
         .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            padding: 40px;
-            max-width: 800px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
         }
 
-        h1 {
+        .filters-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .filters-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            align-items: end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+        }
+
+        .filter-group.wide {
+            flex: 2;
+            min-width: 200px;
+        }
+
+        .search-container {
+            flex: 3;
+            min-width: 300px;
+        }
+
+        .records-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            min-height: 600px;
+        }
+
+        .records-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .record-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f9f9f9;
+            transition: all 0.3s ease;
+        }
+
+        .record-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .record-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .record-type {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .record-block {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .record-title {
+            font-weight: 600;
+            margin-bottom: 8px;
             color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 2.5rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        }
+
+        .record-content {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .record-meta {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        .tags-container {
+            margin-top: 10px;
+        }
+
+        .tag {
+            display: inline-block;
+            background: #e9ecef;
+            color: #495057;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin: 2px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .tag:hover {
+            background: #667eea;
+            color: white;
         }
 
         .section {
-            margin-bottom: 30px;
+            background: white;
+            border-radius: 12px;
             padding: 20px;
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            background: #f9f9f9;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
         .section h2 {
-            color: #555;
+            color: #333;
             margin-bottom: 15px;
             font-size: 1.5rem;
         }
@@ -66,20 +221,22 @@
             margin-bottom: 5px;
             color: #555;
             font-weight: 500;
+            font-size: 0.9rem;
         }
 
         input, select, textarea {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
             transition: border-color 0.3s ease;
         }
 
         input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
         }
 
         textarea {
@@ -91,18 +248,18 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            margin-right: 10px;
-            margin-bottom: 10px;
+            transition: all 0.2s ease;
+            margin-right: 8px;
+            margin-bottom: 8px;
         }
 
         button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
         }
 
         button:disabled {
@@ -112,43 +269,118 @@
             box-shadow: none;
         }
 
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: #ccc;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #667eea;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            left: 28px;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border: 1px solid #c3e6cb;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
         .hidden {
             display: none;
         }
 
-        .status {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 5px;
-            font-weight: 500;
-        }
-
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .status.info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-
         .logged-in-user {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: rgba(255,255,255,0.2);
             color: white;
-            padding: 10px 15px;
-            border-radius: 20px;
-            display: inline-block;
-            margin-bottom: 20px;
-            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 16px;
+            font-size: 14px;
         }
 
         .dynamic-fields {
@@ -176,41 +408,332 @@
             font-size: 14px;
         }
 
-        .template-selector {
-            margin-bottom: 20px;
+        .date-inputs {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
 
-        .loading {
+        .date-inputs input {
+            flex: 1;
+        }
+
+        .advanced-filters {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .toggle-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .load-more {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .no-results {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        .pagination-info {
             text-align: center;
             color: #666;
-            font-style: italic;
+            margin: 15px 0;
+            font-size: 0.9rem;
         }
 
         @media (max-width: 768px) {
-            .container {
-                padding: 20px;
-                margin: 10px;
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
             }
             
-            h1 {
-                font-size: 2rem;
+            .nav-tabs {
+                order: -1;
+            }
+            
+            .filters-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filter-group,
+            .filter-group.wide,
+            .search-container {
+                min-width: auto;
+                flex: none;
+            }
+            
+            .records-grid {
+                grid-template-columns: 1fr;
             }
             
             .field-row {
                 flex-direction: column;
                 gap: 5px;
             }
+            
+            .date-inputs {
+                flex-direction: column;
+            }
+            
+            .toggle-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">OIP Explorer</div>
+            
+            <div class="nav-tabs">
+                <div class="nav-tab active" onclick="showBrowseTab()">Browse Records</div>
+                <div class="nav-tab" onclick="showPublishTab()">Publish</div>
+            </div>
+            
+            <div class="auth-section">
+                <div id="user-info" class="hidden">
+                    <span id="logged-in-display" class="logged-in-user"></span>
+                    <button onclick="logout()" class="btn-secondary btn-small">Logout</button>
+                </div>
+                <div id="auth-buttons">
+                    <button onclick="showAuthModal()" class="btn-small">Login / Register</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
-        <h1>OIP Publishing Platform</h1>
-        
-        <!-- Authentication Section -->
-        <div id="auth-section" class="section">
-            <h2>Authentication</h2>
+        <!-- Browse Tab Content -->
+        <div id="browse-tab">
+            <!-- Filters Section -->
+            <div class="filters-section">
+                <div class="filters-row">
+                    <div class="search-container">
+                        <label for="search-input">Search Records</label>
+                        <input type="text" id="search-input" placeholder="Enter search terms..." onkeyup="handleSearchKeyup(event)">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="record-type-filter">Record Type</label>
+                        <select id="record-type-filter" onchange="applyFilters()">
+                            <option value="">All Types</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="sort-by">Sort By</label>
+                        <select id="sort-by" onchange="applyFilters()">
+                            <option value="inArweaveBlock:desc">Block (Newest)</option>
+                            <option value="inArweaveBlock:asc">Block (Oldest)</option>
+                            <option value="date:desc">Date (Newest)</option>
+                            <option value="date:asc">Date (Oldest)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="resolve-depth">Resolve Depth</label>
+                        <input type="number" id="resolve-depth" value="2" min="0" max="5" onchange="applyFilters()">
+                    </div>
+                </div>
+                
+                <div class="filters-row">
+                    <div class="filter-group wide">
+                        <label>Date Range</label>
+                        <div class="date-inputs">
+                            <input type="date" id="date-start" onchange="applyFilters()" placeholder="Start Date">
+                            <span>to</span>
+                            <input type="date" id="date-end" onchange="applyFilters()" placeholder="End Date">
+                        </div>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="tag-filter">Filter by Tag</label>
+                        <select id="tag-filter" onchange="applyFilters()">
+                            <option value="">All Tags</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="advanced-filters">
+                    <div class="toggle-row">
+                        <div class="toggle-group">
+                            <label>Include Signatures:</label>
+                            <div class="toggle-switch" id="include-sigs-toggle" onclick="toggleSwitch('include-sigs-toggle')"></div>
+                        </div>
+                        
+                        <div class="toggle-group">
+                            <label>Include Public Keys:</label>
+                            <div class="toggle-switch" id="include-pubkeys-toggle" onclick="toggleSwitch('include-pubkeys-toggle')"></div>
+                        </div>
+                        
+                        <button onclick="clearFilters()" class="btn-secondary btn-small">Clear Filters</button>
+                        <button onclick="applyFilters()" class="btn-small">Apply Filters</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Records Display -->
+            <div class="records-container">
+                <div id="records-header">
+                    <h2>OIP Records</h2>
+                    <div id="pagination-info" class="pagination-info"></div>
+                </div>
+                
+                <div id="loading-indicator" class="loading">
+                    <div class="spinner"></div>
+                    Loading records...
+                </div>
+                
+                <div id="records-grid" class="records-grid hidden"></div>
+                
+                <div id="no-results" class="no-results hidden">
+                    No records found matching your criteria.
+                </div>
+                
+                <div id="load-more-container" class="load-more hidden">
+                    <button onclick="loadMoreRecords()" id="load-more-btn">Load More Records</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Publish Tab Content -->
+        <div id="publish-tab" class="hidden">
+            <div class="section">
+                <h2>Publishing Platform</h2>
+                <p>Please log in to access publishing features.</p>
+                
+                <div id="publishing-content" class="hidden">
+                    <div class="filters-row">
+                        <button onclick="showCreatorRegistration()">Register Creator</button>
+                        <button onclick="showTemplateCreation()">Create Template</button>
+                        <button onclick="showRecordPublishing()">Publish Record</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Creator Registration -->
+            <div id="creator-section" class="section hidden">
+                <h2>Creator Registration</h2>
+                <div class="form-group">
+                    <label for="creator-name">Creator Name:</label>
+                    <input type="text" id="creator-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="creator-description">Description:</label>
+                    <textarea id="creator-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="creator-email">Email:</label>
+                    <input type="email" id="creator-email">
+                </div>
+                <div class="form-group">
+                    <label for="creator-website">Website:</label>
+                    <input type="url" id="creator-website">
+                </div>
+                <button onclick="registerCreator()">Register Creator</button>
+                <div id="creator-status" class="error-message hidden"></div>
+                <div id="creator-success" class="success-message hidden"></div>
+            </div>
+
+            <!-- Template Creation -->
+            <div id="template-section" class="section hidden">
+                <h2>Template Creation</h2>
+                <div class="form-group">
+                    <label for="template-name">Template Name:</label>
+                    <input type="text" id="template-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="template-recordtype">Record Type:</label>
+                    <input type="text" id="template-recordtype" required placeholder="e.g., post, recipe, workout">
+                </div>
+                <div class="dynamic-fields">
+                    <h3>Template Fields</h3>
+                    <div id="template-fields">
+                        <div class="field-row">
+                            <div>
+                                <label>Field Name:</label>
+                                <input type="text" class="field-name" placeholder="e.g., title, content">
+                            </div>
+                            <div>
+                                <label>Field Type:</label>
+                                <select class="field-type">
+                                    <option value="string">String</option>
+                                    <option value="number">Number</option>
+                                    <option value="boolean">Boolean</option>
+                                    <option value="enum">Enum</option>
+                                    <option value="array">Array</option>
+                                </select>
+                            </div>
+                            <div>
+                                <button type="button" onclick="removeField(this)">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" onclick="addTemplateField()">Add Field</button>
+                </div>
+                <button onclick="createTemplate()">Create Template</button>
+                <div id="template-status" class="error-message hidden"></div>
+                <div id="template-success" class="success-message hidden"></div>
+            </div>
+
+            <!-- Record Publishing -->
+            <div id="record-section" class="section hidden">
+                <h2>Publish Record</h2>
+                <div class="form-group">
+                    <label for="record-type">Record Type:</label>
+                    <select id="record-type" onchange="loadTemplateFields()">
+                        <option value="">Select Record Type</option>
+                        <option value="recipe">Recipe</option>
+                        <option value="workout">Workout</option>
+                        <option value="video">Video</option>
+                        <option value="image">Image</option>
+                        <option value="post">Post</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="template-select">Template:</label>
+                    <select id="template-select">
+                        <option value="">Loading templates...</option>
+                    </select>
+                </div>
+
+                <div id="record-fields" class="dynamic-fields">
+                    <div class="loading">Select a record type to see available fields</div>
+                </div>
+                
+                <button onclick="publishRecord()" id="publish-btn" disabled>Publish Record</button>
+                <div id="record-status" class="error-message hidden"></div>
+                <div id="record-success" class="success-message hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div id="auth-modal" class="modal hidden">
+        <div class="modal-content">
             <div id="login-form">
+                <h2>Login</h2>
                 <div class="form-group">
                     <label for="email">Email:</label>
                     <input type="email" id="email" required>
@@ -220,10 +743,12 @@
                     <input type="password" id="password" required>
                 </div>
                 <button onclick="login()">Login</button>
-                <button onclick="showRegister()">Register</button>
+                <button onclick="showRegisterForm()" class="btn-secondary">Register Instead</button>
+                <button onclick="hideAuthModal()" class="btn-secondary">Cancel</button>
             </div>
             
             <div id="register-form" class="hidden">
+                <h2>Register</h2>
                 <div class="form-group">
                     <label for="register-email">Email:</label>
                     <input type="email" id="register-email" required>
@@ -233,132 +758,105 @@
                     <input type="password" id="register-password" required>
                 </div>
                 <button onclick="register()">Register</button>
-                <button onclick="showLogin()">Back to Login</button>
+                <button onclick="showLoginForm()" class="btn-secondary">Login Instead</button>
+                <button onclick="hideAuthModal()" class="btn-secondary">Cancel</button>
             </div>
             
-            <div id="user-info" class="hidden">
-                <div id="logged-in-display" class="logged-in-user"></div>
-                <button onclick="logout()">Logout</button>
-            </div>
-            
-            <div id="auth-status" class="status hidden"></div>
-        </div>
-
-        <!-- Publishing Actions -->
-        <div id="publishing-section" class="section hidden">
-            <h2>Publishing Actions</h2>
-            <button onclick="showCreatorRegistration()">Register Creator</button>
-            <button onclick="showTemplateCreation()">Create Template</button>
-            <button onclick="showRecordPublishing()">Publish Record</button>
-        </div>
-
-        <!-- Creator Registration -->
-        <div id="creator-section" class="section hidden">
-            <h2>Creator Registration</h2>
-            <div class="form-group">
-                <label for="creator-name">Creator Name:</label>
-                <input type="text" id="creator-name" required>
-            </div>
-            <div class="form-group">
-                <label for="creator-description">Description:</label>
-                <textarea id="creator-description"></textarea>
-            </div>
-            <div class="form-group">
-                <label for="creator-email">Email:</label>
-                <input type="email" id="creator-email">
-            </div>
-            <div class="form-group">
-                <label for="creator-website">Website:</label>
-                <input type="url" id="creator-website">
-            </div>
-            <button onclick="registerCreator()">Register Creator</button>
-            <div id="creator-status" class="status hidden"></div>
-        </div>
-
-        <!-- Template Creation -->
-        <div id="template-section" class="section hidden">
-            <h2>Template Creation</h2>
-            <div class="form-group">
-                <label for="template-name">Template Name:</label>
-                <input type="text" id="template-name" required>
-            </div>
-            <div class="form-group">
-                <label for="template-recordtype">Record Type:</label>
-                <input type="text" id="template-recordtype" required placeholder="e.g., post, recipe, workout">
-            </div>
-            <div class="dynamic-fields">
-                <h3>Template Fields</h3>
-                <div id="template-fields">
-                    <div class="field-row">
-                        <div>
-                            <label>Field Name:</label>
-                            <input type="text" class="field-name" placeholder="e.g., title, content">
-                        </div>
-                        <div>
-                            <label>Field Type:</label>
-                            <select class="field-type">
-                                <option value="string">String</option>
-                                <option value="number">Number</option>
-                                <option value="boolean">Boolean</option>
-                                <option value="enum">Enum</option>
-                                <option value="array">Array</option>
-                            </select>
-                        </div>
-                        <div>
-                            <button type="button" onclick="removeField(this)">Remove</button>
-                        </div>
-                    </div>
-                </div>
-                <button type="button" onclick="addTemplateField()">Add Field</button>
-            </div>
-            <button onclick="createTemplate()">Create Template</button>
-            <div id="template-status" class="status hidden"></div>
-        </div>
-
-        <!-- Record Publishing -->
-        <div id="record-section" class="section hidden">
-            <h2>Publish Record</h2>
-            <div class="form-group">
-                <label for="record-type">Record Type:</label>
-                <select id="record-type" onchange="loadTemplateFields()">
-                    <option value="">Select Record Type</option>
-                    <option value="recipe">Recipe</option>
-                    <option value="workout">Workout</option>
-                    <option value="video">Video</option>
-                    <option value="image">Image</option>
-                    <option value="post">Post</option>
-                </select>
-            </div>
-            
-            <div class="template-selector">
-                <label for="template-select">Template:</label>
-                <select id="template-select">
-                    <option value="">Loading templates...</option>
-                </select>
-            </div>
-
-            <div id="record-fields" class="dynamic-fields">
-                <div class="loading">Select a record type to see available fields</div>
-            </div>
-            
-            <button onclick="publishRecord()" id="publish-btn" disabled>Publish Record</button>
-            <div id="record-status" class="status hidden"></div>
+            <div id="auth-status" class="error-message hidden"></div>
+            <div id="auth-success" class="success-message hidden"></div>
         </div>
     </div>
 
     <script>
+        // State management
         let authToken = localStorage.getItem('oip-auth-token');
         let currentUser = localStorage.getItem('oip-user-email');
         let templates = {};
         let defaultTemplates = {};
+        let recordTypes = [];
+        let currentRecords = [];
+        let currentPage = 1;
+        let isLoading = false;
+        let hasMoreRecords = true;
+        let currentFilters = {
+            search: '',
+            recordType: '',
+            sortBy: 'inArweaveBlock:desc',
+            resolveDepth: 2,
+            dateStart: '',
+            dateEnd: '',
+            tag: '',
+            includeSigs: false,
+            includePubKeys: false
+        };
+        let availableTags = [];
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+        });
+
+        async function initializeApp() {
+            // Setup authentication state
             if (authToken && currentUser) {
                 showLoggedInState();
-                loadTemplates();
+                await loadTemplates();
             }
-        });
+            
+            // Load record types for filters
+            await loadRecordTypes();
+            
+            // Load initial records
+            await loadRecords(true);
+            
+            // Setup infinite scroll
+            setupInfiniteScroll();
+        }
+
+        // Navigation functions
+        function showBrowseTab() {
+            document.querySelector('.nav-tab.active').classList.remove('active');
+            document.querySelector('.nav-tab').classList.add('active');
+            document.getElementById('browse-tab').classList.remove('hidden');
+            document.getElementById('publish-tab').classList.add('hidden');
+        }
+
+        function showPublishTab() {
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab')[1].classList.add('active');
+            document.getElementById('browse-tab').classList.add('hidden');
+            document.getElementById('publish-tab').classList.remove('hidden');
+        }
+
+        // Authentication Modal functions
+        function showAuthModal() {
+            document.getElementById('auth-modal').classList.remove('hidden');
+            showLoginForm();
+        }
+
+        function hideAuthModal() {
+            document.getElementById('auth-modal').classList.add('hidden');
+            clearAuthForms();
+        }
+
+        function showLoginForm() {
+            document.getElementById('login-form').classList.remove('hidden');
+            document.getElementById('register-form').classList.add('hidden');
+        }
+
+        function showRegisterForm() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('register-form').classList.remove('hidden');
+        }
+
+        function clearAuthForms() {
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('register-email').value = '';
+            document.getElementById('register-password').value = '';
+            hideElement('auth-status');
+            hideElement('auth-success');
+        }
 
         // Authentication functions
         async function login() {
@@ -366,7 +864,7 @@
             const password = document.getElementById('password').value;
             
             if (!email || !password) {
-                showStatus('auth-status', 'Please fill in all fields', 'error');
+                showMessage('auth-status', 'Please fill in all fields', 'error');
                 return;
             }
 
@@ -387,13 +885,14 @@
                     localStorage.setItem('oip-auth-token', authToken);
                     localStorage.setItem('oip-user-email', currentUser);
                     showLoggedInState();
-                    loadTemplates();
-                    showStatus('auth-status', 'Login successful!', 'success');
+                    await loadTemplates();
+                    showMessage('auth-success', 'Login successful!', 'success');
+                    setTimeout(hideAuthModal, 1500);
                 } else {
-                    showStatus('auth-status', data.error || 'Login failed', 'error');
+                    showMessage('auth-status', data.error || 'Login failed', 'error');
                 }
             } catch (error) {
-                showStatus('auth-status', 'Network error: ' + error.message, 'error');
+                showMessage('auth-status', 'Network error: ' + error.message, 'error');
             }
         }
 
@@ -402,7 +901,7 @@
             const password = document.getElementById('register-password').value;
             
             if (!email || !password) {
-                showStatus('auth-status', 'Please fill in all fields', 'error');
+                showMessage('auth-status', 'Please fill in all fields', 'error');
                 return;
             }
 
@@ -423,13 +922,14 @@
                     localStorage.setItem('oip-auth-token', authToken);
                     localStorage.setItem('oip-user-email', currentUser);
                     showLoggedInState();
-                    loadTemplates();
-                    showStatus('auth-status', 'Registration successful!', 'success');
+                    await loadTemplates();
+                    showMessage('auth-success', 'Registration successful!', 'success');
+                    setTimeout(hideAuthModal, 1500);
                 } else {
-                    showStatus('auth-status', data.error || 'Registration failed', 'error');
+                    showMessage('auth-status', data.error || 'Registration failed', 'error');
                 }
             } catch (error) {
-                showStatus('auth-status', 'Network error: ' + error.message, 'error');
+                showMessage('auth-status', 'Network error: ' + error.message, 'error');
             }
         }
 
@@ -441,29 +941,233 @@
             showLoginState();
         }
 
-        function showRegister() {
-            document.getElementById('login-form').classList.add('hidden');
-            document.getElementById('register-form').classList.remove('hidden');
-        }
-
-        function showLogin() {
-            document.getElementById('register-form').classList.add('hidden');
-            document.getElementById('login-form').classList.remove('hidden');
-        }
-
         function showLoggedInState() {
-            document.getElementById('login-form').classList.add('hidden');
-            document.getElementById('register-form').classList.add('hidden');
             document.getElementById('user-info').classList.remove('hidden');
-            document.getElementById('publishing-section').classList.remove('hidden');
-            document.getElementById('logged-in-display').textContent = `Logged in as: ${currentUser}`;
+            document.getElementById('auth-buttons').classList.add('hidden');
+            document.getElementById('publishing-content').classList.remove('hidden');
+            document.getElementById('logged-in-display').textContent = currentUser;
         }
 
         function showLoginState() {
             document.getElementById('user-info').classList.add('hidden');
-            document.getElementById('publishing-section').classList.add('hidden');
-            document.getElementById('login-form').classList.remove('hidden');
-            hideAllSections();
+            document.getElementById('auth-buttons').classList.remove('hidden');
+            document.getElementById('publishing-content').classList.add('hidden');
+            hideAllPublishingSections();
+        }
+
+        // Core browsing functionality
+        async function loadRecords(reset = false) {
+            if (isLoading) return;
+            
+            isLoading = true;
+            const loadingEl = document.getElementById('loading-indicator');
+            const recordsGrid = document.getElementById('records-grid');
+            const noResults = document.getElementById('no-results');
+            
+            if (reset) {
+                currentPage = 1;
+                currentRecords = [];
+                recordsGrid.innerHTML = '';
+                loadingEl.classList.remove('hidden');
+                recordsGrid.classList.add('hidden');
+                noResults.classList.add('hidden');
+            }
+
+            try {
+                const params = buildApiParams();
+                const response = await fetch(`https://api.oip.onl/api/records?${params}`);
+                const data = await response.json();
+                
+                if (data.records) {
+                    if (reset) {
+                        currentRecords = data.records;
+                    } else {
+                        currentRecords = [...currentRecords, ...data.records];
+                    }
+                    
+                    displayRecords(data.records, !reset);
+                    updatePaginationInfo(data);
+                    
+                    // Update tags if available
+                    if (data.tagSummary) {
+                        updateTagFilter(data.tagSummary);
+                    }
+                    
+                    hasMoreRecords = data.records.length === 12; // Check if we got a full page
+                } else {
+                    if (reset) {
+                        showNoResults();
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error loading records:', error);
+                showMessage('records-header', 'Error loading records: ' + error.message, 'error');
+            } finally {
+                isLoading = false;
+                loadingEl.classList.add('hidden');
+                updateLoadMoreButton();
+            }
+        }
+
+        function buildApiParams() {
+            const params = new URLSearchParams({
+                limit: '12',
+                page: currentPage.toString(),
+                sortBy: currentFilters.sortBy,
+                resolveDepth: currentFilters.resolveDepth.toString(),
+                summarizeTags: 'true',
+                tagCount: '25',
+                includeSigs: currentFilters.includeSigs.toString(),
+                includePubKeys: currentFilters.includePubKeys.toString()
+            });
+
+            if (currentFilters.search) {
+                params.append('search', currentFilters.search.replace(/\s+/g, '+'));
+            }
+            
+            if (currentFilters.recordType) {
+                params.append('recordType', currentFilters.recordType);
+            }
+            
+            if (currentFilters.dateStart) {
+                params.append('dateStart', dateToUnixTime(currentFilters.dateStart));
+            }
+            
+            if (currentFilters.dateEnd) {
+                params.append('dateEnd', dateToUnixTime(currentFilters.dateEnd));
+            }
+            
+            if (currentFilters.tag) {
+                params.append('tag', currentFilters.tag);
+            }
+
+            return params.toString();
+        }
+
+        // Display and utility functions
+        function displayRecords(records, append = false) {
+            const grid = document.getElementById('records-grid');
+            
+            if (!append) {
+                grid.innerHTML = '';
+            }
+            
+            records.forEach(record => {
+                const card = createRecordCard(record);
+                grid.appendChild(card);
+            });
+            
+            grid.classList.remove('hidden');
+        }
+
+        function createRecordCard(record) {
+            const card = document.createElement('div');
+            card.className = 'record-card';
+            
+            // Get record type from template or data
+            const recordType = getRecordType(record);
+            const basicData = record.data?.basic || {};
+            const specificData = record.data?.[recordType] || {};
+            
+            card.innerHTML = `
+                <div class="record-header">
+                    <div class="record-type">${recordType}</div>
+                    <div class="record-block">Block: ${record.oip?.inArweaveBlock || 'Unknown'}</div>
+                </div>
+                <div class="record-title">${basicData.name || 'Unnamed Record'}</div>
+                <div class="record-content">
+                    ${basicData.description || getContentPreview(specificData) || 'No description available'}
+                </div>
+                <div class="record-meta">
+                    <div>DID: ${record.oip?.didTx || 'Unknown'}</div>
+                    <div>Date: ${formatDate(basicData.date)}</div>
+                    ${basicData.webUrl ? `<div><a href="${basicData.webUrl}" target="_blank">View Source</a></div>` : ''}
+                </div>
+                ${createTagsDisplay(basicData.tagItems)}
+            `;
+            
+            return card;
+        }
+
+        function getRecordType(record) {
+            // Try to get from data structure
+            if (record.data) {
+                const keys = Object.keys(record.data);
+                for (const key of keys) {
+                    if (key !== 'basic' && typeof record.data[key] === 'object') {
+                        return key;
+                    }
+                }
+            }
+            return 'unknown';
+        }
+
+        function getContentPreview(data) {
+            if (!data) return '';
+            
+            // Try common content fields
+            if (data.content) return truncateText(data.content, 150);
+            if (data.articleText) return truncateText(data.articleText, 150);
+            if (data.description) return truncateText(data.description, 150);
+            
+            return '';
+        }
+
+        function createTagsDisplay(tags) {
+            if (!tags || !Array.isArray(tags) || tags.length === 0) return '';
+            
+            const tagsHtml = tags.slice(0, 5).map(tag => 
+                `<span class="tag" onclick="filterByTag('${tag}')">${tag}</span>`
+            ).join('');
+            
+            return `<div class="tags-container">${tagsHtml}</div>`;
+        }
+
+        // Filter and search functions
+        function applyFilters() {
+            collectFilters();
+            loadRecords(true);
+        }
+
+        function collectFilters() {
+            currentFilters.search = document.getElementById('search-input').value.trim();
+            currentFilters.recordType = document.getElementById('record-type-filter').value;
+            currentFilters.sortBy = document.getElementById('sort-by').value;
+            currentFilters.resolveDepth = parseInt(document.getElementById('resolve-depth').value) || 2;
+            currentFilters.dateStart = document.getElementById('date-start').value;
+            currentFilters.dateEnd = document.getElementById('date-end').value;
+            currentFilters.tag = document.getElementById('tag-filter').value;
+            currentFilters.includeSigs = document.getElementById('include-sigs-toggle').classList.contains('active');
+            currentFilters.includePubKeys = document.getElementById('include-pubkeys-toggle').classList.contains('active');
+        }
+
+        function handleSearchKeyup(event) {
+            if (event.key === 'Enter') {
+                applyFilters();
+            }
+        }
+
+        function clearFilters() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('record-type-filter').value = '';
+            document.getElementById('sort-by').value = 'inArweaveBlock:desc';
+            document.getElementById('resolve-depth').value = '2';
+            document.getElementById('date-start').value = '';
+            document.getElementById('date-end').value = '';
+            document.getElementById('tag-filter').value = '';
+            document.getElementById('include-sigs-toggle').classList.remove('active');
+            document.getElementById('include-pubkeys-toggle').classList.remove('active');
+            applyFilters();
+        }
+
+        function filterByTag(tag) {
+            document.getElementById('tag-filter').value = tag;
+            applyFilters();
+        }
+
+        function toggleSwitch(elementId) {
+            document.getElementById(elementId).classList.toggle('active');
         }
 
         // Load templates from API
@@ -475,7 +1179,7 @@
                 if (data.templates) {
                     templates = {};
                     data.templates.forEach(template => {
-                        const recordType = template.data.recordType || 'unknown';
+                        const recordType = template.data.recordType || template.data.template || 'unknown';
                         if (!templates[recordType]) {
                             templates[recordType] = [];
                         }
@@ -498,25 +1202,142 @@
             }
         }
 
-        // Navigation functions
-        function hideAllSections() {
+        async function loadRecordTypes() {
+            try {
+                const response = await fetch('https://api.oip.onl/api/templates?limit=25&page=1');
+                const data = await response.json();
+                
+                if (data.templates) {
+                    const typeSet = new Set();
+                    data.templates.forEach(template => {
+                        if (template.data?.template) {
+                            typeSet.add(template.data.template);
+                        }
+                    });
+                    
+                    recordTypes = Array.from(typeSet).sort();
+                    populateRecordTypeFilter();
+                }
+            } catch (error) {
+                console.error('Error loading record types:', error);
+            }
+        }
+
+        function populateRecordTypeFilter() {
+            const select = document.getElementById('record-type-filter');
+            select.innerHTML = '<option value="">All Types</option>';
+            
+            recordTypes.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                select.appendChild(option);
+            });
+        }
+
+        // Utility functions
+        function truncateText(text, length) {
+            if (!text) return '';
+            return text.length > length ? text.substring(0, length) + '...' : text;
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return 'Unknown';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleDateString();
+        }
+
+        function dateToUnixTime(dateString) {
+            if (!dateString) return '';
+            return Math.floor(new Date(dateString).getTime() / 1000).toString();
+        }
+
+        function updatePaginationInfo(data) {
+            const info = document.getElementById('pagination-info');
+            info.textContent = `Showing ${currentRecords.length} of ${data.totalRecords || 'many'} records`;
+        }
+
+        function updateTagFilter(tagSummary) {
+            const select = document.getElementById('tag-filter');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">All Tags</option>';
+            
+            tagSummary.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag.tag;
+                option.textContent = `${tag.tag} (${tag.count})`;
+                select.appendChild(option);
+            });
+            
+            select.value = currentValue;
+        }
+
+        function showNoResults() {
+            document.getElementById('records-grid').classList.add('hidden');
+            document.getElementById('no-results').classList.remove('hidden');
+        }
+
+        function updateLoadMoreButton() {
+            const container = document.getElementById('load-more-container');
+            const button = document.getElementById('load-more-btn');
+            
+            if (hasMoreRecords && currentRecords.length > 0) {
+                container.classList.remove('hidden');
+                button.disabled = isLoading;
+                button.textContent = isLoading ? 'Loading...' : 'Load More Records';
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function loadMoreRecords() {
+            if (!hasMoreRecords || isLoading) return;
+            currentPage++;
+            loadRecords(false);
+        }
+
+        function setupInfiniteScroll() {
+            window.addEventListener('scroll', () => {
+                if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1000) {
+                    loadMoreRecords();
+                }
+            });
+        }
+
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = type === 'error' ? 'error-message' : 'success-message';
+            element.classList.remove('hidden');
+            
+            if (type === 'success') {
+                setTimeout(() => element.classList.add('hidden'), 3000);
+            }
+        }
+
+        function hideElement(elementId) {
+            document.getElementById(elementId).classList.add('hidden');
+        }
+
+        // Publishing navigation functions
+        function hideAllPublishingSections() {
             document.getElementById('creator-section').classList.add('hidden');
             document.getElementById('template-section').classList.add('hidden');
             document.getElementById('record-section').classList.add('hidden');
         }
 
         function showCreatorRegistration() {
-            hideAllSections();
+            hideAllPublishingSections();
             document.getElementById('creator-section').classList.remove('hidden');
         }
 
         function showTemplateCreation() {
-            hideAllSections();
+            hideAllPublishingSections();
             document.getElementById('template-section').classList.remove('hidden');
         }
 
         function showRecordPublishing() {
-            hideAllSections();
+            hideAllPublishingSections();
             document.getElementById('record-section').classList.remove('hidden');
         }
 
@@ -528,7 +1349,7 @@
             const website = document.getElementById('creator-website').value;
 
             if (!name) {
-                showStatus('creator-status', 'Please enter a creator name', 'error');
+                showMessage('creator-status', 'Please enter a creator name', 'error');
                 return;
             }
 
@@ -560,21 +1381,21 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    showStatus('creator-status', `Creator registered successfully! Transaction ID: ${data.transactionId}`, 'success');
+                    showMessage('creator-success', `Creator registered successfully! Transaction ID: ${data.transactionId}`, 'success');
                     // Clear form
                     document.getElementById('creator-name').value = '';
                     document.getElementById('creator-description').value = '';
                     document.getElementById('creator-email').value = '';
                     document.getElementById('creator-website').value = '';
                 } else {
-                    showStatus('creator-status', data.error || 'Failed to register creator', 'error');
+                    showMessage('creator-status', data.error || 'Failed to register creator', 'error');
                 }
             } catch (error) {
-                showStatus('creator-status', 'Network error: ' + error.message, 'error');
+                showMessage('creator-status', 'Network error: ' + error.message, 'error');
             }
         }
 
-        // Template creation
+        // Template creation functions
         function addTemplateField() {
             const fieldsContainer = document.getElementById('template-fields');
             const fieldRow = document.createElement('div');
@@ -610,7 +1431,7 @@
             const recordType = document.getElementById('template-recordtype').value;
 
             if (!templateName || !recordType) {
-                showStatus('template-status', 'Please fill in template name and record type', 'error');
+                showMessage('template-status', 'Please fill in template name and record type', 'error');
                 return;
             }
 
@@ -627,7 +1448,7 @@
             });
 
             if (Object.keys(templateFields).length === 0) {
-                showStatus('template-status', 'Please add at least one field', 'error');
+                showMessage('template-status', 'Please add at least one field', 'error');
                 return;
             }
 
@@ -650,41 +1471,20 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    showStatus('template-status', `Template created successfully! Transaction ID: ${data.newTemplate.transactionId}`, 'success');
-                    // Clear form
+                    showMessage('template-success', `Template created successfully! Transaction ID: ${data.newTemplate.transactionId}`, 'success');
+                    // Clear form and reload templates
                     document.getElementById('template-name').value = '';
                     document.getElementById('template-recordtype').value = '';
-                    document.getElementById('template-fields').innerHTML = `
-                        <div class="field-row">
-                            <div>
-                                <label>Field Name:</label>
-                                <input type="text" class="field-name" placeholder="e.g., title, content">
-                            </div>
-                            <div>
-                                <label>Field Type:</label>
-                                <select class="field-type">
-                                    <option value="string">String</option>
-                                    <option value="number">Number</option>
-                                    <option value="boolean">Boolean</option>
-                                    <option value="enum">Enum</option>
-                                    <option value="array">Array</option>
-                                </select>
-                            </div>
-                            <div>
-                                <button type="button" onclick="removeField(this)">Remove</button>
-                            </div>
-                        </div>
-                    `;
-                    loadTemplates(); // Reload templates
+                    await loadTemplates();
                 } else {
-                    showStatus('template-status', data.error || 'Failed to create template', 'error');
+                    showMessage('template-status', data.error || 'Failed to create template', 'error');
                 }
             } catch (error) {
-                showStatus('template-status', 'Network error: ' + error.message, 'error');
+                showMessage('template-status', 'Network error: ' + error.message, 'error');
             }
         }
 
-        // Record publishing
+        // Record publishing functions
         function loadTemplateFields() {
             const recordType = document.getElementById('record-type').value;
             const fieldsContainer = document.getElementById('record-fields');
@@ -737,153 +1537,32 @@
                     <textarea id="basic-description"></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Language:</label>
-                    <select id="basic-language">
-                        <option value="en">English</option>
-                        <option value="es">Spanish</option>
-                        <option value="fr">French</option>
-                        <option value="de">German</option>
-                    </select>
-                </div>
-                <div class="form-group">
                     <label>Tags (comma-separated):</label>
                     <input type="text" id="basic-tags" placeholder="tag1, tag2, tag3">
                 </div>
-                <div class="form-group">
-                    <label>Web URL:</label>
-                    <input type="url" id="basic-weburl">
-                </div>
             `;
 
-            // Record-specific fields
-            fieldsHTML += `<h3>${recordType.charAt(0).toUpperCase() + recordType.slice(1)} Specific Fields</h3>`;
+            // Simplified record-specific fields
+            fieldsHTML += `<h3>${recordType.charAt(0).toUpperCase() + recordType.slice(1)} Fields</h3>`;
             
-            switch (recordType) {
-                case 'post':
-                    fieldsHTML += `
-                        <div class="form-group">
-                            <label>Web URL:</label>
-                            <input type="url" id="post-weburl" placeholder="https://example.com/article">
-                        </div>
-                        <div class="form-group">
-                            <label>Byline Writer:</label>
-                            <input type="text" id="post-bylinewriter" placeholder="Author name">
-                        </div>
-                        <div class="form-group">
-                            <label>Byline Writer's Title:</label>
-                            <input type="text" id="post-bylinewriterstitle" placeholder="e.g., Senior Writer, Editor">
-                        </div>
-                        <div class="form-group">
-                            <label>Byline Writer's Location:</label>
-                            <input type="text" id="post-bylinewriterslocation" placeholder="e.g., New York, NY">
-                        </div>
-                        <div class="form-group">
-                            <label>Article Text:</label>
-                            <textarea id="post-articletext" required placeholder="Main article content"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Featured Image (URL or DID reference):</label>
-                            <input type="text" id="post-featuredimage" placeholder="https://example.com/image.jpg or did:arweave:...">
-                        </div>
-                        <div class="form-group">
-                            <label>Image Items (comma-separated URLs or DIDs):</label>
-                            <textarea id="post-imageitems" placeholder="https://example.com/img1.jpg, did:arweave:..., https://example.com/img2.jpg"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Image Caption Items (comma-separated):</label>
-                            <textarea id="post-imagecaptionitems" placeholder="Caption for image 1, Caption for image 2, Caption for image 3"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Video Items (comma-separated URLs or DIDs):</label>
-                            <textarea id="post-videoitems" placeholder="https://youtube.com/watch?v=..., did:arweave:..."></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Audio Items (comma-separated URLs or DIDs):</label>
-                            <textarea id="post-audioitems" placeholder="https://example.com/audio1.mp3, did:arweave:..."></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Audio Caption Items (comma-separated):</label>
-                            <textarea id="post-audiocaptionitems" placeholder="Caption for audio 1, Caption for audio 2"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Reply To (DID reference):</label>
-                            <input type="text" id="post-replyto" placeholder="did:arweave:... (if this is a reply to another post)">
-                        </div>
-                    `;
-                    break;
-                case 'recipe':
-                    fieldsHTML += `
-                        <div class="form-group">
-                            <label>Ingredients (JSON format):</label>
-                            <textarea id="recipe-ingredients" placeholder='[{"section": "Main", "ingredient": ["flour", "sugar"], "ingredient_amount": [2, 1], "ingredient_unit": ["cups", "cup"]}]'></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Instructions:</label>
-                            <textarea id="recipe-instructions" placeholder="Step-by-step instructions"></textarea>
-                        </div>
-                    `;
-                    break;
-                case 'workout':
-                    fieldsHTML += `
-                        <div class="form-group">
-                            <label>Duration (minutes):</label>
-                            <input type="number" id="workout-duration">
-                        </div>
-                        <div class="form-group">
-                            <label>Difficulty:</label>
-                            <select id="workout-difficulty">
-                                <option value="beginner">Beginner</option>
-                                <option value="intermediate">Intermediate</option>
-                                <option value="advanced">Advanced</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Category:</label>
-                            <input type="text" id="workout-category" value="general">
-                        </div>
-                        <div class="form-group">
-                            <label>Equipment Required (comma-separated):</label>
-                            <input type="text" id="workout-equipment">
-                        </div>
-                        <div class="form-group">
-                            <label>Target Muscle Groups (comma-separated):</label>
-                            <input type="text" id="workout-muscles">
-                        </div>
-                        <div class="form-group">
-                            <label>Exercises (JSON format):</label>
-                            <textarea id="workout-exercises" placeholder='[{"section": "Warm-up", "exercises": [{"name": "jumping jacks", "sets": 1, "reps": 20}]}]'></textarea>
-                        </div>
-                    `;
-                    break;
-                case 'video':
-                    fieldsHTML += `
-                        <div class="form-group">
-                            <label>Video URL (YouTube or direct link):</label>
-                            <input type="url" id="video-url">
-                        </div>
-                        <div class="form-group">
-                            <label>Duration (seconds):</label>
-                            <input type="number" id="video-duration">
-                        </div>
-                    `;
-                    break;
-                case 'image':
-                    fieldsHTML += `
-                        <div class="form-group">
-                            <label>Image URL:</label>
-                            <input type="url" id="image-url" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Content Type:</label>
-                            <select id="image-contenttype">
-                                <option value="image/jpeg">JPEG</option>
-                                <option value="image/png">PNG</option>
-                                <option value="image/gif">GIF</option>
-                                <option value="image/webp">WebP</option>
-                            </select>
-                        </div>
-                    `;
-                    break;
+            if (recordType === 'post') {
+                fieldsHTML += `
+                    <div class="form-group">
+                        <label>Article Text:</label>
+                        <textarea id="post-articletext" required placeholder="Main article content"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Byline Writer:</label>
+                        <input type="text" id="post-bylinewriter" placeholder="Author name">
+                    </div>
+                `;
+            } else {
+                fieldsHTML += `
+                    <div class="form-group">
+                        <label>Content:</label>
+                        <textarea id="record-content" placeholder="Enter ${recordType} content"></textarea>
+                    </div>
+                `;
             }
 
             return fieldsHTML;
@@ -893,7 +1572,7 @@
             const recordType = document.getElementById('record-type').value;
             
             if (!recordType) {
-                showStatus('record-status', 'Please select a record type', 'error');
+                showMessage('record-status', 'Please select a record type', 'error');
                 return;
             }
 
@@ -901,92 +1580,45 @@
             const basicData = {
                 name: document.getElementById('basic-name').value,
                 description: document.getElementById('basic-description').value,
-                language: document.getElementById('basic-language').value,
+                language: 'en',
                 tagItems: document.getElementById('basic-tags').value.split(',').map(tag => tag.trim()).filter(tag => tag),
-                webUrl: document.getElementById('basic-weburl').value,
                 nsfw: false,
                 date: Math.floor(Date.now() / 1000)
             };
 
             if (!basicData.name) {
-                showStatus('record-status', 'Please enter a name/title', 'error');
+                showMessage('record-status', 'Please enter a name/title', 'error');
                 return;
             }
 
-            // Collect record-specific data
+            // Simplified record data collection
             let recordData = { basic: basicData };
-            let endpoint = '';
+            let endpoint = `/api/publish/new${recordType.charAt(0).toUpperCase() + recordType.slice(1)}`;
 
-            switch (recordType) {
-                case 'post':
-                    // Helper function to split comma-separated values
-                    const splitCommaSeparated = (value) => {
-                        return value ? value.split(',').map(item => item.trim()).filter(item => item) : [];
-                    };
-
-                    recordData.post = {
-                        webUrl: document.getElementById('post-weburl').value,
-                        bylineWriter: document.getElementById('post-bylinewriter').value,
-                        bylineWritersTitle: document.getElementById('post-bylinewriterstitle').value,
-                        bylineWritersLocation: document.getElementById('post-bylinewriterslocation').value,
-                        articleText: document.getElementById('post-articletext').value,
-                        featuredImage: document.getElementById('post-featuredimage').value,
-                        imageItems: splitCommaSeparated(document.getElementById('post-imageitems').value),
-                        imageCaptionItems: splitCommaSeparated(document.getElementById('post-imagecaptionitems').value),
-                        videoItems: splitCommaSeparated(document.getElementById('post-videoitems').value),
-                        audioItems: splitCommaSeparated(document.getElementById('post-audioitems').value),
-                        audioCaptionItems: splitCommaSeparated(document.getElementById('post-audiocaptionitems').value),
-                        replyTo: document.getElementById('post-replyto').value
-                    };
-                    
-                    // Validate required fields for post
-                    if (!recordData.post.articleText) {
-                        showStatus('record-status', 'Please enter the article text', 'error');
-                        return;
-                    }
-                    
-                    endpoint = '/api/publish/newPost';
-                    break;
-                case 'recipe':
-                    try {
-                        const ingredients = JSON.parse(document.getElementById('recipe-ingredients').value || '[]');
-                        recordData.recipe = ingredients;
-                        recordData.recipe.instructions = document.getElementById('recipe-instructions').value.split('\n').filter(step => step.trim());
-                    } catch (e) {
-                        showStatus('record-status', 'Invalid ingredients JSON format', 'error');
-                        return;
-                    }
-                    endpoint = '/api/publish/newRecipe';
-                    break;
-                case 'workout':
-                    try {
-                        const exercises = JSON.parse(document.getElementById('workout-exercises').value || '[]');
-                        recordData.workout = exercises;
-                        recordData.workout_duration_minutes = parseInt(document.getElementById('workout-duration').value) || null;
-                        recordData.workout_difficulty = document.getElementById('workout-difficulty').value;
-                        recordData.workout_category = document.getElementById('workout-category').value;
-                        recordData.equipment_required = document.getElementById('workout-equipment').value.split(',').map(item => item.trim()).filter(item => item);
-                        recordData.target_muscle_groups = document.getElementById('workout-muscles').value.split(',').map(item => item.trim()).filter(item => item);
-                    } catch (e) {
-                        showStatus('record-status', 'Invalid exercises JSON format', 'error');
-                        return;
-                    }
-                    endpoint = '/api/publish/newWorkout';
-                    break;
-                case 'video':
-                    recordData.youtubeUrl = document.getElementById('video-url').value;
-                    recordData.basicMetadata = basicData;
-                    endpoint = '/api/publish/newVideo';
-                    break;
-                case 'image':
-                    recordData.imageUrl = document.getElementById('image-url').value;
-                    recordData.basicMetadata = basicData;
-                    recordData.image = {
-                        webUrl: document.getElementById('image-url').value,
-                        contentType: document.getElementById('image-contenttype').value
-                    };
-                    endpoint = '/api/publish/newImage';
-                    break;
+            if (recordType === 'post') {
+                recordData.post = {
+                    articleText: document.getElementById('post-articletext').value,
+                    bylineWriter: document.getElementById('post-bylinewriter').value,
+                    webUrl: '',
+                    bylineWritersTitle: '',
+                    bylineWritersLocation: '',
+                    featuredImage: '',
+                    imageItems: [],
+                    imageCaptionItems: [],
+                    videoItems: [],
+                    audioItems: [],
+                    audioCaptionItems: [],
+                    replyTo: ''
+                };
+                
+                if (!recordData.post.articleText) {
+                    showMessage('record-status', 'Please enter the article text', 'error');
+                    return;
+                }
+            } else {
+                // For other record types, use generic content field
+                const content = document.getElementById('record-content').value;
+                recordData[recordType] = { content: content };
             }
 
             try {
@@ -1002,31 +1634,21 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    showStatus('record-status', `${recordType} published successfully! Transaction ID: ${data.transactionId}`, 'success');
+                    showMessage('record-success', `${recordType} published successfully! Transaction ID: ${data.transactionId}`, 'success');
                     // Clear the form
                     document.getElementById('record-fields').innerHTML = '<div class="loading">Select a record type to see available fields</div>';
                     document.getElementById('record-type').value = '';
                     document.getElementById('publish-btn').disabled = true;
+                    
+                    // Refresh the browse tab to show new record
+                    if (currentRecords.length > 0) {
+                        loadRecords(true);
+                    }
                 } else {
-                    showStatus('record-status', data.error || `Failed to publish ${recordType}`, 'error');
+                    showMessage('record-status', data.error || `Failed to publish ${recordType}`, 'error');
                 }
             } catch (error) {
-                showStatus('record-status', 'Network error: ' + error.message, 'error');
-            }
-        }
-
-        // Utility functions
-        function showStatus(elementId, message, type) {
-            const statusElement = document.getElementById(elementId);
-            statusElement.textContent = message;
-            statusElement.className = `status ${type}`;
-            statusElement.classList.remove('hidden');
-            
-            // Auto-hide after 5 seconds for success messages
-            if (type === 'success') {
-                setTimeout(() => {
-                    statusElement.classList.add('hidden');
-                }, 5000);
+                showMessage('record-status', 'Network error: ' + error.message, 'error');
             }
         }
     </script>

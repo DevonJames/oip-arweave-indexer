@@ -785,8 +785,8 @@ async function getRecords(queryParams) {
             records = records.filter(record => 
                 {
                     const basicData = record.data.basic;
-                    if (basicData && basicData.basic.date) {
-                        const recordDate = new Date(basicData.basic.date); 
+                    if (basicData && basicData.date) {
+                        const recordDate = new Date(basicData.date); 
                         return recordDate >= dateStart;
                     }
                     return false;
@@ -798,8 +798,8 @@ async function getRecords(queryParams) {
         if (dateEnd != undefined) {
             records = records.filter(record => {
             const basicData = record.data.basic;
-            if (basicData && basicData.basic.date) {
-                const recordDate = new Date(basicData.basic.date); 
+            if (basicData && basicData.date) {
+                const recordDate = new Date(basicData.date); 
                 return recordDate <= dateEnd;
             }
             return false;
