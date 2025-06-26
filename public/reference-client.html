@@ -198,6 +198,59 @@
             color: white;
         }
 
+        /* Media content styling */
+        .media-content {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+
+        .media-item {
+            margin: 10px 0;
+        }
+
+        .media-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .media-item img:hover {
+            transform: scale(1.02);
+        }
+
+        .media-item audio,
+        .media-item video {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .media-item button {
+            transition: all 0.2s;
+        }
+
+        .media-item button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .text-content {
+            border: 1px solid #dee2e6;
+            background: white;
+            font-family: 'Courier New', monospace;
+            line-height: 1.4;
+        }
+
+        .media-item label {
+            color: #495057;
+            font-size: 14px;
+        }
+
         .section {
             background: white;
             border-radius: 12px;
@@ -1061,6 +1114,209 @@
             grid.classList.remove('hidden');
         }
 
+        // Media rendering functions
+        function renderMediaContent(record, recordType, specificData) {
+            let mediaHtml = '';
+            
+            // Handle direct media records (image, audio, video, text)
+            if (['image', 'audio', 'video', 'text'].includes(recordType)) {
+                mediaHtml += renderDirectMedia(specificData, recordType);
+            }
+            
+            // Handle post records with embedded media
+            if (recordType === 'post' && specificData) {
+                mediaHtml += renderPostMedia(specificData);
+            }
+            
+            // Handle recipe and workout records with media in ingredients/exercises
+            if (['recipe', 'workout'].includes(recordType) && specificData) {
+                mediaHtml += renderRecipeWorkoutMedia(specificData, recordType);
+            }
+            
+            return mediaHtml ? `<div class="media-content">${mediaHtml}</div>` : '';
+        }
+        
+        function renderDirectMedia(data, type) {
+            if (!data || !data.webUrl) return '';
+            
+            const webUrl = data.webUrl;
+            const contentType = data.contentType || '';
+            
+            switch (type) {
+                case 'image':
+                    return `<div class="media-item">
+                        <img src="${webUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" 
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div style="display: none; padding: 10px; background: #f5f5f5; border-radius: 8px;">
+                            <a href="${webUrl}" target="_blank">📸 View Image</a>
+                        </div>
+                    </div>`;
+                    
+                case 'audio':
+                    return `<div class="media-item">
+                        <audio controls style="width: 100%; margin: 10px 0;">
+                            <source src="${webUrl}" type="${contentType}">
+                            <a href="${webUrl}" target="_blank">🎵 Play Audio</a>
+                        </audio>
+                    </div>`;
+                    
+                case 'video':
+                    return `<div class="media-item">
+                        <video controls style="width: 100%; max-height: 300px; margin: 10px 0;">
+                            <source src="${webUrl}" type="${contentType}">
+                            <a href="${webUrl}" target="_blank">🎥 Play Video</a>
+                        </video>
+                    </div>`;
+                    
+                case 'text':
+                    return `<div class="media-item">
+                        <div class="text-preview" style="margin: 10px 0;">
+                            <button onclick="loadTextContent('${webUrl}', this)" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                📄 View Text Content
+                            </button>
+                            <div class="text-content" style="display: none; margin-top: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px; max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>`;
+                    
+                default:
+                    return `<div class="media-item">
+                        <a href="${webUrl}" target="_blank" style="display: inline-block; padding: 8px 16px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; margin: 5px 0;">
+                            🔗 View Content
+                        </a>
+                    </div>`;
+            }
+        }
+        
+        function renderPostMedia(postData) {
+            let html = '';
+            
+            // Main article web URL (external link) - this should open in new tab
+            if (postData.webUrl) {
+                html += `<div class="media-item">
+                    <a href="${postData.webUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; margin: 5px 0;">
+                        🌐 Read Original Article
+                    </a>
+                </div>`;
+            }
+            
+            // Article text (dref resolved)
+            if (postData.articleText?.data?.text?.webUrl) {
+                html += renderDirectMedia(postData.articleText.data.text, 'text');
+            }
+            
+            // Featured image (dref resolved)
+            if (postData.featuredImage?.data?.image?.webUrl) {
+                html += renderDirectMedia(postData.featuredImage.data.image, 'image');
+            }
+            
+            // Audio items array
+            if (postData.audioItems && Array.isArray(postData.audioItems)) {
+                postData.audioItems.forEach((audioItem, index) => {
+                    if (audioItem?.data?.audio?.webUrl) {
+                        html += `<div class="media-item">
+                            <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">Audio ${index + 1}:</label>
+                            ${renderDirectMedia(audioItem.data.audio, 'audio')}
+                        </div>`;
+                    }
+                });
+            }
+            
+            // Video items array
+            if (postData.videoItems && Array.isArray(postData.videoItems)) {
+                postData.videoItems.forEach((videoItem, index) => {
+                    if (videoItem?.data?.video?.webUrl) {
+                        html += `<div class="media-item">
+                            <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">Video ${index + 1}:</label>
+                            ${renderDirectMedia(videoItem.data.video, 'video')}
+                        </div>`;
+                    }
+                });
+            }
+            
+            // Image items array
+            if (postData.imageItems && Array.isArray(postData.imageItems)) {
+                postData.imageItems.forEach((imageItem, index) => {
+                    if (imageItem?.data?.image?.webUrl) {
+                        html += `<div class="media-item">
+                            <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">Image ${index + 1}:</label>
+                            ${renderDirectMedia(imageItem.data.image, 'image')}
+                        </div>`;
+                    }
+                });
+            }
+            
+            return html;
+        }
+        
+        function renderRecipeWorkoutMedia(data, type) {
+            let html = '';
+            
+            // Handle ingredient/exercise references that might contain media
+            const items = type === 'recipe' ? data.ingredient : data.exercise;
+            if (items && Array.isArray(items)) {
+                items.forEach((item, index) => {
+                    if (item?.data) {
+                        // Check if the referenced item has media
+                        Object.keys(item.data).forEach(key => {
+                            if (key !== 'basic') {
+                                const itemData = item.data[key];
+                                if (itemData?.webUrl) {
+                                    const itemType = key;
+                                    if (['image', 'audio', 'video', 'text'].includes(itemType)) {
+                                        html += `<div class="media-item">
+                                            <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">
+                                                ${type === 'recipe' ? 'Ingredient' : 'Exercise'} ${index + 1} ${itemType}:
+                                            </label>
+                                            ${renderDirectMedia(itemData, itemType)}
+                                        </div>`;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+            
+            return html;
+        }
+        
+        // Load text content dynamically
+        async function loadTextContent(url, button) {
+            const contentDiv = button.nextElementSibling;
+            
+            if (contentDiv.style.display === 'none') {
+                try {
+                    button.textContent = 'Loading...';
+                    button.disabled = true;
+                    
+                    const response = await fetch(url);
+                    const text = await response.text();
+                    
+                    contentDiv.innerHTML = `
+                        <div style="white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 14px;">
+                            ${escapeHtml(text)}
+                        </div>
+                        <button onclick="this.parentElement.style.display='none'; this.parentElement.previousElementSibling.textContent='📄 View Text Content'; this.parentElement.previousElementSibling.disabled=false;" 
+                                style="margin-top: 10px; padding: 4px 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Hide
+                        </button>
+                    `;
+                    contentDiv.style.display = 'block';
+                    button.textContent = '📄 Text Loaded';
+                } catch (error) {
+                    contentDiv.innerHTML = `<div style="color: #dc3545;">Error loading text content: ${error.message}</div>`;
+                    contentDiv.style.display = 'block';
+                    button.textContent = '❌ Failed to Load';
+                }
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         function createRecordCard(record) {
             const card = document.createElement('div');
             card.className = 'record-card';
@@ -1079,6 +1335,7 @@
                 <div class="record-content">
                     ${basicData.description || getContentPreview(specificData) || 'No description available'}
                 </div>
+                ${renderMediaContent(record, recordType, specificData)}
                 <div class="record-meta">
                     <div>DID: ${record.oip?.didTx || 'Unknown'}</div>
                     <div>Date: ${formatDate(basicData.date)}</div>
