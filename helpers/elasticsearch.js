@@ -650,6 +650,109 @@ async function deleteRecordFromDB(creatorDid, transaction) {
     }
 }
 
+async function checkTemplateUsage(templateTxId) {
+    console.log(getFileInfo(), getLineNumber(), 'checkTemplateUsage:', templateTxId);
+    try {
+        // Get all records and templates once to avoid repeated calls
+        const result = await getRecordsInDB();
+        const templatesData = await getTemplatesInDB();
+        let records = result.records;
+        let templates = templatesData.templatesInDB;
+        
+        // Find the template by TxId to get its name
+        const targetTemplate = templates.find(t => t.data.TxId === templateTxId);
+        if (!targetTemplate) {
+            console.log(getFileInfo(), getLineNumber(), 'Template not found:', templateTxId);
+            return false;
+        }
+        
+        const templateName = targetTemplate.data.template;
+        console.log(getFileInfo(), getLineNumber(), 'Checking usage for template:', templateName);
+        
+        // Filter records that use the specified template
+        const recordsUsingTemplate = records.filter(record => {
+            // Check if record.data contains the template name as a key
+            if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
+                // For records where data is an object, check if any key matches the template name
+                return Object.keys(record.data).includes(templateName);
+            }
+            // If record.data is an array, check each object in the array
+            else if (Array.isArray(record.data)) {
+                return record.data.some(dataItem => 
+                    Object.keys(dataItem).includes(templateName)
+                );
+            }
+            return false;
+        });
+        
+        console.log(getFileInfo(), getLineNumber(), 'Records using template:', recordsUsingTemplate.length);
+        return recordsUsingTemplate.length > 0;
+    } catch (error) {
+        console.error('Error checking template usage:', error);
+        throw error;
+    }
+}
+
+async function deleteTemplateFromDB(creatorDid, transaction) {
+    console.log(getFileInfo(), getLineNumber(), 'deleteTemplateFromDB:', creatorDid);
+    try {
+        const didTxToDelete = typeof transaction.data === 'string' 
+            ? JSON.parse(transaction.data).delete.didTx 
+            : transaction.data.delete.didTx;
+        
+        console.log(getFileInfo(), getLineNumber(), 'template didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete });
+        
+        if (creatorDid === 'did:arweave:' + transaction.creator) {
+            console.log(getFileInfo(), getLineNumber(), 'same creator, template deletion authorized');
+
+            // First, check if the template exists
+            const searchResponse = await elasticClient.search({
+                index: 'templates',
+                body: {
+                    query: {
+                        match: {
+                            "oip.didTx": didTxToDelete
+                        }
+                    }
+                }
+            });
+
+            if (searchResponse.hits.hits.length === 0) {
+                console.log(getFileInfo(), getLineNumber(), 'No template found with the specified ID:', didTxToDelete);
+                return;
+            }
+
+            const template = searchResponse.hits.hits[0]._source;
+            const templateTxId = template.data.TxId;
+            
+            // Check if any records are using this template
+            const templateInUse = await checkTemplateUsage(templateTxId);
+            
+            if (templateInUse) {
+                console.log(getFileInfo(), getLineNumber(), 'Template is in use by existing records, deletion not allowed:', didTxToDelete);
+                return { error: 'Template is in use by existing records and cannot be deleted' };
+            }
+
+            // If template is not in use, proceed with deletion
+            const templateId = searchResponse.hits.hits[0]._id;
+
+            const response = await elasticClient.delete({
+                index: 'templates',
+                id: templateId
+            });
+            
+            console.log(getFileInfo(), getLineNumber(), 'Template deleted:', response);
+            return { success: true, message: 'Template deleted successfully' };
+        } else {
+            console.log(getFileInfo(), getLineNumber(), 'different creator, template deletion unauthorized');
+            return { error: 'Unauthorized: only the template creator can delete this template' };
+        }
+    } catch (error) {
+        console.error('Error deleting template:', error);
+        throw error;
+    }
+}
+
 async function searchCreatorByAddress(didAddress) {
     console.log(getFileInfo(), getLineNumber(), 'searchCreatorByAddress:', didAddress)
     try {
@@ -858,7 +961,17 @@ async function getRecords(queryParams) {
 
         if (template != undefined) {
             records = records.filter(record => {
-                return Object.keys(record.data[0]).some(key => key.toLowerCase().includes(template.toLowerCase()));
+                // Check if record.data is an object (not an array) and look for template names as keys
+                if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
+                    return Object.keys(record.data).some(key => key.toLowerCase().includes(template.toLowerCase()));
+                }
+                // If record.data is an array, check each object in the array
+                else if (Array.isArray(record.data)) {
+                    return record.data.some(dataItem => 
+                        Object.keys(dataItem).some(key => key.toLowerCase().includes(template.toLowerCase()))
+                    );
+                }
+                return false;
             });
             console.log('after filtering by template, there are', records.length, 'records');
         }
@@ -2383,6 +2496,8 @@ module.exports = {
     remapExistingRecords,
     verifyAdmin,
     deleteRecordFromDB,
+    deleteTemplateFromDB,
+    checkTemplateUsage,
     deleteRecordsByBlock,
     deleteRecordsByIndexedAt,
     deleteRecordsByIndex,
