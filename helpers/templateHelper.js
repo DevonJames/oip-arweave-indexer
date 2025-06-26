@@ -5,7 +5,7 @@ const { exec } = require('child_process');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
 const { signMessage, txidToDid, getTurboArweave, getTemplateTxidByName, getWalletFilePath } = require('./utils');
-const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, searchCreatorByAddress, indexRecord, elasticClient } = require('./elasticsearch');
+const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, deleteTemplateFromDB, searchCreatorByAddress, indexRecord, elasticClient } = require('./elasticsearch');
 const {getCurrentBlockHeight} = require('../helpers/arweave');
 const arweaveWallet = require('./arweave-wallet');
 const publisherManager = require('./publisher-manager');
@@ -283,7 +283,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
 
         let recordData = '';
         // console.log(getFileInfo(), getLineNumber(), 'Publishing new record:', { recordType }, record);
-        // handle new delete record
+        // handle new delete record or template
         if (record.delete !== undefined && typeof record.delete === 'object' && record.delete.didTx) {
             recordType = 'delete';
             const didTx = record.delete.didTx;
@@ -298,11 +298,40 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
             const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
             const creatorDid = `did:arweave:${myAddress}`;
             transaction.creator = myAddress;
-            await deleteRecordFromDB(creatorDid, transaction);
-            // console.log(getFileInfo(), getLineNumber(), 'Record deleted:', didTx)
+            
+            // Check if this is a template deletion by searching in templates index
+            try {
+                // Extract just the transaction ID from the didTx (remove 'did:arweave:' prefix)
+                const txId = didTx.replace('did:arweave:', '');
+                const template = await searchTemplateByTxId(txId);
+                
+                if (template) {
+                    console.log('Delete message is for a template:', didTx);
+                    const deleteResult = await deleteTemplateFromDB(creatorDid, transaction);
+                    if (deleteResult && deleteResult.error) {
+                        console.error('Template deletion failed:', deleteResult.error);
+                        throw new Error(deleteResult.error);
+                    }
+                    console.log('Template deletion processed:', didTx);
+                } else {
+                    console.log('Delete message is for a record:', didTx);
+                    await deleteRecordFromDB(creatorDid, transaction);
+                    console.log('Record deletion processed:', didTx);
+                }
+            } catch (error) {
+                console.error('Error processing delete message:', error);
+                // If template search fails, try deleting as a record (backward compatibility)
+                try {
+                    await deleteRecordFromDB(creatorDid, transaction);
+                    console.log('Fallback: Record deletion processed:', didTx);
+                } catch (recordDeleteError) {
+                    console.error('Both template and record deletion failed:', recordDeleteError);
+                    throw error;
+                }
+            }
+            
             let stringValue = JSON.stringify(record);
             recordData += stringValue;
-            // console.log(getFileInfo(), getLineNumber(), 'Publishing new record:', { recordType }, record);
 
         } else {
 
