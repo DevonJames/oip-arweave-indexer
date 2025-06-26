@@ -1251,4 +1251,59 @@ router.post('/testEncrypt', async (req, res) => {
     }
 });
 
+// Add newPost endpoint for publishing post records
+router.post('/newPost', async (req, res) => {
+    try {
+        console.log('POST /api/publish/newPost', req.body);
+        const record = req.body;
+        const blockchain = req.body.blockchain || 'arweave'; // Get blockchain parameter, default to arweave
+        let recordType = 'post';
+
+        // Create post record structure using the correct post template fields
+        const postRecord = {
+            basic: {
+                name: record.basic?.name || 'Post Record',
+                description: record.basic?.description || '',
+                language: record.basic?.language || 'en',
+                date: record.basic?.date || Math.floor(Date.now() / 1000),
+                nsfw: record.basic?.nsfw || false,
+                tagItems: record.basic?.tagItems || []
+            },
+            post: {
+                webUrl: record.post?.webUrl || '',
+                bylineWriter: record.post?.bylineWriter || '',
+                bylineWritersTitle: record.post?.bylineWritersTitle || '',
+                bylineWritersLocation: record.post?.bylineWritersLocation || '',
+                articleText: record.post?.articleText || '',
+                featuredImage: record.post?.featuredImage || '',
+                imageItems: record.post?.imageItems || [],
+                imageCaptionItems: record.post?.imageCaptionItems || [],
+                videoItems: record.post?.videoItems || [],
+                audioItems: record.post?.audioItems || [],
+                audioCaptionItems: record.post?.audioCaptionItems || [],
+                replyTo: record.post?.replyTo || ''
+            }
+        };
+
+        console.log('Final post data:', postRecord);
+
+        // Publish the post record
+        const postResult = await publishNewRecord(postRecord, recordType, false, false, false, null, blockchain);
+
+        const transactionId = postResult.transactionId;
+        const recordToIndex = postResult.recordToIndex;
+
+        res.status(200).json({ 
+            transactionId, 
+            recordToIndex, 
+            blockchain,
+            message: 'Post published successfully'
+        });
+
+    } catch (error) {
+        console.error('Error publishing post:', error);
+        res.status(500).json({ error: 'Failed to publish post' });
+    }
+});
+
 module.exports = router;
