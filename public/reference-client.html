@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OIP Publishing Platform - Reference Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            background: #f9f9f9;
+        }
+
+        .section h2 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .logged-in-user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .dynamic-fields {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            background: white;
+        }
+
+        .field-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: end;
+        }
+
+        .field-row > div {
+            flex: 1;
+        }
+
+        .field-row button {
+            margin: 0;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+
+        .template-selector {
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .field-row {
+                flex-direction: column;
+                gap: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OIP Publishing Platform</h1>
+        
+        <!-- Authentication Section -->
+        <div id="auth-section" class="section">
+            <h2>Authentication</h2>
+            <div id="login-form">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button onclick="login()">Login</button>
+                <button onclick="showRegister()">Register</button>
+            </div>
+            
+            <div id="register-form" class="hidden">
+                <div class="form-group">
+                    <label for="register-email">Email:</label>
+                    <input type="email" id="register-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password:</label>
+                    <input type="password" id="register-password" required>
+                </div>
+                <button onclick="register()">Register</button>
+                <button onclick="showLogin()">Back to Login</button>
+            </div>
+            
+            <div id="user-info" class="hidden">
+                <div id="logged-in-display" class="logged-in-user"></div>
+                <button onclick="logout()">Logout</button>
+            </div>
+            
+            <div id="auth-status" class="status hidden"></div>
+        </div>
+
+        <!-- Publishing Actions -->
+        <div id="publishing-section" class="section hidden">
+            <h2>Publishing Actions</h2>
+            <button onclick="showCreatorRegistration()">Register Creator</button>
+            <button onclick="showTemplateCreation()">Create Template</button>
+            <button onclick="showRecordPublishing()">Publish Record</button>
+        </div>
+
+        <!-- Creator Registration -->
+        <div id="creator-section" class="section hidden">
+            <h2>Creator Registration</h2>
+            <div class="form-group">
+                <label for="creator-name">Creator Name:</label>
+                <input type="text" id="creator-name" required>
+            </div>
+            <div class="form-group">
+                <label for="creator-description">Description:</label>
+                <textarea id="creator-description"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="creator-email">Email:</label>
+                <input type="email" id="creator-email">
+            </div>
+            <div class="form-group">
+                <label for="creator-website">Website:</label>
+                <input type="url" id="creator-website">
+            </div>
+            <button onclick="registerCreator()">Register Creator</button>
+            <div id="creator-status" class="status hidden"></div>
+        </div>
+
+        <!-- Template Creation -->
+        <div id="template-section" class="section hidden">
+            <h2>Template Creation</h2>
+            <div class="form-group">
+                <label for="template-name">Template Name:</label>
+                <input type="text" id="template-name" required>
+            </div>
+            <div class="form-group">
+                <label for="template-recordtype">Record Type:</label>
+                <input type="text" id="template-recordtype" required placeholder="e.g., post, recipe, workout">
+            </div>
+            <div class="dynamic-fields">
+                <h3>Template Fields</h3>
+                <div id="template-fields">
+                    <div class="field-row">
+                        <div>
+                            <label>Field Name:</label>
+                            <input type="text" class="field-name" placeholder="e.g., title, content">
+                        </div>
+                        <div>
+                            <label>Field Type:</label>
+                            <select class="field-type">
+                                <option value="string">String</option>
+                                <option value="number">Number</option>
+                                <option value="boolean">Boolean</option>
+                                <option value="enum">Enum</option>
+                                <option value="array">Array</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button type="button" onclick="removeField(this)">Remove</button>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" onclick="addTemplateField()">Add Field</button>
+            </div>
+            <button onclick="createTemplate()">Create Template</button>
+            <div id="template-status" class="status hidden"></div>
+        </div>
+
+        <!-- Record Publishing -->
+        <div id="record-section" class="section hidden">
+            <h2>Publish Record</h2>
+            <div class="form-group">
+                <label for="record-type">Record Type:</label>
+                <select id="record-type" onchange="loadTemplateFields()">
+                    <option value="">Select Record Type</option>
+                    <option value="recipe">Recipe</option>
+                    <option value="workout">Workout</option>
+                    <option value="video">Video</option>
+                    <option value="image">Image</option>
+                    <option value="post">Post</option>
+                </select>
+            </div>
+            
+            <div class="template-selector">
+                <label for="template-select">Template:</label>
+                <select id="template-select">
+                    <option value="">Loading templates...</option>
+                </select>
+            </div>
+
+            <div id="record-fields" class="dynamic-fields">
+                <div class="loading">Select a record type to see available fields</div>
+            </div>
+            
+            <button onclick="publishRecord()" id="publish-btn" disabled>Publish Record</button>
+            <div id="record-status" class="status hidden"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = localStorage.getItem('oip-auth-token');
+        let currentUser = localStorage.getItem('oip-user-email');
+        let templates = {};
+        let defaultTemplates = {};
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            if (authToken && currentUser) {
+                showLoggedInState();
+                loadTemplates();
+            }
+        });
+
+        // Authentication functions
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                showStatus('auth-status', 'Please fill in all fields', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/user/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    currentUser = email;
+                    localStorage.setItem('oip-auth-token', authToken);
+                    localStorage.setItem('oip-user-email', currentUser);
+                    showLoggedInState();
+                    loadTemplates();
+                    showStatus('auth-status', 'Login successful!', 'success');
+                } else {
+                    showStatus('auth-status', data.error || 'Login failed', 'error');
+                }
+            } catch (error) {
+                showStatus('auth-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        async function register() {
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            
+            if (!email || !password) {
+                showStatus('auth-status', 'Please fill in all fields', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/user/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    currentUser = email;
+                    localStorage.setItem('oip-auth-token', authToken);
+                    localStorage.setItem('oip-user-email', currentUser);
+                    showLoggedInState();
+                    loadTemplates();
+                    showStatus('auth-status', 'Registration successful!', 'success');
+                } else {
+                    showStatus('auth-status', data.error || 'Registration failed', 'error');
+                }
+            } catch (error) {
+                showStatus('auth-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('oip-auth-token');
+            localStorage.removeItem('oip-user-email');
+            showLoginState();
+        }
+
+        function showRegister() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('register-form').classList.remove('hidden');
+        }
+
+        function showLogin() {
+            document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+        }
+
+        function showLoggedInState() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('user-info').classList.remove('hidden');
+            document.getElementById('publishing-section').classList.remove('hidden');
+            document.getElementById('logged-in-display').textContent = `Logged in as: ${currentUser}`;
+        }
+
+        function showLoginState() {
+            document.getElementById('user-info').classList.add('hidden');
+            document.getElementById('publishing-section').classList.add('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+            hideAllSections();
+        }
+
+        // Load templates from API
+        async function loadTemplates() {
+            try {
+                const response = await fetch('/api/templates?limit=100');
+                const data = await response.json();
+                
+                if (data.templates) {
+                    templates = {};
+                    data.templates.forEach(template => {
+                        const recordType = template.data.recordType || 'unknown';
+                        if (!templates[recordType]) {
+                            templates[recordType] = [];
+                        }
+                        templates[recordType].push(template);
+                    });
+                    
+                    // Load default templates
+                    defaultTemplates = {
+                        basic: "-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk",
+                        creatorRegistration: "BKVvTSXmmJni-L82irZfPFXWWJLBcdvbxS34jP1FTG8",
+                        post: "op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
+                        recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
+                        workout: "T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE",
+                        video: "G73WplyxpNDOgDSFO6CP3O6hZXq8kNJXxkCqx3sgd1s",
+                        image: "AkZnE1VckJJlRamgNJuIGE7KrYwDcCciWOMrMh68V4o"
+                    };
+                }
+            } catch (error) {
+                console.error('Error loading templates:', error);
+            }
+        }
+
+        // Navigation functions
+        function hideAllSections() {
+            document.getElementById('creator-section').classList.add('hidden');
+            document.getElementById('template-section').classList.add('hidden');
+            document.getElementById('record-section').classList.add('hidden');
+        }
+
+        function showCreatorRegistration() {
+            hideAllSections();
+            document.getElementById('creator-section').classList.remove('hidden');
+        }
+
+        function showTemplateCreation() {
+            hideAllSections();
+            document.getElementById('template-section').classList.remove('hidden');
+        }
+
+        function showRecordPublishing() {
+            hideAllSections();
+            document.getElementById('record-section').classList.remove('hidden');
+        }
+
+        // Creator registration
+        async function registerCreator() {
+            const name = document.getElementById('creator-name').value;
+            const description = document.getElementById('creator-description').value;
+            const email = document.getElementById('creator-email').value;
+            const website = document.getElementById('creator-website').value;
+
+            if (!name) {
+                showStatus('creator-status', 'Please enter a creator name', 'error');
+                return;
+            }
+
+            const creatorData = {
+                basic: {
+                    name: name,
+                    description: description,
+                    language: 'en',
+                    date: Math.floor(Date.now() / 1000),
+                    nsfw: false
+                },
+                creatorRegistration: {
+                    email: email || currentUser,
+                    website: website,
+                    verified: false
+                }
+            };
+
+            try {
+                const response = await fetch('/api/creators/newCreator', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(creatorData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('creator-status', `Creator registered successfully! Transaction ID: ${data.transactionId}`, 'success');
+                    // Clear form
+                    document.getElementById('creator-name').value = '';
+                    document.getElementById('creator-description').value = '';
+                    document.getElementById('creator-email').value = '';
+                    document.getElementById('creator-website').value = '';
+                } else {
+                    showStatus('creator-status', data.error || 'Failed to register creator', 'error');
+                }
+            } catch (error) {
+                showStatus('creator-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        // Template creation
+        function addTemplateField() {
+            const fieldsContainer = document.getElementById('template-fields');
+            const fieldRow = document.createElement('div');
+            fieldRow.className = 'field-row';
+            fieldRow.innerHTML = `
+                <div>
+                    <label>Field Name:</label>
+                    <input type="text" class="field-name" placeholder="e.g., title, content">
+                </div>
+                <div>
+                    <label>Field Type:</label>
+                    <select class="field-type">
+                        <option value="string">String</option>
+                        <option value="number">Number</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="enum">Enum</option>
+                        <option value="array">Array</option>
+                    </select>
+                </div>
+                <div>
+                    <button type="button" onclick="removeField(this)">Remove</button>
+                </div>
+            `;
+            fieldsContainer.appendChild(fieldRow);
+        }
+
+        function removeField(button) {
+            button.closest('.field-row').remove();
+        }
+
+        async function createTemplate() {
+            const templateName = document.getElementById('template-name').value;
+            const recordType = document.getElementById('template-recordtype').value;
+
+            if (!templateName || !recordType) {
+                showStatus('template-status', 'Please fill in template name and record type', 'error');
+                return;
+            }
+
+            const fieldRows = document.querySelectorAll('#template-fields .field-row');
+            const templateFields = {};
+
+            fieldRows.forEach(row => {
+                const fieldName = row.querySelector('.field-name').value;
+                const fieldType = row.querySelector('.field-type').value;
+                
+                if (fieldName && fieldType) {
+                    templateFields[fieldName] = fieldType;
+                }
+            });
+
+            if (Object.keys(templateFields).length === 0) {
+                showStatus('template-status', 'Please add at least one field', 'error');
+                return;
+            }
+
+            const templateData = {
+                template: templateName,
+                recordType: recordType,
+                fields: JSON.stringify(templateFields)
+            };
+
+            try {
+                const response = await fetch('/api/templates/newTemplate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(templateData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('template-status', `Template created successfully! Transaction ID: ${data.newTemplate.transactionId}`, 'success');
+                    // Clear form
+                    document.getElementById('template-name').value = '';
+                    document.getElementById('template-recordtype').value = '';
+                    document.getElementById('template-fields').innerHTML = `
+                        <div class="field-row">
+                            <div>
+                                <label>Field Name:</label>
+                                <input type="text" class="field-name" placeholder="e.g., title, content">
+                            </div>
+                            <div>
+                                <label>Field Type:</label>
+                                <select class="field-type">
+                                    <option value="string">String</option>
+                                    <option value="number">Number</option>
+                                    <option value="boolean">Boolean</option>
+                                    <option value="enum">Enum</option>
+                                    <option value="array">Array</option>
+                                </select>
+                            </div>
+                            <div>
+                                <button type="button" onclick="removeField(this)">Remove</button>
+                            </div>
+                        </div>
+                    `;
+                    loadTemplates(); // Reload templates
+                } else {
+                    showStatus('template-status', data.error || 'Failed to create template', 'error');
+                }
+            } catch (error) {
+                showStatus('template-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        // Record publishing
+        function loadTemplateFields() {
+            const recordType = document.getElementById('record-type').value;
+            const fieldsContainer = document.getElementById('record-fields');
+            const publishBtn = document.getElementById('publish-btn');
+            
+            if (!recordType) {
+                fieldsContainer.innerHTML = '<div class="loading">Select a record type to see available fields</div>';
+                publishBtn.disabled = true;
+                return;
+            }
+
+            // Load template selector
+            const templateSelect = document.getElementById('template-select');
+            templateSelect.innerHTML = '<option value="">Select a template</option>';
+            
+            if (templates[recordType]) {
+                templates[recordType].forEach(template => {
+                    const option = document.createElement('option');
+                    option.value = template.oip.didTx;
+                    option.textContent = template.data.template || template.oip.didTx;
+                    templateSelect.appendChild(option);
+                });
+            }
+
+            // Add default template option
+            if (defaultTemplates[recordType]) {
+                const option = document.createElement('option');
+                option.value = `did:arweave:${defaultTemplates[recordType]}`;
+                option.textContent = `Default ${recordType} template`;
+                option.selected = true;
+                templateSelect.appendChild(option);
+            }
+
+            // Create basic fields for the record type
+            fieldsContainer.innerHTML = createRecordFields(recordType);
+            publishBtn.disabled = false;
+        }
+
+        function createRecordFields(recordType) {
+            let fieldsHTML = '<h3>Basic Information</h3>';
+            
+            // Basic fields common to all records
+            fieldsHTML += `
+                <div class="form-group">
+                    <label>Name/Title:</label>
+                    <input type="text" id="basic-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Description:</label>
+                    <textarea id="basic-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Language:</label>
+                    <select id="basic-language">
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Tags (comma-separated):</label>
+                    <input type="text" id="basic-tags" placeholder="tag1, tag2, tag3">
+                </div>
+                <div class="form-group">
+                    <label>Web URL:</label>
+                    <input type="url" id="basic-weburl">
+                </div>
+            `;
+
+            // Record-specific fields
+            fieldsHTML += `<h3>${recordType.charAt(0).toUpperCase() + recordType.slice(1)} Specific Fields</h3>`;
+            
+            switch (recordType) {
+                case 'post':
+                    fieldsHTML += `
+                        <div class="form-group">
+                            <label>Web URL:</label>
+                            <input type="url" id="post-weburl" placeholder="https://example.com/article">
+                        </div>
+                        <div class="form-group">
+                            <label>Byline Writer:</label>
+                            <input type="text" id="post-bylinewriter" placeholder="Author name">
+                        </div>
+                        <div class="form-group">
+                            <label>Byline Writer's Title:</label>
+                            <input type="text" id="post-bylinewriterstitle" placeholder="e.g., Senior Writer, Editor">
+                        </div>
+                        <div class="form-group">
+                            <label>Byline Writer's Location:</label>
+                            <input type="text" id="post-bylinewriterslocation" placeholder="e.g., New York, NY">
+                        </div>
+                        <div class="form-group">
+                            <label>Article Text:</label>
+                            <textarea id="post-articletext" required placeholder="Main article content"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Featured Image (URL or DID reference):</label>
+                            <input type="text" id="post-featuredimage" placeholder="https://example.com/image.jpg or did:arweave:...">
+                        </div>
+                        <div class="form-group">
+                            <label>Image Items (comma-separated URLs or DIDs):</label>
+                            <textarea id="post-imageitems" placeholder="https://example.com/img1.jpg, did:arweave:..., https://example.com/img2.jpg"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Image Caption Items (comma-separated):</label>
+                            <textarea id="post-imagecaptionitems" placeholder="Caption for image 1, Caption for image 2, Caption for image 3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Video Items (comma-separated URLs or DIDs):</label>
+                            <textarea id="post-videoitems" placeholder="https://youtube.com/watch?v=..., did:arweave:..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Audio Items (comma-separated URLs or DIDs):</label>
+                            <textarea id="post-audioitems" placeholder="https://example.com/audio1.mp3, did:arweave:..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Audio Caption Items (comma-separated):</label>
+                            <textarea id="post-audiocaptionitems" placeholder="Caption for audio 1, Caption for audio 2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Reply To (DID reference):</label>
+                            <input type="text" id="post-replyto" placeholder="did:arweave:... (if this is a reply to another post)">
+                        </div>
+                    `;
+                    break;
+                case 'recipe':
+                    fieldsHTML += `
+                        <div class="form-group">
+                            <label>Ingredients (JSON format):</label>
+                            <textarea id="recipe-ingredients" placeholder='[{"section": "Main", "ingredient": ["flour", "sugar"], "ingredient_amount": [2, 1], "ingredient_unit": ["cups", "cup"]}]'></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Instructions:</label>
+                            <textarea id="recipe-instructions" placeholder="Step-by-step instructions"></textarea>
+                        </div>
+                    `;
+                    break;
+                case 'workout':
+                    fieldsHTML += `
+                        <div class="form-group">
+                            <label>Duration (minutes):</label>
+                            <input type="number" id="workout-duration">
+                        </div>
+                        <div class="form-group">
+                            <label>Difficulty:</label>
+                            <select id="workout-difficulty">
+                                <option value="beginner">Beginner</option>
+                                <option value="intermediate">Intermediate</option>
+                                <option value="advanced">Advanced</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Category:</label>
+                            <input type="text" id="workout-category" value="general">
+                        </div>
+                        <div class="form-group">
+                            <label>Equipment Required (comma-separated):</label>
+                            <input type="text" id="workout-equipment">
+                        </div>
+                        <div class="form-group">
+                            <label>Target Muscle Groups (comma-separated):</label>
+                            <input type="text" id="workout-muscles">
+                        </div>
+                        <div class="form-group">
+                            <label>Exercises (JSON format):</label>
+                            <textarea id="workout-exercises" placeholder='[{"section": "Warm-up", "exercises": [{"name": "jumping jacks", "sets": 1, "reps": 20}]}]'></textarea>
+                        </div>
+                    `;
+                    break;
+                case 'video':
+                    fieldsHTML += `
+                        <div class="form-group">
+                            <label>Video URL (YouTube or direct link):</label>
+                            <input type="url" id="video-url">
+                        </div>
+                        <div class="form-group">
+                            <label>Duration (seconds):</label>
+                            <input type="number" id="video-duration">
+                        </div>
+                    `;
+                    break;
+                case 'image':
+                    fieldsHTML += `
+                        <div class="form-group">
+                            <label>Image URL:</label>
+                            <input type="url" id="image-url" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Content Type:</label>
+                            <select id="image-contenttype">
+                                <option value="image/jpeg">JPEG</option>
+                                <option value="image/png">PNG</option>
+                                <option value="image/gif">GIF</option>
+                                <option value="image/webp">WebP</option>
+                            </select>
+                        </div>
+                    `;
+                    break;
+            }
+
+            return fieldsHTML;
+        }
+
+        async function publishRecord() {
+            const recordType = document.getElementById('record-type').value;
+            
+            if (!recordType) {
+                showStatus('record-status', 'Please select a record type', 'error');
+                return;
+            }
+
+            // Collect basic data
+            const basicData = {
+                name: document.getElementById('basic-name').value,
+                description: document.getElementById('basic-description').value,
+                language: document.getElementById('basic-language').value,
+                tagItems: document.getElementById('basic-tags').value.split(',').map(tag => tag.trim()).filter(tag => tag),
+                webUrl: document.getElementById('basic-weburl').value,
+                nsfw: false,
+                date: Math.floor(Date.now() / 1000)
+            };
+
+            if (!basicData.name) {
+                showStatus('record-status', 'Please enter a name/title', 'error');
+                return;
+            }
+
+            // Collect record-specific data
+            let recordData = { basic: basicData };
+            let endpoint = '';
+
+            switch (recordType) {
+                case 'post':
+                    // Helper function to split comma-separated values
+                    const splitCommaSeparated = (value) => {
+                        return value ? value.split(',').map(item => item.trim()).filter(item => item) : [];
+                    };
+
+                    recordData.post = {
+                        webUrl: document.getElementById('post-weburl').value,
+                        bylineWriter: document.getElementById('post-bylinewriter').value,
+                        bylineWritersTitle: document.getElementById('post-bylinewriterstitle').value,
+                        bylineWritersLocation: document.getElementById('post-bylinewriterslocation').value,
+                        articleText: document.getElementById('post-articletext').value,
+                        featuredImage: document.getElementById('post-featuredimage').value,
+                        imageItems: splitCommaSeparated(document.getElementById('post-imageitems').value),
+                        imageCaptionItems: splitCommaSeparated(document.getElementById('post-imagecaptionitems').value),
+                        videoItems: splitCommaSeparated(document.getElementById('post-videoitems').value),
+                        audioItems: splitCommaSeparated(document.getElementById('post-audioitems').value),
+                        audioCaptionItems: splitCommaSeparated(document.getElementById('post-audiocaptionitems').value),
+                        replyTo: document.getElementById('post-replyto').value
+                    };
+                    
+                    // Validate required fields for post
+                    if (!recordData.post.articleText) {
+                        showStatus('record-status', 'Please enter the article text', 'error');
+                        return;
+                    }
+                    
+                    endpoint = '/api/publish/newPost';
+                    break;
+                case 'recipe':
+                    try {
+                        const ingredients = JSON.parse(document.getElementById('recipe-ingredients').value || '[]');
+                        recordData.recipe = ingredients;
+                        recordData.recipe.instructions = document.getElementById('recipe-instructions').value.split('\n').filter(step => step.trim());
+                    } catch (e) {
+                        showStatus('record-status', 'Invalid ingredients JSON format', 'error');
+                        return;
+                    }
+                    endpoint = '/api/publish/newRecipe';
+                    break;
+                case 'workout':
+                    try {
+                        const exercises = JSON.parse(document.getElementById('workout-exercises').value || '[]');
+                        recordData.workout = exercises;
+                        recordData.workout_duration_minutes = parseInt(document.getElementById('workout-duration').value) || null;
+                        recordData.workout_difficulty = document.getElementById('workout-difficulty').value;
+                        recordData.workout_category = document.getElementById('workout-category').value;
+                        recordData.equipment_required = document.getElementById('workout-equipment').value.split(',').map(item => item.trim()).filter(item => item);
+                        recordData.target_muscle_groups = document.getElementById('workout-muscles').value.split(',').map(item => item.trim()).filter(item => item);
+                    } catch (e) {
+                        showStatus('record-status', 'Invalid exercises JSON format', 'error');
+                        return;
+                    }
+                    endpoint = '/api/publish/newWorkout';
+                    break;
+                case 'video':
+                    recordData.youtubeUrl = document.getElementById('video-url').value;
+                    recordData.basicMetadata = basicData;
+                    endpoint = '/api/publish/newVideo';
+                    break;
+                case 'image':
+                    recordData.imageUrl = document.getElementById('image-url').value;
+                    recordData.basicMetadata = basicData;
+                    recordData.image = {
+                        webUrl: document.getElementById('image-url').value,
+                        contentType: document.getElementById('image-contenttype').value
+                    };
+                    endpoint = '/api/publish/newImage';
+                    break;
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(recordData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('record-status', `${recordType} published successfully! Transaction ID: ${data.transactionId}`, 'success');
+                    // Clear the form
+                    document.getElementById('record-fields').innerHTML = '<div class="loading">Select a record type to see available fields</div>';
+                    document.getElementById('record-type').value = '';
+                    document.getElementById('publish-btn').disabled = true;
+                } else {
+                    showStatus('record-status', data.error || `Failed to publish ${recordType}`, 'error');
+                }
+            } catch (error) {
+                showStatus('record-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        // Utility functions
+        function showStatus(elementId, message, type) {
+            const statusElement = document.getElementById(elementId);
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+            statusElement.classList.remove('hidden');
+            
+            // Auto-hide after 5 seconds for success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusElement.classList.add('hidden');
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html> 
