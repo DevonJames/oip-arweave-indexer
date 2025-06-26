@@ -1595,19 +1595,30 @@
             
             // Handle audio - create play button for master player
             let audioHtml = '';
-            const audioItems = basicData.audioItems;
-            if (audioItems && audioItems.length > 0) {
-                audioHtml = `
-                    <div style="margin: 10px 0;">
-                        <button onclick="playAudioInMaster('${audioItems[0]}', '${(basicData.name || 'Unnamed Record').replace(/'/g, "\\'")}', '${recordType}', ${recordIndex})" 
-                                id="audioBtn-${recordIndex}" 
-                                class="audio-play-btn">
-                            <span>▶️</span>
-                            <span>Play Audio</span>
-                        </button>
-                        ${audioItems.length > 1 ? `<span style="font-size: 12px; color: #666; margin-left: 8px;">(${audioItems.length} audio files)</span>` : ''}
-                    </div>
-                `;
+            // Check for audio in specific data (e.g., post.audioItems) first, then basic data
+            const audioItems = specificData.audioItems || basicData.audioItems;
+            if (audioItems && Array.isArray(audioItems) && audioItems.length > 0) {
+                // Get the first audio item's URL
+                let firstAudioUrl = '';
+                if (audioItems[0]?.data?.audio?.webUrl) {
+                    firstAudioUrl = audioItems[0].data.audio.webUrl;
+                } else if (typeof audioItems[0] === 'string') {
+                    firstAudioUrl = audioItems[0];
+                }
+                
+                if (firstAudioUrl) {
+                    audioHtml = `
+                        <div style="margin: 10px 0;">
+                            <button onclick="playAudioInMaster('${firstAudioUrl}', '${(basicData.name || 'Unnamed Record').replace(/'/g, "\\'")}', '${recordType}', ${recordIndex})" 
+                                    id="audioBtn-${recordIndex}" 
+                                    class="audio-play-btn">
+                                <span>▶️</span>
+                                <span>Play Audio</span>
+                            </button>
+                            ${audioItems.length > 1 ? `<span style="font-size: 12px; color: #666; margin-left: 8px;">(${audioItems.length} audio files)</span>` : ''}
+                        </div>
+                    `;
+                }
             }
             
             // Determine text content source and type
@@ -1669,7 +1680,7 @@
                 ${renderOtherMediaContent(record, recordType, specificData)}
                 <div class="record-meta">
                     <div>DID: ${record.oip?.didTx || 'Unknown'}</div>
-                    ${basicData.webUrl ? `<div><a href="${basicData.webUrl}" target="_blank" rel="noopener noreferrer">🌐 View Source</a></div>` : ''}
+                    ${(specificData.webUrl || basicData.webUrl) ? `<div><a href="${specificData.webUrl || basicData.webUrl}" target="_blank" rel="noopener noreferrer">🌐 Read Original Article</a></div>` : ''}
                 </div>
                 ${createTagsDisplay(basicData.tagItems)}
             `;
