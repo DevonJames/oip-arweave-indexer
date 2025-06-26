@@ -498,6 +498,169 @@
         .no-results {
             text-align: center;
             color: #999;
+        }
+
+        /* Master Audio Player */
+        .master-audio-player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .master-audio-player.visible {
+            transform: translateY(0);
+        }
+
+        .audio-player-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .audio-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .audio-title {
+            font-weight: bold;
+            font-size: 16px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .audio-meta {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .audio-controls button {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .audio-controls button:hover {
+            background: rgba(255,255,255,0.3);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .audio-progress {
+            width: 200px;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .audio-progress-bar {
+            height: 100%;
+            background: white;
+            border-radius: 2px;
+            transition: width 0.1s;
+        }
+
+        .audio-time {
+            font-size: 12px;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .record-card .audio-play-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .record-card .audio-play-btn:hover {
+            background: #218838;
+            transform: translateY(-1px);
+        }
+
+        .record-card .audio-play-btn.playing {
+            background: #dc3545;
+        }
+
+        .record-card .audio-play-btn.playing:hover {
+            background: #c82333;
+        }
+
+        .text-content-preview {
+            margin-top: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .toggle-text-btn {
+            background: #17a2b8;
+            font-size: 12px;
+            padding: 4px 8px;
+        }
+
+        .toggle-text-btn:hover {
+            background: #138496;
+        }
+
+        .record-image {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .record-image:hover {
+            transform: scale(1.02);
+        }
+
+        /* Ensure body has padding for fixed audio player */
+        body {
+            margin-bottom: 80px;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
             font-style: italic;
             padding: 40px;
         }
@@ -820,6 +983,32 @@
         </div>
     </div>
 
+    <!-- Master Audio Player -->
+    <div id="master-audio-player" class="master-audio-player">
+        <div class="audio-player-content">
+            <div class="audio-info">
+                <div class="audio-title" id="audio-title">No audio selected</div>
+                <div class="audio-meta" id="audio-meta">Select an audio file to play</div>
+            </div>
+            
+            <div class="audio-controls">
+                <button onclick="toggleAudioPlayback()" id="master-play-btn">▶️</button>
+                <button onclick="stopAudio()">⏹️</button>
+                <div class="audio-progress" onclick="seekAudio(event)">
+                    <div class="audio-progress-bar" id="audio-progress-bar"></div>
+                </div>
+                <div class="audio-time" id="audio-time">0:00 / 0:00</div>
+                <button onclick="closeMasterPlayer()">✕</button>
+            </div>
+        </div>
+        
+        <audio id="master-audio" style="display: none;" 
+               ontimeupdate="updateAudioProgress()" 
+               onended="onAudioEnded()"
+               onloadedmetadata="onAudioLoaded()">
+        </audio>
+    </div>
+
     <script>
         // State management
         let authToken = localStorage.getItem('oip-auth-token');
@@ -1106,34 +1295,90 @@
                 grid.innerHTML = '';
             }
             
-            records.forEach(record => {
-                const card = createRecordCard(record);
+            const startIndex = currentRecords.length - records.length;
+            records.forEach((record, index) => {
+                const card = createRecordCard(record, startIndex + index);
                 grid.appendChild(card);
             });
             
             grid.classList.remove('hidden');
         }
 
-        // Media rendering functions
-        function renderMediaContent(record, recordType, specificData) {
+        // Media rendering functions (excluding images and audio which are handled separately)
+        function renderOtherMediaContent(record, recordType, specificData) {
             let mediaHtml = '';
             
-            // Handle direct media records (image, audio, video, text)
-            if (['image', 'audio', 'video', 'text'].includes(recordType)) {
+            // Handle direct media records (video, text only - images and audio handled separately)
+            if (['video', 'text'].includes(recordType)) {
                 mediaHtml += renderDirectMedia(specificData, recordType);
             }
             
-            // Handle post records with embedded media
+            // Handle post records with embedded media (excluding featured image and audio)
             if (recordType === 'post' && specificData) {
-                mediaHtml += renderPostMedia(specificData);
+                mediaHtml += renderPostVideoAndText(specificData);
             }
             
             // Handle recipe and workout records with media in ingredients/exercises
             if (['recipe', 'workout'].includes(recordType) && specificData) {
-                mediaHtml += renderRecipeWorkoutMedia(specificData, recordType);
+                mediaHtml += renderRecipeWorkoutNonAudioMedia(specificData, recordType);
             }
             
             return mediaHtml ? `<div class="media-content">${mediaHtml}</div>` : '';
+        }
+
+        function renderPostVideoAndText(postData) {
+            let html = '';
+            
+            // Article text (dref resolved) - but not if it's already shown in the text toggle
+            if (postData.articleText?.data?.text?.webUrl && !postData.articleText) {
+                html += renderDirectMedia(postData.articleText.data.text, 'text');
+            }
+            
+            // Video items array
+            if (postData.videoItems && Array.isArray(postData.videoItems)) {
+                postData.videoItems.forEach((videoItem, index) => {
+                    if (videoItem?.data?.video?.webUrl) {
+                        html += `<div class="media-item">
+                            <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">Video ${index + 1}:</label>
+                            ${renderDirectMedia(videoItem.data.video, 'video')}
+                        </div>`;
+                    }
+                });
+            }
+            
+            return html;
+        }
+
+        function renderRecipeWorkoutNonAudioMedia(data, type) {
+            let html = '';
+            
+            // Handle ingredient/exercise references that might contain media (excluding audio/images)
+            const items = type === 'recipe' ? data.ingredient : data.exercise;
+            if (items && Array.isArray(items)) {
+                items.forEach((item, index) => {
+                    if (item?.data) {
+                        // Check if the referenced item has video or text media
+                        Object.keys(item.data).forEach(key => {
+                            if (key !== 'basic') {
+                                const itemData = item.data[key];
+                                if (itemData?.webUrl) {
+                                    const itemType = key;
+                                    if (['video', 'text'].includes(itemType)) {
+                                        html += `<div class="media-item">
+                                            <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">
+                                                ${type === 'recipe' ? 'Ingredient' : 'Exercise'} ${index + 1} ${itemType}:
+                                            </label>
+                                            ${renderDirectMedia(itemData, itemType)}
+                                        </div>`;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+            
+            return html;
         }
         
         function renderDirectMedia(data, type) {
@@ -1317,7 +1562,7 @@
             return div.innerHTML;
         }
 
-        function createRecordCard(record) {
+        function createRecordCard(record, recordIndex) {
             const card = document.createElement('div');
             card.className = 'record-card';
             
@@ -1326,20 +1571,87 @@
             const basicData = record.data?.basic || {};
             const specificData = record.data?.[recordType] || {};
             
+            // Get date - prefer dateReadable, fallback to formatted date
+            const dateDisplay = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
+            
+            // Handle images - check multiple possible locations
+            let imageHtml = '';
+            let imageUrl = null;
+            
+            if (basicData.featuredImage) {
+                imageUrl = basicData.featuredImage;
+            } else if (record.data?.image?.webUrl) {
+                imageUrl = record.data.image.webUrl;
+            } else if (basicData.imageItems && basicData.imageItems.length > 0) {
+                imageUrl = basicData.imageItems[0];
+            }
+            
+            if (imageUrl) {
+                imageHtml = `<img src="${imageUrl}" alt="Record image" class="record-image" onerror="this.style.display='none';">`;
+            }
+            
+            // Handle audio - create play button for master player
+            let audioHtml = '';
+            const audioItems = basicData.audioItems;
+            if (audioItems && audioItems.length > 0) {
+                audioHtml = `
+                    <div style="margin: 10px 0;">
+                        <button onclick="playAudioInMaster('${audioItems[0]}', '${(basicData.name || 'Unnamed Record').replace(/'/g, "\\'")}', '${recordType}', ${recordIndex})" 
+                                id="audioBtn-${recordIndex}" 
+                                class="audio-play-btn">
+                            <span>▶️</span>
+                            <span>Play Audio</span>
+                        </button>
+                        ${audioItems.length > 1 ? `<span style="font-size: 12px; color: #666; margin-left: 8px;">(${audioItems.length} audio files)</span>` : ''}
+                    </div>
+                `;
+            }
+            
+            // Get full text content for collapsible view
+            let fullTextContent = '';
+            if (specificData.articleText) {
+                fullTextContent = specificData.articleText;
+            } else if (specificData.instructions) {
+                fullTextContent = specificData.instructions;
+            } else if (specificData.content) {
+                fullTextContent = specificData.content;
+            } else if (basicData.description) {
+                fullTextContent = basicData.description;
+            }
+            
+            // Text content toggle button
+            let textToggleHtml = '';
+            if (fullTextContent && fullTextContent.length > 200) {
+                textToggleHtml = `
+                    <div style="margin: 10px 0;">
+                        <button onclick="toggleTextContent(${recordIndex})" 
+                                id="textBtn-${recordIndex}" 
+                                class="toggle-text-btn">
+                            📄 Show Full Text
+                        </button>
+                        <div id="textContent-${recordIndex}" class="text-content-preview hidden">
+                            ${escapeHtml(fullTextContent)}
+                        </div>
+                    </div>
+                `;
+            }
+            
             card.innerHTML = `
                 <div class="record-header">
                     <div class="record-type">${recordType}</div>
-                    <div class="record-block">Block: ${record.oip?.inArweaveBlock || 'Unknown'}</div>
+                    <div class="record-block">${dateDisplay}</div>
                 </div>
                 <div class="record-title">${basicData.name || 'Unnamed Record'}</div>
+                ${imageHtml}
                 <div class="record-content">
                     ${basicData.description || getContentPreview(specificData) || 'No description available'}
                 </div>
-                ${renderMediaContent(record, recordType, specificData)}
+                ${audioHtml}
+                ${textToggleHtml}
+                ${renderOtherMediaContent(record, recordType, specificData)}
                 <div class="record-meta">
                     <div>DID: ${record.oip?.didTx || 'Unknown'}</div>
-                    <div>Date: ${formatDate(basicData.date)}</div>
-                    ${basicData.webUrl ? `<div><a href="${basicData.webUrl}" target="_blank">View Source</a></div>` : ''}
+                    ${basicData.webUrl ? `<div><a href="${basicData.webUrl}" target="_blank" rel="noopener noreferrer">🌐 View Source</a></div>` : ''}
                 </div>
                 ${createTagsDisplay(basicData.tagItems)}
             `;
@@ -1348,7 +1660,12 @@
         }
 
         function getRecordType(record) {
-            // Try to get from data structure
+            // First, check the authoritative source: oip.recordType
+            if (record.oip && record.oip.recordType) {
+                return record.oip.recordType;
+            }
+            
+            // Fallback: Try to get from data structure
             if (record.data) {
                 const keys = Object.keys(record.data);
                 for (const key of keys) {
@@ -1357,6 +1674,7 @@
                     }
                 }
             }
+            
             return 'unknown';
         }
 
@@ -1908,6 +2226,183 @@
                 showMessage('record-status', 'Network error: ' + error.message, 'error');
             }
         }
+
+        // Master Audio Player functions
+        let currentAudioUrl = null;
+        let currentAudioTitle = null;
+        let currentAudioType = null;
+        let currentPlayingIndex = null;
+
+        function playAudioInMaster(audioUrl, title, recordType, recordIndex) {
+            const masterPlayer = document.getElementById('master-audio-player');
+            const masterAudio = document.getElementById('master-audio');
+            const audioTitle = document.getElementById('audio-title');
+            const audioMeta = document.getElementById('audio-meta');
+            const playBtn = document.getElementById('master-play-btn');
+            
+            // Update all audio buttons
+            document.querySelectorAll('.audio-play-btn').forEach(btn => {
+                btn.classList.remove('playing');
+                btn.innerHTML = '<span>▶️</span><span>Play Audio</span>';
+            });
+            
+            // If same audio is playing, toggle it
+            if (currentAudioUrl === audioUrl && !masterAudio.paused) {
+                masterAudio.pause();
+                return;
+            }
+            
+            // Set new audio
+            currentAudioUrl = audioUrl;
+            currentAudioTitle = title;
+            currentAudioType = recordType;
+            currentPlayingIndex = recordIndex;
+            
+            masterAudio.src = audioUrl;
+            audioTitle.textContent = title;
+            audioMeta.textContent = `${recordType} • Loading...`;
+            
+            // Show master player
+            masterPlayer.classList.add('visible');
+            
+            // Update button states
+            const currentBtn = document.getElementById(`audioBtn-${recordIndex}`);
+            if (currentBtn) {
+                currentBtn.classList.add('playing');
+                currentBtn.innerHTML = '<span>⏸️</span><span>Playing...</span>';
+            }
+            
+            // Play audio
+            masterAudio.play().catch(error => {
+                console.error('Error playing audio:', error);
+                audioMeta.textContent = `${recordType} • Error loading audio`;
+            });
+            
+            playBtn.textContent = '⏸️';
+        }
+
+        function toggleAudioPlayback() {
+            const masterAudio = document.getElementById('master-audio');
+            const playBtn = document.getElementById('master-play-btn');
+            
+            if (masterAudio.paused) {
+                masterAudio.play();
+                playBtn.textContent = '⏸️';
+                updateCurrentPlayingButton(true);
+            } else {
+                masterAudio.pause();
+                playBtn.textContent = '▶️';
+                updateCurrentPlayingButton(false);
+            }
+        }
+
+        function stopAudio() {
+            const masterAudio = document.getElementById('master-audio');
+            const playBtn = document.getElementById('master-play-btn');
+            const audioMeta = document.getElementById('audio-meta');
+            
+            masterAudio.pause();
+            masterAudio.currentTime = 0;
+            playBtn.textContent = '▶️';
+            audioMeta.textContent = `${currentAudioType} • Stopped`;
+            updateCurrentPlayingButton(false);
+        }
+
+        function closeMasterPlayer() {
+            const masterPlayer = document.getElementById('master-audio-player');
+            const masterAudio = document.getElementById('master-audio');
+            
+            masterAudio.pause();
+            masterPlayer.classList.remove('visible');
+            updateCurrentPlayingButton(false);
+            
+            currentAudioUrl = null;
+            currentAudioTitle = null;
+            currentAudioType = null;
+            currentPlayingIndex = null;
+        }
+
+        function updateCurrentPlayingButton(isPlaying) {
+            if (currentPlayingIndex !== null) {
+                const btn = document.getElementById(`audioBtn-${currentPlayingIndex}`);
+                if (btn) {
+                    if (isPlaying) {
+                        btn.classList.add('playing');
+                        btn.innerHTML = '<span>⏸️</span><span>Playing...</span>';
+                    } else {
+                        btn.classList.remove('playing');
+                        btn.innerHTML = '<span>▶️</span><span>Play Audio</span>';
+                    }
+                }
+            }
+        }
+
+        function updateAudioProgress() {
+            const masterAudio = document.getElementById('master-audio');
+            const progressBar = document.getElementById('audio-progress-bar');
+            const timeDisplay = document.getElementById('audio-time');
+            
+            if (masterAudio.duration) {
+                const progress = (masterAudio.currentTime / masterAudio.duration) * 100;
+                progressBar.style.width = progress + '%';
+                
+                const currentTime = formatTime(masterAudio.currentTime);
+                const totalTime = formatTime(masterAudio.duration);
+                timeDisplay.textContent = `${currentTime} / ${totalTime}`;
+            }
+        }
+
+        function seekAudio(event) {
+            const masterAudio = document.getElementById('master-audio');
+            const progressContainer = event.currentTarget;
+            const rect = progressContainer.getBoundingClientRect();
+            const percent = (event.clientX - rect.left) / rect.width;
+            
+            if (masterAudio.duration) {
+                masterAudio.currentTime = percent * masterAudio.duration;
+            }
+        }
+
+        function onAudioLoaded() {
+            const audioMeta = document.getElementById('audio-meta');
+            const masterAudio = document.getElementById('master-audio');
+            
+            if (masterAudio.duration) {
+                const duration = formatTime(masterAudio.duration);
+                audioMeta.textContent = `${currentAudioType} • Duration: ${duration}`;
+            }
+        }
+
+        function onAudioEnded() {
+            const playBtn = document.getElementById('master-play-btn');
+            const audioMeta = document.getElementById('audio-meta');
+            
+            playBtn.textContent = '▶️';
+            audioMeta.textContent = `${currentAudioType} • Finished`;
+            updateCurrentPlayingButton(false);
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Text content toggle function
+        function toggleTextContent(recordIndex) {
+            const textContent = document.getElementById(`textContent-${recordIndex}`);
+            const toggleBtn = document.getElementById(`textBtn-${recordIndex}`);
+            
+            if (textContent.classList.contains('hidden')) {
+                textContent.classList.remove('hidden');
+                toggleBtn.textContent = '📄 Hide Full Text';
+            } else {
+                textContent.classList.add('hidden');
+                toggleBtn.textContent = '📄 Show Full Text';
+            }
+        }
+
+
     </script>
 </body>
 </html> 
