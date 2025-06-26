@@ -131,7 +131,7 @@ services:
       - "3005:3005"  # Express API
       - "9229:9229"
     volumes:
-      - ./media/jfk:/usr/src/app/media/jfk
+      - ./media:/usr/src/app/media
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
     environment:
