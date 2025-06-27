@@ -112,31 +112,127 @@ class RAGService {
      * Extract key search terms from a natural language question
      */
     extractSearchKeywords(question) {
-        // Remove common question words and extract meaningful terms
-        const stopWords = ['what', 'is', 'are', 'the', 'latest', 'news', 'on', 'about', 'tell', 'me', 'can', 'you', 'how', 'where', 'when', 'why', 'who', 'which', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'any', 'some', 'all', 'no', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'now', 'and', 'or', 'but', 'if', 'then', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further', 'once', 'here', 'there', 'everywhere', 'anywhere', 'somewhere', 'nowhere'];
+        const lowerQuestion = question.toLowerCase();
         
-        // Clean and split the question
-        const cleaned = question.toLowerCase()
-            .replace(/[^\w\s]/g, ' ') // Remove punctuation
-            .replace(/\s+/g, ' ') // Normalize spaces
-            .trim();
+        // Comprehensive stop words including common question structure words
+        const stopWords = ['what', 'is', 'are', 'the', 'latest', 'news', 'on', 'about', 'tell', 'me', 'can', 'you', 'how', 'where', 'when', 'why', 'who', 'which', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'any', 'some', 'all', 'no', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'now', 'and', 'or', 'but', 'if', 'then', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further', 'once', 'here', 'there', 'everywhere', 'anywhere', 'somewhere', 'nowhere', 'have', 'has', 'had', 'them', 'they', 'their', 'these', 'those', 'this', 'that', 'in', 'to', 'from', 'get', 'find', 'show', 'give', 'make', 'take', 'come', 'go', 'see', 'know', 'think', 'look', 'want', 'use', 'work', 'try', 'ask', 'need', 'feel', 'become', 'leave', 'put', 'mean', 'keep', 'let', 'begin', 'seem', 'help', 'talk', 'turn', 'start', 'might', 'move', 'live', 'believe', 'hold', 'bring', 'happen', 'write', 'provide', 'sit', 'stand', 'lose', 'pay', 'meet', 'include', 'continue', 'set', 'learn', 'change', 'lead', 'understand', 'watch', 'follow', 'stop', 'create', 'speak', 'read', 'allow', 'add', 'spend', 'grow', 'open', 'walk', 'win', 'offer', 'remember', 'love', 'consider', 'appear', 'buy', 'wait', 'serve', 'die', 'send', 'expect', 'build', 'stay', 'fall', 'cut', 'reach', 'kill', 'remain'];
         
-        const words = cleaned.split(' ')
-            .filter(word => word.length > 2) // Remove very short words
-            .filter(word => !stopWords.includes(word)); // Remove stop words
+        // Special handling for recipe queries
+        if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook') || lowerQuestion.includes('ingredient')) {
+            return this.extractRecipeKeywords(question);
+        }
         
-        // Prioritize important terms (countries, proper nouns, etc.)
+        // Special handling for exercise queries
+        if (lowerQuestion.includes('exercise') || lowerQuestion.includes('workout') || lowerQuestion.includes('training')) {
+            return this.extractExerciseKeywords(question);
+        }
+        
+        // Special handling for news/post queries
+        if (lowerQuestion.includes('news') || lowerQuestion.includes('article') || lowerQuestion.includes('post')) {
+            return this.extractNewsKeywords(question);
+        }
+        
+        // Default keyword extraction for other queries
+        return this.extractGeneralKeywords(question, stopWords);
+    }
+    
+    extractRecipeKeywords(question) {
+        const lowerQuestion = question.toLowerCase();
+        
+        // Common recipe-related stop words to ignore
+        const recipeStopWords = ['recipe', 'recipes', 'cook', 'cooking', 'make', 'making', 'prepare', 'preparation', 'dish', 'dishes', 'meal', 'meals', 'food', 'foods', 'ingredient', 'ingredients', 'have', 'has', 'had', 'with', 'using', 'contains', 'contain', 'any', 'some', 'all', 'that', 'which', 'what', 'how', 'do', 'does', 'can', 'could', 'would', 'should', 'will', 'them', 'they', 'their', 'in', 'for', 'to', 'from', 'of', 'on', 'at', 'by', 'me', 'i', 'my', 'is', 'are', 'the', 'and', 'or', 'but'];
+        
+        // Extract potential ingredient/food terms
+        const words = lowerQuestion
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .split(' ')
+            .filter(word => word.length > 2)
+            .filter(word => !recipeStopWords.includes(word));
+        
+        // Common ingredients and food items to prioritize
+        const foodKeywords = ['chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'turkey', 'lamb', 'bacon', 'ham', 'cheese', 'egg', 'eggs', 'milk', 'butter', 'cream', 'yogurt', 'rice', 'pasta', 'bread', 'flour', 'sugar', 'salt', 'pepper', 'garlic', 'onion', 'tomato', 'potato', 'carrot', 'broccoli', 'spinach', 'mushroom', 'bell', 'basil', 'oregano', 'thyme', 'rosemary', 'parsley', 'cilantro', 'lemon', 'lime', 'apple', 'banana', 'strawberry', 'blueberry', 'avocado', 'olive', 'oil', 'vinegar', 'wine', 'beer', 'chocolate', 'vanilla', 'cinnamon', 'ginger', 'curry', 'soy', 'sauce', 'honey', 'maple', 'syrup', 'nuts', 'almond', 'walnut', 'peanut', 'coconut', 'beans', 'lentils', 'quinoa', 'oats', 'corn', 'zucchini', 'eggplant', 'cucumber', 'lettuce', 'cabbage', 'kale', 'asparagus', 'peas', 'green', 'red', 'yellow', 'white', 'black', 'blue', 'orange', 'purple'];
+        
+        // Prioritize food-related terms
+        const foodTerms = words.filter(word => 
+            foodKeywords.some(food => word.includes(food) || food.includes(word))
+        );
+        
+        // If we found food terms, use those; otherwise use remaining words
+        const keyTerms = foodTerms.length > 0 ? foodTerms : words.slice(0, 3);
+        
+        const result = keyTerms.slice(0, 3).join(' '); // Limit to top 3 terms for recipes
+        console.log(`[RAG] Extracted recipe keywords from "${question}":`, keyTerms);
+        return result;
+    }
+    
+    extractExerciseKeywords(question) {
+        const lowerQuestion = question.toLowerCase();
+        
+        const exerciseStopWords = ['exercise', 'exercises', 'workout', 'workouts', 'training', 'train', 'fitness', 'gym', 'routine', 'routines', 'do', 'does', 'can', 'could', 'would', 'should', 'will', 'have', 'has', 'had', 'with', 'for', 'to', 'from', 'of', 'on', 'at', 'by', 'me', 'i', 'my', 'is', 'are', 'the', 'and', 'or', 'but', 'that', 'which', 'what', 'how', 'any', 'some', 'all'];
+        
+        const words = lowerQuestion
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .split(' ')
+            .filter(word => word.length > 2)
+            .filter(word => !exerciseStopWords.includes(word));
+        
+        // Exercise and body part terms to prioritize
+        const exerciseKeywords = ['chest', 'back', 'shoulders', 'arms', 'legs', 'abs', 'core', 'cardio', 'strength', 'push', 'pull', 'squat', 'deadlift', 'bench', 'press', 'curl', 'row', 'fly', 'dip', 'lunge', 'plank', 'crunch', 'bicep', 'tricep', 'quad', 'hamstring', 'calf', 'glute', 'lat', 'delt', 'pec', 'trap', 'running', 'walking', 'cycling', 'swimming', 'jumping', 'stretching', 'yoga', 'pilates', 'crossfit', 'bodyweight', 'dumbbell', 'barbell', 'kettlebell', 'resistance', 'band', 'machine', 'cable', 'free', 'weight', 'reps', 'sets', 'minutes', 'seconds', 'beginner', 'intermediate', 'advanced', 'easy', 'hard', 'difficult', 'upper', 'lower', 'full', 'body'];
+        
+        const exerciseTerms = words.filter(word => 
+            exerciseKeywords.some(term => word.includes(term) || term.includes(word))
+        );
+        
+        const keyTerms = exerciseTerms.length > 0 ? exerciseTerms : words.slice(0, 3);
+        const result = keyTerms.slice(0, 3).join(' ');
+        console.log(`[RAG] Extracted exercise keywords from "${question}":`, keyTerms);
+        return result;
+    }
+    
+    extractNewsKeywords(question) {
+        const lowerQuestion = question.toLowerCase();
+        
+        const newsStopWords = ['news', 'article', 'articles', 'post', 'posts', 'story', 'stories', 'report', 'reports', 'latest', 'recent', 'new', 'current', 'today', 'yesterday', 'about', 'on', 'regarding', 'concerning', 'related', 'to', 'tell', 'me', 'show', 'find', 'get', 'give', 'what', 'is', 'are', 'the', 'and', 'or', 'but', 'have', 'has', 'had', 'do', 'does', 'can', 'could', 'would', 'should', 'will', 'any', 'some', 'all'];
+        
+        const words = lowerQuestion
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .split(' ')
+            .filter(word => word.length > 2)
+            .filter(word => !newsStopWords.includes(word));
+        
+        // Important news topics and entities
         const importantTerms = words.filter(word => {
-            // Check if it's a country, organization, or important term
-            const importantPatterns = ['iran', 'china', 'russia', 'ukraine', 'israel', 'palestine', 'syria', 'afghanistan', 'turkey', 'venezuela', 'belarus', 'america', 'usa', 'europe', 'asia', 'africa', 'biden', 'trump', 'nuclear', 'war', 'peace', 'economy', 'covid', 'climate', 'election', 'congress', 'senate', 'president'];
+            const importantPatterns = ['iran', 'china', 'russia', 'ukraine', 'israel', 'palestine', 'syria', 'afghanistan', 'turkey', 'venezuela', 'belarus', 'america', 'usa', 'europe', 'asia', 'africa', 'biden', 'trump', 'nuclear', 'war', 'peace', 'economy', 'covid', 'climate', 'election', 'congress', 'senate', 'president', 'government', 'politics', 'military', 'defense', 'security', 'trade', 'diplomacy', 'technology', 'science', 'health', 'business', 'finance', 'market', 'stock', 'crypto', 'bitcoin', 'energy', 'oil', 'gas', 'renewable', 'environment', 'climate', 'weather', 'disaster', 'emergency', 'crisis', 'conflict', 'peace', 'treaty', 'agreement', 'summit', 'meeting', 'visit', 'travel', 'border', 'immigration', 'refugee', 'protest', 'demonstration', 'strike', 'union', 'company', 'corporation', 'industry', 'factory', 'production', 'manufacturing', 'export', 'import', 'gdp', 'inflation', 'recession', 'growth', 'development'];
             return importantPatterns.some(pattern => word.includes(pattern) || pattern.includes(word));
         });
         
-        // Return important terms first, then all remaining words, but limit to top 3-5 terms
         const keyTerms = [...new Set([...importantTerms, ...words])].slice(0, 5);
+        const result = keyTerms.join(' ');
+        console.log(`[RAG] Extracted news keywords from "${question}":`, keyTerms);
+        return result;
+    }
+    
+    extractGeneralKeywords(question, stopWords) {
+        // Default extraction for general queries
+        const cleaned = question.toLowerCase()
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
         
-        console.log(`[RAG] Extracted keywords from "${question}":`, keyTerms);
-        return keyTerms.join(' ');
+        const words = cleaned.split(' ')
+            .filter(word => word.length > 2)
+            .filter(word => !stopWords.includes(word));
+        
+        const keyTerms = words.slice(0, 4);
+        const result = keyTerms.join(' ');
+        console.log(`[RAG] Extracted general keywords from "${question}":`, keyTerms);
+        return result;
     }
 
     /**
@@ -775,14 +871,10 @@ Answer the question using the information above:`;
         const filters = {};
         const lowerQuestion = question.toLowerCase();
         
-        // Extract search terms - remove common question words
-        const questionWords = ['what', 'is', 'are', 'tell', 'me', 'about', 'latest', 'recent', 'news', 'on', 'the', 'any', 'some'];
-        const searchTerms = lowerQuestion.split(/[\s,]+/)
-            .filter(word => word.length > 2 && !questionWords.includes(word))
-            .slice(0, 3);
-        
-        if (searchTerms.length > 0) {
-            filters.search = searchTerms.join(' ');
+        // Use the same smart keyword extraction that was used for the search
+        const searchKeywords = this.extractSearchKeywords(question);
+        if (searchKeywords && searchKeywords.trim().length > 0) {
+            filters.search = searchKeywords.trim();
         }
         
         // Determine record type from search results or query analysis
@@ -805,14 +897,32 @@ Answer the question using the information above:`;
             filters.hasAudio = true;
         }
         
-        // Add filter rationale
+        // Generate more informative rationale based on query type
         const sourceCount = searchResults.records ? searchResults.records.length : 0;
-        filters.rationale = `Found ${sourceCount} relevant records`;
-        if (filters.recordType) {
-            filters.rationale += ` of type "${filters.recordType}"`;
-        }
-        if (filters.search) {
-            filters.rationale += ` matching "${filters.search}"`;
+        
+        if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook')) {
+            filters.rationale = `Found ${sourceCount} recipe${sourceCount === 1 ? '' : 's'}`;
+            if (filters.search) {
+                filters.rationale += ` containing "${filters.search}"`;
+            }
+        } else if (lowerQuestion.includes('exercise') || lowerQuestion.includes('workout')) {
+            filters.rationale = `Found ${sourceCount} exercise${sourceCount === 1 ? '' : 's'}`;
+            if (filters.search) {
+                filters.rationale += ` related to "${filters.search}"`;
+            }
+        } else if (lowerQuestion.includes('news') || lowerQuestion.includes('article')) {
+            filters.rationale = `Found ${sourceCount} news article${sourceCount === 1 ? '' : 's'}`;
+            if (filters.search) {
+                filters.rationale += ` about "${filters.search}"`;
+            }
+        } else {
+            filters.rationale = `Found ${sourceCount} relevant record${sourceCount === 1 ? '' : 's'}`;
+            if (filters.recordType) {
+                filters.rationale += ` of type "${filters.recordType}"`;
+            }
+            if (filters.search) {
+                filters.rationale += ` matching "${filters.search}"`;
+            }
         }
         
         console.log(`[RAG] Extracted filters for "${question}":`, filters);
