@@ -81,7 +81,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'xi-api-key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-API-Key', 'xi-api-key'],
   exposedHeaders: ['Content-Length', 'Content-Type'],
   maxAge: 86400 // 24 hours
 };

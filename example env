@@ -2,6 +2,7 @@
 REGISTRATION_LIMIT=50
 PORT=3005
 JWT_SECRET=
+OIP_API_KEY=dd5ec56e98e2a872f07b28caf8e54b4fd2db2ff1e9ad65f062c49ce20641df77
 
 # Arweave Configuration
 WALLET_FILE=config/arweave-keyfile.json

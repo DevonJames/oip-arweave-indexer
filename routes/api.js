@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateToken } = require('../middleware/auth'); // Import the authentication middleware
 const socketManager = require('../socket/socketManager');
 const ragService = require('../helpers/ragService'); // Add RAG service
 

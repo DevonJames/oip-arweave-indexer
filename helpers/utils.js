@@ -35,10 +35,8 @@ const { ArweaveSigner } = require('arbundles');
 const { TurboFactory } = require('@ardrive/turbo-sdk');
 const arweave = require('arweave');
 const {crypto, createHash} = require('crypto');
-const jwt = require('jsonwebtoken');
 const base64url = require('base64url');
 const templatesConfig = require('../config/templates.config.js');
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 dotenv.config();
 
 const getTurboArweave = async () => {
@@ -199,26 +197,7 @@ const resolveRecords = async (record, resolveDepth, recordsInDB) => {
     return record;
 };
 
-// Middleware to verify the JWT token
-const authenticateToken = (req, res, next) => {
-    console.log('Authenticating token...', req.headers, req.body, req.user);
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    console.log('token:', token);
 
-    if (!token) {
-        return res.status(401).json({ error: 'No token provided' });
-    }
-
-    try {
-        const verified = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = verified;
-        next();
-    } catch (error) {
-        console.error('Invalid token:', error);
-        return res.status(403).json({ error: 'Invalid token' });
-    }
-};
 
 let remapTemplatesPromise = loadRemapTemplates();
 
@@ -234,7 +213,6 @@ module.exports = {
     getLineNumber,
     getFileInfo,
     loadRemapTemplates,
-    authenticateToken,
     isValidDid,
     isValidTxId,
     getWalletFilePath

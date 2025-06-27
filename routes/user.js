@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { elasticClient, ensureUserIndexExists, verifyAdmin } = require('../helpers/elasticsearch');
-const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateToken } = require('../middleware/auth'); // Import the authentication middleware
 
 // JWT secret (should be stored in environment variables in production)
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';

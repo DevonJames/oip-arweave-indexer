@@ -3,7 +3,7 @@ const router = express.Router();
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateApiKey } = require('../middleware/auth'); // Import the API key authentication middleware
 const { TurboFactory, ArDriveUploadDriver } = require('@ardrive/turbo-sdk');
 const { 
   encryptContent,
@@ -322,7 +322,7 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
   }
 }
 
-router.post('/newRecipe', async (req, res) => {
+router.post('/newRecipe', authenticateApiKey, async (req, res) => {
 
     try {
         console.log('POST /api/publish/newRecipe', req.body)
@@ -744,7 +744,7 @@ recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false,
 });
 
 // Add workout publishing endpoint
-router.post('/newWorkout', async (req, res) => {
+router.post('/newWorkout', authenticateApiKey, async (req, res) => {
     try {
         console.log('POST /api/publish/newWorkout', req.body);
         const record = req.body;
@@ -931,7 +931,7 @@ function findBestExerciseMatch(exerciseName, exerciseRecordMap) {
 }
 
 // Add specific video record endpoint with YouTube support
-router.post('/newVideo', async (req, res) => {
+router.post('/newVideo', authenticateApiKey, async (req, res) => {
     try {
         const {
             youtubeUrl,
@@ -1001,7 +1001,7 @@ router.post('/newVideo', async (req, res) => {
 });
 
 // Add specific image record endpoint
-router.post('/newImage', async (req, res) => {
+router.post('/newImage', authenticateApiKey, async (req, res) => {
     try {
         const {
             imageUrl, // Direct image URL
@@ -1074,7 +1074,7 @@ router.post('/newImage', async (req, res) => {
 });
 
 // Add a new general media publishing endpoint
-router.post('/newMedia', async (req, res) => {
+router.post('/newMedia', authenticateApiKey, async (req, res) => {
     try {
         const {
             mediaFile, // Base64 encoded file
@@ -1145,7 +1145,7 @@ router.post('/newMedia', async (req, res) => {
 });
 
 // Add template publishing endpoint
-router.post('/newTemplate', authenticateToken, async (req, res) => {
+router.post('/newTemplate', authenticateApiKey, async (req, res) => {
     try {
         const rawTemplate = req.body.template || req.body;
         const blockchain = req.body.blockchain || 'arweave'; // Default to arweave
@@ -1252,7 +1252,7 @@ router.post('/testEncrypt', async (req, res) => {
 });
 
 // Add newPost endpoint for publishing post records
-router.post('/newPost', async (req, res) => {
+router.post('/newPost', authenticateApiKey, async (req, res) => {
     try {
         console.log('POST /api/publish/newPost', req.body);
         const record = req.body;

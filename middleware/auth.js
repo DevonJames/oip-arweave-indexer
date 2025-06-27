@@ -31,6 +31,29 @@ function authenticateToken(req, res, next) {
 }
 
 /**
+ * Middleware to authenticate API key
+ */
+function authenticateApiKey(req, res, next) {
+  const apiKey = req.headers['x-api-key'];
+  
+  if (!apiKey) {
+    return res.status(401).json({ 
+      error: 'Unauthorized', 
+      message: 'API key required' 
+    });
+  }
+  
+  if (apiKey !== process.env.OIP_API_KEY) {
+    return res.status(403).json({ 
+      error: 'Forbidden', 
+      message: 'Invalid API key' 
+    });
+  }
+  
+  next();
+}
+
+/**
  * Middleware to check if user is an admin
  */
 function isAdmin(req, res, next) {
@@ -69,6 +92,7 @@ function optionalAuth(req, res, next) {
 
 module.exports = {
   authenticateToken,
+  authenticateApiKey,
   isAdmin,
   optionalAuth
 }; 

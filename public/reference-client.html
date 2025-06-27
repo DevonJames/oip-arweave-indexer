@@ -1328,6 +1328,12 @@
     </div>
 
     <script>
+        // API Configuration
+        const API_CONFIG = {
+            apiKey: 'dd5ec56e98e2a872f07b28caf8e54b4fd2db2ff1e9ad65f062c49ce20641df77', // This should be loaded from environment/config
+            baseUrl: window.location.origin
+        };
+
         // State management
         let authToken = localStorage.getItem('oip-auth-token');
         let currentUser = localStorage.getItem('oip-user-email');
@@ -1429,6 +1435,25 @@
             document.getElementById('register-password').value = '';
             hideElement('auth-status');
             hideElement('auth-success');
+        }
+
+        // Helper function for authenticated requests
+        async function makeAuthenticatedRequest(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-API-Key': API_CONFIG.apiKey,
+                ...options.headers
+            };
+            
+            // Add JWT token if user is logged in
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            
+            return fetch(endpoint, {
+                ...options,
+                headers
+            });
         }
 
         // Authentication functions
@@ -2304,12 +2329,8 @@
             };
 
             try {
-                const response = await fetch('/api/creators/newCreator', {
+                const response = await makeAuthenticatedRequest('/api/creators/newCreator', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
                     body: JSON.stringify(creatorData)
                 });
 
@@ -2394,12 +2415,8 @@
             };
 
             try {
-                const response = await fetch('/api/templates/newTemplate', {
+                const response = await makeAuthenticatedRequest('/api/templates/newTemplate', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
                     body: JSON.stringify(templateData)
                 });
 
@@ -2557,12 +2574,8 @@
             }
 
             try {
-                const response = await fetch(endpoint, {
+                const response = await makeAuthenticatedRequest(endpoint, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
                     body: JSON.stringify(recordData)
                 });
 

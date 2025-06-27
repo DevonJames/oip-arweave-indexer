@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const LitJsSdk = require('@lit-protocol/sdk-nodejs');
 const { ethers } = require('ethers');
-const { authenticateToken } = require('../helpers/utils');
+const { authenticateApiKey } = require('../middleware/auth');
 
 // Datil network PKP NFT contract details - use lowercase to avoid checksum issues
 const PKP_NFT_ADDRESS = "0x4ee6ecad1c2dae9f525404de8555724e3c35d07b"; // lowercase to avoid initialization errors
@@ -12,7 +12,7 @@ const PKP_NFT_ABI = [
 ];
 
 // Mint new PKP endpoint
-router.post('/mint-pkp', authenticateToken, async (req, res) => {
+router.post('/mint-pkp', authenticateApiKey, async (req, res) => {
     try {
         // Initialize Lit Node Client
         const litNodeClient = new LitJsSdk.LitNodeClient({
@@ -82,7 +82,7 @@ router.post('/mint-pkp', authenticateToken, async (req, res) => {
 });
 
 // Get PKP details endpoint
-router.get('/pkp/:tokenId', authenticateToken, async (req, res) => {
+router.get('/pkp/:tokenId', authenticateApiKey, async (req, res) => {
     try {
         const { tokenId } = req.params;
         

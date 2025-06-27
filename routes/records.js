@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateToken } = require('../middleware/auth'); // Import the authentication middleware
 
 // const path = require('path');
 const { getRecords, searchRecordInDB } = require('../helpers/elasticsearch');

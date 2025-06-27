@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { upfrontFunding, lazyFunding, checkBalance } = require('../helpers/arweave');
 const paymentManager = require('../helpers/payment-manager');
-const { authenticateToken, txidToDid } = require('../helpers/utils');
+const { authenticateApiKey } = require('../middleware/auth');
+const { txidToDid } = require('../helpers/utils');
 const arweaveWallet = require('../helpers/arweave-wallet');
 const paymentVerification = require('../helpers/payment-verification');
 const { Client } = require('@elastic/elasticsearch');
@@ -61,7 +62,7 @@ router.post('/fund/lazy', async (req, res) => {
 });
 
 // Get a new payment address
-router.post('/address', authenticateToken, async (req, res) => {
+router.post('/address', authenticateApiKey, async (req, res) => {
     try {
         const { currency } = req.body;
         
@@ -94,7 +95,7 @@ router.post('/address', authenticateToken, async (req, res) => {
 });
 
 // Get wallet balances
-router.get('/balances', authenticateToken, async (req, res) => {
+router.get('/balances', authenticateApiKey, async (req, res) => {
     try {
         const balances = {
             arweave: await arweaveWallet.getBalance(),
@@ -114,7 +115,7 @@ router.get('/balances', authenticateToken, async (req, res) => {
 });
 
 // Get transaction history
-router.get('/transactions', authenticateToken, async (req, res) => {
+router.get('/transactions', authenticateApiKey, async (req, res) => {
     try {
         const { currency, limit = 10, offset = 0 } = req.query;
         
@@ -137,7 +138,7 @@ router.get('/transactions', authenticateToken, async (req, res) => {
 });
 
 // Verify payment for content
-router.post('/verify-payment', authenticateToken, async (req, res) => {
+router.post('/verify-payment', authenticateApiKey, async (req, res) => {
     try {
         const { contentId, currency, txid } = req.body;
 
@@ -168,7 +169,7 @@ router.post('/verify-payment', authenticateToken, async (req, res) => {
 });
 
 // Get payment status for content
-router.get('/payment-status/:contentId', authenticateToken, async (req, res) => {
+router.get('/payment-status/:contentId', authenticateApiKey, async (req, res) => {
     try {
         const { contentId } = req.params;
         const content = await paymentVerification.getContentPaymentInfo(contentId);
@@ -273,7 +274,7 @@ router.post('/payment-webhook', async (req, res) => {
 });
 
 // Get user notifications
-router.get('/notifications', authenticateToken, async (req, res) => {
+router.get('/notifications', authenticateApiKey, async (req, res) => {
     try {
         const { limit, offset, unreadOnly } = req.query;
         const notifications = await getUserNotifications(req.user.id, {
@@ -297,7 +298,7 @@ router.get('/notifications', authenticateToken, async (req, res) => {
 });
 
 // Mark notifications as read
-router.post('/notifications/mark-read', authenticateToken, async (req, res) => {
+router.post('/notifications/mark-read', authenticateApiKey, async (req, res) => {
     try {
         const { notificationIds } = req.body;
         

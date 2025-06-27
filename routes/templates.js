@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateApiKey } = require('../middleware/auth'); // Import the API key authentication middleware
 const { getTemplatesInDB } = require('../helpers/elasticsearch');
 const { publishNewTemplate, indexTemplate } = require('../helpers/templateHelper');
 
@@ -104,8 +104,7 @@ router.get('/', async (req, res) => {
 });
 
 
-router.post('/newTemplate', authenticateToken, async (req, res) => {
-// router.post('/newTemplate', async (req, res) => {
+router.post('/newTemplate', authenticateApiKey, async (req, res) => {
     try {
         console.log('POST /api/templates/newTemplate', req.body)
         const template = req.body;
@@ -137,8 +136,7 @@ router.post('/newTemplate', authenticateToken, async (req, res) => {
     }
 });
 
-router.post('/newTemplateRemap', authenticateToken, async (req, res) => {
-// router.post('/newTemplateRemap', async (req, res) => {
+router.post('/newTemplateRemap', authenticateApiKey, async (req, res) => {
     try {
         const templateRemap = req.body;
         if (!validateTemplateRemap(templateRemap)) {

@@ -1,5 +1,6 @@
 // routes/creators.js
 const express = require('express');
+const { authenticateApiKey } = require('../middleware/auth');
 const { getCreatorsInDB } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
 const { Client } = require('@elastic/elasticsearch');
@@ -68,7 +69,7 @@ router.get('/', async (req, res) => {
 //         }
 //     });
 
-router.post('/newCreator', async (req, res) => {
+router.post('/newCreator', authenticateApiKey, async (req, res) => {
     try {
         console.log('POST /api/creators/newCreator', req.body)
         const record = req.body;
