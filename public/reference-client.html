@@ -1850,7 +1850,7 @@
             });
 
             if (currentFilters.search) {
-                params.append('search', currentFilters.search.replace(/\s+/g, '+'));
+                params.append('search', currentFilters.search.trim());
             }
             
             if (currentFilters.recordType) {
@@ -2413,6 +2413,7 @@
         }
 
         function populateRecordTypeFilter() {
+            // Populate regular record type filter (Browse Records tab)
             const select = document.getElementById('record-type-filter');
             select.innerHTML = '<option value="">All Types</option>';
             
@@ -2422,6 +2423,19 @@
                 option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
                 select.appendChild(option);
             });
+
+            // Populate voice record type filter (Browse + AI Chat tab)
+            const voiceSelect = document.getElementById('voice-record-type-filter');
+            if (voiceSelect) {
+                voiceSelect.innerHTML = '<option value="">All Types</option>';
+                
+                recordTypes.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                    voiceSelect.appendChild(option);
+                });
+            }
         }
 
         // Utility functions
@@ -3813,7 +3827,7 @@
             });
 
             if (voiceFilters.search) {
-                params.append('search', voiceFilters.search.replace(/\s+/g, '+'));
+                params.append('search', voiceFilters.search.trim());
             }
             
             if (voiceFilters.recordType) {
