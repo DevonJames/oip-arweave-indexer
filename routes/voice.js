@@ -8,6 +8,29 @@ const { spawn } = require('child_process');
 const os = require('os');
 const router = express.Router();
 
+// Configure axios with better connection management
+const axiosConfig = {
+    timeout: 15000, // Reduced from 30000ms to 15000ms
+    headers: {
+        'Connection': 'close', // Force connection close to prevent hanging
+        'User-Agent': 'OIP-Voice-Service/1.0'
+    },
+    // Add retry configuration
+    maxRedirects: 3,
+    // Connection management
+    httpAgent: new (require('http').Agent)({
+        keepAlive: false, // Disable keep-alive to prevent socket issues
+        maxSockets: 10
+    }),
+    httpsAgent: new (require('https').Agent)({
+        keepAlive: false,
+        maxSockets: 10
+    })
+};
+
+// Create axios instance with configuration
+const axiosInstance = axios.create(axiosConfig);
+
 // Configure multer for audio file uploads
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -92,6 +115,36 @@ async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
     });
 }
 
+// Utility function for safe axios calls with error handling
+async function safeAxiosCall(url, options, serviceName = 'Service') {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    
+    try {
+        const response = await axiosInstance({
+            ...options,
+            url,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+            console.error(`[${serviceName}] Request aborted (15s timeout)`);
+            throw new Error(`${serviceName} timeout - service may be overloaded`);
+        }
+        
+        if (error.code === 'ECONNRESET' || error.code === 'ECONNABORTED') {
+            console.error(`[${serviceName}] Connection reset - ${error.code}`);
+            throw new Error(`${serviceName} connection failed - service restarting`);
+        }
+        
+        throw error;
+    }
+}
+
 /**
  * POST /api/voice/transcribe
  * Transcribe uploaded audio file to text
@@ -116,14 +169,14 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
         }
         formData.append('task', task);
 
-        const response = await axios.post(
+        const response = await safeAxiosCall(
             `${STT_SERVICE_URL}/transcribe_file`,
-            formData,
             {
+                method: 'POST',
+                data: formData,
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
-                timeout: 30000, // 30 second timeout
             }
         );
 
@@ -189,18 +242,18 @@ router.post('/synthesize', async (req, res) => {
                     
                     const mappedVoice = voiceMapping[voice_id] || voice_id;
                     
-                    const ttsResponse = await axios.post(
+                    const ttsResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
-                            text: finalText,
-                            voice: mappedVoice,
-                            engine: 'chatterbox'  // Explicitly request chatterbox engine
-                        },
-            {
-                timeout: 30000,
-                responseType: 'arraybuffer'
-            }
-        );
+                            method: 'POST',
+                            data: {
+                                text: finalText,
+                                voice: mappedVoice,
+                                engine: 'chatterbox'  // Explicitly request chatterbox engine
+                            },
+                            responseType: 'arraybuffer'
+                        }
+                    );
 
         // Set appropriate headers
         res.set({
@@ -276,12 +329,12 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 contentType: req.file.mimetype || 'audio/wav'
             });
 
-            const sttResponse = await axios.post(
+            const sttResponse = await safeAxiosCall(
                 `${STT_SERVICE_URL}/transcribe_file`,
-                formData,
                 {
+                    method: 'POST',
+                    data: formData,
                     headers: { 'Content-Type': 'multipart/form-data' },
-                    timeout: 30000,
                 }
             );
 
@@ -357,15 +410,15 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     
                     const mappedVoice = voiceMapping[voice_id] || voice_id;
                     
-                    const ttsResponse = await axios.post(
+                    const ttsResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
-                            text: textForTTS,
-                            voice: mappedVoice,
-                            engine: 'chatterbox'  // Explicitly request chatterbox engine
-                        },
-                        {
-                            timeout: 30000,
+                            method: 'POST',
+                            data: {
+                                text: textForTTS,
+                                voice: mappedVoice,
+                                engine: 'chatterbox'  // Explicitly request chatterbox engine
+                            },
                             responseType: 'arraybuffer'
                         }
                     );
@@ -462,9 +515,12 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
 router.get('/voices', async (req, res) => {
     try {
         // Try to get voices from Chatterbox TTS service
-        const response = await axios.get(`${TTS_SERVICE_URL}/voices`, {
-            timeout: 10000
-        });
+        const response = await safeAxiosCall(
+            `${TTS_SERVICE_URL}/voices`,
+            {
+                timeout: 10000
+            }
+        );
         
         console.log('[TTS] Returning Chatterbox voices from TTS service');
         res.json(response.data);
@@ -499,7 +555,7 @@ router.get('/engines', async (req, res) => {
     
     // Check if TTS service is available
     try {
-        await axios.get(`${TTS_SERVICE_URL}/health`, { timeout: 5000 });
+        await safeAxiosCall(`${TTS_SERVICE_URL}/health`, { timeout: 5000 });
         engines[0].status = 'healthy';
     } catch (error) {
         engines[0].status = 'unavailable';
@@ -515,7 +571,7 @@ router.get('/engines', async (req, res) => {
  */
 router.get('/models', async (req, res) => {
     try {
-        const response = await axios.get(`${STT_SERVICE_URL}/models`, {
+        const response = await safeAxiosCall(`${STT_SERVICE_URL}/models`, {
             timeout: 10000
         });
 
@@ -602,7 +658,7 @@ router.get('/health', async (req, res) => {
     // Check external services
     const healthChecks = ['stt', 'tts', 'text_generator'].map(async (serviceName) => {
         try {
-            const response = await axios.get(
+            const response = await safeAxiosCall(
                 `${services[serviceName].url}/health`,
                 { timeout: 5000 }
             );

@@ -2992,12 +2992,25 @@
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'recording.webm');
                 
+                // Create AbortController for STT timeout
+                const sttController = new AbortController();
+                const sttTimeoutId = setTimeout(() => {
+                    sttController.abort();
+                    console.log('[Voice] STT request aborted due to timeout');
+                }, 15000); // 15 second timeout for STT
+                
                 const sttResponse = await fetch('/api/voice/transcribe', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    signal: sttController.signal
                 });
                 
+                clearTimeout(sttTimeoutId);
+                
                 if (!sttResponse.ok) {
+                    if (sttResponse.status === 408 || sttResponse.status === 504) {
+                        throw new Error('Speech transcription timeout - please try again');
+                    }
                     throw new Error('Speech transcription failed');
                 }
                 
@@ -3032,53 +3045,81 @@
                 voiceState.selectedModel = document.getElementById('voice-model-select').value;
                 voiceState.selectedVoice = document.getElementById('voice-style-select').value;
                 
-                // Send to enhanced voice/chat endpoint that returns both response and filter params
-                const response = await fetch('/api/voice/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        text: text,
-                        model: voiceState.selectedModel,
-                        voice_id: voiceState.selectedVoice,
-                        speed: 1.0,
-                        return_audio: true,
-                        include_filter_analysis: true // New parameter we'll add to the backend
-                    })
-                });
+                // Create AbortController for timeout management
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    controller.abort();
+                    console.log('[Voice] Request aborted due to timeout');
+                }, 15000); // 15 second timeout to match backend
                 
-                if (!response.ok) {
-                    throw new Error('AI processing failed');
+                try {
+                    // Send to enhanced voice/chat endpoint that returns both response and filter params
+                    const response = await fetch('/api/voice/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            text: text,
+                            model: voiceState.selectedModel,
+                            voice_id: voiceState.selectedVoice,
+                            speed: 1.0,
+                            return_audio: true,
+                            include_filter_analysis: true
+                        }),
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        if (response.status === 408 || response.status === 504) {
+                            throw new Error('Request timeout - service may be busy, please try again');
+                        }
+                        throw new Error(`AI processing failed: ${response.status}`);
+                    }
+                    
+                    const aiData = await response.json();
+                    
+                    if (!aiData.response_text) {
+                        throw new Error('No response generated');
+                    }
+                    
+                    console.log('[Voice] AI Response:', aiData);
+                    
+                    // Use applied filters from backend (enhanced RAG service)
+                    const appliedFilters = aiData.applied_filters || {};
+                    
+                    // Apply the filters to the UI and reload records
+                    await applyAIFilters(appliedFilters, aiData.sources);
+                    
+                    // Add AI response to conversation
+                    addToConversation('assistant', aiData.response_text, {
+                        sources: aiData.sources,
+                        searchResults: aiData.search_results_count,
+                        filtersApplied: appliedFilters
+                    });
+                    
+                    // Play the audio response if available
+                    if (aiData.has_audio && aiData.audio_data) {
+                        await playAudioResponse(aiData.audio_data);
+                    }
+                    
+                    updateVoiceStatus('Ready to use!', 'Ask another question or use conversation mode');
+                    
+                } catch (fetchError) {
+                    clearTimeout(timeoutId);
+                    
+                    if (fetchError.name === 'AbortError') {
+                        throw new Error('Request timeout - please try again in a moment');
+                    }
+                    
+                    if (fetchError.message.includes('Failed to fetch')) {
+                        throw new Error('Connection failed - please check your connection and try again');
+                    }
+                    
+                    throw fetchError;
                 }
-                
-                const aiData = await response.json();
-                
-                if (!aiData.response_text) {
-                    throw new Error('No response generated');
-                }
-                
-                console.log('[Voice] AI Response:', aiData);
-                
-                // Use applied filters from backend (enhanced RAG service)
-                const appliedFilters = aiData.applied_filters || {};
-                
-                // Apply the filters to the UI and reload records
-                await applyAIFilters(appliedFilters, aiData.sources);
-                
-                // Add AI response to conversation
-                addToConversation('assistant', aiData.response_text, {
-                    sources: aiData.sources,
-                    searchResults: aiData.search_results_count,
-                    filtersApplied: appliedFilters
-                });
-                
-                // Play the audio response if available
-                if (aiData.has_audio && aiData.audio_data) {
-                    await playAudioResponse(aiData.audio_data);
-                }
-                
-                updateVoiceStatus('Ready to use!', 'Ask another question or use conversation mode');
                 
             } catch (error) {
                 console.error('[Voice] AI processing error:', error);
