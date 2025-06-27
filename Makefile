@@ -45,14 +45,13 @@ validate-profile:
 # Check if .env file exists
 check-env:
 	@if [ ! -f .env ]; then \
-		echo "$(YELLOW)Warning: .env file not found$(NC)"; \
-		if [ -f "example env" ]; then \
-			cp "example env" .env; \
-			echo "$(BLUE)Copied example env to .env - please edit with your configuration$(NC)"; \
-		else \
-			echo "$(RED)Error: No example env file found. Please create .env manually$(NC)"; \
-			exit 1; \
-		fi \
+		echo "$(RED)Error: .env file not found$(NC)"; \
+		echo "$(YELLOW)Please copy 'example env' to '.env' and configure it manually$(NC)"; \
+		echo "$(YELLOW)Command: cp \"example env\" .env$(NC)"; \
+		echo "$(RED)Build cancelled to protect your configuration$(NC)"; \
+		exit 1; \
+	else \
+		echo "$(GREEN)Found .env file - using your configuration$(NC)"; \
 	fi
 
 # Check if Docker network exists
