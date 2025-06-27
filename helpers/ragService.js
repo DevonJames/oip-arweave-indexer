@@ -176,12 +176,20 @@ class RAGService {
 
     /**
      * Extract key search terms from a natural language question
+     * Intelligently separates the question from the subject matter
      */
     extractSearchKeywords(question) {
-        const lowerQuestion = question.toLowerCase();
+        console.log(`[RAG] Extracting keywords from: "${question}"`);
         
-        // Comprehensive stop words including common question structure words
-        const stopWords = ['what', 'is', 'are', 'the', 'latest', 'news', 'on', 'about', 'tell', 'me', 'can', 'you', 'how', 'where', 'when', 'why', 'who', 'which', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'any', 'some', 'all', 'no', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'now', 'and', 'or', 'but', 'if', 'then', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further', 'once', 'here', 'there', 'everywhere', 'anywhere', 'somewhere', 'nowhere', 'have', 'has', 'had', 'them', 'they', 'their', 'these', 'those', 'this', 'that', 'in', 'to', 'from', 'get', 'find', 'show', 'give', 'make', 'take', 'come', 'go', 'see', 'know', 'think', 'look', 'want', 'use', 'work', 'try', 'ask', 'need', 'feel', 'become', 'leave', 'put', 'mean', 'keep', 'let', 'begin', 'seem', 'help', 'talk', 'turn', 'start', 'might', 'move', 'live', 'believe', 'hold', 'bring', 'happen', 'write', 'provide', 'sit', 'stand', 'lose', 'pay', 'meet', 'include', 'continue', 'set', 'learn', 'change', 'lead', 'understand', 'watch', 'follow', 'stop', 'create', 'speak', 'read', 'allow', 'add', 'spend', 'grow', 'open', 'walk', 'win', 'offer', 'remember', 'love', 'consider', 'appear', 'buy', 'wait', 'serve', 'die', 'send', 'expect', 'build', 'stay', 'fall', 'cut', 'reach', 'kill', 'remain'];
+        // First, try to identify subject entities using smart patterns
+        const subjects = this.extractSubjectEntities(question);
+        if (subjects.length > 0) {
+            const result = subjects.join(' ');
+            console.log(`[RAG] Extracted subject entities: "${result}"`);
+            return result;
+        }
+        
+        const lowerQuestion = question.toLowerCase();
         
         // Special handling for recipe queries
         if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook') || lowerQuestion.includes('ingredient')) {
@@ -199,7 +207,106 @@ class RAGService {
         }
         
         // Default keyword extraction for other queries
+        const stopWords = ['what', 'is', 'are', 'the', 'latest', 'news', 'on', 'about', 'tell', 'me', 'can', 'you', 'how', 'where', 'when', 'why', 'who', 'which', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'any', 'some', 'all', 'no', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'now', 'and', 'or', 'but', 'if', 'then', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further', 'once', 'here', 'there', 'everywhere', 'anywhere', 'somewhere', 'nowhere', 'have', 'has', 'had', 'them', 'they', 'their', 'these', 'those', 'this', 'that', 'in', 'to', 'from', 'get', 'find', 'show', 'give', 'make', 'take', 'come', 'go', 'see', 'know', 'think', 'look', 'want', 'use', 'work', 'try', 'ask', 'need', 'feel', 'become', 'leave', 'put', 'mean', 'keep', 'let', 'begin', 'seem', 'help', 'talk', 'turn', 'start', 'might', 'move', 'live', 'believe', 'hold', 'bring', 'happen', 'write', 'provide', 'sit', 'stand', 'lose', 'pay', 'meet', 'include', 'continue', 'set', 'learn', 'change', 'lead', 'understand', 'watch', 'follow', 'stop', 'create', 'speak', 'read', 'allow', 'add', 'spend', 'grow', 'open', 'walk', 'win', 'offer', 'remember', 'love', 'consider', 'appear', 'buy', 'wait', 'serve', 'die', 'send', 'expect', 'build', 'stay', 'fall', 'cut', 'reach', 'kill', 'remain'];
         return this.extractGeneralKeywords(question, stopWords);
+    }
+
+    /**
+     * Extract subject entities from questions using intelligent patterns
+     * Examples: "LA fire", "Iran nuclear", "Tesla stock", etc.
+     */
+    extractSubjectEntities(question) {
+        const lowerQuestion = question.toLowerCase();
+        console.log(`[RAG] Looking for subject entities in: "${lowerQuestion}"`);
+        
+        // Define pattern-based entity extraction rules
+        const entityPatterns = [
+            // Location + Event patterns (LA fire, California wildfire, etc.)
+            {
+                pattern: /\b(la|los angeles|california|ca|san francisco|sf|new york|ny|nyc|texas|florida|chicago|seattle|portland|denver|atlanta|boston|miami|phoenix|detroit|philadelphia|houston|dallas|washington|dc|las vegas|nevada|arizona|oregon|colorado|ohio|illinois|pennsylvania|maryland|virginia|north carolina|south carolina|georgia|tennessee|kentucky|alabama|louisiana|arkansas|mississippi|missouri|oklahoma|kansas|nebraska|iowa|minnesota|wisconsin|michigan|indiana|west virginia|delaware|new jersey|connecticut|rhode island|massachusetts|vermont|new hampshire|maine|montana|north dakota|south dakota|wyoming|utah|idaho|alaska|hawaii)\s+(fire|wildfire|earthquake|storm|hurricane|flood|disaster|shooting|attack|incident|crisis|emergency|accident|explosion|crash|protest|riot|election|vote|politics|political)\b/gi,
+                extract: match => match[0].trim()
+            },
+            // Country + Topic patterns (Iran nuclear, China trade, etc.)
+            {
+                pattern: /\b(iran|iranian|china|chinese|russia|russian|ukraine|ukrainian|israel|israeli|palestine|palestinian|north korea|south korea|japan|japanese|india|indian|pakistan|turkey|turkish|syria|syrian|afghanistan|iraq|iraqi|saudi arabia|egypt|yemen|libya|sudan|ethiopia|nigeria|south africa|brazil|mexico|canada|france|germany|italy|spain|uk|britain|british|australia|argentina)\s+(nuclear|missile|war|peace|trade|economy|sanctions|oil|gas|military|defense|attack|strike|deal|agreement|treaty|talks|summit|election|government|regime|crisis|conflict|protest|revolution|coup)\b/gi,
+                extract: match => match[0].trim()
+            },
+            // Company + Topic patterns (Tesla stock, Apple earnings, etc.)
+            {
+                pattern: /\b(tesla|apple|microsoft|amazon|google|meta|facebook|netflix|nvidia|intel|amd|boeing|ford|gm|general motors|exxon|chevron|walmart|target|costco|home depot|mcdonalds|starbucks|coca cola|pepsi|johnson|pfizer|moderna|disney|twitter|x|spacex|uber|lyft|airbnb|zoom|slack|salesforce|oracle|ibm|cisco|adobe|paypal|square|robinhood|coinbase|bitcoin|ethereum|crypto|cryptocurrency)\s+(stock|price|earnings|revenue|profit|loss|ipo|merger|acquisition|ceo|lawsuit|scandal|hack|breach|update|launch|release|partnership|deal|investment|funding|valuation)\b/gi,
+                extract: match => match[0].trim()
+            },
+            // Celebrity/Person + Topic patterns
+            {
+                pattern: /\b(elon musk|jeff bezos|bill gates|mark zuckerberg|tim cook|satya nadella|sundar pichai|jack dorsey|donald trump|joe biden|kamala harris|barack obama|hillary clinton|bernie sanders|nancy pelosi|mitch mcconnell|chuck schumer|alexandria ocasio-cortez|ted cruz|marco rubio|ron desantis|gavin newsom|greg abbott|vladimir putin|xi jinping|volodymyr zelensky|benjamin netanyahu|recep erdogan|narendra modi|imran khan|mohammed bin salman|kim jong un|pope francis|taylor swift|kanye west|kim kardashian|lebron james|tom brady|cristiano ronaldo|lionel messi|serena williams|roger federer|tiger woods|michael jordan|kobe bryant|stephen curry|kevin durant)\s+(tweet|twitter|statement|interview|speech|scandal|lawsuit|divorce|marriage|death|health|retirement|comeback|controversy|endorsement|criticism|praise|attack|defense|announcement|decision|action|policy|plan|strategy|investment|donation|charity|foundation|business|company|deal|partnership|meeting|visit|travel)\b/gi,
+                extract: match => match[0].trim()
+            },
+            // General proper noun patterns (capitalized words that might be entities)
+            {
+                pattern: /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(fire|wildfire|earthquake|storm|hurricane|flood|disaster|shooting|attack|incident|crisis|emergency|accident|explosion|crash|protest|riot|election|vote|politics|political|nuclear|missile|war|peace|trade|economy|sanctions|oil|gas|military|defense|strike|deal|agreement|treaty|talks|summit|government|regime|conflict|revolution|coup|stock|price|earnings|revenue|profit|loss|ipo|merger|acquisition|ceo|lawsuit|scandal|hack|breach|update|launch|release|partnership|investment|funding|valuation)\b/g,
+                extract: match => match[0].trim()
+            }
+        ];
+        
+        const foundEntities = [];
+        const processedEntities = new Set(); // Avoid duplicates
+        
+        // Apply each pattern
+        for (const patternRule of entityPatterns) {
+            const matches = [...lowerQuestion.matchAll(patternRule.pattern)];
+            console.log(`[RAG] Pattern matched ${matches.length} entities:`, matches.map(m => m[0]));
+            
+            for (const match of matches) {
+                const entity = patternRule.extract(match);
+                if (entity && entity.length > 2 && !processedEntities.has(entity.toLowerCase())) {
+                    foundEntities.push(entity);
+                    processedEntities.add(entity.toLowerCase());
+                }
+            }
+        }
+        
+        // If no pattern matches, try to extract meaningful proper nouns and compound terms
+        if (foundEntities.length === 0) {
+            const properNouns = this.extractProperNouns(question);
+            foundEntities.push(...properNouns);
+        }
+        
+        console.log(`[RAG] Found ${foundEntities.length} subject entities:`, foundEntities);
+        return foundEntities.slice(0, 3); // Limit to top 3 entities
+    }
+    
+    /**
+     * Extract proper nouns and compound terms as fallback
+     */
+    extractProperNouns(question) {
+        // Find capitalized words and common compound terms
+        const capitalizedWords = question.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
+        
+        // Filter out common question words that might be capitalized
+        const questionWords = ['What', 'Who', 'Where', 'When', 'How', 'Why', 'Which', 'Can', 'Do', 'Does', 'Did', 'Will', 'Would', 'Could', 'Should'];
+        const filtered = capitalizedWords.filter(word => !questionWords.includes(word));
+        
+        // Also look for compound terms with common patterns
+        const lowerQuestion = question.toLowerCase();
+        const compoundPatterns = [
+            /\b\w+\s+fire\b/g,
+            /\b\w+\s+wildfire\b/g,
+            /\b\w+\s+election\b/g,
+            /\b\w+\s+crisis\b/g,
+            /\b\w+\s+war\b/g,
+            /\b\w+\s+attack\b/g,
+            /\b\w+\s+deal\b/g,
+            /\b\w+\s+stock\b/g,
+            /\b\w+\s+nuclear\b/g
+        ];
+        
+        const compounds = [];
+        for (const pattern of compoundPatterns) {
+            const matches = [...lowerQuestion.matchAll(pattern)];
+            compounds.push(...matches.map(m => m[0].trim()));
+        }
+        
+        return [...filtered, ...compounds].slice(0, 2);
     }
     
     extractRecipeKeywords(question) {
@@ -853,15 +960,80 @@ Please respond helpfully, acknowledging that you don't have specific information
 Response:`;
         }
 
-        return `Here is relevant information from the knowledge base:
+        // Extract what the user is specifically asking for
+        const questionType = this.categorizeQuestion(question);
+        
+        return `You are an AI assistant analyzing content from a knowledge base to answer a specific question.
 
+RELEVANT CONTENT FROM KNOWLEDGE BASE:
 ${context}
 
-Question: ${question}
+USER'S QUESTION: ${question}
 
-Instructions: Provide a brief, to-the-point answer using the information above. Be concise and focus only on the most relevant details that directly answer the question. Avoid unnecessary elaboration.
+INSTRUCTIONS:
+1. Read through the provided content carefully
+2. Look for information that directly answers the user's question: "${question}"
+3. ${this.getAnswerInstruction(questionType, question)}
+4. If the information exists in the content, provide a clear, factual answer
+5. If some information is missing, acknowledge what you found and what's not available
+6. Be concise and focus only on answering the specific question asked
+7. If you find numerical data, statistics, or specific facts that answer the question, highlight them clearly
 
-Answer:`;
+ANSWER:`;
+    }
+
+    /**
+     * Categorize the type of question to provide better answering instructions
+     */
+    categorizeQuestion(question) {
+        const lowerQuestion = question.toLowerCase();
+        
+        if (lowerQuestion.includes('how many') || lowerQuestion.includes('how much') || lowerQuestion.includes('what number') || lowerQuestion.includes('count')) {
+            return 'quantitative';
+        }
+        if (lowerQuestion.includes('when') || lowerQuestion.includes('what time') || lowerQuestion.includes('what date')) {
+            return 'temporal';
+        }
+        if (lowerQuestion.includes('where') || lowerQuestion.includes('location') || lowerQuestion.includes('place')) {
+            return 'location';
+        }
+        if (lowerQuestion.includes('who') || lowerQuestion.includes('which person') || lowerQuestion.includes('whose')) {
+            return 'person';
+        }
+        if (lowerQuestion.includes('why') || lowerQuestion.includes('reason') || lowerQuestion.includes('cause')) {
+            return 'causal';
+        }
+        if (lowerQuestion.includes('how') && !lowerQuestion.includes('how many') && !lowerQuestion.includes('how much')) {
+            return 'process';
+        }
+        if (lowerQuestion.includes('what') || lowerQuestion.includes('which')) {
+            return 'descriptive';
+        }
+        return 'general';
+    }
+
+    /**
+     * Get specific answering instructions based on question type
+     */
+    getAnswerInstruction(questionType, question) {
+        switch (questionType) {
+            case 'quantitative':
+                return 'Look for specific numbers, statistics, measurements, or quantities that answer the question. If you find them, state them clearly with their units or context.';
+            case 'temporal':
+                return 'Look for dates, times, or temporal references that answer when something happened or will happen.';
+            case 'location':
+                return 'Look for geographical locations, addresses, or place names that answer where something is or happened.';
+            case 'person':
+                return 'Look for names, titles, or references to specific people that answer who is involved.';
+            case 'causal':
+                return 'Look for explanations, reasons, or cause-and-effect relationships that explain why something happened.';
+            case 'process':
+                return 'Look for step-by-step information, procedures, or methods that explain how something works or is done.';
+            case 'descriptive':
+                return 'Look for detailed descriptions, characteristics, or features that answer what something is or which option applies.';
+            default:
+                return 'Look for any information that directly relates to and answers the user\'s question.';
+        }
     }
 
     /**
