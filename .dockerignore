@@ -12,6 +12,10 @@
 **/*.dbmdl
 **/*.jfm
 
+# Environment and configuration files (NEVER copy into containers)
+.env
+example env
+
 # Build and dependency directories
 **/charts
 **/compose*

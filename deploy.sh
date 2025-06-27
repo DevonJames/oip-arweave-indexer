@@ -63,14 +63,13 @@ show_usage() {
 # Function to check if .env file exists
 check_env_file() {
     if [ ! -f .env ]; then
-        print_warning ".env file not found. Copying from example env..."
-        if [ -f "example env" ]; then
-            cp "example env" .env
-            print_info "Please edit .env file with your configuration before running services"
-        else
-            print_error "No example env file found. Please create .env file manually"
-            exit 1
-        fi
+        print_error ".env file not found!"
+        print_warning "Please copy 'example env' to '.env' and configure it manually"
+        print_info "Command: cp \"example env\" .env"
+        print_error "Deployment cancelled to protect your configuration"
+        exit 1
+    else
+        print_success "Found .env file - using your configuration"
     fi
 }
 
