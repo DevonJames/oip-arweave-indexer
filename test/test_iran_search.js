@@ -1,4 +1,4 @@
-const ragService = require('./helpers/ragService');
+const ragService = require('../helpers/ragService');
 
 async function testIranSearch() {
     console.log('🔍 Testing Iran Search Functionality');
@@ -37,7 +37,7 @@ async function testDirectElasticsearch() {
     console.log('\n=== Testing Direct Elasticsearch Query ===');
     
     try {
-        const { getRecords } = require('./helpers/elasticsearch');
+        const { getRecords } = require('../helpers/elasticsearch');
         
         const searchParams = {
             search: 'iran',

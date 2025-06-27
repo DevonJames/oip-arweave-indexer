@@ -1,4 +1,4 @@
-const ragService = require('./helpers/ragService');
+const ragService = require('../helpers/ragService');
 
 // Create a RAG service instance for testing
 const ragServiceInstance = new ragService.constructor();

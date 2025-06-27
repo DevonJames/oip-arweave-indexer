@@ -27,7 +27,7 @@ cp speech-to-text/Dockerfile.gpu.fallback speech-to-text/Dockerfile.gpu
 cp text-to-speech/Dockerfile.gpu.fallback text-to-speech/Dockerfile.gpu
 
 # Deploy
-make full-gpu
+make standard-gpu
 ```
 
 #### **Option B: Update to Match Your CUDA Version**
@@ -82,12 +82,12 @@ curl -s https://registry.hub.docker.com/v2/repositories/nvidia/cuda/tags/ | jq '
 If GPU images continue to fail, temporarily use CPU-only services:
 
 ```bash
-# Use CPU profile instead
-make voice
+# Use standard profile (CPU-based AI services)
+make standard
 
 # This gives you:
-# - CPU-based Whisper STT
-# - CPU-based LLaMA (slower but works)
+# - CPU-based Ollama LLM (slower but works)
+# - CPU-based Text Generator
 # - Multi-engine TTS (still great quality)
 ```
 
@@ -99,7 +99,7 @@ make voice
    ```bash
    cp speech-to-text/Dockerfile.gpu.fallback speech-to-text/Dockerfile.gpu
    cp text-to-speech/Dockerfile.gpu.fallback text-to-speech/Dockerfile.gpu
-   make full-gpu
+   make standard-gpu
    ```
 
 2. **Check your driver compatibility**:
@@ -131,8 +131,8 @@ cp speech-to-text/Dockerfile.gpu.fallback speech-to-text/Dockerfile.gpu
 cp text-to-speech/Dockerfile.gpu.fallback text-to-speech/Dockerfile.gpu
 
 # Rebuild
-make rebuild PROFILE=full-gpu
+make rebuild PROFILE=standard-gpu
 
 # If that fails, use CPU version temporarily
-make voice
+make standard
 ``` 

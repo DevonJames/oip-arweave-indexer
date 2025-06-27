@@ -49,7 +49,7 @@ make gpu
 
 ### **Option 2: Full GPU Stack**
 ```bash
-make full-gpu
+make standard-gpu
 ```
 
 ### **Option 3: Manual Build**

@@ -1,6 +1,6 @@
 version: "2"
 tunnels:
-  oip-gpu:
+  oip:
     proto: http
-    addr: oip-gpu:3005
-    hostname: api.oip.onl  # Comment this line out if domain issues persist
+    addr: localhost:3005
+    hostname: ${NGROK_DOMAIN}  # Set NGROK_DOMAIN in your .env file, leave empty for random URL

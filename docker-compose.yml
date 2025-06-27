@@ -21,11 +21,11 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full
+      - standard-monolithic
       - standard
       - minimal
       - gpu
-      - full-gpu
+      - standard-gpu
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.8
@@ -39,11 +39,11 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full
+      - standard-monolithic
       - standard
       - minimal
       - gpu
-      - full-gpu
+      - standard-gpu
 
   ipfs:
     image: ipfs/go-ipfs:latest
@@ -58,9 +58,9 @@ services:
     networks:
       - oip-network
     profiles:
-      - full
+      - standard-monolithic
       - standard
-      - full-gpu
+      - standard-gpu
 
   # Standard OIP service (for distributed deployments)
   oip:
@@ -89,7 +89,7 @@ services:
       - standard
       - minimal
 
-  # Full monolithic OIP service (all services in one container)
+  # Standard monolithic OIP service (all services in one container)
   oip-full:
     build:
       context: .
@@ -117,7 +117,7 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full
+      - standard-monolithic
 
   # GPU-optimized OIP service
   oip-gpu:
@@ -152,8 +152,8 @@ services:
     restart: unless-stopped
     profiles:
       - gpu
-      - gpu-only
-      - full-gpu
+      - oip-gpu-only
+      - standard-gpu
 
   # Self-hosted Speech Synthesizer (Coqui TTS) - for distributed deployments
   speech-synthesizer:
@@ -183,7 +183,7 @@ services:
     restart: unless-stopped
     profiles:
       - gpu
-      - full-gpu
+      - standard-gpu
     deploy:
       resources:
         reservations:
@@ -203,8 +203,9 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full-gpu
+      - standard-gpu
       - gpu
+      - standard
     deploy:
       resources:
         reservations:
@@ -229,8 +230,9 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full-gpu
+      - standard-gpu
       - gpu
+      - standard
 
   # Speech-to-Text Service (Whisper)
   stt-service:
@@ -247,9 +249,8 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full
+      - standard-monolithic
       - standard
-      - voice
 
   # GPU-accelerated Speech-to-Text Service (Whisper with CUDA)
   stt-service-gpu:
@@ -269,7 +270,7 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full-gpu
+      - standard-gpu
       - gpu
     deploy:
       resources:
@@ -288,16 +289,21 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full
+      - standard-monolithic
       - standard
-      - voice
 
   # Ngrok for public access - for distributed deployments
   ngrok:
     image: ngrok/ngrok
-    command: http oip:3005
+    command: >
+      sh -c "if [ -n \"$$NGROK_DOMAIN\" ]; then 
+        ngrok http --domain=$$NGROK_DOMAIN oip:3005; 
+      else 
+        ngrok http oip:3005; 
+      fi"
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN}
     depends_on:
       - oip
     ports:
@@ -308,12 +314,20 @@ services:
     profiles:
       - standard
 
+
+
   # Ngrok for GPU deployments
   ngrok-gpu:
     image: ngrok/ngrok:latest
-    command: http --domain=api.oip.onl oip-gpu:3000
+    command: >
+      sh -c "if [ -n \"$$NGROK_DOMAIN\" ]; then 
+        ngrok http --domain=$$NGROK_DOMAIN oip-gpu:3000; 
+      else 
+        ngrok http oip-gpu:3000; 
+      fi"
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN}
     depends_on:
       - oip-gpu
     ports:
@@ -322,7 +336,7 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - full-gpu
+      - standard-gpu
 
 networks:
   oip-network:
