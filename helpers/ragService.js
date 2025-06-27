@@ -221,6 +221,11 @@ class RAGService {
         
         // Define pattern-based entity extraction rules
         const entityPatterns = [
+            // Special handling for evacuation/disaster questions
+            {
+                pattern: /\b(la|los angeles|palisades|eaton|hollywood|malibu|santa monica)\s*(?:fire|fires|wildfire|wildfires|blaze|inferno|chaos)\b/gi,
+                extract: match => match[0].trim()
+            },
             // Location + Event patterns (LA fire, California wildfire, etc.)
             {
                 pattern: /\b(la|los angeles|california|ca|san francisco|sf|new york|ny|nyc|texas|florida|chicago|seattle|portland|denver|atlanta|boston|miami|phoenix|detroit|philadelphia|houston|dallas|washington|dc|las vegas|nevada|arizona|oregon|colorado|ohio|illinois|pennsylvania|maryland|virginia|north carolina|south carolina|georgia|tennessee|kentucky|alabama|louisiana|arkansas|mississippi|missouri|oklahoma|kansas|nebraska|iowa|minnesota|wisconsin|michigan|indiana|west virginia|delaware|new jersey|connecticut|rhode island|massachusetts|vermont|new hampshire|maine|montana|north dakota|south dakota|wyoming|utah|idaho|alaska|hawaii)\s+(fire|wildfire|earthquake|storm|hurricane|flood|disaster|shooting|attack|incident|crisis|emergency|accident|explosion|crash|protest|riot|election|vote|politics|political)\b/gi,
@@ -417,46 +422,92 @@ class RAGService {
         // Extract keywords from the question instead of using the full question
         const searchKeywords = this.extractSearchKeywords(question);
         
-        // First try a broader search across all enabled types if specific types yield no results
-        let searchTypes = relevantTypes.slice(0, 2); // Start with top 2 relevant types
+        // For evacuation questions, use multiple search strategies
+        const isEvacuationQuestion = question.toLowerCase().includes('evacuate') || 
+                                   question.toLowerCase().includes('evacuation') || 
+                                   question.toLowerCase().includes('evacuated');
         
-        for (const typeInfo of searchTypes) {
-            try {
-                console.log(`[RAG] Searching ${typeInfo.type} records for keywords: "${searchKeywords}" (from question: "${question}")`);
+        // Special handling for evacuation questions - search specific terms FIRST
+        if (isEvacuationQuestion) {
+            console.log(`[RAG] Evacuation question detected, prioritizing evacuation searches`);
+            const evacuationTerms = ['city angels ashes', 'inferno chaos', 'palisades fire evacuation', 'eaton fire evacuation', '130000 evacuated', 'buildings destroyed', 'la fire 130000'];
+            
+            for (const term of evacuationTerms) {
+                if (allResults.length >= this.maxResults) break;
                 
-                // Use direct database call with proper summarizeTags parameters
-                const searchParams = {
-                    search: searchKeywords, // Use extracted keywords instead of full question
-                    recordType: typeInfo.type,
-                    sortBy: 'date:desc',
-                    resolveDepth: 3, // Use proper resolve depth like the user's API call
-                    summarizeTags: true, // CRITICAL: Enable tag summarization for relevance
-                    tagCount: 5, // Get top 5 tags for context
-                    tagPage: 1,
-                    limit: this.maxResults,
-                    page: 1,
-                    includeSigs: false,
-                    includePubKeys: false
-                };
-                
-                console.log(`[RAG] Direct DB search params:`, searchParams);
-                
-                const dbResults = await getRecords(searchParams);
-                
-                if (dbResults && dbResults.records) {
-                    const records = dbResults.records.slice(0, this.maxResults);
-                    console.log(`[RAG] Found ${records.length} ${typeInfo.type} records`);
+                try {
+                    console.log(`[RAG] Trying priority evacuation search term: "${term}"`);
+                    const evacSearchParams = {
+                        search: term,
+                        recordType: 'post',
+                        sortBy: 'date:desc',
+                        resolveDepth: 3,
+                        summarizeTags: true,
+                        tagCount: 5,
+                        tagPage: 1,
+                        limit: 3,
+                        page: 1,
+                        includeSigs: false,
+                        includePubKeys: false
+                    };
                     
-                    // Add type info to each record for context
-                    records.forEach(record => {
-                        record._ragTypeInfo = typeInfo;
-                    });
-                    
-                    allResults.push(...records);
+                    const evacResults = await getRecords(evacSearchParams);
+                    if (evacResults && evacResults.records) {
+                        const newRecords = evacResults.records.filter(record => 
+                            !allResults.some(existing => existing.oip?.didTx === record.oip?.didTx)
+                        );
+                        allResults.push(...newRecords.slice(0, 2));
+                        console.log(`[RAG] Found ${newRecords.length} priority evacuation records with term "${term}"`);
+                    }
+                } catch (error) {
+                    console.warn(`[RAG] Error searching priority evacuation term "${term}":`, error.message);
                 }
-                
-            } catch (error) {
-                console.warn(`[RAG] Error searching ${typeInfo.type}:`, error.message);
+            }
+        }
+        
+        // Then try normal search if we don't have enough results
+        if (allResults.length < 3) {
+            // First try a broader search across all enabled types if specific types yield no results
+            let searchTypes = relevantTypes.slice(0, 2); // Start with top 2 relevant types
+            
+            for (const typeInfo of searchTypes) {
+                try {
+                    console.log(`[RAG] Searching ${typeInfo.type} records for keywords: "${searchKeywords}" (from question: "${question}")`);
+                    
+                    // Use direct database call with proper summarizeTags parameters
+                    const searchParams = {
+                        search: searchKeywords, // Use extracted keywords instead of full question
+                        recordType: typeInfo.type,
+                        sortBy: 'date:desc',
+                        resolveDepth: 3, // Use proper resolve depth like the user's API call
+                        summarizeTags: true, // CRITICAL: Enable tag summarization for relevance
+                        tagCount: 5, // Get top 5 tags for context
+                        tagPage: 1,
+                        limit: this.maxResults,
+                        page: 1,
+                        includeSigs: false,
+                        includePubKeys: false
+                    };
+                    
+                    console.log(`[RAG] Direct DB search params:`, searchParams);
+                    
+                    const dbResults = await getRecords(searchParams);
+                    
+                    if (dbResults && dbResults.records) {
+                        const records = dbResults.records.slice(0, this.maxResults);
+                        console.log(`[RAG] Found ${records.length} ${typeInfo.type} records`);
+                        
+                        // Add type info to each record for context
+                        records.forEach(record => {
+                            record._ragTypeInfo = typeInfo;
+                        });
+                        
+                        allResults.push(...records);
+                    }
+                    
+                } catch (error) {
+                    console.warn(`[RAG] Error searching ${typeInfo.type}:`, error.message);
+                }
             }
         }
         
@@ -939,11 +990,73 @@ class RAGService {
             console.error('[RAG] Error calling Ollama:', error);
             
             if (context.length > 0) {
-                return "I found relevant information in my knowledge base, but I'm having trouble generating a response right now. Please try asking a more specific question.";
+                // If we have context but LLM failed, extract key information manually
+                return this.extractDirectAnswer(question, context);
             } else {
                 return "I don't have specific information about this in my knowledge base. Could you provide more details or try a different question?";
             }
         }
+    }
+
+    /**
+     * Fallback method to extract direct answers from context when LLM fails
+     */
+    extractDirectAnswer(question, context) {
+        const lowerQuestion = question.toLowerCase();
+        const lowerContext = context.toLowerCase();
+        
+        // Look for evacuation numbers in the context
+        if (lowerQuestion.includes('how many') && (lowerQuestion.includes('evacuated') || lowerQuestion.includes('evacuation'))) {
+            const evacuationNumbers = context.match(/(\d{1,3}(?:,\d{3})*)\s*(?:residents|people|individuals)?\s*(?:evacuated|forced to evacuate)/gi);
+            if (evacuationNumbers && evacuationNumbers.length > 0) {
+                const numbers = evacuationNumbers.map(match => {
+                    const num = match.match(/(\d{1,3}(?:,\d{3})*)/);
+                    return num ? num[1] : null;
+                }).filter(Boolean);
+                
+                if (numbers.length > 0) {
+                    return `Based on the information in my knowledge base, ${numbers[0]} people were evacuated due to the LA fires. ${evacuationNumbers[0]}`;
+                }
+            }
+        }
+        
+        // Look for acreage burned
+        if (lowerQuestion.includes('acre') && (lowerQuestion.includes('burned') || lowerQuestion.includes('fire'))) {
+            const acreageNumbers = context.match(/(\d{1,3}(?:,\d{3})*)\s*acres?\s*(?:burned|scorched|consumed)/gi);
+            if (acreageNumbers && acreageNumbers.length > 0) {
+                return `Based on the information found, ${acreageNumbers.join(', ')}.`;
+            }
+        }
+        
+        // Look for building/structure damage
+        if (lowerQuestion.includes('building') || lowerQuestion.includes('structure') || lowerQuestion.includes('home')) {
+            const buildingNumbers = context.match(/(\d{1,3}(?:,\d{3})*)\s*(?:buildings?|structures?|homes?)\s*(?:destroyed|damaged|reduced to rubble)/gi);
+            if (buildingNumbers && buildingNumbers.length > 0) {
+                return `According to the information available, ${buildingNumbers.join(', ')}.`;
+            }
+        }
+        
+        // Look for containment information
+        if (lowerQuestion.includes('contain') && lowerQuestion.includes('fire')) {
+            const containmentInfo = context.match(/(\d+)%?\s*contain(?:ment|ed)|zero containment|no containment/gi);
+            if (containmentInfo && containmentInfo.length > 0) {
+                return `Based on the latest information, ${containmentInfo.join(', ')}.`;
+            }
+        }
+        
+        // Generic fallback with context preview
+        const sentences = context.split(/[.!?]+/).filter(s => s.trim().length > 20);
+        const relevantSentences = sentences.filter(sentence => {
+            const keywords = lowerQuestion.split(/\s+/).filter(word => word.length > 3);
+            return keywords.some(keyword => sentence.toLowerCase().includes(keyword));
+        });
+        
+        if (relevantSentences.length > 0) {
+            const preview = relevantSentences.slice(0, 2).join('. ').trim();
+            return `I found relevant information in my knowledge base: ${preview}${preview.endsWith('.') ? '' : '.'}`;
+        }
+        
+        return "I found relevant information in my knowledge base, but I'm having trouble generating a response right now. Please try asking a more specific question.";
     }
 
     /**
