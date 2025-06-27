@@ -666,17 +666,180 @@
             padding: 20px;
             margin-bottom: 20px;
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+
+        .chat-header {
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 15px;
+        }
+
+        .chat-conversation {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            min-height: 300px;
+            max-height: 400px;
+        }
+
+        .chat-message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .chat-message.user {
+            flex-direction: row-reverse;
+        }
+
+        .chat-message .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .chat-message.user .message-avatar {
+            background: rgba(59, 130, 246, 0.8);
+        }
+
+        .chat-message.assistant .message-avatar {
+            background: rgba(34, 197, 94, 0.8);
+        }
+
+        .chat-message.system .message-avatar {
+            background: rgba(239, 68, 68, 0.8);
+        }
+
+        .message-content {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            position: relative;
+        }
+
+        .chat-message.user .message-content {
+            background: rgba(59, 130, 246, 0.8);
+            margin-left: auto;
+        }
+
+        .chat-message.assistant .message-content {
+            background: rgba(34, 197, 94, 0.8);
+        }
+
+        .chat-message.system .message-content {
+            background: rgba(239, 68, 68, 0.8);
+            font-style: italic;
+        }
+
+        .message-text {
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .message-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+            font-size: 11px;
+            opacity: 0.8;
+        }
+
+        .message-timestamp {
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        .mic-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            height: 44px;
+            min-width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mic-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .mic-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .mic-btn.recording {
+            background: rgba(239, 68, 68, 0.8);
+            border-color: rgba(239, 68, 68, 1);
+            animation: pulse 1.5s infinite;
+        }
+
+        .mic-btn.listening {
+            background: rgba(34, 197, 94, 0.8);
+            border-color: rgba(34, 197, 94, 1);
+            animation: pulse 2s infinite;
+        }
+
+        .mic-btn.transcribing {
+            background: rgba(59, 130, 246, 0.8);
+            border-color: rgba(59, 130, 246, 1);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .message-sources {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 11px;
+        }
+
+        .source-count {
+            font-weight: bold;
         }
 
         .chat-input-container {
-            margin-bottom: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            padding-top: 15px;
         }
 
         .chat-input-row {
             display: flex;
             gap: 10px;
-            align-items: center;
-            margin-bottom: 15px;
+            align-items: flex-end;
+            margin-bottom: 10px;
         }
 
         #ai-chat-input {
@@ -690,6 +853,9 @@
             outline: none;
             transition: all 0.3s ease;
             backdrop-filter: blur(10px);
+            min-height: 44px;
+            resize: vertical;
+            max-height: 120px;
         }
 
         #ai-chat-input::placeholder {
@@ -713,6 +879,7 @@
             transition: all 0.3s ease;
             white-space: nowrap;
             backdrop-filter: blur(10px);
+            height: 44px;
         }
 
         .chat-send-btn:hover {
@@ -729,11 +896,38 @@
 
         .ai-status {
             text-align: center;
-            padding: 10px;
+            padding: 8px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
+            border-radius: 6px;
             backdrop-filter: blur(10px);
             opacity: 0.9;
+            font-size: 12px;
+        }
+
+        .chat-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            opacity: 0.8;
+        }
+
+        .chat-empty-state .emoji {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .chat-empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .chat-empty-state p {
+            font-size: 14px;
+            opacity: 0.8;
         }
 
         .ai-settings {
@@ -893,6 +1087,36 @@
                 align-items: flex-start;
                 gap: 10px;
             }
+            
+            /* Mobile adjustments for chat */
+            .ai-chat-section {
+                height: 500px;
+                padding: 15px;
+            }
+            
+            .ai-settings {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .ai-setting {
+                display: block !important;
+                margin-right: 0 !important;
+            }
+            
+            .chat-input-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            
+            .chat-send-btn {
+                width: 100%;
+            }
+            
+            .message-content {
+                max-width: 95%;
+            }
         }
     </style>
 </head>
@@ -1018,44 +1242,69 @@
         <div id="voice-browse-tab" class="hidden">
             <!-- AI Chat Section -->
             <div class="ai-chat-section">
-                <h3 style="margin: 0 0 15px 0; display: flex; align-items: center; gap: 10px;">
-                    <span>🤖</span> AI Assistant
-                </h3>
+                <div class="chat-header">
+                    <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                        <span>🤖</span> AI Assistant
+                    </h3>
+                    
+                    <div class="ai-settings" style="margin-top: 15px;">
+                        <div class="ai-setting" style="display: inline-block; margin-right: 15px;">
+                            <label for="ai-model-select">AI Model</label>
+                            <select id="ai-model-select">
+                                <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
+                                <option value="mistral:latest">Mistral 7B (Balanced)</option>
+                                <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
+                            </select>
+                        </div>
+                        <div class="ai-setting" style="display: inline-block;">
+                            <label for="stt-language">Speech Language</label>
+                            <select id="stt-language">
+                                <option value="auto">Auto-detect</option>
+                                <option value="en">English</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                                <option value="de">German</option>
+                                <option value="it">Italian</option>
+                                <option value="pt">Portuguese</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="applied-filters-display" class="applied-filters hidden" style="margin-top: 15px;">
+                        <div style="margin-bottom: 8px; font-weight: bold;">🔍 AI Applied Filters:</div>
+                        <div id="filter-chips-container"></div>
+                        <div id="filter-rationale" style="margin-top: 8px; font-size: 12px; opacity: 0.8;"></div>
+                    </div>
+                </div>
                 
+                <div id="chat-conversation" class="chat-conversation">
+                    <div id="chat-empty-state" class="chat-empty-state">
+                        <div class="emoji">💬</div>
+                        <h3>Start a conversation</h3>
+                        <p>Ask questions about your data and I'll help you find answers!</p>
+                    </div>
+                    <div id="chat-messages"></div>
+                </div>
+
                 <div class="chat-input-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div class="ai-status" id="ai-status" style="flex: 1; margin-bottom: 0; margin-right: 10px;">
+                            <div id="ai-status-text">Ready to answer questions!</div>
+                        </div>
+                        <button onclick="clearConversation()" class="btn-secondary btn-small" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; margin: 0;">
+                            Clear Chat
+                        </button>
+                    </div>
+                    
                     <div class="chat-input-row">
-                        <input type="text" id="ai-chat-input" placeholder="Ask a question about your data..." onkeyup="handleChatKeyup(event)" />
+                        <button id="mic-btn" onclick="toggleRecording()" class="mic-btn" title="Click to record voice message">
+                            🎤
+                        </button>
+                        <textarea id="ai-chat-input" placeholder="Ask a question about your data or click the microphone..." onkeydown="handleChatKeydown(event)" rows="1"></textarea>
                         <button id="ai-chat-send-btn" onclick="sendChatMessage()" class="chat-send-btn">
                             <span>Ask AI</span>
                         </button>
                     </div>
-                    
-                    <div class="ai-status">
-                        <div id="ai-status-text">Ready to answer questions!</div>
-                        <div id="ai-status-detail" style="font-size: 12px; opacity: 0.8; margin-top: 4px;">Type your question above and press Enter or click "Ask AI"</div>
-                    </div>
-                </div>
-
-                <div class="ai-settings">
-                    <div class="ai-setting">
-                        <label for="ai-model-select">AI Model</label>
-                        <select id="ai-model-select">
-                            <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
-                            <option value="mistral:latest">Mistral 7B (Balanced)</option>
-                            <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div id="applied-filters-display" class="applied-filters hidden">
-                    <div style="margin-bottom: 8px; font-weight: bold;">🔍 AI Applied Filters:</div>
-                    <div id="filter-chips-container"></div>
-                    <div id="filter-rationale" style="margin-top: 8px; font-size: 12px; opacity: 0.8;"></div>
-                </div>
-
-                <div id="conversation-history" class="conversation-history hidden">
-                    <div style="margin-bottom: 10px; font-weight: bold;">💭 Conversation:</div>
-                    <div id="conversation-messages"></div>
                 </div>
             </div>
 
@@ -2754,8 +3003,21 @@
             isProcessing: false,
             conversation: [],
             selectedModel: 'llama3.2:3b',
+            selectedLanguage: 'auto',
             lastQuery: '',
-            appliedFilters: {}
+            appliedFilters: {},
+            // Voice recording state
+            isRecording: false,
+            isTranscribing: false,
+            isListening: false,
+            mediaStream: null,
+            mediaRecorder: null,
+            audioChunks: [],
+            audioContext: null,
+            analyser: null,
+            vadInterval: null,
+            silenceTimeout: null,
+            lastSpeechTime: 0
         };
 
         let voiceFilters = {
@@ -2780,10 +3042,12 @@
             if (chatState.isInitialized) return;
             
             console.log('[Chat] Initializing AI chat features...');
-            updateAIStatus('Initializing...', '');
+            updateAIStatus('Initializing...');
             
             try {
-                updateAIStatus('Ready to answer questions!', 'Type your question above and press Enter or click "Ask AI"');
+                // Initialize STT features
+                
+                updateAIStatus('Ready to answer questions!');
                 
                 chatState.isInitialized = true;
                 
@@ -2794,9 +3058,10 @@
                 
             } catch (error) {
                 console.error('[Chat] Initialization failed:', error);
-                updateAIStatus('AI chat unavailable', error.message);
+                updateAIStatus('AI chat unavailable');
             }
         }
+
 
         async function loadVoiceSettings() {
             try {
@@ -2878,18 +3143,28 @@
             });
         }
 
-        function updateAIStatus(main, detail = '') {
+        function updateAIStatus(main) {
             document.getElementById('ai-status-text').textContent = main;
-            document.getElementById('ai-status-detail').textContent = detail;
         }
 
         // Chat Input Functions
-        function handleChatKeyup(event) {
+        function handleChatKeydown(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 sendChatMessage();
             }
         }
+
+        // Auto-resize textarea
+        document.addEventListener('DOMContentLoaded', function() {
+            const textarea = document.getElementById('ai-chat-input');
+            if (textarea) {
+                textarea.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+                });
+            }
+        });
 
         async function sendChatMessage() {
             const input = document.getElementById('ai-chat-input');
@@ -2901,27 +3176,33 @@
             
             // Clear input and disable send button
             input.value = '';
+            input.style.height = '44px'; // Reset textarea height
             const sendBtn = document.getElementById('ai-chat-send-btn');
             sendBtn.disabled = true;
             
             try {
+                // Add user message to conversation immediately
+                addToConversation('user', question);
+                
+                // Update selected model and voice
+                chatState.selectedModel = document.getElementById('ai-model-select').value;
+                chatState.selectedLanguage = document.getElementById('stt-language').value;
+                
                 await processTextWithAI(question);
             } catch (error) {
                 console.error('[Chat] Error processing message:', error);
-                updateAIStatus('Error occurred', error.message);
+                updateAIStatus('Error occurred');
+                addToConversation('system', `Error: ${error.message}`);
             } finally {
                 sendBtn.disabled = false;
             }
         }
 
-        // Simplified Chat Functions (no audio needed)
+        // AI Processing Functions
 
         async function processTextWithAI(text) {
             try {
-                updateAIStatus('Thinking...', 'AI is analyzing your query');
-                
-                // Get current model setting
-                chatState.selectedModel = document.getElementById('ai-model-select').value;
+                updateAIStatus('Thinking...');
                 chatState.isProcessing = true;
                 
                 // Create AbortController for timeout management
@@ -2977,7 +3258,7 @@
                         filtersApplied: appliedFilters
                     });
                     
-                    updateAIStatus('Ready to answer questions!', 'Ask another question');
+                    updateAIStatus('Ready to answer questions!');
                     
                 } catch (fetchError) {
                     clearTimeout(timeoutId);
@@ -2995,7 +3276,7 @@
                 
             } catch (error) {
                 console.error('[Chat] AI processing error:', error);
-                updateAIStatus('AI processing failed', error.message);
+                updateAIStatus('AI processing failed');
                 addToConversation('system', `AI Error: ${error.message}`);
             } finally {
                 chatState.isProcessing = false;
@@ -3085,38 +3366,341 @@
         }
 
         function updateConversationDisplay() {
-            const container = document.getElementById('conversation-messages');
-            const history = document.getElementById('conversation-history');
+            const container = document.getElementById('chat-messages');
+            const emptyState = document.getElementById('chat-empty-state');
             
             if (chatState.conversation.length === 0) {
-                history.classList.add('hidden');
+                emptyState.style.display = 'flex';
+                container.innerHTML = '';
                 return;
             }
             
-            history.classList.remove('hidden');
+            emptyState.style.display = 'none';
             container.innerHTML = '';
             
-            // Show last 5 messages
-            const recentMessages = chatState.conversation.slice(-5);
-            recentMessages.forEach(message => {
+            // Show all messages
+            chatState.conversation.forEach((message, index) => {
                 const messageDiv = document.createElement('div');
-                messageDiv.className = `conversation-message ${message.role}`;
+                messageDiv.className = `chat-message ${message.role}`;
                 
-                let content = message.content;
-                if (message.role === 'assistant' && message.sources) {
-                    content += ` (${message.sources.length} sources)`;
+                const avatar = getMessageAvatar(message.role);
+                const timestamp = new Date(message.timestamp).toLocaleTimeString();
+                
+                                 // No action buttons needed for text-only chat
+                
+                let sourcesHtml = '';
+                if (message.role === 'assistant' && message.sources && message.sources.length > 0) {
+                    sourcesHtml = `
+                        <div class="message-sources">
+                            <span class="source-count">📚 ${message.sources.length} sources found</span>
+                        </div>
+                    `;
                 }
                 
-                messageDiv.innerHTML = `
-                    <div>${content}</div>
-                    <span class="timestamp">${new Date(message.timestamp).toLocaleTimeString()}</span>
-                `;
+                                 messageDiv.innerHTML = `
+                     <div class="message-avatar">${avatar}</div>
+                     <div class="message-content">
+                         <div class="message-text">${escapeHtml(message.content)}</div>
+                         ${sourcesHtml}
+                         <div class="message-meta">
+                             <span class="message-timestamp">${timestamp}</span>
+                         </div>
+                     </div>
+                 `;
                 
                 container.appendChild(messageDiv);
             });
             
             // Scroll to bottom
-            container.scrollTop = container.scrollHeight;
+            const chatConversation = document.getElementById('chat-conversation');
+            chatConversation.scrollTop = chatConversation.scrollHeight;
+        }
+
+        function getMessageAvatar(role) {
+            switch (role) {
+                case 'user': return '👤';
+                case 'assistant': return '🤖';
+                case 'system': return '⚠️';
+                default: return '💬';
+            }
+        }
+
+        // STT (Speech-to-Text) Functions
+        
+        // Voice Activity Detection configuration
+        const VAD_CONFIG = {
+            silenceThreshold: 0.01,
+            silenceTimeoutMs: 2000,
+            minRecordingMs: 1500,
+            volumeThreshold: 0.12,
+        };
+
+        function checkBrowserSupport() {
+            const hasMediaDevices = !!(navigator?.mediaDevices?.getUserMedia);
+            const hasMediaRecorder = typeof MediaRecorder !== 'undefined';
+            const hasAudioContext = !!(window.AudioContext || window.webkitAudioContext);
+            
+            return hasMediaDevices && hasMediaRecorder && hasAudioContext;
+        }
+
+        async function toggleRecording() {
+            if (chatState.isRecording) {
+                stopRecording();
+            } else {
+                await startRecording();
+            }
+        }
+
+        async function startRecording() {
+            if (!checkBrowserSupport()) {
+                updateAIStatus('Browser does not support voice recording');
+                return;
+            }
+
+            try {
+                chatState.mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 16000
+                    }
+                });
+
+                await setupVAD(chatState.mediaStream);
+
+                chatState.mediaRecorder = new MediaRecorder(chatState.mediaStream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+
+                chatState.audioChunks = [];
+
+                chatState.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        chatState.audioChunks.push(event.data);
+                    }
+                };
+
+                chatState.mediaRecorder.onstop = async () => {
+                    if (chatState.audioChunks.length > 0) {
+                        const audioBlob = new Blob(chatState.audioChunks, { type: 'audio/webm' });
+                        await processAudioBlob(audioBlob);
+                    }
+                };
+
+                chatState.mediaRecorder.start();
+                chatState.isRecording = true;
+                updateMicrophoneButton();
+                updateAIStatus('Recording... Speak now');
+
+            } catch (error) {
+                console.error('Error starting recording:', error);
+                updateAIStatus('Microphone access denied');
+                cleanupRecording();
+            }
+        }
+
+        async function setupVAD(stream) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            chatState.audioContext = new AudioContext();
+
+            if (chatState.audioContext.state === 'suspended') {
+                await chatState.audioContext.resume();
+            }
+
+            chatState.analyser = chatState.audioContext.createAnalyser();
+            chatState.analyser.fftSize = 512;
+
+            const source = chatState.audioContext.createMediaStreamSource(stream);
+            source.connect(chatState.analyser);
+
+            const bufferLength = chatState.analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const monitorAudio = () => {
+                if (!chatState.analyser || !chatState.isRecording) return;
+
+                chatState.analyser.getByteFrequencyData(dataArray);
+
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    sum += dataArray[i] * dataArray[i];
+                }
+                const rms = Math.sqrt(sum / bufferLength) / 255;
+
+                const now = Date.now();
+
+                if (rms > VAD_CONFIG.volumeThreshold) {
+                    chatState.lastSpeechTime = now;
+                    chatState.isListening = true;
+                    updateMicrophoneButton();
+
+                    if (chatState.silenceTimeout) {
+                        clearTimeout(chatState.silenceTimeout);
+                        chatState.silenceTimeout = null;
+                    }
+                } else {
+                    const recordingDuration = now - (chatState.lastSpeechTime || now);
+
+                    if (recordingDuration > VAD_CONFIG.minRecordingMs && chatState.lastSpeechTime > 0) {
+                        if (!chatState.silenceTimeout) {
+                            chatState.silenceTimeout = setTimeout(() => {
+                                stopRecording();
+                            }, VAD_CONFIG.silenceTimeoutMs);
+                        }
+                    }
+
+                    chatState.isListening = false;
+                    updateMicrophoneButton();
+                }
+            };
+
+            chatState.vadInterval = setInterval(monitorAudio, 100);
+        }
+
+        function stopRecording() {
+            if (chatState.mediaRecorder && chatState.isRecording) {
+                chatState.mediaRecorder.stop();
+            }
+            
+            chatState.isRecording = false;
+            chatState.isListening = false;
+            updateMicrophoneButton();
+            cleanupVAD();
+
+            if (chatState.mediaStream) {
+                chatState.mediaStream.getTracks().forEach(track => track.stop());
+                chatState.mediaStream = null;
+            }
+
+            updateAIStatus('Processing speech...');
+        }
+
+        function cleanupVAD() {
+            if (chatState.vadInterval) {
+                clearInterval(chatState.vadInterval);
+                chatState.vadInterval = null;
+            }
+
+            if (chatState.silenceTimeout) {
+                clearTimeout(chatState.silenceTimeout);
+                chatState.silenceTimeout = null;
+            }
+
+            if (chatState.analyser) {
+                chatState.analyser = null;
+            }
+        }
+
+        function cleanupRecording() {
+            cleanupVAD();
+            
+            if (chatState.mediaStream) {
+                chatState.mediaStream.getTracks().forEach(track => track.stop());
+                chatState.mediaStream = null;
+            }
+
+            if (chatState.audioContext && chatState.audioContext.state !== 'closed') {
+                chatState.audioContext.close();
+                chatState.audioContext = null;
+            }
+
+            chatState.isRecording = false;
+            chatState.isTranscribing = false;
+            chatState.isListening = false;
+            updateMicrophoneButton();
+        }
+
+        async function processAudioBlob(audioBlob) {
+            try {
+                chatState.isTranscribing = true;
+                updateMicrophoneButton();
+                updateAIStatus('Transcribing speech...');
+
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                
+                // Add language if specified
+                const language = document.getElementById('stt-language').value;
+                if (language && language !== 'auto') {
+                    formData.append('language', language);
+                }
+
+                const response = await fetch('/api/voice/transcribe', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error('Speech transcription failed');
+                }
+
+                const data = await response.json();
+                const transcribedText = data.text?.trim();
+
+                if (!transcribedText) {
+                    updateAIStatus('No speech detected. Try again.');
+                    return;
+                }
+
+                console.log('[STT] Transcribed:', transcribedText);
+
+                // Put transcribed text in the input field
+                const input = document.getElementById('ai-chat-input');
+                input.value = transcribedText;
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+
+                updateAIStatus('Speech transcribed! Click "Ask AI" or press Enter');
+
+            } catch (error) {
+                console.error('Transcription error:', error);
+                updateAIStatus('Speech transcription failed');
+            } finally {
+                chatState.isTranscribing = false;
+                updateMicrophoneButton();
+            }
+        }
+
+        function updateMicrophoneButton() {
+            const micBtn = document.getElementById('mic-btn');
+            
+            // Reset all classes
+            micBtn.classList.remove('recording', 'listening', 'transcribing');
+            
+            if (chatState.isTranscribing) {
+                micBtn.classList.add('transcribing');
+                micBtn.innerHTML = '🔄';
+                micBtn.title = 'Processing speech...';
+            } else if (chatState.isRecording) {
+                if (chatState.isListening) {
+                    micBtn.classList.add('listening');
+                    micBtn.innerHTML = '🎤';
+                    micBtn.title = 'Listening... (click to stop)';
+                } else {
+                    micBtn.classList.add('recording');
+                    micBtn.innerHTML = '🔴';
+                    micBtn.title = 'Recording... (click to stop)';
+                }
+            } else {
+                micBtn.innerHTML = '🎤';
+                micBtn.title = 'Click to record voice message';
+            }
+        }
+
+        function clearConversation() {
+            // Stop any current recording
+            
+            // Clear conversation array
+            chatState.conversation = [];
+            
+            // Update display
+            updateConversationDisplay();
+            
+            // Clear any applied filters
+            document.getElementById('applied-filters-display').classList.add('hidden');
+            
+            updateAIStatus('Ready to answer questions!');
         }
 
         // No conversation mode needed for text chat
