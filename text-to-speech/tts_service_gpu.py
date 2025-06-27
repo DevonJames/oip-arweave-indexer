@@ -503,11 +503,20 @@ class GPUTTSService:
         engines_to_try = []
         
         if engine == "auto":
-            # Corrected fallback order: Chatterbox PRIMARY -> Silero fallback -> others
+            # Default fallback order: Chatterbox -> Silero -> Edge -> others
             engines_to_try = [
                 ("chatterbox", self.synthesize_with_chatterbox),  # Primary engine
                 ("silero", self.synthesize_with_silero),          # First fallback (GPU)
                 ("edge_tts", self.synthesize_with_edge_tts),
+                ("gtts", self.synthesize_with_gtts),
+                ("espeak", self.synthesize_with_espeak)
+            ]
+        elif engine == "edge":
+            # When specifically requesting Edge TTS (preferred for high quality)
+            engines_to_try = [
+                ("edge_tts", self.synthesize_with_edge_tts),      # Primary choice
+                ("silero", self.synthesize_with_silero),          # GPU fallback
+                ("chatterbox", self.synthesize_with_chatterbox),
                 ("gtts", self.synthesize_with_gtts),
                 ("espeak", self.synthesize_with_espeak)
             ]

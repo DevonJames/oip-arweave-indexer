@@ -658,8 +658,8 @@
             margin-bottom: 80px;
         }
 
-        /* Voice Chat Integration Styles */
-        .voice-chat-section {
+        /* AI Chat Integration Styles */
+        .ai-chat-section {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border-radius: 12px;
@@ -668,83 +668,94 @@
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
 
-        .voice-controls {
-            display: flex;
-            align-items: center;
-            gap: 15px;
+        .chat-input-container {
             margin-bottom: 15px;
-            flex-wrap: wrap;
         }
 
-        .voice-btn {
+        .chat-input-row {
             display: flex;
-            flex-direction: column;
+            gap: 10px;
             align-items: center;
+            margin-bottom: 15px;
+        }
+
+        #ai-chat-input {
+            flex: 1;
             padding: 12px 16px;
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
             color: white;
-            cursor: pointer;
+            font-size: 16px;
+            outline: none;
             transition: all 0.3s ease;
-            min-width: 100px;
             backdrop-filter: blur(10px);
         }
 
-        .voice-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-2px);
+        #ai-chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
         }
 
-        .voice-btn:disabled {
+        #ai-chat-input:focus {
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .chat-send-btn {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            backdrop-filter: blur(10px);
+        }
+
+        .chat-send-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .chat-send-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
         }
 
-        .voice-btn.recording {
-            background: rgba(239, 68, 68, 0.8);
-            animation: pulse 2s infinite;
-        }
-
-        .voice-btn.conversation-active {
-            background: rgba(34, 197, 94, 0.8);
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        .voice-status {
-            flex: 1;
+        .ai-status {
             text-align: center;
             padding: 10px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 8px;
             backdrop-filter: blur(10px);
+            opacity: 0.9;
         }
 
-        .voice-settings {
+        .ai-settings {
             display: flex;
             gap: 15px;
             margin-top: 15px;
             flex-wrap: wrap;
         }
 
-        .voice-setting {
+        .ai-setting {
             flex: 1;
             min-width: 200px;
         }
 
-        .voice-setting label {
+        .ai-setting label {
             display: block;
             margin-bottom: 5px;
             font-size: 14px;
             opacity: 0.9;
         }
 
-        .voice-setting select {
+        .ai-setting select {
             width: 100%;
             padding: 8px 12px;
             border: none;
@@ -893,7 +904,7 @@
             
             <div class="nav-tabs">
                 <div class="nav-tab active" onclick="showBrowseTab()">Browse Records</div>
-                <div class="nav-tab" onclick="showVoiceBrowseTab()">Browse + Voice Chat</div>
+                <div class="nav-tab" onclick="showVoiceBrowseTab()">Browse + AI Chat</div>
                 <div class="nav-tab" onclick="showPublishTab()">Publish</div>
             </div>
             
@@ -1005,46 +1016,33 @@
 
         <!-- Browse + Voice Chat Tab Content -->
         <div id="voice-browse-tab" class="hidden">
-            <!-- Voice Chat Section -->
-            <div class="voice-chat-section">
+            <!-- AI Chat Section -->
+            <div class="ai-chat-section">
                 <h3 style="margin: 0 0 15px 0; display: flex; align-items: center; gap: 10px;">
-                    <span>🎤</span> AI Voice Assistant
+                    <span>🤖</span> AI Assistant
                 </h3>
                 
-                <div class="voice-controls">
-                    <button id="voice-record-btn" class="voice-btn" onclick="toggleVoiceRecording()" disabled>
-                        <svg class="microphone-icon" viewBox="0 0 1200 1200" fill="currentColor">
-                            <path d="m420.84 524.53v16.922c0 64.547 34.312 121.22 85.547 152.76 18.703 11.531 39.844 19.688 62.297 23.625 10.219 1.7812 20.625 2.7656 31.312 2.7656s21.141-0.9375 31.312-2.7656c22.453-3.9375 43.547-12.141 62.297-23.625 51.234-31.547 85.547-88.219 85.547-152.76v-242.2c0-64.547-34.312-121.22-85.547-152.63-0.60938-0.375-1.2188-0.70312-1.7812-1.0781h-0.23438c-18.234-11.062-38.625-18.844-60.234-22.547-10.219-1.7812-20.625-2.7656-31.312-2.7656s-21.141 0.9375-31.312 2.7656c-21.609 3.8438-42 11.625-60.234 22.547h-0.23438c-0.60938 0.375-1.2188 0.60938-1.7812 1.0781-51.234 31.453-85.547 88.078-85.547 152.63v225.28z"/>
-                        </svg>
-                        <span id="voice-record-text">Start Recording</span>
-                    </button>
+                <div class="chat-input-container">
+                    <div class="chat-input-row">
+                        <input type="text" id="ai-chat-input" placeholder="Ask a question about your data..." onkeyup="handleChatKeyup(event)" />
+                        <button id="ai-chat-send-btn" onclick="sendChatMessage()" class="chat-send-btn">
+                            <span>Ask AI</span>
+                        </button>
+                    </div>
                     
-                    <button id="voice-conversation-btn" class="voice-btn" onclick="toggleConversationMode()" disabled>
-                        <span style="font-size: 20px; margin-bottom: 4px;">💬</span>
-                        <span id="voice-conversation-text">Conversation Mode</span>
-                    </button>
-                    
-                    <div class="voice-status">
-                        <div id="voice-status-text">Initializing voice features...</div>
-                        <div id="voice-status-detail" style="font-size: 12px; opacity: 0.8; margin-top: 4px;"></div>
+                    <div class="ai-status">
+                        <div id="ai-status-text">Ready to answer questions!</div>
+                        <div id="ai-status-detail" style="font-size: 12px; opacity: 0.8; margin-top: 4px;">Type your question above and press Enter or click "Ask AI"</div>
                     </div>
                 </div>
 
-                <div class="voice-settings">
-                    <div class="voice-setting">
-                        <label for="voice-model-select">AI Model</label>
-                        <select id="voice-model-select">
+                <div class="ai-settings">
+                    <div class="ai-setting">
+                        <label for="ai-model-select">AI Model</label>
+                        <select id="ai-model-select">
                             <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
                             <option value="mistral:latest">Mistral 7B (Balanced)</option>
                             <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="voice-setting">
-                        <label for="voice-style-select">Voice Style</label>
-                        <select id="voice-style-select">
-                            <option value="female_1">Female Voice 1</option>
-                            <option value="male_1">Male Voice 1</option>
                         </select>
                     </div>
                 </div>
@@ -2750,21 +2748,12 @@
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
 
-        // Voice Chat State Management
-        let voiceState = {
+        // AI Chat State Management
+        let chatState = {
             isInitialized: false,
-            isRecording: false,
-            isConversationMode: false,
-            isListening: false,
-            isSpeaking: false,
             isProcessing: false,
-            mediaStream: null,
-            mediaRecorder: null,
-            audioChunks: [],
             conversation: [],
-            availableVoices: [],
             selectedModel: 'llama3.2:3b',
-            selectedVoice: 'female_1',
             lastQuery: '',
             appliedFilters: {}
         };
@@ -2786,38 +2775,26 @@
         let voiceHasMoreRecords = true;
         let voiceIsLoading = false;
 
-        // Voice Feature Initialization
+        // AI Chat Feature Initialization
         async function initializeVoiceFeatures() {
-            if (voiceState.isInitialized) return;
+            if (chatState.isInitialized) return;
             
-            console.log('[Voice] Initializing voice features...');
-            updateVoiceStatus('Checking browser compatibility...', '');
+            console.log('[Chat] Initializing AI chat features...');
+            updateAIStatus('Initializing...', '');
             
             try {
-                // Check browser support
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Voice features not supported in this browser');
-                }
+                updateAIStatus('Ready to answer questions!', 'Type your question above and press Enter or click "Ask AI"');
                 
-                updateVoiceStatus('Loading available voices...', '');
-                await loadVoiceSettings();
-                
-                updateVoiceStatus('Ready to use!', 'Click microphone to start or use conversation mode');
-                
-                // Enable voice buttons
-                document.getElementById('voice-record-btn').disabled = false;
-                document.getElementById('voice-conversation-btn').disabled = false;
-                
-                voiceState.isInitialized = true;
+                chatState.isInitialized = true;
                 
                 // Load initial records for voice tab
                 await loadVoiceRecords(true);
                 
-                console.log('[Voice] Voice features initialized successfully');
+                console.log('[Chat] AI chat features initialized successfully');
                 
             } catch (error) {
-                console.error('[Voice] Initialization failed:', error);
-                updateVoiceStatus('Voice features unavailable', error.message);
+                console.error('[Chat] Initialization failed:', error);
+                updateAIStatus('AI chat unavailable', error.message);
             }
         }
 
@@ -2848,8 +2825,15 @@
 
         function populateVoiceSelect() {
             const select = document.getElementById('voice-style-select');
-            select.innerHTML = '';
             
+            // Keep existing options if populated (since we set them manually)
+            if (select.children.length > 0) {
+                // Just set the correct default value
+                select.value = voiceState.selectedVoice;
+                return;
+            }
+            
+            // Fallback: populate from API if no options exist
             voiceState.availableVoices.forEach(voice => {
                 const option = document.createElement('option');
                 option.value = voice.id;
@@ -2857,11 +2841,8 @@
                 select.appendChild(option);
             });
             
-            // Set default voice
-            if (voiceState.availableVoices.length > 0) {
-                voiceState.selectedVoice = voiceState.availableVoices[0].id;
-                select.value = voiceState.selectedVoice;
-            }
+            // Set default voice to Edge if available
+            select.value = voiceState.selectedVoice;
         }
 
         async function loadVoiceRecordTypes() {
@@ -2897,163 +2878,61 @@
             });
         }
 
-        function updateVoiceStatus(main, detail = '') {
-            document.getElementById('voice-status-text').textContent = main;
-            document.getElementById('voice-status-detail').textContent = detail;
+        function updateAIStatus(main, detail = '') {
+            document.getElementById('ai-status-text').textContent = main;
+            document.getElementById('ai-status-detail').textContent = detail;
         }
 
-        // Voice Recording Functions
-        async function toggleVoiceRecording() {
-            if (voiceState.isRecording) {
-                stopVoiceRecording();
-            } else {
-                await startVoiceRecording();
+        // Chat Input Functions
+        function handleChatKeyup(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendChatMessage();
             }
         }
 
-        async function startVoiceRecording() {
-            try {
-                updateVoiceStatus('Requesting microphone access...', '');
-                
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-                
-                voiceState.mediaStream = stream;
-                voiceState.mediaRecorder = new MediaRecorder(stream);
-                voiceState.audioChunks = [];
-                
-                voiceState.mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        voiceState.audioChunks.push(event.data);
-                    }
-                };
-                
-                voiceState.mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(voiceState.audioChunks, { type: 'audio/webm' });
-                    await processVoiceInput(audioBlob);
-                };
-                
-                voiceState.mediaRecorder.start();
-                voiceState.isRecording = true;
-                
-                updateVoiceRecordingUI();
-                updateVoiceStatus('Recording...', 'Speak your question');
-                
-                console.log('[Voice] Recording started');
-                
-            } catch (error) {
-                console.error('[Voice] Recording error:', error);
-                updateVoiceStatus('Recording failed', error.message);
-            }
-        }
-
-        function stopVoiceRecording() {
-            if (voiceState.mediaRecorder && voiceState.isRecording) {
-                voiceState.mediaRecorder.stop();
-                voiceState.isRecording = false;
-                
-                if (voiceState.mediaStream) {
-                    voiceState.mediaStream.getTracks().forEach(track => track.stop());
-                    voiceState.mediaStream = null;
-                }
-                
-                updateVoiceRecordingUI();
-                updateVoiceStatus('Processing...', 'Converting speech to text');
-                
-                console.log('[Voice] Recording stopped');
-            }
-        }
-
-        function updateVoiceRecordingUI() {
-            const recordBtn = document.getElementById('voice-record-btn');
-            const recordText = document.getElementById('voice-record-text');
+        async function sendChatMessage() {
+            const input = document.getElementById('ai-chat-input');
+            const question = input.value.trim();
             
-            if (voiceState.isRecording) {
-                recordBtn.classList.add('recording');
-                recordText.textContent = 'Stop Recording';
-            } else {
-                recordBtn.classList.remove('recording');
-                recordText.textContent = 'Start Recording';
+            if (!question || chatState.isProcessing) {
+                return;
             }
-        }
-
-        // Voice Processing Functions
-        async function processVoiceInput(audioBlob) {
+            
+            // Clear input and disable send button
+            input.value = '';
+            const sendBtn = document.getElementById('ai-chat-send-btn');
+            sendBtn.disabled = true;
+            
             try {
-                voiceState.isProcessing = true;
-                updateVoiceStatus('Processing...', 'Converting speech to text');
-                
-                // Step 1: Convert speech to text
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'recording.webm');
-                
-                // Create AbortController for STT timeout
-                const sttController = new AbortController();
-                const sttTimeoutId = setTimeout(() => {
-                    sttController.abort();
-                    console.log('[Voice] STT request aborted due to timeout');
-                }, 15000); // 15 second timeout for STT
-                
-                const sttResponse = await fetch('/api/voice/transcribe', {
-                    method: 'POST',
-                    body: formData,
-                    signal: sttController.signal
-                });
-                
-                clearTimeout(sttTimeoutId);
-                
-                if (!sttResponse.ok) {
-                    if (sttResponse.status === 408 || sttResponse.status === 504) {
-                        throw new Error('Speech transcription timeout - please try again');
-                    }
-                    throw new Error('Speech transcription failed');
-                }
-                
-                const sttData = await sttResponse.json();
-                const transcribedText = sttData.text?.trim();
-                
-                if (!transcribedText) {
-                    updateVoiceStatus('Ready to use!', 'No speech detected. Try again.');
-                    return;
-                }
-                
-                console.log('[Voice] Transcribed:', transcribedText);
-                addToConversation('user', transcribedText);
-                
-                // Step 2: Process with AI and get filtered results
-                await processTextWithVoiceAI(transcribedText);
-                
+                await processTextWithAI(question);
             } catch (error) {
-                console.error('[Voice] Processing error:', error);
-                updateVoiceStatus('Error occurred', error.message);
-                addToConversation('system', `Error: ${error.message}`);
+                console.error('[Chat] Error processing message:', error);
+                updateAIStatus('Error occurred', error.message);
             } finally {
-                voiceState.isProcessing = false;
+                sendBtn.disabled = false;
             }
         }
 
-        async function processTextWithVoiceAI(text) {
+        // Simplified Chat Functions (no audio needed)
+
+        async function processTextWithAI(text) {
             try {
-                updateVoiceStatus('Thinking...', 'AI is analyzing your query');
+                updateAIStatus('Thinking...', 'AI is analyzing your query');
                 
-                // Get current model and voice settings
-                voiceState.selectedModel = document.getElementById('voice-model-select').value;
-                voiceState.selectedVoice = document.getElementById('voice-style-select').value;
+                // Get current model setting
+                chatState.selectedModel = document.getElementById('ai-model-select').value;
+                chatState.isProcessing = true;
                 
                 // Create AbortController for timeout management
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => {
                     controller.abort();
-                    console.log('[Voice] Request aborted due to timeout');
-                }, 15000); // 15 second timeout to match backend
+                    console.log('[Chat] Request aborted due to timeout');
+                }, 25000);
                 
                 try {
-                    // Send to enhanced voice/chat endpoint that returns both response and filter params
+                    // Send to chat endpoint without audio requirements
                     const response = await fetch('/api/voice/chat', {
                         method: 'POST',
                         headers: {
@@ -3061,10 +2940,8 @@
                         },
                         body: JSON.stringify({
                             text: text,
-                            model: voiceState.selectedModel,
-                            voice_id: voiceState.selectedVoice,
-                            speed: 1.0,
-                            return_audio: true,
+                            model: chatState.selectedModel,
+                            return_audio: false, // No audio needed for text chat
                             include_filter_analysis: true
                         }),
                         signal: controller.signal
@@ -3085,7 +2962,7 @@
                         throw new Error('No response generated');
                     }
                     
-                    console.log('[Voice] AI Response:', aiData);
+                    console.log('[Chat] AI Response:', aiData);
                     
                     // Use applied filters from backend (enhanced RAG service)
                     const appliedFilters = aiData.applied_filters || {};
@@ -3100,12 +2977,7 @@
                         filtersApplied: appliedFilters
                     });
                     
-                    // Play the audio response if available
-                    if (aiData.has_audio && aiData.audio_data) {
-                        await playAudioResponse(aiData.audio_data);
-                    }
-                    
-                    updateVoiceStatus('Ready to use!', 'Ask another question or use conversation mode');
+                    updateAIStatus('Ready to answer questions!', 'Ask another question');
                     
                 } catch (fetchError) {
                     clearTimeout(timeoutId);
@@ -3122,9 +2994,11 @@
                 }
                 
             } catch (error) {
-                console.error('[Voice] AI processing error:', error);
-                updateVoiceStatus('AI processing failed', error.message);
+                console.error('[Chat] AI processing error:', error);
+                updateAIStatus('AI processing failed', error.message);
                 addToConversation('system', `AI Error: ${error.message}`);
+            } finally {
+                chatState.isProcessing = false;
             }
         }
 
@@ -3195,46 +3069,7 @@
             container.appendChild(chip);
         }
 
-        // Audio playback
-        async function playAudioResponse(audioBase64) {
-            try {
-                updateVoiceStatus('Speaking...', 'Playing AI response');
-                voiceState.isSpeaking = true;
-                
-                // Convert base64 to audio blob
-                const audioBytes = atob(audioBase64);
-                const arrayBuffer = new ArrayBuffer(audioBytes.length);
-                const uint8Array = new Uint8Array(arrayBuffer);
-                
-                for (let i = 0; i < audioBytes.length; i++) {
-                    uint8Array[i] = audioBytes.charCodeAt(i);
-                }
-                
-                const audioBlob = new Blob([arrayBuffer], { type: 'audio/wav' });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                
-                const audio = new Audio(audioUrl);
-                
-                audio.onended = () => {
-                    voiceState.isSpeaking = false;
-                    updateVoiceStatus('Ready to use!', 'Ask another question');
-                    URL.revokeObjectURL(audioUrl);
-                };
-                
-                audio.onerror = () => {
-                    voiceState.isSpeaking = false;
-                    updateVoiceStatus('Audio playback failed', 'Response received but could not play audio');
-                    URL.revokeObjectURL(audioUrl);
-                };
-                
-                await audio.play();
-                
-            } catch (error) {
-                console.error('[Voice] Audio playback error:', error);
-                voiceState.isSpeaking = false;
-                updateVoiceStatus('Audio playback failed', error.message);
-            }
-        }
+        // No audio playback needed for text chat
 
         // Conversation Management
         function addToConversation(role, content, metadata = {}) {
@@ -3245,7 +3080,7 @@
                 ...metadata
             };
             
-            voiceState.conversation.push(message);
+            chatState.conversation.push(message);
             updateConversationDisplay();
         }
 
@@ -3253,7 +3088,7 @@
             const container = document.getElementById('conversation-messages');
             const history = document.getElementById('conversation-history');
             
-            if (voiceState.conversation.length === 0) {
+            if (chatState.conversation.length === 0) {
                 history.classList.add('hidden');
                 return;
             }
@@ -3262,7 +3097,7 @@
             container.innerHTML = '';
             
             // Show last 5 messages
-            const recentMessages = voiceState.conversation.slice(-5);
+            const recentMessages = chatState.conversation.slice(-5);
             recentMessages.forEach(message => {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `conversation-message ${message.role}`;
@@ -3284,47 +3119,7 @@
             container.scrollTop = container.scrollHeight;
         }
 
-        // Conversation Mode
-        async function toggleConversationMode() {
-            if (voiceState.isConversationMode) {
-                stopConversationMode();
-            } else {
-                await startConversationMode();
-            }
-        }
-
-        async function startConversationMode() {
-            voiceState.isConversationMode = true;
-            updateConversationModeUI();
-            updateVoiceStatus('Conversation mode active', 'Listening for questions...');
-            
-            // Auto-start recording for conversation mode
-            await startVoiceRecording();
-        }
-
-        function stopConversationMode() {
-            voiceState.isConversationMode = false;
-            updateConversationModeUI();
-            
-            if (voiceState.isRecording) {
-                stopVoiceRecording();
-            }
-            
-            updateVoiceStatus('Ready to use!', 'Conversation mode stopped');
-        }
-
-        function updateConversationModeUI() {
-            const btn = document.getElementById('voice-conversation-btn');
-            const text = document.getElementById('voice-conversation-text');
-            
-            if (voiceState.isConversationMode) {
-                btn.classList.add('conversation-active');
-                text.textContent = 'Stop Conversation';
-            } else {
-                btn.classList.remove('conversation-active');
-                text.textContent = 'Conversation Mode';
-            }
-        }
+        // No conversation mode needed for text chat
 
         // Voice Filtering Functions
         function applyVoiceFilters() {
