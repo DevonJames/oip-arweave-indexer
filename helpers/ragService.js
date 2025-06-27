@@ -12,8 +12,74 @@ class RAGService {
     constructor() {
         this.ollamaBaseUrl = process.env.OLLAMA_HOST || 'http://ollama:11434';
         this.defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
-        this.maxContextLength = 2000; // Max characters for context
+        this.maxContextLength = 8000; // Increased for full text content
         this.maxResults = 5; // Max search results to include
+        this.fullTextCache = new Map(); // Cache for fetched full text content
+    }
+
+    /**
+     * Extract full text URL from a post record
+     */
+    extractFullTextUrl(record) {
+        if (!record || !record.data) return null;
+        
+        const recordType = record.oip?.recordType;
+        if (recordType !== 'post') return null;
+        
+        const specificData = record.data[recordType] || {};
+        
+        // Check multiple possible locations for text URL (same as reference client)
+        if (specificData.articleText?.data?.text?.webUrl) {
+            return specificData.articleText.data.text.webUrl;
+        }
+        if (specificData.articleText?.webUrl) {
+            return specificData.articleText.webUrl;
+        }
+        if (record.data.text?.webUrl) {
+            return record.data.text.webUrl;
+        }
+        
+        return null;
+    }
+
+    /**
+     * Fetch full text content from a URL with caching
+     */
+    async fetchFullTextContent(url, recordTitle = 'Unknown') {
+        if (!url) return null;
+        
+        // Check cache first
+        if (this.fullTextCache.has(url)) {
+            console.log(`[RAG] Using cached full text for: ${recordTitle}`);
+            return this.fullTextCache.get(url);
+        }
+        
+        try {
+            console.log(`[RAG] Fetching full text from: ${url}`);
+            const response = await axios.get(url, { 
+                timeout: 10000, // 10 second timeout
+                maxContentLength: 500000 // 500KB max
+            });
+            
+            if (response.status === 200 && response.data) {
+                const content = typeof response.data === 'string' ? response.data : String(response.data);
+                
+                // Cache the content (limit cache size to prevent memory issues)
+                if (this.fullTextCache.size > 50) {
+                    // Clear oldest entries
+                    const firstKey = this.fullTextCache.keys().next().value;
+                    this.fullTextCache.delete(firstKey);
+                }
+                this.fullTextCache.set(url, content);
+                
+                console.log(`[RAG] Successfully fetched ${content.length} characters of full text for: ${recordTitle}`);
+                return content;
+            }
+        } catch (error) {
+            console.warn(`[RAG] Failed to fetch full text from ${url}:`, error.message);
+        }
+        
+        return null;
     }
 
     /**
@@ -359,7 +425,7 @@ class RAGService {
             }
             
             // Step 4: Build context from search results
-            const context = this.buildContext(searchResults);
+            const context = await this.buildContext(searchResults);
             
             // Step 5: Generate LLM response with context
             const response = await this.generateResponse(question, context, options.model);
@@ -494,7 +560,7 @@ class RAGService {
     /**
      * Build context string from search results
      */
-    buildContext(searchResults) {
+    async buildContext(searchResults) {
         const contextParts = [];
         let currentLength = 0;
 
@@ -505,7 +571,7 @@ class RAGService {
             
             for (let i = 0; i < searchResults.records.length; i++) {
                 const record = searchResults.records[i];
-                const recordContext = this.extractRecordContext(record);
+                const recordContext = await this.extractRecordContext(record);
                 if (currentLength + recordContext.length < this.maxContextLength) {
                     contextParts.push(`RECORD ${i + 1}:`);
                     contextParts.push(recordContext);
@@ -543,7 +609,7 @@ class RAGService {
     /**
      * Extract context from a record using configured context fields
      */
-    extractRecordContext(record) {
+    async extractRecordContext(record) {
         const basic = record.data?.basic || {};
         const oip = record.oip || {};
         const recordType = oip.recordType;
@@ -559,8 +625,28 @@ class RAGService {
             parts.push(`TITLE: ${basic.name}`);
         }
         
-        if (basic.description) {
-            // Use full description for better context
+        // For posts, try to fetch full text content first
+        if (recordType === 'post') {
+            const fullTextUrl = this.extractFullTextUrl(record);
+            if (fullTextUrl) {
+                const fullText = await this.fetchFullTextContent(fullTextUrl, basic.name);
+                if (fullText && fullText.trim()) {
+                    // Use full text but limit to reasonable size for context
+                    const maxFullTextLength = 3000; // Generous but not excessive
+                    const truncatedText = fullText.length > maxFullTextLength 
+                        ? fullText.substring(0, maxFullTextLength) + '...' 
+                        : fullText;
+                    parts.push(`FULL TEXT: ${truncatedText}`);
+                } else if (basic.description) {
+                    // Fall back to description if full text fetch fails
+                    parts.push(`CONTENT: ${basic.description}`);
+                }
+            } else if (basic.description) {
+                // No full text URL available, use description
+                parts.push(`CONTENT: ${basic.description}`);
+            }
+        } else if (basic.description) {
+            // For non-post records, use description as before
             parts.push(`CONTENT: ${basic.description}`);
         }
         
@@ -637,11 +723,14 @@ class RAGService {
                 break;
                 
             case 'post':
-                if (basic.content && contextFields.includes('content')) {
-                    parts.push(`Content: ${basic.content.substring(0, 300)}...`);
-                }
+                // Note: Full text content is already handled in the main extractRecordContext method
+                // Only add additional fields here that aren't the main content
                 if (basic.category && contextFields.includes('category')) {
                     parts.push(`Category: ${basic.category}`);
+                }
+                // Add additional content field only if we don't already have full text
+                if (basic.content && contextFields.includes('content') && !parts.find(p => p.startsWith('FULL TEXT:'))) {
+                    parts.push(`Additional Content: ${basic.content.substring(0, 300)}...`);
                 }
                 break;
                 
@@ -764,13 +853,15 @@ Please respond helpfully, acknowledging that you don't have specific information
 Response:`;
         }
 
-        return `Here is relevant information:
+        return `Here is relevant information from the knowledge base:
 
 ${context}
 
 Question: ${question}
 
-Answer the question using the information above:`;
+Instructions: Provide a brief, to-the-point answer using the information above. Be concise and focus only on the most relevant details that directly answer the question. Avoid unnecessary elaboration.
+
+Answer:`;
     }
 
     /**
