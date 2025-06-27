@@ -3214,6 +3214,8 @@
                 addToConversation('system', `Error: ${error.message}`);
             } finally {
                 sendBtn.disabled = false;
+                // Ensure chat input remains ready for next message
+                setTimeout(() => ensureChatInputReady(), 100);
             }
         }
 
@@ -3433,6 +3435,37 @@
             // Scroll to bottom
             const chatConversation = document.getElementById('chat-conversation');
             chatConversation.scrollTop = chatConversation.scrollHeight;
+            
+            // Ensure chat input is visible and enabled after display update
+            ensureChatInputReady();
+        }
+
+        function ensureChatInputReady() {
+            const chatInput = document.getElementById('ai-chat-input');
+            const sendBtn = document.getElementById('ai-chat-send-btn');
+            const chatContainer = document.querySelector('.chat-input-container');
+            
+            if (chatInput) {
+                chatInput.disabled = false;
+                chatInput.style.display = 'block';
+                chatInput.style.visibility = 'visible';
+                chatInput.style.opacity = '1';
+            }
+            
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.style.display = 'inline-block';
+                sendBtn.style.visibility = 'visible';
+                sendBtn.style.opacity = '1';
+            }
+            
+            if (chatContainer) {
+                chatContainer.style.display = 'block';
+                chatContainer.style.visibility = 'visible';
+                chatContainer.style.opacity = '1';
+            }
+            
+            console.log('[Chat] Input availability ensured');
         }
 
         function getMessageAvatar(role) {
