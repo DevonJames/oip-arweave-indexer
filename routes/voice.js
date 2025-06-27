@@ -409,7 +409,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     audio_data: audioData.toString('base64'), // Include audio as base64
                     sources: ragResponse.sources,
                     context_used: ragResponse.context_used,
-                    search_results_count: ragResponse.search_results_count
+                    search_results_count: ragResponse.search_results_count,
+                    applied_filters: ragResponse.applied_filters || {}
                 });
 
             } catch (ttsError) {
@@ -425,7 +426,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     tts_error: 'Speech synthesis failed',
                     sources: ragResponse.sources,
                     context_used: ragResponse.context_used,
-                    search_results_count: ragResponse.search_results_count
+                    search_results_count: ragResponse.search_results_count,
+                    applied_filters: ragResponse.applied_filters || {}
                 });
             }
         } else {
@@ -438,7 +440,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 has_audio: false,
                 sources: ragResponse.sources,
                 context_used: ragResponse.context_used,
-                search_results_count: ragResponse.search_results_count
+                search_results_count: ragResponse.search_results_count,
+                applied_filters: ragResponse.applied_filters || {}
             });
         }
 

@@ -658,6 +658,176 @@
             margin-bottom: 80px;
         }
 
+        /* Voice Chat Integration Styles */
+        .voice-chat-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .voice-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .voice-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 100px;
+            backdrop-filter: blur(10px);
+        }
+
+        .voice-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .voice-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .voice-btn.recording {
+            background: rgba(239, 68, 68, 0.8);
+            animation: pulse 2s infinite;
+        }
+
+        .voice-btn.conversation-active {
+            background: rgba(34, 197, 94, 0.8);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .voice-status {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .voice-settings {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .voice-setting {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .voice-setting label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .voice-setting select {
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+
+        .applied-filters {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .filter-chip {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 12px;
+            border-radius: 16px;
+            margin: 4px;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .conversation-history {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .conversation-message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .conversation-message.user {
+            background: rgba(59, 130, 246, 0.3);
+            margin-left: 20px;
+        }
+
+        .conversation-message.assistant {
+            background: rgba(34, 197, 94, 0.3);
+            margin-right: 20px;
+        }
+
+        .conversation-message .timestamp {
+            font-size: 11px;
+            opacity: 0.7;
+            display: block;
+            margin-top: 4px;
+        }
+
+        .loading-dots {
+            display: inline-block;
+        }
+
+        .loading-dots:after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+
+        /* Microphone icon styles */
+        .microphone-icon {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 4px;
+        }
+
         .loading {
             text-align: center;
             color: #666;
@@ -723,6 +893,7 @@
             
             <div class="nav-tabs">
                 <div class="nav-tab active" onclick="showBrowseTab()">Browse Records</div>
+                <div class="nav-tab" onclick="showVoiceBrowseTab()">Browse + Voice Chat</div>
                 <div class="nav-tab" onclick="showPublishTab()">Publish</div>
             </div>
             
@@ -828,6 +999,155 @@
                 
                 <div id="load-more-container" class="load-more hidden">
                     <button onclick="loadMoreRecords()" id="load-more-btn">Load More Records</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Browse + Voice Chat Tab Content -->
+        <div id="voice-browse-tab" class="hidden">
+            <!-- Voice Chat Section -->
+            <div class="voice-chat-section">
+                <h3 style="margin: 0 0 15px 0; display: flex; align-items: center; gap: 10px;">
+                    <span>🎤</span> AI Voice Assistant
+                </h3>
+                
+                <div class="voice-controls">
+                    <button id="voice-record-btn" class="voice-btn" onclick="toggleVoiceRecording()" disabled>
+                        <svg class="microphone-icon" viewBox="0 0 1200 1200" fill="currentColor">
+                            <path d="m420.84 524.53v16.922c0 64.547 34.312 121.22 85.547 152.76 18.703 11.531 39.844 19.688 62.297 23.625 10.219 1.7812 20.625 2.7656 31.312 2.7656s21.141-0.9375 31.312-2.7656c22.453-3.9375 43.547-12.141 62.297-23.625 51.234-31.547 85.547-88.219 85.547-152.76v-242.2c0-64.547-34.312-121.22-85.547-152.63-0.60938-0.375-1.2188-0.70312-1.7812-1.0781h-0.23438c-18.234-11.062-38.625-18.844-60.234-22.547-10.219-1.7812-20.625-2.7656-31.312-2.7656s-21.141 0.9375-31.312 2.7656c-21.609 3.8438-42 11.625-60.234 22.547h-0.23438c-0.60938 0.375-1.2188 0.60938-1.7812 1.0781-51.234 31.453-85.547 88.078-85.547 152.63v225.28z"/>
+                        </svg>
+                        <span id="voice-record-text">Start Recording</span>
+                    </button>
+                    
+                    <button id="voice-conversation-btn" class="voice-btn" onclick="toggleConversationMode()" disabled>
+                        <span style="font-size: 20px; margin-bottom: 4px;">💬</span>
+                        <span id="voice-conversation-text">Conversation Mode</span>
+                    </button>
+                    
+                    <div class="voice-status">
+                        <div id="voice-status-text">Initializing voice features...</div>
+                        <div id="voice-status-detail" style="font-size: 12px; opacity: 0.8; margin-top: 4px;"></div>
+                    </div>
+                </div>
+
+                <div class="voice-settings">
+                    <div class="voice-setting">
+                        <label for="voice-model-select">AI Model</label>
+                        <select id="voice-model-select">
+                            <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
+                            <option value="mistral:latest">Mistral 7B (Balanced)</option>
+                            <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="voice-setting">
+                        <label for="voice-style-select">Voice Style</label>
+                        <select id="voice-style-select">
+                            <option value="female_1">Female Voice 1</option>
+                            <option value="male_1">Male Voice 1</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="applied-filters-display" class="applied-filters hidden">
+                    <div style="margin-bottom: 8px; font-weight: bold;">🔍 AI Applied Filters:</div>
+                    <div id="filter-chips-container"></div>
+                    <div id="filter-rationale" style="margin-top: 8px; font-size: 12px; opacity: 0.8;"></div>
+                </div>
+
+                <div id="conversation-history" class="conversation-history hidden">
+                    <div style="margin-bottom: 10px; font-weight: bold;">💭 Conversation:</div>
+                    <div id="conversation-messages"></div>
+                </div>
+            </div>
+
+            <!-- Filters Section (Enhanced Version) -->
+            <div class="filters-section">
+                <div class="filters-row">
+                    <div class="search-container">
+                        <label for="voice-search-input">Search Records</label>
+                        <input type="text" id="voice-search-input" placeholder="Enter search terms or ask AI..." onkeyup="handleVoiceSearchKeyup(event)">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="voice-record-type-filter">Record Type</label>
+                        <select id="voice-record-type-filter" onchange="applyVoiceFilters()">
+                            <option value="">All Types</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="voice-sort-by">Sort By</label>
+                        <select id="voice-sort-by" onchange="applyVoiceFilters()">
+                            <option value="inArweaveBlock:desc">Block (Newest)</option>
+                            <option value="inArweaveBlock:asc">Block (Oldest)</option>
+                            <option value="date:desc">Date (Newest)</option>
+                            <option value="date:asc">Date (Oldest)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="voice-resolve-depth">Resolve Depth</label>
+                        <input type="number" id="voice-resolve-depth" value="2" min="0" max="5" onchange="applyVoiceFilters()">
+                    </div>
+                </div>
+                
+                <div class="filters-row">
+                    <div class="filter-group wide">
+                        <label>Date Range</label>
+                        <div class="date-inputs">
+                            <input type="date" id="voice-date-start" onchange="applyVoiceFilters()" placeholder="Start Date">
+                            <span>to</span>
+                            <input type="date" id="voice-date-end" onchange="applyVoiceFilters()" placeholder="End Date">
+                        </div>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="voice-tag-filter">Filter by Tag</label>
+                        <select id="voice-tag-filter" onchange="applyVoiceFilters()">
+                            <option value="">All Tags</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="advanced-filters">
+                    <div class="toggle-row">
+                        <div class="toggle-group">
+                            <label>Include Signatures:</label>
+                            <div class="toggle-switch" id="voice-include-sigs-toggle" onclick="toggleVoiceSwitch('voice-include-sigs-toggle')"></div>
+                        </div>
+                        
+                        <div class="toggle-group">
+                            <label>Include Public Keys:</label>
+                            <div class="toggle-switch" id="voice-include-pubkeys-toggle" onclick="toggleVoiceSwitch('voice-include-pubkeys-toggle')"></div>
+                        </div>
+                        
+                        <button onclick="clearVoiceFilters()" class="btn-secondary btn-small">Clear Filters</button>
+                        <button onclick="applyVoiceFilters()" class="btn-small">Apply Filters</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Records Display (Enhanced Version) -->
+            <div class="records-container">
+                <div id="voice-records-header">
+                    <h2>OIP Records</h2>
+                    <div id="voice-pagination-info" class="pagination-info"></div>
+                </div>
+                
+                <div id="voice-loading-indicator" class="loading">
+                    <div class="spinner"></div>
+                    Loading records...
+                </div>
+                
+                <div id="voice-records-grid" class="records-grid hidden"></div>
+                
+                <div id="voice-no-results" class="no-results hidden">
+                    No records found matching your criteria.
+                </div>
+                
+                <div id="voice-load-more-container" class="load-more hidden">
+                    <button onclick="loadMoreVoiceRecords()" id="voice-load-more-btn">Load More Records</button>
                 </div>
             </div>
         </div>
@@ -1057,16 +1377,29 @@
 
         // Navigation functions
         function showBrowseTab() {
-            document.querySelector('.nav-tab.active').classList.remove('active');
-            document.querySelector('.nav-tab').classList.add('active');
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab')[0].classList.add('active');
             document.getElementById('browse-tab').classList.remove('hidden');
+            document.getElementById('voice-browse-tab').classList.add('hidden');
             document.getElementById('publish-tab').classList.add('hidden');
+        }
+
+        function showVoiceBrowseTab() {
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab')[1].classList.add('active');
+            document.getElementById('browse-tab').classList.add('hidden');
+            document.getElementById('voice-browse-tab').classList.remove('hidden');
+            document.getElementById('publish-tab').classList.add('hidden');
+            
+            // Initialize voice features when tab is shown
+            initializeVoiceFeatures();
         }
 
         function showPublishTab() {
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[1].classList.add('active');
+            document.querySelectorAll('.nav-tab')[2].classList.add('active');
             document.getElementById('browse-tab').classList.add('hidden');
+            document.getElementById('voice-browse-tab').classList.add('hidden');
             document.getElementById('publish-tab').classList.remove('hidden');
         }
 
@@ -2415,6 +2748,834 @@
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Voice Chat State Management
+        let voiceState = {
+            isInitialized: false,
+            isRecording: false,
+            isConversationMode: false,
+            isListening: false,
+            isSpeaking: false,
+            isProcessing: false,
+            mediaStream: null,
+            mediaRecorder: null,
+            audioChunks: [],
+            conversation: [],
+            availableVoices: [],
+            selectedModel: 'llama3.2:3b',
+            selectedVoice: 'female_1',
+            lastQuery: '',
+            appliedFilters: {}
+        };
+
+        let voiceFilters = {
+            search: '',
+            recordType: '',
+            sortBy: 'inArweaveBlock:desc',
+            resolveDepth: 2,
+            dateStart: '',
+            dateEnd: '',
+            tag: '',
+            includeSigs: false,
+            includePubKeys: false
+        };
+
+        let voiceRecords = [];
+        let voicePage = 1;
+        let voiceHasMoreRecords = true;
+        let voiceIsLoading = false;
+
+        // Voice Feature Initialization
+        async function initializeVoiceFeatures() {
+            if (voiceState.isInitialized) return;
+            
+            console.log('[Voice] Initializing voice features...');
+            updateVoiceStatus('Checking browser compatibility...', '');
+            
+            try {
+                // Check browser support
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Voice features not supported in this browser');
+                }
+                
+                updateVoiceStatus('Loading available voices...', '');
+                await loadVoiceSettings();
+                
+                updateVoiceStatus('Ready to use!', 'Click microphone to start or use conversation mode');
+                
+                // Enable voice buttons
+                document.getElementById('voice-record-btn').disabled = false;
+                document.getElementById('voice-conversation-btn').disabled = false;
+                
+                voiceState.isInitialized = true;
+                
+                // Load initial records for voice tab
+                await loadVoiceRecords(true);
+                
+                console.log('[Voice] Voice features initialized successfully');
+                
+            } catch (error) {
+                console.error('[Voice] Initialization failed:', error);
+                updateVoiceStatus('Voice features unavailable', error.message);
+            }
+        }
+
+        async function loadVoiceSettings() {
+            try {
+                // Load available voices from backend
+                const response = await fetch('/api/voice/voices');
+                const data = await response.json();
+                
+                if (data.voices) {
+                    voiceState.availableVoices = data.voices;
+                    populateVoiceSelect();
+                }
+                
+                // Load record types for voice tab filters
+                await loadVoiceRecordTypes();
+                
+            } catch (error) {
+                console.warn('[Voice] Could not load voice settings:', error);
+                // Set default voices if API fails
+                voiceState.availableVoices = [
+                    { id: 'female_1', name: 'Female Voice 1', engine: 'TTS' },
+                    { id: 'male_1', name: 'Male Voice 1', engine: 'TTS' }
+                ];
+                populateVoiceSelect();
+            }
+        }
+
+        function populateVoiceSelect() {
+            const select = document.getElementById('voice-style-select');
+            select.innerHTML = '';
+            
+            voiceState.availableVoices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.id;
+                option.textContent = `${voice.name} (${voice.engine})`;
+                select.appendChild(option);
+            });
+            
+            // Set default voice
+            if (voiceState.availableVoices.length > 0) {
+                voiceState.selectedVoice = voiceState.availableVoices[0].id;
+                select.value = voiceState.selectedVoice;
+            }
+        }
+
+        async function loadVoiceRecordTypes() {
+            try {
+                const response = await fetch('/api/templates?limit=25&page=1');
+                const data = await response.json();
+                
+                if (data.templates) {
+                    const typeSet = new Set();
+                    data.templates.forEach(template => {
+                        if (template.data?.template) {
+                            typeSet.add(template.data.template);
+                        }
+                    });
+                    
+                    const recordTypes = Array.from(typeSet).sort();
+                    populateVoiceRecordTypeFilter(recordTypes);
+                }
+            } catch (error) {
+                console.error('[Voice] Error loading record types:', error);
+            }
+        }
+
+        function populateVoiceRecordTypeFilter(recordTypes) {
+            const select = document.getElementById('voice-record-type-filter');
+            select.innerHTML = '<option value="">All Types</option>';
+            
+            recordTypes.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                select.appendChild(option);
+            });
+        }
+
+        function updateVoiceStatus(main, detail = '') {
+            document.getElementById('voice-status-text').textContent = main;
+            document.getElementById('voice-status-detail').textContent = detail;
+        }
+
+        // Voice Recording Functions
+        async function toggleVoiceRecording() {
+            if (voiceState.isRecording) {
+                stopVoiceRecording();
+            } else {
+                await startVoiceRecording();
+            }
+        }
+
+        async function startVoiceRecording() {
+            try {
+                updateVoiceStatus('Requesting microphone access...', '');
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                voiceState.mediaStream = stream;
+                voiceState.mediaRecorder = new MediaRecorder(stream);
+                voiceState.audioChunks = [];
+                
+                voiceState.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        voiceState.audioChunks.push(event.data);
+                    }
+                };
+                
+                voiceState.mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(voiceState.audioChunks, { type: 'audio/webm' });
+                    await processVoiceInput(audioBlob);
+                };
+                
+                voiceState.mediaRecorder.start();
+                voiceState.isRecording = true;
+                
+                updateVoiceRecordingUI();
+                updateVoiceStatus('Recording...', 'Speak your question');
+                
+                console.log('[Voice] Recording started');
+                
+            } catch (error) {
+                console.error('[Voice] Recording error:', error);
+                updateVoiceStatus('Recording failed', error.message);
+            }
+        }
+
+        function stopVoiceRecording() {
+            if (voiceState.mediaRecorder && voiceState.isRecording) {
+                voiceState.mediaRecorder.stop();
+                voiceState.isRecording = false;
+                
+                if (voiceState.mediaStream) {
+                    voiceState.mediaStream.getTracks().forEach(track => track.stop());
+                    voiceState.mediaStream = null;
+                }
+                
+                updateVoiceRecordingUI();
+                updateVoiceStatus('Processing...', 'Converting speech to text');
+                
+                console.log('[Voice] Recording stopped');
+            }
+        }
+
+        function updateVoiceRecordingUI() {
+            const recordBtn = document.getElementById('voice-record-btn');
+            const recordText = document.getElementById('voice-record-text');
+            
+            if (voiceState.isRecording) {
+                recordBtn.classList.add('recording');
+                recordText.textContent = 'Stop Recording';
+            } else {
+                recordBtn.classList.remove('recording');
+                recordText.textContent = 'Start Recording';
+            }
+        }
+
+        // Voice Processing Functions
+        async function processVoiceInput(audioBlob) {
+            try {
+                voiceState.isProcessing = true;
+                updateVoiceStatus('Processing...', 'Converting speech to text');
+                
+                // Step 1: Convert speech to text
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                
+                const sttResponse = await fetch('/api/voice/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!sttResponse.ok) {
+                    throw new Error('Speech transcription failed');
+                }
+                
+                const sttData = await sttResponse.json();
+                const transcribedText = sttData.text?.trim();
+                
+                if (!transcribedText) {
+                    updateVoiceStatus('Ready to use!', 'No speech detected. Try again.');
+                    return;
+                }
+                
+                console.log('[Voice] Transcribed:', transcribedText);
+                addToConversation('user', transcribedText);
+                
+                // Step 2: Process with AI and get filtered results
+                await processTextWithVoiceAI(transcribedText);
+                
+            } catch (error) {
+                console.error('[Voice] Processing error:', error);
+                updateVoiceStatus('Error occurred', error.message);
+                addToConversation('system', `Error: ${error.message}`);
+            } finally {
+                voiceState.isProcessing = false;
+            }
+        }
+
+        async function processTextWithVoiceAI(text) {
+            try {
+                updateVoiceStatus('Thinking...', 'AI is analyzing your query');
+                
+                // Get current model and voice settings
+                voiceState.selectedModel = document.getElementById('voice-model-select').value;
+                voiceState.selectedVoice = document.getElementById('voice-style-select').value;
+                
+                // Send to enhanced voice/chat endpoint that returns both response and filter params
+                const response = await fetch('/api/voice/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        model: voiceState.selectedModel,
+                        voice_id: voiceState.selectedVoice,
+                        speed: 1.0,
+                        return_audio: true,
+                        include_filter_analysis: true // New parameter we'll add to the backend
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('AI processing failed');
+                }
+                
+                const aiData = await response.json();
+                
+                if (!aiData.response_text) {
+                    throw new Error('No response generated');
+                }
+                
+                console.log('[Voice] AI Response:', aiData);
+                
+                // Use applied filters from backend (enhanced RAG service)
+                const appliedFilters = aiData.applied_filters || {};
+                
+                // Apply the filters to the UI and reload records
+                await applyAIFilters(appliedFilters, aiData.sources);
+                
+                // Add AI response to conversation
+                addToConversation('assistant', aiData.response_text, {
+                    sources: aiData.sources,
+                    searchResults: aiData.search_results_count,
+                    filtersApplied: appliedFilters
+                });
+                
+                // Play the audio response if available
+                if (aiData.has_audio && aiData.audio_data) {
+                    await playAudioResponse(aiData.audio_data);
+                }
+                
+                updateVoiceStatus('Ready to use!', 'Ask another question or use conversation mode');
+                
+            } catch (error) {
+                console.error('[Voice] AI processing error:', error);
+                updateVoiceStatus('AI processing failed', error.message);
+                addToConversation('system', `AI Error: ${error.message}`);
+            }
+        }
+
+
+
+        async function applyAIFilters(filters, sources = []) {
+            // Update the voice filters state
+            Object.assign(voiceFilters, filters);
+            
+            // Update the UI elements
+            if (filters.search) {
+                document.getElementById('voice-search-input').value = filters.search;
+            }
+            if (filters.recordType) {
+                document.getElementById('voice-record-type-filter').value = filters.recordType;
+            }
+            if (filters.sortBy) {
+                document.getElementById('voice-sort-by').value = filters.sortBy;
+            }
+            
+            // Update applied filters display
+            displayAppliedFilters(filters, sources);
+            
+            // Reload records with new filters
+            await loadVoiceRecords(true);
+            
+            console.log('[Voice] Applied AI filters:', filters);
+        }
+
+        function displayAppliedFilters(filters, sources) {
+            const display = document.getElementById('applied-filters-display');
+            const container = document.getElementById('filter-chips-container');
+            const rationale = document.getElementById('filter-rationale');
+            
+            // Clear existing chips
+            container.innerHTML = '';
+            
+            // Create filter chips
+            let hasFilters = false;
+            if (filters.search) {
+                addFilterChip(container, 'Search', filters.search);
+                hasFilters = true;
+            }
+            if (filters.recordType) {
+                addFilterChip(container, 'Type', filters.recordType);
+                hasFilters = true;
+            }
+            if (filters.sortBy && filters.sortBy !== 'inArweaveBlock:desc') {
+                addFilterChip(container, 'Sort', filters.sortBy.replace(':', ' '));
+                hasFilters = true;
+            }
+            
+            if (hasFilters) {
+                display.classList.remove('hidden');
+                
+                // Use rationale from backend or generate fallback
+                const rationaleText = filters.rationale || `AI applied these filters automatically based on your query.`;
+                rationale.textContent = rationaleText;
+            } else {
+                display.classList.add('hidden');
+            }
+        }
+
+        function addFilterChip(container, label, value) {
+            const chip = document.createElement('span');
+            chip.className = 'filter-chip';
+            chip.textContent = `${label}: ${value}`;
+            container.appendChild(chip);
+        }
+
+        // Audio playback
+        async function playAudioResponse(audioBase64) {
+            try {
+                updateVoiceStatus('Speaking...', 'Playing AI response');
+                voiceState.isSpeaking = true;
+                
+                // Convert base64 to audio blob
+                const audioBytes = atob(audioBase64);
+                const arrayBuffer = new ArrayBuffer(audioBytes.length);
+                const uint8Array = new Uint8Array(arrayBuffer);
+                
+                for (let i = 0; i < audioBytes.length; i++) {
+                    uint8Array[i] = audioBytes.charCodeAt(i);
+                }
+                
+                const audioBlob = new Blob([arrayBuffer], { type: 'audio/wav' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                const audio = new Audio(audioUrl);
+                
+                audio.onended = () => {
+                    voiceState.isSpeaking = false;
+                    updateVoiceStatus('Ready to use!', 'Ask another question');
+                    URL.revokeObjectURL(audioUrl);
+                };
+                
+                audio.onerror = () => {
+                    voiceState.isSpeaking = false;
+                    updateVoiceStatus('Audio playback failed', 'Response received but could not play audio');
+                    URL.revokeObjectURL(audioUrl);
+                };
+                
+                await audio.play();
+                
+            } catch (error) {
+                console.error('[Voice] Audio playback error:', error);
+                voiceState.isSpeaking = false;
+                updateVoiceStatus('Audio playback failed', error.message);
+            }
+        }
+
+        // Conversation Management
+        function addToConversation(role, content, metadata = {}) {
+            const message = {
+                role,
+                content,
+                timestamp: new Date().toISOString(),
+                ...metadata
+            };
+            
+            voiceState.conversation.push(message);
+            updateConversationDisplay();
+        }
+
+        function updateConversationDisplay() {
+            const container = document.getElementById('conversation-messages');
+            const history = document.getElementById('conversation-history');
+            
+            if (voiceState.conversation.length === 0) {
+                history.classList.add('hidden');
+                return;
+            }
+            
+            history.classList.remove('hidden');
+            container.innerHTML = '';
+            
+            // Show last 5 messages
+            const recentMessages = voiceState.conversation.slice(-5);
+            recentMessages.forEach(message => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `conversation-message ${message.role}`;
+                
+                let content = message.content;
+                if (message.role === 'assistant' && message.sources) {
+                    content += ` (${message.sources.length} sources)`;
+                }
+                
+                messageDiv.innerHTML = `
+                    <div>${content}</div>
+                    <span class="timestamp">${new Date(message.timestamp).toLocaleTimeString()}</span>
+                `;
+                
+                container.appendChild(messageDiv);
+            });
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Conversation Mode
+        async function toggleConversationMode() {
+            if (voiceState.isConversationMode) {
+                stopConversationMode();
+            } else {
+                await startConversationMode();
+            }
+        }
+
+        async function startConversationMode() {
+            voiceState.isConversationMode = true;
+            updateConversationModeUI();
+            updateVoiceStatus('Conversation mode active', 'Listening for questions...');
+            
+            // Auto-start recording for conversation mode
+            await startVoiceRecording();
+        }
+
+        function stopConversationMode() {
+            voiceState.isConversationMode = false;
+            updateConversationModeUI();
+            
+            if (voiceState.isRecording) {
+                stopVoiceRecording();
+            }
+            
+            updateVoiceStatus('Ready to use!', 'Conversation mode stopped');
+        }
+
+        function updateConversationModeUI() {
+            const btn = document.getElementById('voice-conversation-btn');
+            const text = document.getElementById('voice-conversation-text');
+            
+            if (voiceState.isConversationMode) {
+                btn.classList.add('conversation-active');
+                text.textContent = 'Stop Conversation';
+            } else {
+                btn.classList.remove('conversation-active');
+                text.textContent = 'Conversation Mode';
+            }
+        }
+
+        // Voice Filtering Functions
+        function applyVoiceFilters() {
+            collectVoiceFilters();
+            loadVoiceRecords(true);
+        }
+
+        function collectVoiceFilters() {
+            voiceFilters.search = document.getElementById('voice-search-input').value.trim();
+            voiceFilters.recordType = document.getElementById('voice-record-type-filter').value;
+            voiceFilters.sortBy = document.getElementById('voice-sort-by').value;
+            voiceFilters.resolveDepth = parseInt(document.getElementById('voice-resolve-depth').value) || 2;
+            voiceFilters.dateStart = document.getElementById('voice-date-start').value;
+            voiceFilters.dateEnd = document.getElementById('voice-date-end').value;
+            voiceFilters.tag = document.getElementById('voice-tag-filter').value;
+            voiceFilters.includeSigs = document.getElementById('voice-include-sigs-toggle').classList.contains('active');
+            voiceFilters.includePubKeys = document.getElementById('voice-include-pubkeys-toggle').classList.contains('active');
+        }
+
+        function handleVoiceSearchKeyup(event) {
+            if (event.key === 'Enter') {
+                applyVoiceFilters();
+            }
+        }
+
+        function clearVoiceFilters() {
+            document.getElementById('voice-search-input').value = '';
+            document.getElementById('voice-record-type-filter').value = '';
+            document.getElementById('voice-sort-by').value = 'inArweaveBlock:desc';
+            document.getElementById('voice-resolve-depth').value = '2';
+            document.getElementById('voice-date-start').value = '';
+            document.getElementById('voice-date-end').value = '';
+            document.getElementById('voice-tag-filter').value = '';
+            document.getElementById('voice-include-sigs-toggle').classList.remove('active');
+            document.getElementById('voice-include-pubkeys-toggle').classList.remove('active');
+            
+            // Clear applied filters display
+            document.getElementById('applied-filters-display').classList.add('hidden');
+            
+            applyVoiceFilters();
+        }
+
+        function toggleVoiceSwitch(elementId) {
+            document.getElementById(elementId).classList.toggle('active');
+        }
+
+        // Voice Records Loading Functions
+        async function loadVoiceRecords(reset = false) {
+            if (voiceIsLoading) return;
+            
+            try {
+                voiceIsLoading = true;
+                
+                if (reset) {
+                    voicePage = 1;
+                    voiceRecords = [];
+                    document.getElementById('voice-records-grid').innerHTML = '';
+                }
+                
+                document.getElementById('voice-loading-indicator').classList.remove('hidden');
+                
+                const params = buildVoiceApiParams();
+                const response = await fetch(`/api/records?${params}`);
+                const data = await response.json();
+                
+                if (data.records) {
+                    if (reset) {
+                        voiceRecords = data.records;
+                    } else {
+                        voiceRecords = [...voiceRecords, ...data.records];
+                    }
+                    
+                    voiceHasMoreRecords = data.totalPages > voicePage;
+                    displayVoiceRecords(data.records, !reset);
+                    updateVoicePaginationInfo(data);
+                    updateVoiceTagFilter(data.tagSummary);
+                } else {
+                    showVoiceNoResults();
+                }
+                
+                updateVoiceLoadMoreButton();
+                
+            } catch (error) {
+                console.error('[Voice] Error loading records:', error);
+                showVoiceNoResults();
+            } finally {
+                voiceIsLoading = false;
+                document.getElementById('voice-loading-indicator').classList.add('hidden');
+            }
+        }
+
+        function buildVoiceApiParams() {
+            const params = new URLSearchParams({
+                limit: '12',
+                page: voicePage.toString(),
+                sortBy: voiceFilters.sortBy,
+                resolveDepth: voiceFilters.resolveDepth.toString(),
+                summarizeTags: 'true',
+                tagCount: '25',
+                includeSigs: voiceFilters.includeSigs.toString(),
+                includePubKeys: voiceFilters.includePubKeys.toString()
+            });
+
+            if (voiceFilters.search) {
+                params.append('search', voiceFilters.search.replace(/\s+/g, '+'));
+            }
+            
+            if (voiceFilters.recordType) {
+                params.append('recordType', voiceFilters.recordType);
+            }
+            
+            if (voiceFilters.dateStart) {
+                params.append('dateStart', dateToUnixTime(voiceFilters.dateStart));
+            }
+            
+            if (voiceFilters.dateEnd) {
+                params.append('dateEnd', dateToUnixTime(voiceFilters.dateEnd));
+            }
+            
+            if (voiceFilters.tag) {
+                params.append('tags', voiceFilters.tag);
+            }
+
+            return params.toString();
+        }
+
+        function displayVoiceRecords(records, append = false) {
+            const grid = document.getElementById('voice-records-grid');
+            
+            if (!append) {
+                grid.innerHTML = '';
+            }
+            
+            const startIndex = voiceRecords.length - records.length;
+            records.forEach((record, index) => {
+                const card = createVoiceRecordCard(record, startIndex + index);
+                grid.appendChild(card);
+            });
+            
+            grid.classList.remove('hidden');
+            document.getElementById('voice-no-results').classList.add('hidden');
+        }
+
+        function createVoiceRecordCard(record, recordIndex) {
+            // Use the same card creation logic as the main browse tab
+            // but with voice- prefixed IDs for unique identification
+            const card = createRecordCard(record, recordIndex);
+            
+            // Update any IDs to be voice-specific to avoid conflicts
+            const audioBtn = card.querySelector('.audio-play-btn');
+            if (audioBtn) {
+                audioBtn.id = `voice-audioBtn-${recordIndex}`;
+                
+                // Extract audio URL from record data
+                let audioUrl = '';
+                const recordType = getRecordType(record);
+                const specificData = record.data?.[recordType] || {};
+                const basicData = record.data?.basic || {};
+                
+                if (specificData.audioItems && specificData.audioItems.length > 0) {
+                    audioUrl = specificData.audioItems[0]?.data?.audio?.webUrl || specificData.audioItems[0];
+                } else if (basicData.audioItems && basicData.audioItems.length > 0) {
+                    audioUrl = basicData.audioItems[0]?.data?.audio?.webUrl || basicData.audioItems[0];
+                }
+                
+                audioBtn.onclick = () => playAudioInMaster(
+                    audioUrl, 
+                    record.data?.basic?.name || 'Unnamed Record',
+                    recordType,
+                    recordIndex
+                );
+            }
+            
+            const textBtn = card.querySelector('.toggle-text-btn');
+            if (textBtn) {
+                textBtn.id = `voice-textBtn-${recordIndex}`;
+                textBtn.onclick = () => toggleVoiceTextContent(recordIndex, 
+                    textBtn.getAttribute('data-type') || 'static',
+                    textBtn.getAttribute('data-url') || ''
+                );
+            }
+            
+            const textContent = card.querySelector('.text-content-preview');
+            if (textContent) {
+                textContent.id = `voice-textContent-${recordIndex}`;
+            }
+            
+            return card;
+        }
+
+        function showVoiceNoResults() {
+            document.getElementById('voice-records-grid').classList.add('hidden');
+            document.getElementById('voice-no-results').classList.remove('hidden');
+        }
+
+        function updateVoicePaginationInfo(data) {
+            const info = document.getElementById('voice-pagination-info');
+            info.textContent = `Showing ${voiceRecords.length} of ${data.totalRecords || 'many'} records`;
+        }
+
+        function updateVoiceTagFilter(tagSummary) {
+            if (!tagSummary) return;
+            
+            const select = document.getElementById('voice-tag-filter');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">All Tags</option>';
+            
+            tagSummary.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag.tag;
+                option.textContent = `${tag.tag} (${tag.count})`;
+                select.appendChild(option);
+            });
+            
+            select.value = currentValue;
+        }
+
+        function updateVoiceLoadMoreButton() {
+            const container = document.getElementById('voice-load-more-container');
+            const button = document.getElementById('voice-load-more-btn');
+            
+            if (voiceHasMoreRecords && voiceRecords.length > 0) {
+                container.classList.remove('hidden');
+                button.disabled = voiceIsLoading;
+                button.textContent = voiceIsLoading ? 'Loading...' : 'Load More Records';
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function loadMoreVoiceRecords() {
+            if (!voiceHasMoreRecords || voiceIsLoading) return;
+            voicePage++;
+            loadVoiceRecords(false);
+        }
+
+        // Voice-specific text content toggle
+        async function toggleVoiceTextContent(recordIndex, sourceType, sourceUrl) {
+            const textContent = document.getElementById(`voice-textContent-${recordIndex}`);
+            const toggleBtn = document.getElementById(`voice-textBtn-${recordIndex}`);
+            
+            if (textContent.classList.contains('hidden')) {
+                // Show content
+                textContent.classList.remove('hidden');
+                
+                if (sourceType === 'fetch' && sourceUrl) {
+                    // Check if we already fetched the content
+                    if (!textContent.dataset.fetched) {
+                        try {
+                            toggleBtn.textContent = '📄 Loading...';
+                            toggleBtn.disabled = true;
+                            
+                            const response = await fetch(sourceUrl);
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            }
+                            const text = await response.text();
+                            
+                            textContent.innerHTML = `<div style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(text)}</div>`;
+                            textContent.dataset.fetched = 'true';
+                            toggleBtn.textContent = '📄 Hide Full Article';
+                            toggleBtn.disabled = false;
+                        } catch (error) {
+                            console.error('Error fetching text content:', error);
+                            textContent.innerHTML = `<div style="color: #dc3545; padding: 10px;">
+                                <strong>Error loading article:</strong><br>
+                                ${escapeHtml(error.message)}<br>
+                                <small>URL: ${escapeHtml(sourceUrl)}</small>
+                            </div>`;
+                            toggleBtn.textContent = '❌ Failed to Load';
+                            toggleBtn.disabled = false;
+                        }
+                    } else {
+                        toggleBtn.textContent = '📄 Hide Full Article';
+                    }
+                } else if (sourceType === 'static') {
+                    // Static content - just show it
+                    const staticContent = textContent.dataset.staticContent;
+                    if (staticContent) {
+                        textContent.innerHTML = staticContent;
+                    }
+                    toggleBtn.textContent = '📄 Hide Full Text';
+                }
+            } else {
+                // Hide content
+                textContent.classList.add('hidden');
+                if (sourceType === 'fetch') {
+                    toggleBtn.textContent = '📄 Load Full Article';
+                } else {
+                    toggleBtn.textContent = '📄 Show Full Text';
+                }
+            }
         }
 
         // Text content toggle function
