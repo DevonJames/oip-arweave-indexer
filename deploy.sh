@@ -44,12 +44,12 @@ show_usage() {
     echo "  help    - Show this help message"
     echo ""
     echo "Profiles:"
-    echo "  minimal     - Core only: elasticsearch, kibana, oip (no extra services)"
-    echo "  standard    - Distributed: Full stack (elasticsearch, kibana, ipfs, oip, speech-synthesizer, ngrok)"
-    echo "  full        - Monolithic: All services in one container (uses Dockerfile-full)"
-    echo "  gpu         - GPU-optimized OIP + text-generator (connects to external network)"
-    echo "  gpu-only    - Only GPU-optimized OIP service (minimal, for existing stacks)"
-    echo "  full-gpu    - Full distributed stack WITH GPU text-generator"
+    echo "  minimal              - Core only: elasticsearch, kibana, oip (no extra services)"
+    echo "  standard             - Distributed: Full stack with AI chat (elasticsearch, kibana, ipfs, oip, speech-synthesizer, ngrok, ollama, text-generator)"
+    echo "  standard-monolithic  - Monolithic: Core services in one container (lacks modern AI, uses Dockerfile-full)"
+    echo "  gpu                  - GPU-optimized OIP + text-generator (connects to external network)"
+    echo "  oip-gpu-only         - Only GPU-optimized OIP service (minimal, for existing stacks)"
+    echo "  standard-gpu         - Complete stack with GPU acceleration"
     echo ""
     echo "Examples:"
     echo "  $0 up minimal           # Start core services only (elasticsearch, kibana, oip)"
@@ -78,7 +78,7 @@ check_env_file() {
 validate_profile() {
     local profile=$1
     case $profile in
-        minimal|standard|full|gpu|gpu-only|full-gpu)
+        minimal|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu)
             return 0
             ;;
         *)
@@ -98,7 +98,7 @@ start_services() {
     print_info "Starting OIP Arweave with profile: $profile"
     
     # Special handling for GPU profiles that need external network
-    if [[ "$profile" == "gpu" || "$profile" == "gpu-only" ]]; then
+    if [[ "$profile" == "gpu" || "$profile" == "oip-gpu-only" ]]; then
         print_info "Checking for external network 'oiparweave_oip-network'..."
         if ! docker network inspect oiparweave_oip-network >/dev/null 2>&1; then
             print_warning "External network 'oiparweave_oip-network' not found."
@@ -124,7 +124,7 @@ build_services() {
     print_info "Building and starting OIP Arweave with profile: $profile"
     
     # Special handling for GPU profiles that need external network
-    if [[ "$profile" == "gpu" || "$profile" == "gpu-only" ]]; then
+    if [[ "$profile" == "gpu" || "$profile" == "oip-gpu-only" ]]; then
         print_info "Checking for external network 'oiparweave_oip-network'..."
         if ! docker network inspect oiparweave_oip-network >/dev/null 2>&1; then
             print_warning "External network 'oiparweave_oip-network' not found."

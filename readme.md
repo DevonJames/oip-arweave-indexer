@@ -141,8 +141,8 @@ Need additional services like IPFS, Speech Synthesis, Text Generation, GPU accel
 - `standard` - Full distributed stack with all services
 - `full` - All services in one container (monolithic)
 - `gpu` - GPU-optimized deployment for RTX 4090 machines
-- `gpu-only` - Minimal GPU service for existing stacks
-- `full-gpu` - Full distributed stack with GPU features
+- `oip-gpu-only` - Minimal GPU service for existing stacks
+- `standard-gpu` - Complete stack with GPU acceleration
 
 #### Alternative Commands
 
@@ -163,8 +163,25 @@ make rebuild PROFILE=minimal
 
 # Rebuild any profile with no cache
 make rebuild PROFILE=standard
-make rebuild PROFILE=full-gpu
+make rebuild PROFILE=standard-gpu
 ```
+
+## Ngrok Domain Configuration
+
+Set your custom domain in the `.env` file:
+
+```bash
+# For GPU nodes with custom domain
+NGROK_DOMAIN=api.oip.onl
+
+# For other nodes with custom domains  
+NGROK_DOMAIN=mynode.example.com
+
+# Leave empty for random ngrok URLs
+NGROK_DOMAIN=
+```
+
+**Note**: The `docker-compose-for4090.yml` file is no longer used and can be safely deleted. All deployments now use the main `docker-compose.yml` with configurable domains.
 
 ## Enhanced Media Publishing System
 

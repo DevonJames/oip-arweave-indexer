@@ -38,7 +38,7 @@ const recordTypesForRAG = {
     
     // Podcast records - audio content and transcripts
     podcast: {
-        enabled: true,
+        enabled: false,
         priority: 6,
         description: 'Podcast episodes and audio content',
         contextFields: ['name', 'description', 'transcript', 'speakers', 'duration', 'topics']
@@ -46,7 +46,7 @@ const recordTypesForRAG = {
     
     // JFK Files documents - historical documents
     jfkFilesDocument: {
-        enabled: true,
+        enabled: false,
         priority: 5,
         description: 'JFK assassination related documents and files',
         contextFields: ['name', 'description', 'content', 'documentType', 'date', 'classification']

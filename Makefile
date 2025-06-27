@@ -19,16 +19,15 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(YELLOW)Available profiles:$(NC)"
-	@echo "  $(GREEN)minimal$(NC)     - Core only: elasticsearch, kibana, oip"
-	@echo "  $(GREEN)standard$(NC)    - Distributed: Full stack (default)"
-	@echo "  $(GREEN)full$(NC)        - Monolithic: All services in one container"
-	@echo "  $(GREEN)gpu$(NC)         - GPU-optimized deployment"
-	@echo "  $(GREEN)gpu-only$(NC)    - Only GPU OIP service"
-	@echo "  $(GREEN)full-gpu$(NC)    - Complete stack: all services + GPU acceleration"
-	@echo "  $(GREEN)voice$(NC)       - Voice AI services: STT, TTS, and core services"
+	@echo "  $(GREEN)minimal$(NC)              - Core only: elasticsearch, kibana, oip"
+	@echo "  $(GREEN)standard$(NC)             - Distributed: Full stack with AI chat (elasticsearch, kibana, oip, ollama, text-generator)"
+	@echo "  $(GREEN)standard-monolithic$(NC)  - Monolithic: Core services in one container (lacks modern AI features)"
+	@echo "  $(GREEN)gpu$(NC)                  - GPU-optimized deployment"
+	@echo "  $(GREEN)oip-gpu-only$(NC)         - Only GPU OIP service"
+	@echo "  $(GREEN)standard-gpu$(NC)         - Complete stack: all services + GPU acceleration"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
-	@echo "  make rebuild-full-gpu          # Build complete stack + install all LLM models"
+	@echo "  make rebuild-standard-gpu      # Build complete stack + install all LLM models"
 	@echo "  make install-models            # Install LLM models only (if already running)"
 	@echo "  make status                    # Check service status"
 	@echo "  make logs SERVICE=oip-gpu      # View specific service logs"
@@ -39,8 +38,8 @@ PROFILE ?= standard
 # Validate profile
 validate-profile:
 	@case "$(PROFILE)" in \
-		minimal|standard|full|gpu|gpu-only|full-gpu|voice) ;; \
-		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, standard, full, gpu, gpu-only, full-gpu, or voice$(NC)"; exit 1 ;; \
+		minimal|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu) ;; \
+		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, standard, standard-monolithic, gpu, oip-gpu-only, or standard-gpu$(NC)"; exit 1 ;; \
 	esac
 
 # Check if .env file exists
@@ -122,22 +121,19 @@ minimal: ## Quick deploy: Core services only (elasticsearch, kibana, oip)
 standard: ## Quick deploy: Distributed full stack
 	@make up PROFILE=standard
 
-full: ## Quick deploy: Monolithic (all services in one container)
-	@make up PROFILE=full
+standard-monolithic: ## Quick deploy: Monolithic (all services in one container + separate AI services)
+	@make up PROFILE=standard-monolithic
 
 gpu: ## Quick deploy: GPU-optimized deployment
 	@make up PROFILE=gpu
 
-gpu-only: ## Quick deploy: GPU OIP service only
-	@make up PROFILE=gpu-only
+oip-gpu-only: ## Quick deploy: GPU OIP service only
+	@make up PROFILE=oip-gpu-only
 
-full-gpu: ## Quick deploy: Complete stack with GPU acceleration (ALL services) + install models
-	@make up PROFILE=full-gpu
+standard-gpu: ## Quick deploy: Complete stack with GPU acceleration (ALL services) + install models
+	@make up PROFILE=standard-gpu
 	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
 	@make install-models
-
-voice: ## Quick deploy: Voice AI services (STT, TTS, core)
-	@make up PROFILE=voice
 
 # Quick rebuild targets for common scenarios
 rebuild-minimal: ## Quick rebuild: Core services only (elasticsearch, kibana, oip)
@@ -146,26 +142,23 @@ rebuild-minimal: ## Quick rebuild: Core services only (elasticsearch, kibana, oi
 rebuild-standard: ## Quick rebuild: Distributed full stack
 	@make rebuild PROFILE=standard
 
-rebuild-full: ## Quick rebuild: Monolithic (all services in one container)
-	@make rebuild PROFILE=full
+rebuild-standard-monolithic: ## Quick rebuild: Monolithic (all services in one container + separate AI services)
+	@make rebuild PROFILE=standard-monolithic
 
 rebuild-gpu: ## Quick rebuild: GPU-optimized deployment
 	@make rebuild PROFILE=gpu
 
-rebuild-gpu-only: ## Quick rebuild: GPU OIP service only
-	@make rebuild PROFILE=gpu-only
+rebuild-oip-gpu-only: ## Quick rebuild: GPU OIP service only
+	@make rebuild PROFILE=oip-gpu-only
 
-rebuild-full-gpu: ## Quick rebuild: Complete stack with GPU acceleration (ALL services) + install models
-	@make rebuild PROFILE=full-gpu
+rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration (ALL services) + install models
+	@make rebuild PROFILE=standard-gpu
 	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
 	@make install-models
 
-rebuild-voice: ## Quick rebuild: Voice AI services (STT, TTS, core)
-	@make rebuild PROFILE=voice
-
 # LLM Model Management
 install-models: ## Install LLM models using Ollama
-	@echo "$(BLUE)Installing LLM models for Voice Assistant...$(NC)"
+	@echo "$(BLUE)Installing LLM models for AI Chat...$(NC)"
 	@chmod +x ./install_llm_models.sh
 	@./install_llm_models.sh
 

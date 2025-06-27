@@ -23,6 +23,13 @@ GOOGLE_API_TOKEN=
 ELEVENLABS_API_KEY=
 FIRECRAWL=
 
+# Ngrok Domain Configuration
+NGROK_DOMAIN=
+# Examples:
+# NGROK_DOMAIN=api.oip.onl           # For GPU nodes
+# NGROK_DOMAIN=mynode.oip.onl        # For custom domains
+# NGROK_DOMAIN=                      # Leave empty for random ngrok URLs
+
 # LLM Configuration (Ollama-based)
 OLLAMA_HOST=http://ollama:11434
 LLAMA_MODEL=llama3.2:3b

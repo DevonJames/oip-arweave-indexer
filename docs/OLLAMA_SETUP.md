@@ -8,7 +8,7 @@ Your OIP Voice Assistant now uses **Ollama** for local LLM management - the same
 
 ```bash
 # Start all GPU-accelerated services + install all LLM models automatically
-make rebuild-full-gpu
+make rebuild-standard-gpu
 ```
 
 This single command will:

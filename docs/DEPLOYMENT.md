@@ -72,14 +72,16 @@ docker-compose --profile gpu up -d
 - No AI/ML capabilities
 - No public access tunneling
 
-### `standard` - Distributed Full Stack (Recommended)
-**Use Case**: Production deployments, development, most common use case
+### `standard` - Distributed Full Stack with AI Chat (Recommended)
+**Use Case**: Production deployments, development, AI chat functionality
 
 **Services Included**:
 - ✅ Elasticsearch + Kibana
 - ✅ IPFS
 - ✅ OIP main service (separate container)
 - ✅ Speech Synthesizer (separate container)
+- ✅ Ollama LLM service (for AI chat)
+- ✅ Text Generator (for AI responses)
 - ✅ Ngrok (separate container)
 
 **Dockerfile**: Uses `Dockerfile` (lightweight, focused on main OIP service)
@@ -89,30 +91,35 @@ docker-compose --profile gpu up -d
 - Easier to scale individual services
 - Faster builds and updates
 - Better for debugging specific services
+- **Includes AI chat functionality for reference-client.html**
 
-### `full` - Monolithic Deployment
-**Use Case**: Simple deployments, testing, resource-constrained environments
+### `standard-monolithic` - True Monolithic Deployment
+**Use Case**: Simple deployments, testing, single-container approach
 
 **Services Included**:
 - ✅ Elasticsearch + Kibana
-- ✅ IPFS
+- ✅ IPFS  
 - ✅ All OIP services in ONE container (oip-full)
   - Main OIP service
-  - Text Generator (LLaMA2)
-  - Speech Synthesizer (Coqui TTS)
-  - Ngrok
+  - Built-in Text Generator (LLaMA2)
+  - Built-in Speech Synthesizer (Coqui TTS)
+  - Built-in Ngrok (configurable domain via NGROK_DOMAIN)
+- ✅ STT/TTS services (separate containers)
 
 **Dockerfile**: Uses `Dockerfile-full` (includes all Python ML dependencies)
 
 **Advantages**:
-- Simpler deployment (fewer containers)
-- All services start together
-- Good for development/testing
+- True monolithic approach (fewer containers)
+- Simpler deployment than distributed
+- All core services in one container
 
 **Disadvantages**:
+- **Missing Ollama/modern LLM support** (only has built-in LLaMA2)
 - Larger container size
 - Resource competition between services
-- Harder to debug individual services
+- **Not equivalent to `standard` profile** - lacks modern AI chat features
+
+**Note**: To make this truly equivalent to `standard`, the `Dockerfile-full` would need to be updated to include Ollama and modern text generation services.
 
 ### `gpu` - GPU-Optimized
 **Use Case**: Machines with RTX 4090 or other CUDA GPUs, connecting to existing Elasticsearch
@@ -127,7 +134,7 @@ docker-compose --profile gpu up -d
 - Existing Elasticsearch running (from another stack)
 - External Docker network `oiparweave_oip-network`
 
-### `gpu-only` - Minimal GPU Service
+### `oip-gpu-only` - Minimal GPU Service
 **Use Case**: Adding GPU capabilities to existing full stack
 
 **Services Included**:
@@ -137,12 +144,15 @@ docker-compose --profile gpu up -d
 - Existing full stack running elsewhere
 - External Docker network `oiparweave_oip-network`
 
-### `full-gpu` - Distributed with GPU
-**Use Case**: Full distributed stack with GPU text generation
+### `standard-gpu` - Complete Stack with GPU Acceleration
+**Use Case**: Full distributed stack with GPU text generation and voice services
 
 **Services Included**:
 - ✅ All services from `standard` profile
 - ✅ GPU-enabled Text Generator
+- ✅ GPU-enabled TTS Service
+- ✅ GPU-enabled STT Service
+- ✅ Automatic LLM model installation
 
 ## 🔧 Dockerfile Variants
 
@@ -196,11 +206,12 @@ Examples:
 make [target] [PROFILE=profile_name]
 
 Quick Targets:
-  make minimal     # Core services only
-  make standard    # Distributed full stack
-  make full        # Monolithic deployment
-  make gpu         # GPU-optimized
-  make gpu-only    # Minimal GPU service
+  make minimal              # Core services only
+  make standard             # Distributed full stack with AI chat
+  make standard-monolithic  # Monolithic deployment with separate AI services
+  make gpu                  # GPU-optimized
+  make oip-gpu-only         # Minimal GPU service
+  make standard-gpu         # Complete stack with GPU acceleration
   
 Detailed Targets:
   make up PROFILE=minimal
@@ -244,7 +255,7 @@ make rebuild PROFILE=minimal
 make rebuild PROFILE=standard
 
 # Rebuild GPU profile with no cache
-make rebuild PROFILE=full-gpu
+make rebuild PROFILE=standard-gpu
 
 # Default profile (standard) rebuild
 make rebuild
@@ -288,25 +299,25 @@ docker-compose --profile minimal up -d
 ./deploy.sh up minimal
 ```
 
-### 2. Fresh Installation (No GPU)
+### 2. Fresh Installation with AI Chat (No GPU)
 ```bash
 ./deploy.sh up standard
 ```
 
-### 3. Simple Development Setup
+### 3. Simple Development Setup (Monolithic)
 ```bash
-./deploy.sh up full
+./deploy.sh up standard-monolithic
 ```
 
 ### 4. Adding GPU to Existing Stack
 ```bash
 # On machine with existing stack running
-./deploy.sh up gpu-only
+./deploy.sh up oip-gpu-only
 ```
 
-### 5. Full GPU Development Environment
+### 5. Complete GPU Development Environment
 ```bash
-./deploy.sh up full-gpu
+./deploy.sh up standard-gpu
 ```
 
 ### 6. Production with Separate Services
@@ -319,10 +330,11 @@ docker-compose --profile minimal up -d
 ### Port Conflicts
 Different profiles expose different ports:
 - `minimal`: 3005, 9229, 9200, 5601
-- `standard`: 3005, 9229, 9200, 5601, 8082, 4040
-- `full`: 3005, 9229, 9200, 5601, 8081, 8082, 4040 (all in oip-full)
-- `gpu`: 3005, 9229, 8081
-- `gpu-only`: 3005, 9229
+- `standard`: 3005, 9229, 9200, 5601, 8082, 4040, 11434, 8081, 8003, 8005 (includes AI services)
+- `standard-monolithic`: 3005, 9229, 9200, 5601, 8081, 8082, 4040 (built-in to oip-full) + 8003, 8005 (separate STT/TTS)
+- `gpu`: 3005, 9229, 8081, 11434
+- `oip-gpu-only`: 3005, 9229
+- `standard-gpu`: All ports + GPU services (5002, 8003)
 
 ### Network Issues
 ```bash
