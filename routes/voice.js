@@ -231,14 +231,23 @@ router.post('/synthesize', async (req, res) => {
             console.log(`[TTS] Text truncated from ${textToSynthesize.length} to ${finalText.length} characters`);
         }
 
-        // Use Chatterbox TTS service
-                            // Map voice names to potentially better quality alternatives
+        // Use TTS service with appropriate engine selection
+                    // Map voice names to high-quality alternatives
                     const voiceMapping = {
+                        'edge_female': 'female_1',
+                        'edge_male': 'male_1', 
+                        'edge_expressive': 'female_2',
                         'chatterbox': 'female_1',
                         'female': 'female_1', 
                         'male': 'male_1',
+                        'female_1': 'female_1',
+                        'male_1': 'male_1',
                         'default': 'female_1'
                     };
+                    
+                    // Determine best engine based on voice selection
+                    const useEdgeTTS = voice_id.startsWith('edge_');
+                    const enginePreference = useEdgeTTS ? 'edge' : 'auto';
                     
                     const mappedVoice = voiceMapping[voice_id] || voice_id;
                     
@@ -249,7 +258,7 @@ router.post('/synthesize', async (req, res) => {
                             data: {
                                 text: finalText,
                                 voice: mappedVoice,
-                                engine: 'chatterbox'  // Explicitly request chatterbox engine
+                                engine: enginePreference  // Use edge for edge_ voices, auto for others
                             },
                             responseType: 'arraybuffer'
                         }
@@ -400,13 +409,22 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         console.log(`[Voice Chat] Text truncated from ${responseText.length} to ${textForTTS.length} characters`);
                     }
                     
-                    // Map voice names to potentially better quality alternatives
+                    // Map voice names to high-quality alternatives
                     const voiceMapping = {
+                        'edge_female': 'female_1',
+                        'edge_male': 'male_1', 
+                        'edge_expressive': 'female_2',
                         'chatterbox': 'female_1',
                         'female': 'female_1', 
                         'male': 'male_1',
+                        'female_1': 'female_1',
+                        'male_1': 'male_1',
                         'default': 'female_1'
                     };
+                    
+                    // Determine best engine based on voice selection
+                    const useEdgeTTS = voice_id.startsWith('edge_');
+                    const enginePreference = useEdgeTTS ? 'edge' : 'auto';
                     
                     const mappedVoice = voiceMapping[voice_id] || voice_id;
                     
@@ -417,7 +435,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                             data: {
                                 text: textForTTS,
                                 voice: mappedVoice,
-                                engine: 'chatterbox'  // Explicitly request chatterbox engine
+                                engine: enginePreference  // Use edge for edge_ voices, auto for others
                             },
                             responseType: 'arraybuffer'
                         }
@@ -531,9 +549,11 @@ router.get('/voices', async (req, res) => {
         // Fallback voices if service is down
         const fallbackVoices = {
             voices: [
-                { id: 'chatterbox', name: 'Chatterbox (Default)', engine: 'Chatterbox' },
-                { id: 'female_1', name: 'Female Voice 1 (eSpeak)', engine: 'eSpeak' },
-                { id: 'male_1', name: 'Male Voice 1 (eSpeak)', engine: 'eSpeak' },
+                { id: 'edge_female', name: 'Edge Female (Jenny) - High Quality', engine: 'Edge TTS' },
+                { id: 'edge_male', name: 'Edge Male (Guy) - High Quality', engine: 'Edge TTS' },
+                { id: 'edge_expressive', name: 'Edge Expressive (Aria) - Natural', engine: 'Edge TTS' },
+                { id: 'female_1', name: 'Chatterbox Female 1', engine: 'Chatterbox' },
+                { id: 'male_1', name: 'Chatterbox Male 1', engine: 'Chatterbox' },
                 { id: 'female_2', name: 'Female Voice 2 (eSpeak)', engine: 'eSpeak' },
                 { id: 'male_2', name: 'Male Voice 2 (eSpeak)', engine: 'eSpeak' }
             ]
