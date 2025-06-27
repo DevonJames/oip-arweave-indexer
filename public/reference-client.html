@@ -3468,52 +3468,60 @@
             document.getElementById('voice-no-results').classList.add('hidden');
         }
 
-        function createVoiceRecordCard(record, recordIndex) {
-            // Use the same card creation logic as the main browse tab
-            // but with voice- prefixed IDs for unique identification
-            const card = createRecordCard(record, recordIndex);
-            
-            // Update any IDs to be voice-specific to avoid conflicts
-            const audioBtn = card.querySelector('.audio-play-btn');
-            if (audioBtn) {
-                audioBtn.id = `voice-audioBtn-${recordIndex}`;
-                
-                // Extract audio URL from record data
-                let audioUrl = '';
-                const recordType = getRecordType(record);
-                const specificData = record.data?.[recordType] || {};
-                const basicData = record.data?.basic || {};
-                
-                if (specificData.audioItems && specificData.audioItems.length > 0) {
-                    audioUrl = specificData.audioItems[0]?.data?.audio?.webUrl || specificData.audioItems[0];
-                } else if (basicData.audioItems && basicData.audioItems.length > 0) {
-                    audioUrl = basicData.audioItems[0]?.data?.audio?.webUrl || basicData.audioItems[0];
-                }
-                
-                audioBtn.onclick = () => playAudioInMaster(
-                    audioUrl, 
-                    record.data?.basic?.name || 'Unnamed Record',
-                    recordType,
-                    recordIndex
-                );
-            }
-            
-            const textBtn = card.querySelector('.toggle-text-btn');
-            if (textBtn) {
-                textBtn.id = `voice-textBtn-${recordIndex}`;
-                textBtn.onclick = () => toggleVoiceTextContent(recordIndex, 
-                    textBtn.getAttribute('data-type') || 'static',
-                    textBtn.getAttribute('data-url') || ''
-                );
-            }
-            
-            const textContent = card.querySelector('.text-content-preview');
-            if (textContent) {
-                textContent.id = `voice-textContent-${recordIndex}`;
-            }
-            
-            return card;
-        }
+                 function createVoiceRecordCard(record, recordIndex) {
+             // Use the same card creation logic as the main browse tab
+             // but with voice- prefixed IDs for unique identification
+             const card = createRecordCard(record, recordIndex);
+             
+             // Update any IDs to be voice-specific to avoid conflicts
+             const audioBtn = card.querySelector('.audio-play-btn');
+             if (audioBtn) {
+                 audioBtn.id = `voice-audioBtn-${recordIndex}`;
+                 
+                 // Extract audio URL from record data
+                 let audioUrl = '';
+                 const recordType = getRecordType(record);
+                 const specificData = record.data?.[recordType] || {};
+                 const basicData = record.data?.basic || {};
+                 
+                 if (specificData.audioItems && specificData.audioItems.length > 0) {
+                     audioUrl = specificData.audioItems[0]?.data?.audio?.webUrl || specificData.audioItems[0];
+                 } else if (basicData.audioItems && basicData.audioItems.length > 0) {
+                     audioUrl = basicData.audioItems[0]?.data?.audio?.webUrl || basicData.audioItems[0];
+                 }
+                 
+                 audioBtn.onclick = () => playAudioInMaster(
+                     audioUrl, 
+                     record.data?.basic?.name || 'Unnamed Record',
+                     recordType,
+                     recordIndex
+                 );
+             }
+             
+             // Fix the text toggle button (for embedded text content)
+             const textBtn = card.querySelector('.toggle-text-btn');
+             if (textBtn) {
+                 textBtn.id = `voice-textBtn-${recordIndex}`;
+                 textBtn.onclick = () => toggleVoiceTextContent(recordIndex, 
+                     textBtn.getAttribute('data-type') || 'static',
+                     textBtn.getAttribute('data-url') || ''
+                 );
+             }
+             
+             // Fix the view article button (for opening original webUrl)
+             const viewBtn = card.querySelector('.view-article-btn');
+             if (viewBtn) {
+                 viewBtn.id = `voice-viewBtn-${recordIndex}`;
+                 // Keep the original onclick functionality for opening in new tab
+             }
+             
+             const textContent = card.querySelector('.text-content-preview');
+             if (textContent) {
+                 textContent.id = `voice-textContent-${recordIndex}`;
+             }
+             
+             return card;
+         }
 
         function showVoiceNoResults() {
             document.getElementById('voice-records-grid').classList.add('hidden');
@@ -3561,63 +3569,63 @@
             loadVoiceRecords(false);
         }
 
-        // Voice-specific text content toggle
-        async function toggleVoiceTextContent(recordIndex, sourceType, sourceUrl) {
-            const textContent = document.getElementById(`voice-textContent-${recordIndex}`);
-            const toggleBtn = document.getElementById(`voice-textBtn-${recordIndex}`);
-            
-            if (textContent.classList.contains('hidden')) {
-                // Show content
-                textContent.classList.remove('hidden');
-                
-                if (sourceType === 'fetch' && sourceUrl) {
-                    // Check if we already fetched the content
-                    if (!textContent.dataset.fetched) {
-                        try {
-                            toggleBtn.textContent = '📄 Loading...';
-                            toggleBtn.disabled = true;
-                            
-                            const response = await fetch(sourceUrl);
-                            if (!response.ok) {
-                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                            }
-                            const text = await response.text();
-                            
-                            textContent.innerHTML = `<div style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(text)}</div>`;
-                            textContent.dataset.fetched = 'true';
-                            toggleBtn.textContent = '📄 Hide Full Article';
-                            toggleBtn.disabled = false;
-                        } catch (error) {
-                            console.error('Error fetching text content:', error);
-                            textContent.innerHTML = `<div style="color: #dc3545; padding: 10px;">
-                                <strong>Error loading article:</strong><br>
-                                ${escapeHtml(error.message)}<br>
-                                <small>URL: ${escapeHtml(sourceUrl)}</small>
-                            </div>`;
-                            toggleBtn.textContent = '❌ Failed to Load';
-                            toggleBtn.disabled = false;
-                        }
-                    } else {
-                        toggleBtn.textContent = '📄 Hide Full Article';
-                    }
-                } else if (sourceType === 'static') {
-                    // Static content - just show it
-                    const staticContent = textContent.dataset.staticContent;
-                    if (staticContent) {
-                        textContent.innerHTML = staticContent;
-                    }
-                    toggleBtn.textContent = '📄 Hide Full Text';
-                }
-            } else {
-                // Hide content
-                textContent.classList.add('hidden');
-                if (sourceType === 'fetch') {
-                    toggleBtn.textContent = '📄 Load Full Article';
-                } else {
-                    toggleBtn.textContent = '📄 Show Full Text';
-                }
-            }
-        }
+                 // Voice-specific text content toggle (for embedded text content)
+         async function toggleVoiceTextContent(recordIndex, sourceType, sourceUrl) {
+             const textContent = document.getElementById(`voice-textContent-${recordIndex}`);
+             const toggleBtn = document.getElementById(`voice-textBtn-${recordIndex}`);
+             
+             if (textContent.classList.contains('hidden')) {
+                 // Show content
+                 textContent.classList.remove('hidden');
+                 
+                 if (sourceType === 'fetch' && sourceUrl) {
+                     // Check if we already fetched the content
+                     if (!textContent.dataset.fetched) {
+                         try {
+                             toggleBtn.textContent = '📄 Loading...';
+                             toggleBtn.disabled = true;
+                             
+                             const response = await fetch(sourceUrl);
+                             if (!response.ok) {
+                                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                             }
+                             const text = await response.text();
+                             
+                             textContent.innerHTML = `<div style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(text)}</div>`;
+                             textContent.dataset.fetched = 'true';
+                             toggleBtn.textContent = '📄 Hide Full Text';
+                             toggleBtn.disabled = false;
+                         } catch (error) {
+                             console.error('Error fetching text content:', error);
+                             textContent.innerHTML = `<div style="color: #dc3545; padding: 10px;">
+                                 <strong>Error loading text:</strong><br>
+                                 ${escapeHtml(error.message)}<br>
+                                 <small>URL: ${escapeHtml(sourceUrl)}</small>
+                             </div>`;
+                             toggleBtn.textContent = '❌ Failed to Load';
+                             toggleBtn.disabled = false;
+                         }
+                     } else {
+                         toggleBtn.textContent = '📄 Hide Full Text';
+                     }
+                 } else if (sourceType === 'static') {
+                     // Static content - just show it
+                     const staticContent = textContent.dataset.staticContent;
+                     if (staticContent) {
+                         textContent.innerHTML = staticContent;
+                     }
+                     toggleBtn.textContent = '📄 Hide Full Text';
+                 }
+             } else {
+                 // Hide content
+                 textContent.classList.add('hidden');
+                 if (sourceType === 'fetch') {
+                     toggleBtn.textContent = '📄 Show Full Text';
+                 } else {
+                     toggleBtn.textContent = '📄 Show Full Text';
+                 }
+             }
+         }
 
         // Text content toggle function
         async function toggleTextContent(recordIndex, sourceType, sourceUrl) {
