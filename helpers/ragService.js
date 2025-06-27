@@ -268,14 +268,15 @@ class RAGService {
             // Step 5: Generate LLM response with context
             const response = await this.generateResponse(question, context, options.model);
             
-            return {
-                answer: response,
-                sources: this.extractSources(searchResults),
-                context_used: context.length > 0,
-                model: options.model || this.defaultModel,
-                search_results_count: searchResults.totalResults || 0,
-                relevant_types: relevantTypes.map(rt => rt.type) // Add this for debugging
-            };
+                    return {
+            answer: response,
+            sources: this.extractSources(searchResults),
+            context_used: context.length > 0,
+            model: options.model || this.defaultModel,
+            search_results_count: searchResults.totalResults || 0,
+            relevant_types: relevantTypes.map(rt => rt.type),
+            applied_filters: this.extractAppliedFilters(question, searchResults, relevantTypes)
+        };
             
         } catch (error) {
             console.error('[RAG] Error processing query:', error);
@@ -765,6 +766,57 @@ Answer the question using the information above:`;
         }
         
         return { params };
+    }
+
+    /**
+     * Extract applied filters for frontend display
+     */
+    extractAppliedFilters(question, searchResults, relevantTypes) {
+        const filters = {};
+        const lowerQuestion = question.toLowerCase();
+        
+        // Extract search terms - remove common question words
+        const questionWords = ['what', 'is', 'are', 'tell', 'me', 'about', 'latest', 'recent', 'news', 'on', 'the', 'any', 'some'];
+        const searchTerms = lowerQuestion.split(/[\s,]+/)
+            .filter(word => word.length > 2 && !questionWords.includes(word))
+            .slice(0, 3);
+        
+        if (searchTerms.length > 0) {
+            filters.search = searchTerms.join(' ');
+        }
+        
+        // Determine record type from search results or query analysis
+        if (searchResults.records && searchResults.records.length > 0) {
+            const recordTypes = [...new Set(searchResults.records.map(r => r.oip?.recordType).filter(Boolean))];
+            if (recordTypes.length === 1) {
+                filters.recordType = recordTypes[0];
+            }
+        } else if (relevantTypes && relevantTypes.length === 1) {
+            filters.recordType = relevantTypes[0].type;
+        }
+        
+        // Detect sorting preferences
+        if (lowerQuestion.includes('recent') || lowerQuestion.includes('latest') || lowerQuestion.includes('new')) {
+            filters.sortBy = 'date:desc';
+        }
+        
+        // Detect audio/media filters
+        if (lowerQuestion.includes('audio') || lowerQuestion.includes('podcast')) {
+            filters.hasAudio = true;
+        }
+        
+        // Add filter rationale
+        const sourceCount = searchResults.records ? searchResults.records.length : 0;
+        filters.rationale = `Found ${sourceCount} relevant records`;
+        if (filters.recordType) {
+            filters.rationale += ` of type "${filters.recordType}"`;
+        }
+        if (filters.search) {
+            filters.rationale += ` matching "${filters.search}"`;
+        }
+        
+        console.log(`[RAG] Extracted filters for "${question}":`, filters);
+        return filters;
     }
 }
 
