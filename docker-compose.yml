@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.8
@@ -82,6 +80,8 @@ services:
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
     depends_on:
       - elasticsearch
+      - text-generator
+      - ollama
     networks:
       - oip-network
     restart: unless-stopped
@@ -144,7 +144,7 @@ services:
       - TEXT_GENERATOR_URL=http://text-generator:8081
     depends_on:
       - elasticsearch
-      - text-generator
+      - text-generator-gpu
       - tts-service-gpu
       - stt-service-gpu
     networks:
@@ -192,8 +192,22 @@ services:
               count: 1
               capabilities: [gpu]
 
-  # Ollama LLM service (manages local models)
+  # Ollama LLM service for standard deployments (CPU/Apple Silicon)
   ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama  # Persistent model storage
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - standard
+      - standard-monolithic
+
+  # Ollama LLM service for GPU deployments (NVIDIA CUDA)
+  ollama-gpu:
     image: ollama/ollama:latest
     ports:
       - "11434:11434"
@@ -205,7 +219,6 @@ services:
     profiles:
       - standard-gpu
       - gpu
-      - standard
     deploy:
       resources:
         reservations:
@@ -214,7 +227,7 @@ services:
               count: 1
               capabilities: [gpu]
 
-  # Text generator for GPU machines - now uses Ollama API
+  # Text generator for standard deployments (CPU/Apple Silicon)
   text-generator:
     build: ./text-generator
     env_file:
@@ -230,9 +243,27 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
+      - standard
+      - standard-monolithic
+
+  # Text generator for GPU deployments - uses GPU Ollama API
+  text-generator-gpu:
+    build: ./text-generator
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_HOST=http://ollama-gpu:11434
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - ollama-gpu
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
       - standard-gpu
       - gpu
-      - standard
 
   # Speech-to-Text Service (Whisper)
   stt-service:
@@ -313,8 +344,6 @@ services:
     restart: unless-stopped
     profiles:
       - standard
-
-
 
   # Ngrok for GPU deployments
   ngrok-gpu:
