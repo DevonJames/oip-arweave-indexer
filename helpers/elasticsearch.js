@@ -1049,7 +1049,7 @@ async function getRecords(queryParams) {
             console.log('searching for:', searchTerms, 'in records');
             records = records.filter(record => {
                 const basicData = record.data.basic;
-                return searchTerms.some(term => {
+                return searchTerms.every(term => {
                     const titleMatches = basicData?.name?.toLowerCase().includes(term) || false;
                     const descriptionMatches = basicData?.description?.toLowerCase().includes(term) || false;
                     const tagsMatches = basicData?.tagItems?.some(tag => tag.toLowerCase().includes(term)) || false;
