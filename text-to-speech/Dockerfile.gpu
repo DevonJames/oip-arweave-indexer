@@ -48,10 +48,10 @@ RUN pip3 install --no-cache-dir \
     librosa \
     soundfile
 
-# Install Silero TTS (lightweight neural TTS)
+# Install additional dependencies for Silero TTS (accessed via torch.hub)
 RUN pip3 install --no-cache-dir \
-    silero \
-    omegaconf
+    omegaconf \
+    tqdm
 
 # Copy service files
 COPY . .

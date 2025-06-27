@@ -21,6 +21,14 @@ import time
 import threading
 import pyttsx3
 
+# Import additional dependencies for GPU TTS
+try:
+    from scipy.io.wavfile import write as scipy_write
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    logger.warning("scipy not available - some audio formats may not work")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -67,134 +75,159 @@ async def timeout_middleware(request: Request, call_next):
 class GPUTTSService:
     def __init__(self):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.chatterbox_engine = None
-        self.chatterbox_voices = {}
         self.silero_model = None
         self.silero_speakers = {}
+        self.chatterbox_engine = None
+        self.chatterbox_voices = {}
         self.engine_lock = threading.Lock()  # Add thread safety
         
-        logger.info(f"Initializing TTS service on device: {self.device}")
-        self._initialize_chatterbox()
+        logger.info(f"Initializing GPU TTS service on device: {self.device}")
+        # Initialize Silero first (primary GPU engine)
         self._initialize_silero()
+        # Initialize Chatterbox as fallback only
+        self._initialize_chatterbox()
     
     def _initialize_chatterbox(self):
-        """Initialize Chatterbox (pyttsx3) TTS engine with better error handling"""
+        """Initialize Chatterbox (pyttsx3) TTS engine - PRIMARY TTS ENGINE"""
         try:
+            logger.info("🚀 Initializing Chatterbox TTS (pyttsx3) as PRIMARY engine...")
+            
             with self.engine_lock:
-                self.chatterbox_engine = pyttsx3.init()
+                # Initialize with debug disabled for stability
+                self.chatterbox_engine = pyttsx3.init(debug=False)
                 
-                # Get available voices
-                voices = self.chatterbox_engine.getProperty('voices')
-                logger.info(f"Available voices: {len(voices) if voices else 0}")
+                if not self.chatterbox_engine:
+                    logger.error("❌ Failed to initialize pyttsx3 engine")
+                    return
                 
-                # Map voices by gender and quality
-                self.chatterbox_voices = {}
+                # Get available voices with better error handling
+                try:
+                    voices = self.chatterbox_engine.getProperty('voices')
+                    logger.info(f"🎵 Chatterbox found {len(voices) if voices else 0} system voices")
+                except Exception as voice_error:
+                    logger.warning(f"⚠️ Could not get voices: {voice_error}")
+                    voices = None
+                
+                # Enhanced voice configuration matching working implementation
+                self.chatterbox_voices = {
+                    "default": {"rate": 200, "volume": 0.9, "voice_id": 0},
+                    "female_1": {"rate": 180, "volume": 0.9, "voice_id": 0},
+                    "male_1": {"rate": 200, "volume": 0.9, "voice_id": 1},
+                    "expressive": {"rate": 220, "volume": 1.0, "voice_id": 0},
+                    "calm": {"rate": 160, "volume": 0.8, "voice_id": 0},
+                    "chatterbox": {"rate": 200, "volume": 0.9, "voice_id": 0}  # Map chatterbox request
+                }
+                
+                # Map available system voices if found
                 if voices:
                     for i, voice in enumerate(voices):
-                        logger.info(f"Voice {i}: {voice.id} - {voice.name}")
+                        voice_name = voice.name.lower() if hasattr(voice, 'name') else f"voice_{i}"
+                        logger.info(f"   Voice {i}: {voice.id} - {voice_name}")
                         
-                        # Try to categorize voices by name/gender
-                        voice_name = voice.name.lower()
-                        if 'female' in voice_name or 'woman' in voice_name:
-                            if 'female_1' not in self.chatterbox_voices:
-                                self.chatterbox_voices['female_1'] = voice.id
-                            elif 'female_2' not in self.chatterbox_voices:
-                                self.chatterbox_voices['female_2'] = voice.id
-                        elif 'male' in voice_name or 'man' in voice_name:
-                            if 'male_1' not in self.chatterbox_voices:
-                                self.chatterbox_voices['male_1'] = voice.id
-                            elif 'male_2' not in self.chatterbox_voices:
-                                self.chatterbox_voices['male_2'] = voice.id
+                        # Update voice IDs based on detected voices
+                        if 'female' in voice_name and i < len(voices):
+                            self.chatterbox_voices['female_1']['voice_id'] = i
+                        elif 'male' in voice_name and i < len(voices):
+                            self.chatterbox_voices['male_1']['voice_id'] = i
                 
-                # Set defaults if we don't have specific gender voices
-                if not self.chatterbox_voices and voices:
-                    self.chatterbox_voices = {
-                        'female_1': voices[0].id,
-                        'female_2': voices[1].id if len(voices) > 1 else voices[0].id,
-                        'male_1': voices[0].id,
-                        'male_2': voices[1].id if len(voices) > 1 else voices[0].id,
-                        'expressive': voices[0].id,
-                        'calm': voices[0].id,
-                        'cheerful': voices[0].id,
-                        'sad': voices[0].id
-                    }
-                
-                # Set speech rate and volume with error handling
+                # Test engine functionality with minimal settings
                 try:
-                    self.chatterbox_engine.setProperty('rate', 150)  # Speed
-                    self.chatterbox_engine.setProperty('volume', 1.0)  # Volume
+                    self.chatterbox_engine.setProperty('rate', 200)
+                    self.chatterbox_engine.setProperty('volume', 0.9)
+                    logger.info("✅ Chatterbox engine properties set successfully")
                 except Exception as prop_error:
-                    logger.warning(f"Could not set engine properties: {prop_error}")
+                    logger.warning(f"⚠️ Could not set engine properties: {prop_error}")
                 
-                logger.info("Chatterbox (pyttsx3) TTS engine initialized successfully")
+                logger.info("✅ Chatterbox TTS (PRIMARY) engine initialized successfully")
+                logger.info(f"   Available voice configs: {list(self.chatterbox_voices.keys())}")
                 
         except Exception as e:
-            logger.error(f"Failed to initialize Chatterbox engine: {e}")
+            logger.error(f"❌ Failed to initialize Chatterbox engine: {e}")
+            logger.error("   Will use fallback engines (Silero -> Edge TTS -> etc.)")
             self.chatterbox_engine = None
     
     def _initialize_silero(self):
-        """Initialize Silero TTS model as secondary engine"""
+        """Initialize Silero TTS model as PRIMARY GPU-accelerated engine"""
         try:
-            import silero
+            logger.info("🚀 Loading Silero Neural TTS model...")
             
-            # Load the multilingual model
-            self.silero_model, _ = torch.hub.load(
+            # Download and load the Silero model from torch hub
+            model, symbols, sample_rate, example_text, apply_tts = torch.hub.load(
                 repo_or_dir='snakers4/silero-models',
                 model='silero_tts',
                 language='en',
-                speaker='v3_en'
+                speaker='v3_en',
+                trust_repo=True
             )
-            self.silero_model.to(self.device)
             
-            # Define available speakers
+            # Move model to GPU if available
+            self.silero_model = model.to(self.device)
+            self.silero_apply_tts = apply_tts
+            self.silero_sample_rate = sample_rate
+            
+            # Define voice mapping based on GPU deployment guide
             self.silero_speakers = {
-                'female_1': 'en_0',
-                'female_2': 'en_1', 
-                'male_1': 'en_2',
-                'male_2': 'en_3',
-                'expressive': 'en_4',
-                'calm': 'en_5',
-                'cheerful': 'en_6',
-                'sad': 'en_7'
+                'chatterbox': 'en_0',        # Map chatterbox to default
+                'female_1': 'en_0',          # Female Clear
+                'female_2': 'en_1',          # Female Expressive  
+                'male_1': 'en_2',            # Male Deep
+                'male_2': 'en_3',            # Male Friendly
+                'expressive': 'en_1',        # Most natural intonation
+                'calm': 'en_0',              # Soothing, relaxing voice
+                'announcer': 'en_2',         # Professional announcer
+                'storyteller': 'en_3'        # Engaging storytelling
             }
             
-            logger.info("Silero TTS model loaded successfully")
+            logger.info(f"✅ Silero Neural TTS loaded successfully on {self.device}")
+            logger.info(f"   Available voices: {list(self.silero_speakers.keys())}")
+            logger.info(f"   Sample rate: {sample_rate}Hz")
             
         except Exception as e:
-            logger.error(f"Failed to load Silero model: {e}")
+            logger.error(f"❌ Failed to load Silero model: {e}")
+            logger.info("   Silero will not be available - falling back to other engines")
             self.silero_model = None
+            self.silero_apply_tts = None
 
     async def synthesize_with_chatterbox(self, text: str, voice: str) -> Optional[str]:
-        """Synthesize speech using Chatterbox (pyttsx3) with improved error handling"""
+        """Synthesize speech using Chatterbox (pyttsx3) - PRIMARY TTS ENGINE"""
         if not self.chatterbox_engine:
-            logger.error("Chatterbox engine not initialized")
+            logger.warning("Chatterbox engine not initialized - falling back to Silero")
             return None
             
         try:
             with self.engine_lock:
-                # Map "chatterbox" to a sensible default
-                if voice == "chatterbox":
-                    voice = "female_1"  # Use female_1 as default for "chatterbox"
+                # Get voice configuration (matches working implementation pattern)
+                config = self.chatterbox_voices.get(voice, self.chatterbox_voices["default"])
                 
-                # Set voice if available
-                voice_id = self.chatterbox_voices.get(voice)
-                if voice_id:
-                    try:
-                        self.chatterbox_engine.setProperty('voice', voice_id)
-                    except Exception as voice_error:
-                        logger.warning(f"Could not set voice {voice}: {voice_error}")
+                logger.info(f"🎵 Chatterbox synthesizing - voice: {voice}, rate: {config['rate']}")
                 
-                # Generate audio to temporary file with timeout
+                # Configure voice properties (improved error handling)
+                try:
+                    voices = self.chatterbox_engine.getProperty('voices')
+                    if voices and len(voices) > config["voice_id"]:
+                        self.chatterbox_engine.setProperty('voice', voices[config["voice_id"]].id)
+                    else:
+                        logger.warning(f"Voice {config['voice_id']} not available, using default")
+                except Exception as voice_error:
+                    logger.warning(f"Could not set voice: {voice_error}")
+                
+                # Apply speed and volume (matching working implementation)
+                try:
+                    self.chatterbox_engine.setProperty('rate', config["rate"])
+                    self.chatterbox_engine.setProperty('volume', config["volume"])
+                except Exception as prop_error:
+                    logger.warning(f"Could not set engine properties: {prop_error}")
+                
+                # Generate audio to temporary file with improved timeout handling
                 with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                    logger.info(f"Synthesizing text with Chatterbox: '{text[:50]}...'")
-                    
-                    # Use a separate thread for the blocking operation
+                    # Use async approach with shorter timeout (15s instead of 30s)
                     synthesis_done = threading.Event()
                     synthesis_error = None
                     
                     def synthesize_thread():
                         nonlocal synthesis_error
                         try:
+                            # Save to file
                             self.chatterbox_engine.save_to_file(text, tmp_file.name)
                             self.chatterbox_engine.runAndWait()
                             synthesis_done.set()
@@ -206,58 +239,86 @@ class GPUTTSService:
                     thread.daemon = True
                     thread.start()
                     
-                    # Wait for synthesis with timeout
-                    if not synthesis_done.wait(timeout=30):
-                        logger.error("Chatterbox synthesis timeout (30s)")
+                    # Wait for synthesis with reduced timeout (15s matches backend fixes)
+                    if not synthesis_done.wait(timeout=15):
+                        logger.warning("⚠️ Chatterbox synthesis timeout (15s) - falling back to Silero")
+                        # Clean up
+                        if os.path.exists(tmp_file.name):
+                            os.unlink(tmp_file.name)
                         return None
                     
                     if synthesis_error:
-                        logger.error(f"Chatterbox synthesis error: {synthesis_error}")
+                        logger.warning(f"⚠️ Chatterbox synthesis error: {synthesis_error} - falling back to Silero")
+                        if os.path.exists(tmp_file.name):
+                            os.unlink(tmp_file.name)
                         return None
                     
-                    # Check if file was created successfully
+                    # Check if file was created successfully (improved validation)
                     if os.path.exists(tmp_file.name) and os.path.getsize(tmp_file.name) > 44:  # More than WAV header
-                        logger.info(f"Chatterbox synthesis successful: {os.path.getsize(tmp_file.name)} bytes")
+                        file_size = os.path.getsize(tmp_file.name)
+                        logger.info(f"✅ Chatterbox synthesis successful: {file_size} bytes")
                         return tmp_file.name
                     else:
-                        logger.warning("Chatterbox produced no audio or empty file")
+                        logger.warning("⚠️ Chatterbox produced no audio (Docker audio system unavailable) - falling back to Silero")
                         if os.path.exists(tmp_file.name):
                             os.unlink(tmp_file.name)
                         return None
                         
         except Exception as e:
-            logger.error(f"Chatterbox TTS error: {e}")
+            logger.warning(f"⚠️ Chatterbox TTS error: {e} - falling back to Silero")
             return None
 
     async def synthesize_with_silero(self, text: str, voice: str) -> Optional[str]:
-        """Synthesize speech using Silero TTS"""
-        if not self.silero_model:
+        """Synthesize speech using Silero Neural TTS (PRIMARY GPU ENGINE)"""
+        if not self.silero_model or not self.silero_apply_tts:
+            logger.warning("Silero model not available")
             return None
             
         try:
-            # Map "chatterbox" to a sensible default
-            if voice == "chatterbox":
-                voice = "female_1"
-                
+            # Map voice to Silero speaker
             speaker = self.silero_speakers.get(voice, 'en_0')
             
-            # Generate audio
+            logger.info(f"🎵 Silero Neural TTS: voice={voice} -> speaker={speaker}")
+            
+            # Generate audio with GPU acceleration
             with torch.no_grad():
-                audio = self.silero_model.apply_tts(
-                    text=text,
+                # Use the loaded apply_tts function
+                audio = self.silero_apply_tts(
+                    texts=[text],
+                    model=self.silero_model,
+                    sample_rate=self.silero_sample_rate,
                     speaker=speaker,
-                    sample_rate=48000,
-                    put_accent=True,
-                    put_yo=True
+                    device=self.device
                 )
+                
+                # audio is a tensor, convert to numpy for saving
+                if isinstance(audio, torch.Tensor):
+                    audio_np = audio.squeeze().cpu().numpy()
+                else:
+                    audio_np = audio.squeeze()
             
             # Save to temporary file
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                torchaudio.save(tmp_file.name, audio.unsqueeze(0), 48000)
+                # Use torchaudio (preferred) or scipy to save
+                try:
+                    import torchaudio
+                    # Convert numpy back to tensor for torchaudio
+                    audio_tensor = torch.from_numpy(audio_np).unsqueeze(0)
+                    torchaudio.save(tmp_file.name, audio_tensor, self.silero_sample_rate)
+                except ImportError:
+                    # Fallback to scipy if available
+                    if SCIPY_AVAILABLE:
+                        scipy_write(tmp_file.name, self.silero_sample_rate, audio_np)
+                    else:
+                        raise Exception("Neither torchaudio nor scipy available for audio saving")
+                
+                logger.info(f"✅ Silero synthesis successful: {os.path.getsize(tmp_file.name)} bytes")
                 return tmp_file.name
                 
         except Exception as e:
-            logger.error(f"Silero TTS error: {e}")
+            logger.error(f"❌ Silero TTS error: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
             return None
 
     async def synthesize_with_edge_tts(self, text: str, voice: str) -> Optional[str]:
@@ -442,19 +503,28 @@ class GPUTTSService:
         engines_to_try = []
         
         if engine == "auto":
-            # Try engines in order of preference (Chatterbox first)
+            # Corrected fallback order: Chatterbox PRIMARY -> Silero fallback -> others
+            engines_to_try = [
+                ("chatterbox", self.synthesize_with_chatterbox),  # Primary engine
+                ("silero", self.synthesize_with_silero),          # First fallback (GPU)
+                ("edge_tts", self.synthesize_with_edge_tts),
+                ("gtts", self.synthesize_with_gtts),
+                ("espeak", self.synthesize_with_espeak)
+            ]
+        elif engine == "chatterbox":
+            # When specifically requesting chatterbox
             engines_to_try = [
                 ("chatterbox", self.synthesize_with_chatterbox),
-                ("silero", self.synthesize_with_silero),
+                ("silero", self.synthesize_with_silero),          # First fallback
                 ("edge_tts", self.synthesize_with_edge_tts),
                 ("gtts", self.synthesize_with_gtts),
                 ("espeak", self.synthesize_with_espeak)
             ]
         else:
-            # Try specific engine first, then fallbacks
+            # Try specific engine first, then GPU-optimized fallbacks
             engine_methods = {
-                "chatterbox": self.synthesize_with_chatterbox,
                 "silero": self.synthesize_with_silero,
+                "chatterbox": self.synthesize_with_chatterbox,
                 "edge_tts": self.synthesize_with_edge_tts,
                 "gtts": self.synthesize_with_gtts,
                 "espeak": self.synthesize_with_espeak
@@ -462,10 +532,11 @@ class GPUTTSService:
             
             if engine in engine_methods:
                 engines_to_try.append((engine, engine_methods[engine]))
-                # Add fallbacks
-                for fallback_engine, method in engine_methods.items():
-                    if fallback_engine != engine:
-                        engines_to_try.append((fallback_engine, method))
+                # Add GPU-optimized fallbacks first
+                fallback_order = ["silero", "edge_tts", "gtts", "espeak", "chatterbox"]
+                for fallback_engine in fallback_order:
+                    if fallback_engine != engine and fallback_engine in engine_methods:
+                        engines_to_try.append((fallback_engine, engine_methods[fallback_engine]))
         
         # Try each engine until one succeeds
         for engine_name, method in engines_to_try:
@@ -627,20 +698,69 @@ async def synthesize_speech_json(request: TTSRequest):
 
 @app.get("/voices")
 async def get_voices():
-    """Get available TTS voices"""
+    """Get available TTS voices - Chatterbox PRIMARY, Silero fallback"""
     voices = []
     
-    # Add Chatterbox voices
-    for voice_id, system_voice_id in tts_service.chatterbox_voices.items():
-        voices.append({
-            "id": voice_id,
-            "name": f"Chatterbox {voice_id.replace('_', ' ').title()}",
-            "engine": "chatterbox",
-            "language": "en",
-            "gender": "female" if "female" in voice_id else "male" if "male" in voice_id else "neutral"
-        })
+    # Add Chatterbox voices (PRIMARY ENGINE)
+    if tts_service.chatterbox_engine is not None:
+        voice_descriptions = {
+            "default": {"name": "Chatterbox Default", "gender": "neutral", "description": "Clear, neutral voice"},
+            "female_1": {"name": "Chatterbox Female", "gender": "female", "description": "Natural female voice"},
+            "male_1": {"name": "Chatterbox Male", "gender": "male", "description": "Deep male voice"},
+            "expressive": {"name": "Chatterbox Expressive", "gender": "neutral", "description": "Expressive, dynamic voice"},
+            "calm": {"name": "Chatterbox Calm", "gender": "neutral", "description": "Calm, soothing voice"},
+            "chatterbox": {"name": "Chatterbox Default", "gender": "neutral", "description": "Default Chatterbox voice"}
+        }
+        
+        for voice_id in tts_service.chatterbox_voices.keys():
+            voice_info = voice_descriptions.get(voice_id, {"name": f"Chatterbox {voice_id}", "gender": "neutral", "description": "System voice"})
+            voices.append({
+                "id": voice_id,
+                "name": voice_info["name"],
+                "engine": "chatterbox",
+                "language": "en",
+                "gender": voice_info["gender"],
+                "description": voice_info["description"],
+                "quality": "high",
+                "gpu_accelerated": False,
+                "primary": True
+            })
     
-    return {"voices": voices}
+    # Add Silero voices as fallback (if available)
+    if tts_service.silero_model is not None:
+        silero_voice_descriptions = {
+            "chatterbox": {"name": "Silero Default (Fallback)", "gender": "female", "description": "Neural fallback voice"},
+            "female_1": {"name": "Silero Female Clear (Fallback)", "gender": "female", "description": "Clear, professional fallback"},
+            "female_2": {"name": "Silero Female Expressive (Fallback)", "gender": "female", "description": "Dynamic fallback"},
+            "male_1": {"name": "Silero Male Deep (Fallback)", "gender": "male", "description": "Deep fallback voice"},
+            "male_2": {"name": "Silero Male Friendly (Fallback)", "gender": "male", "description": "Friendly fallback"},
+            "expressive": {"name": "Silero Expressive (Fallback)", "gender": "female", "description": "Expressive fallback"},
+            "calm": {"name": "Silero Calm (Fallback)", "gender": "female", "description": "Calm fallback"},
+            "announcer": {"name": "Silero Announcer (Fallback)", "gender": "male", "description": "Professional fallback"},
+            "storyteller": {"name": "Silero Storyteller (Fallback)", "gender": "male", "description": "Storytelling fallback"}
+        }
+        
+        for voice_id in tts_service.silero_speakers.keys():
+            # Only add if not already covered by Chatterbox
+            if not any(v["id"] == voice_id and v["engine"] == "chatterbox" for v in voices):
+                voice_info = silero_voice_descriptions.get(voice_id, {"name": f"Silero {voice_id} (Fallback)", "gender": "neutral", "description": "Neural fallback"})
+                voices.append({
+                    "id": voice_id,
+                    "name": voice_info["name"],
+                    "engine": "silero",
+                    "language": "en",
+                    "gender": voice_info["gender"],
+                    "description": voice_info["description"],
+                    "quality": "high",
+                    "gpu_accelerated": True,
+                    "primary": False
+                })
+    
+    return {
+        "voices": voices,
+        "primary_engine": "chatterbox",
+        "fallback_available": tts_service.silero_model is not None
+    }
 
 @app.get("/health")
 async def health_check():
@@ -650,20 +770,33 @@ async def health_check():
         gpu_info = {
             "gpu_available": True,
             "gpu_name": torch.cuda.get_device_name(0),
-            "gpu_memory_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1)
+            "gpu_memory_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1),
+            "cuda_version": torch.version.cuda if torch.version.cuda else "unknown"
         }
     else:
         gpu_info = {"gpu_available": False}
     
+    # Determine primary engine (Chatterbox is primary, Silero is first fallback)
+    primary_engine = "none"
+    if tts_service.chatterbox_engine is not None:
+        primary_engine = "chatterbox"
+    elif tts_service.silero_model is not None:
+        primary_engine = "silero"
+    
     return {
         "status": "healthy",
         "device": str(tts_service.device),
+        "primary_engine": primary_engine,
         "engines": {
-            "chatterbox": tts_service.chatterbox_engine is not None,
-            "silero": tts_service.silero_model is not None
+            "chatterbox": tts_service.chatterbox_engine is not None,  # PRIMARY
+            "silero": tts_service.silero_model is not None,           # First fallback (GPU)
+            "edge_tts": True,  # Always available if network works
+            "gtts": True,      # Always available if network works  
+            "espeak": True     # Usually available in most containers
         },
         "gpu_info": gpu_info,
-        "available_voices": len(tts_service.chatterbox_voices)
+        "available_voices": len(tts_service.chatterbox_voices) if tts_service.chatterbox_engine else len(tts_service.silero_speakers),
+        "voice_options": list(tts_service.chatterbox_voices.keys()) if tts_service.chatterbox_engine else list(tts_service.silero_speakers.keys())
     }
 
 if __name__ == "__main__":
