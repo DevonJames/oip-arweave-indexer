@@ -4,4 +4,3 @@ tunnels:
   oip:
     proto: http
     addr: oip-gpu:3005
-    hostname: api.oip.onl
