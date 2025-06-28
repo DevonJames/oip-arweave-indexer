@@ -1,6 +1,7 @@
 version: "2"
+authtoken_from_env: true
 tunnels:
   oip:
     proto: http
     addr: oip-gpu:3005
-    hostname: ${NGROK_DOMAIN}  # Set NGROK_DOMAIN in your .env file, leave empty for random URL
+    hostname: api.oip.onl
