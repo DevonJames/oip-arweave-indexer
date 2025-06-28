@@ -342,9 +342,12 @@ services:
   # Ngrok for GPU deployments
   ngrok-gpu:
     image: ngrok/ngrok:latest
-    command: ["ngrok", "http", "oip-gpu:3000", "--log=stdout"]
+    command: ["ngrok", "start", "--all", "--config", "/etc/ngrok.yml", "--log=stdout"]
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN}
+    volumes:
+      - ./ngrok/ngrok.yml:/etc/ngrok.yml
     depends_on:
       - oip-gpu
     ports:
