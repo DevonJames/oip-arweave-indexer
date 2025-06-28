@@ -342,7 +342,7 @@ services:
   # Ngrok for GPU deployments
   ngrok-gpu:
     image: ngrok/ngrok:latest
-    command: ["ngrok", "start", "--all", "--config", "/etc/ngrok.yml", "--log=stdout"]
+    command: ["ngrok", "start", "oip", "--config", "/etc/ngrok.yml", "--log=stdout"]
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
       - NGROK_DOMAIN=${NGROK_DOMAIN}
