@@ -15,11 +15,11 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}🚀 OIP LLM Model Installation${NC}"
 echo ""
 
-# Check if docker-compose is running
-if ! docker-compose ps | grep -q -E "ollama|ollama-gpu"; then
+# Check if Ollama containers are running using docker ps (more reliable)
+if ! docker ps --format "{{.Names}}" | grep -q -E "ollama|ollama-gpu"; then
     echo -e "${YELLOW}⚠️  Ollama service not running. Starting services...${NC}"
     # Check which profile to use based on running containers
-    if docker-compose ps | grep -q "gpu"; then
+    if docker ps --format "{{.Names}}" | grep -q "gpu"; then
         echo -e "${BLUE}🎯 Using GPU profile for Ollama...${NC}"
         docker-compose --profile standard-gpu up -d ollama-gpu
     else
