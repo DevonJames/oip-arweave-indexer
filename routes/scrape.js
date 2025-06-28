@@ -1,9 +1,9 @@
 const express = require('express');
-// const bcrypt = require('bcrypt'); // Temporarily disabled due to native module compilation issues
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 // const { crypto } = require('crypto');
 const base64url = require('base64url');
-// const { createCanvas, loadImage, Image } = require('canvas'); // Temporarily disabled due to native module compilation issues
+const { createCanvas, loadImage, Image } = require('canvas');
 const nodeHtmlToImage = require('node-html-to-image');
 const router = express.Router();
 const path = require('path');

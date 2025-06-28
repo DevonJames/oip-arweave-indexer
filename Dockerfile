@@ -14,7 +14,7 @@ RUN apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip c
     pkgconfig \
     espeak
 
-# Add dependencies for node-canvas (optional - continue if they fail)
+# Add dependencies for node-canvas (required for image processing)
 RUN apk add --no-cache \
     build-base \
     cairo-dev \
@@ -22,8 +22,10 @@ RUN apk add --no-cache \
     jpeg-dev \
     giflib-dev \
     librsvg-dev \
-    pkgconfig \
-    || echo "Canvas dependencies failed to install, continuing without them..."
+    pixman-dev \
+    freetype-dev \
+    fontconfig-dev \
+    pkgconfig
 
 #     # Install Puppeteer
 # RUN npm install puppeteer-extra puppeteer-extra-plugin-stealth
@@ -49,15 +51,11 @@ COPY package*.json ./
 RUN echo "python=/usr/bin/python3" > .npmrc && \
     echo "node_gyp=/usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js" >> .npmrc
 
-# Install dependencies with progressive fallback strategy (including dev deps for frontend build)
-RUN npm install --verbose --ignore-scripts || \
-    (echo "First install failed, trying without optional dependencies..." && \
-     npm install --verbose --ignore-scripts --no-optional) || \
-    (echo "Second install failed, trying basic install..." && \
-     npm install --ignore-scripts --no-optional --no-fund --no-audit)
+# Install dependencies with better native module support
+RUN npm install --verbose --build-from-source
 
-# Try to rebuild native modules, but don't fail if some can't be built
-RUN npm rebuild || echo "Some native modules failed to rebuild, continuing..."
+# Rebuild native modules to ensure they work with current environment
+RUN npm rebuild canvas bcrypt sharp
 
 # Move node_modules to parent directory
 RUN mv node_modules ../
