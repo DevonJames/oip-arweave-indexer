@@ -1148,99 +1148,7 @@
     </div>
 
     <div class="container">
-        <!-- Browse Tab Content (COMMENTED OUT - replaced by Browse + AI Chat)
-        <div id="browse-tab" style="display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important;">
-            <!-- Filters Section -->
-            <div class="filters-section">
-                <div class="filters-row">
-                    <div class="search-container">
-                        <label for="search-input">Search Records</label>
-                        <input type="text" id="search-input" placeholder="Enter search terms..." onkeyup="handleSearchKeyup(event)">
-                    </div>
-                    
-                    <div class="filter-group">
-                        <label for="record-type-filter">Record Type</label>
-                        <select id="record-type-filter" onchange="applyFilters()">
-                            <option value="">All Types</option>
-                        </select>
-                    </div>
-                    
-                    <div class="filter-group">
-                        <label for="sort-by">Sort By</label>
-                        <select id="sort-by" onchange="applyFilters()">
-                            <option value="inArweaveBlock:desc">Block (Newest)</option>
-                            <option value="inArweaveBlock:asc">Block (Oldest)</option>
-                            <option value="date:desc">Date (Newest)</option>
-                            <option value="date:asc">Date (Oldest)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="filter-group">
-                        <label for="resolve-depth">Resolve Depth</label>
-                        <input type="number" id="resolve-depth" value="2" min="0" max="5" onchange="applyFilters()">
-                    </div>
-                </div>
-                
-                <div class="filters-row">
-                    <div class="filter-group wide">
-                        <label>Date Range</label>
-                        <div class="date-inputs">
-                            <input type="date" id="date-start" onchange="applyFilters()" placeholder="Start Date">
-                            <span>to</span>
-                            <input type="date" id="date-end" onchange="applyFilters()" placeholder="End Date">
-                        </div>
-                    </div>
-                    
-                    <div class="filter-group">
-                        <label for="tag-filter">Filter by Tag</label>
-                        <select id="tag-filter" onchange="applyFilters()">
-                            <option value="">All Tags</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="advanced-filters">
-                    <div class="toggle-row">
-                        <div class="toggle-group">
-                            <label>Include Signatures:</label>
-                            <div class="toggle-switch" id="include-sigs-toggle" onclick="toggleSwitch('include-sigs-toggle')"></div>
-                        </div>
-                        
-                        <div class="toggle-group">
-                            <label>Include Public Keys:</label>
-                            <div class="toggle-switch" id="include-pubkeys-toggle" onclick="toggleSwitch('include-pubkeys-toggle')"></div>
-                        </div>
-                        
-                        <button onclick="clearFilters()" class="btn-secondary btn-small">Clear Filters</button>
-                        <button onclick="applyFilters()" class="btn-small">Apply Filters</button>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Records Display -->
-            <div class="records-container">
-                <div id="records-header">
-                    <h2>OIP Records</h2>
-                    <div id="pagination-info" class="pagination-info"></div>
-                </div>
-                
-                <div id="loading-indicator" class="loading">
-                    <div class="spinner"></div>
-                    Loading records...
-                </div>
-                
-                <div id="records-grid" class="records-grid hidden"></div>
-                
-                <div id="no-results" class="no-results hidden">
-                    No records found matching your criteria.
-                </div>
-                
-                <div id="load-more-container" class="load-more hidden">
-                    <button onclick="loadMoreRecords()" id="load-more-btn">Load More Records</button>
-                </div>
-            </div>
-        </div>
-        END COMMENTED OUT Browse Records Tab -->
 
         <!-- Browse + Voice Chat Tab Content -->
         <div id="voice-browse-tab">
@@ -2346,51 +2254,7 @@
             return `<div class="tags-container">${tagsHtml}</div>`;
         }
 
-        // Filter and search functions
-        function applyFilters() {
-            collectFilters();
-            loadRecords(true);
-        }
 
-        function collectFilters() {
-            currentFilters.search = document.getElementById('search-input').value.trim();
-            currentFilters.recordType = document.getElementById('record-type-filter').value;
-            currentFilters.sortBy = document.getElementById('sort-by').value;
-            currentFilters.resolveDepth = parseInt(document.getElementById('resolve-depth').value) || 2;
-            currentFilters.dateStart = document.getElementById('date-start').value;
-            currentFilters.dateEnd = document.getElementById('date-end').value;
-            currentFilters.tag = document.getElementById('tag-filter').value;
-            currentFilters.includeSigs = document.getElementById('include-sigs-toggle').classList.contains('active');
-            currentFilters.includePubKeys = document.getElementById('include-pubkeys-toggle').classList.contains('active');
-        }
-
-        function handleSearchKeyup(event) {
-            if (event.key === 'Enter') {
-                applyFilters();
-            }
-        }
-
-        function clearFilters() {
-            document.getElementById('search-input').value = '';
-            document.getElementById('record-type-filter').value = '';
-            document.getElementById('sort-by').value = 'inArweaveBlock:desc';
-            document.getElementById('resolve-depth').value = '2';
-            document.getElementById('date-start').value = '';
-            document.getElementById('date-end').value = '';
-            document.getElementById('tag-filter').value = '';
-            document.getElementById('include-sigs-toggle').classList.remove('active');
-            document.getElementById('include-pubkeys-toggle').classList.remove('active');
-            applyFilters();
-        }
-
-        function filterByTag(tag) {
-            document.getElementById('tag-filter').value = tag;
-            applyFilters();
-        }
-
-        function toggleSwitch(elementId) {
-            document.getElementById(elementId).classList.toggle('active');
-        }
 
         // Load templates from API
         async function loadTemplates() {
@@ -2446,17 +2310,6 @@
         }
 
         function populateRecordTypeFilter() {
-            // Populate regular record type filter (Browse Records tab)
-            const select = document.getElementById('record-type-filter');
-            select.innerHTML = '<option value="">All Types</option>';
-            
-            recordTypes.forEach(type => {
-                const option = document.createElement('option');
-                option.value = type;
-                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-                select.appendChild(option);
-            });
-
             // Populate voice record type filter (Browse + AI Chat tab)
             const voiceSelect = document.getElementById('voice-record-type-filter');
             if (voiceSelect) {
@@ -2488,49 +2341,7 @@
             return Math.floor(new Date(dateString).getTime() / 1000).toString();
         }
 
-        function updatePaginationInfo(data) {
-            const info = document.getElementById('pagination-info');
-            info.textContent = `Showing ${currentRecords.length} of ${data.totalRecords || 'many'} records`;
-        }
 
-        function updateTagFilter(tagSummary) {
-            const select = document.getElementById('tag-filter');
-            const currentValue = select.value;
-            select.innerHTML = '<option value="">All Tags</option>';
-            
-            tagSummary.forEach(tag => {
-                const option = document.createElement('option');
-                option.value = tag.tag;
-                option.textContent = `${tag.tag} (${tag.count})`;
-                select.appendChild(option);
-            });
-            
-            select.value = currentValue;
-        }
-
-        function showNoResults() {
-            document.getElementById('records-grid').classList.add('hidden');
-            document.getElementById('no-results').classList.remove('hidden');
-        }
-
-        function updateLoadMoreButton() {
-            const container = document.getElementById('load-more-container');
-            const button = document.getElementById('load-more-btn');
-            
-            if (hasMoreRecords && currentRecords.length > 0) {
-                container.classList.remove('hidden');
-                button.disabled = isLoading;
-                button.textContent = isLoading ? 'Loading...' : 'Load More Records';
-            } else {
-                container.classList.add('hidden');
-            }
-        }
-
-        function loadMoreRecords() {
-            if (!hasMoreRecords || isLoading) return;
-            currentPage++;
-            loadRecords(false);
-        }
 
         function setupInfiniteScroll() {
             window.addEventListener('scroll', () => {
