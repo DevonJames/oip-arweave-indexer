@@ -1148,7 +1148,7 @@
 
     <div class="container">
         <!-- Browse Tab Content (COMMENTED OUT - replaced by Browse + AI Chat)
-        <div id="browse-tab">
+        <div id="browse-tab" style="display: none;">
             <!-- Filters Section -->
             <div class="filters-section">
                 <div class="filters-row">
@@ -3195,7 +3195,7 @@
                 return;
             }
             
-            // Clear input and disable send button
+            // Clear input and disable send button temporarily
             input.value = '';
             input.style.height = '44px'; // Reset textarea height
             const sendBtn = document.getElementById('ai-chat-send-btn');
@@ -3215,9 +3215,13 @@
                 updateAIStatus('Error occurred');
                 addToConversation('system', `Error: ${error.message}`);
             } finally {
+                // Re-enable send button
                 sendBtn.disabled = false;
-                // Ensure chat input remains ready for next message
+                
+                // Ensure chat input is ready for next message - multiple attempts
+                ensureChatInputReady();
                 setTimeout(() => ensureChatInputReady(), 100);
+                setTimeout(() => ensureChatInputReady(), 300);
             }
         }
 
@@ -3247,6 +3251,8 @@
                 addToConversation('system', `AI Error: ${error.message}`);
             } finally {
                 chatState.isProcessing = false;
+                // Immediately restore input when processing completes
+                ensureChatInputReady();
             }
         }
 
@@ -3580,47 +3586,69 @@
             const chatConversation = document.getElementById('chat-conversation');
             chatConversation.scrollTop = chatConversation.scrollHeight;
             
-            // Ensure chat input is visible and enabled after display update
+            // Ensure chat input is visible and enabled after display update - multiple attempts
             ensureChatInputReady();
+            setTimeout(() => ensureChatInputReady(), 50);
+            setTimeout(() => ensureChatInputReady(), 200);
         }
 
         function ensureChatInputReady() {
-            setTimeout(() => {
-                const chatInput = document.getElementById('ai-chat-input');
-                const sendBtn = document.getElementById('ai-chat-send-btn');
-                const chatContainer = document.querySelector('.chat-input-container');
+            const chatInput = document.getElementById('ai-chat-input');
+            const sendBtn = document.getElementById('ai-chat-send-btn');
+            const chatContainer = document.querySelector('.chat-input-container');
+            const chatInputRow = document.querySelector('.chat-input-row');
+            
+            if (chatInput) {
+                // Force input to be visible and enabled
+                chatInput.disabled = false;
+                chatInput.style.display = 'block !important';
+                chatInput.style.visibility = 'visible !important';
+                chatInput.style.opacity = '1 !important';
+                chatInput.style.pointerEvents = 'auto !important';
+                chatInput.style.position = 'relative !important';
+                chatInput.style.zIndex = '999 !important';
+                chatInput.removeAttribute('readonly');
+                chatInput.removeAttribute('hidden');
+                chatInput.classList.remove('hidden');
                 
-                if (chatInput) {
-                    chatInput.disabled = false;
-                    chatInput.style.display = 'block';
-                    chatInput.style.visibility = 'visible';
-                    chatInput.style.opacity = '1';
-                    chatInput.style.pointerEvents = 'auto';
-                    chatInput.removeAttribute('readonly');
-                    
-                    // Focus the input to ensure it's ready for typing
-                    if (!chatState.isProcessing) {
-                        chatInput.focus();
-                    }
+                // Ensure the input is not being hidden by other elements
+                if (chatInput.offsetHeight === 0 || chatInput.offsetWidth === 0) {
+                    chatInput.style.height = '44px';
+                    chatInput.style.width = '100%';
+                    chatInput.style.minHeight = '44px';
                 }
                 
-                if (sendBtn) {
-                    sendBtn.disabled = chatState.isProcessing; // Only disable when processing
-                    sendBtn.style.display = 'inline-block';
-                    sendBtn.style.visibility = 'visible';
-                    sendBtn.style.opacity = '1';
-                    sendBtn.style.pointerEvents = 'auto';
-                }
-                
-                if (chatContainer) {
-                    chatContainer.style.display = 'block';
-                    chatContainer.style.visibility = 'visible';
-                    chatContainer.style.opacity = '1';
-                    chatContainer.style.pointerEvents = 'auto';
-                }
-                
-                console.log('[Chat] Input availability ensured and focused');
-            }, 50); // Small delay to ensure DOM updates are complete
+                console.log('[Chat] Input restored - height:', chatInput.offsetHeight, 'width:', chatInput.offsetWidth);
+            }
+            
+            if (sendBtn) {
+                sendBtn.disabled = chatState.isProcessing;
+                sendBtn.style.display = 'inline-block !important';
+                sendBtn.style.visibility = 'visible !important';
+                sendBtn.style.opacity = '1 !important';
+                sendBtn.style.pointerEvents = 'auto !important';
+                sendBtn.removeAttribute('hidden');
+                sendBtn.classList.remove('hidden');
+            }
+            
+            if (chatContainer) {
+                chatContainer.style.display = 'block !important';
+                chatContainer.style.visibility = 'visible !important';
+                chatContainer.style.opacity = '1 !important';
+                chatContainer.style.pointerEvents = 'auto !important';
+                chatContainer.removeAttribute('hidden');
+                chatContainer.classList.remove('hidden');
+            }
+            
+            if (chatInputRow) {
+                chatInputRow.style.display = 'flex !important';
+                chatInputRow.style.visibility = 'visible !important';
+                chatInputRow.style.opacity = '1 !important';
+                chatInputRow.removeAttribute('hidden');
+                chatInputRow.classList.remove('hidden');
+            }
+            
+            console.log('[Chat] Input availability forcefully ensured');
         }
 
         function getMessageAvatar(role) {
