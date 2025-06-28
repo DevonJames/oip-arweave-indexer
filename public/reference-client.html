@@ -1148,7 +1148,7 @@
 
     <div class="container">
         <!-- Browse Tab Content (COMMENTED OUT - replaced by Browse + AI Chat)
-        <div id="browse-tab" style="display: none;">
+        <div id="browse-tab" style="display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important;">
             <!-- Filters Section -->
             <div class="filters-section">
                 <div class="filters-row">
@@ -1619,19 +1619,46 @@
                 await loadTemplates();
             }
             
+            // Force hide the old browse tab and ensure it stays hidden
+            forcehideBrowseTab();
+            
             // Initialize the voice browse tab (now the default)
             initializeVoiceFeatures();
             
             console.log('[App] Initialized with voice browse tab as default');
+            
+            // Set up periodic checks to ensure interface stays clean
+            setInterval(() => {
+                forcehideBrowseTab();
+                
+                // Quick check that chat input is still visible
+                const chatInput = document.getElementById('ai-chat-input');
+                if (chatInput && (chatInput.offsetHeight === 0 || chatInput.style.display === 'none')) {
+                    console.log('[App] Detected hidden chat input, restoring...');
+                    ensureChatInputReady();
+                }
+            }, 2000); // Check every 2 seconds
         }
 
-        // Navigation functions
+        // Force hide the old browse tab completely
+        function forcehideBrowseTab() {
+            const browseTab = document.getElementById('browse-tab');
+            if (browseTab) {
+                browseTab.style.display = 'none !important';
+                browseTab.style.visibility = 'hidden !important';
+                browseTab.style.height = '0 !important';
+                browseTab.style.overflow = 'hidden !important';
+                browseTab.style.position = 'absolute !important';
+                browseTab.style.top = '-9999px !important';
+                browseTab.classList.add('hidden');
+                console.log('[App] Old browse tab forcefully hidden');
+            }
+        }
+
+        // Navigation functions (showBrowseTab DISABLED - old tab is commented out)
         function showBrowseTab() {
-            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[0].classList.add('active');
-            document.getElementById('browse-tab').classList.remove('hidden');
-            document.getElementById('voice-browse-tab').classList.add('hidden');
-            document.getElementById('publish-tab').classList.add('hidden');
+            // OLD BROWSE TAB IS DISABLED - DO NOTHING
+            console.log('[Nav] showBrowseTab called but disabled - old tab is commented out');
         }
 
         function showVoiceBrowseTab() {
@@ -1780,8 +1807,15 @@
             hideAllPublishingSections();
         }
 
-        // Core browsing functionality
+        // Core browsing functionality (DISABLED - redirected to voice version)
         async function loadRecords(reset = false) {
+            console.log('[App] loadRecords called but redirected to loadVoiceRecords');
+            // Redirect to the voice version instead
+            return await loadVoiceRecords(reset);
+        }
+
+        // OLD loadRecords function (disabled)
+        async function loadRecordsOLD(reset = false) {
             if (isLoading) return;
             
             isLoading = true;
@@ -3593,6 +3627,9 @@
         }
 
         function ensureChatInputReady() {
+            // First, ensure the old browse tab isn't interfering
+            forcehideBrowseTab();
+            
             const chatInput = document.getElementById('ai-chat-input');
             const sendBtn = document.getElementById('ai-chat-send-btn');
             const chatContainer = document.querySelector('.chat-input-container');

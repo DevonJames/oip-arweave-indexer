@@ -57,6 +57,24 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
+    // Allow Chrome extension origins
+    if (origin.startsWith('chrome-extension://')) {
+      console.log(`[CORS] Allowing Chrome extension: ${origin}`);
+      return callback(null, true);
+    }
+    
+    // Allow Firefox extension origins
+    if (origin.startsWith('moz-extension://')) {
+      console.log(`[CORS] Allowing Firefox extension: ${origin}`);
+      return callback(null, true);
+    }
+    
+    // Allow Safari extension origins
+    if (origin.startsWith('safari-web-extension://')) {
+      console.log(`[CORS] Allowing Safari extension: ${origin}`);
+      return callback(null, true);
+    }
+    
     // List of allowed origins
     const allowedOrigins = [
       'http://localhost:3000',
@@ -76,6 +94,7 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.log(`[CORS] Blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
