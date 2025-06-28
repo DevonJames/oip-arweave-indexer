@@ -326,15 +326,9 @@ services:
   # Ngrok for public access - for distributed deployments
   ngrok:
     image: ngrok/ngrok
-    command: >
-      sh -c "if [ -n \"$$NGROK_DOMAIN\" ]; then 
-        ngrok http --domain=$$NGROK_DOMAIN oip:3005; 
-      else 
-        ngrok http oip:3005; 
-      fi"
+    command: ["ngrok", "http", "oip:3005", "--log=stdout"]
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
-      - NGROK_DOMAIN=${NGROK_DOMAIN}
     depends_on:
       - oip
     ports:
@@ -348,15 +342,9 @@ services:
   # Ngrok for GPU deployments
   ngrok-gpu:
     image: ngrok/ngrok:latest
-    command: >
-      sh -c "if [ -n \"$$NGROK_DOMAIN\" ]; then 
-        ngrok http --domain=$$NGROK_DOMAIN oip-gpu:3000; 
-      else 
-        ngrok http oip-gpu:3000; 
-      fi"
+    command: ["ngrok", "http", "oip-gpu:3000", "--log=stdout"]
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
-      - NGROK_DOMAIN=${NGROK_DOMAIN}
     depends_on:
       - oip-gpu
     ports:
