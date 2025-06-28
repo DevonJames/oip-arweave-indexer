@@ -18,7 +18,14 @@ echo ""
 # Check if docker-compose is running
 if ! docker-compose ps | grep -q ollama; then
     echo -e "${YELLOW}⚠️  Ollama service not running. Starting services...${NC}"
-    docker-compose --profile full-gpu up -d ollama
+    # Check which profile to use based on running containers
+    if docker-compose ps | grep -q "gpu"; then
+        echo -e "${BLUE}🎯 Using GPU profile for Ollama...${NC}"
+        docker-compose --profile standard-gpu up -d ollama-gpu
+    else
+        echo -e "${BLUE}🎯 Using standard profile for Ollama...${NC}"
+        docker-compose --profile standard up -d ollama
+    fi
     echo -e "${BLUE}⏳ Waiting for Ollama to start...${NC}"
     sleep 10
 fi
@@ -53,7 +60,10 @@ install_model() {
     
     echo -e "${BLUE}📥 Installing $display_name ($size)...${NC}"
     
-    if docker exec $(docker-compose ps -q ollama) ollama pull "$model_name"; then
+    # Get the right ollama container (could be ollama or ollama-gpu)
+    local ollama_container=$(docker-compose ps -q ollama 2>/dev/null || docker-compose ps -q ollama-gpu 2>/dev/null)
+    
+    if docker exec "$ollama_container" ollama pull "$model_name"; then
         echo -e "${GREEN}✅ Successfully installed $display_name${NC}"
     else
         echo -e "${RED}❌ Failed to install $display_name${NC}"
@@ -77,12 +87,15 @@ install_model "llama2" "LLaMA 2 7B" "3.8 GB"
 
 # 4. LLaMA 3.2 3B - Fast, efficient modern model (user requested)
 echo -e "${BLUE}📥 Installing LLaMA 3.2 3B (2.0 GB)...${NC}"
-if docker exec $(docker-compose ps -q ollama) ollama pull llama3.2:3b; then
+# Get the right ollama container (could be ollama or ollama-gpu)
+ollama_container=$(docker-compose ps -q ollama 2>/dev/null || docker-compose ps -q ollama-gpu 2>/dev/null)
+
+if docker exec "$ollama_container" ollama pull llama3.2:3b; then
     echo -e "${GREEN}✅ Successfully installed LLaMA 3.2 3B${NC}"
 else
     echo -e "${YELLOW}⚠️  LLaMA 3.2 3B not available, trying alternative...${NC}"
     # Try the instruct variant
-    if docker exec $(docker-compose ps -q ollama) ollama pull llama3.2:3b-instruct-q4_0; then
+    if docker exec "$ollama_container" ollama pull llama3.2:3b-instruct-q4_0; then
         echo -e "${GREEN}✅ Successfully installed LLaMA 3.2 3B Instruct${NC}"
     else
         echo -e "${RED}❌ LLaMA 3.2 variants not available${NC}"
@@ -94,7 +107,10 @@ echo ""
 echo -e "${BLUE}🔍 Verifying installed models...${NC}"
 echo ""
 
-if docker exec $(docker-compose ps -q ollama) ollama list; then
+# Get the right ollama container (could be ollama or ollama-gpu)
+ollama_container=$(docker-compose ps -q ollama 2>/dev/null || docker-compose ps -q ollama-gpu 2>/dev/null)
+
+if docker exec "$ollama_container" ollama list; then
     echo ""
     echo -e "${GREEN}✅ Model installation complete!${NC}"
     echo ""
