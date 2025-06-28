@@ -16,7 +16,7 @@ echo -e "${BLUE}🚀 OIP LLM Model Installation${NC}"
 echo ""
 
 # Check if docker-compose is running
-if ! docker-compose ps | grep -q ollama; then
+if ! docker-compose ps | grep -q -E "ollama|ollama-gpu"; then
     echo -e "${YELLOW}⚠️  Ollama service not running. Starting services...${NC}"
     # Check which profile to use based on running containers
     if docker-compose ps | grep -q "gpu"; then
@@ -28,6 +28,8 @@ if ! docker-compose ps | grep -q ollama; then
     fi
     echo -e "${BLUE}⏳ Waiting for Ollama to start...${NC}"
     sleep 10
+else
+    echo -e "${GREEN}✅ Ollama service is already running${NC}"
 fi
 
 # Wait for Ollama service to be ready
