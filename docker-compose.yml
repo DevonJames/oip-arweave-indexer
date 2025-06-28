@@ -342,7 +342,7 @@ services:
   # Ngrok for GPU deployments
   ngrok-gpu:
     image: ngrok/ngrok:latest
-    command: ["ngrok", "http", "oip-gpu:3005", "--log=stdout"]
+    command: ["ngrok", "http", "oip-gpu:3005"]
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
