@@ -2,5 +2,5 @@ version: "2"
 tunnels:
   oip:
     proto: http
-    addr: localhost:3005
+    addr: oip-gpu:3005
     hostname: ${NGROK_DOMAIN}  # Set NGROK_DOMAIN in your .env file, leave empty for random URL
