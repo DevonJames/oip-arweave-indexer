@@ -774,17 +774,26 @@ const mimeTypes = {
 
   // ... existing code for basic record building ...
 
+  // Validate required fields for post publishing
+  if (!articleData.title || !articleTextURL) {
+    console.error('Missing required fields for post publishing:', {
+      title: !!articleData.title,
+      articleTextURL: !!articleTextURL
+    });
+    throw new Error('Missing required fields: title and articleTextURL are required for post publishing');
+  }
+
   const recordToPublish = {
     "basic": {
       "name": articleData.title,
       "language": "en",
-      "date": articleData.publishDate,
-      "description": articleData.description,
+      "date": articleData.publishDate || Math.floor(Date.now() / 1000),
+      "description": articleData.description || "",
       "nsfw": false,
       "tagItems": articleData.tags || []
     },
     "post": {
-      "bylineWriter": articleData.byline,
+      "bylineWriter": articleData.byline || "",
       "articleText": 
         { 
           "text": {
@@ -794,7 +803,14 @@ const mimeTypes = {
         }
       ,
       "webUrl": cleanUrl(articleData.url),
+      "imageItems": [],
+      "imageCaptionItems": [],
+      "videoItems": [],
+      "audioItems": [],
+      "audioCaptionItems": [],
+      "replyTo": ""
     },
+    "blockchain": blockchain
   };
   
   // ... existing image handling code ...
@@ -819,7 +835,10 @@ const mimeTypes = {
   }
 
   if (articleData.summaryTTS) {
-    // ... existing code ...
+    recordToPublish.post.audioItems = [{
+      webUrl: articleData.summaryTTS,
+      contentType: "audio/mpeg"
+    }];
   }
 
   console.log('this is whats getting published:', recordToPublish)
