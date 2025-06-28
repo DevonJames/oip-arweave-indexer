@@ -1129,8 +1129,8 @@
             <div class="logo">OIP Explorer</div>
             
             <div class="nav-tabs">
-                <div class="nav-tab active" onclick="showBrowseTab()">Browse Records</div>
-                <div class="nav-tab" onclick="showVoiceBrowseTab()">Browse + AI Chat</div>
+                <!-- <div class="nav-tab active" onclick="showBrowseTab()">Browse Records</div> -->
+                <div class="nav-tab active" onclick="showVoiceBrowseTab()">Browse</div>
                 <div class="nav-tab" onclick="showPublishTab()">Publish</div>
             </div>
             
@@ -1147,7 +1147,7 @@
     </div>
 
     <div class="container">
-        <!-- Browse Tab Content -->
+        <!-- Browse Tab Content (COMMENTED OUT - replaced by Browse + AI Chat)
         <div id="browse-tab">
             <!-- Filters Section -->
             <div class="filters-section">
@@ -1239,9 +1239,10 @@
                 </div>
             </div>
         </div>
+        END COMMENTED OUT Browse Records Tab -->
 
         <!-- Browse + Voice Chat Tab Content -->
-        <div id="voice-browse-tab" class="hidden">
+        <div id="voice-browse-tab">
             <!-- AI Chat Section -->
             <div class="ai-chat-section">
                 <div class="chat-header">
@@ -1256,6 +1257,7 @@
                                 <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
                                 <option value="mistral:latest">Mistral 7B (Balanced)</option>
                                 <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
+                                <option value="tinyllama:latest">TinyLlama (Ultra Fast)</option>
                             </select>
                         </div>
                         <div class="ai-setting" style="display: inline-block;">
@@ -1617,14 +1619,10 @@
                 await loadTemplates();
             }
             
-            // Load record types for filters
-            await loadRecordTypes();
+            // Initialize the voice browse tab (now the default)
+            initializeVoiceFeatures();
             
-            // Load initial records
-            await loadRecords(true);
-            
-            // Setup infinite scroll
-            setupInfiniteScroll();
+            console.log('[App] Initialized with voice browse tab as default');
         }
 
         // Navigation functions
@@ -1638,8 +1636,8 @@
 
         function showVoiceBrowseTab() {
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[1].classList.add('active');
-            document.getElementById('browse-tab').classList.add('hidden');
+            document.querySelectorAll('.nav-tab')[0].classList.add('active'); // Now it's the first tab
+            // document.getElementById('browse-tab').classList.add('hidden'); // Commented out tab
             document.getElementById('voice-browse-tab').classList.remove('hidden');
             document.getElementById('publish-tab').classList.add('hidden');
             
@@ -1649,8 +1647,8 @@
 
         function showPublishTab() {
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[2].classList.add('active');
-            document.getElementById('browse-tab').classList.add('hidden');
+            document.querySelectorAll('.nav-tab')[1].classList.add('active'); // Now it's the second tab
+            // document.getElementById('browse-tab').classList.add('hidden'); // Commented out tab
             document.getElementById('voice-browse-tab').classList.add('hidden');
             document.getElementById('publish-tab').classList.remove('hidden');
         }
@@ -3025,6 +3023,10 @@
             selectedLanguage: 'auto',
             lastQuery: '',
             appliedFilters: {},
+            // Follow-up question tracking
+            lastSearchResults: [],
+            lastSearchSubject: '',
+            lastSearchKeywords: [],
             // Voice recording state
             isRecording: false,
             isTranscribing: false,
@@ -3223,77 +3225,21 @@
 
         async function processTextWithAI(text) {
             try {
-                updateAIStatus('Thinking...');
+                updateAIStatus('Analyzing question...');
                 chatState.isProcessing = true;
                 
-                // Create AbortController for timeout management
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => {
-                    controller.abort();
-                    console.log('[Chat] Request aborted due to timeout');
-                }, 25000);
+                // Determine if this is a follow-up question or new subject
+                const isFollowUp = await detectFollowUpQuestion(text);
                 
-                try {
-                    // Send to chat endpoint without audio requirements
-                    const response = await fetch('/api/voice/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            text: text,
-                            model: chatState.selectedModel,
-                            return_audio: false, // No audio needed for text chat
-                            include_filter_analysis: true
-                        }),
-                        signal: controller.signal
-                    });
-                    
-                    clearTimeout(timeoutId);
-                    
-                    if (!response.ok) {
-                        if (response.status === 408 || response.status === 504) {
-                            throw new Error('Request timeout - service may be busy, please try again');
-                        }
-                        throw new Error(`AI processing failed: ${response.status}`);
-                    }
-                    
-                    const aiData = await response.json();
-                    
-                    if (!aiData.response_text) {
-                        throw new Error('No response generated');
-                    }
-                    
-                    console.log('[Chat] AI Response:', aiData);
-                    
-                    // Use applied filters from backend (enhanced RAG service)
-                    const appliedFilters = aiData.applied_filters || {};
-                    
-                    // Apply the filters to the UI and reload records
-                    await applyAIFilters(appliedFilters, aiData.sources);
-                    
-                    // Add AI response to conversation
-                    addToConversation('assistant', aiData.response_text, {
-                        sources: aiData.sources,
-                        searchResults: aiData.search_results_count,
-                        filtersApplied: appliedFilters
-                    });
-                    
-                    updateAIStatus('Ready to answer questions!');
-                    
-                } catch (fetchError) {
-                    clearTimeout(timeoutId);
-                    
-                    if (fetchError.name === 'AbortError') {
-                        throw new Error('Request timeout - please try again in a moment');
-                    }
-                    
-                    if (fetchError.message.includes('Failed to fetch')) {
-                        throw new Error('Connection failed - please check your connection and try again');
-                    }
-                    
-                    throw fetchError;
+                if (isFollowUp && chatState.lastSearchResults.length > 0) {
+                    updateAIStatus('Processing follow-up with existing data...');
+                    await processFollowUpQuestion(text);
+                } else {
+                    updateAIStatus('Searching for new information...');
+                    await processNewQuestion(text);
                 }
+                
+                updateAIStatus('Ready to answer questions!');
                 
             } catch (error) {
                 console.error('[Chat] AI processing error:', error);
@@ -3301,6 +3247,204 @@
                 addToConversation('system', `AI Error: ${error.message}`);
             } finally {
                 chatState.isProcessing = false;
+            }
+        }
+
+        async function detectFollowUpQuestion(text) {
+            // If no previous conversation, definitely not a follow-up
+            if (chatState.conversation.length === 0 || !chatState.lastSearchSubject) {
+                return false;
+            }
+
+            const lowerText = text.toLowerCase();
+            
+            // Obvious new subject indicators
+            const newSubjectPatterns = [
+                /^(find|search|show|get|tell me about|what is|who is|where is|when is|how is)/,
+                /recipe for/,
+                /workout for/,
+                /video about/,
+                /image of/,
+                /post about/,
+                /information about/,
+                /data on/
+            ];
+            
+            if (newSubjectPatterns.some(pattern => pattern.test(lowerText))) {
+                // Check if it mentions the same subject as before
+                const lastSubjectWords = chatState.lastSearchSubject.toLowerCase().split(' ');
+                const hasCommonSubject = lastSubjectWords.some(word => 
+                    word.length > 3 && lowerText.includes(word)
+                );
+                
+                if (!hasCommonSubject) {
+                    return false; // Definitely new subject
+                }
+            }
+            
+            // Follow-up indicators
+            const followUpPatterns = [
+                /^(how many|how much|what about|what else|also|and|more|any other|tell me more)/,
+                /^(where|when|why|who|which|whose)/,
+                /(more|additional|other|else|further|next)/,
+                /^(can you|could you|please)/
+            ];
+            
+            if (followUpPatterns.some(pattern => pattern.test(lowerText))) {
+                return true;
+            }
+            
+            // Check for context continuity
+            const lastSearchWords = chatState.lastSearchKeywords;
+            if (lastSearchWords.length > 0) {
+                const hasContextOverlap = lastSearchWords.some(keyword => 
+                    lowerText.includes(keyword.toLowerCase())
+                );
+                
+                if (hasContextOverlap) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        async function processFollowUpQuestion(text) {
+            console.log('[Chat] Processing follow-up question with existing data');
+            
+            // Create AbortController for timeout management
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+                console.log('[Chat] Request aborted due to timeout');
+            }, 20000);
+            
+            try {
+                // Send the question with context and existing search results
+                const response = await fetch('/api/voice/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        model: chatState.selectedModel,
+                        return_audio: false,
+                        include_filter_analysis: false, // Don't perform new search
+                        is_follow_up: true,
+                        conversation_context: chatState.conversation.slice(-4), // Last 4 messages for context
+                        existing_search_results: chatState.lastSearchResults
+                    }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`Follow-up processing failed: ${response.status}`);
+                }
+                
+                const aiData = await response.json();
+                
+                if (!aiData.response_text) {
+                    throw new Error('No response generated');
+                }
+                
+                console.log('[Chat] Follow-up Response:', aiData);
+                
+                // Add AI response to conversation
+                addToConversation('assistant', aiData.response_text, {
+                    sources: chatState.lastSearchResults,
+                    searchResults: chatState.lastSearchResults.length,
+                    isFollowUp: true
+                });
+                
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                
+                if (fetchError.name === 'AbortError') {
+                    throw new Error('Request timeout - please try again in a moment');
+                }
+                
+                throw fetchError;
+            }
+        }
+
+        async function processNewQuestion(text) {
+            console.log('[Chat] Processing new question with fresh search');
+            
+            // Create AbortController for timeout management
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+                console.log('[Chat] Request aborted due to timeout');
+            }, 25000);
+            
+            try {
+                // Send to chat endpoint for new search
+                const response = await fetch('/api/voice/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        model: chatState.selectedModel,
+                        return_audio: false,
+                        include_filter_analysis: true,
+                        is_follow_up: false
+                    }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    if (response.status === 408 || response.status === 504) {
+                        throw new Error('Request timeout - service may be busy, please try again');
+                    }
+                    throw new Error(`AI processing failed: ${response.status}`);
+                }
+                
+                const aiData = await response.json();
+                
+                if (!aiData.response_text) {
+                    throw new Error('No response generated');
+                }
+                
+                console.log('[Chat] New Question Response:', aiData);
+                
+                // Store search results and subject for future follow-ups
+                chatState.lastSearchResults = aiData.search_results || [];
+                chatState.lastSearchSubject = aiData.extracted_subject || text;
+                chatState.lastSearchKeywords = aiData.extracted_keywords || [];
+                
+                // Use applied filters from backend (enhanced RAG service)
+                const appliedFilters = aiData.applied_filters || {};
+                
+                // Apply the filters to the UI and reload records
+                await applyAIFilters(appliedFilters, aiData.sources);
+                
+                // Add AI response to conversation
+                addToConversation('assistant', aiData.response_text, {
+                    sources: aiData.sources,
+                    searchResults: aiData.search_results_count,
+                    filtersApplied: appliedFilters,
+                    isFollowUp: false
+                });
+                
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                
+                if (fetchError.name === 'AbortError') {
+                    throw new Error('Request timeout - please try again in a moment');
+                }
+                
+                if (fetchError.message.includes('Failed to fetch')) {
+                    throw new Error('Connection failed - please check your connection and try again');
+                }
+                
+                throw fetchError;
             }
         }
 
@@ -3441,31 +3585,42 @@
         }
 
         function ensureChatInputReady() {
-            const chatInput = document.getElementById('ai-chat-input');
-            const sendBtn = document.getElementById('ai-chat-send-btn');
-            const chatContainer = document.querySelector('.chat-input-container');
-            
-            if (chatInput) {
-                chatInput.disabled = false;
-                chatInput.style.display = 'block';
-                chatInput.style.visibility = 'visible';
-                chatInput.style.opacity = '1';
-            }
-            
-            if (sendBtn) {
-                sendBtn.disabled = false;
-                sendBtn.style.display = 'inline-block';
-                sendBtn.style.visibility = 'visible';
-                sendBtn.style.opacity = '1';
-            }
-            
-            if (chatContainer) {
-                chatContainer.style.display = 'block';
-                chatContainer.style.visibility = 'visible';
-                chatContainer.style.opacity = '1';
-            }
-            
-            console.log('[Chat] Input availability ensured');
+            setTimeout(() => {
+                const chatInput = document.getElementById('ai-chat-input');
+                const sendBtn = document.getElementById('ai-chat-send-btn');
+                const chatContainer = document.querySelector('.chat-input-container');
+                
+                if (chatInput) {
+                    chatInput.disabled = false;
+                    chatInput.style.display = 'block';
+                    chatInput.style.visibility = 'visible';
+                    chatInput.style.opacity = '1';
+                    chatInput.style.pointerEvents = 'auto';
+                    chatInput.removeAttribute('readonly');
+                    
+                    // Focus the input to ensure it's ready for typing
+                    if (!chatState.isProcessing) {
+                        chatInput.focus();
+                    }
+                }
+                
+                if (sendBtn) {
+                    sendBtn.disabled = chatState.isProcessing; // Only disable when processing
+                    sendBtn.style.display = 'inline-block';
+                    sendBtn.style.visibility = 'visible';
+                    sendBtn.style.opacity = '1';
+                    sendBtn.style.pointerEvents = 'auto';
+                }
+                
+                if (chatContainer) {
+                    chatContainer.style.display = 'block';
+                    chatContainer.style.visibility = 'visible';
+                    chatContainer.style.opacity = '1';
+                    chatContainer.style.pointerEvents = 'auto';
+                }
+                
+                console.log('[Chat] Input availability ensured and focused');
+            }, 50); // Small delay to ensure DOM updates are complete
         }
 
         function getMessageAvatar(role) {
@@ -3742,15 +3897,26 @@
 
         function clearConversation() {
             // Stop any current recording
+            if (chatState.isRecording) {
+                stopRecording();
+            }
             
             // Clear conversation array
             chatState.conversation = [];
+            
+            // Clear follow-up tracking state
+            chatState.lastSearchResults = [];
+            chatState.lastSearchSubject = '';
+            chatState.lastSearchKeywords = [];
             
             // Update display
             updateConversationDisplay();
             
             // Clear any applied filters
             document.getElementById('applied-filters-display').classList.add('hidden');
+            
+            // Ensure input is ready
+            ensureChatInputReady();
             
             updateAIStatus('Ready to answer questions!');
         }
