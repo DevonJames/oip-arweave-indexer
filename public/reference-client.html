@@ -45,11 +45,11 @@
 
         .nav-tab {
             padding: 10px 20px;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.2);
             border-radius: 20px;
             cursor: pointer;
             transition: all 0.3s ease;
-            border: 2px solid transparent;
+            border: 2px solid rgba(255,255,255,0.3);
         }
 
         .nav-tab:hover {
@@ -961,7 +961,8 @@
         }
 
         .applied-filters {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(59, 130, 246, 0.15);
+            border: 2px solid rgba(59, 130, 246, 0.4);
             border-radius: 8px;
             padding: 15px;
             margin-top: 15px;
@@ -1274,8 +1275,8 @@
                         </div>
                     </div>
 
-                    <div id="applied-filters-display" class="applied-filters hidden" style="margin-top: 15px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 15px;">
-                        <div style="margin-bottom: 8px; font-weight: bold; color: #1e40af;">🔍 AI Applied Filters:</div>
+                    <div id="applied-filters-display" class="applied-filters hidden" style="margin-top: 15px; background: rgba(59, 130, 246, 0.2); border: 2px solid rgba(59, 130, 246, 0.5); border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="margin-bottom: 8px; font-weight: bold; color: #1e40af; background: rgba(255, 255, 255, 0.8); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(30, 64, 175, 0.3);">🔍 AI Applied Filters:</div>
                         <div id="filter-chips-container"></div>
                         <div id="filter-rationale" style="margin-top: 8px; font-size: 12px; color: #374151; opacity: 0.9;"></div>
                     </div>
@@ -1295,7 +1296,7 @@
                         <div class="ai-status" id="ai-status" style="flex: 1; margin-bottom: 0; margin-right: 10px;">
                             <div id="ai-status-text">Ready to answer questions!</div>
                         </div>
-                        <button onclick="clearConversation()" class="btn-secondary btn-small" style="background: #6b7280; border: 1px solid #9ca3af; color: white; margin: 0; opacity: 0.9;">
+                        <button onclick="clearConversation()" class="btn-secondary btn-small" style="background: #6b7280; border: 1px solid #9ca3af; color: white; margin: 0;">
                             Clear Chat
                         </button>
                     </div>
