@@ -345,6 +345,7 @@ services:
     command: ["ngrok", "http", "oip-gpu:3005"]
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+      - NGROK_DOMAIN=${NGROK_DOMAIN}
     depends_on:
       - oip-gpu
     ports:
