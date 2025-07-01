@@ -1089,6 +1089,453 @@
             border-radius: 0 4px 4px 0;
         }
 
+        /* ========================================================================
+           MODERN MEDIA-FOCUSED CARD STYLES (YouTube/SoundCloud/Flickr Style)
+           ======================================================================== */
+        
+        /* Media Preview Styles */
+        .media-preview {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .media-preview:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .preview-image, .preview-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+
+        .preview-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-size: 48px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .audio-preview {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+
+        .audio-artwork {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .audio-icon {
+            font-size: 48px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .audio-visualizer {
+            display: flex;
+            gap: 3px;
+            align-items: center;
+        }
+
+        .audio-visualizer .bar {
+            width: 4px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 2px;
+            animation: audio-bounce 1.5s infinite ease-in-out;
+        }
+
+        .audio-visualizer .bar:nth-child(1) { height: 20px; animation-delay: -0.32s; }
+        .audio-visualizer .bar:nth-child(2) { height: 15px; animation-delay: -0.16s; }
+        .audio-visualizer .bar:nth-child(3) { height: 25px; animation-delay: 0s; }
+        .audio-visualizer .bar:nth-child(4) { height: 18px; animation-delay: -0.24s; }
+
+        @keyframes audio-bounce {
+            0%, 80%, 100% { transform: scaleY(0.6); opacity: 0.8; }
+            40% { transform: scaleY(1); opacity: 1; }
+        }
+
+        .media-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .play-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .video-preview:hover .play-overlay {
+            opacity: 1;
+        }
+
+        .play-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease;
+        }
+
+        .play-button:hover {
+            transform: scale(1.1);
+        }
+
+        /* Record Content Styles */
+        .record-content {
+            padding: 0 5px;
+        }
+
+        .record-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            line-height: 1.3;
+            color: #2c3e50;
+        }
+
+        .record-description {
+            color: #7f8c8d;
+            font-size: 14px;
+            line-height: 1.4;
+            margin: 0 0 15px 0;
+        }
+
+        /* Media Control Styles */
+        .media-controls, .article-controls, .web-controls {
+            margin: 12px 0;
+        }
+
+        .play-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .play-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .play-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .play-btn.primary.playing {
+            background: linear-gradient(135deg, #ee5a24 0%, #ff6b6b 100%);
+            box-shadow: 0 4px 15px rgba(238, 90, 36, 0.3);
+        }
+
+        .play-btn.secondary {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .play-btn.secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        .article-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 20px;
+            color: #495057;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 13px;
+        }
+
+        .article-btn:hover {
+            background: #e9ecef;
+            border-color: #dee2e6;
+            transform: translateY(-1px);
+        }
+
+        .web-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        .web-btn:hover {
+            background: #218838;
+            transform: translateY(-1px);
+            color: white;
+        }
+
+        .media-count {
+            color: #6c757d;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        /* Record Footer Styles */
+        .record-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding-top: 12px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .show-structure-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: transparent;
+            border: 1px solid #dee2e6;
+            border-radius: 15px;
+            color: #6c757d;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s ease;
+        }
+
+        .show-structure-btn:hover {
+            background: #f8f9fa;
+            border-color: #adb5bd;
+            color: #495057;
+        }
+
+        .record-did {
+            font-size: 10px;
+            color: #adb5bd;
+            font-family: monospace;
+        }
+
+        /* Record Structure (Collapsible Technical Details) */
+        .record-structure {
+            margin-top: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            background: #f8f9fa;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .structure-header {
+            padding: 12px 15px;
+            background: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .structure-header h4 {
+            margin: 0 0 8px 0;
+            color: #495057;
+            font-size: 14px;
+        }
+
+        /* Article Content Styles */
+        .article-content {
+            margin-top: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .article-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .article-header h4 {
+            margin: 0;
+            color: #495057;
+            font-size: 14px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #6c757d;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .close-btn:hover {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .article-text {
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.6;
+            color: #495057;
+            white-space: pre-wrap;
+        }
+
+        .article-error {
+            padding: 15px;
+            color: #dc3545;
+            text-align: center;
+        }
+
+        /* Modal Styles */
+        .video-modal, .image-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .video-modal-content, .image-modal-content {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            max-width: 90vw;
+            max-height: 90vh;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .video-modal-header, .image-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .video-modal-header h3, .image-modal-header h3 {
+            margin: 0;
+            color: #495057;
+            font-size: 16px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Record Header Updates */
+        .record-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .record-type {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+
+        .record-date {
+            color: #6c757d;
+            font-size: 12px;
+        }
+
+        /* Enhanced Tags */
+        .tags-container {
+            margin: 12px 0;
+        }
+
+        .tag-chip {
+            display: inline-block;
+            background: #e9ecef;
+            color: #495057;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin: 2px 4px 2px 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-chip:hover {
+            background: #dee2e6;
+            transform: translateY(-1px);
+        }
+
         .field-debug {
             background: #fff3e0;
             border: 1px solid #ff9800;
@@ -1184,7 +1631,7 @@
     <!-- Header -->
     <div class="header">
         <div class="header-content">
-            <div class="logo">OIP Explorer - Dynamic Templates</div>
+            <div class="logo">OIP Explorer</div>
             
             <div class="nav-tabs">
                 <!-- <div class="nav-tab active" onclick="showBrowseTab()">Browse Records</div> -->
@@ -1342,12 +1789,7 @@
                             <div class="toggle-switch" id="voice-include-pubkeys-toggle" onclick="toggleVoiceSwitch('voice-include-pubkeys-toggle')"></div>
                         </div>
                         
-                        <div class="toggle-group">
-                            <label>
-                                <input type="checkbox" id="show-template-debug" onchange="applyVoiceFilters()">
-                                Debug Templates
-                            </label>
-                        </div>
+
                         
                         <button onclick="clearVoiceFilters()" class="btn-secondary btn-small">Clear Filters</button>
                         <button onclick="applyVoiceFilters()" class="btn-small">Apply Filters</button>
@@ -2253,6 +2695,14 @@
         }
 
         /**
+         * Truncate text to specified length with ellipsis
+         */
+        function truncateText(text, maxLength) {
+            if (!text || text.length <= maxLength) return text;
+            return text.substring(0, maxLength).trim() + '...';
+        }
+
+        /**
          * Filter records by tag (called when clicking tag chips)
          */
         function filterByTag(tag) {
@@ -2284,10 +2734,12 @@
         // Make test function available globally for console testing
         window.testTemplateSystem = testTemplateSystem;
 
-        // ====== ENHANCED DYNAMIC RECORD CARD CREATION ======
+        // ========================================================================
+        // MODERN MEDIA-FOCUSED RECORD CARDS (YouTube/SoundCloud/Flickr Style)
+        // ========================================================================
         
         /**
-         * Create a record card with dynamic template-based rendering
+         * Create a modern, media-focused record card with collapsible technical details
          */
         function createRecordCard(record, recordIndex) {
             const card = document.createElement('div');
@@ -2297,38 +2749,385 @@
             const basicData = record.data?.basic || {};
             const templatesUsed = analyzeRecordTemplates(record);
             
-            showDebugInfo = document.getElementById('show-template-debug')?.checked || false;
+            // Extract media and content for modern display
+            const mediaContent = extractMediaContent(record);
+            const dateDisplay = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
             
-            let debugHtml = '';
-            if (showDebugInfo) {
-                debugHtml = `
-                    <div class="template-info">
-                        <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
-                        <strong>Record Type:</strong> ${recordType}<br>
-                        <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth}
+            // Build modern media card
+            card.innerHTML = `
+                <div class="record-header">
+                    <div class="record-type">${recordType}</div>
+                    <div class="record-date">${dateDisplay}</div>
+                </div>
+                
+                ${renderMediaPreview(mediaContent, recordIndex)}
+                
+                <div class="record-content">
+                    <h3 class="record-title">${basicData.name || 'Unnamed Record'}</h3>
+                    ${basicData.description ? `<p class="record-description">${truncateText(basicData.description, 150)}</p>` : ''}
+                    
+                    ${renderMediaControls(mediaContent, record, recordIndex)}
+                    ${renderArticleTextButton(mediaContent, recordIndex)}
+                    ${renderWebUrlButton(mediaContent)}
+                </div>
+                
+                ${createTagsDisplay(basicData.tagItems)}
+                
+                <div class="record-footer">
+                    <button class="show-structure-btn" onclick="toggleRecordStructure(${recordIndex})" title="Show technical record structure">
+                        <span class="structure-icon">🔧</span> Show Record Structure
+                    </button>
+                    <div class="record-did">DID: ${truncateText(record.oip?.didTx || 'Unknown', 20)}</div>
+                </div>
+                
+                <div id="structure-${recordIndex}" class="record-structure hidden">
+                    <div class="structure-header">
+                        <h4>🔧 Technical Record Structure</h4>
+                        <div class="template-info">
+                            <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
+                            <strong>Record Type:</strong> ${recordType}<br>
+                            <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth}
+                        </div>
+                    </div>
+                    ${renderAllTemplateData(record, templatesUsed)}
+                </div>
+            `;
+            
+            return card;
+        }
+
+        /**
+         * Extract all media content from a record for modern display
+         */
+        function extractMediaContent(record) {
+            const content = {
+                featuredImage: null,
+                audioItems: [],
+                videoItems: [],
+                articleText: null,
+                webUrl: null
+            };
+            
+            // Extract from all data sections
+            if (record.data) {
+                Object.keys(record.data).forEach(sectionName => {
+                    if (sectionName === 'basic') return;
+                    
+                    const section = record.data[sectionName];
+                    extractMediaFromSection(section, content, sectionName);
+                });
+            }
+            
+            return content;
+        }
+
+        /**
+         * Extract media from a specific data section
+         */
+        function extractMediaFromSection(section, content, sectionName) {
+            if (!section || typeof section !== 'object') return;
+            
+            Object.keys(section).forEach(fieldName => {
+                const value = section[fieldName];
+                
+                // Handle resolved drefs
+                if (value && typeof value === 'object' && value.data && value.oip) {
+                    const embedType = value.oip.recordType;
+                    const embedData = value.data[embedType];
+                    
+                    if (embedType === 'image' && embedData?.webUrl) {
+                        if (!content.featuredImage) content.featuredImage = {
+                            url: embedData.webUrl,
+                            title: value.data.basic?.name || 'Image',
+                            contentType: embedData.contentType
+                        };
+                    } else if (embedType === 'audio' && embedData?.webUrl) {
+                        content.audioItems.push({
+                            url: embedData.webUrl,
+                            title: value.data.basic?.name || 'Audio',
+                            contentType: embedData.contentType
+                        });
+                    } else if (embedType === 'video' && embedData?.webUrl) {
+                        content.videoItems.push({
+                            url: embedData.webUrl,
+                            title: value.data.basic?.name || 'Video',
+                            contentType: embedData.contentType
+                        });
+                    } else if (embedType === 'text' && embedData?.webUrl && fieldName === 'articleText') {
+                        content.articleText = {
+                            url: embedData.webUrl,
+                            title: value.data.basic?.name || 'Article Text',
+                            contentType: embedData.contentType
+                        };
+                    }
+                }
+                
+                // Handle arrays of resolved drefs
+                else if (Array.isArray(value) && value.length > 0 && value[0].data && value[0].oip) {
+                    value.forEach(item => {
+                        const embedType = item.oip.recordType;
+                        const embedData = item.data[embedType];
+                        
+                        if (embedType === 'audio' && embedData?.webUrl) {
+                            content.audioItems.push({
+                                url: embedData.webUrl,
+                                title: item.data.basic?.name || 'Audio',
+                                contentType: embedData.contentType
+                            });
+                        } else if (embedType === 'video' && embedData?.webUrl) {
+                            content.videoItems.push({
+                                url: embedData.webUrl,
+                                title: item.data.basic?.name || 'Video',
+                                contentType: embedData.contentType
+                            });
+                        }
+                    });
+                }
+                
+                // Handle direct URLs
+                else if (fieldName === 'webUrl' && typeof value === 'string') {
+                    content.webUrl = value;
+                }
+                
+                // Handle direct image URLs (for unresolved cases)
+                else if (fieldName.toLowerCase().includes('image') && typeof value === 'string' && 
+                         (value.startsWith('http') && (value.includes('.jpg') || value.includes('.png') || value.includes('.gif')))) {
+                    if (!content.featuredImage) content.featuredImage = {
+                        url: value,
+                        title: 'Image',
+                        contentType: 'image/jpeg'
+                    };
+                }
+            });
+        }
+
+        /**
+         * Render media preview (featured image or video thumbnail)
+         */
+        function renderMediaPreview(mediaContent, recordIndex) {
+            // Priority: Video thumbnail > Featured Image > First Video > Placeholder
+            if (mediaContent.videoItems.length > 0) {
+                const video = mediaContent.videoItems[0];
+                return `
+                    <div class="media-preview video-preview">
+                        <video class="preview-video" poster="" onclick="playVideoFullscreen('${video.url}', '${video.title}')">
+                            <source src="${video.url}" type="${video.contentType || 'video/mp4'}">
+                        </video>
+                        <div class="play-overlay" onclick="playVideoFullscreen('${video.url}', '${video.title}')">
+                            <div class="play-button">▶️</div>
+                        </div>
+                        <div class="media-badge">📹 Video</div>
+                    </div>
+                `;
+            } else if (mediaContent.featuredImage) {
+                return `
+                    <div class="media-preview image-preview">
+                        <img src="${mediaContent.featuredImage.url}" 
+                             alt="${mediaContent.featuredImage.title}"
+                             class="preview-image"
+                             onclick="openImageModal('${mediaContent.featuredImage.url}', '${mediaContent.featuredImage.title}')"
+                             onerror="this.parentElement.innerHTML='<div class=\\"preview-placeholder\\">🖼️ Image</div>'">
+                        <div class="media-badge">📷 Image</div>
+                    </div>
+                `;
+            } else if (mediaContent.audioItems.length > 0) {
+                return `
+                    <div class="media-preview audio-preview">
+                        <div class="audio-artwork">
+                            <div class="audio-icon">🎵</div>
+                            <div class="audio-visualizer">
+                                <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+                            </div>
+                        </div>
+                        <div class="media-badge">🎵 Audio</div>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div class="media-preview placeholder-preview">
+                        <div class="preview-placeholder">📄 Text</div>
+                    </div>
+                `;
+            }
+        }
+
+        /**
+         * Render media controls (play buttons, etc.)
+         */
+        function renderMediaControls(mediaContent, record, recordIndex) {
+            let controls = '';
+            
+            // Audio controls
+            if (mediaContent.audioItems.length > 0) {
+                const audio = mediaContent.audioItems[0];
+                controls += `
+                    <div class="media-controls">
+                        <button class="play-btn primary" onclick="playAudioInMaster('${audio.url}', '${audio.title}', '${record.oip?.recordType || 'audio'}', ${recordIndex})" id="audioBtn-${recordIndex}">
+                            <span class="play-icon">▶️</span>
+                            <span class="play-text">Play Audio</span>
+                        </button>
+                        ${mediaContent.audioItems.length > 1 ? `<span class="media-count">+${mediaContent.audioItems.length - 1} more</span>` : ''}
                     </div>
                 `;
             }
             
-            // Build the card content
-            const dateDisplay = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
+            // Video controls  
+            if (mediaContent.videoItems.length > 0) {
+                const video = mediaContent.videoItems[0];
+                controls += `
+                    <div class="media-controls">
+                        <button class="play-btn secondary" onclick="playVideoFullscreen('${video.url}', '${video.title}')">
+                            <span class="play-icon">▶️</span>
+                            <span class="play-text">Play Video</span>
+                        </button>
+                        ${mediaContent.videoItems.length > 1 ? `<span class="media-count">+${mediaContent.videoItems.length - 1} more</span>` : ''}
+                    </div>
+                `;
+            }
             
-            card.innerHTML = `
-                <div class="record-header">
-                    <div class="record-type">${recordType}</div>
-                    <div class="record-block">${dateDisplay}</div>
+            return controls;
+        }
+
+        /**
+         * Render article text button for posts
+         */
+        function renderArticleTextButton(mediaContent, recordIndex) {
+            if (mediaContent.articleText) {
+                return `
+                    <div class="article-controls">
+                        <button class="article-btn" onclick="loadArticleText('${mediaContent.articleText.url}', ${recordIndex})">
+                            📄 Full Article Text
+                        </button>
+                        <div id="articleText-${recordIndex}" class="article-content hidden">
+                            <div class="article-loading">Loading article...</div>
+                        </div>
+                    </div>
+                `;
+            }
+            return '';
+        }
+
+        /**
+         * Render web URL button
+         */
+        function renderWebUrlButton(mediaContent) {
+            if (mediaContent.webUrl) {
+                return `
+                    <div class="web-controls">
+                        <a href="${mediaContent.webUrl}" target="_blank" rel="noopener noreferrer" class="web-btn">
+                            🌐 View Original
+                        </a>
+                    </div>
+                `;
+            }
+            return '';
+        }
+
+        /**
+         * Toggle record structure visibility
+         */
+        function toggleRecordStructure(recordIndex) {
+            const structure = document.getElementById(`structure-${recordIndex}`);
+            const button = structure.previousElementSibling.querySelector('.show-structure-btn');
+            
+            if (structure.classList.contains('hidden')) {
+                structure.classList.remove('hidden');
+                button.innerHTML = '<span class="structure-icon">🔧</span> Hide Record Structure';
+            } else {
+                structure.classList.add('hidden');
+                button.innerHTML = '<span class="structure-icon">🔧</span> Show Record Structure';
+            }
+        }
+
+        /**
+         * Load article text content
+         */
+        async function loadArticleText(url, recordIndex) {
+            const container = document.getElementById(`articleText-${recordIndex}`);
+            const button = container.previousElementSibling;
+            
+            if (!container.classList.contains('hidden')) {
+                container.classList.add('hidden');
+                button.textContent = '📄 Full Article Text';
+                return;
+            }
+            
+            try {
+                button.textContent = '📄 Loading...';
+                button.disabled = true;
+                
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const text = await response.text();
+                
+                container.innerHTML = `
+                    <div class="article-header">
+                        <h4>📄 Full Article Text</h4>
+                        <button onclick="toggleRecordStructure(${recordIndex}); document.getElementById('articleText-${recordIndex}').classList.add('hidden'); document.querySelector('[onclick*=\\"loadArticleText\\"]').textContent='📄 Full Article Text'; document.querySelector('[onclick*=\\"loadArticleText\\"]').disabled=false;" class="close-btn">✕</button>
+                    </div>
+                    <div class="article-text">${escapeHtml(text)}</div>
+                `;
+                container.classList.remove('hidden');
+                button.textContent = '📄 Hide Article Text';
+                
+            } catch (error) {
+                container.innerHTML = `<div class="article-error">Error loading article: ${error.message}</div>`;
+                container.classList.remove('hidden');
+                button.textContent = '❌ Failed to Load';
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        /**
+         * Play video in fullscreen modal
+         */
+        function playVideoFullscreen(url, title) {
+            // Create simple video modal
+            const modal = document.createElement('div');
+            modal.className = 'video-modal';
+            modal.innerHTML = `
+                <div class="video-modal-content">
+                    <div class="video-modal-header">
+                        <h3>${escapeHtml(title)}</h3>
+                        <button onclick="this.closest('.video-modal').remove()" class="close-btn">✕</button>
+                    </div>
+                    <video controls autoplay style="width: 100%; max-height: 70vh;">
+                        <source src="${url}">
+                        Your browser doesn't support video playback.
+                    </video>
                 </div>
-                <div class="record-title">${basicData.name || 'Unnamed Record'}</div>
-                ${debugHtml}
-                ${renderBasicInfo(basicData)}
-                ${renderAllTemplateData(record, templatesUsed)}
-                <div class="record-meta">
-                    <div>DID: ${record.oip?.didTx || 'Unknown'}</div>
-                </div>
-                ${createTagsDisplay(basicData.tagItems)}
             `;
             
-            return card;
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+            
+            document.body.appendChild(modal);
+        }
+
+        /**
+         * Open image in modal
+         */
+        function openImageModal(url, title) {
+            const modal = document.createElement('div');
+            modal.className = 'image-modal';
+            modal.innerHTML = `
+                <div class="image-modal-content">
+                    <div class="image-modal-header">
+                        <h3>${escapeHtml(title)}</h3>
+                        <button onclick="this.closest('.image-modal').remove()" class="close-btn">✕</button>
+                    </div>
+                    <img src="${url}" alt="${escapeHtml(title)}" style="max-width: 100%; max-height: 80vh;">
+                </div>
+            `;
+            
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+            
+            document.body.appendChild(modal);
         }
 
         /**
@@ -2595,7 +3394,7 @@
             if (!tags || !Array.isArray(tags) || tags.length === 0) return '';
             
             const tagsHtml = tags.slice(0, 5).map(tag => 
-                `<span class="tag" onclick="filterByTag('${tag}')">${tag}</span>`
+                `<span class="tag-chip" onclick="filterByTag('${escapeHtml(tag)}')" title="Filter by ${escapeHtml(tag)}">${escapeHtml(tag)}</span>`
             ).join('');
             
             return `<div class="tags-container">${tagsHtml}</div>`;
