@@ -2501,61 +2501,50 @@ const deleteRecordsByIndex = async (index) => {
 
 const getRecordTypesSummary = async () => {
     try {
-        // First try with .keyword, if that fails, fallback to the raw field
-        let response;
-        try {
-            response = await elasticClient.search({
-                index: 'records',
-                body: {
-                    size: 0, // We don't need the actual records, just the aggregation
-                    aggs: {
-                        recordTypes: {
-                            terms: {
-                                field: 'oip.recordType.keyword', // Try with .keyword first
-                                size: 100, // Adjust size as needed to capture all record types
-                                order: { _count: 'desc' } // Order by count descending
-                            }
-                        }
+        // Since the recordType field is mapped as 'text', we need to use a different approach
+        // We'll fetch all records and manually count the recordTypes
+        const response = await elasticClient.search({
+            index: 'records',
+            body: {
+                size: 10000, // Fetch a large number of records to get all
+                _source: ['oip.recordType'], // Only fetch the recordType field
+                query: {
+                    exists: {
+                        field: 'oip.recordType'
                     }
                 }
-            });
-        } catch (keywordError) {
-            console.log(getFileInfo(), getLineNumber(), 'Trying without .keyword due to error:', keywordError.message);
-            // Fallback to raw field if .keyword doesn't exist
-            response = await elasticClient.search({
-                index: 'records',
-                body: {
-                    size: 0,
-                    aggs: {
-                        recordTypes: {
-                            terms: {
-                                field: 'oip.recordType', // Use raw field
-                                size: 100,
-                                order: { _count: 'desc' }
-                            }
-                        }
-                    }
-                }
-            });
-        }
+            }
+        });
 
-        // Extract the aggregation results
-        const buckets = response.aggregations?.recordTypes?.buckets || [];
-        const recordTypeCounts = buckets.map(bucket => ({
-            recordType: bucket.key,
-            count: bucket.doc_count
-        }));
+        // Manual aggregation since the field doesn't support terms aggregation
+        const recordTypeCounts = {};
+        const records = response.hits.hits;
+
+        records.forEach(hit => {
+            const recordType = hit._source?.oip?.recordType;
+            if (recordType) {
+                recordTypeCounts[recordType] = (recordTypeCounts[recordType] || 0) + 1;
+            }
+        });
+
+        // Convert to array and sort by count descending
+        const recordTypeArray = Object.keys(recordTypeCounts)
+            .map(recordType => ({
+                recordType: recordType,
+                count: recordTypeCounts[recordType]
+            }))
+            .sort((a, b) => b.count - a.count);
 
         // Get total count
         const totalRecords = response.hits.total.value || response.hits.total;
 
-        console.log(getFileInfo(), getLineNumber(), `Found ${recordTypeCounts.length} different record types across ${totalRecords} total records`);
+        console.log(getFileInfo(), getLineNumber(), `Found ${recordTypeArray.length} different record types across ${totalRecords} total records`);
 
         return {
             message: "Record types retrieved successfully",
             totalRecords: totalRecords,
-            recordTypeCount: recordTypeCounts.length,
-            recordTypes: recordTypeCounts
+            recordTypeCount: recordTypeArray.length,
+            recordTypes: recordTypeArray
         };
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error retrieving record types summary:', error);
