@@ -2499,6 +2499,70 @@ const deleteRecordsByIndex = async (index) => {
     }
 };
 
+const getRecordTypesSummary = async () => {
+    try {
+        // First try with .keyword, if that fails, fallback to the raw field
+        let response;
+        try {
+            response = await elasticClient.search({
+                index: 'records',
+                body: {
+                    size: 0, // We don't need the actual records, just the aggregation
+                    aggs: {
+                        recordTypes: {
+                            terms: {
+                                field: 'oip.recordType.keyword', // Try with .keyword first
+                                size: 100, // Adjust size as needed to capture all record types
+                                order: { _count: 'desc' } // Order by count descending
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (keywordError) {
+            console.log(getFileInfo(), getLineNumber(), 'Trying without .keyword due to error:', keywordError.message);
+            // Fallback to raw field if .keyword doesn't exist
+            response = await elasticClient.search({
+                index: 'records',
+                body: {
+                    size: 0,
+                    aggs: {
+                        recordTypes: {
+                            terms: {
+                                field: 'oip.recordType', // Use raw field
+                                size: 100,
+                                order: { _count: 'desc' }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Extract the aggregation results
+        const buckets = response.aggregations?.recordTypes?.buckets || [];
+        const recordTypeCounts = buckets.map(bucket => ({
+            recordType: bucket.key,
+            count: bucket.doc_count
+        }));
+
+        // Get total count
+        const totalRecords = response.hits.total.value || response.hits.total;
+
+        console.log(getFileInfo(), getLineNumber(), `Found ${recordTypeCounts.length} different record types across ${totalRecords} total records`);
+
+        return {
+            message: "Record types retrieved successfully",
+            totalRecords: totalRecords,
+            recordTypeCount: recordTypeCounts.length,
+            recordTypes: recordTypeCounts
+        };
+    } catch (error) {
+        console.error(getFileInfo(), getLineNumber(), 'Error retrieving record types summary:', error);
+        throw error;
+    }
+};
+
 module.exports = {
     ensureIndexExists,
     ensureUserIndexExists,
@@ -2521,5 +2585,6 @@ module.exports = {
     deleteRecordsByIndexedAt,
     deleteRecordsByIndex,
     getCreatorsInDB,
+    getRecordTypesSummary,
     elasticClient
 };

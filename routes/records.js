@@ -3,7 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 
 // const path = require('path');
-const { getRecords, searchRecordInDB } = require('../helpers/elasticsearch');
+const { getRecords, searchRecordInDB, getRecordTypesSummary } = require('../helpers/elasticsearch');
 // const { resolveRecords } = require('../helpers/utils');
 const { publishNewRecord} = require('../helpers/templateHelper');
 const paymentManager = require('../helpers/payment-manager');
@@ -52,6 +52,17 @@ router.get('/', async (req, res) => {
     } catch (error) {
         console.error('Error at /api/records:', error);
         res.status(500).json({ error: 'Failed to retrieve and process records' });
+    }
+});
+
+router.get('/recordTypes', async (req, res) => {
+    try {
+        const recordTypesSummary = await getRecordTypesSummary();
+        console.log('records.js recordTypes endpoint, summary:', recordTypesSummary);
+        res.status(200).json(recordTypesSummary);
+    } catch (error) {
+        console.error('Error at /api/records/recordTypes:', error);
+        res.status(500).json({ error: 'Failed to retrieve record types summary' });
     }
 });
 
