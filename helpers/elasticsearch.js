@@ -1134,75 +1134,89 @@ async function getRecords(queryParams) {
 
         console.log('after adding dateReadable field, there are', records.length, 'records');
 
+        // Helper function to sort records based on sortBy parameter
+        const applySorting = (recordsToSort, sortByParam) => {
+            if (sortByParam != undefined) {
+                console.log('sorting by:', sortByParam);
+                const fieldToSortBy = sortByParam.split(':')[0];
+                const order = sortByParam.split(':')[1];
+                
+                if (fieldToSortBy === 'inArweaveBlock') {
+                    recordsToSort.sort((a, b) => {
+                        if (order === 'asc') {
+                            return a.oip.inArweaveBlock - b.oip.inArweaveBlock;
+                        } else {
+                            return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
+                        }
+                    });
+                }
+
+                if (fieldToSortBy === 'indexedAt') {
+                    recordsToSort.sort((a, b) => {
+                        if (order === 'asc') {
+                            return new Date(a.oip.indexedAt) - new Date(b.oip.indexedAt);
+                        } else {
+                            return new Date(b.oip.indexedAt) - new Date(a.oip.indexedAt);
+                        }
+                    });
+                }
+
+                if (fieldToSortBy === 'ver') {
+                    recordsToSort.sort((a, b) => {
+                        if (order === 'asc') {
+                            return a.oip.ver - b.oip.ver;
+                        } else {
+                            return b.oip.ver - a.oip.ver;
+                        }
+                    });
+                }
+
+                if (fieldToSortBy === 'recordType') {
+                    recordsToSort.sort((a, b) => {
+                        if (order === 'asc') {
+                            return a.oip.recordType.localeCompare(b.oip.recordType);
+                        } else {
+                            return b.oip.recordType.localeCompare(a.oip.recordType);
+                        }
+                    });
+                }
+
+                if (fieldToSortBy === 'creatorHandle') {
+                    recordsToSort.sort((a, b) => {
+                        if (order === 'asc') {
+                            return a.oip.creator.creatorHandle.localeCompare(b.oip.creator.creatorHandle);
+                        } else {
+                            return b.oip.creator.creatorHandle.localeCompare(a.oip.creator.creatorHandle);
+                        }
+                    });
+                }
+
+                if (fieldToSortBy === 'date') {
+                    recordsToSort.sort((a, b) => {
+                        if (!a.data || !a.data.basic || !a.data.basic.date) return 1;
+                        if (!b.data || !b.data.basic || !b.data.basic.date) return -1;
+                        if (order === 'asc') {
+                            return a.data.basic.date - b.data.basic.date;
+                        } else {
+                            return b.data.basic.date - a.data.basic.date;
+                        }
+                    });
+                }
+
+                if (fieldToSortBy === 'score') {
+                    recordsToSort.sort((a, b) => {
+                        if (order === 'asc') {
+                            return (a.score || 0) - (b.score || 0);
+                        } else {
+                            return (b.score || 0) - (a.score || 0);
+                        }
+                    });
+                }
+            }
+        };
+
         // Sort records based on sortBy parameter
-        if (sortBy != undefined) {
-            console.log('sorting by:', sortBy);
-            fieldToSortBy = sortBy.split(':')[0];
-            order = sortBy.split(':')[1];
-            // console.log('fieldToSortBy:', fieldToSortBy, 'order:', order);
-            if (fieldToSortBy === 'inArweaveBlock') {
-                records.sort((a, b) => {
-                    if (order === 'asc') {
-                        return a.oip.inArweaveBlock - b.oip.inArweaveBlock;
-                    } else {
-                        return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
-                    }
-                });
-            }
-
-            if (fieldToSortBy === 'indexedAt') {
-                records.sort((a, b) => {
-                    if (order === 'asc') {
-                        return new Date(a.oip.indexedAt) - new Date(b.oip.indexedAt);
-                    } else {
-                        return new Date(b.oip.indexedAt) - new Date(a.oip.indexedAt);
-                    }
-                });
-            }
-
-            if (fieldToSortBy === 'ver') {
-                records.sort((a, b) => {
-                    if (order === 'asc') {
-                        return a.oip.ver - b.oip.ver;
-                    } else {
-                        return b.oip.ver - a.oip.ver;
-                    }
-                });
-            }
-
-            if (fieldToSortBy === 'recordType') {
-                records.sort((a, b) => {
-                    if (order === 'asc') {
-                        return a.oip.recordType.localeCompare(b.oip.recordType);
-                    } else {
-                        return b.oip.recordType.localeCompare(a.oip.recordType);
-                    }
-                });
-            }
-
-            if (fieldToSortBy === 'creatorHandle') {
-                records.sort((a, b) => {
-                    if (order === 'asc') {
-                        return a.oip.creator.creatorHandle.localeCompare(b.oip.creator.creatorHandle);
-                    } else {
-                        return b.oip.creator.creatorHandle.localeCompare(a.oip.creator.creatorHandle);
-                    }
-                });
-            }
-
-            if (fieldToSortBy === 'date') {
-                records.sort((a, b) => {
-                    if (!a.data || !a.data.basic || !a.data.basic.date) return 1;
-                    if (!b.data || !b.data.basic || !b.data.basic.date) return -1;
-                    if (order === 'asc') {
-                        return a.data.basic.date - b.data.basic.date;
-                    } else {
-                        return b.data.basic.date - a.data.basic.date;
-                    }
-                });
-            }
-
-        }
+        applySorting(records, sortBy);
 
         // Resolve records if resolveDepth is specified
         let resolvedRecords = await Promise.all(records.map(async (record) => {
@@ -1282,7 +1296,7 @@ async function getRecords(queryParams) {
             const filteredRecords = resolvedRecords.filter(record => {
                 return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
             });
-            // Sort the records by the number of matching tags and generate a score
+            // Add tag match scores to records
             const sortedRecords = filteredRecords.map(record => {
                 const countMatches = (record) => {
                     if (record.data && record.data.basic && record.data.basic.tagItems) {
@@ -1296,7 +1310,12 @@ async function getRecords(queryParams) {
                 return { ...record, score }; // Attach the score to the record
             });
 
-            sortedRecords.sort((a, b) => b.score - a.score); // Sort in descending order by score
+            // Apply sorting - use sortBy parameter if provided, otherwise sort by score
+            if (sortBy != undefined) {
+                applySorting(sortedRecords, sortBy);
+            } else {
+                sortedRecords.sort((a, b) => b.score - a.score); // Sort in descending order by score
+            }
 
             return {
                 message: "Records retrieved successfully",
