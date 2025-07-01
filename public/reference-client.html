@@ -1061,6 +1061,52 @@
             font-size: 0.9rem;
         }
 
+        /* Dynamic Template Debugging Styles */
+        .template-info {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 4px;
+            padding: 8px;
+            margin: 5px 0;
+            font-size: 11px;
+            color: #1976d2;
+        }
+
+        .field-type-indicator {
+            background: #f3e5f5;
+            color: #7b1fa2;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+
+        .dref-resolved {
+            border-left: 3px solid #4caf50;
+            margin-left: 10px;
+            padding-left: 10px;
+            background: #f1f8e9;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .field-debug {
+            background: #fff3e0;
+            border: 1px solid #ff9800;
+            padding: 5px;
+            margin: 2px 0;
+            font-size: 10px;
+            border-radius: 3px;
+        }
+
+        .unresolved-dref {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin: 5px 0;
+        }
+
         @media (max-width: 768px) {
             .header-content {
                 flex-direction: column;
@@ -1138,7 +1184,7 @@
     <!-- Header -->
     <div class="header">
         <div class="header-content">
-            <div class="logo">OIP Explorer</div>
+            <div class="logo">OIP Explorer - Dynamic Templates</div>
             
             <div class="nav-tabs">
                 <!-- <div class="nav-tab active" onclick="showBrowseTab()">Browse Records</div> -->
@@ -1296,6 +1342,13 @@
                             <div class="toggle-switch" id="voice-include-pubkeys-toggle" onclick="toggleVoiceSwitch('voice-include-pubkeys-toggle')"></div>
                         </div>
                         
+                        <div class="toggle-group">
+                            <label>
+                                <input type="checkbox" id="show-template-debug" onchange="applyVoiceFilters()">
+                                Debug Templates
+                            </label>
+                        </div>
+                        
                         <button onclick="clearVoiceFilters()" class="btn-secondary btn-small">Clear Filters</button>
                         <button onclick="applyVoiceFilters()" class="btn-small">Apply Filters</button>
                     </div>
@@ -1318,6 +1371,10 @@
                 
                 <div id="voice-no-results" class="no-results hidden">
                     No records found matching your criteria.
+                </div>
+                
+                <div id="voice-load-more-container" class="load-more hidden">
+                    <button onclick="loadMoreVoiceRecords()" id="voice-load-more-btn">Load More Records</button>
                 </div>
                 
                 <div id="voice-load-more-container" class="load-more hidden">
@@ -1509,6 +1566,10 @@
         let currentUser = localStorage.getItem('oip-user-email');
         let templates = {};
         let defaultTemplates = {};
+        // Enhanced template system variables
+        let allTemplates = {}; // Maps template names and TxIds to template objects
+        let templateFieldMap = {}; // Maps template names and TxIds to field definitions
+        let showDebugInfo = false; // Controls debug information display
         let recordTypes = [];
         let currentRecords = [];
         let currentPage = 1;
@@ -1533,10 +1594,14 @@
         });
 
         async function initializeApp() {
+            console.log('[App] Starting enhanced initialization with dynamic templates...');
+            
+            // Always load templates first for dynamic rendering
+            await loadTemplates();
+            
             // Setup authentication state
             if (authToken && currentUser) {
                 showLoggedInState();
-                await loadTemplates();
             }
             
             // Load actual record types from the index
@@ -1548,7 +1613,7 @@
             // Initialize the voice browse tab (now the default)
             initializeVoiceFeatures();
             
-            console.log('[App] Initialized with voice browse tab as default');
+            console.log('[App] Initialized with enhanced dynamic template system');
             
             // Set up periodic checks to ensure interface stays clean
             setInterval(() => {
@@ -2187,108 +2252,66 @@
             return div.innerHTML;
         }
 
+        /**
+         * Filter records by tag (called when clicking tag chips)
+         */
+        function filterByTag(tag) {
+            document.getElementById('voice-search-input').value = tag;
+            applyVoiceFilters();
+        }
+
+        // ====== ENHANCED TEMPLATE SYSTEM TEST FUNCTIONS ======
+        
+        /**
+         * Test function to verify dynamic template system is working
+         */
+        function testTemplateSystem() {
+            console.log('[Test] Testing Enhanced Dynamic Template System');
+            console.log('[Test] Templates loaded:', Object.keys(allTemplates).length / 2);
+            console.log('[Test] Field mappings available:', Object.keys(templateFieldMap).length / 2);
+            console.log('[Test] Debug mode:', showDebugInfo);
+            console.log('[Test] Sample template field mapping:', templateFieldMap['post'] || 'No post template found');
+            
+            if (currentRecords.length > 0) {
+                const sampleRecord = currentRecords[0];
+                const templatesUsed = analyzeRecordTemplates(sampleRecord);
+                console.log('[Test] Sample record uses templates:', templatesUsed);
+            }
+            
+            console.log('[Test] Enhanced template system is active!');
+        }
+
+        // Make test function available globally for console testing
+        window.testTemplateSystem = testTemplateSystem;
+
+        // ====== ENHANCED DYNAMIC RECORD CARD CREATION ======
+        
+        /**
+         * Create a record card with dynamic template-based rendering
+         */
         function createRecordCard(record, recordIndex) {
             const card = document.createElement('div');
             card.className = 'record-card';
             
-            // Get record type from template or data
-            const recordType = getRecordType(record);
+            const recordType = record.oip?.recordType || 'unknown';
             const basicData = record.data?.basic || {};
-            const specificData = record.data?.[recordType] || {};
+            const templatesUsed = analyzeRecordTemplates(record);
             
-            // Get date - prefer dateReadable, fallback to formatted date
-            const dateDisplay = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
+            showDebugInfo = document.getElementById('show-template-debug')?.checked || false;
             
-            // Handle images - check multiple possible locations
-            let imageHtml = '';
-            let imageUrl = null;
-            
-            // Check various image field locations in order of preference
-            if (basicData.featuredImage) {
-                imageUrl = basicData.featuredImage;
-            } else if (specificData.featuredImage?.data?.image?.webUrl) {
-                imageUrl = specificData.featuredImage.data.image.webUrl;
-            } else if (record.data?.image?.webUrl) {
-                imageUrl = record.data.image.webUrl;
-            } else if (basicData.imageItems && basicData.imageItems.length > 0) {
-                imageUrl = basicData.imageItems[0];
-            }
-            
-            if (imageUrl) {
-                imageHtml = `<img src="${imageUrl}" alt="Record image" class="record-image" onerror="this.style.display='none';">`;
-            }
-            
-            // Handle audio - create play button for master player
-            let audioHtml = '';
-            // Check for audio in specific data (e.g., post.audioItems) first, then basic data
-            const audioItems = specificData.audioItems || basicData.audioItems;
-            if (audioItems && Array.isArray(audioItems) && audioItems.length > 0) {
-                // Get the first audio item's URL
-                let firstAudioUrl = '';
-                if (audioItems[0]?.data?.audio?.webUrl) {
-                    firstAudioUrl = audioItems[0].data.audio.webUrl;
-                } else if (typeof audioItems[0] === 'string') {
-                    firstAudioUrl = audioItems[0];
-                }
-                
-                if (firstAudioUrl) {
-                    audioHtml = `
-                        <div style="margin: 10px 0;">
-                            <button onclick="playAudioInMaster('${firstAudioUrl}', '${(basicData.name || 'Unnamed Record').replace(/'/g, "\\'")}', '${recordType}', ${recordIndex})" 
-                                    id="audioBtn-${recordIndex}" 
-                                    class="audio-play-btn">
-                                <span>▶️</span>
-                                <span>Play Audio</span>
-                            </button>
-                            ${audioItems.length > 1 ? `<span style="font-size: 12px; color: #666; margin-left: 8px;">(${audioItems.length} audio files)</span>` : ''}
-                        </div>
-                    `;
-                }
-            }
-            
-            // Determine text content source and type
-            let textSourceUrl = null;
-            let textSourceType = 'static'; // 'static' or 'fetch'
-            let staticTextContent = '';
-            
-            // Check for text file URLs first (highest priority)
-            if (specificData.articleText?.data?.text?.webUrl) {
-                textSourceUrl = specificData.articleText.data.text.webUrl;
-                textSourceType = 'fetch';
-            } else if (specificData.articleText?.webUrl) {
-                textSourceUrl = specificData.articleText.webUrl;
-                textSourceType = 'fetch';
-            } else if (record.data?.text?.webUrl) {
-                textSourceUrl = record.data.text.webUrl;
-                textSourceType = 'fetch';
-            } else if (specificData.instructions && typeof specificData.instructions === 'string' && specificData.instructions.length > 200) {
-                staticTextContent = specificData.instructions;
-                textSourceType = 'static';
-            } else if (specificData.content && typeof specificData.content === 'string' && specificData.content.length > 200) {
-                staticTextContent = specificData.content;
-                textSourceType = 'static';
-            } else if (basicData.description && basicData.description.length > 200) {
-                staticTextContent = basicData.description;
-                textSourceType = 'static';
-            }
-            
-            // Text content toggle button
-            let textToggleHtml = '';
-            if (textSourceType === 'fetch' || (textSourceType === 'static' && staticTextContent)) {
-                const buttonText = textSourceType === 'fetch' ? '📄 Load Full Article' : '📄 Show Full Text';
-                textToggleHtml = `
-                    <div style="margin: 10px 0;">
-                        <button onclick="toggleTextContent(${recordIndex}, '${textSourceType}', '${textSourceUrl || ''}')" 
-                                id="textBtn-${recordIndex}" 
-                                class="toggle-text-btn">
-                            ${buttonText}
-                        </button>
-                        <div id="textContent-${recordIndex}" class="text-content-preview hidden" data-static-content="${textSourceType === 'static' ? escapeHtml(staticTextContent) : ''}">
-                            ${textSourceType === 'static' ? escapeHtml(staticTextContent) : '<div class="loading">Loading...</div>'}
-                        </div>
+            let debugHtml = '';
+            if (showDebugInfo) {
+                debugHtml = `
+                    <div class="template-info">
+                        <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
+                        <strong>Record Type:</strong> ${recordType}<br>
+                        <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth}
                     </div>
                 `;
             }
+            
+            // Build the card content
+            const dateDisplay = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
             
             card.innerHTML = `
                 <div class="record-header">
@@ -2296,21 +2319,246 @@
                     <div class="record-block">${dateDisplay}</div>
                 </div>
                 <div class="record-title">${basicData.name || 'Unnamed Record'}</div>
-                ${imageHtml}
-                <div class="record-content">
-                    ${basicData.description || getContentPreview(specificData) || 'No description available'}
-                </div>
-                ${audioHtml}
-                ${textToggleHtml}
-                ${renderOtherMediaContent(record, recordType, specificData)}
+                ${debugHtml}
+                ${renderBasicInfo(basicData)}
+                ${renderAllTemplateData(record, templatesUsed)}
                 <div class="record-meta">
                     <div>DID: ${record.oip?.didTx || 'Unknown'}</div>
-                    ${(specificData.webUrl || basicData.webUrl) ? `<div><a href="${specificData.webUrl || basicData.webUrl}" target="_blank" rel="noopener noreferrer">🌐 Read Original Article</a></div>` : ''}
                 </div>
                 ${createTagsDisplay(basicData.tagItems)}
             `;
             
             return card;
+        }
+
+        /**
+         * Render basic information section
+         */
+        function renderBasicInfo(basicData) {
+            let html = '';
+            
+            if (basicData.description) {
+                html += `<div class="record-content">${truncateText(basicData.description, 200)}</div>`;
+            }
+            
+            return html;
+        }
+
+        /**
+         * Dynamically render all template data sections
+         */
+        function renderAllTemplateData(record, templatesUsed) {
+            let html = '';
+            
+            if (!record.data) return html;
+            
+            Object.keys(record.data).forEach(templateName => {
+                if (templateName === 'basic') return; // Skip basic - handled separately
+                
+                const templateData = record.data[templateName];
+                html += renderTemplateSectionData(templateName, templateData, `data.${templateName}`);
+            });
+            
+            return html ? `<div class="media-content">${html}</div>` : '';
+        }
+
+        /**
+         * Render data for a specific template section
+         */
+        function renderTemplateSectionData(templateName, data, path = '') {
+            if (!data || typeof data !== 'object') return '';
+            
+            let html = '';
+            const fieldsMap = templateFieldMap[templateName];
+            
+            if (showDebugInfo && fieldsMap) {
+                html += `<div class="field-debug">Template: ${templateName}, Fields: ${Object.keys(fieldsMap).length}</div>`;
+            }
+            
+            Object.keys(data).forEach(fieldName => {
+                const value = data[fieldName];
+                const fieldDef = getFieldDefinition(templateName, fieldName);
+                const fieldPath = path ? `${path}.${fieldName}` : fieldName;
+                
+                html += renderFieldByType(templateName, fieldName, value, fieldDef, fieldPath);
+            });
+            
+            return html;
+        }
+
+        /**
+         * Render a field based on its type definition
+         */
+        function renderFieldByType(templateName, fieldName, value, fieldDef, path) {
+            if (!value) return '';
+            
+            let html = '';
+            const mediaType = getMediaType(templateName, fieldName, value);
+            
+            // Debug info
+            if (showDebugInfo) {
+                const typeInfo = fieldDef ? `${fieldDef.type} (${fieldDef.index})` : 'unknown type';
+                html += `<div class="field-debug">Field: ${fieldName} <span class="field-type-indicator">${typeInfo}</span></div>`;
+            }
+            
+            // Handle resolved drefs (embedded records)
+            if (value && typeof value === 'object' && value.data && value.oip) {
+                return renderResolvedDref(fieldName, value, path);
+            }
+            
+            // Handle arrays of resolved drefs
+            if (Array.isArray(value) && value.length > 0 && value[0].data && value[0].oip) {
+                return renderResolvedDrefArray(fieldName, value, path);
+            }
+            
+            // Handle direct media URLs based on detected type
+            if (mediaType) {
+                return renderMediaField(fieldName, value, mediaType);
+            }
+            
+            // Handle simple web URLs
+            if (fieldName === 'webUrl' && typeof value === 'string') {
+                html += `<div class="media-item">
+                    <a href="${value}" target="_blank" rel="noopener noreferrer" 
+                       style="display: inline-block; padding: 8px 16px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; margin: 5px 0;">
+                        🌐 Visit ${fieldName}
+                    </a>
+                </div>`;
+            }
+            
+            // Handle unresolved drefs
+            if (isDrefField(fieldDef, value)) {
+                html += renderUnresolvedDref(fieldName, value);
+            }
+            
+            return html;
+        }
+
+        /**
+         * Render resolved dref (embedded record)
+         */
+        function renderResolvedDref(fieldName, resolvedRecord, path) {
+            const embedTemplates = Object.keys(resolvedRecord.data).filter(k => k !== 'basic');
+            const recordType = resolvedRecord.oip?.recordType || embedTemplates[0] || 'unknown';
+            
+            let html = `<div class="dref-resolved">
+                <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">
+                    📎 ${fieldName} (${recordType}):
+                </label>`;
+            
+            // Render basic info from embedded record
+            if (resolvedRecord.data.basic) {
+                const basicData = resolvedRecord.data.basic;
+                if (basicData.name) {
+                    html += `<div style="font-weight: 500; margin-bottom: 5px;">${basicData.name}</div>`;
+                }
+                if (basicData.description) {
+                    html += `<div style="font-size: 13px; color: #666; margin-bottom: 8px;">${truncateText(basicData.description, 100)}</div>`;
+                }
+            }
+            
+            // Render each template section in the embedded record
+            embedTemplates.forEach(templateName => {
+                const templateData = resolvedRecord.data[templateName];
+                html += renderTemplateSectionData(templateName, templateData, `${path}.data.${templateName}`);
+            });
+            
+            if (showDebugInfo) {
+                html += `<div class="field-debug">Resolved: ${resolvedRecord.oip?.didTx}</div>`;
+            }
+            
+            html += '</div>';
+            return html;
+        }
+
+        /**
+         * Render array of resolved drefs
+         */
+        function renderResolvedDrefArray(fieldName, resolvedArray, path) {
+            let html = `<div style="margin: 10px 0;">
+                <label style="font-weight: bold; display: block; margin-bottom: 5px;">
+                    📎 ${fieldName} (${resolvedArray.length} items):
+                </label>`;
+            
+            resolvedArray.forEach((resolvedRecord, index) => {
+                html += renderResolvedDref(`${fieldName}[${index}]`, resolvedRecord, `${path}[${index}]`);
+            });
+            
+            html += '</div>';
+            return html;
+        }
+
+        /**
+         * Render media field based on detected type
+         */
+        function renderMediaField(fieldName, value, mediaType) {
+            const webUrl = value.webUrl || value;
+            if (!webUrl) return '';
+            
+            switch (mediaType) {
+                case 'image':
+                    return `<div class="media-item">
+                        <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">${fieldName}:</label>
+                        <img src="${webUrl}" alt="${fieldName}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 5px 0;" 
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div style="display: none; padding: 10px; background: #f5f5f5; border-radius: 8px;">
+                            <a href="${webUrl}" target="_blank">📸 View Image</a>
+                        </div>
+                    </div>`;
+                    
+                case 'audio':
+                    return `<div class="media-item">
+                        <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">${fieldName}:</label>
+                        <audio controls style="width: 100%; margin: 5px 0;">
+                            <source src="${webUrl}" type="${value.contentType || 'audio/mpeg'}">
+                            <a href="${webUrl}" target="_blank">🎵 Play Audio</a>
+                        </audio>
+                    </div>`;
+                    
+                case 'video':
+                    return `<div class="media-item">
+                        <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">${fieldName}:</label>
+                        <video controls style="width: 100%; max-height: 300px; margin: 5px 0;">
+                            <source src="${webUrl}" type="${value.contentType || 'video/mp4'}">
+                            <a href="${webUrl}" target="_blank">🎥 Play Video</a>
+                        </video>
+                    </div>`;
+                    
+                case 'text':
+                    return `<div class="media-item">
+                        <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">${fieldName}:</label>
+                        <div class="text-preview" style="margin: 5px 0;">
+                            <button onclick="loadTextContent('${webUrl}', this)" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                📄 View Text Content
+                            </button>
+                            <div class="text-content" style="display: none; margin-top: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px; max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>`;
+                    
+                default:
+                    return `<div class="media-item">
+                        <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">${fieldName}:</label>
+                        <a href="${webUrl}" target="_blank" style="display: inline-block; padding: 8px 16px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; margin: 5px 0;">
+                            🔗 View Content
+                        </a>
+                    </div>`;
+            }
+        }
+
+        /**
+         * Render unresolved dref
+         */
+        function renderUnresolvedDref(fieldName, value) {
+            const didValue = Array.isArray(value) ? value[0] : value;
+            if (!didValue || !didValue.startsWith('did:arweave:')) return '';
+            
+            return `<div class="media-item">
+                <label style="font-weight: bold; display: block; margin: 10px 0 5px 0;">${fieldName} (unresolved):</label>
+                <div class="unresolved-dref">
+                    📋 ${didValue}
+                    <br><em>Increase resolve depth to see content</em>
+                </div>
+            </div>`;
         }
 
         function getRecordType(record) {
@@ -2355,36 +2603,226 @@
 
 
 
-        // Load templates from API
+        // ========================================================================
+        // ENHANCED DYNAMIC TEMPLATE SYSTEM
+        // ========================================================================
+        // 
+        // This system dynamically renders OIP records based on their actual 
+        // template definitions from the /api/templates endpoint, eliminating 
+        // the need for hardcoded field names and types.
+        //
+        // Key Features:
+        // - Loads all templates and builds field type mappings at startup
+        // - Analyzes records to identify all templates used (including nested DREFs)
+        // - Renders fields based on their actual template type definitions
+        // - Handles resolved and unresolved DREF fields automatically
+        // - Supports unlimited nesting depth with resolveDepth parameter
+        // - Includes debug mode to show template analysis information
+        // - Works with any new templates/fields without code changes
+        //
+        // Usage: Enable "Debug Templates" checkbox to see template analysis
+        // Test: Run testTemplateSystem() in browser console to verify functionality
+        // ========================================================================
+        
+        /**
+         * Load all templates and build enhanced field mapping
+         */
         async function loadTemplates() {
             try {
-                const response = await fetch('/api/templates?limit=100');
+                console.log('[Templates] Loading all templates with enhanced mapping...');
+                const response = await fetch('/api/templates?limit=1000');
                 const data = await response.json();
                 
                 if (data.templates) {
+                    // Clear existing mappings
                     templates = {};
+                    allTemplates = {};
+                    templateFieldMap = {};
+                    
                     data.templates.forEach(template => {
+                        const templateName = template.data.template || template.data.recordType || 'unknown';
+                        const templateTxId = template.oip.didTx;
                         const recordType = template.data.recordType || template.data.template || 'unknown';
+                        
+                        // Store in legacy format for compatibility
                         if (!templates[recordType]) {
                             templates[recordType] = [];
                         }
                         templates[recordType].push(template);
+                        
+                        // Store in enhanced format by name and TxId
+                        allTemplates[templateName] = template;
+                        allTemplates[templateTxId] = template;
+                        
+                        // Build field mapping for this template
+                        if (template.data.fieldsInTemplate) {
+                            templateFieldMap[templateName] = template.data.fieldsInTemplate;
+                            templateFieldMap[templateTxId] = template.data.fieldsInTemplate;
+                            
+                            if (showDebugInfo) {
+                                console.log(`[Templates] Mapped fields for ${templateName}:`, template.data.fieldsInTemplate);
+                            }
+                        }
                     });
                     
-                    // Load default templates
+                    // Load default templates from config
                     defaultTemplates = {
-                        basic: "-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk",
-                        creatorRegistration: "BKVvTSXmmJni-L82irZfPFXWWJLBcdvbxS34jP1FTG8",
-                        post: "op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
-                        recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
-                        workout: "T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE",
-                        video: "G73WplyxpNDOgDSFO6CP3O6hZXq8kNJXxkCqx3sgd1s",
-                        image: "AkZnE1VckJJlRamgNJuIGE7KrYwDcCciWOMrMh68V4o"
+                        basic: "did:arweave:-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk",
+                        creatorRegistration: "did:arweave:BKVvTSXmmJni-L82irZfPFXWWJLBcdvbxS34jP1FTG8",
+                        associatedUrlOnWeb: "did:arweave:_RJtiNMr1Ls9NG3G9-6rvbI5Sn0ccSnRTnrQCZi3ABE",
+                        text: "did:arweave:of_eh0kGy65uYD0xsTh7Qe6JVTfJ2oFoA7xp4H7t7YI",
+                        image: "did:arweave:AkZnE1VckJJlRamgNJuIGE7KrYwDcCciWOMrMh68V4o",
+                        audio: "did:arweave:9MrI8kJvBJ-u7uvgngMZ-gMo5RREDwey8G7mJEUOpdo",
+                        video: "did:arweave:G73WplyxpNDOgDSFO6CP3O6hZXq8kNJXxkCqx3sgd1s",
+                        post: "did:arweave:op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
+                        recipe: "did:arweave:46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
+                        workout: "did:arweave:T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE"
                     };
+                    
+                    console.log(`[Templates] Loaded ${Object.keys(allTemplates).length / 2} templates`);
+                    console.log(`[Templates] Field mappings for:`, Object.keys(templateFieldMap));
                 }
             } catch (error) {
-                console.error('Error loading templates:', error);
+                console.error('[Templates] Error loading templates:', error);
             }
+        }
+
+        /**
+         * Analyze a record to find all templates used (including nested drefs)
+         */
+        function analyzeRecordTemplates(record) {
+            const templatesFound = new Set();
+            
+            function analyzeDataSection(data, path = '') {
+                if (!data || typeof data !== 'object') return;
+                
+                Object.keys(data).forEach(key => {
+                    if (key === 'basic' || key === 'oip') return; // Skip these
+                    
+                    const value = data[key];
+                    const currentPath = path ? `${path}.${key}` : key;
+                    
+                    // This is a template section (e.g., 'post', 'image', etc.)
+                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                        // Check if this looks like a template data section
+                        if (value.webUrl || value.contentType || Object.keys(value).some(k => !k.startsWith('_'))) {
+                            templatesFound.add(key);
+                            if (showDebugInfo) {
+                                console.log(`[Templates] Found template section: ${key} at ${currentPath}`);
+                            }
+                        }
+                        
+                        // Recursively analyze nested objects
+                        analyzeDataSection(value, currentPath);
+                    } else if (Array.isArray(value)) {
+                        // Analyze array items (might be dref resolved objects)
+                        value.forEach((item, index) => {
+                            if (item && typeof item === 'object' && item.data) {
+                                if (showDebugInfo) {
+                                    console.log(`[Templates] Found resolved dref in array at ${currentPath}[${index}]`);
+                                }
+                                analyzeDataSection(item.data, `${currentPath}[${index}].data`);
+                            }
+                        });
+                    } else if (typeof value === 'object' && value !== null && value.data) {
+                        // This is a resolved dref
+                        if (showDebugInfo) {
+                            console.log(`[Templates] Found resolved dref at ${currentPath}`);
+                        }
+                        analyzeDataSection(value.data, `${currentPath}.data`);
+                    }
+                });
+            }
+            
+            // Analyze the main data section
+            if (record.data) {
+                analyzeDataSection(record.data);
+            }
+            
+            // Always include the main record type
+            if (record.oip && record.oip.recordType) {
+                templatesFound.add(record.oip.recordType);
+            }
+            
+            return Array.from(templatesFound);
+        }
+
+        /**
+         * Get field definition for a specific field in a template
+         */
+        function getFieldDefinition(templateName, fieldName) {
+            const fieldsMap = templateFieldMap[templateName];
+            if (!fieldsMap) return null;
+            
+            return fieldsMap[fieldName] || null;
+        }
+
+        /**
+         * Determine if a field is a DREF based on its type and content
+         */
+        function isDrefField(fieldDef, value) {
+            if (!fieldDef) return false;
+            
+            // Check type definition
+            if (fieldDef.type === 'dref' || fieldDef.type === 'repeated dref') {
+                return true;
+            }
+            
+            // Check value pattern (did:arweave:...)
+            if (typeof value === 'string' && value.startsWith('did:arweave:')) {
+                return true;
+            }
+            
+            // Check if it's an array of DIDs
+            if (Array.isArray(value) && value.length > 0 && 
+                typeof value[0] === 'string' && value[0].startsWith('did:arweave:')) {
+                return true;
+            }
+            
+            return false;
+        }
+
+        /**
+         * Determine media type from field definition and content
+         */
+        function getMediaType(templateName, fieldName, value) {
+            const fieldDef = getFieldDefinition(templateName, fieldName);
+            
+            // If it's a resolved dref, look at the embedded data
+            if (value && typeof value === 'object' && value.data) {
+                const embedTemplates = Object.keys(value.data).filter(k => k !== 'basic');
+                if (embedTemplates.length > 0) {
+                    return embedTemplates[0]; // Return the template type (image, audio, video, text, etc.)
+                }
+            }
+            
+            // Check for arrays of resolved drefs
+            if (Array.isArray(value) && value.length > 0 && value[0].data) {
+                const embedTemplates = Object.keys(value[0].data).filter(k => k !== 'basic');
+                if (embedTemplates.length > 0) {
+                    return embedTemplates[0];
+                }
+            }
+            
+            // Check field name patterns
+            if (fieldName.toLowerCase().includes('image')) return 'image';
+            if (fieldName.toLowerCase().includes('audio')) return 'audio';
+            if (fieldName.toLowerCase().includes('video')) return 'video';
+            if (fieldName.toLowerCase().includes('text')) return 'text';
+            
+            // Check content patterns
+            if (value && typeof value === 'object') {
+                if (value.webUrl) {
+                    if (value.contentType) {
+                        if (value.contentType.startsWith('image/')) return 'image';
+                        if (value.contentType.startsWith('audio/')) return 'audio';
+                        if (value.contentType.startsWith('video/')) return 'video';
+                        if (value.contentType.startsWith('text/')) return 'text';
+                    }
+                }
+            }
+            
+            return null;
         }
 
         async function loadRecordTypes() {
@@ -2986,22 +3424,7 @@
             lastSpeechTime: 0
         };
 
-        let voiceFilters = {
-            search: '',
-            recordType: '',
-            sortBy: 'inArweaveBlock:desc',
-            resolveDepth: 2,
-            dateStart: '',
-            dateEnd: '',
-            tag: '',
-            includeSigs: false,
-            includePubKeys: false
-        };
-
-        let voiceRecords = [];
-        let voicePage = 1;
-        let voiceHasMoreRecords = true;
-        let voiceIsLoading = false;
+        // Voice variables removed - now using unified enhanced system with currentFilters, currentRecords, etc.
 
         // AI Chat Feature Initialization
         async function initializeVoiceFeatures() {
@@ -3368,8 +3791,8 @@
 
 
         async function applyAIFilters(filters, sources = []) {
-            // Update the voice filters state
-            Object.assign(voiceFilters, filters);
+            // Update the enhanced unified filters state
+            Object.assign(currentFilters, filters);
             
             // Update the UI elements
             if (filters.search) {
@@ -3385,10 +3808,10 @@
             // Update applied filters display
             displayAppliedFilters(filters, sources);
             
-            // Reload records with new filters
+            // Reload records with new filters using enhanced system
             await loadVoiceRecords(true);
             
-            console.log('[Voice] Applied AI filters:', filters);
+            console.log('[Enhanced AI] Applied AI filters:', filters);
         }
 
         function displayAppliedFilters(filters, sources) {
@@ -3822,21 +4245,29 @@
         // No conversation mode needed for text chat
 
         // Voice Filtering Functions
+        // ====== ENHANCED VOICE FILTER FUNCTIONS ======
+        
         function applyVoiceFilters() {
             collectVoiceFilters();
             loadVoiceRecords(true);
         }
 
         function collectVoiceFilters() {
-            voiceFilters.search = document.getElementById('voice-search-input').value.trim();
-            voiceFilters.recordType = document.getElementById('voice-record-type-filter').value;
-            voiceFilters.sortBy = document.getElementById('voice-sort-by').value;
-            voiceFilters.resolveDepth = parseInt(document.getElementById('voice-resolve-depth').value) || 2;
-            voiceFilters.dateStart = document.getElementById('voice-date-start').value;
-            voiceFilters.dateEnd = document.getElementById('voice-date-end').value;
-            voiceFilters.tag = document.getElementById('voice-tag-filter').value;
-            voiceFilters.includeSigs = document.getElementById('voice-include-sigs-toggle').classList.contains('active');
-            voiceFilters.includePubKeys = document.getElementById('voice-include-pubkeys-toggle').classList.contains('active');
+            // Update the main currentFilters object to work with enhanced system
+            currentFilters.search = document.getElementById('voice-search-input').value.trim();
+            currentFilters.recordType = document.getElementById('voice-record-type-filter').value;
+            currentFilters.sortBy = document.getElementById('voice-sort-by').value;
+            currentFilters.resolveDepth = parseInt(document.getElementById('voice-resolve-depth').value) || 2;
+            currentFilters.dateStart = document.getElementById('voice-date-start').value;
+            currentFilters.dateEnd = document.getElementById('voice-date-end').value;
+            currentFilters.tag = document.getElementById('voice-tag-filter').value;
+            currentFilters.includeSigs = document.getElementById('voice-include-sigs-toggle').classList.contains('active');
+            currentFilters.includePubKeys = document.getElementById('voice-include-pubkeys-toggle').classList.contains('active');
+            
+            // Update debug setting
+            showDebugInfo = document.getElementById('show-template-debug')?.checked || false;
+            
+            console.log('[Filters] Updated filters:', currentFilters);
         }
 
         function handleVoiceSearchKeyup(event) {
@@ -3866,36 +4297,46 @@
             document.getElementById(elementId).classList.toggle('active');
         }
 
-        // Voice Records Loading Functions
+        // ====== ENHANCED VOICE RECORDS LOADING WITH DYNAMIC TEMPLATES ======
+        
         async function loadVoiceRecords(reset = false) {
-            if (voiceIsLoading) return;
+            if (isLoading) return;
             
             try {
-                voiceIsLoading = true;
+                isLoading = true;
                 
                 if (reset) {
-                    voicePage = 1;
-                    voiceRecords = [];
+                    currentPage = 1;
+                    currentRecords = [];
                     document.getElementById('voice-records-grid').innerHTML = '';
                 }
                 
                 document.getElementById('voice-loading-indicator').classList.remove('hidden');
                 
                 const params = buildVoiceApiParams();
+                console.log(`[Enhanced Records] Loading with resolveDepth=${currentFilters.resolveDepth}, debug=${showDebugInfo}`);
+                
                 const response = await fetch(`/api/records?${params}`);
                 const data = await response.json();
                 
                 if (data.records) {
                     if (reset) {
-                        voiceRecords = data.records;
+                        currentRecords = data.records;
                     } else {
-                        voiceRecords = [...voiceRecords, ...data.records];
+                        currentRecords = [...currentRecords, ...data.records];
                     }
                     
-                    voiceHasMoreRecords = data.totalPages > voicePage;
+                    hasMoreRecords = data.totalPages > currentPage;
                     displayVoiceRecords(data.records, !reset);
                     updateVoicePaginationInfo(data);
                     updateVoiceTagFilter(data.tagSummary);
+                    
+                    // Log template analysis for first record if debug is on
+                    if (showDebugInfo && data.records.length > 0) {
+                        const firstRecord = data.records[0];
+                        const templates = analyzeRecordTemplates(firstRecord);
+                        console.log(`[Enhanced Records] First record uses templates:`, templates);
+                    }
                 } else {
                     showVoiceNoResults();
                 }
@@ -3903,10 +4344,10 @@
                 updateVoiceLoadMoreButton();
                 
             } catch (error) {
-                console.error('[Voice] Error loading records:', error);
+                console.error('[Enhanced Records] Error loading records:', error);
                 showVoiceNoResults();
             } finally {
-                voiceIsLoading = false;
+                isLoading = false;
                 document.getElementById('voice-loading-indicator').classList.add('hidden');
             }
         }
@@ -3914,38 +4355,42 @@
         function buildVoiceApiParams() {
             const params = new URLSearchParams({
                 limit: '12',
-                page: voicePage.toString(),
-                sortBy: voiceFilters.sortBy,
-                resolveDepth: voiceFilters.resolveDepth.toString(),
+                page: currentPage.toString(),
+                sortBy: currentFilters.sortBy,
+                resolveDepth: currentFilters.resolveDepth.toString(),
                 summarizeTags: 'true',
                 tagCount: '25',
-                includeSigs: voiceFilters.includeSigs.toString(),
-                includePubKeys: voiceFilters.includePubKeys.toString()
+                includeSigs: currentFilters.includeSigs.toString(),
+                includePubKeys: currentFilters.includePubKeys.toString()
             });
 
-            if (voiceFilters.search) {
-                params.append('search', voiceFilters.search.trim());
+            if (currentFilters.search) {
+                params.append('search', currentFilters.search.trim());
             }
             
-            if (voiceFilters.recordType) {
-                params.append('recordType', voiceFilters.recordType);
+            if (currentFilters.recordType) {
+                params.append('recordType', currentFilters.recordType);
             }
             
-            if (voiceFilters.dateStart) {
-                params.append('dateStart', dateToUnixTime(voiceFilters.dateStart));
+            if (currentFilters.dateStart) {
+                params.append('dateStart', dateToUnixTime(currentFilters.dateStart));
             }
             
-            if (voiceFilters.dateEnd) {
-                params.append('dateEnd', dateToUnixTime(voiceFilters.dateEnd));
+            if (currentFilters.dateEnd) {
+                params.append('dateEnd', dateToUnixTime(currentFilters.dateEnd));
             }
             
-            if (voiceFilters.tag) {
-                params.append('tags', voiceFilters.tag);
+            if (currentFilters.tag) {
+                params.append('tags', currentFilters.tag);
             }
 
+            console.log('[API] Building request with resolveDepth:', currentFilters.resolveDepth);
             return params.toString();
         }
 
+        /**
+         * Display voice records using enhanced dynamic template rendering
+         */
         function displayVoiceRecords(records, append = false) {
             const grid = document.getElementById('voice-records-grid');
             
@@ -3953,70 +4398,18 @@
                 grid.innerHTML = '';
             }
             
-            const startIndex = voiceRecords.length - records.length;
+            const startIndex = currentRecords.length - records.length;
             records.forEach((record, index) => {
-                const card = createVoiceRecordCard(record, startIndex + index);
+                // Use the enhanced createRecordCard function directly
+                const card = createRecordCard(record, startIndex + index);
                 grid.appendChild(card);
             });
             
             grid.classList.remove('hidden');
             document.getElementById('voice-no-results').classList.add('hidden');
+            
+            console.log(`[Enhanced Display] Rendered ${records.length} records with dynamic templates`);
         }
-
-                 function createVoiceRecordCard(record, recordIndex) {
-             // Use the same card creation logic as the main browse tab
-             // but with voice- prefixed IDs for unique identification
-             const card = createRecordCard(record, recordIndex);
-             
-             // Update any IDs to be voice-specific to avoid conflicts
-             const audioBtn = card.querySelector('.audio-play-btn');
-             if (audioBtn) {
-                 audioBtn.id = `voice-audioBtn-${recordIndex}`;
-                 
-                 // Extract audio URL from record data
-                 let audioUrl = '';
-                 const recordType = getRecordType(record);
-                 const specificData = record.data?.[recordType] || {};
-                 const basicData = record.data?.basic || {};
-                 
-                 if (specificData.audioItems && specificData.audioItems.length > 0) {
-                     audioUrl = specificData.audioItems[0]?.data?.audio?.webUrl || specificData.audioItems[0];
-                 } else if (basicData.audioItems && basicData.audioItems.length > 0) {
-                     audioUrl = basicData.audioItems[0]?.data?.audio?.webUrl || basicData.audioItems[0];
-                 }
-                 
-                 audioBtn.onclick = () => playAudioInMaster(
-                     audioUrl, 
-                     record.data?.basic?.name || 'Unnamed Record',
-                     recordType,
-                     recordIndex
-                 );
-             }
-             
-             // Fix the text toggle button (for embedded text content)
-             const textBtn = card.querySelector('.toggle-text-btn');
-             if (textBtn) {
-                 textBtn.id = `voice-textBtn-${recordIndex}`;
-                 textBtn.onclick = () => toggleVoiceTextContent(recordIndex, 
-                     textBtn.getAttribute('data-type') || 'static',
-                     textBtn.getAttribute('data-url') || ''
-                 );
-             }
-             
-             // Fix the view article button (for opening original webUrl)
-             const viewBtn = card.querySelector('.view-article-btn');
-             if (viewBtn) {
-                 viewBtn.id = `voice-viewBtn-${recordIndex}`;
-                 // Keep the original onclick functionality for opening in new tab
-             }
-             
-             const textContent = card.querySelector('.text-content-preview');
-             if (textContent) {
-                 textContent.id = `voice-textContent-${recordIndex}`;
-             }
-             
-             return card;
-         }
 
         function showVoiceNoResults() {
             document.getElementById('voice-records-grid').classList.add('hidden');
@@ -4025,7 +4418,7 @@
 
         function updateVoicePaginationInfo(data) {
             const info = document.getElementById('voice-pagination-info');
-            info.textContent = `Showing ${voiceRecords.length} of ${data.totalRecords || 'many'} records`;
+            info.textContent = `Showing ${currentRecords.length} of ${data.totalRecords || 'many'} records • Page ${currentPage}`;
         }
 
         function updateVoiceTagFilter(tagSummary) {
@@ -4049,18 +4442,18 @@
             const container = document.getElementById('voice-load-more-container');
             const button = document.getElementById('voice-load-more-btn');
             
-            if (voiceHasMoreRecords && voiceRecords.length > 0) {
+            if (hasMoreRecords && currentRecords.length > 0) {
                 container.classList.remove('hidden');
-                button.disabled = voiceIsLoading;
-                button.textContent = voiceIsLoading ? 'Loading...' : 'Load More Records';
+                button.disabled = isLoading;
+                button.textContent = isLoading ? 'Loading...' : 'Load More Records';
             } else {
                 container.classList.add('hidden');
             }
         }
 
         function loadMoreVoiceRecords() {
-            if (!voiceHasMoreRecords || voiceIsLoading) return;
-            voicePage++;
+            if (!hasMoreRecords || isLoading) return;
+            currentPage++;
             loadVoiceRecords(false);
         }
 
