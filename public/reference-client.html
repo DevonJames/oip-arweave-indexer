@@ -1528,6 +1528,9 @@
                 await loadTemplates();
             }
             
+            // Load actual record types from the index
+            await loadActualRecordTypes();
+            
             // Force hide the old browse tab and ensure it stays hidden
             forcehideBrowseTab();
             
@@ -1547,6 +1550,91 @@
                     ensureChatInputReady();
                 }
             }, 2000); // Check every 2 seconds
+        }
+
+        // Load actual record types from the index
+        async function loadActualRecordTypes() {
+            try {
+                console.log('[App] Loading actual record types from index...');
+                const response = await fetch('/api/records/recordTypes');
+                const data = await response.json();
+                
+                if (response.ok && data.recordTypes) {
+                    console.log('[App] Loaded record types:', data.recordTypes);
+                    
+                    // Store the actual record types with counts
+                    recordTypes = data.recordTypes.map(rt => rt.recordType).sort();
+                    
+                    // Populate all record type dropdowns
+                    populateAllRecordTypeDropdowns(data.recordTypes);
+                    
+                    console.log('[App] Populated record type dropdowns with', recordTypes.length, 'types');
+                } else {
+                    console.error('[App] Failed to load record types:', data.error || 'Unknown error');
+                    // Fallback to basic types if API fails
+                    recordTypes = ['post', 'video', 'image', 'recipe', 'workout'];
+                    populateAllRecordTypeDropdowns(recordTypes.map(type => ({ recordType: type, count: 0 })));
+                }
+            } catch (error) {
+                console.error('[App] Error loading record types:', error);
+                // Fallback to basic types if API fails
+                recordTypes = ['post', 'video', 'image', 'recipe', 'workout'];
+                populateAllRecordTypeDropdowns(recordTypes.map(type => ({ recordType: type, count: 0 })));
+            }
+        }
+
+        // Populate all record type dropdowns with actual data
+        function populateAllRecordTypeDropdowns(recordTypesData) {
+            // Voice browse tab dropdown
+            const voiceSelect = document.getElementById('voice-record-type-filter');
+            if (voiceSelect) {
+                voiceSelect.innerHTML = '<option value="">All Types</option>';
+                recordTypesData.forEach(rt => {
+                    const option = document.createElement('option');
+                    option.value = rt.recordType;
+                    option.textContent = `${rt.recordType.charAt(0).toUpperCase() + rt.recordType.slice(1)} (${rt.count})`;
+                    voiceSelect.appendChild(option);
+                });
+                console.log('[App] Populated voice record type filter with', recordTypesData.length, 'types');
+            }
+            
+            // Publishing record type dropdown
+            const publishSelect = document.getElementById('record-type');
+            if (publishSelect) {
+                // Keep the first option as "Select Record Type"
+                const firstOption = publishSelect.querySelector('option[value=""]');
+                publishSelect.innerHTML = '';
+                if (firstOption) {
+                    publishSelect.appendChild(firstOption);
+                } else {
+                    publishSelect.innerHTML = '<option value="">Select Record Type</option>';
+                }
+                
+                // Add actual record types
+                recordTypesData.forEach(rt => {
+                    const option = document.createElement('option');
+                    option.value = rt.recordType;
+                    option.textContent = `${rt.recordType.charAt(0).toUpperCase() + rt.recordType.slice(1)} (${rt.count})`;
+                    publishSelect.appendChild(option);
+                });
+                console.log('[App] Populated publishing record type filter with', recordTypesData.length, 'types');
+            }
+        }
+
+        // Legacy function - now redirects to new implementation
+        async function loadRecordTypes() {
+            console.log('[App] Legacy loadRecordTypes called - redirecting to loadActualRecordTypes');
+            await loadActualRecordTypes();
+        }
+
+        // Legacy function - now uses new implementation
+        function populateRecordTypeFilter() {
+            console.log('[App] Legacy populateRecordTypeFilter called - record types already populated');
+        }
+
+        // Legacy function - now uses new implementation
+        function populateVoiceRecordTypeFilter(recordTypes) {
+            console.log('[App] Legacy populateVoiceRecordTypeFilter called - record types already populated');
         }
 
         // Force hide the old browse tab completely
@@ -2941,8 +3029,7 @@
                     populateVoiceSelect();
                 }
                 
-                // Load record types for voice tab filters
-                await loadVoiceRecordTypes();
+                // NOTE: Record types are now loaded by loadActualRecordTypes() in main app initialization
                 
             } catch (error) {
                 console.warn('[Voice] Could not load voice settings:', error);
@@ -2977,38 +3064,11 @@
             select.value = voiceState.selectedVoice;
         }
 
-        async function loadVoiceRecordTypes() {
-            try {
-                const response = await fetch('/api/templates?limit=25&page=1');
-                const data = await response.json();
-                
-                if (data.templates) {
-                    const typeSet = new Set();
-                    data.templates.forEach(template => {
-                        if (template.data?.template) {
-                            typeSet.add(template.data.template);
-                        }
-                    });
-                    
-                    const recordTypes = Array.from(typeSet).sort();
-                    populateVoiceRecordTypeFilter(recordTypes);
-                }
-            } catch (error) {
-                console.error('[Voice] Error loading record types:', error);
-            }
-        }
+        // DEPRECATED: loadVoiceRecordTypes() - now handled by loadActualRecordTypes() in main app init
+        // async function loadVoiceRecordTypes() { ... }
 
-        function populateVoiceRecordTypeFilter(recordTypes) {
-            const select = document.getElementById('voice-record-type-filter');
-            select.innerHTML = '<option value="">All Types</option>';
-            
-            recordTypes.forEach(type => {
-                const option = document.createElement('option');
-                option.value = type;
-                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-                select.appendChild(option);
-            });
-        }
+        // DEPRECATED: populateVoiceRecordTypeFilter() - now handled by populateAllRecordTypeDropdowns()
+        // function populateVoiceRecordTypeFilter(recordTypes) { ... }
 
         function updateAIStatus(main) {
             document.getElementById('ai-status-text').textContent = main;
