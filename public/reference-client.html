@@ -5479,8 +5479,20 @@
         }
         
         function onTagFilterChange(index) {
-            console.log('[Multi-Tag] Tag filter changed:', index);
+            const select = document.querySelector(`[data-tag-index="${index}"] .tag-filter-select`);
+            const selectedValue = select ? select.value : 'NOT_FOUND';
+            console.log(`[Multi-Tag] Tag filter ${index} changed to: "${selectedValue}"`);
+            
+            // Debug: show all current selections before update
+            const currentSelections = getSelectedTags();
+            console.log(`[Multi-Tag] All current selections before update:`, currentSelections);
+            
             updateAllTagDropdowns();
+            
+            // Debug: show all selections after update
+            const updatedSelections = getSelectedTags();
+            console.log(`[Multi-Tag] All selections after update:`, updatedSelections);
+            
             applyVoiceFilters();
         }
         
@@ -5498,9 +5510,17 @@
         }
         
         function updateAllTagDropdowns() {
-            const selectedTags = getSelectedTags();
             const selects = document.querySelectorAll('.tag-filter-select');
             const container = document.getElementById('tag-filters-container');
+            
+            // Store current values before clearing dropdowns
+            const currentValues = [];
+            selects.forEach(select => {
+                currentValues.push({
+                    index: parseInt(select.getAttribute('data-tag-index')),
+                    value: select.value
+                });
+            });
             
             // Add compact styling when there are many tag filters
             if (selects.length >= 3) {
@@ -5509,40 +5529,46 @@
                 container.classList.remove('has-many-tags');
             }
             
-            selects.forEach(select => {
-                const currentValue = select.value;
-                const currentIndex = parseInt(select.getAttribute('data-tag-index'));
+            // Get all currently selected tags (exclude empty values)
+            const allSelectedTags = currentValues
+                .filter(item => item.value && item.value.trim())
+                .map(item => item.value.trim());
+            
+            selects.forEach((select, selectIndex) => {
+                const selectTagIndex = parseInt(select.getAttribute('data-tag-index'));
+                const currentValue = currentValues.find(item => item.index === selectTagIndex)?.value || '';
                 
                 // Clear and repopulate options
                 select.innerHTML = '<option value="">Select a tag...</option>';
                 
-                availableTags.forEach(tag => {
-                    // Only add tags that aren't already selected by other dropdowns
-                    const isSelectedElsewhere = selectedTags.some(selectedTag => 
-                        selectedTag === tag.tag && select.value !== tag.tag
-                    );
-                    
-                    if (!isSelectedElsewhere) {
-                        const option = document.createElement('option');
-                        option.value = tag.tag;
-                        option.textContent = `${tag.tag} (${tag.count})`;
-                        select.appendChild(option);
-                    }
-                });
+                if (availableTags && availableTags.length > 0) {
+                    availableTags.forEach(tag => {
+                        // Add this tag if:
+                        // 1. It's not selected by any other dropdown, OR
+                        // 2. It's the current value of THIS dropdown
+                        const isSelectedByOthers = allSelectedTags.some(selectedTag => 
+                            selectedTag === tag.tag && selectedTag !== currentValue
+                        );
+                        
+                        if (!isSelectedByOthers) {
+                            const option = document.createElement('option');
+                            option.value = tag.tag;
+                            option.textContent = `${tag.tag} (${tag.count})`;
+                            select.appendChild(option);
+                        }
+                    });
+                }
                 
-                // Restore the current value if it's still valid
-                if (currentValue && !selectedTags.includes(currentValue)) {
+                // Restore the current value (this will work now because we rebuilt the options)
+                if (currentValue && currentValue.trim()) {
                     select.value = currentValue;
-                } else if (currentValue && selectedTags.includes(currentValue)) {
-                    // If the value is selected elsewhere, keep it selected here too (it's this dropdown's value)
-                    const thisTagSelected = select.value === currentValue;
-                    if (thisTagSelected) {
-                        select.value = currentValue;
-                    }
+                    console.log(`[Multi-Tag] Restored value "${currentValue}" for select ${selectTagIndex}`);
                 }
             });
             
-            console.log('[Multi-Tag] Updated dropdowns. Selected tags:', selectedTags, 'Compact mode:', selects.length >= 3);
+            // Get final selected tags for logging
+            const finalSelectedTags = getSelectedTags();
+            console.log('[Multi-Tag] Updated dropdowns. Selected tags:', finalSelectedTags, 'Compact mode:', selects.length >= 3);
         }
         
         function clearAllTagFilters() {
@@ -5589,6 +5615,9 @@
             const selectedTags = getSelectedTags();
             const tagMatchMode = document.getElementById('tag-match-mode').value;
             
+            console.log(`[Filters] DEBUG: getSelectedTags() returned:`, selectedTags);
+            console.log(`[Filters] DEBUG: tagMatchMode is:`, tagMatchMode);
+            
             if (selectedTags.length > 0) {
                 // Use manual multi-tag selection
                 currentFilters.tags = selectedTags.join(',');
@@ -5599,7 +5628,8 @@
                 delete currentFilters.aiTags;
                 delete currentFilters.aiTagsMatchMode;
                 
-                console.log('[Filters] Using manual multi-tag filters:', selectedTags, 'mode:', tagMatchMode);
+                console.log('[Filters] ✅ Using manual multi-tag filters:', selectedTags, 'mode:', tagMatchMode);
+                console.log('[Filters] ✅ Final tags parameter:', currentFilters.tags);
             } else {
                 // No manual tags selected, keep AI tags if they exist
                 if (!currentFilters.aiTags) {
@@ -5607,7 +5637,7 @@
                     currentFilters.tagsMatchMode = '';
                     currentFilters.tag = '';
                 }
-                console.log('[Filters] No manual tags, keeping AI tags:', currentFilters.aiTags);
+                console.log('[Filters] ❌ No manual tags, keeping AI tags:', currentFilters.aiTags);
             }
             
             // Update debug setting
