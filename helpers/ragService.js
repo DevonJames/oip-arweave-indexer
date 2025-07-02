@@ -176,7 +176,7 @@ class RAGService {
 
     /**
      * Extract key search terms from a natural language question
-     * Intelligently separates the question from the subject matter
+     * Intelligently separates the question from the subject matter AND extracts modifiers
      */
     extractSearchKeywords(question) {
         console.log(`[RAG] Extracting keywords from: "${question}"`);
@@ -191,7 +191,7 @@ class RAGService {
         
         const lowerQuestion = question.toLowerCase();
         
-        // Special handling for recipe queries
+        // Special handling for recipe queries with modifier extraction
         if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook') || lowerQuestion.includes('ingredient')) {
             return this.extractRecipeKeywords(question);
         }
@@ -415,12 +415,17 @@ class RAGService {
 
     /**
      * Use tag summarization to get the most relevant results for specific record types
+     * Enhanced with intelligent modifier detection and tag-based refinement
      */
     async searchWithTagSummarization(question, relevantTypes, options = {}) {
         const allResults = [];
         
-        // Extract keywords from the question instead of using the full question
-        const searchKeywords = this.extractSearchKeywords(question);
+        // Extract both subject and modifiers from the question
+        const { subject, modifiers } = this.extractSubjectAndModifiers(question);
+        console.log(`[RAG] Extracted - Subject: "${subject}", Modifiers: [${modifiers.join(', ')}]`);
+        
+        // For backward compatibility, also extract keywords the old way
+        const searchKeywords = subject || this.extractSearchKeywords(question);
         
         // For evacuation questions, use multiple search strategies
         const isEvacuationQuestion = question.toLowerCase().includes('evacuate') || 
@@ -474,85 +479,277 @@ class RAGService {
                 try {
                     console.log(`[RAG] Searching ${typeInfo.type} records for keywords: "${searchKeywords}" (from question: "${question}")`);
                     
-                    // Use direct database call with proper summarizeTags parameters
+                    // Perform initial broad search
                     const searchParams = {
-                        search: searchKeywords, // Use extracted keywords instead of full question
+                        search: searchKeywords, // Use main subject for initial search
                         recordType: typeInfo.type,
                         sortBy: 'date:desc',
-                        resolveDepth: 3, // Use proper resolve depth like the user's API call
-                        summarizeTags: true, // CRITICAL: Enable tag summarization for relevance
-                        tagCount: 5, // Get top 5 tags for context
+                        resolveDepth: 3,
+                        summarizeTags: true,
+                        tagCount: 15, // Get more tags for analysis
                         tagPage: 1,
-                        limit: this.maxResults,
+                        limit: this.maxResults * 2, // Get more results initially for refinement
                         page: 1,
                         includeSigs: false,
                         includePubKeys: false
                     };
                     
-                    console.log(`[RAG] Direct DB search params:`, searchParams);
+                    console.log(`[RAG] Initial broad search params:`, searchParams);
                     
-                    const dbResults = await getRecords(searchParams);
+                    const initialResults = await getRecords(searchParams);
                     
-                    if (dbResults && dbResults.records) {
-                        const records = dbResults.records.slice(0, this.maxResults);
-                        console.log(`[RAG] Found ${records.length} ${typeInfo.type} records`);
+                    if (initialResults && initialResults.records && initialResults.records.length > 0) {
+                        console.log(`[RAG] Initial search found ${initialResults.records.length} ${typeInfo.type} records`);
                         
-                        // Add type info to each record for context
-                        records.forEach(record => {
-                            record._ragTypeInfo = typeInfo;
-                        });
+                        // Apply intelligent refinement if we have modifiers and multiple results
+                        const finalResults = await this.analyzeAndRefineSearch(
+                            question, 
+                            initialResults, 
+                            searchKeywords, 
+                            modifiers
+                        );
                         
-                        allResults.push(...records);
+                        if (finalResults && finalResults.records) {
+                            const records = finalResults.records.slice(0, this.maxResults);
+                            
+                            // Add refinement info to records for better context
+                            records.forEach(record => {
+                                if (finalResults.wasRefined) {
+                                    record.ragRefinementInfo = {
+                                        wasRefined: true,
+                                        appliedModifiers: finalResults.appliedModifiers,
+                                        originalResultCount: finalResults.originalResultCount
+                                    };
+                                }
+                                record.ragTypeInfo = typeInfo;
+                            });
+                            
+                            allResults.push(...records);
+                            
+                            if (finalResults.wasRefined) {
+                                console.log(`[RAG] ✅ Successfully refined from ${finalResults.originalResultCount} to ${records.length} results using modifiers: [${finalResults.appliedModifiers.join(', ')}]`);
+                            } else {
+                                console.log(`[RAG] Using ${records.length} ${typeInfo.type} records (no refinement needed)`);
+                            }
+                            
+                            // If we got refined results, we can stop here since they should be very specific
+                            if (finalResults.wasRefined && records.length > 0) {
+                                break;
+                            }
+                        }
+                    } else {
+                        console.log(`[RAG] No results found for ${typeInfo.type} with keywords: "${searchKeywords}"`);
                     }
-                    
                 } catch (error) {
-                    console.warn(`[RAG] Error searching ${typeInfo.type}:`, error.message);
+                    console.error(`[RAG] Error searching ${typeInfo.type}:`, error.message);
                 }
             }
         }
         
-        // If no results and we have a clear search term, try broader search without record type filter
-        if (allResults.length === 0 && searchKeywords.trim().length > 2) {
-            console.log(`[RAG] No results with type filtering, trying broader search for keywords: "${searchKeywords}"`);
-            try {
-                const broadSearchParams = {
-                    search: searchKeywords, // Use extracted keywords for broad search too
-                    // Remove recordType filter for broader search
-                    sortBy: 'date:desc',
-                    resolveDepth: 3,
-                    summarizeTags: true,
-                    tagCount: 5,
-                    tagPage: 1,
-                    limit: this.maxResults,
-                    page: 1,
-                    includeSigs: false,
-                    includePubKeys: false
-                };
-                
-                console.log(`[RAG] Broad search params:`, broadSearchParams);
-                const broadResults = await getRecords(broadSearchParams);
-                
-                if (broadResults && broadResults.records) {
-                    const records = broadResults.records.slice(0, this.maxResults);
-                    console.log(`[RAG] Found ${records.length} records in broad search`);
-                    
-                    // Filter to only enabled record types after the search
-                    const enabledTypes = getEnabledRecordTypes();
-                    const filteredRecords = records.filter(record => {
-                        const recordType = record.oip?.recordType;
-                        return recordType && enabledTypes.includes(recordType);
-                    });
-                    
-                    console.log(`[RAG] After filtering by enabled types: ${filteredRecords.length} records`);
-                    allResults.push(...filteredRecords);
-                }
-            } catch (error) {
-                console.warn(`[RAG] Error in broad search:`, error.message);
+        // Remove duplicates and limit total results
+        const uniqueResults = [];
+        const seenIds = new Set();
+        
+        for (const record of allResults) {
+            const id = record.oip?.didTx;
+            if (id && !seenIds.has(id)) {
+                seenIds.add(id);
+                uniqueResults.push(record);
+                if (uniqueResults.length >= this.maxResults) break;
             }
         }
         
-        console.log(`[RAG] Total results after search: ${allResults.length}`);
-        return allResults;
+        console.log(`[RAG] Final search results: ${uniqueResults.length} unique records`);
+        
+        return {
+            records: uniqueResults,
+            searchMetadata: {
+                originalKeywords: searchKeywords,
+                extractedModifiers: modifiers,
+                hasRefinement: uniqueResults.some(r => r.ragRefinementInfo?.wasRefined)
+            }
+        };
+    }
+
+    /**
+     * Check if modifiers exist as tags in search results and suggest refined search
+     */
+    async analyzeAndRefineSearch(question, initialResults, originalSubject, modifiers) {
+        if (!initialResults || !initialResults.records || initialResults.records.length < 2) {
+            console.log(`[RAG] No need to refine - got ${initialResults?.records?.length || 0} results`);
+            return initialResults;
+        }
+
+        if (!modifiers || modifiers.length === 0) {
+            console.log(`[RAG] No modifiers to use for refinement`);
+            return initialResults;
+        }
+
+        console.log(`[RAG] Analyzing ${initialResults.records.length} results for tag-based refinement`);
+        console.log(`[RAG] Looking for modifiers: [${modifiers.join(', ')}] in record tags`);
+
+        // Collect all tags from initial results
+        const allTags = new Set();
+        initialResults.records.forEach(record => {
+            const tags = record.data?.basic?.tagItems || [];
+            tags.forEach(tag => allTags.add(tag.toLowerCase()));
+        });
+
+        console.log(`[RAG] Found ${allTags.size} unique tags in results:`, [...allTags].slice(0, 10));
+
+        // Find which modifiers match existing tags
+        const matchingTags = modifiers.filter(modifier => {
+            const modifierLower = modifier.toLowerCase();
+            return allTags.has(modifierLower) || 
+                   [...allTags].some(tag => tag.includes(modifierLower) || modifierLower.includes(tag));
+        });
+
+        if (matchingTags.length === 0) {
+            console.log(`[RAG] No modifier matches found in tags, using original results`);
+            return initialResults;
+        }
+
+        console.log(`[RAG] Found matching tags for refinement: [${matchingTags.join(', ')}]`);
+
+        // Perform refined search with tag filtering
+        try {
+            const recordType = initialResults.records[0]?.oip?.recordType;
+            
+            const refinedSearchParams = {
+                search: originalSubject,
+                recordType: recordType,
+                tags: matchingTags.join(','),
+                tagsMatchMode: 'AND', // Require ALL matching tags
+                sortBy: 'tags:desc', // Sort by tag match score
+                resolveDepth: 3,
+                limit: 5,
+                page: 1,
+                includeSigs: false,
+                includePubKeys: false
+            };
+
+            console.log(`[RAG] Performing refined search with tags:`, refinedSearchParams);
+
+            const refinedResults = await getRecords(refinedSearchParams);
+
+            if (refinedResults && refinedResults.records && refinedResults.records.length > 0) {
+                console.log(`[RAG] ✅ Refined search successful: ${refinedResults.records.length} precise results`);
+                
+                // Add refinement metadata
+                refinedResults.wasRefined = true;
+                refinedResults.appliedModifiers = matchingTags;
+                refinedResults.originalResultCount = initialResults.records.length;
+                
+                return refinedResults;
+            } else {
+                console.log(`[RAG] Refined search returned no results, using original`);
+                return initialResults;
+            }
+
+        } catch (error) {
+            console.error(`[RAG] Error during refined search:`, error.message);
+            return initialResults;
+        }
+    }
+
+    /**
+     * Extract both main subject and modifiers from questions
+     * Returns {subject: string, modifiers: string[]}
+     */
+    extractSubjectAndModifiers(question) {
+        console.log(`[RAG] Extracting subject and modifiers from: "${question}"`);
+        
+        const lowerQuestion = question.toLowerCase();
+        
+        // Special handling for recipe queries
+        if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook')) {
+            return this.extractRecipeSubjectAndModifiers(question);
+        }
+        
+        // Special handling for exercise queries
+        if (lowerQuestion.includes('exercise') || lowerQuestion.includes('workout')) {
+            return this.extractExerciseSubjectAndModifiers(question);
+        }
+        
+        // Default extraction
+        const words = lowerQuestion
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .split(' ');
+            
+        const stopWords = ['what', 'is', 'are', 'the', 'how', 'where', 'when', 'why', 'who', 'which', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'long', 'much', 'many', 'time', 'need', 'needs', 'to', 'for', 'with', 'and', 'or', 'but', 'in', 'on', 'at', 'by', 'from', 'about', 'tell', 'me', 'you'];
+        
+        const meaningfulWords = words.filter(word => 
+            word.length > 2 && !stopWords.includes(word)
+        );
+        
+        return {
+            subject: meaningfulWords.slice(0, 2).join(' '),
+            modifiers: meaningfulWords.slice(2, 5)
+        };
+    }
+
+    /**
+     * Extract subject and modifiers specifically for recipe queries
+     */
+    extractRecipeSubjectAndModifiers(question) {
+        const lowerQuestion = question.toLowerCase();
+        
+        // Common recipe modifiers that often appear as tags
+        const commonModifiers = [
+            'grilled', 'grilling', 'baked', 'baking', 'fried', 'frying', 'roasted', 'roasting', 'steamed', 'steaming',
+            'greek', 'italian', 'mexican', 'indian', 'chinese', 'japanese', 'french', 'thai', 'mediterranean', 'asian',
+            'spicy', 'mild', 'sweet', 'savory', 'hot', 'cold', 'fresh', 'healthy', 'low-fat', 'gluten-free', 'vegan', 'vegetarian',
+            'quick', 'easy', 'simple', 'fast', 'slow', 'traditional', 'classic', 'modern', 'gourmet', 'comfort',
+            'marinated', 'seasoned', 'stuffed', 'glazed', 'crispy', 'tender', 'juicy', 'creamy', 'crunchy'
+        ];
+        
+        // Extract main ingredients (subjects)
+        const ingredients = ['chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'turkey', 'lamb', 'tofu', 'vegetables', 'pasta', 'rice', 'beans', 'lentils'];
+        const foundIngredients = ingredients.filter(ingredient => lowerQuestion.includes(ingredient));
+        
+        // Extract modifiers that exist in the question
+        const foundModifiers = commonModifiers.filter(modifier => {
+            // Check for exact match or as part of compound words
+            return lowerQuestion.includes(modifier) || lowerQuestion.includes(modifier + 'ed') || lowerQuestion.includes(modifier + 'ing');
+        });
+        
+        const subject = foundIngredients.length > 0 ? foundIngredients[0] : 'recipe';
+        
+        console.log(`[RAG] Recipe extraction - Subject: "${subject}", Modifiers: [${foundModifiers.join(', ')}]`);
+        
+        return {
+            subject: subject,
+            modifiers: foundModifiers
+        };
+    }
+
+    /**
+     * Extract subject and modifiers specifically for exercise queries
+     */
+    extractExerciseSubjectAndModifiers(question) {
+        const lowerQuestion = question.toLowerCase();
+        
+        // Common exercise modifiers
+        const exerciseModifiers = [
+            'beginner', 'intermediate', 'advanced', 'easy', 'hard', 'difficult',
+            'upper', 'lower', 'full', 'body', 'core', 'cardio', 'strength', 'endurance',
+            'home', 'gym', 'outdoor', 'indoor', 'bodyweight', 'dumbbell', 'barbell', 'kettlebell',
+            'chest', 'back', 'shoulders', 'arms', 'legs', 'abs', 'glutes', 'biceps', 'triceps'
+        ];
+        
+        const exerciseTypes = ['workout', 'exercise', 'training', 'routine', 'program'];
+        const foundExerciseType = exerciseTypes.find(type => lowerQuestion.includes(type)) || 'exercise';
+        
+        const foundModifiers = exerciseModifiers.filter(modifier => lowerQuestion.includes(modifier));
+        
+        console.log(`[RAG] Exercise extraction - Subject: "${foundExerciseType}", Modifiers: [${foundModifiers.join(', ')}]`);
+        
+        return {
+            subject: foundExerciseType,
+            modifiers: foundModifiers
+        };
     }
 
     /**
@@ -570,10 +767,10 @@ class RAGService {
             
             // Step 3: Fallback to traditional search if smart search yields no results
             let searchResults;
-            if (smartResults.length > 0) {
+            if (smartResults.records.length > 0) {
                 searchResults = {
-                    records: smartResults,
-                    totalResults: smartResults.length,
+                    records: smartResults.records,
+                    totalResults: smartResults.records.length,
                     templates: [],
                     creators: []
                 };
@@ -844,6 +1041,7 @@ class RAGService {
 
     /**
      * Add record type specific context fields
+     * Enhanced to include comprehensive recipe timing and measurement fields
      */
     addRecordTypeSpecificContext(parts, record, recordType, contextFields) {
         const basic = record.data?.basic || {};
@@ -851,18 +1049,105 @@ class RAGService {
         // Add specific fields based on record type
         switch (recordType) {
             case 'recipe':
+                // Enhanced recipe field extraction for better cooking question support
+                
+                // Timing fields - multiple variations to catch different field names
+                const timingFields = [
+                    'cook_time_mins', 'cookingTime', 'cook_time', 'cooking_time_mins', 'cooking_time',
+                    'prep_time_mins', 'prepTime', 'prep_time', 'preparation_time_mins', 'preparation_time',
+                    'total_time_mins', 'totalTime', 'total_time', 'ready_in_mins', 'ready_time'
+                ];
+                
+                timingFields.forEach(field => {
+                    if (basic[field] && contextFields.includes(field)) {
+                        const displayName = field.replace(/_/g, ' ').replace(/mins?/i, 'minutes');
+                        parts.push(`${displayName}: ${basic[field]} minutes`);
+                    }
+                });
+                
+                // If no specific timing fields found, look for generic time mentions
+                if (!timingFields.some(field => basic[field])) {
+                    if (basic.time && contextFields.includes('time')) {
+                        parts.push(`Time: ${basic.time}`);
+                    }
+                    if (basic.duration && contextFields.includes('duration')) {
+                        parts.push(`Duration: ${basic.duration}`);
+                    }
+                }
+                
+                // Temperature fields
+                const tempFields = ['temperature', 'oven_temp', 'cooking_temp', 'baking_temp'];
+                tempFields.forEach(field => {
+                    if (basic[field] && contextFields.includes(field)) {
+                        parts.push(`Temperature: ${basic[field]}`);
+                    }
+                });
+                
+                // Serving and quantity fields
+                const servingFields = ['servings', 'serves', 'portions', 'yield', 'makes'];
+                servingFields.forEach(field => {
+                    if (basic[field] && contextFields.includes(field)) {
+                        parts.push(`Servings: ${basic[field]}`);
+                    }
+                });
+                
+                // Ingredient handling - enhanced to be more comprehensive
                 if (basic.ingredients && contextFields.includes('ingredients')) {
-                    parts.push(`Ingredients: ${Array.isArray(basic.ingredients) ? basic.ingredients.join(', ') : basic.ingredients}`);
+                    let ingredientText = '';
+                    if (Array.isArray(basic.ingredients)) {
+                        ingredientText = basic.ingredients.join(', ');
+                    } else if (typeof basic.ingredients === 'object') {
+                        // Handle structured ingredient objects
+                        ingredientText = Object.values(basic.ingredients).join(', ');
+                    } else {
+                        ingredientText = String(basic.ingredients);
+                    }
+                    parts.push(`Ingredients: ${ingredientText.substring(0, 300)}${ingredientText.length > 300 ? '...' : ''}`);
                 }
+                
+                // Instructions - enhanced to capture cooking methods and timing
                 if (basic.instructions && contextFields.includes('instructions')) {
-                    parts.push(`Instructions: ${basic.instructions.substring(0, 200)}...`);
+                    let instructionText = String(basic.instructions);
+                    // Prioritize sentences with timing information
+                    const sentences = instructionText.split(/[.!?]+/);
+                    const timingSentences = sentences.filter(sentence => 
+                        /\d+\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?)/i.test(sentence)
+                    );
+                    
+                    if (timingSentences.length > 0) {
+                        // Include timing-related instructions first
+                        const relevantInstructions = timingSentences.slice(0, 2).join('. ').trim();
+                        parts.push(`Instructions (timing): ${relevantInstructions}${relevantInstructions.length > 200 ? '...' : ''}`);
+                    }
+                    
+                    // Then add general instructions if there's space
+                    const generalInstructions = instructionText.substring(0, 200);
+                    parts.push(`Instructions: ${generalInstructions}${instructionText.length > 200 ? '...' : ''}`);
                 }
-                if (basic.cookingTime && contextFields.includes('cookingTime')) {
-                    parts.push(`Cooking Time: ${basic.cookingTime}`);
+                
+                // Method and technique fields
+                const methodFields = ['method', 'technique', 'cooking_method', 'preparation_method'];
+                methodFields.forEach(field => {
+                    if (basic[field] && contextFields.includes(field)) {
+                        parts.push(`Method: ${basic[field]}`);
+                    }
+                });
+                
+                // Difficulty and skill level
+                if (basic.difficulty && contextFields.includes('difficulty')) {
+                    parts.push(`Difficulty: ${basic.difficulty}`);
                 }
-                if (basic.servings && contextFields.includes('servings')) {
-                    parts.push(`Servings: ${basic.servings}`);
+                
+                // Cuisine type
+                if (basic.cuisine && contextFields.includes('cuisine')) {
+                    parts.push(`Cuisine: ${basic.cuisine}`);
                 }
+                
+                // Equipment needed
+                if (basic.equipment && contextFields.includes('equipment')) {
+                    parts.push(`Equipment: ${Array.isArray(basic.equipment) ? basic.equipment.join(', ') : basic.equipment}`);
+                }
+                
                 break;
                 
             case 'exercise':
@@ -999,11 +1284,17 @@ class RAGService {
     }
 
     /**
-     * Fallback method to extract direct answers from context when LLM fails
+     * Enhanced fallback method to extract direct answers from context when LLM fails
+     * Now includes recipe-specific field extraction
      */
     extractDirectAnswer(question, context) {
         const lowerQuestion = question.toLowerCase();
         const lowerContext = context.toLowerCase();
+        
+        // Recipe-specific extractions
+        if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook')) {
+            return this.extractRecipeAnswer(question, context);
+        }
         
         // Look for evacuation numbers in the context
         if (lowerQuestion.includes('how many') && (lowerQuestion.includes('evacuated') || lowerQuestion.includes('evacuation'))) {
@@ -1057,6 +1348,279 @@ class RAGService {
         }
         
         return "I found relevant information in my knowledge base, but I'm having trouble generating a response right now. Please try asking a more specific question.";
+    }
+
+    /**
+     * Extract specific answers for recipe-related questions
+     */
+    extractRecipeAnswer(question, context) {
+        const lowerQuestion = question.toLowerCase();
+        
+        // Cooking time questions
+        if (lowerQuestion.includes('how long') && (lowerQuestion.includes('cook') || lowerQuestion.includes('bake') || lowerQuestion.includes('grill'))) {
+            // Look for specific time fields first
+            const timePatterns = [
+                /cook[_\s]*time[_\s]*mins?:?\s*(\d+)/gi,
+                /cooking[_\s]*time:?\s*(\d+)\s*min/gi,
+                /prep[_\s]*time[_\s]*mins?:?\s*(\d+)/gi,
+                /total[_\s]*time[_\s]*mins?:?\s*(\d+)/gi,
+                /bake\s*(?:for\s*)?(\d+)\s*(?:minutes?|mins?)/gi,
+                /grill\s*(?:for\s*)?(\d+)\s*(?:minutes?|mins?)/gi,
+                /cook\s*(?:for\s*)?(\d+)\s*(?:minutes?|mins?)/gi,
+                /(\d+)\s*(?:minutes?|mins?)\s*(?:of\s*)?(?:cooking|baking|grilling)/gi
+            ];
+            
+            for (const pattern of timePatterns) {
+                const matches = [...context.matchAll(pattern)];
+                if (matches.length > 0) {
+                    const time = matches[0][1];
+                    return `According to the recipe, it needs to cook for ${time} minutes.`;
+                }
+            }
+            
+            // Look for time ranges in instructions
+            const instructionTimePatterns = [
+                /(\d+)[-–](\d+)\s*(?:minutes?|mins?)/gi,
+                /(\d+)\s*(?:to|or)\s*(\d+)\s*(?:minutes?|mins?)/gi,
+                /about\s*(\d+)\s*(?:minutes?|mins?)/gi,
+                /approximately\s*(\d+)\s*(?:minutes?|mins?)/gi
+            ];
+            
+            for (const pattern of instructionTimePatterns) {
+                const matches = [...context.matchAll(pattern)];
+                if (matches.length > 0) {
+                    if (matches[0][2]) {
+                        // Range
+                        return `According to the recipe instructions, it should cook for ${matches[0][1]}-${matches[0][2]} minutes.`;
+                    } else {
+                        // Single time with approximation
+                        return `According to the recipe instructions, it should cook for about ${matches[0][1]} minutes.`;
+                    }
+                }
+            }
+            
+            // Look for specific cooking instructions that mention time
+            const specificInstructions = context.match(/(?:grill|cook|bake|roast)\s+[^.]*?(\d+)(?:[-–](\d+))?\s*(?:minutes?|mins?)[^.]*/gi);
+            if (specificInstructions && specificInstructions.length > 0) {
+                return `Based on the cooking instructions: "${specificInstructions[0].trim()}"`;
+            }
+        }
+        
+        // Temperature questions
+        if (lowerQuestion.includes('temperature') || lowerQuestion.includes('degrees') || lowerQuestion.includes('°')) {
+            const tempPatterns = [
+                /(\d+)°?\s*f(?:ahrenheit)?/gi,
+                /(\d+)\s*degrees?\s*f/gi,
+                /preheat\s*(?:oven\s*)?(?:to\s*)?(\d+)°?\s*f/gi,
+                /cook\s*(?:at\s*)?(\d+)°?\s*f/gi,
+                /bake\s*(?:at\s*)?(\d+)°?\s*f/gi
+            ];
+            
+            for (const pattern of tempPatterns) {
+                const matches = [...context.matchAll(pattern)];
+                if (matches.length > 0) {
+                    const temp = matches[0][1];
+                    return `According to the recipe, cook at ${temp}°F.`;
+                }
+            }
+        }
+        
+        // Serving size questions
+        if (lowerQuestion.includes('serving') || lowerQuestion.includes('portion') || lowerQuestion.includes('how many people')) {
+            const servingPatterns = [
+                /servings?:?\s*(\d+)/gi,
+                /serves?:?\s*(\d+)/gi,
+                /(?:makes?\s*)?(\d+)\s*servings?/gi,
+                /(?:feeds?\s*)?(\d+)\s*people/gi
+            ];
+            
+            for (const pattern of servingPatterns) {
+                const matches = [...context.matchAll(pattern)];
+                if (matches.length > 0) {
+                    const servings = matches[0][1];
+                    return `This recipe serves ${servings} people.`;
+                }
+            }
+        }
+        
+        // Ingredient questions
+        if (lowerQuestion.includes('ingredient') || lowerQuestion.includes('what do i need') || lowerQuestion.includes('what needs')) {
+            const ingredientMatch = context.match(/ingredients?:?\s*([^:]*?)(?:\n\n|\n(?=[A-Z])|$)/gi);
+            if (ingredientMatch && ingredientMatch.length > 0) {
+                const ingredients = ingredientMatch[0].replace(/ingredients?:?\s*/gi, '').trim();
+                return `The ingredients needed are: ${ingredients.substring(0, 200)}${ingredients.length > 200 ? '...' : ''}`;
+            }
+        }
+        
+        // Fallback for recipe questions
+        const recipeKeywords = lowerQuestion.split(/\s+/).filter(word => word.length > 3);
+        const relevantSentences = context.split(/[.!?]+/).filter(sentence => {
+            return recipeKeywords.some(keyword => sentence.toLowerCase().includes(keyword));
+        }).slice(0, 2);
+        
+        if (relevantSentences.length > 0) {
+            return `Here's what I found about the recipe: ${relevantSentences.join('. ').trim()}.`;
+        }
+        
+        return "I found recipe information but couldn't extract the specific detail you're looking for. Please try asking a more specific question about the recipe.";
+    }
+
+    /**
+     * Check if query is about templates
+     */
+    isTemplateQuery(question) {
+        const templateKeywords = ['template', 'structure', 'field', 'schema', 'format', 'type'];
+        const lowerQuestion = question.toLowerCase();
+        return templateKeywords.some(keyword => lowerQuestion.includes(keyword));
+    }
+
+    /**
+     * Check if query is about creators
+     */
+    isCreatorQuery(question) {
+        const creatorKeywords = ['creator', 'user', 'author', 'publisher', 'who created', 'who made', 'who posted'];
+        const lowerQuestion = question.toLowerCase();
+        return creatorKeywords.some(keyword => lowerQuestion.includes(keyword));
+    }
+
+    /**
+     * Advanced search with specific parameters
+     */
+    async advancedSearch(question, searchOptions = {}) {
+        // Parse question for specific search intents
+        const intent = this.parseSearchIntent(question);
+        
+        const params = {
+            ...searchOptions,
+            ...intent.params
+        };
+        
+        return await this.query(question, { searchParams: params });
+    }
+
+    /**
+     * Parse question for search intent and parameters
+     */
+    parseSearchIntent(question) {
+        const lowerQuestion = question.toLowerCase();
+        const params = {};
+        
+        // Parse creator mentions
+        const creatorMatch = lowerQuestion.match(/by\s+(\w+)|from\s+(\w+)|creator\s+(\w+)/);
+        if (creatorMatch) {
+            params.creatorHandle = creatorMatch[1] || creatorMatch[2] || creatorMatch[3];
+        }
+        
+        // Parse date ranges
+        if (lowerQuestion.includes('recent') || lowerQuestion.includes('latest')) {
+            params.sortBy = 'date:desc';
+            params.limit = 3;
+        }
+        
+        // Parse content type
+        if (lowerQuestion.includes('audio') || lowerQuestion.includes('podcast')) {
+            params.hasAudio = true;
+        }
+        
+        if (lowerQuestion.includes('video')) {
+            params.recordType = 'video';
+        }
+        
+        if (lowerQuestion.includes('post')) {
+            params.recordType = 'post';
+        }
+        
+        return { params };
+    }
+
+    /**
+     * Extract applied filters for frontend display
+     * Enhanced to provide better explanations of refinement process
+     */
+    extractAppliedFilters(question, searchResults, relevantTypes) {
+        const filters = {};
+        const lowerQuestion = question.toLowerCase();
+        
+        // Use the same smart keyword extraction that was used for the search
+        const searchKeywords = this.extractSearchKeywords(question);
+        if (searchKeywords && searchKeywords.trim().length > 0) {
+            filters.search = searchKeywords.trim();
+        }
+        
+        // Determine record type from search results or query analysis
+        if (searchResults.records && searchResults.records.length > 0) {
+            const recordTypes = [...new Set(searchResults.records.map(r => r.oip?.recordType).filter(Boolean))];
+            if (recordTypes.length === 1) {
+                filters.recordType = recordTypes[0];
+            }
+        } else if (relevantTypes && relevantTypes.length === 1) {
+            filters.recordType = relevantTypes[0].type;
+        }
+        
+        // Detect sorting preferences
+        if (lowerQuestion.includes('recent') || lowerQuestion.includes('latest') || lowerQuestion.includes('new')) {
+            filters.sortBy = 'date:desc';
+        }
+        
+        // Detect audio/media filters
+        if (lowerQuestion.includes('audio') || lowerQuestion.includes('podcast')) {
+            filters.hasAudio = true;
+        }
+        
+        // Check if refinement occurred and build enhanced rationale
+        const sourceCount = searchResults.records ? searchResults.records.length : 0;
+        const hasRefinement = searchResults.records && searchResults.records.some(r => r.ragRefinementInfo?.wasRefined);
+        
+        if (hasRefinement) {
+            // Enhanced rationale for refined searches
+            const refinedRecord = searchResults.records.find(r => r.ragRefinementInfo?.wasRefined);
+            const appliedModifiers = refinedRecord.ragRefinementInfo?.appliedModifiers || [];
+            const originalCount = refinedRecord.ragRefinementInfo?.originalResultCount || 0;
+            
+            if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook')) {
+                filters.rationale = `Found ${originalCount} recipes containing "${filters.search}", then refined to ${sourceCount} specific ${sourceCount === 1 ? 'recipe' : 'recipes'} using tags: ${appliedModifiers.join(', ')}`;
+                // Add tags filter to show what was applied
+                filters.tags = appliedModifiers.join(',');
+                filters.tagsMatchMode = 'AND';
+            } else if (lowerQuestion.includes('exercise') || lowerQuestion.includes('workout')) {
+                filters.rationale = `Found ${originalCount} exercises related to "${filters.search}", then refined to ${sourceCount} specific ${sourceCount === 1 ? 'exercise' : 'exercises'} using tags: ${appliedModifiers.join(', ')}`;
+                filters.tags = appliedModifiers.join(',');
+                filters.tagsMatchMode = 'AND';
+            } else {
+                filters.rationale = `Found ${originalCount} records matching "${filters.search}", then refined to ${sourceCount} specific ${sourceCount === 1 ? 'result' : 'results'} using tags: ${appliedModifiers.join(', ')}`;
+                filters.tags = appliedModifiers.join(',');
+                filters.tagsMatchMode = 'AND';
+            }
+        } else {
+            // Standard rationale for non-refined searches
+            if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook')) {
+                filters.rationale = `Found ${sourceCount} recipe${sourceCount === 1 ? '' : 's'}`;
+                if (filters.search) {
+                    filters.rationale += ` containing "${filters.search}"`;
+                }
+            } else if (lowerQuestion.includes('exercise') || lowerQuestion.includes('workout')) {
+                filters.rationale = `Found ${sourceCount} exercise${sourceCount === 1 ? '' : 's'}`;
+                if (filters.search) {
+                    filters.rationale += ` related to "${filters.search}"`;
+                }
+            } else if (lowerQuestion.includes('news') || lowerQuestion.includes('article')) {
+                filters.rationale = `Found ${sourceCount} news article${sourceCount === 1 ? '' : 's'}`;
+                if (filters.search) {
+                    filters.rationale += ` about "${filters.search}"`;
+                }
+            } else {
+                filters.rationale = `Found ${sourceCount} relevant record${sourceCount === 1 ? '' : 's'}`;
+                if (filters.recordType) {
+                    filters.rationale += ` of type "${filters.recordType}"`;
+                }
+                if (filters.search) {
+                    filters.rationale += ` matching "${filters.search}"`;
+                }
+            }
+        }
+        
+        console.log(`[RAG] Extracted filters for "${question}":`, filters);
+        return filters;
     }
 
     /**
@@ -1170,139 +1734,6 @@ ANSWER:`;
         }
         
         return sources;
-    }
-
-    /**
-     * Check if query is about templates
-     */
-    isTemplateQuery(question) {
-        const templateKeywords = ['template', 'structure', 'field', 'schema', 'format', 'type'];
-        const lowerQuestion = question.toLowerCase();
-        return templateKeywords.some(keyword => lowerQuestion.includes(keyword));
-    }
-
-    /**
-     * Check if query is about creators
-     */
-    isCreatorQuery(question) {
-        const creatorKeywords = ['creator', 'user', 'author', 'publisher', 'who created', 'who made', 'who posted'];
-        const lowerQuestion = question.toLowerCase();
-        return creatorKeywords.some(keyword => lowerQuestion.includes(keyword));
-    }
-
-    /**
-     * Advanced search with specific parameters
-     */
-    async advancedSearch(question, searchOptions = {}) {
-        // Parse question for specific search intents
-        const intent = this.parseSearchIntent(question);
-        
-        const params = {
-            ...searchOptions,
-            ...intent.params
-        };
-        
-        return await this.query(question, { searchParams: params });
-    }
-
-    /**
-     * Parse question for search intent and parameters
-     */
-    parseSearchIntent(question) {
-        const lowerQuestion = question.toLowerCase();
-        const params = {};
-        
-        // Parse creator mentions
-        const creatorMatch = lowerQuestion.match(/by\s+(\w+)|from\s+(\w+)|creator\s+(\w+)/);
-        if (creatorMatch) {
-            params.creatorHandle = creatorMatch[1] || creatorMatch[2] || creatorMatch[3];
-        }
-        
-        // Parse date ranges
-        if (lowerQuestion.includes('recent') || lowerQuestion.includes('latest')) {
-            params.sortBy = 'date:desc';
-            params.limit = 3;
-        }
-        
-        // Parse content type
-        if (lowerQuestion.includes('audio') || lowerQuestion.includes('podcast')) {
-            params.hasAudio = true;
-        }
-        
-        if (lowerQuestion.includes('video')) {
-            params.recordType = 'video';
-        }
-        
-        if (lowerQuestion.includes('post')) {
-            params.recordType = 'post';
-        }
-        
-        return { params };
-    }
-
-    /**
-     * Extract applied filters for frontend display
-     */
-    extractAppliedFilters(question, searchResults, relevantTypes) {
-        const filters = {};
-        const lowerQuestion = question.toLowerCase();
-        
-        // Use the same smart keyword extraction that was used for the search
-        const searchKeywords = this.extractSearchKeywords(question);
-        if (searchKeywords && searchKeywords.trim().length > 0) {
-            filters.search = searchKeywords.trim();
-        }
-        
-        // Determine record type from search results or query analysis
-        if (searchResults.records && searchResults.records.length > 0) {
-            const recordTypes = [...new Set(searchResults.records.map(r => r.oip?.recordType).filter(Boolean))];
-            if (recordTypes.length === 1) {
-                filters.recordType = recordTypes[0];
-            }
-        } else if (relevantTypes && relevantTypes.length === 1) {
-            filters.recordType = relevantTypes[0].type;
-        }
-        
-        // Detect sorting preferences
-        if (lowerQuestion.includes('recent') || lowerQuestion.includes('latest') || lowerQuestion.includes('new')) {
-            filters.sortBy = 'date:desc';
-        }
-        
-        // Detect audio/media filters
-        if (lowerQuestion.includes('audio') || lowerQuestion.includes('podcast')) {
-            filters.hasAudio = true;
-        }
-        
-        // Generate more informative rationale based on query type
-        const sourceCount = searchResults.records ? searchResults.records.length : 0;
-        
-        if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook')) {
-            filters.rationale = `Found ${sourceCount} recipe${sourceCount === 1 ? '' : 's'}`;
-            if (filters.search) {
-                filters.rationale += ` containing "${filters.search}"`;
-            }
-        } else if (lowerQuestion.includes('exercise') || lowerQuestion.includes('workout')) {
-            filters.rationale = `Found ${sourceCount} exercise${sourceCount === 1 ? '' : 's'}`;
-            if (filters.search) {
-                filters.rationale += ` related to "${filters.search}"`;
-            }
-        } else if (lowerQuestion.includes('news') || lowerQuestion.includes('article')) {
-            filters.rationale = `Found ${sourceCount} news article${sourceCount === 1 ? '' : 's'}`;
-            if (filters.search) {
-                filters.rationale += ` about "${filters.search}"`;
-            }
-        } else {
-            filters.rationale = `Found ${sourceCount} relevant record${sourceCount === 1 ? '' : 's'}`;
-            if (filters.recordType) {
-                filters.rationale += ` of type "${filters.recordType}"`;
-            }
-            if (filters.search) {
-                filters.rationale += ` matching "${filters.search}"`;
-            }
-        }
-        
-        console.log(`[RAG] Extracted filters for "${question}":`, filters);
-        return filters;
     }
 }
 

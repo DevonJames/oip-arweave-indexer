@@ -17,7 +17,20 @@ const recordTypesForRAG = {
         enabled: true,
         priority: 8,
         description: 'Cooking recipes and food-related content',
-        contextFields: ['name', 'description', 'ingredients', 'instructions', 'cookingTime', 'servings']
+        contextFields: [
+            'name', 'description', 'ingredients', 'instructions', 
+            // Enhanced timing fields for better cooking question support
+            'cookingTime', 'cook_time_mins', 'cook_time', 'cooking_time_mins', 'cooking_time',
+            'prepTime', 'prep_time_mins', 'prep_time', 'preparation_time_mins', 'preparation_time', 
+            'totalTime', 'total_time_mins', 'total_time', 'ready_in_mins', 'ready_time',
+            'time', 'duration',
+            // Temperature and measurement fields
+            'temperature', 'oven_temp', 'cooking_temp', 'baking_temp',
+            'servings', 'serves', 'portions', 'yield', 'makes',
+            // Method and technique fields
+            'method', 'technique', 'cooking_method', 'preparation_method',
+            'difficulty', 'cuisine', 'equipment'
+        ]
     },
     
     // Exercise records - fitness and workout content
