@@ -97,8 +97,13 @@
         }
 
         .filter-group.wide {
-            flex: 2;
-            min-width: 200px;
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .filter-group.compact {
+            flex: 0 0 auto;
+            min-width: 140px;
         }
 
         .search-container {
@@ -463,12 +468,20 @@
 
         .date-inputs {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
         }
 
         .date-inputs input {
-            flex: 1;
+            width: 110px;
+            min-width: 100px;
+            flex: 0 0 auto;
+        }
+
+        .date-inputs span {
+            color: #666;
+            font-size: 0.9rem;
+            white-space: nowrap;
         }
 
         .advanced-filters {
@@ -498,6 +511,143 @@
         .no-results {
             text-align: center;
             color: #999;
+        }
+
+        /* Multi-Tag Filter Styles */
+        .multi-tag-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tag-mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tag-mode-selector label {
+            font-size: 0.9rem;
+            color: #666;
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .tag-mode-selector select {
+            padding: 4px 8px;
+            font-size: 0.85rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .tag-filters-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .tag-filter-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tag-filter-select {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .add-tag-btn, .remove-tag-btn {
+            width: 32px;
+            height: 32px;
+            border: 1px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            margin: 0;
+            padding: 0;
+        }
+
+        .add-tag-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .remove-tag-btn {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+
+        .remove-tag-btn:hover {
+            background: #dc3545;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .tag-filter-row:first-child .remove-tag-btn {
+            display: none; /* Hide remove button on first row */
+        }
+
+        /* Resolve hint styling */
+        .resolve-hint {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px dashed #6c757d;
+            color: #495057;
+            text-align: center;
+            padding: 20px;
+            cursor: help;
+        }
+
+        .resolve-hint:hover {
+            background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+            transform: none; /* Override hover transform */
+        }
+
+        /* Responsive Layout for Multi-Tag Filters */
+        @media (max-width: 768px) {
+            .filters-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .filter-group.compact,
+            .filter-group.wide {
+                min-width: 100%;
+            }
+            
+            .date-inputs input {
+                width: 120px;
+            }
+        }
+
+        /* When many tag filters are present, optimize spacing */
+        .tag-filters-container.has-many-tags {
+            gap: 6px;
+        }
+
+        .tag-filters-container.has-many-tags .tag-filter-select {
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+
+        .tag-filters-container.has-many-tags .add-tag-btn,
+        .tag-filters-container.has-many-tags .remove-tag-btn {
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
         }
 
         /* Master Audio Player */
@@ -1754,13 +1904,17 @@
                     </div>
                     
                     <div class="filter-group">
-                        <label for="voice-resolve-depth">Resolve Depth</label>
-                        <input type="number" id="voice-resolve-depth" value="2" min="0" max="5" onchange="applyVoiceFilters()">
+                        <label for="voice-resolve-depth" title="Higher values resolve more linked records. Set to 1+ to see recipe images.">
+                            Resolve Depth
+                            <span style="opacity: 0.6; font-size: 0.8rem;">(?)</span>
+                        </label>
+                        <input type="number" id="voice-resolve-depth" value="2" min="0" max="5" onchange="applyVoiceFilters()" 
+                               title="2 recommended for images. 0=fastest, 5=most complete">
                     </div>
                 </div>
                 
                 <div class="filters-row">
-                    <div class="filter-group wide">
+                    <div class="filter-group compact">
                         <label>Date Range</label>
                         <div class="date-inputs">
                             <input type="date" id="voice-date-start" onchange="applyVoiceFilters()" placeholder="Start Date">
@@ -1769,11 +1923,33 @@
                         </div>
                     </div>
                     
-                    <div class="filter-group">
-                        <label for="voice-tag-filter">Filter by Tag</label>
-                        <select id="voice-tag-filter" onchange="applyVoiceFilters()">
-                            <option value="">All Tags</option>
-                        </select>
+                    <div class="filter-group wide">
+                        <label for="multi-tag-container">Filter by Tags</label>
+                        <div id="multi-tag-container" class="multi-tag-container">
+                            <!-- Tag Match Mode Selector -->
+                            <div class="tag-mode-selector">
+                                <label for="tag-match-mode">Match:</label>
+                                <select id="tag-match-mode" onchange="applyVoiceFilters()">
+                                    <option value="OR">ANY tag (OR)</option>
+                                    <option value="AND">ALL tags (AND)</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Tag Filters Container -->
+                            <div id="tag-filters-container" class="tag-filters-container">
+                                <div class="tag-filter-row" data-tag-index="0">
+                                    <select class="tag-filter-select" onchange="onTagFilterChange(0)" data-tag-index="0">
+                                        <option value="">Select a tag...</option>
+                                    </select>
+                                    <button type="button" class="add-tag-btn" onclick="addTagFilter()" title="Add another tag filter">+</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Legacy single tag filter (hidden) for backward compatibility -->
+                            <select id="voice-tag-filter" style="display: none;">
+                                <option value="">All Tags</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 
@@ -2786,7 +2962,8 @@
                         <div class="template-info">
                             <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
                             <strong>Record Type:</strong> ${recordType}<br>
-                            <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth}
+                            <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth} 
+                            ${mediaContent.unresolvedImageDref ? '<br><span style="color: #dc3545;">⚠️ Images require resolve depth ≥ 1</span>' : ''}
                         </div>
                     </div>
                     ${renderAllTemplateData(record, templatesUsed)}
@@ -2808,24 +2985,163 @@
                 webUrl: null
             };
             
+            const recordType = record.oip?.recordType || 'unknown';
+            const recordName = record.data?.basic?.name || 'Unnamed';
+            
             // Extract from all data sections
             if (record.data) {
                 Object.keys(record.data).forEach(sectionName => {
                     if (sectionName === 'basic') return;
                     
                     const section = record.data[sectionName];
-                    extractMediaFromSection(section, content, sectionName);
+                    extractMediaFromSection(section, content, sectionName, record);
                 });
+            }
+            
+            // Fallback: If no featured image found, search more aggressively
+            if (!content.featuredImage && record.data) {
+                console.log(`[Media Detection] No image found in primary extraction for ${recordType}: "${recordName}". Trying fallback search...`);
+                const fallbackResult = findFirstImageInRecord(record);
+                
+                if (fallbackResult) {
+                    if (fallbackResult.type === 'unresolved_dref') {
+                        console.log(`[Media Detection] ⚠️ Found unresolved image dref for "${recordName}". Increase resolve depth to see images.`);
+                        content.unresolvedImageDref = fallbackResult.dref;
+                    } else {
+                        content.featuredImage = fallbackResult;
+                        console.log(`[Media Detection] ✅ Fallback found image for "${recordName}": ${content.featuredImage.url}`);
+                    }
+                } else {
+                    console.log(`[Media Detection] ❌ No image found for "${recordName}" even after fallback search`);
+                }
+            } else if (content.featuredImage) {
+                console.log(`[Media Detection] ✅ Primary extraction found image for "${recordName}": ${content.featuredImage.url}`);
             }
             
             return content;
         }
 
         /**
+         * Aggressively search for any image URL in a record (fallback method)
+         */
+        function findFirstImageInRecord(record) {
+            const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+            const basicData = record.data?.basic || {};
+            
+            // Priority order for field names (most likely to be main images first)
+            const priorityFields = ['image', 'photo', 'picture', 'thumbnail', 'featured', 'cover', 'avatar', 'img', 'imageurl', 'photourl'];
+            
+            // First pass: Look for priority fields
+            for (const priorityField of priorityFields) {
+                const result = searchForImageInSection(record.data, priorityField);
+                if (result) {
+                    console.log(`[Media Detection] Found priority image in field containing "${priorityField}": ${result}`);
+                    return {
+                        url: result,
+                        title: basicData.name || 'Image',
+                        contentType: 'image/jpeg'
+                    };
+                }
+            }
+            
+            // Second pass: Search all fields recursively
+            const anyImageUrl = searchForImageUrl(record.data);
+            if (anyImageUrl) {
+                console.log(`[Media Detection] Found image URL in fallback search: ${anyImageUrl}`);
+                return {
+                    url: anyImageUrl,
+                    title: basicData.name || 'Image',
+                    contentType: 'image/jpeg'
+                };
+            }
+            
+            // Third pass: Look for unresolved image drefs
+            const unresolvedImageDref = searchForUnresolvedImageDref(record.data);
+            if (unresolvedImageDref) {
+                console.log(`[Media Detection] Found unresolved image dref: ${unresolvedImageDref}`);
+                return {
+                    type: 'unresolved_dref',
+                    dref: unresolvedImageDref
+                };
+            }
+            
+            return null;
+            
+            // Helper function to search for images in fields with priority names
+            function searchForImageInSection(obj, priorityField, path = '') {
+                if (typeof obj === 'string' && obj.startsWith('http')) {
+                    const isImageUrl = imageExtensions.some(ext => obj.toLowerCase().includes(ext));
+                    if (isImageUrl && path.toLowerCase().includes(priorityField.toLowerCase())) {
+                        return obj;
+                    }
+                } else if (typeof obj === 'object' && obj !== null && !obj.oip) {
+                    for (const [key, value] of Object.entries(obj)) {
+                        const result = searchForImageInSection(value, priorityField, path ? `${path}.${key}` : key);
+                        if (result) return result;
+                    }
+                } else if (Array.isArray(obj)) {
+                    for (let i = 0; i < obj.length; i++) {
+                        const result = searchForImageInSection(obj[i], priorityField, `${path}[${i}]`);
+                        if (result) return result;
+                    }
+                }
+                return null;
+            }
+            
+            // Helper function for general image URL search
+            function searchForImageUrl(obj, path = '') {
+                if (typeof obj === 'string' && obj.startsWith('http')) {
+                    const isImageUrl = imageExtensions.some(ext => obj.toLowerCase().includes(ext));
+                    if (isImageUrl) {
+                        return obj;
+                    }
+                } else if (typeof obj === 'object' && obj !== null && !obj.oip) {
+                    for (const [key, value] of Object.entries(obj)) {
+                        const result = searchForImageUrl(value, path ? `${path}.${key}` : key);
+                        if (result) return result;
+                    }
+                } else if (Array.isArray(obj)) {
+                    for (let i = 0; i < obj.length; i++) {
+                        const result = searchForImageUrl(obj[i], `${path}[${i}]`);
+                        if (result) return result;
+                    }
+                }
+                return null;
+            }
+            
+            // Helper function to search for unresolved image drefs
+            function searchForUnresolvedImageDref(obj, path = '') {
+                if (typeof obj === 'string' && obj.startsWith('did:arweave:')) {
+                    // Check if the field name suggests it's an image
+                    const imageFieldNames = ['image', 'photo', 'picture', 'thumbnail', 'avatar', 'icon', 'cover', 'featured'];
+                    const isImageField = imageFieldNames.some(name => path.toLowerCase().includes(name.toLowerCase()));
+                    
+                    if (isImageField) {
+                        return obj;
+                    }
+                } else if (typeof obj === 'object' && obj !== null && !obj.oip) {
+                    for (const [key, value] of Object.entries(obj)) {
+                        const result = searchForUnresolvedImageDref(value, path ? `${path}.${key}` : key);
+                        if (result) return result;
+                    }
+                } else if (Array.isArray(obj)) {
+                    for (let i = 0; i < obj.length; i++) {
+                        const result = searchForUnresolvedImageDref(obj[i], `${path}[${i}]`);
+                        if (result) return result;
+                    }
+                }
+                return null;
+            }
+        }
+
+        /**
          * Extract media from a specific data section
          */
-        function extractMediaFromSection(section, content, sectionName) {
+        function extractMediaFromSection(section, content, sectionName, record = null) {
             if (!section || typeof section !== 'object') return;
+            
+            // Get basic data for image titles
+            const basicData = record?.data?.basic || {};
             
             Object.keys(section).forEach(fieldName => {
                 const value = section[fieldName];
@@ -2836,11 +3152,14 @@
                     const embedData = value.data[embedType];
                     
                     if (embedType === 'image' && embedData?.webUrl) {
-                        if (!content.featuredImage) content.featuredImage = {
-                            url: embedData.webUrl,
-                            title: value.data.basic?.name || 'Image',
-                            contentType: embedData.contentType
-                        };
+                        if (!content.featuredImage) {
+                            content.featuredImage = {
+                                url: embedData.webUrl,
+                                title: value.data.basic?.name || 'Image',
+                                contentType: embedData.contentType
+                            };
+                            console.log(`[Media Detection] ✅ Found resolved image dref at ${sectionName}.${fieldName}: ${embedData.webUrl}`);
+                        }
                     } else if (embedType === 'audio' && embedData?.webUrl) {
                         content.audioItems.push({
                             url: embedData.webUrl,
@@ -2889,14 +3208,47 @@
                     content.webUrl = value;
                 }
                 
-                // Handle direct image URLs (for unresolved cases)
-                else if (fieldName.toLowerCase().includes('image') && typeof value === 'string' && 
-                         (value.startsWith('http') && (value.includes('.jpg') || value.includes('.png') || value.includes('.gif')))) {
-                    if (!content.featuredImage) content.featuredImage = {
-                        url: value,
-                        title: 'Image',
-                        contentType: 'image/jpeg'
-                    };
+                // Enhanced image URL detection for recipes and other records
+                else if (typeof value === 'string' && value.startsWith('http')) {
+                    // Check if it's an image URL by extension
+                    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+                    const isImageUrl = imageExtensions.some(ext => value.toLowerCase().includes(ext));
+                    
+                    // Check if field name suggests it's an image
+                    const imageFieldNames = ['image', 'photo', 'picture', 'thumbnail', 'avatar', 'icon', 'cover', 'featured'];
+                    const isImageField = imageFieldNames.some(name => fieldName.toLowerCase().includes(name));
+                    
+                                         // For recipes, be even more permissive - any URL ending in image extension
+                     const isRecipeContext = sectionName === 'recipe' || sectionName === 'food';
+                     
+                     // Additional recipe-specific field names
+                     const recipeImageFields = ['photo', 'picture', 'img', 'imageurl', 'photourl', 'pictureurl'];
+                     const isRecipeImageField = recipeImageFields.some(name => fieldName.toLowerCase().includes(name));
+                    
+                                                              if ((isImageUrl && (isImageField || isRecipeImageField || isRecipeContext)) || 
+                         ((isImageField || isRecipeImageField) && isImageUrl)) {
+                        if (!content.featuredImage) content.featuredImage = {
+                            url: value,
+                            title: basicData?.name || 'Image',
+                            contentType: 'image/jpeg'
+                        };
+                    }
+                }
+                
+                // Handle webUrl fields that point to images (common in recipes)
+                else if (fieldName === 'webUrl' && typeof value === 'string' && value.startsWith('http')) {
+                    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+                    const isImageUrl = imageExtensions.some(ext => value.toLowerCase().includes(ext));
+                    
+                    if (isImageUrl && !content.featuredImage) {
+                        content.featuredImage = {
+                            url: value,
+                            title: basicData?.name || 'Image',
+                            contentType: 'image/jpeg'
+                        };
+                    } else {
+                        content.webUrl = value;
+                    }
                 }
             });
         }
@@ -2940,6 +3292,15 @@
                             </div>
                         </div>
                         <div class="media-badge">🎵 Audio</div>
+                    </div>
+                `;
+            } else if (mediaContent.unresolvedImageDref) {
+                return `
+                    <div class="media-preview placeholder-preview">
+                        <div class="preview-placeholder resolve-hint">
+                            🖼️ Image<br>
+                            <small style="font-size: 0.7rem; opacity: 0.8;">Increase Resolve Depth to see image</small>
+                        </div>
                     </div>
                 `;
             } else {
@@ -4233,6 +4594,9 @@
             updateAIStatus('Initializing...');
             
             try {
+                // Initialize multi-tag filtering system
+                clearAllTagFilters();
+                
                 // Initialize STT features
                 
                 updateAIStatus('Ready to answer questions!');
@@ -4242,7 +4606,7 @@
                 // Load initial records for voice tab
                 await loadVoiceRecords(true);
                 
-                console.log('[Chat] AI chat features initialized successfully');
+                console.log('[Chat] AI chat features initialized successfully with multi-tag system');
                 
             } catch (error) {
                 console.error('[Chat] Initialization failed:', error);
@@ -4593,7 +4957,7 @@
             // Update the enhanced unified filters state
             Object.assign(currentFilters, filters);
             
-            // Update the UI elements
+            // Update the UI elements for basic filters
             if (filters.search) {
                 document.getElementById('voice-search-input').value = filters.search;
             }
@@ -4602,6 +4966,24 @@
             }
             if (filters.sortBy) {
                 document.getElementById('voice-sort-by').value = filters.sortBy;
+            }
+            
+            // Handle enhanced multi-tag filtering from AI
+            if (filters.tags && filters.tagsMatchMode) {
+                console.log(`[Enhanced AI] Applying multi-tag filter: ${filters.tags} (${filters.tagsMatchMode} mode)`);
+                // Store the AI-applied tag filters separately since UI doesn't support multi-tag
+                currentFilters.aiTags = filters.tags;
+                currentFilters.aiTagsMatchMode = filters.tagsMatchMode;
+                
+                // Clear the single tag filter since we're using AI multi-tag
+                currentFilters.tag = '';
+                document.getElementById('voice-tag-filter').value = '';
+            } else if (filters.tag) {
+                // Handle single tag from regular filtering
+                currentFilters.tag = filters.tag;
+                if (document.getElementById('voice-tag-filter')) {
+                    document.getElementById('voice-tag-filter').value = filters.tag;
+                }
             }
             
             // Update applied filters display
@@ -4633,6 +5015,23 @@
             }
             if (filters.sortBy && filters.sortBy !== 'inArweaveBlock:desc') {
                 addFilterChip(container, 'Sort', filters.sortBy.replace(':', ' '));
+                hasFilters = true;
+            }
+            // Show manual multi-tag filters first (highest priority)
+            if (currentFilters.tags && currentFilters.tagsMatchMode) {
+                const tagMode = currentFilters.tagsMatchMode === 'AND' ? 'ALL' : 'ANY';
+                addFilterChip(container, `Tags (${tagMode})`, currentFilters.tags.replace(/,/g, ', '));
+                hasFilters = true;
+            } 
+            // Show AI-applied filters if no manual filters
+            else if (filters.tags && filters.tagsMatchMode) {
+                const tagMode = filters.tagsMatchMode === 'AND' ? 'ALL' : 'ANY';
+                addFilterChip(container, `AI Tags (${tagMode})`, filters.tags.replace(/,/g, ', '));
+                hasFilters = true;
+            } 
+            // Show legacy single tag filter (fallback)
+            else if (filters.tag) {
+                addFilterChip(container, 'Tag', filters.tag);
                 hasFilters = true;
             }
             
@@ -5046,6 +5445,130 @@
         // Voice Filtering Functions
         // ====== ENHANCED VOICE FILTER FUNCTIONS ======
         
+        // Multi-Tag Filter Management
+        let tagFilterIndex = 0;
+        
+        function addTagFilter() {
+            tagFilterIndex++;
+            const container = document.getElementById('tag-filters-container');
+            
+            const newRow = document.createElement('div');
+            newRow.className = 'tag-filter-row';
+            newRow.setAttribute('data-tag-index', tagFilterIndex);
+            
+            newRow.innerHTML = `
+                <select class="tag-filter-select" onchange="onTagFilterChange(${tagFilterIndex})" data-tag-index="${tagFilterIndex}">
+                    <option value="">Select a tag...</option>
+                </select>
+                <button type="button" class="remove-tag-btn" onclick="removeTagFilter(${tagFilterIndex})" title="Remove this tag filter">×</button>
+            `;
+            
+            container.appendChild(newRow);
+            updateAllTagDropdowns(); // This will handle compact styling
+            console.log('[Multi-Tag] Added tag filter', tagFilterIndex, 'Total filters:', document.querySelectorAll('.tag-filter-select').length);
+        }
+        
+        function removeTagFilter(index) {
+            const row = document.querySelector(`[data-tag-index="${index}"]`);
+            if (row) {
+                row.remove();
+                updateAllTagDropdowns(); // This will handle compact styling
+                applyVoiceFilters();
+                console.log('[Multi-Tag] Removed tag filter', index, 'Remaining filters:', document.querySelectorAll('.tag-filter-select').length);
+            }
+        }
+        
+        function onTagFilterChange(index) {
+            console.log('[Multi-Tag] Tag filter changed:', index);
+            updateAllTagDropdowns();
+            applyVoiceFilters();
+        }
+        
+        function getSelectedTags() {
+            const selects = document.querySelectorAll('.tag-filter-select');
+            const selectedTags = [];
+            
+            selects.forEach(select => {
+                if (select.value && select.value.trim()) {
+                    selectedTags.push(select.value.trim());
+                }
+            });
+            
+            return selectedTags;
+        }
+        
+        function updateAllTagDropdowns() {
+            const selectedTags = getSelectedTags();
+            const selects = document.querySelectorAll('.tag-filter-select');
+            const container = document.getElementById('tag-filters-container');
+            
+            // Add compact styling when there are many tag filters
+            if (selects.length >= 3) {
+                container.classList.add('has-many-tags');
+            } else {
+                container.classList.remove('has-many-tags');
+            }
+            
+            selects.forEach(select => {
+                const currentValue = select.value;
+                const currentIndex = parseInt(select.getAttribute('data-tag-index'));
+                
+                // Clear and repopulate options
+                select.innerHTML = '<option value="">Select a tag...</option>';
+                
+                availableTags.forEach(tag => {
+                    // Only add tags that aren't already selected by other dropdowns
+                    const isSelectedElsewhere = selectedTags.some(selectedTag => 
+                        selectedTag === tag.tag && select.value !== tag.tag
+                    );
+                    
+                    if (!isSelectedElsewhere) {
+                        const option = document.createElement('option');
+                        option.value = tag.tag;
+                        option.textContent = `${tag.tag} (${tag.count})`;
+                        select.appendChild(option);
+                    }
+                });
+                
+                // Restore the current value if it's still valid
+                if (currentValue && !selectedTags.includes(currentValue)) {
+                    select.value = currentValue;
+                } else if (currentValue && selectedTags.includes(currentValue)) {
+                    // If the value is selected elsewhere, keep it selected here too (it's this dropdown's value)
+                    const thisTagSelected = select.value === currentValue;
+                    if (thisTagSelected) {
+                        select.value = currentValue;
+                    }
+                }
+            });
+            
+            console.log('[Multi-Tag] Updated dropdowns. Selected tags:', selectedTags, 'Compact mode:', selects.length >= 3);
+        }
+        
+        function clearAllTagFilters() {
+            // Reset to single empty tag filter
+            const container = document.getElementById('tag-filters-container');
+            
+            // Remove compact styling
+            container.classList.remove('has-many-tags');
+            
+            container.innerHTML = `
+                <div class="tag-filter-row" data-tag-index="0">
+                    <select class="tag-filter-select" onchange="onTagFilterChange(0)" data-tag-index="0">
+                        <option value="">Select a tag...</option>
+                    </select>
+                    <button type="button" class="add-tag-btn" onclick="addTagFilter()" title="Add another tag filter">+</button>
+                </div>
+            `;
+            
+            // Reset the match mode
+            document.getElementById('tag-match-mode').value = 'OR';
+            
+            tagFilterIndex = 0;
+            updateAllTagDropdowns(); // This will ensure compact styling stays off
+            console.log('[Multi-Tag] Cleared all tag filters');
+        }
+        
         function applyVoiceFilters() {
             collectVoiceFilters();
             loadVoiceRecords(true);
@@ -5059,9 +5582,33 @@
             currentFilters.resolveDepth = parseInt(document.getElementById('voice-resolve-depth').value) || 2;
             currentFilters.dateStart = document.getElementById('voice-date-start').value;
             currentFilters.dateEnd = document.getElementById('voice-date-end').value;
-            currentFilters.tag = document.getElementById('voice-tag-filter').value;
             currentFilters.includeSigs = document.getElementById('voice-include-sigs-toggle').classList.contains('active');
             currentFilters.includePubKeys = document.getElementById('voice-include-pubkeys-toggle').classList.contains('active');
+            
+            // Collect multi-tag filters (prioritize user manual selection over AI)
+            const selectedTags = getSelectedTags();
+            const tagMatchMode = document.getElementById('tag-match-mode').value;
+            
+            if (selectedTags.length > 0) {
+                // Use manual multi-tag selection
+                currentFilters.tags = selectedTags.join(',');
+                currentFilters.tagsMatchMode = tagMatchMode;
+                currentFilters.tag = ''; // Clear legacy single tag
+                
+                // Clear AI tags since user is manually filtering
+                delete currentFilters.aiTags;
+                delete currentFilters.aiTagsMatchMode;
+                
+                console.log('[Filters] Using manual multi-tag filters:', selectedTags, 'mode:', tagMatchMode);
+            } else {
+                // No manual tags selected, keep AI tags if they exist
+                if (!currentFilters.aiTags) {
+                    currentFilters.tags = '';
+                    currentFilters.tagsMatchMode = '';
+                    currentFilters.tag = '';
+                }
+                console.log('[Filters] No manual tags, keeping AI tags:', currentFilters.aiTags);
+            }
             
             // Update debug setting
             showDebugInfo = document.getElementById('show-template-debug')?.checked || false;
@@ -5082,9 +5629,18 @@
             document.getElementById('voice-resolve-depth').value = '2';
             document.getElementById('voice-date-start').value = '';
             document.getElementById('voice-date-end').value = '';
-            document.getElementById('voice-tag-filter').value = '';
             document.getElementById('voice-include-sigs-toggle').classList.remove('active');
             document.getElementById('voice-include-pubkeys-toggle').classList.remove('active');
+            
+            // Clear multi-tag filters
+            clearAllTagFilters();
+            
+            // Clear AI-applied multi-tag filters
+            delete currentFilters.aiTags;
+            delete currentFilters.aiTagsMatchMode;
+            delete currentFilters.tags;
+            delete currentFilters.tagsMatchMode;
+            delete currentFilters.tag;
             
             // Clear applied filters display
             document.getElementById('applied-filters-display').classList.add('hidden');
@@ -5179,8 +5735,21 @@
                 params.append('dateEnd', dateToUnixTime(currentFilters.dateEnd));
             }
             
-            if (currentFilters.tag) {
+            // Handle tag filters (prioritize manual selection over AI)
+            if (currentFilters.tags && currentFilters.tagsMatchMode) {
+                // Use manual multi-tag selection (highest priority)
+                params.append('tags', currentFilters.tags);
+                params.append('tagsMatchMode', currentFilters.tagsMatchMode);
+                console.log(`[Enhanced API] Using manual multi-tag filter: ${currentFilters.tags} (${currentFilters.tagsMatchMode})`);
+            } else if (currentFilters.aiTags && currentFilters.aiTagsMatchMode) {
+                // Use AI-applied multi-tag filters (fallback)
+                params.append('tags', currentFilters.aiTags);
+                params.append('tagsMatchMode', currentFilters.aiTagsMatchMode);
+                console.log(`[Enhanced API] Using AI multi-tag filter: ${currentFilters.aiTags} (${currentFilters.aiTagsMatchMode})`);
+            } else if (currentFilters.tag) {
+                // Fallback to legacy single tag
                 params.append('tags', currentFilters.tag);
+                console.log(`[Enhanced API] Using legacy single tag: ${currentFilters.tag}`);
             }
 
             console.log('[API] Building request with resolveDepth:', currentFilters.resolveDepth);
@@ -5223,18 +5792,29 @@
         function updateVoiceTagFilter(tagSummary) {
             if (!tagSummary) return;
             
-            const select = document.getElementById('voice-tag-filter');
-            const currentValue = select.value;
-            select.innerHTML = '<option value="">All Tags</option>';
+            // Store available tags globally for multi-tag system
+            availableTags = tagSummary;
             
-            tagSummary.forEach(tag => {
-                const option = document.createElement('option');
-                option.value = tag.tag;
-                option.textContent = `${tag.tag} (${tag.count})`;
-                select.appendChild(option);
-            });
+            // Update legacy single tag filter (hidden, for backward compatibility)
+            const legacySelect = document.getElementById('voice-tag-filter');
+            if (legacySelect) {
+                const currentValue = legacySelect.value;
+                legacySelect.innerHTML = '<option value="">All Tags</option>';
+                
+                tagSummary.forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag.tag;
+                    option.textContent = `${tag.tag} (${tag.count})`;
+                    legacySelect.appendChild(option);
+                });
+                
+                legacySelect.value = currentValue;
+            }
             
-            select.value = currentValue;
+            // Update all multi-tag dropdowns
+            updateAllTagDropdowns();
+            
+            console.log('[Multi-Tag] Updated tag filter with', tagSummary.length, 'available tags');
         }
 
         function updateVoiceLoadMoreButton() {
