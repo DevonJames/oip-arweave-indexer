@@ -758,7 +758,8 @@ class RAGService {
      */
     async query(question, options = {}) {
         try {
-            console.log(`[RAG] Processing query: ${question}`);
+            console.log(`[RAG] 🔍 Processing query: "${question}"`);
+            console.log(`[RAG] 📊 Using structured field extraction: ${options.useFieldExtraction !== false ? 'ENABLED' : 'DISABLED'}`);
             
             // Step 1: Analyze question to determine relevant record types
             const relevantTypes = this.analyzeQuestionForRecordTypes(question);
@@ -783,8 +784,8 @@ class RAGService {
             // Step 4: Build context from search results
             const context = await this.buildContext(searchResults);
             
-            // Step 5: Generate LLM response with context
-            const response = await this.generateResponse(question, context, options.model);
+            // Step 5: Generate LLM response with context (enhanced with structured data)
+            const response = await this.generateResponse(question, context, options.model, searchResults);
             
                     return {
             answer: response,
@@ -792,6 +793,7 @@ class RAGService {
             context_used: context.length > 0,
             model: options.model || this.defaultModel,
             search_results_count: searchResults.totalResults || 0,
+            search_results: searchResults.records, // Include actual records for frontend analysis
             relevant_types: relevantTypes.map(rt => rt.type),
             applied_filters: this.extractAppliedFilters(question, searchResults, relevantTypes)
         };
@@ -1250,10 +1252,20 @@ class RAGService {
 
     /**
      * Generate response using Ollama with context
+     * Enhanced with structured data field extraction
      */
-    async generateResponse(question, context, model = null) {
+    async generateResponse(question, context, model = null, searchResults = null) {
+        // First try to extract direct field-based answers from structured data
+        if (searchResults && searchResults.records && searchResults.records.length > 0) {
+            console.log(`[RAG] Attempting field-based answer extraction for: "${question}"`);
+            const fieldAnswer = this.extractStructuredFieldAnswer(question, searchResults.records);
+            if (fieldAnswer) {
+                console.log(`[RAG] ✅ Found direct field answer: "${fieldAnswer}"`);
+                return fieldAnswer;
+            }
+        }
+
         const modelName = model || this.defaultModel;
-        
         const prompt = this.buildPrompt(question, context);
         
         try {
@@ -1282,6 +1294,212 @@ class RAGService {
                 return "I don't have specific information about this in my knowledge base. Could you provide more details or try a different question?";
             }
         }
+    }
+
+    /**
+     * Extract answers directly from structured record data using field mapping
+     */
+    extractStructuredFieldAnswer(question, records) {
+        const lowerQuestion = question.toLowerCase();
+        console.log(`[RAG] Analyzing question for field extraction: "${question}"`);
+        
+        // Get the first record (should be most relevant after filtering)
+        const record = records[0];
+        if (!record || !record.data) {
+            console.log(`[RAG] No structured data available for field extraction`);
+            return null;
+        }
+
+        const recordType = record.oip?.recordType;
+        const recordName = record.data?.basic?.name || 'record';
+        
+        console.log(`[RAG] Analyzing ${recordType} record: "${recordName}"`);
+        console.log(`[RAG] Available data sections:`, Object.keys(record.data));
+
+        // Recipe-specific field extraction
+        if (recordType === 'recipe' || Object.keys(record.data).includes('recipe')) {
+            const recipeData = record.data.recipe || {};
+            console.log(`[RAG] Recipe data fields:`, Object.keys(recipeData));
+            
+            // Cooking time questions
+            if ((lowerQuestion.includes('how long') || lowerQuestion.includes('time')) && 
+                (lowerQuestion.includes('cook') || lowerQuestion.includes('bake') || lowerQuestion.includes('grill'))) {
+                
+                                 // Check for specific timing fields (prioritize cook time for cooking questions)
+                 const timeFields = ['cook_time_mins', 'cooking_time', 'cookingTime', 'prep_time_mins', 'total_time_mins', 'bake_time_mins', 'grill_time_mins'];
+                 
+                 console.log(`[RAG] Looking for timing fields in recipe data:`, timeFields);
+                 console.log(`[RAG] Recipe data contains:`, Object.keys(recipeData));
+                 
+                 for (const field of timeFields) {
+                     const value = recipeData[field];
+                     console.log(`[RAG] Checking field '${field}': ${value} (type: ${typeof value})`);
+                     
+                     if (value !== undefined && value !== null && value !== '') {
+                         console.log(`[RAG] ✅ FOUND timing field '${field}' with value: ${value}`);
+                         
+                         if (field.includes('cook') && !field.includes('prep')) {
+                             const answer = `According to the ${recordName} recipe, it needs to cook for ${value} minutes.`;
+                             console.log(`[RAG] 🎯 DIRECT ANSWER: "${answer}"`);
+                             return answer;
+                         } else if (field.includes('prep')) {
+                             const answer = `According to the ${recordName} recipe, prep time is ${value} minutes.`;
+                             console.log(`[RAG] 🎯 DIRECT ANSWER: "${answer}"`);
+                             return answer;
+                         } else if (field.includes('total')) {
+                             const answer = `According to the ${recordName} recipe, total time is ${value} minutes.`;
+                             console.log(`[RAG] 🎯 DIRECT ANSWER: "${answer}"`);
+                             return answer;
+                         } else if (field.includes('bake') || field.includes('grill')) {
+                             const answer = `According to the ${recordName} recipe, it needs to ${field.includes('bake') ? 'bake' : 'grill'} for ${value} minutes.`;
+                             console.log(`[RAG] 🎯 DIRECT ANSWER: "${answer}"`);
+                             return answer;
+                         }
+                     }
+                 }
+                
+                // Look for instructions that contain timing information
+                if (recipeData.instructions) {
+                    const instructions = recipeData.instructions;
+                    const timeMatches = instructions.match(/(\d+)(?:[-–](\d+))?\s*(?:minutes?|mins?)/gi);
+                    if (timeMatches) {
+                        console.log(`[RAG] ✅ Found timing in instructions: ${timeMatches[0]}`);
+                        return `According to the ${recordName} recipe instructions, ${timeMatches[0].toLowerCase()}.`;
+                    }
+                }
+            }
+            
+            // Temperature questions
+            if (lowerQuestion.includes('temperature') || lowerQuestion.includes('degrees') || lowerQuestion.includes('°')) {
+                const tempFields = ['temperature', 'oven_temp', 'cooking_temp', 'cook_temperature'];
+                
+                for (const field of tempFields) {
+                    if (recipeData[field] !== undefined && recipeData[field] !== null) {
+                        const tempValue = recipeData[field];
+                        console.log(`[RAG] ✅ Found temperature field ${field}: ${tempValue}`);
+                        return `According to the ${recordName} recipe, cook at ${tempValue}°F.`;
+                    }
+                }
+            }
+            
+            // Serving size questions
+            if (lowerQuestion.includes('serving') || lowerQuestion.includes('portion') || lowerQuestion.includes('how many people')) {
+                const servingFields = ['servings', 'serves', 'portions', 'yield'];
+                
+                for (const field of servingFields) {
+                    if (recipeData[field] !== undefined && recipeData[field] !== null) {
+                        const servingValue = recipeData[field];
+                        console.log(`[RAG] ✅ Found serving field ${field}: ${servingValue}`);
+                        return `The ${recordName} recipe serves ${servingValue} people.`;
+                    }
+                }
+            }
+            
+            // Ingredient questions
+            if (lowerQuestion.includes('ingredient') || lowerQuestion.includes('what do i need') || lowerQuestion.includes('what needs')) {
+                if (recipeData.ingredients) {
+                    console.log(`[RAG] ✅ Found ingredients field`);
+                    const ingredients = Array.isArray(recipeData.ingredients) ? 
+                        recipeData.ingredients.join(', ') : 
+                        recipeData.ingredients;
+                    return `For the ${recordName} recipe, you need: ${ingredients.substring(0, 300)}${ingredients.length > 300 ? '...' : ''}`;
+                }
+                
+                // Check for ingredient arrays or amounts
+                const ingredientFields = Object.keys(recipeData).filter(key => 
+                    key.toLowerCase().includes('ingredient') || key.toLowerCase().includes('amount')
+                );
+                
+                if (ingredientFields.length > 0) {
+                    console.log(`[RAG] ✅ Found ingredient-related fields:`, ingredientFields);
+                    const ingredientData = ingredientFields.map(field => recipeData[field]).join(', ');
+                    return `For the ${recordName} recipe, you need: ${ingredientData.substring(0, 300)}${ingredientData.length > 300 ? '...' : ''}`;
+                }
+            }
+            
+                             // Fallback: Look for ANY numeric field that might contain timing information
+                 console.log(`[RAG] No exact field match, trying fallback search for timing values...`);
+                 for (const [fieldName, fieldValue] of Object.entries(recipeData)) {
+                     if (typeof fieldValue === 'number' && fieldValue > 0 && fieldValue < 1000) {
+                         if (fieldName.toLowerCase().includes('time') || 
+                             fieldName.toLowerCase().includes('cook') || 
+                             fieldName.toLowerCase().includes('bake') ||
+                             fieldName.toLowerCase().includes('min')) {
+                             console.log(`[RAG] 🔍 Fallback found timing field '${fieldName}': ${fieldValue}`);
+                             const answer = `According to the ${recordName} recipe, ${fieldName.replace(/_/g, ' ')}: ${fieldValue} minutes.`;
+                             console.log(`[RAG] 🎯 FALLBACK ANSWER: "${answer}"`);
+                             return answer;
+                         }
+                     }
+                 }
+                 
+                 console.log(`[RAG] Recipe question didn't match any specific fields for: "${question}"`);
+             }
+        
+        // Workout/Exercise specific field extraction
+        else if (recordType === 'workout' || recordType === 'exercise' || Object.keys(record.data).includes('workout')) {
+            const workoutData = record.data.workout || record.data.exercise || {};
+            console.log(`[RAG] Workout data fields:`, Object.keys(workoutData));
+            
+            // Duration questions
+            if (lowerQuestion.includes('how long') || lowerQuestion.includes('duration') || lowerQuestion.includes('time')) {
+                const durationFields = ['duration', 'time', 'length', 'workout_time'];
+                
+                for (const field of durationFields) {
+                    if (workoutData[field] !== undefined && workoutData[field] !== null) {
+                        const duration = workoutData[field];
+                        console.log(`[RAG] ✅ Found duration field ${field}: ${duration}`);
+                        return `The ${recordName} workout takes ${duration} minutes.`;
+                    }
+                }
+            }
+            
+            // Difficulty questions
+            if (lowerQuestion.includes('difficult') || lowerQuestion.includes('level') || lowerQuestion.includes('beginner') || lowerQuestion.includes('advanced')) {
+                const difficultyFields = ['difficulty', 'level', 'difficulty_level'];
+                
+                for (const field of difficultyFields) {
+                    if (workoutData[field] !== undefined && workoutData[field] !== null) {
+                        const difficulty = workoutData[field];
+                        console.log(`[RAG] ✅ Found difficulty field ${field}: ${difficulty}`);
+                        return `The ${recordName} workout is ${difficulty} level.`;
+                    }
+                }
+            }
+        }
+        
+        // General field extraction for any record type
+        else {
+            console.log(`[RAG] Attempting general field extraction for ${recordType} record`);
+            
+            // Look through all data sections for potential answers
+            for (const [sectionName, sectionData] of Object.entries(record.data)) {
+                if (sectionName === 'basic' || !sectionData || typeof sectionData !== 'object') continue;
+                
+                console.log(`[RAG] Checking section: ${sectionName} with fields:`, Object.keys(sectionData));
+                
+                // Time-related questions
+                if (lowerQuestion.includes('time') || lowerQuestion.includes('duration') || lowerQuestion.includes('how long')) {
+                    const timeFields = Object.keys(sectionData).filter(key => 
+                        key.toLowerCase().includes('time') || 
+                        key.toLowerCase().includes('duration') ||
+                        key.toLowerCase().includes('mins') ||
+                        key.toLowerCase().includes('minutes')
+                    );
+                    
+                    for (const field of timeFields) {
+                        const value = sectionData[field];
+                        if (value !== undefined && value !== null) {
+                            console.log(`[RAG] ✅ Found time-related field ${field}: ${value}`);
+                            return `According to the ${recordName}, ${field.replace(/_/g, ' ')}: ${value}${typeof value === 'number' && field.includes('min') ? ' minutes' : ''}`;
+                        }
+                    }
+                }
+            }
+        }
+        
+        console.log(`[RAG] No specific field mapping found for question: "${question}"`);
+        return null;
     }
 
     /**
