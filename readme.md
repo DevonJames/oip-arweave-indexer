@@ -336,12 +336,30 @@ Query Parameters:
 #### Get Records
 `GET /api/records`
 
-Query Parameters:
-- `resolveDepth` - Resolve embedded records (0-3)
-- `sortBy` - Sort field (e.g., `inArweaveBlock:desc`)
-- `limit` - Number of results
-- `recordType` - Filter by type
-- `creatorHandle` - Filter by creator
+**Enhanced Query System**: The `/api/records` endpoint provides powerful search and filtering capabilities with 25+ parameters for precise data retrieval.
+
+**Key Features:**
+- **Advanced Tag Filtering**: Support for both AND/OR tag matching modes
+- **Full-Text Search**: Search across names, descriptions, and tags
+- **Multi-Field Sorting**: Sort by relevance, date, block height, tag matches, and more
+- **Creator Filtering**: Filter by creator handle, name, or DID address
+- **Date Range Filtering**: Time-based record filtering
+- **Media Filtering**: Filter records by audio/video content presence
+- **Reference Resolution**: Automatically resolve embedded record references
+
+**Quick Examples:**
+```bash
+# Search for cooking recipes with multiple tags (AND mode)
+GET /api/records?tags=greek,grilling&tagsMatchMode=AND&recordType=recipe&sortBy=tags:desc
+
+# Full-text search with date filtering
+GET /api/records?search=climate change&dateStart=2024-01-01&sortBy=date:desc
+
+# Get records by specific creator with audio content
+GET /api/records?creatorHandle=chef_alex&hasAudio=true&limit=20
+```
+
+**📖 Complete Documentation**: See **[API Records Endpoint Documentation](docs/API_RECORDS_ENDPOINT_DOCUMENTATION.md)** for detailed information on all 25+ parameters, advanced filtering options, response formats, and performance optimization tips.
 
 ### Publishing Endpoints
 

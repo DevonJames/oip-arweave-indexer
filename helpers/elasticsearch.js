@@ -848,6 +848,7 @@ async function getRecords(queryParams) {
         didTx,
         didTxRef,
         tags,
+        tagsMatchMode = 'OR', // New parameter: 'AND' or 'OR' (default: 'OR' for backward compatibility)
         sortBy,
         recordType,
         limit,
@@ -1018,14 +1019,27 @@ async function getRecords(queryParams) {
             console.log('after filtering by url:', url, 'there are', records.length, 'records');
         }
         if (tags != undefined) {
-            console.log('tags to match:', tags);
+            console.log('tags to match:', tags, 'match mode:', tagsMatchMode);
             const tagArray = tags.split(',').map(tag => tag.trim());
             console.log('type of tags:', typeof tagArray);
-            records = records.filter(record => {
-                return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
-            });
+            
+            // Filter records based on match mode (AND vs OR)
+            if (tagsMatchMode.toUpperCase() === 'AND') {
+                // AND behavior: record must have ALL specified tags
+                records = records.filter(record => {
+                    if (!record.data.basic || !record.data.basic.tagItems) return false;
+                    return tagArray.every(tag => record.data.basic.tagItems.includes(tag));
+                });
+                console.log('after filtering by tags (AND mode), there are', records.length, 'records');
+            } else {
+                // OR behavior: record must have at least ONE of the specified tags (default)
+                records = records.filter(record => {
+                    return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
+                });
+                console.log('after filtering by tags (OR mode), there are', records.length, 'records');
+            }
 
-            // Sort the records by the number of matching tags and generate a score
+            // Add tag match scores to all filtered records
             records = records.map(record => {
                 const countMatches = (record) => {
                     if (record.data && record.data.basic && record.data.basic.tagItems) {
@@ -1034,13 +1048,15 @@ async function getRecords(queryParams) {
                     return 0;
                 };
 
-            const matches = countMatches(record);
-            const score = (matches / tagArray.length).toFixed(3); // Calculate the score as a ratio of matches to total tags and trim to three decimal places
-            return { ...record, score }; // Attach the score to the record
+                const matches = countMatches(record);
+                const score = (matches / tagArray.length).toFixed(3); // Calculate the score as a ratio of matches to total tags and trim to three decimal places
+                return { ...record, score }; // Attach the score to the record
             });
 
-            records.sort((a, b) => b.score - a.score); // Sort in descending order by score
-            console.log('after filtering by tags, there are', records.length, 'records', records[1], records[records.length - 1]);
+            // Only sort automatically by score if sortBy is not specified or is not 'tags'
+            if (!sortBy || sortBy.split(':')[0] !== 'tags') {
+                records.sort((a, b) => b.score - a.score); // Sort in descending order by score
+            }
         }
 
         // search records by search parameter
@@ -1211,6 +1227,22 @@ async function getRecords(queryParams) {
                             return (b.score || 0) - (a.score || 0);
                         }
                     });
+                }
+
+                if (fieldToSortBy === 'tags') {
+                    // Only allow 'tags' sorting when tags parameter is provided
+                    if (tags != undefined) {
+                        recordsToSort.sort((a, b) => {
+                            if (order === 'asc') {
+                                return (a.score || 0) - (b.score || 0);
+                            } else {
+                                return (b.score || 0) - (a.score || 0);
+                            }
+                        });
+                        console.log('sorted by tags match score (' + order + ')');
+                    } else {
+                        console.log('Warning: sortBy=tags specified but no tags parameter provided - skipping tags sort');
+                    }
                 }
             }
         };
