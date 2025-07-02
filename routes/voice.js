@@ -481,6 +481,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     sources: ragResponse.sources,
                     context_used: ragResponse.context_used,
                     search_results_count: ragResponse.search_results_count,
+                    search_results: ragResponse.search_results, // Include actual search results for debugging
                     applied_filters: ragResponse.applied_filters || {}
                 });
 
@@ -498,6 +499,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     sources: ragResponse.sources,
                     context_used: ragResponse.context_used,
                     search_results_count: ragResponse.search_results_count,
+                    search_results: ragResponse.search_results, // Include actual search results for debugging
                     applied_filters: ragResponse.applied_filters || {}
                 });
             }
@@ -512,6 +514,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 sources: ragResponse.sources,
                 context_used: ragResponse.context_used,
                 search_results_count: ragResponse.search_results_count,
+                search_results: ragResponse.search_results, // Include actual search results for debugging
                 applied_filters: ragResponse.applied_filters || {}
             });
         }
@@ -651,6 +654,7 @@ router.post('/rag', async (req, res) => {
             sources: ragResponse.sources,
             context_used: ragResponse.context_used,
             search_results_count: ragResponse.search_results_count,
+            search_results: ragResponse.search_results, // Include actual search results for debugging
             model_used: ragResponse.model,
             timestamp: new Date().toISOString()
         });
