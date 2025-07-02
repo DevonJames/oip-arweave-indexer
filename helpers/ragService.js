@@ -179,13 +179,14 @@ class RAGService {
      * Intelligently separates the question from the subject matter AND extracts modifiers
      */
     extractSearchKeywords(question) {
-        console.log(`[RAG] Extracting keywords from: "${question}"`);
+        console.log(`[RAG] 🔍 EXTRACTING KEYWORDS FROM: "${question}"`);
         
         // First, try to identify subject entities using smart patterns
         const subjects = this.extractSubjectEntities(question);
         if (subjects.length > 0) {
             const result = subjects.join(' ');
-            console.log(`[RAG] Extracted subject entities: "${result}"`);
+            console.log(`[RAG] ✅ EXTRACTED SUBJECT ENTITIES: "${result}"`);
+            console.log(`[RAG] 🎯 USING SUBJECT: "${result}" (instead of full question)`);
             return result;
         }
         
@@ -248,7 +249,12 @@ class RAGService {
             },
             // General proper noun patterns (capitalized words that might be entities)
             {
-                pattern: /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(fire|wildfire|earthquake|storm|hurricane|flood|disaster|shooting|attack|incident|crisis|emergency|accident|explosion|crash|protest|riot|election|vote|politics|political|nuclear|missile|war|peace|trade|economy|sanctions|oil|gas|military|defense|strike|deal|agreement|treaty|talks|summit|government|regime|conflict|revolution|coup|stock|price|earnings|revenue|profit|loss|ipo|merger|acquisition|ceo|lawsuit|scandal|hack|breach|update|launch|release|partnership|investment|funding|valuation)\b/g,
+                pattern: /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(fire|wildfire|earthquake|storm|hurricane|flood|disaster|shooting|attack|incident|crisis|emergency|accident|explosion|crash|protest|riot|election|vote|politics|political|nuclear|missile|war|peace|trade|economy|sanctions|oil|gas|military|defense|strike|deal|agreement|treaty|talks|summit|government|regime|conflict|revolution|coup|stock|price|earnings|revenue|profit|loss|ipo|merger|acquisition|ceo|lawsuit|scandal|hack|breach|update|launch|release|partnership|investment|funding|valuation|audit|audits|audited|auditing|investigation|investigations|report|reports|review|reviews|analysis|study|studies|examination|inquiry|inquiries|inspection|inspections|assessment|assessments)\b/g,
+                extract: match => match[0].trim()
+            },
+            // Enhanced proper noun detection for places/facilities with specific terms
+            {
+                pattern: /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(base|facility|building|complex|center|centre|institute|laboratory|lab|depot|warehouse|reserve|repository|vault|fort|castle|palace|mansion|estate|park|monument|memorial|museum|library|hospital|school|university|college|airport|station|port|bridge|dam|tunnel|mine|plant|factory|refinery|headquarters|office|tower|plaza|square|district|neighborhood|zone|area|region|county|state|province|territory|country|nation|republic|kingdom|empire|union|federation|alliance|organization|agency|department|ministry|bureau|commission|committee|council|assembly|parliament|congress|senate|court|tribunal|chamber|board|company|corporation|firm|business|enterprise|group|association|society|foundation|charity|trust|fund|bank|exchange|market|store|shop|restaurant|hotel|resort|club|gym|stadium|arena|theater|cinema|mall|gallery|studio|workshop|garage|yard|farm|ranch|plantation|vineyard|orchard|garden|beach|coast|shore|island|mountain|hill|valley|river|lake|ocean|sea|desert|forest|jungle|wilderness|reserve|sanctuary|preserve)\b/gi,
                 extract: match => match[0].trim()
             }
         ];
@@ -282,6 +288,7 @@ class RAGService {
     
     /**
      * Extract proper nouns and compound terms as fallback
+     * Enhanced to detect important entities even when not capitalized
      */
     extractProperNouns(question) {
         // Find capitalized words and common compound terms
@@ -291,18 +298,17 @@ class RAGService {
         const questionWords = ['What', 'Who', 'Where', 'When', 'How', 'Why', 'Which', 'Can', 'Do', 'Does', 'Did', 'Will', 'Would', 'Could', 'Should'];
         const filtered = capitalizedWords.filter(word => !questionWords.includes(word));
         
-        // Also look for compound terms with common patterns
+        // Enhanced compound patterns (case insensitive) for better entity detection
         const lowerQuestion = question.toLowerCase();
         const compoundPatterns = [
-            /\b\w+\s+fire\b/g,
-            /\b\w+\s+wildfire\b/g,
-            /\b\w+\s+election\b/g,
-            /\b\w+\s+crisis\b/g,
-            /\b\w+\s+war\b/g,
-            /\b\w+\s+attack\b/g,
-            /\b\w+\s+deal\b/g,
-            /\b\w+\s+stock\b/g,
-            /\b\w+\s+nuclear\b/g
+            // Places + events/concepts
+            /\b(fort\s+knox|white\s+house|pentagon|area\s+51|mount\s+rushmore|statue\s+of\s+liberty|golden\s+gate|brooklyn\s+bridge|empire\s+state|world\s+trade|twin\s+towers|capitol\s+building|lincoln\s+memorial|washington\s+monument|federal\s+reserve|wall\s+street|silicon\s+valley|hollywood|las\s+vegas|new\s+york|los\s+angeles|san\s+francisco|chicago|houston|philadelphia|phoenix|san\s+antonio|san\s+diego|dallas|miami|atlanta|boston|seattle|denver|detroit|washington\s+dc|puerto\s+rico|hawaii|alaska|california|texas|florida|new\s+york|illinois|pennsylvania|ohio|georgia|north\s+carolina|michigan|new\s+jersey|virginia|washington|arizona|massachusetts|tennessee|indiana|missouri|maryland|wisconsin|colorado|minnesota|south\s+carolina|alabama|louisiana|kentucky|oregon|oklahoma|connecticut|utah|nevada|arkansas|mississippi|kansas|new\s+mexico|nebraska|west\s+virginia|idaho|hawaii|new\s+hampshire|maine|montana|rhode\s+island|delaware|south\s+dakota|north\s+dakota|alaska|vermont|wyoming)\b/g,
+            // Organizations + concepts
+            /\b(federal\s+reserve|central\s+bank|world\s+bank|international\s+monetary|united\s+nations|nato|european\s+union|african\s+union|world\s+health|centers\s+for\s+disease|food\s+and\s+drug|environmental\s+protection|department\s+of\s+defense|homeland\s+security|treasury\s+department|state\s+department|justice\s+department|supreme\s+court|house\s+of\s+representatives|senate\s+judiciary|foreign\s+relations|intelligence\s+committee)\b/g,
+            // Events + topics
+            /\b\w+\s+(fire|wildfire|earthquake|storm|hurricane|flood|disaster|shooting|attack|incident|crisis|emergency|accident|explosion|crash|protest|riot|election|vote|politics|political|nuclear|missile|war|peace|trade|economy|sanctions|oil|gas|military|defense|strike|deal|agreement|treaty|talks|summit|government|regime|conflict|revolution|coup|stock|price|earnings|revenue|profit|loss|ipo|merger|acquisition|ceo|lawsuit|scandal|hack|breach|update|launch|release|partnership|investment|funding|valuation|audit|audits|investigation|report|review|analysis|study|examination|inquiry|inspection|assessment)\b/g,
+            // Company/Entity + concepts
+            /\b(apple|microsoft|google|amazon|tesla|meta|facebook|netflix|nvidia|intel|boeing|ford|general\s+motors|exxon|walmart|berkshire\s+hathaway|johnson\s+&\s+johnson|procter\s+&\s+gamble|jpmorgan\s+chase|bank\s+of\s+america|wells\s+fargo|goldman\s+sachs|morgan\s+stanley|blackrock|vanguard|fidelity)\s+(stock|price|earnings|revenue|profit|loss|ipo|merger|acquisition|ceo|lawsuit|scandal|hack|breach|update|launch|release|partnership|investment|funding|valuation)\b/g
         ];
         
         const compounds = [];
@@ -311,7 +317,27 @@ class RAGService {
             compounds.push(...matches.map(m => m[0].trim()));
         }
         
-        return [...filtered, ...compounds].slice(0, 2);
+        // Special handling for well-known entities that might not be capitalized
+        const knownEntities = [
+            'fort knox', 'white house', 'pentagon', 'federal reserve', 'wall street',
+            'silicon valley', 'hollywood', 'las vegas', 'new york', 'los angeles',
+            'san francisco', 'area 51', 'mount rushmore', 'statue of liberty',
+            'golden gate bridge', 'brooklyn bridge', 'empire state building',
+            'world trade center', 'capitol building', 'lincoln memorial',
+            'washington monument', 'supreme court', 'congress', 'senate',
+            'house of representatives', 'department of defense', 'treasury department',
+            'homeland security', 'cia', 'fbi', 'nsa', 'secret service'
+        ];
+        
+        const foundKnownEntities = knownEntities.filter(entity => 
+            lowerQuestion.includes(entity)
+        );
+        
+        console.log(`[RAG] Found ${foundKnownEntities.length} known entities:`, foundKnownEntities);
+        console.log(`[RAG] Found ${compounds.length} compound patterns:`, compounds.slice(0, 3));
+        console.log(`[RAG] Found ${filtered.length} capitalized words:`, filtered);
+        
+        return [...foundKnownEntities, ...filtered, ...compounds].slice(0, 3);
     }
     
     extractRecipeKeywords(question) {
