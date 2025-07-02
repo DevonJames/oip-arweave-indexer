@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ΛLΞXΛNDRIΛ - Browse & Publish Records</title>
+    <title>ΛLΞXΛNDRIΛ - A decentralized library of art, history, knowledge and memes</title>
     <link rel="icon" type="image/png" href="icons/blue yo.png">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap');
         
         * {
             margin: 0;
@@ -19,6 +20,8 @@
             background: #fafafa;
             min-height: 100vh;
             color: #2d3748;
+            margin: 0;
+            padding: 0;
         }
 
         .header {
@@ -28,7 +31,7 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             position: sticky;
             top: 0;
-            z-index: 100;
+            z-index: 1000;
         }
 
         .header-content {
@@ -45,16 +48,20 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            font-size: 1.5rem;
-            font-weight: 300;
-            letter-spacing: 2px;
-            font-family: 'Inter', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 600;
+            letter-spacing: 3px;
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
         }
 
         .logo-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(255,255,255,0.2);
         }
 
         .nav-tabs {
@@ -113,6 +120,167 @@
         .ai-drawer-toggle.active {
             background: #3b82f6;
             border-color: #3b82f6;
+        }
+
+        /* AI Drawer Styles */
+        .ai-drawer {
+            position: fixed;
+            top: 64px;
+            right: -420px;
+            width: 400px;
+            height: calc(100vh - 64px);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .ai-drawer.open {
+            right: 0;
+        }
+
+        .ai-drawer-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .ai-drawer-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Main content with drawer */
+        .main-content {
+            transition: margin-right 0.3s ease;
+            min-height: calc(100vh - 64px);
+        }
+
+        .main-content.drawer-open {
+            margin-right: 400px;
+        }
+
+        /* Welcome Interface Styles */
+        .welcome-interface {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 164px);
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+
+        .welcome-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 4rem;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: #2d3748;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .welcome-subtitle {
+            font-size: 1.2rem;
+            color: #718096;
+            margin-bottom: 60px;
+            font-weight: 400;
+        }
+
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 30px;
+            max-width: 800px;
+            width: 100%;
+            margin-bottom: 40px;
+        }
+
+        .category-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .category-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .category-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .category-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        /* Search Bar in Welcome */
+        .welcome-search {
+            max-width: 600px;
+            width: 100%;
+            margin-bottom: 40px;
+        }
+
+        .welcome-search input {
+            width: 100%;
+            padding: 16px 20px;
+            font-size: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 25px;
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .welcome-search input:focus {
+            border-color: #667eea;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .advanced-search-toggle {
+            margin-top: 20px;
+        }
+
+        .advanced-search-toggle button {
+            background: transparent;
+            border: 1px solid #cbd5e0;
+            color: #4a5568;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .advanced-search-toggle button:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            transform: none;
+            box-shadow: none;
         }
 
         .container {
@@ -1754,13 +1922,86 @@
         @media (max-width: 768px) {
             .header-content {
                 flex-direction: column;
+                height: auto;
+                padding: 15px;
                 gap: 15px;
+            }
+            
+            .logo {
+                font-size: 1.5rem;
+                letter-spacing: 2px;
+            }
+            
+            .logo-icon {
+                width: 32px;
+                height: 32px;
             }
             
             .nav-tabs {
                 order: -1;
+                justify-content: center;
+                width: 100%;
             }
             
+            .auth-section {
+                justify-content: center;
+                width: 100%;
+            }
+            
+            /* AI Drawer Mobile */
+            .ai-drawer {
+                width: 100%;
+                right: -100%;
+                top: 120px;
+                height: calc(100vh - 120px);
+            }
+            
+            .main-content.drawer-open {
+                margin-right: 0;
+                transform: translateX(-100%);
+            }
+            
+            /* Welcome Interface Mobile */
+            .welcome-interface {
+                padding: 20px 15px;
+                min-height: calc(100vh - 120px);
+            }
+            
+            .welcome-title {
+                font-size: 2.5rem;
+                letter-spacing: 2px;
+            }
+            
+            .welcome-subtitle {
+                font-size: 1rem;
+                margin-bottom: 40px;
+            }
+            
+            .categories-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 15px;
+                max-width: 400px;
+            }
+            
+            .category-item {
+                padding: 15px 10px;
+            }
+            
+            .category-icon {
+                font-size: 2rem;
+                margin-bottom: 8px;
+            }
+            
+            .category-label {
+                font-size: 0.8rem;
+            }
+            
+            .welcome-search input {
+                padding: 14px 18px;
+                font-size: 16px;
+            }
+            
+            /* Search Interface Mobile */
             .filters-row {
                 flex-direction: column;
                 align-items: stretch;
@@ -1792,9 +2033,8 @@
                 gap: 10px;
             }
             
-            /* Mobile adjustments for chat */
-            .ai-chat-section {
-                height: 500px;
+            /* Mobile adjustments for AI drawer */
+            .ai-drawer-header {
                 padding: 15px;
             }
             
@@ -1828,15 +2068,21 @@
     <!-- Header -->
     <div class="header">
         <div class="header-content">
-            <div class="logo">OIP Explorer</div>
+            <div class="logo">
+                <img src="icons/blue yo.png" alt="ALEXANDRIA" class="logo-icon">
+                ΛLΞXΛNDRIΛ
+            </div>
             
             <div class="nav-tabs">
-                <!-- <div class="nav-tab active" onclick="showBrowseTab()">Browse Records</div> -->
-                <div class="nav-tab active" onclick="showVoiceBrowseTab()">Browse</div>
+                <div class="nav-tab active" onclick="showWelcomeInterface()">Home</div>
+                <div class="nav-tab" onclick="showSearchInterface()">Search</div>
                 <div class="nav-tab" onclick="showPublishTab()">Publish</div>
             </div>
             
             <div class="auth-section">
+                <button id="ai-drawer-toggle" class="ai-drawer-toggle" onclick="toggleAIDrawer()">
+                    🤖 AI Assistant
+                </button>
                 <div id="user-info" class="hidden">
                     <span id="logged-in-display" class="logged-in-user"></span>
                     <button onclick="logout()" class="btn-secondary btn-small">Logout</button>
@@ -1848,83 +2094,141 @@
         </div>
     </div>
 
-    <div class="container">
-
-
-        <!-- Browse + Voice Chat Tab Content -->
-        <div id="voice-browse-tab">
-            <!-- AI Chat Section -->
-            <div class="ai-chat-section">
-                <div class="chat-header">
-                    <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
-                        <span>🤖</span> AI Assistant
-                    </h3>
-                    
-                    <div class="ai-settings" style="margin-top: 15px;">
-                        <div class="ai-setting" style="display: inline-block; margin-right: 15px;">
-                            <label for="ai-model-select">AI Model</label>
-                            <select id="ai-model-select">
-                                <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
-                                <option value="mistral:latest">Mistral 7B (Balanced)</option>
-                                <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
-                                <option value="tinyllama:latest">TinyLlama (Ultra Fast)</option>
-                            </select>
-                        </div>
-                        <div class="ai-setting" style="display: inline-block;">
-                            <label for="stt-language">Speech Language</label>
-                            <select id="stt-language">
-                                <option value="auto">Auto-detect</option>
-                                <option value="en">English</option>
-                                <option value="es">Spanish</option>
-                                <option value="fr">French</option>
-                                <option value="de">German</option>
-                                <option value="it">Italian</option>
-                                <option value="pt">Portuguese</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="applied-filters-display" class="applied-filters hidden" style="margin-top: 15px; background: rgba(59, 130, 246, 0.2); border: 2px solid rgba(59, 130, 246, 0.5); border-radius: 8px; padding: 12px; margin-bottom: 15px;">
-                        <div style="margin-bottom: 8px; font-weight: bold; color: #1e40af; background: rgba(255, 255, 255, 0.8); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(30, 64, 175, 0.3);">🔍 AI Applied Filters:</div>
-                        <div id="filter-chips-container"></div>
-                        <div id="filter-rationale" style="margin-top: 8px; font-size: 12px; color: #374151; opacity: 0.9;"></div>
-                    </div>
+    <!-- AI Drawer -->
+    <div id="ai-drawer" class="ai-drawer">
+        <div class="ai-drawer-header">
+            <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                <span>🤖</span> AI Assistant
+            </h3>
+            
+            <div class="ai-settings" style="margin-top: 15px;">
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px;">
+                    <label for="ai-model-select">AI Model</label>
+                    <select id="ai-model-select">
+                        <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
+                        <option value="mistral:latest">Mistral 7B (Balanced)</option>
+                        <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
+                        <option value="tinyllama:latest">TinyLlama (Ultra Fast)</option>
+                    </select>
                 </div>
-                
-                <div id="chat-conversation" class="chat-conversation">
-                    <div id="chat-empty-state" class="chat-empty-state">
-                        <div class="emoji">💬</div>
-                        <h3>Start a conversation</h3>
-                        <p>Ask questions about your data and I'll help you find answers!</p>
-                    </div>
-                    <div id="chat-messages"></div>
-                </div>
-
-                <div class="chat-input-container">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div class="ai-status" id="ai-status" style="flex: 1; margin-bottom: 0; margin-right: 10px;">
-                            <div id="ai-status-text">Ready to answer questions!</div>
-                        </div>
-                        <button onclick="clearConversation()" class="btn-secondary btn-small" style="background: #6b7280; border: 1px solid #9ca3af; color: white; margin: 0;">
-                            Clear Chat
-                        </button>
-                    </div>
-                    
-                    <div class="chat-input-row">
-                        <button id="mic-btn" onclick="toggleRecording()" class="mic-btn" title="Click to record voice message">
-                            🎤
-                        </button>
-                        <textarea id="ai-chat-input" placeholder="Ask a question about your data or click the microphone..." onkeydown="handleChatKeydown(event)" rows="1"></textarea>
-                        <button id="ai-chat-send-btn" onclick="sendChatMessage()" class="chat-send-btn">
-                            <span>Ask AI</span>
-                        </button>
-                    </div>
+                <div class="ai-setting" style="display: inline-block;">
+                    <label for="stt-language">Speech Language</label>
+                    <select id="stt-language">
+                        <option value="auto">Auto-detect</option>
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="it">Italian</option>
+                        <option value="pt">Portuguese</option>
+                    </select>
                 </div>
             </div>
 
-            <!-- Clear visual separator -->
-            <div style="height: 20px; border-bottom: 2px solid rgba(102, 126, 234, 0.2); margin: 15px 0;"></div>
+            <div id="applied-filters-display" class="applied-filters hidden" style="margin-top: 15px; background: rgba(59, 130, 246, 0.2); border: 2px solid rgba(59, 130, 246, 0.5); border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                <div style="margin-bottom: 8px; font-weight: bold; color: #1e40af; background: rgba(255, 255, 255, 0.8); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(30, 64, 175, 0.3);">🔍 AI Applied Filters:</div>
+                <div id="filter-chips-container"></div>
+                <div id="filter-rationale" style="margin-top: 8px; font-size: 12px; color: #374151; opacity: 0.9;"></div>
+            </div>
+        </div>
+        
+        <div class="ai-drawer-content">
+            <div id="chat-conversation" class="chat-conversation">
+                <div id="chat-empty-state" class="chat-empty-state">
+                    <div class="emoji">💬</div>
+                    <h3>Start a conversation</h3>
+                    <p>Ask questions about your data and I'll help you find answers!</p>
+                </div>
+                <div id="chat-messages"></div>
+            </div>
+
+            <div class="chat-input-container">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div class="ai-status" id="ai-status" style="flex: 1; margin-bottom: 0; margin-right: 10px;">
+                        <div id="ai-status-text">Ready to answer questions!</div>
+                    </div>
+                    <button onclick="clearConversation()" class="btn-secondary btn-small" style="background: #6b7280; border: 1px solid #9ca3af; color: white; margin: 0;">
+                        Clear Chat
+                    </button>
+                </div>
+                
+                <div class="chat-input-row">
+                    <button id="mic-btn" onclick="toggleRecording()" class="mic-btn" title="Click to record voice message">
+                        🎤
+                    </button>
+                    <textarea id="ai-chat-input" placeholder="Ask a question about your data or click the microphone..." onkeydown="handleChatKeydown(event)" rows="1"></textarea>
+                    <button id="ai-chat-send-btn" onclick="sendChatMessage()" class="chat-send-btn">
+                        <span>Ask AI</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main-content" class="main-content">
+        <!-- Welcome Interface -->
+        <div id="welcome-interface" class="welcome-interface">
+            <h1 class="welcome-title">ΛLΞXΛNDRIΛ</h1>
+            <p class="welcome-subtitle">A decentralized library of art, history, knowledge and memes.</p>
             
+            <div class="welcome-search">
+                <input type="text" id="welcome-search-input" placeholder="Search the archive..." onkeydown="handleWelcomeSearch(event)">
+                <div class="advanced-search-toggle">
+                    <button onclick="showAdvancedSearch()">Advanced Search</button>
+                </div>
+            </div>
+            
+            <div class="categories-grid">
+                <div class="category-item" onclick="searchByCategory('archives')">
+                    <div class="category-icon">🗃️</div>
+                    <div class="category-label">Archives</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('movies')">
+                    <div class="category-icon">🎬</div>
+                    <div class="category-label">Movies</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('videos')">
+                    <div class="category-icon">📹</div>
+                    <div class="category-label">Videos</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('podcasts')">
+                    <div class="category-icon">🎙️</div>
+                    <div class="category-label">Podcasts</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('music')">
+                    <div class="category-icon">🎵</div>
+                    <div class="category-label">Music</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('photos')">
+                    <div class="category-icon">📷</div>
+                    <div class="category-label">Photos</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('books')">
+                    <div class="category-icon">📚</div>
+                    <div class="category-label">Books</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('recipes')">
+                    <div class="category-icon">🍳</div>
+                    <div class="category-label">Recipes</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('things')">
+                    <div class="category-icon">🏛️</div>
+                    <div class="category-label">Things</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('documents')">
+                    <div class="category-icon">📄</div>
+                    <div class="category-label">Documents</div>
+                </div>
+                <div class="category-item" onclick="searchByCategory('software')">
+                    <div class="category-icon">💻</div>
+                    <div class="category-label">Software</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Interface -->
+        <div id="search-interface" class="container hidden">
             <!-- Filters Section (Enhanced Version) -->
             <div class="filters-section" style="position: relative; z-index: 1; background: white; border: 2px solid rgba(102, 126, 234, 0.1);">
                 <div class="filters-row">
@@ -2041,12 +2345,9 @@
                 <div id="voice-load-more-container" class="load-more hidden">
                     <button onclick="loadMoreVoiceRecords()" id="voice-load-more-btn">Load More Records</button>
                 </div>
-                
-                <div id="voice-load-more-container" class="load-more hidden">
-                    <button onclick="loadMoreVoiceRecords()" id="voice-load-more-btn">Load More Records</button>
-                </div>
             </div>
         </div>
+    </div>
 
         <!-- Publish Tab Content -->
         <div id="publish-tab" class="hidden">
@@ -2393,29 +2694,111 @@
             }
         }
 
-        // Navigation functions (showBrowseTab DISABLED - old tab is commented out)
-        function showBrowseTab() {
-            // OLD BROWSE TAB IS DISABLED - DO NOTHING
-            console.log('[Nav] showBrowseTab called but disabled - old tab is commented out');
+        // Navigation functions (Updated for new interface)
+        function showWelcomeInterface() {
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab')[0].classList.add('active');
+            
+            document.getElementById('welcome-interface').classList.remove('hidden');
+            document.getElementById('search-interface').classList.add('hidden');
+            document.getElementById('publish-tab').classList.add('hidden');
         }
 
-        function showVoiceBrowseTab() {
+        function showSearchInterface() {
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[0].classList.add('active'); // Now it's the first tab
-            // document.getElementById('browse-tab').classList.add('hidden'); // Commented out tab
-            document.getElementById('voice-browse-tab').classList.remove('hidden');
+            document.querySelectorAll('.nav-tab')[1].classList.add('active');
+            
+            document.getElementById('welcome-interface').classList.add('hidden');
+            document.getElementById('search-interface').classList.remove('hidden');
             document.getElementById('publish-tab').classList.add('hidden');
             
-            // Initialize voice features when tab is shown
+            // Initialize voice features when search interface is shown
             initializeVoiceFeatures();
         }
 
         function showPublishTab() {
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[1].classList.add('active'); // Now it's the second tab
-            // document.getElementById('browse-tab').classList.add('hidden'); // Commented out tab
-            document.getElementById('voice-browse-tab').classList.add('hidden');
+            document.querySelectorAll('.nav-tab')[2].classList.add('active');
+            
+            document.getElementById('welcome-interface').classList.add('hidden');
+            document.getElementById('search-interface').classList.add('hidden');
             document.getElementById('publish-tab').classList.remove('hidden');
+        }
+
+        // AI Drawer Functions
+        function toggleAIDrawer() {
+            const drawer = document.getElementById('ai-drawer');
+            const mainContent = document.getElementById('main-content');
+            const toggle = document.getElementById('ai-drawer-toggle');
+            
+            if (drawer.classList.contains('open')) {
+                drawer.classList.remove('open');
+                mainContent.classList.remove('drawer-open');
+                toggle.classList.remove('active');
+            } else {
+                drawer.classList.add('open');
+                mainContent.classList.add('drawer-open');
+                toggle.classList.add('active');
+                
+                // Initialize AI features when drawer is first opened
+                if (!chatState.isInitialized) {
+                    initializeVoiceFeatures();
+                }
+            }
+        }
+
+        // Welcome Interface Functions
+        function handleWelcomeSearch(event) {
+            if (event.key === 'Enter') {
+                const searchTerm = event.target.value.trim();
+                if (searchTerm) {
+                    // Set the search term in the search interface
+                    document.getElementById('voice-search-input').value = searchTerm;
+                    // Switch to search interface
+                    showSearchInterface();
+                    // Apply the search
+                    applyVoiceFilters();
+                }
+            }
+        }
+
+        function searchByCategory(category) {
+            // Map category names to record types where applicable
+            const categoryMap = {
+                'videos': 'video',
+                'movies': 'video', 
+                'photos': 'image',
+                'books': 'text',
+                'recipes': 'recipe',
+                'documents': 'text',
+                'music': 'audio',
+                'podcasts': 'audio'
+            };
+            
+            const recordType = categoryMap[category] || '';
+            
+            // Clear current search and set category-based search
+            document.getElementById('voice-search-input').value = category;
+            if (recordType) {
+                document.getElementById('voice-record-type-filter').value = recordType;
+            }
+            
+            // Switch to search interface
+            showSearchInterface();
+            
+            // Apply the search
+            setTimeout(() => {
+                applyVoiceFilters();
+            }, 100);
+        }
+
+        function showAdvancedSearch() {
+            showSearchInterface();
+        }
+
+        // Legacy function for compatibility
+        function showVoiceBrowseTab() {
+            showSearchInterface();
         }
 
         // Authentication Modal functions
