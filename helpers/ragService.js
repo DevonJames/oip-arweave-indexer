@@ -422,7 +422,7 @@ class RAGService {
         
         // Extract both subject and modifiers from the question
         const { subject, modifiers } = this.extractSubjectAndModifiers(question);
-        console.log(`[RAG] Extracted - Subject: "${subject}", Modifiers: [${modifiers.join(', ')}]`);
+        console.log(`[RAG] 🎯 Extracted - Subject: "${subject}", Modifiers: [${modifiers.join(', ')}]`);
         
         // For backward compatibility, also extract keywords the old way
         const searchKeywords = subject || this.extractSearchKeywords(question);
@@ -434,14 +434,14 @@ class RAGService {
         
         // Special handling for evacuation questions - search specific terms FIRST
         if (isEvacuationQuestion) {
-            console.log(`[RAG] Evacuation question detected, prioritizing evacuation searches`);
+            console.log(`[RAG] 🚨 Evacuation question detected, prioritizing evacuation searches`);
             const evacuationTerms = ['city angels ashes', 'inferno chaos', 'palisades fire evacuation', 'eaton fire evacuation', '130000 evacuated', 'buildings destroyed', 'la fire 130000'];
             
             for (const term of evacuationTerms) {
                 if (allResults.length >= this.maxResults) break;
                 
                 try {
-                    console.log(`[RAG] Trying priority evacuation search term: "${term}"`);
+                    console.log(`[RAG] 🔥 Trying priority evacuation search term: "${term}"`);
                     const evacSearchParams = {
                         search: term,
                         recordType: 'post',
@@ -462,10 +462,10 @@ class RAGService {
                             !allResults.some(existing => existing.oip?.didTx === record.oip?.didTx)
                         );
                         allResults.push(...newRecords.slice(0, 2));
-                        console.log(`[RAG] Found ${newRecords.length} priority evacuation records with term "${term}"`);
+                        console.log(`[RAG] ✅ Found ${newRecords.length} priority evacuation records with term "${term}"`);
                     }
                 } catch (error) {
-                    console.warn(`[RAG] Error searching priority evacuation term "${term}":`, error.message);
+                    console.warn(`[RAG] ❌ Error searching priority evacuation term "${term}":`, error.message);
                 }
             }
         }
@@ -477,7 +477,7 @@ class RAGService {
             
             for (const typeInfo of searchTypes) {
                 try {
-                    console.log(`[RAG] Searching ${typeInfo.type} records for keywords: "${searchKeywords}" (from question: "${question}")`);
+                    console.log(`[RAG] 🔍 Searching ${typeInfo.type} records for keywords: "${searchKeywords}" (from question: "${question}")`);
                     
                     // Perform initial broad search
                     const searchParams = {
@@ -494,12 +494,12 @@ class RAGService {
                         includePubKeys: false
                     };
                     
-                    console.log(`[RAG] Initial broad search params:`, searchParams);
+                    console.log(`[RAG] 📋 Initial broad search params:`, searchParams);
                     
                     const initialResults = await getRecords(searchParams);
                     
                     if (initialResults && initialResults.records && initialResults.records.length > 0) {
-                        console.log(`[RAG] Initial search found ${initialResults.records.length} ${typeInfo.type} records`);
+                        console.log(`[RAG] 📊 Initial search found ${initialResults.records.length} ${typeInfo.type} records`);
                         
                         // Apply intelligent refinement if we have modifiers and multiple results
                         const finalResults = await this.analyzeAndRefineSearch(
@@ -527,21 +527,22 @@ class RAGService {
                             allResults.push(...records);
                             
                             if (finalResults.wasRefined) {
-                                console.log(`[RAG] ✅ Successfully refined from ${finalResults.originalResultCount} to ${records.length} results using modifiers: [${finalResults.appliedModifiers.join(', ')}]`);
+                                console.log(`[RAG] ✨ REFINEMENT SUCCESS: refined from ${finalResults.originalResultCount} to ${records.length} results using modifiers: [${finalResults.appliedModifiers.join(', ')}]`);
                             } else {
-                                console.log(`[RAG] Using ${records.length} ${typeInfo.type} records (no refinement needed)`);
+                                console.log(`[RAG] 📝 Using ${records.length} ${typeInfo.type} records (no refinement needed/possible)`);
                             }
                             
                             // If we got refined results, we can stop here since they should be very specific
                             if (finalResults.wasRefined && records.length > 0) {
+                                console.log(`[RAG] 🎯 Early termination: refined results found, stopping search`);
                                 break;
                             }
                         }
                     } else {
-                        console.log(`[RAG] No results found for ${typeInfo.type} with keywords: "${searchKeywords}"`);
+                        console.log(`[RAG] ❌ No results found for ${typeInfo.type} with keywords: "${searchKeywords}"`);
                     }
                 } catch (error) {
-                    console.error(`[RAG] Error searching ${typeInfo.type}:`, error.message);
+                    console.error(`[RAG] 💥 Error searching ${typeInfo.type}:`, error.message);
                 }
             }
         }
@@ -559,7 +560,7 @@ class RAGService {
             }
         }
         
-        console.log(`[RAG] Final search results: ${uniqueResults.length} unique records`);
+        console.log(`[RAG] 🏁 Final search results: ${uniqueResults.length} unique records`);
         
         return {
             records: uniqueResults,
