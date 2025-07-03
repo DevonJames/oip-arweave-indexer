@@ -3,7 +3,13 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 // const { crypto } = require('crypto');
 const base64url = require('base64url');
-const { createCanvas, loadImage, Image } = require('canvas');
+// Optional canvas dependency - gracefully handle if not installed
+let canvasModule = null;
+try {
+  canvasModule = require('canvas');
+} catch (error) {
+  console.warn('Canvas module not available - image stitching will be disabled');
+}
 const nodeHtmlToImage = require('node-html-to-image');
 const router = express.Router();
 const path = require('path');
@@ -669,6 +675,24 @@ async function stitchImages(screenshots, totalHeight, scrapeId) {
   console.log('converting screenshot base64 to files before stitching');
 
   try {
+    if (!canvasModule) {
+      console.warn('Canvas module not available - cannot stitch images. Consider using minimal-with-scrape profile for full scraping functionality.');
+      // Return a fallback - just save the first screenshot
+      if (screenshots && screenshots.length > 0) {
+        const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+        const mediaId = `fullscreenshot-${scrapeId}-${today}.png`;
+        const outputPath = path.resolve(downloadsDirectory, mediaId);
+        console.log('outputPath', outputPath);
+        const firstScreenshot = screenshots[0];
+        const buffer = Buffer.from(firstScreenshot.screenshot.replace(/^data:image\/png;base64,/, ''), 'base64');
+        fs.writeFileSync(outputPath, buffer);
+        console.log('Using first screenshot as fallback since canvas is not available');
+        return mediaId;
+      }
+      throw new Error('Canvas module not available and no screenshots provided');
+    }
+
+    const { createCanvas, loadImage, Image } = canvasModule;
     const today = new Date().toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
     const mediaId = `fullscreenshot-${scrapeId}-${today}.png`;
     const outputPath = path.resolve(downloadsDirectory, mediaId);

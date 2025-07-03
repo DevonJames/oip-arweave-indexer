@@ -22,6 +22,7 @@ services:
       - standard-monolithic
       - standard
       - minimal
+      - minimal-with-scrape
       - gpu
       - standard-gpu
 
@@ -40,6 +41,7 @@ services:
       - standard-monolithic
       - standard
       - minimal
+      - minimal-with-scrape
       - gpu
       - standard-gpu
 
@@ -88,8 +90,34 @@ services:
     profiles:
       - standard
 
-  # Minimal OIP service (core functionality only, no AI dependencies)
+  # Minimal OIP service (core functionality only, no AI dependencies, no canvas)
   oip-minimal:
+    build:
+      context: .
+      dockerfile: Dockerfile-minimal
+    env_file:
+      - .env
+    ports:
+      - "3005:3005"
+      - "9229:9229"
+    volumes:
+      - ./helpers:/usr/src/app/helpers
+      - ./routes:/usr/src/app/routes
+    environment:
+      - NODE_ENV=production
+      - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
+      - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
+      - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
+    depends_on:
+      - elasticsearch
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - minimal
+
+  # Minimal OIP service with scraping capabilities (includes canvas)
+  oip-minimal-with-scrape:
     build:
       context: .
       dockerfile: Dockerfile
@@ -112,7 +140,7 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
-      - minimal
+      - minimal-with-scrape
 
   # Standard monolithic OIP service (all services in one container)
   oip-full:

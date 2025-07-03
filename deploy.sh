@@ -44,7 +44,8 @@ show_usage() {
     echo "  help    - Show this help message"
     echo ""
     echo "Profiles:"
-    echo "  minimal              - Core only: elasticsearch, kibana, oip (no extra services)"
+    echo "  minimal              - Core only: elasticsearch, kibana, oip (no extra services, no canvas - fastest build)"
+    echo "  minimal-with-scrape  - Core + scraping: elasticsearch, kibana, oip with canvas support"
     echo "  standard             - Distributed: Full stack with AI chat (elasticsearch, kibana, ipfs, oip, speech-synthesizer, ngrok, ollama, text-generator)"
     echo "  standard-monolithic  - Monolithic: Core services in one container (lacks modern AI, uses Dockerfile-full)"
     echo "  gpu                  - GPU-optimized OIP + text-generator (connects to external network)"
@@ -52,7 +53,8 @@ show_usage() {
     echo "  standard-gpu         - Complete stack with GPU acceleration"
     echo ""
     echo "Examples:"
-    echo "  $0 up minimal           # Start core services only (elasticsearch, kibana, oip)"
+    echo "  $0 up minimal           # Start core services only (elasticsearch, kibana, oip - no canvas)"
+    echo "  $0 up minimal-with-scrape # Start core services + scraping (elasticsearch, kibana, oip + canvas)"
     echo "  $0 up standard          # Start full stack on standard machine"
     echo "  $0 up gpu               # Start GPU-optimized deployment"
     echo "  $0 build gpu-only       # Build and start minimal GPU service only"
@@ -77,7 +79,7 @@ check_env_file() {
 validate_profile() {
     local profile=$1
     case $profile in
-        minimal|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu)
+        minimal|minimal-with-scrape|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu)
             return 0
             ;;
         *)

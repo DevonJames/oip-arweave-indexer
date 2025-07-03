@@ -19,7 +19,8 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(YELLOW)Available profiles:$(NC)"
-	@echo "  $(GREEN)minimal$(NC)              - Core only: elasticsearch, kibana, oip"
+	@echo "  $(GREEN)minimal$(NC)              - Core only: elasticsearch, kibana, oip (no canvas - fastest build)"
+	@echo "  $(GREEN)minimal-with-scrape$(NC)  - Core + scraping: elasticsearch, kibana, oip with canvas support"
 	@echo "  $(GREEN)standard$(NC)             - Distributed: Full stack with AI chat (elasticsearch, kibana, oip, ollama, text-generator)"
 	@echo "  $(GREEN)standard-monolithic$(NC)  - Monolithic: Core services in one container (lacks modern AI features)"
 	@echo "  $(GREEN)gpu$(NC)                  - GPU-optimized deployment"
@@ -38,8 +39,8 @@ PROFILE ?= standard
 # Validate profile
 validate-profile:
 	@case "$(PROFILE)" in \
-		minimal|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu) ;; \
-		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, standard, standard-monolithic, gpu, oip-gpu-only, or standard-gpu$(NC)"; exit 1 ;; \
+		minimal|minimal-with-scrape|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu) ;; \
+		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-monolithic, gpu, oip-gpu-only, or standard-gpu$(NC)"; exit 1 ;; \
 	esac
 
 # Check if .env file exists
@@ -114,8 +115,11 @@ clean: ## Stop services and remove containers, networks, volumes
 	@echo "$(GREEN)Cleanup completed$(NC)"
 
 # Quick deployment targets for common scenarios
-minimal: ## Quick deploy: Core services only (elasticsearch, kibana, oip)
+minimal: ## Quick deploy: Core services only (elasticsearch, kibana, oip - no canvas)
 	@make up PROFILE=minimal
+
+minimal-with-scrape: ## Quick deploy: Core services + scraping (elasticsearch, kibana, oip + canvas)
+	@make up PROFILE=minimal-with-scrape
 
 standard: ## Quick deploy: Distributed full stack
 	@make up PROFILE=standard
@@ -135,8 +139,11 @@ standard-gpu: ## Quick deploy: Complete stack with GPU acceleration (ALL service
 	@make install-models
 
 # Quick rebuild targets for common scenarios
-rebuild-minimal: ## Quick rebuild: Core services only (elasticsearch, kibana, oip)
+rebuild-minimal: ## Quick rebuild: Core services only (elasticsearch, kibana, oip - no canvas)
 	@make rebuild PROFILE=minimal
+
+rebuild-minimal-with-scrape: ## Quick rebuild: Core services + scraping (elasticsearch, kibana, oip + canvas)
+	@make rebuild PROFILE=minimal-with-scrape
 
 rebuild-standard: ## Quick rebuild: Distributed full stack
 	@make rebuild PROFILE=standard
