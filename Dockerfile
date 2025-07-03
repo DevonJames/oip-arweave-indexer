@@ -2,7 +2,7 @@ FROM node:18-alpine3.20
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
-# Install necessary packages for all services
+# Install necessary packages for all services including Chromium dependencies
 RUN apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium cmake ffmpeg poppler-utils \
     openssl-dev \
     openssl-libs-static \
@@ -12,7 +12,17 @@ RUN apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip c
     linux-headers \
     git \
     pkgconfig \
-    espeak
+    espeak \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto \
+    eudev-dev \
+    xvfb \
+    dbus
 
 # Add dependencies for node-canvas (required for image processing)
 RUN apk add --no-cache \
@@ -30,9 +40,11 @@ RUN apk add --no-cache \
 #     # Install Puppeteer
 # RUN npm install puppeteer-extra puppeteer-extra-plugin-stealth
 
-# Set environment variables for Puppeteer
-# ENV PUPPETEER_SKIP_DOWNLOAD=true
-# ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+# Set environment variables for Puppeteer to use system chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage"
 
 # Install Python packages for LLaMA2 and Coqui TTS
 # RUN pip3 install torch transformers flask TTS
