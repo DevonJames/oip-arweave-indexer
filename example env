@@ -15,7 +15,13 @@ ELASTICCLIENTPASSWORD=yourpassword
 OPENAI_API_KEY=
 XAI_API_KEY=
 XAI_BEARER_TOKEN=
-TWITTER_BEARER_TOKEN=
+
+# X (Twitter) API Configuration
+# Get from: https://developer.twitter.com/en/portal/dashboard
+# Required for reliable X post archiving (otherwise scraping may fail)
+X_BEARER_TOKEN=
+TWITTER_BEARER_TOKEN=  # Legacy alias, use X_BEARER_TOKEN instead
+
 NGROK_AUTH_TOKEN=
 GOOGLE_CLOUD_API_KEY=
 GOOGLE_APPLICATION_CREDENTIALS=config/google-service-account-key.json

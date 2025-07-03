@@ -2352,6 +2352,125 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1) ||
   }
 }
 
+// X API v2 tweet extraction using official API
+async function fetchTweetWithAPI(tweetUrl) {
+    try {
+        // Extract tweet ID from URL
+        const tweetId = extractTweetId(tweetUrl);
+        if (!tweetId) {
+            throw new Error('Could not extract tweet ID from URL');
+        }
+
+        console.log(`Extracting tweet ID: ${tweetId} using X API v2`);
+
+        // Check if we have X API credentials
+        const bearerToken = process.env.X_BEARER_TOKEN || process.env.TWITTER_BEARER_TOKEN;
+        if (!bearerToken) {
+            throw new Error('X API Bearer Token not configured. Please set X_BEARER_TOKEN environment variable.');
+        }
+
+        // Call X API v2 to get tweet data
+        const apiUrl = `https://api.twitter.com/2/tweets/${tweetId}`;
+        const params = new URLSearchParams({
+            'expansions': 'author_id,attachments.media_keys',
+            'tweet.fields': 'created_at,public_metrics,author_id,text',
+            'user.fields': 'username,name',
+            'media.fields': 'url,preview_image_url,type'
+        });
+
+        console.log(`Calling X API: ${apiUrl}?${params}`);
+
+        const response = await axios.get(`${apiUrl}?${params}`, {
+            headers: {
+                'Authorization': `Bearer ${bearerToken}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 10000
+        });
+
+        if (response.status !== 200) {
+            throw new Error(`X API request failed with status ${response.status}`);
+        }
+
+        const data = response.data;
+        console.log('X API Response:', JSON.stringify(data, null, 2));
+
+        // Extract tweet data from API response
+        const tweet = data.data;
+        if (!tweet) {
+            throw new Error('No tweet data found in API response');
+        }
+
+        // Get author information
+        const author = data.includes?.users?.find(user => user.id === tweet.author_id);
+        const authorName = author ? (author.name || author.username) : 'Unknown';
+
+        // Get media attachments
+        const images = [];
+        if (tweet.attachments?.media_keys && data.includes?.media) {
+            data.includes.media.forEach(media => {
+                if (media.type === 'photo' && media.url) {
+                    images.push(media.url);
+                }
+            });
+        }
+
+        const result = {
+            text: tweet.text || '',
+            author: authorName,
+            username: author?.username || '',
+            date: tweet.created_at || '',
+            url: tweetUrl,
+            images: images,
+            metrics: tweet.public_metrics || {},
+            // Add fields that the frontend expects for compatibility
+            user: author ? {
+                name: author.name,
+                screen_name: author.username,
+                username: author.username
+            } : null
+        };
+
+        console.log('X API extraction successful:', result);
+        return result;
+
+    } catch (error) {
+        console.error('X API extraction failed:', error.message);
+        
+        if (error.response) {
+            console.error('X API Error Response:', error.response.status, error.response.data);
+            
+            if (error.response.status === 401) {
+                throw new Error('X API authentication failed. Please check your Bearer Token.');
+            } else if (error.response.status === 429) {
+                throw new Error('X API rate limit exceeded. Please try again later.');
+            } else if (error.response.status === 404) {
+                throw new Error('Tweet not found. It may have been deleted or is from a protected account.');
+            }
+        }
+        
+        throw error;
+    }
+}
+
+// Extract tweet ID from various X/Twitter URL formats
+function extractTweetId(url) {
+    const patterns = [
+        /(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/,
+        /status\/(\d+)/,
+        /\/(\d+)$/
+    ];
+    
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) {
+            return match[1];
+        }
+    }
+    
+    return null;
+}
+
 async function fetchTweetDetails(tweetUrl) {
     try {
         // Update URL format for X.com if needed
@@ -2361,16 +2480,40 @@ async function fetchTweetDetails(tweetUrl) {
         
         console.log(`Fetching tweet from: ${tweetUrl}`);
         
+        // First, try using the official X API v2 if configured
+        const bearerToken = process.env.X_BEARER_TOKEN || process.env.TWITTER_BEARER_TOKEN;
+        if (bearerToken) {
+            console.log('Using X API v2 for tweet extraction...');
+            try {
+                const apiResult = await fetchTweetWithAPI(tweetUrl);
+                console.log('X API extraction successful, returning API data');
+                return apiResult;
+            } catch (apiError) {
+                console.log('X API failed, falling back to web scraping:', apiError.message);
+                // Continue to scraping fallback below
+            }
+        } else {
+            console.log('X API not configured (no X_BEARER_TOKEN), using web scraping...');
+        }
+        
+        // Fallback: Use web scraping (though this will likely fail due to X.com restrictions)
+        console.log('⚠️  Warning: Web scraping X.com is unreliable and may fail. Consider setting up X API access.');
+        
         // Use a browser-like user agent to avoid detection
         const response = await axios.get(tweetUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
                 'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
+                'Pragma': 'no-cache',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Upgrade-Insecure-Requests': '1'
             },
-            timeout: 10000,
+            timeout: 15000,
             maxRedirects: 5
         });
         
@@ -2380,26 +2523,165 @@ async function fetchTweetDetails(tweetUrl) {
         
         const $ = cheerio.load(response.data);
         
-        // Updated selectors for X.com
-        const tweetText = $('article[data-testid="tweet"] div[data-testid="tweetText"]').text().trim();
-        const tweetAuthor = $('article[data-testid="tweet"] div[data-testid="User-Name"] a span').first().text().trim();
-        const tweetDate = $('article[data-testid="tweet"] time').attr('datetime');
+        // Debug: Log page title to verify we got the right page
+        const pageTitle = $('title').text();
+        console.log(`Page title: ${pageTitle}`);
+        
+        // Enhanced selectors with multiple fallbacks for X.com structure changes
+        let tweetText = '';
+        let tweetAuthor = '';
+        let tweetDate = '';
+        
+        // Try multiple selectors for tweet text
+        const textSelectors = [
+            'article[data-testid="tweet"] div[data-testid="tweetText"]',
+            'article[data-testid="tweet"] div[lang]',
+            'article div[data-testid="tweetText"]',
+            'div[data-testid="tweetText"]',
+            'article[role="article"] div[lang]',
+            'article div[lang]:not([data-testid])',
+            '[data-testid="tweetText"] span',
+            'article span[lang]'
+        ];
+        
+        for (const selector of textSelectors) {
+            const element = $(selector);
+            if (element.length > 0 && element.text().trim()) {
+                tweetText = element.text().trim();
+                console.log(`Found tweet text using selector: ${selector}`);
+                break;
+            }
+        }
+        
+        // Try multiple selectors for author
+        const authorSelectors = [
+            'article[data-testid="tweet"] div[data-testid="User-Name"] a span',
+            'article[data-testid="tweet"] div[data-testid="User-Name"] span',
+            'article div[data-testid="User-Name"] span',
+            'div[data-testid="User-Name"] span',
+            'article[role="article"] div[data-testid="User-Name"] span',
+            'article a[role="link"] span',
+            'article div:contains("@") span'
+        ];
+        
+        for (const selector of authorSelectors) {
+            const element = $(selector);
+            if (element.length > 0 && element.text().trim() && !element.text().startsWith('@')) {
+                tweetAuthor = element.text().trim();
+                console.log(`Found tweet author using selector: ${selector}`);
+                break;
+            }
+        }
+        
+        // Try multiple selectors for date
+        const dateSelectors = [
+            'article[data-testid="tweet"] time',
+            'article time',
+            'time',
+            'article[role="article"] time'
+        ];
+        
+        for (const selector of dateSelectors) {
+            const element = $(selector);
+            if (element.length > 0 && element.attr('datetime')) {
+                tweetDate = element.attr('datetime');
+                console.log(`Found tweet date using selector: ${selector}`);
+                break;
+            }
+        }
+        
+        // Alternative approach: extract from page data/scripts
+        if (!tweetText || !tweetAuthor) {
+            console.log('Primary selectors failed, trying script extraction...');
+            
+            // Look for JSON data in script tags
+            $('script').each((i, script) => {
+                const scriptContent = $(script).html();
+                if (scriptContent && scriptContent.includes('full_text')) {
+                    try {
+                        // Try to extract tweet data from embedded JSON
+                        const jsonMatch = scriptContent.match(/"full_text":"([^"]+)"/);
+                        if (jsonMatch && !tweetText) {
+                            tweetText = jsonMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                            console.log('Extracted text from script JSON');
+                        }
+                        
+                        const authorMatch = scriptContent.match(/"screen_name":"([^"]+)"/);
+                        if (authorMatch && !tweetAuthor) {
+                            tweetAuthor = authorMatch[1];
+                            console.log('Extracted author from script JSON');
+                        }
+                    } catch (e) {
+                        // Continue if JSON parsing fails
+                    }
+                }
+            });
+        }
+        
+        // Extract meta tags as fallback
+        if (!tweetText && !tweetAuthor) {
+            console.log('Script extraction failed, trying meta tags...');
+            
+            const ogTitle = $('meta[property="og:title"]').attr('content');
+            const ogDescription = $('meta[property="og:description"]').attr('content');
+            const twitterTitle = $('meta[name="twitter:title"]').attr('content');
+            const twitterDescription = $('meta[name="twitter:description"]').attr('content');
+            
+            if (ogDescription && ogDescription.length > 10) {
+                tweetText = ogDescription;
+                console.log('Using og:description as tweet text');
+            } else if (twitterDescription && twitterDescription.length > 10) {
+                tweetText = twitterDescription;
+                console.log('Using twitter:description as tweet text');
+            }
+            
+            if (ogTitle && ogTitle.includes(' on X:')) {
+                tweetAuthor = ogTitle.split(' on X:')[0];
+                console.log('Extracted author from og:title');
+            } else if (twitterTitle && twitterTitle.includes(' on X:')) {
+                tweetAuthor = twitterTitle.split(' on X:')[0];
+                console.log('Extracted author from twitter:title');
+            }
+        }
         
         // Try to get images from the tweet
         const imageUrls = [];
-        $('article[data-testid="tweet"] img[alt="Image"]').each((i, img) => {
-            const imgSrc = $(img).attr('src');
-            if (imgSrc && !imgSrc.includes('profile') && !imageUrls.includes(imgSrc)) {
-                imageUrls.push(imgSrc);
-            }
-        });
+        const imageSelectors = [
+            'article[data-testid="tweet"] img[alt="Image"]',
+            'article img[alt="Image"]',
+            'img[alt="Image"]',
+            'article img[src*="media"]',
+            'img[src*="pbs.twimg.com"]'
+        ];
         
-        console.log(`Tweet fetched successfully: ${tweetText.substring(0, 50)}...`);
+        for (const selector of imageSelectors) {
+            $(selector).each((i, img) => {
+                const imgSrc = $(img).attr('src');
+                if (imgSrc && !imgSrc.includes('profile') && !imgSrc.includes('avatar') && !imageUrls.includes(imgSrc)) {
+                    imageUrls.push(imgSrc);
+                }
+            });
+            if (imageUrls.length > 0) {
+                console.log(`Found ${imageUrls.length} images using selector: ${selector}`);
+                break;
+            }
+        }
+        
+        console.log(`Scraping results: text="${tweetText.substring(0, 50)}...", author="${tweetAuthor}", date="${tweetDate}", images=${imageUrls.length}`);
+        
+        // If we still don't have text, this might be a protected account or login required
+        if (!tweetText && !tweetAuthor) {
+            // Check if page indicates login required
+            const bodyText = $('body').text().toLowerCase();
+            if (bodyText.includes('sign up') || bodyText.includes('log in') || bodyText.includes('create account')) {
+                throw new Error('X.com requires login to view this content. To fix this, set up X API access by adding X_BEARER_TOKEN to your environment variables.');
+            }
+        }
         
         return {
-            text: tweetText,
-            author: tweetAuthor,
-            date: tweetDate,
+            text: tweetText || '',
+            author: tweetAuthor || '',
+            date: tweetDate || '',
             url: tweetUrl,
             images: imageUrls
         };
