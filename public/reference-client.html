@@ -1659,7 +1659,8 @@
             transition: opacity 0.2s ease;
         }
 
-        .video-preview:hover .play-overlay {
+        .video-preview:hover .play-overlay, 
+        .podcast-preview:hover .play-overlay {
             opacity: 1;
         }
 
@@ -1996,6 +1997,55 @@
         .tag-chip:hover {
             background: #dee2e6;
             transform: translateY(-1px);
+        }
+
+        /* Podcast Specific Styles */
+        .podcast-preview {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .podcast-info {
+            margin-bottom: 10px;
+        }
+
+        .podcast-show {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .podcast-date {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #6c757d;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .podcast-citations {
+            border-top: 1px solid #e9ecef;
+            padding-top: 12px;
+            margin-top: 15px;
+        }
+
+        .podcast-sources {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .source-item {
+            transition: all 0.2s ease;
+        }
+
+        .source-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .field-debug {
@@ -2555,6 +2605,12 @@
                         <input type="number" id="voice-resolve-depth" value="2" min="0" max="5" onchange="applyVoiceFilters()" 
                                title="2 recommended for images. 0=fastest, 5=most complete">
                     </div>
+                    
+                    <div class="filter-group">
+                        <label for="voice-did-tx">DID TX</label>
+                        <input type="text" id="voice-did-tx" placeholder="did:arweave:..." onchange="validateAndApplyDidTx()" oninput="clearDidTxError()">
+                        <div id="did-tx-error" class="hidden" style="color: #dc3545; font-size: 0.8rem; margin-top: 4px;">Please provide a valid DID address</div>
+                    </div>
                 </div>
                 
                 <div class="filters-row">
@@ -2964,9 +3020,7 @@
             const iconMap = {
                 'post': '📝',
                 'video': '📹', 
-                'image': '📷',
                 'audio': '🎵',
-                'text': '📄',
                 'recipe': '🍳',
                 'workout': '💪',
                 'podcast': '🎙️',
@@ -2979,6 +3033,9 @@
                 'thing': '🏛️'
             };
             
+            // Record types to exclude from home page buttons
+            const excludedTypes = ['deletemessage', 'replyto', 'nutritionalinfo', 'image', 'text'];
+            
             grid.innerHTML = '';
             
             // If no recordTypes data, show default categories
@@ -2986,20 +3043,20 @@
                 const defaultTypes = [
                     { recordType: 'post', count: 0 },
                     { recordType: 'video', count: 0 },
-                    { recordType: 'image', count: 0 },
                     { recordType: 'audio', count: 0 },
                     { recordType: 'recipe', count: 0 },
-                    { recordType: 'text', count: 0 }
+                    { recordType: 'workout', count: 0 }
                 ];
                 recordTypesData = defaultTypes;
             }
             
-            // Sort by count (descending) and take top categories
-            const sortedTypes = recordTypesData
+            // Filter out excluded types and sort by count (descending)
+            const filteredTypes = recordTypesData
+                .filter(rt => !excludedTypes.includes(rt.recordType.toLowerCase()))
                 .sort((a, b) => b.count - a.count)
                 .slice(0, 12); // Limit to 12 categories max
             
-            sortedTypes.forEach(rt => {
+            filteredTypes.forEach(rt => {
                 const categoryDiv = document.createElement('div');
                 categoryDiv.className = 'category-item';
                 categoryDiv.onclick = () => searchByRecordType(rt.recordType);
@@ -3015,7 +3072,7 @@
                 grid.appendChild(categoryDiv);
             });
             
-            console.log('[App] Populated categories grid with', sortedTypes.length, 'categories');
+            console.log('[App] Populated categories grid with', filteredTypes.length, 'categories (excluded:', excludedTypes.join(', '), ')');
         }
 
         // Legacy function - now redirects to new implementation
@@ -3150,13 +3207,26 @@
             // Clear current search field (don't put record type name in search)
             document.getElementById('voice-search-input').value = '';
             
-            // Set the record type filter
-            document.getElementById('voice-record-type-filter').value = recordType;
+            // Special handling for audio - search for records with audio content, not audio record type
+            if (recordType === 'audio') {
+                console.log('[Search] 🎵 Searching for records with embedded audio content (any record type that contains audio)');
+                // Don't set record type filter for audio
+                document.getElementById('voice-record-type-filter').value = '';
+                // Set a flag to use hasAudio parameter (will be handled in collectVoiceFilters)
+                currentFilters.hasAudio = true;
+            } else {
+                // Set the record type filter for other types
+                document.getElementById('voice-record-type-filter').value = recordType;
+                // Clear any hasAudio flag
+                delete currentFilters.hasAudio;
+            }
             
             // Clear other filters to get clean results for this record type
             document.getElementById('voice-sort-by').value = 'inArweaveBlock:desc';
             document.getElementById('voice-date-start').value = '';
             document.getElementById('voice-date-end').value = '';
+            document.getElementById('voice-did-tx').value = '';
+            clearDidTxError();
             clearAllTagFilters();
             
             // Switch to search interface
@@ -3798,12 +3868,12 @@
                 ${renderMediaPreview(mediaContent, recordIndex)}
                 
                 <div class="record-content">
-                    <h3 class="record-title">${basicData.name || 'Unnamed Record'}</h3>
-                    ${basicData.description ? `<p class="record-description">${truncateText(basicData.description, 150)}</p>` : ''}
+                    ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
                     
                     ${renderMediaControls(mediaContent, record, recordIndex)}
                     ${renderArticleTextButton(mediaContent, recordIndex)}
                     ${renderWebUrlButton(mediaContent)}
+                    ${renderPodcastCitations(mediaContent, recordIndex)}
                 </div>
                 
                 ${createTagsDisplay(basicData.tagItems)}
@@ -3841,11 +3911,43 @@
                 audioItems: [],
                 videoItems: [],
                 articleText: null,
-                webUrl: null
+                webUrl: null,
+                podcastData: null // Add podcast-specific data
             };
             
             const recordType = record.oip?.recordType || 'unknown';
             const recordName = record.data?.basic?.name || 'Unnamed';
+            
+            // Handle podcast records specifically
+            if (recordType === 'podcast') {
+                content.podcastData = {
+                    show: record.data?.podcast?.show || 'Unknown Show',
+                    duration: record.data?.podcast?.duration,
+                    episodeAudio: record.data?.audio?.webUrl || null,
+                    episodeTitle: record.data?.basic?.name || 'Untitled Episode',
+                    episodeDescription: record.data?.basic?.description || '',
+                    citations: record.data?.basic?.citations || [],
+                    date: record.data?.basic?.dateReadable || formatDate(record.data?.basic?.date) || 'Unknown Date'
+                };
+                
+                // Add the main podcast audio as an audio item
+                if (record.data?.audio?.webUrl) {
+                    content.audioItems.push({
+                        url: record.data.audio.webUrl,
+                        title: content.podcastData.episodeTitle,
+                        contentType: record.data.audio.contentType || 'audio/mp3'
+                    });
+                }
+                
+                // Set show artwork as featured image for "The Light of Inquiry"
+                if (content.podcastData.show === 'The Light of Inquiry') {
+                    content.featuredImage = {
+                        url: 'podcastShows/TheLightOfInquiry-v2.png',
+                        title: 'The Light of Inquiry',
+                        contentType: 'image/png'
+                    };
+                }
+            }
             
             // Extract from all data sections
             if (record.data) {
@@ -4116,8 +4218,32 @@
          * Render media preview (featured image or video thumbnail)
          */
         function renderMediaPreview(mediaContent, recordIndex) {
+            // Handle podcast records with specialized interface
+            if (mediaContent.podcastData) {
+                const podcast = mediaContent.podcastData;
+                const showArtwork = mediaContent.featuredImage?.url || 'icons/noun-microphone-7907572.svg';
+                
+                return `
+                    <div class="media-preview podcast-preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="podcast-artwork" style="position: relative; height: 100%; display: flex; align-items: center; justify-content: center;">
+                            <img src="${showArtwork}" 
+                                 alt="${podcast.show}"
+                                 class="preview-image"
+                                 style="max-height: 80%; max-width: 80%; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);"
+                                 onclick="openImageModal('${showArtwork}', '${podcast.show}')"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                            <div class="podcast-icon" style="display: none; font-size: 48px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">🎙️</div>
+                            
+                            <div class="play-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.2s;">
+                                <div class="play-button" style="width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,0.9); display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">▶️</div>
+                            </div>
+                        </div>
+                        <div class="media-badge" style="background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);">🎙️ Podcast</div>
+                    </div>
+                `;
+            }
             // Priority: Video thumbnail > Featured Image > First Video > Placeholder
-            if (mediaContent.videoItems.length > 0) {
+            else if (mediaContent.videoItems.length > 0) {
                 const video = mediaContent.videoItems[0];
                 return `
                     <div class="media-preview video-preview">
@@ -4172,13 +4298,53 @@
         }
 
         /**
+         * Render record title and description with podcast-specific formatting
+         */
+        function renderRecordTitleAndDescription(mediaContent, basicData, recordType) {
+            if (mediaContent.podcastData) {
+                const podcast = mediaContent.podcastData;
+                return `
+                    <div class="podcast-info">
+                        <div class="podcast-show" style="color: #667eea; font-weight: 600; font-size: 14px; margin-bottom: 5px;">
+                            🎙️ ${podcast.show}
+                        </div>
+                        <h3 class="record-title" style="margin-bottom: 8px;">${podcast.episodeTitle}</h3>
+                        <div class="podcast-date" style="color: #6c757d; font-size: 12px; margin-bottom: 10px;">
+                            📅 ${podcast.date}
+                        </div>
+                        ${podcast.episodeDescription ? `<p class="record-description">${truncateText(podcast.episodeDescription, 200)}</p>` : ''}
+                    </div>
+                `;
+            } else {
+                return `
+                    <h3 class="record-title">${basicData.name || 'Unnamed Record'}</h3>
+                    ${basicData.description ? `<p class="record-description">${truncateText(basicData.description, 150)}</p>` : ''}
+                `;
+            }
+        }
+
+        /**
          * Render media controls (play buttons, etc.)
          */
         function renderMediaControls(mediaContent, record, recordIndex) {
             let controls = '';
             
-            // Audio controls
-            if (mediaContent.audioItems.length > 0) {
+            // Podcast controls (specialized for podcast episodes)
+            if (mediaContent.podcastData && mediaContent.audioItems.length > 0) {
+                const podcast = mediaContent.podcastData;
+                const audio = mediaContent.audioItems[0];
+                controls += `
+                    <div class="media-controls">
+                        <button class="play-btn primary" onclick="playAudioInMaster('${audio.url}', '${podcast.episodeTitle}', 'podcast', ${recordIndex})" id="audioBtn-${recordIndex}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px 24px;">
+                            <span class="play-icon">🎙️</span>
+                            <span class="play-text">Play Episode</span>
+                        </button>
+                        ${podcast.duration ? `<span class="media-count" style="color: #667eea;">Duration: ${podcast.duration}</span>` : ''}
+                    </div>
+                `;
+            }
+            // Audio controls (for non-podcast audio)
+            else if (mediaContent.audioItems.length > 0) {
                 const audio = mediaContent.audioItems[0];
                 controls += `
                     <div class="media-controls">
@@ -4206,6 +4372,110 @@
             }
             
             return controls;
+        }
+
+        /**
+         * Render podcast citations and sources
+         */
+        function renderPodcastCitations(mediaContent, recordIndex) {
+            if (!mediaContent.podcastData || !mediaContent.podcastData.citations || mediaContent.podcastData.citations.length === 0) {
+                return '';
+            }
+            
+            const citations = mediaContent.podcastData.citations;
+            const citationCount = Array.isArray(citations) ? citations.length : (typeof citations === 'object' ? Object.keys(citations).length : 0);
+            
+            if (citationCount === 0) return '';
+            
+            return `
+                <div class="podcast-citations" style="margin-top: 15px;">
+                    <button class="article-btn" onclick="togglePodcastSources(${recordIndex})" id="sourcesBtn-${recordIndex}" style="background: #e3f2fd; border-color: #2196f3; color: #1976d2;">
+                        📚 Show ${citationCount} Source${citationCount === 1 ? '' : 's'}
+                    </button>
+                    <div id="podcastSources-${recordIndex}" class="podcast-sources hidden" style="margin-top: 15px; border: 1px solid #e9ecef; border-radius: 8px; background: #f8f9fa; padding: 15px;">
+                        <div style="font-weight: bold; margin-bottom: 10px; color: #495057;">📚 Episode Sources & Citations</div>
+                        <div id="sourcesContent-${recordIndex}">Loading sources...</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Toggle podcast sources display
+         */
+        function togglePodcastSources(recordIndex) {
+            const sourcesDiv = document.getElementById(`podcastSources-${recordIndex}`);
+            const button = document.getElementById(`sourcesBtn-${recordIndex}`);
+            const contentDiv = document.getElementById(`sourcesContent-${recordIndex}`);
+            
+            if (sourcesDiv.classList.contains('hidden')) {
+                sourcesDiv.classList.remove('hidden');
+                button.textContent = button.textContent.replace('Show', 'Hide');
+                
+                // Load sources if not already loaded
+                if (contentDiv.textContent === 'Loading sources...') {
+                    loadPodcastSources(recordIndex);
+                }
+            } else {
+                sourcesDiv.classList.add('hidden');
+                button.textContent = button.textContent.replace('Hide', 'Show');
+            }
+        }
+
+        /**
+         * Load and display podcast sources
+         */
+        function loadPodcastSources(recordIndex) {
+            const record = currentRecords[recordIndex];
+            if (!record?.data?.basic?.citations) return;
+            
+            const contentDiv = document.getElementById(`sourcesContent-${recordIndex}`);
+            const citations = record.data.basic.citations;
+            let sourcesHtml = '';
+            
+            citations.forEach((citation, index) => {
+                if (typeof citation === 'string') {
+                    // Simple DID reference
+                    sourcesHtml += `
+                        <div class="source-item" style="margin-bottom: 10px; padding: 10px; border: 1px solid #dee2e6; border-radius: 6px; background: white;">
+                            <div style="font-size: 12px; color: #6c757d; font-family: monospace;">DID: ${citation}</div>
+                        </div>
+                    `;
+                } else if (citation?.data?.basic) {
+                    // Resolved citation with post data
+                    const citationData = citation.data.basic;
+                    const postData = citation.data.post || {};
+                    
+                    sourcesHtml += `
+                        <div class="source-item" style="margin-bottom: 10px; padding: 12px; border: 1px solid #dee2e6; border-radius: 6px; background: white;">
+                            <div style="font-weight: 600; margin-bottom: 5px; color: #333;">
+                                ${citationData.name || 'Untitled Source'}
+                            </div>
+                            ${citationData.description ? `
+                                <div style="font-size: 13px; color: #666; margin-bottom: 8px; line-height: 1.4;">
+                                    ${truncateText(citationData.description, 120)}
+                                </div>
+                            ` : ''}
+                            ${postData.webUrl ? `
+                                <div style="margin-top: 8px;">
+                                    <a href="${postData.webUrl}" target="_blank" rel="noopener noreferrer" style="color: #1976d2; text-decoration: none; font-size: 12px;">
+                                        🔗 Read Original Article
+                                    </a>
+                                </div>
+                            ` : ''}
+                            <div style="font-size: 11px; color: #999; margin-top: 5px;">
+                                DID: ${citation.oip?.didTx || 'Unknown'}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            if (sourcesHtml) {
+                contentDiv.innerHTML = sourcesHtml;
+            } else {
+                contentDiv.innerHTML = '<div style="color: #666; font-style: italic;">No sources available</div>';
+            }
         }
 
         /**
@@ -5874,8 +6144,16 @@
             currentPlayingIndex = recordIndex;
             
             masterAudio.src = audioUrl;
-            audioTitle.textContent = title;
-            audioMeta.textContent = `${recordType} • Loading...`;
+            
+            // Enhanced display for podcast episodes
+            if (recordType === 'podcast' && currentRecords[recordIndex]?.data?.podcast?.show) {
+                const podcastShow = currentRecords[recordIndex].data.podcast.show;
+                audioTitle.textContent = title;
+                audioMeta.textContent = `🎙️ ${podcastShow} • Loading...`;
+            } else {
+                audioTitle.textContent = title;
+                audioMeta.textContent = `${recordType} • Loading...`;
+            }
             
             // Show master player
             masterPlayer.classList.add('visible');
@@ -5884,13 +6162,21 @@
             const currentBtn = document.getElementById(`audioBtn-${recordIndex}`);
             if (currentBtn) {
                 currentBtn.classList.add('playing');
-                currentBtn.innerHTML = '<span>⏸️</span><span>Playing...</span>';
+                if (recordType === 'podcast') {
+                    currentBtn.innerHTML = '<span>⏸️</span><span>Playing Episode...</span>';
+                } else {
+                    currentBtn.innerHTML = '<span>⏸️</span><span>Playing...</span>';
+                }
             }
             
             // Play audio
             masterAudio.play().catch(error => {
                 console.error('Error playing audio:', error);
-                audioMeta.textContent = `${recordType} • Error loading audio`;
+                if (recordType === 'podcast') {
+                    audioMeta.textContent = `🎙️ ${currentRecords[recordIndex]?.data?.podcast?.show || 'Podcast'} • Error loading episode`;
+                } else {
+                    audioMeta.textContent = `${recordType} • Error loading audio`;
+                }
             });
             
             playBtn.textContent = '⏸️';
@@ -5943,10 +6229,18 @@
                 if (btn) {
                     if (isPlaying) {
                         btn.classList.add('playing');
-                        btn.innerHTML = '<span>⏸️</span><span>Playing...</span>';
+                        if (currentAudioType === 'podcast') {
+                            btn.innerHTML = '<span>⏸️</span><span>Playing Episode...</span>';
+                        } else {
+                            btn.innerHTML = '<span>⏸️</span><span>Playing...</span>';
+                        }
                     } else {
                         btn.classList.remove('playing');
-                        btn.innerHTML = '<span>▶️</span><span>Play Audio</span>';
+                        if (currentAudioType === 'podcast') {
+                            btn.innerHTML = '<span>🎙️</span><span>Play Episode</span>';
+                        } else {
+                            btn.innerHTML = '<span>▶️</span><span>Play Audio</span>';
+                        }
                     }
                 }
             }
@@ -5984,7 +6278,13 @@
             
             if (masterAudio.duration) {
                 const duration = formatTime(masterAudio.duration);
-                audioMeta.textContent = `${currentAudioType} • Duration: ${duration}`;
+                
+                if (currentAudioType === 'podcast' && currentPlayingIndex !== null && currentRecords[currentPlayingIndex]?.data?.podcast?.show) {
+                    const podcastShow = currentRecords[currentPlayingIndex].data.podcast.show;
+                    audioMeta.textContent = `🎙️ ${podcastShow} • Duration: ${duration}`;
+                } else {
+                    audioMeta.textContent = `${currentAudioType} • Duration: ${duration}`;
+                }
             }
         }
 
@@ -5993,7 +6293,14 @@
             const audioMeta = document.getElementById('audio-meta');
             
             playBtn.textContent = '▶️';
-            audioMeta.textContent = `${currentAudioType} • Finished`;
+            
+            if (currentAudioType === 'podcast' && currentPlayingIndex !== null && currentRecords[currentPlayingIndex]?.data?.podcast?.show) {
+                const podcastShow = currentRecords[currentPlayingIndex].data.podcast.show;
+                audioMeta.textContent = `🎙️ ${podcastShow} • Episode Finished`;
+            } else {
+                audioMeta.textContent = `${currentAudioType} • Finished`;
+            }
+            
             updateCurrentPlayingButton(false);
         }
 
@@ -6484,6 +6791,9 @@
             if (filters.sortBy) {
                 document.getElementById('voice-sort-by').value = filters.sortBy;
             }
+            if (filters.didTx) {
+                document.getElementById('voice-did-tx').value = filters.didTx;
+            }
             
             // Handle enhanced multi-tag filtering from AI
             if (filters.tags && filters.tagsMatchMode) {
@@ -6528,6 +6838,17 @@
             }
             if (filters.recordType) {
                 addFilterChip(container, 'Type', filters.recordType);
+                hasFilters = true;
+            }
+            if (currentFilters.hasAudio) {
+                addFilterChip(container, 'Content', 'Has Audio');
+                hasFilters = true;
+            }
+            if (currentFilters.didTx) {
+                const shortDid = currentFilters.didTx.length > 25 ? 
+                    currentFilters.didTx.substring(0, 25) + '...' : 
+                    currentFilters.didTx;
+                addFilterChip(container, 'DID TX', shortDid);
                 hasFilters = true;
             }
             if (filters.sortBy && filters.sortBy !== 'inArweaveBlock:desc') {
@@ -7149,8 +7470,12 @@
             currentFilters.resolveDepth = parseInt(document.getElementById('voice-resolve-depth').value) || 2;
             currentFilters.dateStart = document.getElementById('voice-date-start').value;
             currentFilters.dateEnd = document.getElementById('voice-date-end').value;
+            currentFilters.didTx = document.getElementById('voice-did-tx').value.trim();
             currentFilters.includeSigs = document.getElementById('voice-include-sigs-toggle').classList.contains('active');
             currentFilters.includePubKeys = document.getElementById('voice-include-pubkeys-toggle').classList.contains('active');
+            
+            // Note: hasAudio is set separately in searchByRecordType() and preserved here
+            // It doesn't have a UI toggle - it's set programmatically when clicking the Audio category
             
             // Collect multi-tag filters (prioritize user manual selection over AI)
             const selectedTags = getSelectedTags();
@@ -7193,6 +7518,30 @@
             }
         }
 
+        function validateAndApplyDidTx() {
+            const didTxInput = document.getElementById('voice-did-tx');
+            const errorDiv = document.getElementById('did-tx-error');
+            const value = didTxInput.value.trim();
+            
+            if (value && !value.startsWith('did:')) {
+                errorDiv.classList.remove('hidden');
+                didTxInput.style.borderColor = '#dc3545';
+                return false;
+            } else {
+                errorDiv.classList.add('hidden');
+                didTxInput.style.borderColor = '';
+                applyVoiceFilters();
+                return true;
+            }
+        }
+        
+        function clearDidTxError() {
+            const errorDiv = document.getElementById('did-tx-error');
+            const didTxInput = document.getElementById('voice-did-tx');
+            errorDiv.classList.add('hidden');
+            didTxInput.style.borderColor = '';
+        }
+
         function clearVoiceFilters() {
             document.getElementById('voice-search-input').value = '';
             document.getElementById('voice-record-type-filter').value = '';
@@ -7200,8 +7549,12 @@
             document.getElementById('voice-resolve-depth').value = '2';
             document.getElementById('voice-date-start').value = '';
             document.getElementById('voice-date-end').value = '';
+            document.getElementById('voice-did-tx').value = '';
             document.getElementById('voice-include-sigs-toggle').classList.remove('active');
             document.getElementById('voice-include-pubkeys-toggle').classList.remove('active');
+            
+            // Clear DID TX error
+            clearDidTxError();
             
             // Clear multi-tag filters
             clearAllTagFilters();
@@ -7212,6 +7565,12 @@
             delete currentFilters.tags;
             delete currentFilters.tagsMatchMode;
             delete currentFilters.tag;
+            
+            // Clear hasAudio filter
+            delete currentFilters.hasAudio;
+            
+            // Clear didTx filter
+            delete currentFilters.didTx;
             
             // Clear applied filters display
             document.getElementById('applied-filters-display').classList.add('hidden');
@@ -7304,6 +7663,17 @@
             
             if (currentFilters.dateEnd) {
                 params.append('dateEnd', dateToUnixTime(currentFilters.dateEnd));
+            }
+            
+            if (currentFilters.didTx) {
+                params.append('didTx', currentFilters.didTx);
+                console.log('[Enhanced API] Using didTx filter:', currentFilters.didTx);
+            }
+            
+            // Handle hasAudio filter (for finding records with audio content)
+            if (currentFilters.hasAudio) {
+                params.append('hasAudio', 'true');
+                console.log('[Enhanced API] Using hasAudio filter: true');
             }
             
             // Handle tag filters (prioritize manual selection over AI)
