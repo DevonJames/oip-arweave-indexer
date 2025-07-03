@@ -5223,6 +5223,11 @@
 
                     <!-- X Post Archival Interface -->
                     <div id="x-post-interface" class="hidden">
+                        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+                            <strong>💡 Tip:</strong> For reliable X post archiving, configure X API access. 
+                            <a href="docs/X_API_SETUP.md" target="_blank" style="color: #1da1f2;">See setup guide</a>
+                        </div>
+                        
                         <div class="form-group">
                             <label for="x-post-url">X/Twitter Post URL:</label>
                             <input type="url" id="x-post-url" placeholder="https://x.com/username/status/1234567890" required>
@@ -7683,11 +7688,45 @@
                     showXPostStatus('✅ Post data fetched successfully!', 'success');
                 } else {
                     console.error('[X Post] Error response:', data);
-                    showXPostStatus(`❌ Error: ${data.error}`, 'error');
+                    let errorMessage = data.error || 'Unknown error occurred';
+                    
+                    // Provide more helpful error messages
+                    if (errorMessage.includes('Bearer Token')) {
+                        errorMessage = `
+                            <div style="text-align: left; line-height: 1.5;">
+                                <strong>🔑 X API Setup Required</strong><br><br>
+                                To reliably archive X posts, you need X API access:<br><br>
+                                <strong>1. Get X API Access:</strong><br>
+                                • Go to <a href="https://developer.twitter.com/en/portal/dashboard" target="_blank" style="color: #1da1f2;">developer.twitter.com</a><br>
+                                • Create a developer account and app<br>
+                                • Get your Bearer Token<br><br>
+                                <strong>2. Configure Server:</strong><br>
+                                • Add X_BEARER_TOKEN to environment variables<br>
+                                • Restart the server<br><br>
+                                <em>Without this, X post archiving is unreliable due to X.com login requirements.</em>
+                            </div>
+                        `;
+                    } else if (errorMessage.includes('login') || errorMessage.includes('protected')) {
+                        errorMessage = '❌ This X post requires login or is from a protected account. Set up X API access for reliable extraction.';
+                    } else if (errorMessage.includes('rate limit')) {
+                        errorMessage = '❌ Rate limited by X. Please wait a few minutes and try again.';
+                    } else if (errorMessage.includes('Failed to retrieve')) {
+                        errorMessage = '❌ Could not extract post data. X may have changed their structure or the post may be unavailable.';
+                    }
+                    
+                    showXPostStatus(errorMessage, 'error');
                 }
             } catch (error) {
                 console.error('[X Post] Network error:', error);
-                showXPostStatus(`❌ Network error: ${error.message}`, 'error');
+                let errorMessage = error.message;
+                
+                if (errorMessage.includes('Failed to fetch')) {
+                    errorMessage = '❌ Network error. Please check your connection and try again.';
+                } else if (errorMessage.includes('timeout')) {
+                    errorMessage = '❌ Request timed out. X may be slow to respond.';
+                }
+                
+                showXPostStatus(`❌ ${errorMessage}`, 'error');
             }
         }
 
@@ -7904,30 +7943,50 @@
             window.scrapedXPostData = data;
 
             // Handle different possible data structures from the API
-            const author = data.author || data.username || data.user?.screen_name || data.user?.username || 'Unknown';
-            const text = data.text || data.full_text || data.tweet_text || data.content || 'No text content found';
+            const author = data.author || data.username || data.user?.screen_name || data.user?.username || '';
+            const text = data.text || data.full_text || data.tweet_text || data.content || '';
             const postUrl = data.url || data.original_url || url;
-            const postDate = data.date || data.created_at || data.timestamp || 'Unknown';
+            const postDate = data.date || data.created_at || data.timestamp || '';
             const images = data.images || data.media || data.photos || [];
 
             // Ensure we have an array for images
             const imageArray = Array.isArray(images) ? images : (images ? [images] : []);
 
-            contentDiv.innerHTML = `
-                <div style="font-weight: 600; margin-bottom: 8px; color: #1da1f2;">@${author}</div>
-                <div style="line-height: 1.4; margin-bottom: 10px; white-space: pre-wrap;">${text}</div>
-                ${imageArray.length > 0 ? `
-                    <div style="margin-top: 10px;">
-                        <strong>Images (${imageArray.length}):</strong><br>
-                        ${imageArray.map((img, index) => `
-                            <img src="${img}" 
-                                 style="max-width: 150px; max-height: 150px; margin: 5px; border-radius: 8px; border: 1px solid #ddd;" 
-                                 alt="Tweet image ${index + 1}"
-                                 onerror="this.style.display='none';">
-                        `).join('')}
+            // Check if we have any meaningful data
+            const hasData = author.trim() || text.trim() || imageArray.length > 0;
+            
+            if (!hasData) {
+                contentDiv.innerHTML = `
+                    <div style="color: #dc3545; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+                        <strong>⚠️ No content extracted</strong><br>
+                        This X post may be:<br>
+                        • From a protected/private account<br>
+                        • Requiring login to view<br>
+                        • Deleted or unavailable<br>
+                        • Using new X.com structure we haven't adapted to yet
                     </div>
-                ` : '<div style="color: #666; font-style: italic;">No images</div>'}
-            `;
+                `;
+            } else {
+                contentDiv.innerHTML = `
+                    <div style="font-weight: 600; margin-bottom: 8px; color: #1da1f2;">
+                        ${author ? `@${author}` : 'Unknown Author'}
+                    </div>
+                    <div style="line-height: 1.4; margin-bottom: 10px; white-space: pre-wrap;">
+                        ${text || '<em style="color: #666;">No text content found</em>'}
+                    </div>
+                    ${imageArray.length > 0 ? `
+                        <div style="margin-top: 10px;">
+                            <strong>Images (${imageArray.length}):</strong><br>
+                            ${imageArray.map((img, index) => `
+                                <img src="${img}" 
+                                     style="max-width: 150px; max-height: 150px; margin: 5px; border-radius: 8px; border: 1px solid #ddd;" 
+                                     alt="Tweet image ${index + 1}"
+                                     onerror="this.style.display='none';">
+                            `).join('')}
+                        </div>
+                    ` : '<div style="color: #666; font-style: italic;">No images</div>'}
+                `;
+            }
 
             metaDiv.innerHTML = `
                 <strong>Original URL:</strong> <a href="${postUrl}" target="_blank" style="color: #1da1f2;">${postUrl}</a><br>
@@ -7963,7 +8022,12 @@
                 statusDiv.style.border = '1px solid #2196f3';
             }
             
-            statusDiv.textContent = message;
+            // Use innerHTML for rich content (like API setup instructions)
+            if (message.includes('<')) {
+                statusDiv.innerHTML = message;
+            } else {
+                statusDiv.textContent = message;
+            }
             statusDiv.classList.remove('hidden');
         }
 
