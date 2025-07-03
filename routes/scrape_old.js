@@ -1,9 +1,9 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt'); // Temporarily disabled due to native module compilation issues
 const jwt = require('jsonwebtoken');
 // const { crypto } = require('crypto');
 const base64url = require('base64url');
-const { createCanvas, loadImage, Image } = require('canvas');
+// const { createCanvas, loadImage, Image } = require('canvas'); // Temporarily disabled due to native module compilation issues
 const nodeHtmlToImage = require('node-html-to-image');
 const router = express.Router();
 const path = require('path');
@@ -19,7 +19,7 @@ const sharp = require('sharp');
 const { timeout } = require('../config/arweave.config');
 const { getRecords, indexRecord, searchCreatorByAddress } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
-const { authenticateToken, getWalletFilePath } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const { ongoingScrapes, cleanupScrape } = require('../helpers/sharedState.js'); // Adjust the path to store.js
 // const { retryAsync } = require('../helpers/utils');
 const { uploadToArFleet, publishVideoFiles, publishArticleText, publishImage } = require('../helpers/templateHelper');
@@ -448,161 +448,393 @@ const cleanUrl = (url) => {
 };
 
 async function publishArticleAndAttachedMedia(articleData, $, url, html, res, blockchain = 'arweave') {
+  // console.log('test test url:', url, 'blockchain:', blockchain);
+  // Initialize an array to hold YouTube URLs
+  let youtubeUrls = [];
+
+  // Direct YouTube URL search (in the content)
+  youtubeUrls = [...articleData.content.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)].map(match => match[0]);
+
   // Ensure the downloads directory exists
   const downloadsDir = path.resolve(__dirname, '../media');
   if (!fs.existsSync(downloadsDir)) {
     fs.mkdirSync(downloadsDir, { recursive: true });
   }
+  let imageArweaveAddress
+  let imageIPFSAddress
+  let imageBittorrentAddress
+  let imageFileType
+  let imageWidth
+  let imageHeight
+  let imageSize
   
-  let imageWidth, imageHeight, imageSize, imageFileType;
-  
-  // Determine the MIME content type based on the file extension
-  const mimeTypes = {
-    // Image MIME types
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.bmp': 'image/bmp',
-    '.webp': 'image/webp',
-    '.tiff': 'image/tiff',
-    '.svg': 'image/svg+xml',
-    // Video MIME types
-    '.mp4': 'video/mp4',
-    '.avi': 'video/x-msvideo',
-    '.mov': 'video/quicktime',
-    '.mkv': 'video/x-matroska',
-    '.flv': 'video/x-flv',
-    '.webm': 'video/webm',
-    '.wmv': 'video/x-ms-wmv',
-    '.3gp': 'video/3gpp',
-    '.m4v': 'video/x-m4v',
-    '.mpeg': 'video/mpeg'
-  };
+// Determine the MIME content type based on the file extension
+const mimeTypes = {
+// Image MIME types
+'.jpg': 'image/jpeg',
+'.jpeg': 'image/jpeg',
+'.png': 'image/png',
+'.gif': 'image/gif',
+'.bmp': 'image/bmp',
+'.webp': 'image/webp',
+'.tiff': 'image/tiff',
+'.svg': 'image/svg+xml',
+
+// Video MIME types
+'.mp4': 'video/mp4',
+'.avi': 'video/x-msvideo',
+'.mov': 'video/quicktime',
+'.mkv': 'video/x-matroska',
+'.flv': 'video/x-flv',
+'.webm': 'video/webm',
+'.wmv': 'video/x-ms-wmv',
+'.3gp': 'video/3gpp',
+'.m4v': 'video/x-m4v',
+'.mpeg': 'video/mpeg'
+};
 
   textFile = await downloadTextFile(articleData.content, url);
 
   console.log('textFile', textFile);
 
+  // publish to arweave
+  // const arweaveAddress = await publishArticleText(textFile.outputPath, null, null, null, false);
+  
   articleTextURL = `${backendURL}/api/media?id=${textFile}`;
+  // TEMPORARILY TURNED OFF FOR FIRST RELEASE
+  // articleTextAddresses = await publishArticleText(textFile.outputPath, null, null, null, false);
+  // console.log({articleTextURL},'articleTextBittorrentAddress', articleTextAddresses.torrent.magnetURI);
+  // articleTextBittorrentAddress = articleTextAddresses.torrent.magnetURI;
+// let hostedImageUrl
+  // if (articleData.embeddedImage) {
+  //   const imageUrl = articleData.embeddedImage;
+  //   console.log('imageUrl', imageUrl);
 
-  // Process embedded image if it exists
-  if (articleData.embeddedImage) {
-    const imageUrl = articleData.embeddedImage;
-    console.log('imageUrl', imageUrl);
+  //   // Extract the filename and file type from the URL
+  //   let parsedPath = path.parse(new URL(imageUrl).pathname);
+  //   let fileName = parsedPath.base;
+  //   let fileType = parsedPath.ext;
 
-    // Extract the filename and file type from the URL
-    let parsedPath = path.parse(new URL(imageUrl).pathname);
-    let fileName = parsedPath.base;
-    let fileType = parsedPath.ext;
+  //   // Check if the URL contains a query parameter that points to a filename
+  //   const urlObj = new URL(imageUrl);
+  //   if (urlObj.searchParams.has('url')) {
+  //     const queryUrl = urlObj.searchParams.get('url');
+  //     parsedPath = path.parse(new URL(queryUrl).pathname);
+  //     fileName = parsedPath.base;
+  //     fileType = parsedPath.ext;
+  //   }
 
-    // Check if the URL contains a query parameter that points to a filename
-    const urlObj = new URL(imageUrl);
-    if (urlObj.searchParams.has('url')) {
-      const queryUrl = urlObj.searchParams.get('url');
-      parsedPath = path.parse(new URL(queryUrl).pathname);
-      fileName = parsedPath.base;
-      fileType = parsedPath.ext;
-    }
+  //   const imageFileName = await downloadImageFile(imageUrl, url);
+  //   const mediaDownloadsDir = path.resolve(__dirname, '../media');
+  //   console.log('mediaDownloadsDir', mediaDownloadsDir, 'fileName', imageFileName);
+  //   const imagePath = path.join(mediaDownloadsDir, imageFileName);
 
-    const imageFileName = await downloadImageFile(imageUrl, url);
-    const mediaDownloadsDir = path.resolve(__dirname, '../media');
-    console.log('mediaDownloadsDir', mediaDownloadsDir, 'fileName', imageFileName);
-    const imagePath = path.join(mediaDownloadsDir, imageFileName);
-
-    const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
-    articleData.embeddedImageUrl = hostedImageUrl;
+  //   const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
+  //   articleData.embeddedImageUrl = hostedImageUrl;
     
-    // Get image info for the record
-    try {
-      const imageStats = fs.statSync(imagePath);
-      imageSize = imageStats.size;
-      imageFileType = mimeTypes[fileType.toLowerCase()] || 'image/jpeg';
+  //   // Upload image to ArFleet and BitTorrent
+  //   try {
+  //     const imageStorage = await publishImage(imagePath, false);
+  //     imageBittorrentAddress = imageStorage.bittorrentAddress;
+  //     imageArfleetAddress = imageStorage.arfleetAddress;
+  //     console.log('Image storage addresses:', {
+  //       bittorrent: imageBittorrentAddress,
+  //       arfleet: imageArfleetAddress
+  //     });
+      
+  //     // Get image info
+  //     const imageStats = fs.statSync(imagePath);
+  //     imageSize = imageStats.size;
+  //     imageFileType = mimeTypes[fileType.toLowerCase()] || 'image/jpeg';
 
-      const imageMetadata = await sharp(imagePath).metadata();
-      imageWidth = imageMetadata.width;
-      imageHeight = imageMetadata.height;
-      console.log('Image dimensions:', imageWidth, imageHeight);
-    } catch (error) {
-      console.error('Error processing image:', error);
-      imageWidth = null;
-      imageHeight = null;
-      imageSize = null;
-      imageFileType = 'image/jpeg';
-    }
-  }
+  //     const imageMetadata = await sharp(imagePath).metadata();
+  //     imageWidth = imageMetadata.width;
+  //     imageHeight = imageMetadata.height;
+  //     console.log('Image dimensions:', imageWidth, imageHeight);
+  //   } catch (error) {
+  //     console.error('Error publishing image:', error);
+  //   }
+  // }
+
+  // // Process Twitter content and YouTube videos
+  // try {
+  //   let embeddedTweets = await getEmbeddedTweets(html);
+  //   console.log('embeddedTweets', embeddedTweets);
+  //   let tweetDetails = null;
+  //   const tweetVideoArfleet = [];
+  //   const tweetRecords = [];
+  //   const tweetVideoRecords = [];
+  //   const youtubeVideoArfleet = [];
+  //   let videoRecords = [];
+
+  //   if (embeddedTweets.length > 0) {
+  //     tweetDetails = await fetchTweetDetails(embeddedTweets);
+  //     console.log('Tweet details:', tweetDetails);
+  //   }
+    
+  //   if (tweetDetails && tweetDetails.includes && tweetDetails.includes.media) {
+  //     let tweetMediaUrls = await getTwitterMediaUrls(embeddedTweets);
+  //     await Promise.all(embeddedTweets.map(async (tweet, index) => {
+  //       const tweetId = tweet.match(/status\/(\d+)/)[1]; // Extract tweet ID
+  //       const mediaUrl = tweetMediaUrls[index];
+
+  //       if (mediaUrl) {
+  //         outputPath = await downloadMedia(mediaUrl, tweetId); // Pass media URL and tweet ID
+  //         console.log('Media downloaded to:', outputPath);
+          
+  //         // Upload media to ArFleet
+  //         const mediaFiles = await publishVideoFiles(outputPath, tweetId, false);
+  //         tweetVideoRecords[index] = {
+  //           "media": {
+  //             "arfleetAddress": mediaFiles.arfleetAddress,
+  //             "arfleetId": mediaFiles.arfleetId
+  //           }
+  //         };
+          
+  //         // Keep torrent as fallback if available
+  //         if (mediaFiles.torrentAddress) {
+  //           tweetVideoRecords[index].media.bittorrentAddress = mediaFiles.torrentAddress;
+  //         }
+          
+  //         tweetVideoArfleet.push(mediaFiles.arfleetAddress);
+  //       } else {
+  //         tweetVideoRecords[index] = null; // No media for this tweet
+  //       }
+  //     }));
+  //   }
+
+  //   for (let i = 0; i < embeddedTweets.length; i++) {
+  //     const tweetRecord = {
+  //       "basic": {
+  //         "name": tweetDetails.data[i].id,
+  //         "language": "en",
+  //         "date": tweetDetails.data[i].created_at,
+  //         "description": tweetDetails.data[i].text,
+  //         "urlItems": [
+  //           {
+  //             "associatedUrlOnWeb": {
+  //               "url": embeddedTweets[i]
+  //             }
+  //           }
+  //         ]
+  //       },
+  //       "post": {
+  //         "bylineWriter": tweetDetails.data[i].author_id,
+  //         "videoItems": tweetVideoRecords[i] ? [tweetVideoRecords[i]] : [] // Add video record or empty array
+  //       }
+  //     };
+  //     tweetRecords.push(tweetRecord);
+  //   }
+
+  //   console.log('tweetRecords', tweetRecords);
+    
+  //   if (tweetVideoArfleet.length > 0) {
+  //     console.log('Twitter video ArFleet links:', tweetVideoArfleet);
+  //     if (res && typeof res.write === 'function') {
+  //       res.write(`event: tweets\n`);
+  //       res.write(`data: ${JSON.stringify(tweetVideoArfleet)}\n\n`);
+  //     }
+  //   }
+    
+  //   // Scrape YouTube iframes using Cheerio
+  //   const youtubeIframeUrls = [];
+
+  //   $('iframe[src*="youtube.com"]').each((i, elem) => {
+  //     const iframeSrc = $(elem).attr('src');
+  //     if (iframeSrc) {
+  //       youtubeIframeUrls.push(iframeSrc);
+  //     }
+  //   });
+    
+  //   // Also look for YouTube videos embedded in iframes
+  //   if (youtubeIframeUrls.length > 0) {
+  //     youtubeIframeUrls.forEach(iframeSrc => {
+  //       const youtubeUrlMatch = iframeSrc.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/)[\w-]+)/);
+  //       if (youtubeUrlMatch) {
+  //         const videoUrl = youtubeUrlMatch[0].replace("/embed/", "/watch?v=");
+  //         youtubeUrls.push(videoUrl);
+  //       }
+  //     });
+  //   }
+    
+  //   // Direct YouTube URL search (in the content)
+  //   const youtubeUrlMatches = [...html.matchAll(/(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+)/g)];
+  //   youtubeUrlMatches.forEach(match => youtubeUrls.push(match[0]));
+    
+  //   // Remove duplicates
+  //   youtubeUrls = [...new Set(youtubeUrls)];
+    
+  //   for (const videoUrl of youtubeUrls) {
+  //     const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)[1]; // Extract YouTube video ID
+  //     const metadata = await getYouTubeMetadata(videoUrl);
+  //     videoOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.mp4`);
+      
+  //     await downloadVideo(videoUrl, videoId); // Pass video URL and YouTube video ID
+      
+  //     // Process captions if available
+  //     let transcriptBittorrentAddress = null;
+  //     let transcriptArfleetAddress = null;
+      
+  //     if (metadata.automatic_captions && metadata.automatic_captions.en) {
+  //       // Find the URL for the caption with the 'vtt' extension
+  //       const captions = metadata.automatic_captions.en;
+  //       const vttCaption = captions.find(caption => caption.ext === 'vtt');
+
+  //       if (vttCaption) {
+  //         const vttUrl = vttCaption.url;
+  //         console.log('VTT Caption URL:', vttUrl);
+          
+  //         await downloadFile(vttUrl, path.join(downloadsDir, `${videoId}/${videoId}.vtt`));
+  //         const transcriptOutputPath = path.join(downloadsDir, `${videoId}/${videoId}.vtt`);
+  //         console.log('Transcript downloaded to:', transcriptOutputPath);
+          
+  //         // Upload transcript to ArFleet
+  //         try {
+  //           const transcriptArfleet = await uploadToArFleet(transcriptOutputPath, 30);
+  //           transcriptArfleetAddress = transcriptArfleet.arfleetUrl;
+            
+  //           // Fallback to BitTorrent
+  //           const transcriptAddresses = await publishArticleText(transcriptOutputPath, null, null, null, false);
+  //           transcriptBittorrentAddress = transcriptAddresses.bittorrentAddress;
+  //         } catch (error) {
+  //           console.error("Error uploading transcript:", error);
+  //         }
+  //       }
+  //     }
+      
+  //     // Upload video to ArFleet
+  //     const videoFiles = await publishVideoFiles(videoOutputPath, videoId, false);
+  //     let fileType = path.extname(videoOutputPath);
+  //     let videoFileType = mimeTypes[fileType.toLowerCase()] || 'application/octet-stream';
+  //     let fileName = `${videoId}.mp4`;
+      
+  //     if (videoFiles.arfleetAddress) {
+  //       youtubeVideoArfleet.push(videoFiles.arfleetAddress);
+  //     } else if (videoFiles.torrentAddress) {
+  //       youtubeVideoArfleet.push(videoFiles.torrentAddress);
+  //     }
+      
+  //     videoRecordData = {
+  //       "basic": {
+  //         "name": metadata.title,
+  //         "language": "en",
+  //         "date": metadata.timestamp,
+  //         "description": metadata.description,
+  //         "urlItems": [
+  //           {
+  //             "associatedUrlOnWeb": {
+  //               "url": videoUrl
+  //             }
+  //           }
+  //         ],
+  //         "nsfw": false,
+  //         "tagItems": [...(metadata.tags || []), ...(metadata.categories || [])]
+  //       },
+  //       "video": {
+  //         "arfleetAddress": videoFiles.arfleetAddress || "",
+  //         "arfleetId": videoFiles.arfleetId || "",
+  //         "bittorrentAddress": videoFiles.torrentAddress || "",
+  //         "filename": fileName,
+  //         "size": metadata.filesize || 0,
+  //         "width": metadata.width,
+  //         "height": metadata.height,
+  //         "duration": metadata.duration,
+  //         "contentType": videoFileType
+  //       }
+  //     };
+      
+  //     // Add transcript if available
+  //     if (transcriptArfleetAddress || transcriptBittorrentAddress) {
+  //       videoRecordData.text = {
+  //         "arfleetAddress": transcriptArfleetAddress || "",
+  //         "bittorrentAddress": transcriptBittorrentAddress || "",
+  //         "contentType": "text/text"
+  //       };
+  //     }
+      
+  //     videoRecords.push(videoRecordData);
+  //   }
+    
+  //   if (youtubeUrls.length > 0) {
+  //     console.log('YouTube video URLs:', youtubeUrls);
+  //     console.log('YouTube video ArFleet links:', youtubeVideoArfleet);
+  //     if (res && typeof res.write === 'function') {
+  //       res.write(`event: youtube\n`);
+  //       res.write(`data: ${JSON.stringify(youtubeVideoArfleet)}\n\n`);
+  //     }
+  //   }
+  // } catch (error) {
+  //   console.error('Error processing embedded media:', error);
+  // }
 
   if (articleData.summaryTTS) {
     const fullUrl = backendURL + articleData.summaryTTS;
     articleData.summaryTTS = fullUrl;
   }
 
-  // Validate required fields for post publishing
-  if (!articleData.title || !articleTextURL) {
-    console.error('Missing required fields for post publishing:', {
-      title: !!articleData.title,
-      articleTextURL: !!articleTextURL
-    });
-    throw new Error('Missing required fields: title and articleTextURL are required for post publishing');
-  }
+  // ... existing code for basic record building ...
 
-  // Build the main record structure - don't initialize empty arrays that will be processed incorrectly
   const recordToPublish = {
     "basic": {
       "name": articleData.title,
       "language": "en",
-      "date": articleData.publishDate || Math.floor(Date.now() / 1000),
-      "description": articleData.description || "",
+      "date": articleData.publishDate,
+      "description": articleData.description,
       "nsfw": false,
       "tagItems": articleData.tags || []
     },
     "post": {
-      "bylineWriter": articleData.byline || "",
-      "articleText": {
-        "text": {
-          "webUrl": articleTextURL,
-          "contentType": "text/text"
+      "bylineWriter": articleData.byline,
+      "articleText": 
+        { 
+          "text": {
+            "webUrl": articleTextURL,
+            "contentType": "text/text"
+          }
         }
-      },
+      ,
       "webUrl": cleanUrl(articleData.url),
-      // Don't initialize these as empty arrays - only add them if they have content
-      "imageItems": [],
-      "imageCaptionItems": [],
-      "videoItems": [],
-      "audioItems": [],
-      "audioCaptionItems": [],
-      "replyTo": ""
     },
-    "blockchain": blockchain
   };
   
-  // Handle featured image if it exists
-  if (articleData.embeddedImage && articleData.embeddedImageUrl) {
+  // ... existing image handling code ...
+  
+  if (articleData.embeddedImage) {
     recordToPublish.post.featuredImage = {
+      "basic": {
+        "name": articleData.title,
+        "language": "en",
+        "nsfw": false,
+      },
       "image": {
         "webUrl": articleData.embeddedImageUrl,
-        "contentType": imageFileType || "image/jpeg",
-        "height": imageHeight || null,
-        "width": imageWidth || null,
-        "size": imageSize || null
+        // "arfleetAddress": imageArfleetAddress || "",
+        // "bittorrentAddress": imageBittorrentAddress || "",
+        "height": imageHeight,
+        "width": imageWidth,
+        "size": imageSize,
+        "contentType": imageFileType
       }
     };
   }
 
-  // Handle summary TTS audio if it exists
   if (articleData.summaryTTS) {
-    recordToPublish.post.audioItems = [{
-      "audio": {
-        "webUrl": articleData.summaryTTS,
-        "contentType": "audio/mpeg"
-      }
-    }];
+    // ... existing code ...
   }
 
   console.log('this is whats getting published:', recordToPublish)
 
-  // Publish the main record
-  const record = await publishNewRecord(recordToPublish, "post", false, false, false, null, blockchain);
+  // Add YouTube videos if found
+  // if (videoRecords && videoRecords.length > 0) {
+  //   recordToPublish.post.videoItems = videoRecords;
+  // }
+  
+  // Add tweet citations if found
+  // if (tweetRecords && tweetRecords.length > 0) {
+  //   recordToPublish.post.citations = tweetRecords;
+  // }
+  
+  record = await publishNewRecord(recordToPublish, "post", false, false, false, null, blockchain)
   console.log('Record published XYZ:', record);
   return record;
 }
@@ -1144,10 +1376,178 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       // res.write(`event: finalData\n`);
       // res.write(`data: ${JSON.stringify(articleData)}\n\n`);
       console.log('Sent finalData:', articleData);
-      let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url, html, res, blockchain);
+      let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url,html, res, blockchain);
+      let articleTxid = article.transactionId;
       let articleDidTx = article.didTx;
+      // this is the audio url
+      let didTxRefs = article.didTxRefs;
+      let subRecords = article.subRecords;
+      let subRecordTypes = article.subRecordTypes;
+
+      // Define placeholders for each type of record
+      let articleUrlRecord = null;
+      let audioUrlRecord = null;
+      let articleDidTxRef = null;
+      let audioDidTxRef = null;
+      let urlInRecord = null;
+      let imageRecord = null;
+      let imageDidTxRef = null;
+      let textRecord = null;
+      let textDidTxRef = null;
+
+      let currentblock = await getCurrentBlockHeight();
+      if (currentblock === null) {
+        currentblock = await getCurrentBlockHeight();
+        if (currentblock === null) {
+          currentblock = latestArweaveBlockInDB;
+        }
+      }
+      console.log('SUPER IMPORTANT currentblock:', currentblock);
       
-      console.log('article archived successfully at didTx', articleDidTx);
+      const jwk = JSON.parse(fs.readFileSync(process.env.WALLET_FILE)); 
+      const myPublicKey = jwk.n;
+      const myAddress = base64url(crypto.createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
+      const creatorDid = `did:arweave:${myAddress}`;
+      const creatorInfo = await searchCreatorByAddress(creatorDid)
+      // console.log('creatorData:', creatorData);
+
+
+      const creator = {
+        creatorHandle: creatorInfo.data.creatorHandle,
+        didAddress: creatorInfo.data.didAddress,
+        didTx: creatorInfo.data.didTx,
+        publicKey: creatorInfo.data.publicKey
+      }
+        // "creatorHandle": "scribe1",
+        // "didAddress": "did:arweave:iZq_A50yy5YpHNZZfQ5E5Xres3fhMa-buPOlotxbEtU",
+        // "didTx": "did:arweave:B-2sMjXybRI-gGbKUyu-KEBHT7HfgD0hZKmso0nZmds",
+        // "publicKey": "g80XM1oE_GZVzpq6yTRVX0sCj1xisWhBAA31ANiqAl9-r6_5VMOT5SiX5ujLIh1GtLefb_BtNECoTSRbosndWrhypPFzEZutT6ttBi6lPrrDJGFYdAxE8Rucfw7aZyzfMNYQfEZC-vK6Wkw4HiVllwwp2ZG--XplJyYlKSQIDt78DmLUnkRIA0c0HhPC4pct3G0lHFz7-7ychn9HYNOmEYBsaIrqX4XIE1GGOzPieyAa5DiOkWqTDBwFVglRZ1bE4VSEl-TdEpizUC8SOuAsVvjiHIXkrCP3ugkZj2mpi3VaDN6T9GhI9BtP6duXa7fU5GUbYTkArxYU9bGCpvJKVE3hoeWAq-5coaG3tV5q_vXfGcVcwbm2tz1q292kpXnQ91HIBVzaOlJgEhC-f4UvHy_4dNvYlBc8wvdUFktkPK8tpQ17a3wNSN6_qRZemvbVobLXguSqWE9jxx4F3oXSoGoYQYL_UomWnIsNRr5Gre8fwrBOc8ZTl3wdKbqDV6SlSYq0q3y41KW2V6KI_csTXyE6boTWRIoFxGBG7Z1N8Fd3_GtdFKmevEkfNnlYYAM7pcMRfD-oz8ZMXHXwD86yed-b0kh6p4yqPnYpR_NyKsURlloVvpxBwOzZqIU9d_rsmsMZDY2ZIIowSYkqkjW7ug0597_LkCpA-eyyLaijbxE"
+    // }
+      
+      const records = getRecords({ resolveDepth: 0 });
+      
+    // console.log('subRecords:', subRecords, 'subRecordTypes', subRecordTypes);
+      subRecords.forEach(async (record, index) => {
+        let didTxRef = didTxRefs[index]; // Get the corresponding didTxRef
+        recordType = subRecordTypes[index]; // Get the corresponding record type
+        // console.log('1184 record:', index, {recordType}, record);
+          if (record.associatedUrlOnWeb !== undefined && record.associatedUrlOnWeb.url !== undefined) {
+            urlInRecord = record.associatedUrlOnWeb.url
+            // console.log('1187 record:', urlInRecord, {recordType}, record);
+          } else if (record.basic && record.basic.urlItems !== undefined && record.basic.urlItems[0] !== undefined) {
+            // console.log('1176 record:', {recordType}, record.basic.urlItems);
+            urlInRecord = record.basic.urlItems[0].associatedUrlOnWeb.url;
+          } else if (record.audio !== undefined && record.audio.webUrl !== undefined) {
+            urlInRecord = record.audio.webUrl;
+          }
+            if (recordType === 'audio') {
+              audioUrlRecord = audioUrlRecord || { oip: {} };
+              audioUrlRecord.data = { ...record };
+              audioUrlRecord.oip.didTx = didTxRef;
+              // audioUrlRecord.data = audioUrlRecord.data || '';
+              // audioUrlRecord.data.push(record);
+              audioDidTxRef = didTxRefs[index];
+              audioUrlRecord.oip.indexedAt = new Date().toISOString();
+              audioUrlRecord.oip.recordType = 'audio';
+              audioUrlRecord.oip.inArweaveBlock = currentblock;
+              audioUrlRecord.oip.recordStatus = 'pending confirmation in Arweave';
+              audioUrlRecord.oip.creator = creator;
+              console.log('30 indexRecord audioUrlRecord:', audioUrlRecord, audioDidTxRef);
+              // console.log('audioDidTxRef:', audioDidTxRef);
+
+              indexRecord(audioUrlRecord);
+            } else if (recordType === 'image') {
+              console.log('Image record found:', imageRecord);
+              imageRecord = imageRecord || { oip: {} };
+              imageRecord.data = { ...record };
+              imageRecord.oip.didTx = didTxRef;
+              // imageRecord.data = imageRecord.data || [];
+              // imageRecord.data.push(record);
+              imageDidTxRef = didTxRefs[index];
+              imageRecord.oip.indexedAt = new Date().toISOString();
+              imageRecord.oip.recordType = 'image';
+              imageRecord.oip.inArweaveBlock = currentblock;
+              imageRecord.oip.recordStatus = 'pending confirmation in Arweave';
+              imageRecord.oip.creator = creator;
+              console.log('30 indexRecord imageRecord:', imageRecord, imageDidTxRef);
+              // console.log('imageDidTxRef:', imageDidTxRef);
+              indexRecord(imageRecord);
+            
+            } else if (recordType === 'text') {
+              textRecord = textRecord || { oip: {} };
+              textRecord.data = { ...record };
+              textRecord.oip.didTx = didTxRef;
+              // textRecord.data = textRecord.data || [];
+              // textRecord.data.push(record);
+              textDidTxRef = didTxRefs[index];
+              textRecord.oip.indexedAt = new Date().toISOString();
+              textRecord.oip.recordType = 'text';
+              textRecord.oip.inArweaveBlock = currentblock;
+              textRecord.oip.recordStatus = 'pending confirmation in Arweave';
+              textRecord.oip.creator = creator;
+              console.log('30 indexRecord textRecord:', textRecord, textDidTxRef);
+              // console.log('textDidTxRef:', textDidTxRef);
+              indexRecord(textRecord);
+            }
+      });
+
+      // res.write(`event: archived\n`);
+      // res.write(`data: ${JSON.stringify({ archived: articleDidTx })}\n\n`);
+      // articleData.url = String(url);
+      let record = {
+        "data": 
+          {
+            "basic": {
+              "name": articleData.title,
+              "language": "en",
+              "date": articleData.publishDate,
+              "description": articleData.description,
+              // "urlItems": [
+                //   articleDidTxRef
+                // ],
+                "nsfw": false,
+                "tagItems": articleData.tags || []
+              },
+              "post": {
+                "bylineWriter": articleData.byline,
+                // "audioItems": [
+                //   audioDidTxRef
+                // ],
+                // "articleText": textDidTxRef
+                // ,
+                "webUrl": cleanUrl(articleData.url)
+                // "featuredImage": [
+                  //   imageDidTxRef
+                  // ]
+                },
+                // "associatedUrlOnWeb": {
+                //   "url": cleanUrl(articleData.url)
+                // }
+            },
+          "oip": {
+            "didTx": articleDidTx,
+            "inArweaveBlock": currentblock,
+            "recordType": "post",
+            "indexedAt": new Date().toISOString(),
+            "recordStatus": "pending confirmation in Arweave",
+            "creator": {...creator}
+            // "indexedAt": new Date().toISOString(),
+            }
+            };
+            if (imageRecord && imageDidTxRef) {
+              record.data.post.featuredImage = imageDidTxRef;
+            }
+            if (textRecord && textDidTxRef) {
+              record.data.post.articleText = textDidTxRef;
+            }
+            if (audioUrlRecord && audioDidTxRef) {
+              record.data.post.audioItems = [audioDidTxRef];
+            }
+            
+            console.log('40 indexRecord pending record to index:', record);
+            
+            indexRecord(record);
+            console.log('article archived successfully at didTx', articleDidTx);
             sendUpdate('archived', { archived: articleDidTx });
       res.end();
       cleanupScrape(scrapeId); // Clear completed scrape
