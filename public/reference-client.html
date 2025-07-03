@@ -7639,14 +7639,17 @@
                 });
 
                 const data = await response.json();
+                console.log('[X Post] Received data:', data); // Debug log
 
                 if (response.ok) {
                     displayXPostPreview(data);
                     showXPostStatus('✅ Post data fetched successfully!', 'success');
                 } else {
+                    console.error('[X Post] Error response:', data);
                     showXPostStatus(`❌ Error: ${data.error}`, 'error');
                 }
             } catch (error) {
+                console.error('[X Post] Network error:', error);
                 showXPostStatus(`❌ Network error: ${error.message}`, 'error');
             }
         }
@@ -7656,26 +7659,55 @@
             const contentDiv = document.getElementById('x-post-content');
             const metaDiv = document.getElementById('x-post-meta');
 
+            console.log('[X Post] Displaying preview for data:', data); // Debug log
+
             // Store data for publishing
             window.scrapedXPostData = data;
 
+            // Handle different possible data structures from the API
+            const author = data.author || data.username || data.user?.screen_name || data.user?.username || 'Unknown';
+            const text = data.text || data.full_text || data.tweet_text || data.content || 'No text content found';
+            const postUrl = data.url || data.original_url || url;
+            const postDate = data.date || data.created_at || data.timestamp || 'Unknown';
+            const images = data.images || data.media || data.photos || [];
+
+            // Ensure we have an array for images
+            const imageArray = Array.isArray(images) ? images : (images ? [images] : []);
+
             contentDiv.innerHTML = `
-                <div style="font-weight: 600; margin-bottom: 8px;">@${data.author}</div>
-                <div style="line-height: 1.4;">${data.text}</div>
-                ${data.images && data.images.length > 0 ? `
+                <div style="font-weight: 600; margin-bottom: 8px; color: #1da1f2;">@${author}</div>
+                <div style="line-height: 1.4; margin-bottom: 10px; white-space: pre-wrap;">${text}</div>
+                ${imageArray.length > 0 ? `
                     <div style="margin-top: 10px;">
-                        ${data.images.map(img => `<img src="${img}" style="max-width: 100px; margin-right: 10px; border-radius: 4px;">`).join('')}
+                        <strong>Images (${imageArray.length}):</strong><br>
+                        ${imageArray.map((img, index) => `
+                            <img src="${img}" 
+                                 style="max-width: 150px; max-height: 150px; margin: 5px; border-radius: 8px; border: 1px solid #ddd;" 
+                                 alt="Tweet image ${index + 1}"
+                                 onerror="this.style.display='none';">
+                        `).join('')}
                     </div>
-                ` : ''}
+                ` : '<div style="color: #666; font-style: italic;">No images</div>'}
             `;
 
             metaDiv.innerHTML = `
-                <strong>Original URL:</strong> ${data.url}<br>
-                <strong>Date:</strong> ${data.date || 'Unknown'}<br>
-                <strong>Images:</strong> ${data.images ? data.images.length : 0}
+                <strong>Original URL:</strong> <a href="${postUrl}" target="_blank" style="color: #1da1f2;">${postUrl}</a><br>
+                <strong>Date:</strong> ${postDate}<br>
+                <strong>Author:</strong> @${author}<br>
+                <strong>Images:</strong> ${imageArray.length}<br>
+                <strong>Text Length:</strong> ${text.length} characters
             `;
 
             previewDiv.classList.remove('hidden');
+
+            // Also log what we're displaying for debugging
+            console.log('[X Post] Preview data:', {
+                author,
+                text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+                postUrl,
+                postDate,
+                imageCount: imageArray.length
+            });
         }
 
         function showXPostStatus(message, type) {
