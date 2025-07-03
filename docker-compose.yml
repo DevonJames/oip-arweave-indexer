@@ -60,7 +60,7 @@ services:
       - standard
       - standard-gpu
 
-  # Standard OIP service (for distributed deployments)
+  # Standard OIP service (for distributed deployments with AI features)
   oip:
     build:
       context: .
@@ -87,6 +87,31 @@ services:
     restart: unless-stopped
     profiles:
       - standard
+
+  # Minimal OIP service (core functionality only, no AI dependencies)
+  oip-minimal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "3005:3005"
+      - "9229:9229"
+    volumes:
+      - ./helpers:/usr/src/app/helpers
+      - ./routes:/usr/src/app/routes
+    environment:
+      - NODE_ENV=production
+      - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
+      - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
+      - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
+    depends_on:
+      - elasticsearch
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
       - minimal
 
   # Standard monolithic OIP service (all services in one container)
