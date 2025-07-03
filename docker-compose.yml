@@ -411,7 +411,6 @@ services:
 networks:
   oip-network:
     driver: bridge
-    name: oiparweave_oip-network
 
 volumes:
   esdata:
