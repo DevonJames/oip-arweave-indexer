@@ -126,8 +126,8 @@
         .ai-drawer {
             position: fixed;
             top: 64px;
-            right: -420px;
-            width: 400px;
+            right: -600px;
+            width: 580px;
             height: calc(100vh - 64px);
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             box-shadow: -2px 0 10px rgba(0,0,0,0.1);
@@ -163,7 +163,7 @@
         }
 
         .main-content.drawer-open {
-            margin-right: 400px;
+            margin-right: 580px;
         }
 
         /* Welcome Interface Styles */
@@ -2069,7 +2069,7 @@
     <div class="header">
         <div class="header-content">
             <div class="logo">
-                <img src="icons/blue yo.png" alt="ALEXANDRIA" class="logo-icon">
+                <img src="public/blue-alexandria-logo.png" alt="ALEXANDRIA" class="logo-icon">
                 ΛLΞXΛNDRIΛ
             </div>
             
@@ -2179,51 +2179,8 @@
                 </div>
             </div>
             
-            <div class="categories-grid">
-                <div class="category-item" onclick="searchByCategory('archives')">
-                    <div class="category-icon">🗃️</div>
-                    <div class="category-label">Archives</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('movies')">
-                    <div class="category-icon">🎬</div>
-                    <div class="category-label">Movies</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('videos')">
-                    <div class="category-icon">📹</div>
-                    <div class="category-label">Videos</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('podcasts')">
-                    <div class="category-icon">🎙️</div>
-                    <div class="category-label">Podcasts</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('music')">
-                    <div class="category-icon">🎵</div>
-                    <div class="category-label">Music</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('photos')">
-                    <div class="category-icon">📷</div>
-                    <div class="category-label">Photos</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('books')">
-                    <div class="category-icon">📚</div>
-                    <div class="category-label">Books</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('recipes')">
-                    <div class="category-icon">🍳</div>
-                    <div class="category-label">Recipes</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('things')">
-                    <div class="category-icon">🏛️</div>
-                    <div class="category-label">Things</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('documents')">
-                    <div class="category-icon">📄</div>
-                    <div class="category-label">Documents</div>
-                </div>
-                <div class="category-item" onclick="searchByCategory('software')">
-                    <div class="category-icon">💻</div>
-                    <div class="category-label">Software</div>
-                </div>
+            <div id="categories-grid" class="categories-grid">
+                <!-- Categories will be populated dynamically from recordTypes -->
             </div>
         </div>
 
@@ -2576,8 +2533,8 @@
             // Force hide the old browse tab and ensure it stays hidden
             forcehideBrowseTab();
             
-            // Initialize the voice browse tab (now the default)
-            initializeVoiceFeatures();
+            // Show welcome interface by default
+            showWelcomeInterface();
             
             console.log('[App] Initialized with enhanced dynamic template system');
             
@@ -2661,6 +2618,72 @@
                 });
                 console.log('[App] Populated publishing record type filter with', recordTypesData.length, 'types');
             }
+            
+            // Populate categories grid
+            populateCategoriesGrid(recordTypesData);
+        }
+        
+        // Populate the categories grid dynamically from recordTypes
+        function populateCategoriesGrid(recordTypesData) {
+            const grid = document.getElementById('categories-grid');
+            if (!grid) return;
+            
+            // Icon mapping for different record types
+            const iconMap = {
+                'post': '📝',
+                'video': '📹', 
+                'image': '📷',
+                'audio': '🎵',
+                'text': '📄',
+                'recipe': '🍳',
+                'workout': '💪',
+                'podcast': '🎙️',
+                'movie': '🎬',
+                'music': '🎵',
+                'book': '📚',
+                'document': '📄',
+                'software': '💻',
+                'archive': '🗃️',
+                'thing': '🏛️'
+            };
+            
+            grid.innerHTML = '';
+            
+            // If no recordTypes data, show default categories
+            if (!recordTypesData || recordTypesData.length === 0) {
+                const defaultTypes = [
+                    { recordType: 'post', count: 0 },
+                    { recordType: 'video', count: 0 },
+                    { recordType: 'image', count: 0 },
+                    { recordType: 'audio', count: 0 },
+                    { recordType: 'recipe', count: 0 },
+                    { recordType: 'text', count: 0 }
+                ];
+                recordTypesData = defaultTypes;
+            }
+            
+            // Sort by count (descending) and take top categories
+            const sortedTypes = recordTypesData
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 12); // Limit to 12 categories max
+            
+            sortedTypes.forEach(rt => {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'category-item';
+                categoryDiv.onclick = () => searchByRecordType(rt.recordType);
+                
+                const icon = iconMap[rt.recordType] || '📋';
+                const label = rt.recordType.charAt(0).toUpperCase() + rt.recordType.slice(1);
+                
+                categoryDiv.innerHTML = `
+                    <div class="category-icon">${icon}</div>
+                    <div class="category-label">${label}</div>
+                `;
+                
+                grid.appendChild(categoryDiv);
+            });
+            
+            console.log('[App] Populated categories grid with', sortedTypes.length, 'categories');
         }
 
         // Legacy function - now redirects to new implementation
@@ -2762,26 +2785,18 @@
             }
         }
 
-        function searchByCategory(category) {
-            // Map category names to record types where applicable
-            const categoryMap = {
-                'videos': 'video',
-                'movies': 'video', 
-                'photos': 'image',
-                'books': 'text',
-                'recipes': 'recipe',
-                'documents': 'text',
-                'music': 'audio',
-                'podcasts': 'audio'
-            };
+        function searchByRecordType(recordType) {
+            // Clear current search field (don't put record type name in search)
+            document.getElementById('voice-search-input').value = '';
             
-            const recordType = categoryMap[category] || '';
+            // Set the record type filter
+            document.getElementById('voice-record-type-filter').value = recordType;
             
-            // Clear current search and set category-based search
-            document.getElementById('voice-search-input').value = category;
-            if (recordType) {
-                document.getElementById('voice-record-type-filter').value = recordType;
-            }
+            // Clear other filters to get clean results for this record type
+            document.getElementById('voice-sort-by').value = 'inArweaveBlock:desc';
+            document.getElementById('voice-date-start').value = '';
+            document.getElementById('voice-date-end').value = '';
+            clearAllTagFilters();
             
             // Switch to search interface
             showSearchInterface();
@@ -2790,6 +2805,11 @@
             setTimeout(() => {
                 applyVoiceFilters();
             }, 100);
+        }
+        
+        // Legacy function for backward compatibility
+        function searchByCategory(category) {
+            searchByRecordType(category);
         }
 
         function showAdvancedSearch() {
