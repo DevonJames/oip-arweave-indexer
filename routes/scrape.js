@@ -30,6 +30,14 @@ const { ongoingScrapes, cleanupScrape } = require('../helpers/sharedState.js'); 
 // const { retryAsync } = require('../helpers/utils');
 const { uploadToArFleet, publishVideoFiles, publishArticleText, publishImage } = require('../helpers/templateHelper');
 
+// Optional puppeteer dependency - gracefully handle if not installed
+let puppeteer = null;
+try {
+  puppeteer = require('puppeteer');
+} catch (error) {
+  console.warn('Puppeteer not available - web article archiving will be disabled');
+}
+
 // const { FirecrawlApp } = require('@mendable/firecrawl-js');
 // const app = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY });
 
@@ -2648,6 +2656,72 @@ router.post('/x-post', authenticateToken, async (req, res) => {
   }
 });
 
+// Web Article Archiving Endpoint (without requiring screenshots from frontend)
+router.post('/web-article', authenticateToken, async (req, res) => {
+  const { url, blockchain = 'arweave' } = req.body;
+  const userId = req.user.id; // Get userId from authenticated token
+
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  // Validate URL format
+  try {
+    new URL(url);
+  } catch (error) {
+    return res.status(400).json({ error: 'Invalid URL format' });
+  }
+
+  const scrapeId = generateScrapeId(url, userId);
+  console.log('Web Article Scrape ID:', scrapeId);
+
+  // Respond immediately with the scrapeId
+  res.status(200).json({ scrapeId, blockchain });
+
+  // Initialize the stream if not already present
+  if (!ongoingScrapes.has(scrapeId)) {
+    ongoingScrapes.set(scrapeId, { clients: [], data: [] });
+  }
+
+  try {
+    // Stream updates function
+    const streamUpdates = (event, data) => {
+      console.log('sending event over stream', event, data);
+      const streamData = ongoingScrapes.get(scrapeId);
+      if (streamData) {
+        streamData.data.push({ event, data });
+        console.log('streamData', streamData);
+        streamData.clients.forEach(client => {
+          if (typeof client.write === 'function') {
+            console.log('writing event to client', event, data);
+            client.write(`event: ${event}\n`);
+            client.write(`data: ${JSON.stringify({ type: event, data })}\n\n`);
+            client.flush && client.flush(); // Ensure data is flushed to the client
+            console.log('Sent event:', event, data);
+          } else {
+            console.warn('client.write is not a function');
+          }
+        });
+      }
+    };
+
+    // Use Puppeteer to fetch HTML and generate screenshots automatically
+    await fetchWebArticleWithPuppeteer(url, scrapeId, { sendUpdate: streamUpdates, res, blockchain });
+
+  } catch (error) {
+    console.error('Error starting web article scrape:', error);
+    const streamData = ongoingScrapes.get(scrapeId);
+    if (streamData) {
+      streamData.clients.forEach(client => {
+        client.write(`event: error\n`);
+        client.write(`data: ${JSON.stringify({ message: 'Failed to fetch article data: ' + error.message })}\n\n`);
+        client.end(); // Close SSE stream
+      });
+      cleanupScrape(scrapeId); // Clean up
+    }
+  }
+});
+
 // YouTube Video Archiving Endpoints
 let youtubeTasks = new Map(); // Store ongoing tasks
 
@@ -2828,5 +2902,116 @@ router.get('/open-stream', (req, res) => {
     }
   });
 });
+
+// Function to fetch web article using Puppeteer (without requiring frontend screenshots)
+async function fetchWebArticleWithPuppeteer(url, scrapeId, options) {
+  const { sendUpdate, res, blockchain = 'arweave' } = options;
+
+  if (!puppeteer) {
+    throw new Error('Puppeteer is not available. Install puppeteer to use web article archiving.');
+  }
+
+  let browser = null;
+
+  try {
+    sendUpdate('initializing', { message: 'Starting browser...' });
+
+    // Launch Puppeteer
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ]
+    });
+
+    const page = await browser.newPage();
+    
+    // Set viewport and user agent
+    await page.setViewport({ width: 1200, height: 800 });
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+
+    sendUpdate('loading', { message: 'Loading page...' });
+
+    // Navigate to the URL
+    await page.goto(url, { 
+      waitUntil: 'networkidle2', 
+      timeout: 30000 
+    });
+
+    // Wait a bit for any dynamic content to load
+    await page.waitForTimeout(2000);
+
+    sendUpdate('processing', { message: 'Processing page content...' });
+
+    // Get the HTML content
+    const html = await page.content();
+
+    // Scroll to capture the full page
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        let totalHeight = 0;
+        const distance = 100;
+        const timer = setInterval(() => {
+          const scrollHeight = document.body.scrollHeight;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+
+          if (totalHeight >= scrollHeight) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 100);
+      });
+    });
+
+    // Get page dimensions
+    const bodyHandle = await page.$('body');
+    const { height } = await bodyHandle.boundingBox();
+    await bodyHandle.dispose();
+
+    sendUpdate('screenshot', { message: 'Generating screenshot...' });
+
+    // Take a full page screenshot
+    const screenshotBuffer = await page.screenshot({
+      fullPage: true,
+      type: 'png'
+    });
+
+    // Convert screenshot to base64 and create screenshots array for compatibility
+    const screenshotBase64 = `data:image/png;base64,${screenshotBuffer.toString('base64')}`;
+    const screenshots = [{
+      screenshot: screenshotBase64,
+      height: height
+    }];
+
+    await browser.close();
+    browser = null;
+
+    sendUpdate('parsing', { message: 'Parsing article content...' });
+
+    // Now use the existing fetchParsedArticleData function
+    await fetchParsedArticleData(
+      url, 
+      html, 
+      scrapeId, 
+      screenshotBase64, 
+      screenshots, 
+      height,
+      { sendUpdate, res, blockchain }
+    );
+
+  } catch (error) {
+    if (browser) {
+      await browser.close();
+    }
+    throw error;
+  }
+}
 
 module.exports = router;

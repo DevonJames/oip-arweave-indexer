@@ -5136,6 +5136,7 @@
                         <select id="post-source" onchange="updatePostSource()">
                             <option value="manual">Create New Post</option>
                             <option value="archive-x">Archive X/Twitter Post</option>
+                            <option value="archive-web">Archive Web Article</option>
                         </select>
                     </div>
 
@@ -5237,6 +5238,35 @@
                         </div>
 
                         <div id="x-post-status" class="hidden" style="margin-top: 15px; padding: 10px; border-radius: 6px;"></div>
+                    </div>
+
+                    <!-- Web Article Archival Interface -->
+                    <div id="web-article-interface" class="hidden">
+                        <div class="form-group">
+                            <label for="web-article-url">Article URL:</label>
+                            <input type="url" id="web-article-url" placeholder="https://example.com/article-title" required>
+                            <button type="button" onclick="scrapeWebArticle()" style="margin-top: 10px; width: 100%;">
+                                📰 Archive Article
+                            </button>
+                        </div>
+
+                        <div id="web-article-progress" class="hidden" style="margin-top: 20px;">
+                            <div class="publish-progress">
+                                <h4 id="web-article-progress-title">📰 Archiving Web Article...</h4>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="web-article-progress-bar" style="width: 0%;"></div>
+                                </div>
+                                <div id="web-article-status" style="margin-top: 10px; font-size: 0.9rem;">Initializing...</div>
+                            </div>
+                        </div>
+
+                        <div id="web-article-preview" class="hidden" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #28a745;">
+                            <h4>📰 Article Preview</h4>
+                            <div id="web-article-content"></div>
+                            <div id="web-article-meta" style="margin-top: 10px; font-size: 0.9rem; color: #666;"></div>
+                        </div>
+
+                        <div id="web-article-result" class="hidden" style="margin-top: 15px; padding: 10px; border-radius: 6px;"></div>
                     </div>
 
                     <button onclick="publishPost()" class="btn-primary" style="width: 100%; margin-top: 20px;">
@@ -7504,15 +7534,22 @@
             const source = document.getElementById('post-source').value;
             const manualInterface = document.getElementById('manual-post-interface');
             const xInterface = document.getElementById('x-post-interface');
+            const webArticleInterface = document.getElementById('web-article-interface');
             const publishText = document.getElementById('post-publish-text');
             
+            // Hide all interfaces first
+            manualInterface.classList.add('hidden');
+            xInterface.classList.add('hidden');
+            webArticleInterface.classList.add('hidden');
+            
             if (source === 'archive-x') {
-                manualInterface.classList.add('hidden');
                 xInterface.classList.remove('hidden');
                 publishText.textContent = '📱 Archive X Post';
+            } else if (source === 'archive-web') {
+                webArticleInterface.classList.remove('hidden');
+                publishText.textContent = '📰 Archive Web Article';
             } else {
                 manualInterface.classList.remove('hidden');
-                xInterface.classList.add('hidden');
                 publishText.textContent = '📤 Publish Post';
             }
         }
@@ -7652,6 +7689,208 @@
                 console.error('[X Post] Network error:', error);
                 showXPostStatus(`❌ Network error: ${error.message}`, 'error');
             }
+        }
+
+        // Web Article Scraping Functions
+        async function scrapeWebArticle() {
+            const url = document.getElementById('web-article-url').value;
+            
+            if (!url) {
+                showWebArticleStatus('Please enter a valid article URL', 'error');
+                return;
+            }
+
+            // Validate URL format
+            try {
+                new URL(url);
+            } catch (error) {
+                showWebArticleStatus('Please enter a valid URL format', 'error');
+                return;
+            }
+
+            try {
+                // Show progress
+                document.getElementById('web-article-progress').classList.remove('hidden');
+                document.getElementById('web-article-preview').classList.add('hidden');
+                document.getElementById('web-article-result').classList.add('hidden');
+                
+                updateWebArticleProgress(5, 'Starting article archival...');
+                
+                // Start the scraping process
+                const response = await fetch('/api/scrape/web-article', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
+                console.log('[Web Article] Received scrape ID:', data);
+
+                if (response.ok && data.scrapeId) {
+                    // Open EventSource stream to receive real-time updates
+                    openWebArticleStream(data.scrapeId);
+                } else {
+                    throw new Error(data.error || 'Failed to start article archival');
+                }
+            } catch (error) {
+                console.error('[Web Article] Error:', error);
+                showWebArticleStatus(`❌ Error: ${error.message}`, 'error');
+                document.getElementById('web-article-progress').classList.add('hidden');
+            }
+        }
+
+        function openWebArticleStream(scrapeId) {
+            const eventSource = new EventSource(`/api/scrape/open-stream?streamId=${scrapeId}`);
+            
+            eventSource.onopen = function() {
+                console.log('[Web Article] Stream opened for scrapeId:', scrapeId);
+                updateWebArticleProgress(10, 'Connected to server...');
+            };
+
+            eventSource.onmessage = function(event) {
+                console.log('[Web Article] Received message:', event);
+            };
+
+            eventSource.addEventListener('initializing', function(event) {
+                const data = JSON.parse(event.data);
+                console.log('[Web Article] Initializing:', data);
+                updateWebArticleProgress(15, data.data?.message || 'Initializing browser...');
+            });
+
+            eventSource.addEventListener('loading', function(event) {
+                const data = JSON.parse(event.data);
+                console.log('[Web Article] Loading:', data);
+                updateWebArticleProgress(25, data.data?.message || 'Loading page...');
+            });
+
+            eventSource.addEventListener('processing', function(event) {
+                const data = JSON.parse(event.data);
+                console.log('[Web Article] Processing:', data);
+                updateWebArticleProgress(40, data.data?.message || 'Processing content...');
+            });
+
+            eventSource.addEventListener('screenshot', function(event) {
+                const data = JSON.parse(event.data);
+                console.log('[Web Article] Screenshot:', data);
+                updateWebArticleProgress(55, data.data?.message || 'Taking screenshot...');
+            });
+
+            eventSource.addEventListener('parsing', function(event) {
+                const data = JSON.parse(event.data);
+                console.log('[Web Article] Parsing:', data);
+                updateWebArticleProgress(70, data.data?.message || 'Parsing article...');
+            });
+
+            eventSource.addEventListener('initialData', function(event) {
+                const data = JSON.parse(event.data);
+                console.log('[Web Article] Initial data:', data);
+                updateWebArticleProgress(75, 'Article data extracted...');
+                displayWebArticlePreview(data.data);
+            });
+
+            eventSource.addEventListener('finalData', function(event) {
+                const data = JSON.parse(event.data);
+                console.log('[Web Article] Final data:', data);
+                updateWebArticleProgress(90, 'Finalizing article...');
+                // Store the final data for publishing
+                window.scrapedWebArticleData = data.data;
+            });
+
+            eventSource.addEventListener('archived', function(event) {
+                const data = JSON.parse(event.data);
+                console.log('[Web Article] Archived:', data);
+                updateWebArticleProgress(100, 'Article archived successfully!');
+                showWebArticleStatus(`✅ Article archived successfully! DID: ${data.data?.archived}`, 'success');
+                setTimeout(() => {
+                    document.getElementById('web-article-progress').classList.add('hidden');
+                }, 2000);
+                eventSource.close();
+            });
+
+            eventSource.addEventListener('error', function(event) {
+                const data = JSON.parse(event.data);
+                console.error('[Web Article] Error:', data);
+                showWebArticleStatus(`❌ Error: ${data.data?.message || 'Unknown error occurred'}`, 'error');
+                document.getElementById('web-article-progress').classList.add('hidden');
+                eventSource.close();
+            });
+
+            eventSource.onerror = function(event) {
+                console.error('[Web Article] Stream error:', event);
+                showWebArticleStatus('❌ Connection error occurred', 'error');
+                document.getElementById('web-article-progress').classList.add('hidden');
+                eventSource.close();
+            };
+        }
+
+        function updateWebArticleProgress(percent, status) {
+            document.getElementById('web-article-progress-bar').style.width = `${percent}%`;
+            document.getElementById('web-article-status').textContent = status;
+        }
+
+        function displayWebArticlePreview(data) {
+            const previewDiv = document.getElementById('web-article-preview');
+            const contentDiv = document.getElementById('web-article-content');
+            const metaDiv = document.getElementById('web-article-meta');
+
+            console.log('[Web Article] Displaying preview for data:', data);
+
+            const title = data.title || 'Unknown Title';
+            const description = data.description || 'No description available';
+            const byline = data.byline || 'Unknown Author';
+            const domain = data.domain || 'Unknown Domain';
+            const publishDate = data.publishDate ? new Date(data.publishDate * 1000).toLocaleDateString() : 'Unknown Date';
+
+            contentDiv.innerHTML = `
+                <div style="font-weight: 600; margin-bottom: 8px; color: #28a745;">${title}</div>
+                <div style="line-height: 1.4; margin-bottom: 10px; color: #666;">${description}</div>
+                ${data.screenshotURL ? `
+                    <div style="margin-top: 10px;">
+                        <img src="${data.screenshotURL}" 
+                             style="max-width: 100%; max-height: 200px; border-radius: 8px; border: 1px solid #ddd;" 
+                             alt="Article screenshot"
+                             onerror="this.style.display='none';">
+                    </div>
+                ` : ''}
+            `;
+
+            metaDiv.innerHTML = `
+                <strong>Author:</strong> ${byline}<br>
+                <strong>Domain:</strong> ${domain}<br>
+                <strong>Published:</strong> ${publishDate}<br>
+                <strong>URL:</strong> <a href="${data.url}" target="_blank" style="color: #28a745;">${data.url}</a><br>
+                ${data.tags && data.tags.length > 0 ? `<strong>Tags:</strong> ${data.tags.join(', ')}<br>` : ''}
+                ${data.summaryTTS ? `<strong>Audio Summary:</strong> <a href="${data.summaryTTS}" target="_blank">🎵 Listen</a><br>` : ''}
+            `;
+
+            previewDiv.classList.remove('hidden');
+        }
+
+        function showWebArticleStatus(message, type) {
+            const statusDiv = document.getElementById('web-article-result');
+            statusDiv.className = 'hidden';
+            
+            if (type === 'error') {
+                statusDiv.className = 'error-message';
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
+            } else if (type === 'success') {
+                statusDiv.className = 'success-message';
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.color = '#155724';
+                statusDiv.style.border = '1px solid #c3e6cb';
+            } else {
+                statusDiv.style.background = '#e3f2fd';
+                statusDiv.style.color = '#1976d2';
+                statusDiv.style.border = '1px solid #2196f3';
+            }
+            
+            statusDiv.textContent = message;
+            statusDiv.classList.remove('hidden');
         }
 
         function displayXPostPreview(data) {
@@ -7952,6 +8191,36 @@
                             replyTo: ''
                         }
                     };
+                } else if (postSource === 'archive-web' && window.scrapedWebArticleData) {
+                    // Use scraped web article data
+                    postData = {
+                        basic: {
+                            name: window.scrapedWebArticleData.title || 'Archived Web Article',
+                            description: window.scrapedWebArticleData.description || '',
+                            language: 'en',
+                            date: window.scrapedWebArticleData.publishDate || Math.floor(Date.now() / 1000),
+                            nsfw: false,
+                            tagItems: window.scrapedWebArticleData.tags || ['web-article', 'archived'],
+                            webUrl: window.scrapedWebArticleData.url // Original article URL
+                        },
+                        post: {
+                            articleText: window.scrapedWebArticleData.content || '',
+                            bylineWriter: window.scrapedWebArticleData.byline || '',
+                            webUrl: window.scrapedWebArticleData.url,
+                            featuredImage: window.scrapedWebArticleData.embeddedImageUrl || '',
+                            imageItems: [],
+                            imageCaptionItems: [],
+                            videoItems: [],
+                            audioItems: window.scrapedWebArticleData.summaryTTS ? [{
+                                audio: {
+                                    webUrl: window.scrapedWebArticleData.summaryTTS,
+                                    contentType: 'audio/mpeg'
+                                }
+                            }] : [],
+                            audioCaptionItems: [],
+                            replyTo: ''
+                        }
+                    };
                 } else {
                     // Use manual form data
                     postData = {
@@ -7980,8 +8249,19 @@
                     };
                 }
 
-                if (!postData.basic.name || !postData.post.articleText) {
-                    showMessage('publish-status', 'Please fill in title and content', 'error');
+                if (!postData.basic.name) {
+                    showMessage('publish-status', 'Please provide a title for the post', 'error');
+                    return;
+                }
+
+                // For archived content, the article may already be published, so just show success
+                if (postSource === 'archive-web' && window.scrapedWebArticleData?.didTx) {
+                    showMessage('publish-success', `Article already archived! DID: ${window.scrapedWebArticleData.didTx}`, 'success');
+                    return;
+                }
+
+                if (!postData.post.articleText && postSource === 'manual') {
+                    showMessage('publish-status', 'Please fill in content', 'error');
                     return;
                 }
 
