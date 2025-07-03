@@ -2062,6 +2062,224 @@
                 max-width: 95%;
             }
         }
+
+        /* Publishing Interface Styles */
+        .publish-form {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .publish-form h3 {
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .publish-form .form-group {
+            margin-bottom: 20px;
+        }
+
+        .publish-form .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .publish-form input,
+        .publish-form textarea,
+        .publish-form select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: #fafbfc;
+        }
+
+        .publish-form input:focus,
+        .publish-form textarea:focus,
+        .publish-form select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .publish-form textarea {
+            resize: vertical;
+            min-height: 120px;
+            font-family: inherit;
+            line-height: 1.5;
+        }
+
+        .publish-form small {
+            display: block;
+            margin-top: 5px;
+            color: #6c757d;
+            font-size: 0.85rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: none;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .media-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .media-section h4 {
+            margin: 0 0 15px 0;
+            color: #495057;
+            font-size: 1.1rem;
+        }
+
+        .ingredient-row,
+        .exercise-row {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: end;
+        }
+
+        .ingredient-row {
+            grid-template-columns: 80px 100px 1fr 40px;
+        }
+
+        .exercise-row {
+            grid-template-columns: 1fr 80px 80px 80px 40px;
+        }
+
+        .ingredient-row input,
+        .exercise-row input {
+            margin-bottom: 0;
+        }
+
+        .ingredient-row button,
+        .exercise-row button {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid #dc3545;
+            background: white;
+            color: #dc3545;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ingredient-row button:hover,
+        .exercise-row button:hover {
+            background: #dc3545;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .publish-form input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+            transform: scale(1.2);
+        }
+
+        .publish-form label:has(input[type="checkbox"]) {
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .publish-progress {
+            margin: 20px 0;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .publish-progress h4 {
+            margin: 0 0 10px 0;
+            color: #1976d2;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            .publish-form {
+                margin: 0;
+                padding: 15px;
+                border-radius: 0;
+            }
+
+            .ingredient-row {
+                grid-template-columns: 60px 80px 1fr 35px;
+                gap: 8px;
+            }
+
+            .exercise-row {
+                grid-template-columns: 1fr 60px 60px 60px 35px;
+                gap: 8px;
+            }
+
+            .ingredient-row input,
+            .exercise-row input {
+                font-size: 13px;
+                padding: 8px 10px;
+            }
+
+            .media-section {
+                margin: 15px 0;
+                padding: 15px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -2389,32 +2607,29 @@
             <!-- Record Publishing -->
             <div id="record-section" class="section hidden">
                 <h2>Publish Record</h2>
+                
+                <!-- Record Type Selection -->
                 <div class="form-group">
-                    <label for="record-type">Record Type:</label>
-                    <select id="record-type" onchange="loadTemplateFields()">
+                    <label for="publish-record-type">Record Type:</label>
+                    <select id="publish-record-type" onchange="loadPublishInterface()">
                         <option value="">Select Record Type</option>
+                        <option value="post">Post / Article</option>
+                        <option value="video">Video</option>
+                        <option value="audio">Audio / Podcast</option>
+                        <option value="image">Image</option>
                         <option value="recipe">Recipe</option>
                         <option value="workout">Workout</option>
-                        <option value="video">Video</option>
-                        <option value="image">Image</option>
-                        <option value="post">Post</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="template-select">Template:</label>
-                    <select id="template-select">
-                        <option value="">Loading templates...</option>
+                        <option value="text">Text Document</option>
                     </select>
                 </div>
 
-                <div id="record-fields" class="dynamic-fields">
-                    <div class="loading">Select a record type to see available fields</div>
+                <!-- Dynamic Publishing Interface -->
+                <div id="publish-interface" class="dynamic-fields">
+                    <div class="loading">Select a record type to see publishing interface</div>
                 </div>
                 
-                <button onclick="publishRecord()" id="publish-btn" disabled>Publish Record</button>
-                <div id="record-status" class="error-message hidden"></div>
-                <div id="record-success" class="success-message hidden"></div>
+                <div id="publish-status" class="error-message hidden"></div>
+                <div id="publish-success" class="success-message hidden"></div>
             </div>
         </div>
     </div>
@@ -4678,172 +4893,724 @@
             }
         }
 
-        // Record publishing functions
-        function loadTemplateFields() {
-            const recordType = document.getElementById('record-type').value;
-            const fieldsContainer = document.getElementById('record-fields');
-            const publishBtn = document.getElementById('publish-btn');
+        // Enhanced Record Publishing Functions
+        function loadPublishInterface() {
+            const recordType = document.getElementById('publish-record-type').value;
+            const interfaceContainer = document.getElementById('publish-interface');
             
             if (!recordType) {
-                fieldsContainer.innerHTML = '<div class="loading">Select a record type to see available fields</div>';
-                publishBtn.disabled = true;
+                interfaceContainer.innerHTML = '<div class="loading">Select a record type to see publishing interface</div>';
                 return;
             }
 
-            // Load template selector
-            const templateSelect = document.getElementById('template-select');
-            templateSelect.innerHTML = '<option value="">Select a template</option>';
-            
-            if (templates[recordType]) {
-                templates[recordType].forEach(template => {
-                    const option = document.createElement('option');
-                    option.value = template.oip.didTx;
-                    option.textContent = template.data.template || template.oip.didTx;
-                    templateSelect.appendChild(option);
-                });
+            // Create tailored interface based on record type
+            switch (recordType) {
+                case 'post':
+                    interfaceContainer.innerHTML = createPostInterface();
+                    break;
+                case 'video':
+                    interfaceContainer.innerHTML = createVideoInterface();
+                    break;
+                case 'audio':
+                    interfaceContainer.innerHTML = createAudioInterface();
+                    break;
+                case 'image':
+                    interfaceContainer.innerHTML = createImageInterface();
+                    break;
+                case 'recipe':
+                    interfaceContainer.innerHTML = createRecipeInterface();
+                    break;
+                case 'workout':
+                    interfaceContainer.innerHTML = createWorkoutInterface();
+                    break;
+                case 'text':
+                    interfaceContainer.innerHTML = createTextInterface();
+                    break;
+                default:
+                    interfaceContainer.innerHTML = '<div class="loading">Unknown record type</div>';
             }
-
-            // Add default template option
-            if (defaultTemplates[recordType]) {
-                const option = document.createElement('option');
-                option.value = `did:arweave:${defaultTemplates[recordType]}`;
-                option.textContent = `Default ${recordType} template`;
-                option.selected = true;
-                templateSelect.appendChild(option);
-            }
-
-            // Create basic fields for the record type
-            fieldsContainer.innerHTML = createRecordFields(recordType);
-            publishBtn.disabled = false;
         }
 
-        function createRecordFields(recordType) {
-            let fieldsHTML = '<h3>Basic Information</h3>';
-            
-            // Basic fields common to all records
-            fieldsHTML += `
-                <div class="form-group">
-                    <label>Name/Title:</label>
-                    <input type="text" id="basic-name" required>
-                </div>
-                <div class="form-group">
-                    <label>Description:</label>
-                    <textarea id="basic-description"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Tags (comma-separated):</label>
-                    <input type="text" id="basic-tags" placeholder="tag1, tag2, tag3">
+        function createPostInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>📝 Post / Article Publishing</h3>
+                    
+                    <!-- Post Source Selection -->
+                    <div class="form-group">
+                        <label for="post-source">Post Source:</label>
+                        <select id="post-source" onchange="updatePostSource()">
+                            <option value="manual">Create New Post</option>
+                            <option value="archive-x">Archive X/Twitter Post</option>
+                        </select>
+                    </div>
+
+                    <!-- Manual Post Creation Interface -->
+                    <div id="manual-post-interface">
+                        <!-- Post Type Selection -->
+                        <div class="form-group">
+                            <label for="post-type">Post Type:</label>
+                            <select id="post-type" onchange="updatePostInterface()">
+                                <option value="microblog">Microblog Post (Twitter-style)</option>
+                                <option value="article">News Article</option>
+                                <option value="blog">Blog Post</option>
+                            </select>
+                        </div>
+
+                        <!-- Basic Information -->
+                        <div class="form-group">
+                            <label for="post-title">Title:</label>
+                            <input type="text" id="post-title" required placeholder="Enter post title...">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="post-description">Description:</label>
+                            <textarea id="post-description" placeholder="Brief description of the post..." rows="2"></textarea>
+                        </div>
+
+                        <!-- Article Content -->
+                        <div class="form-group">
+                            <label for="post-content">Content:</label>
+                            <textarea id="post-content" required placeholder="Write your post content here..." rows="8"></textarea>
+                            <small>Supports markdown formatting</small>
+                        </div>
+
+                        <!-- Author Information (for articles) -->
+                        <div id="author-section">
+                            <div class="form-group">
+                                <label for="post-author">Author:</label>
+                                <input type="text" id="post-author" placeholder="Author name">
+                            </div>
+                            <div class="form-group">
+                                <label for="post-author-title">Author Title:</label>
+                                <input type="text" id="post-author-title" placeholder="e.g., Senior Reporter">
+                            </div>
+                            <div class="form-group">
+                                <label for="post-author-location">Author Location:</label>
+                                <input type="text" id="post-author-location" placeholder="e.g., New York">
+                            </div>
+                        </div>
+
+                        <!-- Media Attachments -->
+                        <div class="media-section">
+                            <h4>📎 Media Attachments</h4>
+                            
+                            <div class="form-group">
+                                <label for="post-featured-image">Featured Image URL:</label>
+                                <input type="url" id="post-featured-image" placeholder="https://example.com/image.jpg">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="post-web-url">Source URL:</label>
+                                <input type="url" id="post-web-url" placeholder="Original article URL (if reposting)">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="post-reply-to">Reply To (DID):</label>
+                                <input type="text" id="post-reply-to" placeholder="did:arweave:... (if replying to another post)">
+                            </div>
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="form-group">
+                            <label for="post-tags">Tags:</label>
+                            <input type="text" id="post-tags" placeholder="tag1, tag2, tag3">
+                            <small>Comma-separated tags</small>
+                        </div>
+
+                        <!-- NSFW Toggle -->
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="post-nsfw"> NSFW Content
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- X Post Archival Interface -->
+                    <div id="x-post-interface" class="hidden">
+                        <div class="form-group">
+                            <label for="x-post-url">X/Twitter Post URL:</label>
+                            <input type="url" id="x-post-url" placeholder="https://x.com/username/status/1234567890" required>
+                            <button type="button" onclick="scrapeXPost()" style="margin-top: 10px; width: 100%;">
+                                🔍 Fetch Post Data
+                            </button>
+                        </div>
+
+                        <div id="x-post-preview" class="hidden" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #1da1f2;">
+                            <h4>📱 Post Preview</h4>
+                            <div id="x-post-content"></div>
+                            <div id="x-post-meta" style="margin-top: 10px; font-size: 0.9rem; color: #666;"></div>
+                        </div>
+
+                        <div id="x-post-status" class="hidden" style="margin-top: 15px; padding: 10px; border-radius: 6px;"></div>
+                    </div>
+
+                    <button onclick="publishPost()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        <span id="post-publish-text">📤 Publish Post</span>
+                    </button>
                 </div>
             `;
-
-            // Simplified record-specific fields
-            fieldsHTML += `<h3>${recordType.charAt(0).toUpperCase() + recordType.slice(1)} Fields</h3>`;
-            
-            if (recordType === 'post') {
-                fieldsHTML += `
-                    <div class="form-group">
-                        <label>Article Text:</label>
-                        <textarea id="post-articletext" required placeholder="Main article content"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Byline Writer:</label>
-                        <input type="text" id="post-bylinewriter" placeholder="Author name">
-                    </div>
-                `;
-            } else {
-                fieldsHTML += `
-                    <div class="form-group">
-                        <label>Content:</label>
-                        <textarea id="record-content" placeholder="Enter ${recordType} content"></textarea>
-                    </div>
-                `;
-            }
-
-            return fieldsHTML;
         }
 
-        async function publishRecord() {
-            const recordType = document.getElementById('record-type').value;
-            
-            if (!recordType) {
-                showMessage('record-status', 'Please select a record type', 'error');
-                return;
-            }
-
-            // Collect basic data
-            const basicData = {
-                name: document.getElementById('basic-name').value,
-                description: document.getElementById('basic-description').value,
-                language: 'en',
-                tagItems: document.getElementById('basic-tags').value.split(',').map(tag => tag.trim()).filter(tag => tag),
-                nsfw: false,
-                date: Math.floor(Date.now() / 1000)
-            };
-
-            if (!basicData.name) {
-                showMessage('record-status', 'Please enter a name/title', 'error');
-                return;
-            }
-
-            // Simplified record data collection
-            let recordData = { basic: basicData };
-            let endpoint = `/api/publish/new${recordType.charAt(0).toUpperCase() + recordType.slice(1)}`;
-
-            if (recordType === 'post') {
-                recordData.post = {
-                    articleText: document.getElementById('post-articletext').value,
-                    bylineWriter: document.getElementById('post-bylinewriter').value,
-                    webUrl: '',
-                    bylineWritersTitle: '',
-                    bylineWritersLocation: '',
-                    featuredImage: '',
-                    imageItems: [],
-                    imageCaptionItems: [],
-                    videoItems: [],
-                    audioItems: [],
-                    audioCaptionItems: [],
-                    replyTo: ''
-                };
-                
-                if (!recordData.post.articleText) {
-                    showMessage('record-status', 'Please enter the article text', 'error');
-                    return;
-                }
-            } else {
-                // For other record types, use generic content field
-                const content = document.getElementById('record-content').value;
-                recordData[recordType] = { content: content };
-            }
-
-            try {
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify(recordData)
-                });
-
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showMessage('record-success', `${recordType} published successfully! Transaction ID: ${data.transactionId}`, 'success');
-                    // Clear the form
-                    document.getElementById('record-fields').innerHTML = '<div class="loading">Select a record type to see available fields</div>';
-                    document.getElementById('record-type').value = '';
-                    document.getElementById('publish-btn').disabled = true;
+        function createVideoInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🎥 Video Publishing</h3>
                     
-                    // Refresh the browse tab to show new record
-                    if (currentRecords.length > 0) {
-                        loadRecords(true);
-                    }
-                } else {
-                    showMessage('record-status', data.error || `Failed to publish ${recordType}`, 'error');
-                }
-            } catch (error) {
-                showMessage('record-status', 'Network error: ' + error.message, 'error');
-            }
+                    <!-- Video Source -->
+                    <div class="form-group">
+                        <label for="video-source">Video Source:</label>
+                        <select id="video-source" onchange="updateVideoInterface()">
+                            <option value="manual">Manual Entry</option>
+                            <option value="youtube-archive">Archive YouTube Video</option>
+                            <option value="direct">Direct Video URL</option>
+                            <option value="upload">Upload Video File</option>
+                        </select>
+                    </div>
+
+                    <div id="video-input-section">
+                        <div class="form-group">
+                            <label for="video-url">Video URL:</label>
+                            <input type="url" id="video-url" placeholder="https://example.com/video.mp4">
+                        </div>
+                    </div>
+
+                    <!-- Video Information -->
+                    <div class="form-group">
+                        <label for="video-title">Title:</label>
+                        <input type="text" id="video-title" required placeholder="Video title">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="video-description">Description:</label>
+                        <textarea id="video-description" placeholder="Video description..." rows="4"></textarea>
+                    </div>
+
+                    <!-- Video Metadata -->
+                    <div class="form-group">
+                        <label for="video-duration">Duration (minutes):</label>
+                        <input type="number" id="video-duration" placeholder="e.g., 15">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="video-channel">Channel/Creator:</label>
+                        <input type="text" id="video-channel" placeholder="Channel or creator name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="video-thumbnail">Thumbnail URL:</label>
+                        <input type="url" id="video-thumbnail" placeholder="https://example.com/thumbnail.jpg">
+                    </div>
+
+                    <!-- Tags and Categories -->
+                    <div class="form-group">
+                        <label for="video-category">Category:</label>
+                        <select id="video-category">
+                            <option value="">Select category</option>
+                            <option value="education">Education</option>
+                            <option value="entertainment">Entertainment</option>
+                            <option value="music">Music</option>
+                            <option value="news">News</option>
+                            <option value="sports">Sports</option>
+                            <option value="technology">Technology</option>
+                            <option value="gaming">Gaming</option>
+                            <option value="howto">How-to & Style</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="video-tags">Tags:</label>
+                        <input type="text" id="video-tags" placeholder="tag1, tag2, tag3">
+                    </div>
+
+                    <!-- Publishing Options -->
+                    <div class="form-group">
+                        <label>Publishing Options:</label>
+                        <div style="margin-top: 10px;">
+                            <label><input type="checkbox" id="video-arweave" checked> Store on Arweave</label><br>
+                            <label><input type="checkbox" id="video-ipfs"> Store on IPFS</label><br>
+                            <label><input type="checkbox" id="video-nsfw"> NSFW Content</label>
+                        </div>
+                    </div>
+
+                    <button onclick="publishVideo()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        <span id="video-publish-text">🎥 Publish Video</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        function createAudioInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🎵 Audio / Podcast Publishing</h3>
+                    
+                    <!-- Audio Source -->
+                    <div class="form-group">
+                        <label for="audio-source">Audio Source:</label>
+                        <select id="audio-source" onchange="updateAudioInterface()">
+                            <option value="url">Audio URL</option>
+                            <option value="upload">Upload Audio File</option>
+                        </select>
+                    </div>
+
+                    <div id="audio-input-section">
+                        <div class="form-group">
+                            <label for="audio-url">Audio URL:</label>
+                            <input type="url" id="audio-url" placeholder="https://example.com/audio.mp3">
+                        </div>
+                    </div>
+
+                    <!-- Audio Information -->
+                    <div class="form-group">
+                        <label for="audio-title">Title:</label>
+                        <input type="text" id="audio-title" required placeholder="Audio title">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="audio-description">Description:</label>
+                        <textarea id="audio-description" placeholder="Audio description..." rows="4"></textarea>
+                    </div>
+
+                    <!-- Audio Metadata -->
+                    <div class="form-group">
+                        <label for="audio-duration">Duration (minutes):</label>
+                        <input type="number" id="audio-duration" placeholder="e.g., 45">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="audio-artist">Artist/Creator:</label>
+                        <input type="text" id="audio-artist" placeholder="Artist or creator name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="audio-album">Album/Series:</label>
+                        <input type="text" id="audio-album" placeholder="Album or podcast series name">
+                    </div>
+
+                    <!-- Cover Art -->
+                    <div class="form-group">
+                        <label for="audio-cover">Cover Art URL:</label>
+                        <input type="url" id="audio-cover" placeholder="https://example.com/cover.jpg">
+                    </div>
+
+                    <!-- Genre and Tags -->
+                    <div class="form-group">
+                        <label for="audio-genre">Genre:</label>
+                        <select id="audio-genre">
+                            <option value="">Select genre</option>
+                            <option value="podcast">Podcast</option>
+                            <option value="music">Music</option>
+                            <option value="audiobook">Audiobook</option>
+                            <option value="interview">Interview</option>
+                            <option value="education">Education</option>
+                            <option value="comedy">Comedy</option>
+                            <option value="news">News</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="audio-tags">Tags:</label>
+                        <input type="text" id="audio-tags" placeholder="tag1, tag2, tag3">
+                    </div>
+
+                    <!-- Publishing Options -->
+                    <div class="form-group">
+                        <label>Publishing Options:</label>
+                        <div style="margin-top: 10px;">
+                            <label><input type="checkbox" id="audio-arweave" checked> Store on Arweave</label><br>
+                            <label><input type="checkbox" id="audio-ipfs"> Store on IPFS</label><br>
+                            <label><input type="checkbox" id="audio-nsfw"> NSFW Content</label>
+                        </div>
+                    </div>
+
+                    <button onclick="publishAudio()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        🎵 Publish Audio
+                    </button>
+                </div>
+            `;
+        }
+
+        function createImageInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>📷 Image Publishing</h3>
+                    
+                    <!-- Image Source -->
+                    <div class="form-group">
+                        <label for="image-source">Image Source:</label>
+                        <select id="image-source" onchange="updateImageInterface()">
+                            <option value="url">Image URL</option>
+                            <option value="upload">Upload Image File</option>
+                        </select>
+                    </div>
+
+                    <div id="image-input-section">
+                        <div class="form-group">
+                            <label for="image-url">Image URL:</label>
+                            <input type="url" id="image-url" placeholder="https://example.com/image.jpg">
+                            <button type="button" onclick="previewImage()" style="margin-top: 5px;">Preview</button>
+                        </div>
+                    </div>
+
+                    <!-- Image Preview -->
+                    <div id="image-preview" class="hidden" style="margin: 15px 0;">
+                        <img id="preview-img" style="max-width: 100%; max-height: 300px; border-radius: 8px;">
+                    </div>
+
+                    <!-- Image Information -->
+                    <div class="form-group">
+                        <label for="image-title">Title:</label>
+                        <input type="text" id="image-title" required placeholder="Image title">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-description">Description:</label>
+                        <textarea id="image-description" placeholder="Image description..." rows="3"></textarea>
+                    </div>
+
+                    <!-- Image Metadata -->
+                    <div class="form-group">
+                        <label for="image-alt-text">Alt Text:</label>
+                        <input type="text" id="image-alt-text" placeholder="Accessibility description">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-photographer">Photographer/Creator:</label>
+                        <input type="text" id="image-photographer" placeholder="Creator name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-location">Location:</label>
+                        <input type="text" id="image-location" placeholder="Where the image was taken">
+                    </div>
+
+                    <!-- Categories and Tags -->
+                    <div class="form-group">
+                        <label for="image-category">Category:</label>
+                        <select id="image-category">
+                            <option value="">Select category</option>
+                            <option value="photography">Photography</option>
+                            <option value="art">Art</option>
+                            <option value="nature">Nature</option>
+                            <option value="architecture">Architecture</option>
+                            <option value="portrait">Portrait</option>
+                            <option value="landscape">Landscape</option>
+                            <option value="abstract">Abstract</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-tags">Tags:</label>
+                        <input type="text" id="image-tags" placeholder="tag1, tag2, tag3">
+                    </div>
+
+                    <!-- Publishing Options -->
+                    <div class="form-group">
+                        <label>Publishing Options:</label>
+                        <div style="margin-top: 10px;">
+                            <label><input type="checkbox" id="image-arweave" checked> Store on Arweave</label><br>
+                            <label><input type="checkbox" id="image-ipfs"> Store on IPFS</label><br>
+                            <label><input type="checkbox" id="image-nsfw"> NSFW Content</label>
+                        </div>
+                    </div>
+
+                    <button onclick="publishImage()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        📷 Publish Image
+                    </button>
+                </div>
+            `;
+        }
+
+        function createRecipeInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🍳 Recipe Publishing</h3>
+                    
+                    <!-- Recipe Basic Info -->
+                    <div class="form-group">
+                        <label for="recipe-title">Recipe Name:</label>
+                        <input type="text" id="recipe-title" required placeholder="e.g., Mediterranean Grilled Chicken">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="recipe-description">Description:</label>
+                        <textarea id="recipe-description" placeholder="Brief description of the recipe..." rows="3"></textarea>
+                    </div>
+
+                    <!-- Recipe Image -->
+                    <div class="form-group">
+                        <label for="recipe-image">Recipe Image URL:</label>
+                        <input type="url" id="recipe-image" placeholder="https://example.com/recipe-image.jpg">
+                    </div>
+
+                    <!-- Recipe Details -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label for="recipe-prep-time">Prep Time (minutes):</label>
+                            <input type="number" id="recipe-prep-time" placeholder="e.g., 15">
+                        </div>
+                        <div class="form-group">
+                            <label for="recipe-cook-time">Cook Time (minutes):</label>
+                            <input type="number" id="recipe-cook-time" placeholder="e.g., 30">
+                        </div>
+                        <div class="form-group">
+                            <label for="recipe-servings">Servings:</label>
+                            <input type="number" id="recipe-servings" placeholder="e.g., 4">
+                        </div>
+                        <div class="form-group">
+                            <label for="recipe-difficulty">Difficulty:</label>
+                            <select id="recipe-difficulty">
+                                <option value="easy">Easy</option>
+                                <option value="medium">Medium</option>
+                                <option value="hard">Hard</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Cuisine and Course -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label for="recipe-cuisine">Cuisine:</label>
+                            <input type="text" id="recipe-cuisine" placeholder="e.g., Mediterranean, Italian">
+                        </div>
+                        <div class="form-group">
+                            <label for="recipe-course">Course:</label>
+                            <select id="recipe-course">
+                                <option value="">Select course</option>
+                                <option value="appetizer">Appetizer</option>
+                                <option value="main">Main Course</option>
+                                <option value="side">Side Dish</option>
+                                <option value="dessert">Dessert</option>
+                                <option value="drink">Drink</option>
+                                <option value="snack">Snack</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Ingredients -->
+                    <div class="form-group">
+                        <label>Ingredients:</label>
+                        <div id="ingredients-container">
+                            <div class="ingredient-row" style="display: grid; grid-template-columns: 80px 80px 1fr 40px; gap: 10px; margin-bottom: 10px;">
+                                <input type="text" placeholder="Amount" class="ingredient-amount">
+                                <input type="text" placeholder="Unit" class="ingredient-unit">
+                                <input type="text" placeholder="Ingredient name" class="ingredient-name">
+                                <button type="button" onclick="removeIngredient(this)">✕</button>
+                            </div>
+                        </div>
+                        <button type="button" onclick="addIngredient()" style="margin-top: 10px;">+ Add Ingredient</button>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="form-group">
+                        <label for="recipe-instructions">Instructions:</label>
+                        <textarea id="recipe-instructions" required placeholder="1. First step...
+2. Second step...
+3. Third step..." rows="8"></textarea>
+                        <small>Write each step on a new line</small>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="form-group">
+                        <label for="recipe-notes">Notes:</label>
+                        <textarea id="recipe-notes" placeholder="Additional notes, tips, or variations..." rows="3"></textarea>
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="form-group">
+                        <label for="recipe-tags">Tags:</label>
+                        <input type="text" id="recipe-tags" placeholder="vegetarian, quick, healthy">
+                    </div>
+
+                    <button onclick="publishRecipe()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        🍳 Publish Recipe
+                    </button>
+                </div>
+            `;
+        }
+
+        function createWorkoutInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>💪 Workout Publishing</h3>
+                    
+                    <!-- Workout Basic Info -->
+                    <div class="form-group">
+                        <label for="workout-title">Workout Name:</label>
+                        <input type="text" id="workout-title" required placeholder="e.g., Full Body HIIT Workout">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="workout-description">Description:</label>
+                        <textarea id="workout-description" placeholder="Brief description of the workout..." rows="3"></textarea>
+                    </div>
+
+                    <!-- Workout Details -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label for="workout-duration">Duration (minutes):</label>
+                            <input type="number" id="workout-duration" placeholder="e.g., 30">
+                        </div>
+                        <div class="form-group">
+                            <label for="workout-difficulty">Difficulty:</label>
+                            <select id="workout-difficulty">
+                                <option value="beginner">Beginner</option>
+                                <option value="intermediate">Intermediate</option>
+                                <option value="advanced">Advanced</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Workout Type and Equipment -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label for="workout-category">Category:</label>
+                            <select id="workout-category">
+                                <option value="">Select category</option>
+                                <option value="strength">Strength Training</option>
+                                <option value="cardio">Cardio</option>
+                                <option value="hiit">HIIT</option>
+                                <option value="yoga">Yoga</option>
+                                <option value="pilates">Pilates</option>
+                                <option value="flexibility">Flexibility</option>
+                                <option value="sports">Sports</option>
+                                <option value="mixed">Mixed</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="workout-equipment">Equipment Required:</label>
+                            <input type="text" id="workout-equipment" placeholder="dumbbells, resistance bands">
+                        </div>
+                    </div>
+
+                    <!-- Target Muscle Groups -->
+                    <div class="form-group">
+                        <label for="workout-muscles">Target Muscle Groups:</label>
+                        <input type="text" id="workout-muscles" placeholder="chest, shoulders, legs">
+                    </div>
+
+                    <!-- Exercises -->
+                    <div class="form-group">
+                        <label>Exercises:</label>
+                        <div id="exercises-container">
+                            <div class="exercise-row" style="display: grid; grid-template-columns: 1fr 80px 80px 80px 40px; gap: 10px; margin-bottom: 10px;">
+                                <input type="text" placeholder="Exercise name" class="exercise-name">
+                                <input type="text" placeholder="Sets" class="exercise-sets">
+                                <input type="text" placeholder="Reps" class="exercise-reps">
+                                <input type="text" placeholder="Rest(s)" class="exercise-rest">
+                                <button type="button" onclick="removeExercise(this)">✕</button>
+                            </div>
+                        </div>
+                        <button type="button" onclick="addExercise()" style="margin-top: 10px;">+ Add Exercise</button>
+                    </div>
+
+                    <!-- Workout Type Toggle -->
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="workout-non-standard"> Non-standard workout (custom exercises)
+                        </label>
+                        <small>Check this if your exercises are not in our database</small>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="form-group">
+                        <label for="workout-notes">Notes:</label>
+                        <textarea id="workout-notes" placeholder="Additional notes, tips, or modifications..." rows="3"></textarea>
+                    </div>
+
+                    <!-- Goal Tags -->
+                    <div class="form-group">
+                        <label for="workout-goals">Goal Tags:</label>
+                        <input type="text" id="workout-goals" placeholder="weight loss, muscle gain, endurance">
+                    </div>
+
+                    <button onclick="publishWorkout()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        💪 Publish Workout
+                    </button>
+                </div>
+            `;
+        }
+
+        function createTextInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>📄 Text Document Publishing</h3>
+                    
+                    <!-- Text Document Info -->
+                    <div class="form-group">
+                        <label for="text-title">Document Title:</label>
+                        <input type="text" id="text-title" required placeholder="Document title">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="text-description">Description:</label>
+                        <textarea id="text-description" placeholder="Brief description..." rows="2"></textarea>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="form-group">
+                        <label for="text-content">Content:</label>
+                        <textarea id="text-content" required placeholder="Enter your text content here..." rows="15"></textarea>
+                        <small>Supports plain text and markdown</small>
+                    </div>
+
+                    <!-- Document Type -->
+                    <div class="form-group">
+                        <label for="text-type">Document Type:</label>
+                        <select id="text-type">
+                            <option value="document">Document</option>
+                            <option value="article">Article</option>
+                            <option value="essay">Essay</option>
+                            <option value="story">Story</option>
+                            <option value="poem">Poem</option>
+                            <option value="tutorial">Tutorial</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <!-- Author Information -->
+                    <div class="form-group">
+                        <label for="text-author">Author:</label>
+                        <input type="text" id="text-author" placeholder="Author name">
+                    </div>
+
+                    <!-- Language -->
+                    <div class="form-group">
+                        <label for="text-language">Language:</label>
+                        <select id="text-language">
+                            <option value="en">English</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="it">Italian</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="form-group">
+                        <label for="text-tags">Tags:</label>
+                        <input type="text" id="text-tags" placeholder="tag1, tag2, tag3">
+                    </div>
+
+                    <!-- Publishing Options -->
+                    <div class="form-group">
+                        <label>Publishing Options:</label>
+                        <div style="margin-top: 10px;">
+                            <label><input type="checkbox" id="text-nsfw"> NSFW Content</label>
+                        </div>
+                    </div>
+
+                    <button onclick="publishText()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        📄 Publish Text
+                    </button>
+                </div>
+            `;
         }
 
         // Master Audio Player functions
@@ -6503,6 +7270,728 @@
             }
         }
 
+        // Interface update functions
+        function updatePostInterface() {
+            const postType = document.getElementById('post-type').value;
+            const authorSection = document.getElementById('author-section');
+            
+            if (postType === 'microblog') {
+                authorSection.style.display = 'none';
+            } else {
+                authorSection.style.display = 'block';
+            }
+        }
+
+        function updatePostSource() {
+            const source = document.getElementById('post-source').value;
+            const manualInterface = document.getElementById('manual-post-interface');
+            const xInterface = document.getElementById('x-post-interface');
+            const publishText = document.getElementById('post-publish-text');
+            
+            if (source === 'archive-x') {
+                manualInterface.classList.add('hidden');
+                xInterface.classList.remove('hidden');
+                publishText.textContent = '📱 Archive X Post';
+            } else {
+                manualInterface.classList.remove('hidden');
+                xInterface.classList.add('hidden');
+                publishText.textContent = '📤 Publish Post';
+            }
+        }
+
+        function updateVideoInterface() {
+            const source = document.getElementById('video-source').value;
+            const inputSection = document.getElementById('video-input-section');
+            
+            switch (source) {
+                case 'manual':
+                    inputSection.innerHTML = `
+                        <div class="form-group">
+                            <label for="video-url">Video URL:</label>
+                            <input type="url" id="video-url" placeholder="https://example.com/video.mp4">
+                        </div>
+                    `;
+                    break;
+                case 'youtube-archive':
+                    inputSection.innerHTML = `
+                        <div class="form-group">
+                            <label for="youtube-url">YouTube URL:</label>
+                            <input type="url" id="youtube-url" placeholder="https://youtube.com/watch?v=..." required>
+                            <button type="button" onclick="archiveYouTubeVideo()" style="margin-top: 10px; width: 100%;">
+                                📥 Archive Video & Get Metadata
+                            </button>
+                        </div>
+
+                        <div id="youtube-progress" class="hidden" style="margin-top: 20px;">
+                            <div class="publish-progress">
+                                <h4>📥 Archiving YouTube Video...</h4>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="youtube-progress-bar" style="width: 0%;"></div>
+                                </div>
+                                <div id="youtube-status" style="margin-top: 10px; font-size: 0.9rem;">Initializing...</div>
+                            </div>
+                        </div>
+
+                        <div id="youtube-preview" class="hidden" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #ff0000;">
+                            <h4>🎥 Video Preview</h4>
+                            <div id="youtube-thumbnail" style="margin-bottom: 15px;"></div>
+                            <div id="youtube-metadata"></div>
+                        </div>
+                    `;
+                    break;
+                case 'direct':
+                    inputSection.innerHTML = `
+                        <div class="form-group">
+                            <label for="video-url">Video URL:</label>
+                            <input type="url" id="video-url" placeholder="https://example.com/video.mp4">
+                        </div>
+                    `;
+                    break;
+                case 'upload':
+                    inputSection.innerHTML = `
+                        <div class="form-group">
+                            <label for="video-file">Upload Video:</label>
+                            <input type="file" id="video-file" accept="video/*">
+                            <small>Note: Large files may take time to upload</small>
+                        </div>
+                    `;
+                    break;
+            }
+        }
+
+        // Dynamic ingredient/exercise management
+        function addIngredient() {
+            const container = document.getElementById('ingredients-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'ingredient-row';
+            newRow.style = 'display: grid; grid-template-columns: 80px 80px 1fr 40px; gap: 10px; margin-bottom: 10px;';
+            newRow.innerHTML = `
+                <input type="text" placeholder="Amount" class="ingredient-amount">
+                <input type="text" placeholder="Unit" class="ingredient-unit">
+                <input type="text" placeholder="Ingredient name" class="ingredient-name">
+                <button type="button" onclick="removeIngredient(this)">✕</button>
+            `;
+            container.appendChild(newRow);
+        }
+
+        function removeIngredient(button) {
+            button.parentElement.remove();
+        }
+
+        function addExercise() {
+            const container = document.getElementById('exercises-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'exercise-row';
+            newRow.style = 'display: grid; grid-template-columns: 1fr 80px 80px 80px 40px; gap: 10px; margin-bottom: 10px;';
+            newRow.innerHTML = `
+                <input type="text" placeholder="Exercise name" class="exercise-name">
+                <input type="text" placeholder="Sets" class="exercise-sets">
+                <input type="text" placeholder="Reps" class="exercise-reps">
+                <input type="text" placeholder="Rest(s)" class="exercise-rest">
+                <button type="button" onclick="removeExercise(this)">✕</button>
+            `;
+            container.appendChild(newRow);
+        }
+
+        function removeExercise(button) {
+            button.parentElement.remove();
+        }
+
+        // X Post Scraping Functions
+        async function scrapeXPost() {
+            const url = document.getElementById('x-post-url').value;
+            const statusDiv = document.getElementById('x-post-status');
+            const previewDiv = document.getElementById('x-post-preview');
+            
+            if (!url || (!url.includes('x.com') && !url.includes('twitter.com'))) {
+                showXPostStatus('Please enter a valid X/Twitter URL', 'error');
+                return;
+            }
+
+            try {
+                showXPostStatus('🔍 Fetching post data...', 'loading');
+                
+                const response = await fetch('/api/scrape/x-post', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayXPostPreview(data);
+                    showXPostStatus('✅ Post data fetched successfully!', 'success');
+                } else {
+                    showXPostStatus(`❌ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showXPostStatus(`❌ Network error: ${error.message}`, 'error');
+            }
+        }
+
+        function displayXPostPreview(data) {
+            const previewDiv = document.getElementById('x-post-preview');
+            const contentDiv = document.getElementById('x-post-content');
+            const metaDiv = document.getElementById('x-post-meta');
+
+            // Store data for publishing
+            window.scrapedXPostData = data;
+
+            contentDiv.innerHTML = `
+                <div style="font-weight: 600; margin-bottom: 8px;">@${data.author}</div>
+                <div style="line-height: 1.4;">${data.text}</div>
+                ${data.images && data.images.length > 0 ? `
+                    <div style="margin-top: 10px;">
+                        ${data.images.map(img => `<img src="${img}" style="max-width: 100px; margin-right: 10px; border-radius: 4px;">`).join('')}
+                    </div>
+                ` : ''}
+            `;
+
+            metaDiv.innerHTML = `
+                <strong>Original URL:</strong> ${data.url}<br>
+                <strong>Date:</strong> ${data.date || 'Unknown'}<br>
+                <strong>Images:</strong> ${data.images ? data.images.length : 0}
+            `;
+
+            previewDiv.classList.remove('hidden');
+        }
+
+        function showXPostStatus(message, type) {
+            const statusDiv = document.getElementById('x-post-status');
+            statusDiv.className = 'hidden';
+            
+            if (type === 'error') {
+                statusDiv.className = 'error-message';
+            } else if (type === 'success') {
+                statusDiv.className = 'success-message';
+            } else {
+                statusDiv.style.background = '#e3f2fd';
+                statusDiv.style.color = '#1976d2';
+                statusDiv.style.border = '1px solid #2196f3';
+            }
+            
+            statusDiv.textContent = message;
+            statusDiv.classList.remove('hidden');
+        }
+
+        // YouTube Video Archiving Functions
+        async function archiveYouTubeVideo() {
+            const url = document.getElementById('youtube-url').value;
+            const progressDiv = document.getElementById('youtube-progress');
+            const previewDiv = document.getElementById('youtube-preview');
+            
+            if (!url || (!url.includes('youtube.com') && !url.includes('youtu.be'))) {
+                alert('Please enter a valid YouTube URL');
+                return;
+            }
+
+            try {
+                progressDiv.classList.remove('hidden');
+                updateYouTubeProgress(10, 'Extracting video metadata...');
+
+                const response = await fetch('/api/scrape/youtube-archive', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                updateYouTubeProgress(30, 'Downloading video...');
+
+                // Poll for completion
+                const checkProgress = async () => {
+                    try {
+                        const progressResponse = await fetch(`/api/scrape/youtube-progress?taskId=${data.taskId}`, {
+                            headers: { 'Authorization': `Bearer ${authToken}` }
+                        });
+                        
+                        const progressData = await progressResponse.json();
+                        
+                        if (progressData.status === 'complete') {
+                            displayYouTubePreview(progressData.result);
+                            updateYouTubeProgress(100, 'Video archived successfully!');
+                            setTimeout(() => progressDiv.classList.add('hidden'), 2000);
+                        } else if (progressData.status === 'error') {
+                            updateYouTubeProgress(0, `Error: ${progressData.error}`);
+                        } else {
+                            updateYouTubeProgress(progressData.progress || 50, progressData.message || 'Processing...');
+                            setTimeout(checkProgress, 2000);
+                        }
+                    } catch (error) {
+                        updateYouTubeProgress(0, `Error: ${error.message}`);
+                    }
+                };
+
+                setTimeout(checkProgress, 2000);
+
+            } catch (error) {
+                updateYouTubeProgress(0, `Error: ${error.message}`);
+            }
+        }
+
+        function updateYouTubeProgress(percent, status) {
+            document.getElementById('youtube-progress-bar').style.width = `${percent}%`;
+            document.getElementById('youtube-status').textContent = status;
+        }
+
+        function extractVideoId(url) {
+            const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+            return match ? match[1] : null;
+        }
+
+        function displayYouTubePreview(data) {
+            const previewDiv = document.getElementById('youtube-preview');
+            const thumbnailDiv = document.getElementById('youtube-thumbnail');
+            const metadataDiv = document.getElementById('youtube-metadata');
+
+            // Store data for publishing
+            window.archivedYouTubeData = data;
+
+            // Auto-populate form fields
+            document.getElementById('video-title').value = data.title || '';
+            document.getElementById('video-description').value = data.description || '';
+            document.getElementById('video-channel').value = data.uploader || '';
+            document.getElementById('video-duration').value = data.duration ? Math.ceil(data.duration / 60) : '';
+            document.getElementById('video-thumbnail').value = data.thumbnail || '';
+            
+            // Set tags from YouTube tags
+            if (data.tags && data.tags.length > 0) {
+                document.getElementById('video-tags').value = data.tags.slice(0, 10).join(', ');
+            }
+
+            thumbnailDiv.innerHTML = data.thumbnail ? 
+                `<img src="${data.thumbnail}" style="max-width: 200px; border-radius: 8px;">` : 
+                '<div style="color: #666;">No thumbnail available</div>';
+
+            metadataDiv.innerHTML = `
+                <div><strong>Title:</strong> ${data.title || 'Unknown'}</div>
+                <div><strong>Channel:</strong> ${data.uploader || 'Unknown'}</div>
+                <div><strong>Duration:</strong> ${data.duration ? formatDuration(data.duration) : 'Unknown'}</div>
+                <div><strong>Upload Date:</strong> ${data.upload_date || 'Unknown'}</div>
+                <div><strong>Views:</strong> ${data.view_count ? data.view_count.toLocaleString() : 'Unknown'}</div>
+                <div><strong>Resolution:</strong> ${data.resolution || 'Unknown'}</div>
+                <div><strong>Video URL:</strong> <a href="${data.video_url}" target="_blank">Archived Video</a></div>
+            `;
+
+            previewDiv.classList.remove('hidden');
+        }
+
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                return `${minutes}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+
+        // Exercise Resolution for Workouts
+        async function resolveWorkoutExercises() {
+            const exerciseRows = document.querySelectorAll('.exercise-row');
+            const exercises = [];
+            const exerciseNames = [];
+
+            exerciseRows.forEach(row => {
+                const name = row.querySelector('.exercise-name').value.trim();
+                if (name) {
+                    exerciseNames.push(name.toLowerCase());
+                    exercises.push({
+                        name: name,
+                        sets: parseInt(row.querySelector('.exercise-sets').value) || 3,
+                        reps: row.querySelector('.exercise-reps').value || '12',
+                        rest_seconds: parseInt(row.querySelector('.exercise-rest').value) || 60
+                    });
+                }
+            });
+
+            if (exerciseNames.length === 0) {
+                throw new Error('Please add at least one exercise');
+            }
+
+            // Check if non-standard workout
+            const isNonStandard = document.getElementById('workout-non-standard').checked;
+            if (isNonStandard) {
+                return { exercises, exerciseDidRefs: null };
+            }
+
+            try {
+                showMessage('publish-status', '🔍 Looking up exercises in database...', 'info');
+
+                // Look up exercises in OIP
+                const response = await fetch('/api/workout/resolve-exercises', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ exerciseNames })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Update exercise names with DID references where available
+                    const resolvedExercises = exercises.map(exercise => {
+                        const didRef = data.exerciseDidRefs[exercise.name.toLowerCase()];
+                        return {
+                            ...exercise,
+                            exerciseDidRef: didRef || exercise.name
+                        };
+                    });
+
+                    const missingCount = Object.values(data.exerciseDidRefs).filter(ref => ref === null).length;
+                    if (missingCount > 0) {
+                        showMessage('publish-status', `✅ Found ${exerciseNames.length - missingCount} exercises, creating ${missingCount} new ones from Kaggle dataset...`, 'info');
+                    } else {
+                        showMessage('publish-status', '✅ All exercises found in database!', 'success');
+                    }
+
+                    return { exercises: resolvedExercises, exerciseDidRefs: data.exerciseDidRefs };
+                } else {
+                    throw new Error(data.error || 'Failed to resolve exercises');
+                }
+            } catch (error) {
+                console.error('Exercise resolution error:', error);
+                showMessage('publish-status', `⚠️ Exercise lookup failed, publishing with exercise names: ${error.message}`, 'warning');
+                return { exercises, exerciseDidRefs: null };
+            }
+        }
+
+        // Publishing functions for each record type
+        async function publishPost() {
+            try {
+                const postSource = document.getElementById('post-source').value;
+                let postData;
+
+                if (postSource === 'archive-x' && window.scrapedXPostData) {
+                    // Use scraped X post data
+                    postData = {
+                        basic: {
+                            name: window.scrapedXPostData.text.substring(0, 100) + (window.scrapedXPostData.text.length > 100 ? '...' : ''),
+                            description: window.scrapedXPostData.text,
+                            language: 'en',
+                            date: window.scrapedXPostData.date ? Math.floor(new Date(window.scrapedXPostData.date).getTime() / 1000) : Math.floor(Date.now() / 1000),
+                            nsfw: false,
+                            tagItems: ['twitter', 'x', 'social-media'],
+                            webUrl: window.scrapedXPostData.url // Original X post URL
+                        },
+                        post: {
+                            articleText: window.scrapedXPostData.text,
+                            bylineWriter: window.scrapedXPostData.author,
+                            webUrl: window.scrapedXPostData.url,
+                            imageItems: window.scrapedXPostData.images || [],
+                            imageCaptionItems: [],
+                            videoItems: [],
+                            audioItems: [],
+                            audioCaptionItems: [],
+                            replyTo: ''
+                        }
+                    };
+                } else {
+                    // Use manual form data
+                    postData = {
+                        basic: {
+                            name: document.getElementById('post-title').value,
+                            description: document.getElementById('post-description').value,
+                            language: 'en',
+                            date: Math.floor(Date.now() / 1000),
+                            nsfw: document.getElementById('post-nsfw').checked,
+                            tagItems: document.getElementById('post-tags').value.split(',').map(t => t.trim()).filter(t => t)
+                        },
+                        post: {
+                            articleText: document.getElementById('post-content').value,
+                            bylineWriter: document.getElementById('post-author')?.value || '',
+                            bylineWritersTitle: document.getElementById('post-author-title')?.value || '',
+                            bylineWritersLocation: document.getElementById('post-author-location')?.value || '',
+                            webUrl: document.getElementById('post-web-url')?.value || '',
+                            featuredImage: document.getElementById('post-featured-image')?.value || '',
+                            replyTo: document.getElementById('post-reply-to')?.value || '',
+                            imageItems: [],
+                            imageCaptionItems: [],
+                            videoItems: [],
+                            audioItems: [],
+                            audioCaptionItems: []
+                        }
+                    };
+                }
+
+                if (!postData.basic.name || !postData.post.articleText) {
+                    showMessage('publish-status', 'Please fill in title and content', 'error');
+                    return;
+                }
+
+                const response = await fetch('/api/publish/newPost', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(postData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage('publish-success', `Post published successfully! Transaction ID: ${result.transactionId}`, 'success');
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to publish post', 'error');
+                }
+            } catch (error) {
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        async function publishVideo() {
+            try {
+                const videoSource = document.getElementById('video-source').value;
+                let videoData;
+
+                if (videoSource === 'youtube-archive' && window.archivedYouTubeData) {
+                    // Use archived YouTube data
+                    videoData = {
+                        youtubeUrl: window.archivedYouTubeData.original_url || document.getElementById('youtube-url').value,
+                        archivedVideoUrl: window.archivedYouTubeData.video_url,
+                        thumbnailUrl: window.archivedYouTubeData.thumbnail,
+                        basicMetadata: {
+                            name: document.getElementById('video-title').value,
+                            description: document.getElementById('video-description').value,
+                            language: 'en',
+                            nsfw: document.getElementById('video-nsfw').checked,
+                            tagItems: document.getElementById('video-tags').value.split(',').map(t => t.trim()).filter(t => t),
+                            webUrl: window.archivedYouTubeData.original_url // Original YouTube URL
+                        },
+                        videoMetadata: {
+                            duration: window.archivedYouTubeData.duration,
+                            uploader: window.archivedYouTubeData.uploader,
+                            upload_date: window.archivedYouTubeData.upload_date,
+                            view_count: window.archivedYouTubeData.view_count,
+                            resolution: window.archivedYouTubeData.resolution
+                        },
+                        blockchain: 'arweave',
+                        publishTo: {
+                            arweave: document.getElementById('video-arweave').checked,
+                            ipfs: document.getElementById('video-ipfs').checked
+                        }
+                    };
+                } else {
+                    // Use manual form data
+                    videoData = {
+                        youtubeUrl: document.getElementById('video-url')?.value,
+                        thumbnailUrl: document.getElementById('video-thumbnail')?.value,
+                        basicMetadata: {
+                            name: document.getElementById('video-title').value,
+                            description: document.getElementById('video-description').value,
+                            language: 'en',
+                            nsfw: document.getElementById('video-nsfw').checked,
+                            tagItems: document.getElementById('video-tags').value.split(',').map(t => t.trim()).filter(t => t)
+                        },
+                        videoMetadata: {
+                            duration: document.getElementById('video-duration').value ? parseInt(document.getElementById('video-duration').value) * 60 : null,
+                            uploader: document.getElementById('video-channel').value
+                        },
+                        blockchain: 'arweave',
+                        publishTo: {
+                            arweave: document.getElementById('video-arweave').checked,
+                            ipfs: document.getElementById('video-ipfs').checked
+                        }
+                    };
+                }
+
+                if (!videoData.basicMetadata.name) {
+                    showMessage('publish-status', 'Please fill in video title', 'error');
+                    return;
+                }
+
+                const response = await fetch('/api/publish/newVideo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(videoData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage('publish-success', `Video published successfully! Transaction ID: ${result.transactionId}`, 'success');
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to publish video', 'error');
+                }
+            } catch (error) {
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        async function publishRecipe() {
+            try {
+                // Collect ingredients
+                const ingredientRows = document.querySelectorAll('.ingredient-row');
+                const ingredients = [];
+                const ingredientAmounts = [];
+                const ingredientUnits = [];
+
+                ingredientRows.forEach(row => {
+                    const amount = row.querySelector('.ingredient-amount').value;
+                    const unit = row.querySelector('.ingredient-unit').value;
+                    const name = row.querySelector('.ingredient-name').value;
+                    
+                    if (name.trim()) {
+                        ingredients.push(name);
+                        ingredientAmounts.push(parseFloat(amount) || 1);
+                        ingredientUnits.push(unit || 'unit');
+                    }
+                });
+
+                const recipeData = {
+                    basic: {
+                        name: document.getElementById('recipe-title').value,
+                        description: document.getElementById('recipe-description').value,
+                        language: 'En',
+                        date: Math.floor(Date.now() / 1000),
+                        nsfw: false,
+                        tagItems: document.getElementById('recipe-tags').value.split(',').map(t => t.trim()).filter(t => t)
+                    },
+                    recipe: [{
+                        prep_time_mins: parseInt(document.getElementById('recipe-prep-time').value) || null,
+                        cook_time_mins: parseInt(document.getElementById('recipe-cook-time').value) || null,
+                        total_time_mins: (parseInt(document.getElementById('recipe-prep-time').value) || 0) + (parseInt(document.getElementById('recipe-cook-time').value) || 0),
+                        servings: parseInt(document.getElementById('recipe-servings').value) || null,
+                        ingredient_amount: ingredientAmounts,
+                        ingredient_unit: ingredientUnits,
+                        ingredient: ingredients,
+                        instructions: document.getElementById('recipe-instructions').value,
+                        notes: document.getElementById('recipe-notes').value,
+                        cuisine: document.getElementById('recipe-cuisine').value,
+                        course: document.getElementById('recipe-course').value
+                    }],
+                    image: {
+                        webUrl: document.getElementById('recipe-image').value,
+                        contentType: 'image/jpeg'
+                    }
+                };
+
+                if (!recipeData.basic.name || !recipeData.recipe[0].instructions) {
+                    showMessage('publish-status', 'Please fill in recipe name and instructions', 'error');
+                    return;
+                }
+
+                const response = await fetch('/api/publish/newRecipe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(recipeData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage('publish-success', `Recipe published successfully! Transaction ID: ${result.transactionId}`, 'success');
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to publish recipe', 'error');
+                }
+            } catch (error) {
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        async function publishWorkout() {
+            try {
+                // Resolve exercises first
+                const exerciseData = await resolveWorkoutExercises();
+                
+                const workoutData = {
+                    basic: {
+                        name: document.getElementById('workout-title').value,
+                        description: document.getElementById('workout-description').value,
+                        language: 'en',
+                        date: Math.floor(Date.now() / 1000),
+                        nsfw: false,
+                        tagItems: document.getElementById('workout-goals').value.split(',').map(t => t.trim()).filter(t => t)
+                    },
+                    workout: {
+                        duration_mins: parseInt(document.getElementById('workout-duration').value) || null,
+                        difficulty: document.getElementById('workout-difficulty').value,
+                        category: document.getElementById('workout-category').value,
+                        equipment_required: document.getElementById('workout-equipment').value.split(',').map(t => t.trim()).filter(t => t),
+                        target_muscle_groups: document.getElementById('workout-muscles').value.split(',').map(t => t.trim()).filter(t => t),
+                        exercise: exerciseData.exerciseDidRefs ? 
+                            exerciseData.exercises.map(ex => ex.exerciseDidRef) : 
+                            exerciseData.exercises.map(ex => ex.name),
+                        exercise_sets: exerciseData.exercises.map(ex => ex.sets),
+                        exercise_reps: exerciseData.exercises.map(ex => ex.reps),
+                        exercise_rest_seconds: exerciseData.exercises.map(ex => ex.rest_seconds),
+                        notes: document.getElementById('workout-notes').value,
+                        non_standard: document.getElementById('workout-non-standard').checked
+                    }
+                };
+
+                if (!workoutData.basic.name || exerciseData.exercises.length === 0) {
+                    showMessage('publish-status', 'Please fill in workout name and add at least one exercise', 'error');
+                    return;
+                }
+
+                const response = await fetch('/api/publish/newWorkout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(workoutData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage('publish-success', `Workout published successfully! Transaction ID: ${result.transactionId}`, 'success');
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to publish workout', 'error');
+                }
+            } catch (error) {
+                showMessage('publish-status', 'Exercise resolution error: ' + error.message, 'error');
+            }
+        }
+
+        // Helper functions
+        function previewImage() {
+            const imageUrl = document.getElementById('image-url').value;
+            const previewContainer = document.getElementById('image-preview');
+            const previewImg = document.getElementById('preview-img');
+            
+            if (imageUrl) {
+                previewImg.src = imageUrl;
+                previewContainer.classList.remove('hidden');
+            }
+        }
 
     </script>
 </body>
