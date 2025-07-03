@@ -29,7 +29,7 @@ RUN echo "python=/usr/bin/python3" > .npmrc && \
     echo "node_gyp=/usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js" >> .npmrc
 
 # Install dependencies with better native module support (excluding canvas)
-RUN npm install --verbose --build-from-source --ignore-optional
+RUN npm install --verbose --build-from-source --no-optional
 
 # Rebuild native modules to ensure they work with current environment (excluding canvas)
 RUN npm rebuild bcrypt sharp
