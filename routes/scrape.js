@@ -2596,6 +2596,168 @@ router.post('/recipe', async (req, res) => {
 //   }
 // });
 
+// X Post Scraping Endpoint
+router.post('/x-post', authenticateToken, async (req, res) => {
+  const { url } = req.body;
+
+  if (!url || (!url.includes('x.com') && !url.includes('twitter.com'))) {
+    return res.status(400).json({ error: 'Valid X/Twitter URL is required' });
+  }
+
+  try {
+    console.log(`Scraping X post: ${url}`);
+    
+    // Use the existing fetchTweetDetails function
+    const tweetData = await fetchTweetDetails(url);
+    
+    res.json({
+      text: tweetData.text,
+      author: tweetData.author,
+      date: tweetData.date,
+      url: tweetData.url,
+      images: tweetData.images || []
+    });
+
+  } catch (error) {
+    console.error('X post scraping error:', error);
+    res.status(500).json({ error: 'Failed to scrape X post: ' + error.message });
+  }
+});
+
+// YouTube Video Archiving Endpoints
+let youtubeTasks = new Map(); // Store ongoing tasks
+
+router.post('/youtube-archive', authenticateToken, async (req, res) => {
+  const { url } = req.body;
+
+  if (!url || (!url.includes('youtube.com') && !url.includes('youtu.be'))) {
+    return res.status(400).json({ error: 'Valid YouTube URL is required' });
+  }
+
+  try {
+    const taskId = crypto.createHash('md5').update(url + Date.now()).digest('hex');
+    
+    // Initialize task
+    youtubeTasks.set(taskId, {
+      status: 'starting',
+      progress: 0,
+      message: 'Initializing...'
+    });
+
+    // Start background processing
+    processYouTubeVideo(url, taskId);
+
+    res.json({ taskId });
+
+  } catch (error) {
+    console.error('YouTube archive error:', error);
+    res.status(500).json({ error: 'Failed to start YouTube archiving: ' + error.message });
+  }
+});
+
+router.get('/youtube-progress', authenticateToken, (req, res) => {
+  const { taskId } = req.query;
+  
+  if (!taskId || !youtubeTasks.has(taskId)) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+
+  const task = youtubeTasks.get(taskId);
+  res.json(task);
+
+  // Clean up completed/failed tasks after sending response
+  if (task.status === 'complete' || task.status === 'error') {
+    setTimeout(() => youtubeTasks.delete(taskId), 60000); // Clean up after 1 minute
+  }
+});
+
+async function processYouTubeVideo(url, taskId) {
+  try {
+    // Update progress
+    youtubeTasks.set(taskId, {
+      status: 'downloading',
+      progress: 20,
+      message: 'Extracting video metadata...'
+    });
+
+    // Get metadata first
+    const metadata = await getYouTubeMetadata(url);
+    
+    youtubeTasks.set(taskId, {
+      status: 'downloading',
+      progress: 40,
+      message: 'Downloading video...'
+    });
+
+    // Download video to our media directory
+    const videoId = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/)?.[1];
+    if (!videoId) {
+      throw new Error('Could not extract video ID from URL');
+    }
+
+    const outputPath = await downloadVideo(url, videoId);
+    
+    youtubeTasks.set(taskId, {
+      status: 'downloading',
+      progress: 70,
+      message: 'Processing thumbnail...'
+    });
+
+    // Download and process thumbnail
+    let thumbnailUrl = null;
+    if (metadata.thumbnail) {
+      try {
+        const thumbnailFileName = await downloadImageFile(metadata.thumbnail, url);
+        thumbnailUrl = `${backendURL}/api/media?id=${thumbnailFileName}`;
+      } catch (error) {
+        console.warn('Failed to download thumbnail:', error);
+      }
+    }
+
+    youtubeTasks.set(taskId, {
+      status: 'downloading',
+      progress: 90,
+      message: 'Finalizing...'
+    });
+
+    // Create hosted URL for the video
+    const videoFileName = path.basename(outputPath);
+    const hostedVideoUrl = `${backendURL}/api/media?id=${videoFileName}`;
+
+    const result = {
+      title: metadata.title,
+      description: metadata.description,
+      uploader: metadata.uploader,
+      duration: metadata.duration,
+      upload_date: metadata.upload_date,
+      view_count: metadata.view_count,
+      tags: metadata.tags || [],
+      thumbnail: thumbnailUrl,
+      video_url: hostedVideoUrl,
+      original_url: url,
+      resolution: metadata.height ? `${metadata.width}x${metadata.height}` : null
+    };
+
+    youtubeTasks.set(taskId, {
+      status: 'complete',
+      progress: 100,
+      message: 'Video archived successfully!',
+      result
+    });
+
+  } catch (error) {
+    console.error('YouTube processing error:', error);
+    youtubeTasks.set(taskId, {
+      status: 'error',
+      progress: 0,
+      message: error.message,
+      error: error.message
+    });
+  }
+}
+
+
+
 // In your open-stream endpoint
 router.get('/open-stream', (req, res) => {
   const streamId = req.query.streamId;
