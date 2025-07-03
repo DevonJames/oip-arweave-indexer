@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
-const { getRecords, publishNewRecord } = require('../lib/oip-index');
+const { getRecords } = require('../helpers/elasticsearch');
+const { publishNewRecord } = require('../helpers/templateHelper');
 const { searchKaggleExercise } = require('../lib/kaggle-exercise-fetcher');
 
 // Exercise Resolution Endpoint (for workouts)
