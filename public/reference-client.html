@@ -2665,7 +2665,10 @@
                             <div class="toggle-switch" id="voice-include-pubkeys-toggle" onclick="toggleVoiceSwitch('voice-include-pubkeys-toggle')"></div>
                         </div>
                         
-
+                        <div class="toggle-group">
+                            <label>Includes Audio:</label>
+                            <div class="toggle-switch" id="voice-includes-audio-toggle" onclick="toggleVoiceSwitch('voice-includes-audio-toggle')"></div>
+                        </div>
                         
                         <button onclick="clearVoiceFilters()" class="btn-secondary btn-small">Clear Filters</button>
                         <button onclick="applyVoiceFilters()" class="btn-small">Apply Filters</button>
@@ -3034,7 +3037,7 @@
             };
             
             // Record types to exclude from home page buttons
-            const excludedTypes = ['deletemessage', 'replyto', 'nutritionalinfo', 'image', 'text'];
+            const excludedTypes = ['deletemessage', 'replyto', 'nutritionalinfo', 'image', 'text', 'audioitems', 'imageitems', 'videoitems'];
             
             grid.innerHTML = '';
             
@@ -3212,13 +3215,13 @@
                 console.log('[Search] 🎵 Searching for records with embedded audio content (any record type that contains audio)');
                 // Don't set record type filter for audio
                 document.getElementById('voice-record-type-filter').value = '';
-                // Set a flag to use hasAudio parameter (will be handled in collectVoiceFilters)
-                currentFilters.hasAudio = true;
+                // Enable the "Includes Audio" toggle
+                document.getElementById('voice-includes-audio-toggle').classList.add('active');
             } else {
                 // Set the record type filter for other types
                 document.getElementById('voice-record-type-filter').value = recordType;
-                // Clear any hasAudio flag
-                delete currentFilters.hasAudio;
+                // Clear the "Includes Audio" toggle
+                document.getElementById('voice-includes-audio-toggle').classList.remove('active');
             }
             
             // Clear other filters to get clean results for this record type
@@ -3232,10 +3235,17 @@
             // Switch to search interface
             showSearchInterface();
             
-            // Apply the search
+            // Apply the search (ensure we wait for UI to be ready)
             setTimeout(() => {
-                applyVoiceFilters();
-            }, 100);
+                // Ensure voice features are initialized first
+                if (!chatState.isInitialized) {
+                    initializeVoiceFeatures().then(() => {
+                        applyVoiceFilters();
+                    });
+                } else {
+                    applyVoiceFilters();
+                }
+            }, 200);
         }
         
         // Legacy function for backward compatibility
@@ -3844,6 +3854,193 @@
         // ========================================================================
         
         /**
+         * Create a podcast show card that groups multiple episodes
+         */
+        function createPodcastShowCard(showName, episodes, baseIndex) {
+            const card = document.createElement('div');
+            card.className = 'record-card podcast-show-card';
+            card.style.background = 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)';
+            card.style.border = '2px solid #667eea';
+            
+            // Sort episodes by date (newest first)
+            episodes.sort((a, b) => (b.data?.basic?.date || 0) - (a.data?.basic?.date || 0));
+            
+            const showArtwork = showName === 'The Light of Inquiry' ? 'TheLightOfInquiry-v2.png' : 'icons/noun-microphone-7907572.svg';
+            const episodeCount = episodes.length;
+            const latestEpisode = episodes[0];
+            
+            card.innerHTML = `
+                <div class="podcast-show-header" style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #667eea;">
+                    <img src="${showArtwork}" alt="${showName}" style="width: 80px; height: 80px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" onerror="this.src='icons/noun-microphone-7907572.svg'">
+                    <div style="flex: 1;">
+                        <h2 style="margin: 0 0 5px 0; color: #667eea; font-size: 1.4rem; font-weight: 700;">🎙️ ${showName}</h2>
+                        <div style="color: #6c757d; font-size: 14px; margin-bottom: 5px;">${episodeCount} Episode${episodeCount === 1 ? '' : 's'}</div>
+                        <div style="color: #495057; font-size: 13px;">Latest: ${formatDate(latestEpisode.data?.basic?.date)}</div>
+                    </div>
+                    <button onclick="toggleShowEpisodes('${showName.replace(/'/g, "\\'")}')" class="show-toggle-btn" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer;">
+                        Show Episodes
+                    </button>
+                </div>
+                
+                <div id="episodes-${showName.replace(/[^a-zA-Z0-9]/g, '_')}" class="episodes-container" style="display: none;">
+                    ${episodes.map((episode, index) => createEpisodeCard(episode, baseIndex + index, showName)).join('')}
+                </div>
+            `;
+            
+            return card;
+        }
+
+        /**
+         * Create an individual episode card within a show
+         */
+        function createEpisodeCard(episode, episodeIndex, showName) {
+            const basicData = episode.data?.basic || {};
+            const podcastData = episode.data?.podcast || {};
+            const audioData = episode.data?.audio || {};
+            
+            const episodeTitle = basicData.name || 'Untitled Episode';
+            const episodeDescription = basicData.description || '';
+            const episodeDate = formatDate(basicData.date);
+            const episodeTime = formatTime(basicData.date);
+            const citations = basicData.citations || [];
+            const citationCount = Array.isArray(citations) ? citations.length : 0;
+            
+            return `
+                <div class="episode-card" style="margin: 15px 0; padding: 15px; border: 1px solid #e9ecef; border-radius: 8px; background: white;">
+                    <div class="episode-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0 0 5px 0; color: #333; font-size: 1.1rem;">${episodeTitle}</h4>
+                            <div style="color: #6c757d; font-size: 12px; margin-bottom: 8px;">
+                                📅 ${episodeDate} • 🕐 ${episodeTime}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${episodeDescription ? `<p style="color: #666; font-size: 14px; line-height: 1.4; margin-bottom: 12px;">${truncateText(episodeDescription, 200)}</p>` : ''}
+                    
+                    <div class="episode-controls" style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px;">
+                        ${audioData.webUrl ? `
+                            <button class="play-btn primary" onclick="playAudioInMaster('${audioData.webUrl}', '${episodeTitle}', 'podcast', ${episodeIndex})" id="audioBtn-${episodeIndex}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 20px;">
+                                <span class="play-icon">🎙️</span>
+                                <span class="play-text">Play Episode</span>
+                            </button>
+                        ` : ''}
+                        ${podcastData.duration ? `<span style="color: #667eea; font-size: 12px;">Duration: ${podcastData.duration}</span>` : ''}
+                    </div>
+                    
+                    ${citationCount > 0 ? `
+                        <div class="episode-sources" style="border-top: 1px solid #e9ecef; padding-top: 10px;">
+                            <button class="article-btn" onclick="toggleEpisodeSources(${episodeIndex})" id="episodeSourcesBtn-${episodeIndex}" style="background: #e3f2fd; border-color: #2196f3; color: #1976d2; font-size: 12px; padding: 6px 12px;">
+                                📚 ${citationCount} Source${citationCount === 1 ? '' : 's'}
+                            </button>
+                            <div id="episodeSources-${episodeIndex}" class="episode-sources-content hidden" style="margin-top: 10px;">
+                                <div id="episodeSourcesContent-${episodeIndex}">Loading sources...</div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        /**
+         * Toggle show episodes visibility
+         */
+        function toggleShowEpisodes(showName) {
+            const containerId = 'episodes-' + showName.replace(/[^a-zA-Z0-9]/g, '_');
+            const container = document.getElementById(containerId);
+            const button = event.target;
+            
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                button.textContent = 'Hide Episodes';
+            } else {
+                container.style.display = 'none';
+                button.textContent = 'Show Episodes';
+            }
+        }
+
+        /**
+         * Toggle episode sources
+         */
+        function toggleEpisodeSources(episodeIndex) {
+            const sourcesDiv = document.getElementById(`episodeSources-${episodeIndex}`);
+            const button = document.getElementById(`episodeSourcesBtn-${episodeIndex}`);
+            const contentDiv = document.getElementById(`episodeSourcesContent-${episodeIndex}`);
+            
+            if (sourcesDiv.classList.contains('hidden')) {
+                sourcesDiv.classList.remove('hidden');
+                button.textContent = button.textContent.replace(/\d+ Source/, 'Hide Source');
+                
+                if (contentDiv.textContent === 'Loading sources...') {
+                    loadEpisodeSources(episodeIndex);
+                }
+            } else {
+                sourcesDiv.classList.add('hidden');
+                button.textContent = button.textContent.replace('Hide Source', currentRecords[episodeIndex]?.data?.basic?.citations?.length + ' Source');
+            }
+        }
+
+        /**
+         * Load episode sources
+         */
+        function loadEpisodeSources(episodeIndex) {
+            const record = currentRecords[episodeIndex];
+            if (!record?.data?.basic?.citations) return;
+            
+            const contentDiv = document.getElementById(`episodeSourcesContent-${episodeIndex}`);
+            const citations = record.data.basic.citations;
+            let sourcesHtml = '';
+            
+            citations.forEach((citation, index) => {
+                if (typeof citation === 'string') {
+                    sourcesHtml += `
+                        <div class="source-item" style="margin-bottom: 8px; padding: 8px; border: 1px solid #dee2e6; border-radius: 4px; background: #f8f9fa; font-size: 11px;">
+                            <div style="color: #6c757d; font-family: monospace;">DID: ${citation}</div>
+                        </div>
+                    `;
+                } else if (citation?.data?.basic) {
+                    const citationData = citation.data.basic;
+                    const postData = citation.data.post || {};
+                    
+                    sourcesHtml += `
+                        <div class="source-item" style="margin-bottom: 8px; padding: 10px; border: 1px solid #dee2e6; border-radius: 4px; background: white; font-size: 12px;">
+                            <div style="font-weight: 600; margin-bottom: 4px; color: #333;">
+                                ${citationData.name || 'Untitled Source'}
+                            </div>
+                            ${citationData.description ? `
+                                <div style="color: #666; margin-bottom: 6px; line-height: 1.3;">
+                                    ${truncateText(citationData.description, 100)}
+                                </div>
+                            ` : ''}
+                            ${postData.webUrl ? `
+                                <div style="margin-top: 6px;">
+                                    <a href="${postData.webUrl}" target="_blank" rel="noopener noreferrer" style="color: #1976d2; text-decoration: none; font-size: 11px;">
+                                        🔗 Read Original
+                                    </a>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+            });
+            
+            if (sourcesHtml) {
+                contentDiv.innerHTML = sourcesHtml;
+            } else {
+                contentDiv.innerHTML = '<div style="color: #666; font-style: italic; font-size: 12px;">No sources available</div>';
+            }
+        }
+
+        /**
+         * Format time from unix timestamp
+         */
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        /**
          * Create a modern, media-focused record card with collapsible technical details
          */
         function createRecordCard(record, recordIndex) {
@@ -3942,7 +4139,7 @@
                 // Set show artwork as featured image for "The Light of Inquiry"
                 if (content.podcastData.show === 'The Light of Inquiry') {
                     content.featuredImage = {
-                        url: 'podcastShows/TheLightOfInquiry-v2.png',
+                        url: 'TheLightOfInquiry-v2.png',
                         title: 'The Light of Inquiry',
                         contentType: 'image/png'
                     };
@@ -4498,10 +4695,10 @@
         }
 
         /**
-         * Render web URL button
+         * Render web URL button (skip for podcast records)
          */
         function renderWebUrlButton(mediaContent) {
-            if (mediaContent.webUrl) {
+            if (mediaContent.webUrl && !mediaContent.podcastData) {
                 return `
                     <div class="web-controls">
                         <a href="${mediaContent.webUrl}" target="_blank" rel="noopener noreferrer" class="web-btn">
@@ -6341,7 +6538,7 @@
 
         // AI Chat Feature Initialization
         async function initializeVoiceFeatures() {
-            if (chatState.isInitialized) return;
+            if (chatState.isInitialized) return Promise.resolve();
             
             console.log('[Chat] Initializing AI chat features...');
             updateAIStatus('Initializing...');
@@ -6361,9 +6558,12 @@
                 
                 console.log('[Chat] AI chat features initialized successfully with multi-tag system');
                 
+                return Promise.resolve();
+                
             } catch (error) {
                 console.error('[Chat] Initialization failed:', error);
                 updateAIStatus('AI chat unavailable');
+                return Promise.reject(error);
             }
         }
 
@@ -7473,9 +7673,7 @@
             currentFilters.didTx = document.getElementById('voice-did-tx').value.trim();
             currentFilters.includeSigs = document.getElementById('voice-include-sigs-toggle').classList.contains('active');
             currentFilters.includePubKeys = document.getElementById('voice-include-pubkeys-toggle').classList.contains('active');
-            
-            // Note: hasAudio is set separately in searchByRecordType() and preserved here
-            // It doesn't have a UI toggle - it's set programmatically when clicking the Audio category
+            currentFilters.hasAudio = document.getElementById('voice-includes-audio-toggle').classList.contains('active');
             
             // Collect multi-tag filters (prioritize user manual selection over AI)
             const selectedTags = getSelectedTags();
@@ -7552,6 +7750,7 @@
             document.getElementById('voice-did-tx').value = '';
             document.getElementById('voice-include-sigs-toggle').classList.remove('active');
             document.getElementById('voice-include-pubkeys-toggle').classList.remove('active');
+            document.getElementById('voice-includes-audio-toggle').classList.remove('active');
             
             // Clear DID TX error
             clearDidTxError();
@@ -7566,11 +7765,11 @@
             delete currentFilters.tagsMatchMode;
             delete currentFilters.tag;
             
-            // Clear hasAudio filter
-            delete currentFilters.hasAudio;
-            
             // Clear didTx filter
             delete currentFilters.didTx;
+            
+            // Clear hasAudio filter
+            delete currentFilters.hasAudio;
             
             // Clear applied filters display
             document.getElementById('applied-filters-display').classList.add('hidden');
@@ -7707,17 +7906,44 @@
                 grid.innerHTML = '';
             }
             
+            // Group podcast records by show
+            const podcastShows = {};
+            const nonPodcastRecords = [];
+            
+            records.forEach(record => {
+                if (record.oip?.recordType === 'podcast' && record.data?.podcast?.show) {
+                    const showName = record.data.podcast.show;
+                    if (!podcastShows[showName]) {
+                        podcastShows[showName] = [];
+                    }
+                    podcastShows[showName].push(record);
+                } else {
+                    nonPodcastRecords.push(record);
+                }
+            });
+            
             const startIndex = currentRecords.length - records.length;
-            records.forEach((record, index) => {
-                // Use the enhanced createRecordCard function directly
-                const card = createRecordCard(record, startIndex + index);
+            let recordIndex = startIndex;
+            
+            // Render podcast shows as grouped cards
+            Object.keys(podcastShows).forEach(showName => {
+                const episodes = podcastShows[showName];
+                const showCard = createPodcastShowCard(showName, episodes, recordIndex);
+                grid.appendChild(showCard);
+                recordIndex += episodes.length;
+            });
+            
+            // Render non-podcast records normally
+            nonPodcastRecords.forEach(record => {
+                const card = createRecordCard(record, recordIndex);
                 grid.appendChild(card);
+                recordIndex++;
             });
             
             grid.classList.remove('hidden');
             document.getElementById('voice-no-results').classList.add('hidden');
             
-            console.log(`[Enhanced Display] Rendered ${records.length} records with dynamic templates`);
+            console.log(`[Enhanced Display] Rendered ${records.length} records with dynamic templates (${Object.keys(podcastShows).length} podcast shows)`);
         }
 
         function showVoiceNoResults() {

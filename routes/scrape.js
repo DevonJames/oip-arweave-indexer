@@ -3198,19 +3198,88 @@ async function fetchWebArticleWithPuppeteer(url, scrapeId, options) {
   try {
     sendUpdate('initializing', { message: 'Starting browser...' });
 
-    // Launch Puppeteer
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
-      ]
-    });
+    // Launch Puppeteer with Alpine Linux compatible settings
+    const browserArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-background-networking',
+      '--disable-sync',
+      '--disable-translate',
+      '--disable-ipc-flooding-protection',
+      '--mute-audio',
+      '--disable-default-apps',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--run-all-compositor-stages-before-draw',
+      '--memory-pressure-off',
+      '--max_old_space_size=4096'
+    ];
+
+    // Try to use system chromium first (Alpine Linux), fall back to bundled Chrome
+    const fs = require('fs');
+    const possiblePaths = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      process.env.CHROME_BIN,
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome'
+    ];
+    
+    let executablePath = undefined;
+    for (const path of possiblePaths) {
+      if (path && fs.existsSync(path)) {
+        executablePath = path;
+        console.log(`Using Chrome/Chromium at: ${executablePath}`);
+        break;
+      }
+    }
+    
+    if (!executablePath) {
+      console.log('System chromium not found, using bundled Chrome (may cause compatibility issues in Alpine)');
+    }
+
+    try {
+      console.log('Launching browser with args:', browserArgs);
+      console.log('Executable path:', executablePath || 'default');
+      
+      browser = await puppeteer.launch({
+        headless: true,
+        executablePath: executablePath,
+        args: browserArgs,
+        timeout: 30000, // 30 second timeout
+        ignoreDefaultArgs: false,
+        dumpio: false // Set to true for debugging
+      });
+      
+      console.log('Browser launched successfully');
+    } catch (browserError) {
+      console.error('Browser launch failed:', browserError.message);
+      
+      // If system chromium fails, try without executablePath as fallback
+      if (executablePath && browserError.message.includes('Failed to launch')) {
+        console.log('Retrying browser launch without custom executable path...');
+        browser = await puppeteer.launch({
+          headless: true,
+          args: browserArgs,
+          timeout: 30000,
+          ignoreDefaultArgs: false
+        });
+        console.log('Browser launched successfully with bundled Chrome');
+      } else {
+        throw browserError;
+      }
+    }
 
     const page = await browser.newPage();
     
