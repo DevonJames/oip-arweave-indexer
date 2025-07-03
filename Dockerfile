@@ -67,6 +67,7 @@ RUN chmod +x wait-for-it.sh
 # Copy specific application directories and config
 COPY config ./config
 COPY helpers ./helpers
+COPY lib ./lib
 COPY remapTemplates ./remapTemplates
 COPY routes ./routes
 COPY speech-synthesizer ./speech-synthesizer
