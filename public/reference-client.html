@@ -2162,25 +2162,31 @@
             
             /* Mobile AI drawer content adjustments */
             .ai-drawer-content {
-                height: calc(100% - 120px); /* Account for header */
+                height: calc(100% - 160px); /* More space for header and input */
                 display: flex;
                 flex-direction: column;
             }
             
             .chat-conversation {
                 flex: 1;
-                min-height: 200px;
-                max-height: calc(100vh - 300px);
+                min-height: 150px;
+                max-height: calc(100vh - 400px); /* Reduced to make room for input */
                 overflow-y: auto;
+                margin-bottom: 20px;
             }
             
-            .chat-input-container {
-                position: sticky;
-                bottom: 0;
-                background: inherit;
-                padding: 15px;
-                border-top: 1px solid rgba(255, 255, 255, 0.2);
+            .ai-drawer.open .chat-input-container {
+                position: fixed;
+                bottom: 100px; /* Move up from bottom */
+                left: 0;
+                right: 0;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 20px;
+                border-top: 2px solid rgba(255, 255, 255, 0.3);
                 flex-shrink: 0;
+                z-index: 10000;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
             }
             
             /* Welcome Interface Mobile */
@@ -2259,16 +2265,34 @@
             /* Mobile adjustments for AI drawer */
             .ai-drawer-header {
                 padding: 15px;
+                position: sticky;
+                top: 0;
+                background: inherit;
+                z-index: 10001;
             }
             
             .ai-settings {
                 flex-direction: column;
                 gap: 10px;
+                margin-bottom: 15px;
             }
             
             .ai-setting {
                 flex: 1;
                 min-width: auto;
+            }
+            
+            /* AI status area adjustments */
+            .ai-drawer.open .ai-status {
+                position: fixed;
+                bottom: 200px; /* Above the input area */
+                left: 20px;
+                right: 20px;
+                z-index: 9999;
+                text-align: center;
+                background: rgba(102, 126, 234, 0.9);
+                border-radius: 8px;
+                margin: 0;
             }
             
             .chat-input-row {
@@ -2321,10 +2345,32 @@
                 height: 100dvh; /* Use dvh for better mobile support */
             }
             
+            /* Applied filters adjustments for mobile */
+            .applied-filters-display {
+                position: relative;
+                margin-bottom: 15px;
+                z-index: 9998;
+            }
+            
+            /* Only apply fixed positioning on small screens */
+            @media (max-width: 768px) and (max-height: 800px) {
+                .ai-drawer.open .chat-input-container {
+                    bottom: 120px; /* Even higher on smaller screens */
+                }
+                
+                .ai-drawer.open .ai-status {
+                    bottom: 220px;
+                }
+            }
+            
             /* Fix for iOS Safari bottom bar */
             @supports (-webkit-touch-callout: none) {
                 .ai-drawer.open {
                     height: calc(100vh - env(safe-area-inset-bottom));
+                }
+                
+                .ai-drawer.open .chat-input-container {
+                    bottom: calc(100px + env(safe-area-inset-bottom));
                 }
             }
         }
@@ -3133,12 +3179,12 @@
             
             // Icon mapping for different record types - using SVG icons
             const iconMap = {
-                'post': '<img src="icons/noun-copywriting-4038314-9B9B9B.svg" alt="Post" style="width: 40px; height: 40px;">',
+                'post': '<img src="noun-copywriting-4038314-9B9B9B.svg" alt="Post" style="width: 40px; height: 40px;">',
                 'video': '📹', 
-                'audio': '<img src="icons/noun-speaker-1445780-9B9B9B.png" alt="Audio" style="width: 40px; height: 40px;">',
-                'recipe': '<img src="icons/noun-plate-4303489-9B9B9B.svg" alt="Recipe" style="width: 40px; height: 40px;">',
+                'audio': '<img src="noun-speaker-1445776-9B9B9B.svg" alt="Audio" style="width: 40px; height: 40px;">',
+                'recipe': '<img src="noun-plate-4303489-9B9B9B.svg" alt="Recipe" style="width: 40px; height: 40px;">',
                 'workout': '💪',
-                'podcast': '<img src="icons/noun-podcast-7882058-9B9B9B.svg" alt="Podcast" style="width: 40px; height: 40px;">',
+                'podcast': '<img src="noun-podcast-7882058-9B9B9B.svg" alt="Podcast" style="width: 40px; height: 40px;">',
                 'movie': '🎬',
                 'music': '🎵',
                 'book': '📚',
