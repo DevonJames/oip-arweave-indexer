@@ -3019,14 +3019,14 @@
             const grid = document.getElementById('categories-grid');
             if (!grid) return;
             
-            // Icon mapping for different record types
+            // Icon mapping for different record types - using SVG icons
             const iconMap = {
-                'post': '📝',
+                'post': '<img src="icons/noun-copywriting-4038314-9B9B9B.svg" alt="Post" style="width: 40px; height: 40px;">',
                 'video': '📹', 
-                'audio': '🎵',
-                'recipe': '🍳',
+                'audio': '<img src="icons/noun-speaker-1445780-9B9B9B.png" alt="Audio" style="width: 40px; height: 40px;">',
+                'recipe': '<img src="icons/noun-plate-4303489-9B9B9B.svg" alt="Recipe" style="width: 40px; height: 40px;">',
                 'workout': '💪',
-                'podcast': '🎙️',
+                'podcast': '<img src="icons/noun-podcast-7882058-9B9B9B.svg" alt="Podcast" style="width: 40px; height: 40px;">',
                 'movie': '🎬',
                 'music': '🎵',
                 'book': '📚',
@@ -3037,7 +3037,7 @@
             };
             
             // Record types to exclude from home page buttons
-            const excludedTypes = ['deletemessage', 'replyto', 'nutritionalinfo', 'image', 'text', 'audioitems', 'imageitems', 'videoitems'];
+            const excludedTypes = ['deletemessage', 'replyto', 'nutritionalinfo', 'image', 'text', 'audioitems', 'imageitems', 'videoitems', '0', 'featuredimage'];
             
             grid.innerHTML = '';
             
