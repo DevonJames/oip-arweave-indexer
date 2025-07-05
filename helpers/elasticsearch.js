@@ -320,10 +320,17 @@ const expandData = async (compressedData, templates) => {
 
 const ensureIndexExists = async () => {
     try {
-        const templatesExists = await elasticClient.indices.exists({ index: 'templates' });
-        console.log('🔍 Templates index exists check:', templatesExists.body);
+        let templatesExists;
+        try {
+            const existsResponse = await elasticClient.indices.exists({ index: 'templates' });
+            templatesExists = existsResponse.body !== undefined ? existsResponse.body : existsResponse;
+            console.log('🔍 Templates index exists check:', templatesExists);
+        } catch (existsError) {
+            console.log('❌ Error checking templates index existence:', existsError.message);
+            templatesExists = false; // Assume it doesn't exist if we can't check
+        }
         
-        if (!templatesExists.body) {
+        if (!templatesExists) {
             console.log('📝 Creating new templates index with correct mapping...');
             try {
                 await elasticClient.indices.create({
@@ -377,83 +384,14 @@ const ensureIndexExists = async () => {
                 console.log('📋 New templates mapping structure:', JSON.stringify(newMapping.body.templates.mappings.properties.data.properties.fieldsInTemplate, null, 2));
                 
             } catch (error) {
-                if (error.meta.body.error.type !== "resource_already_exists_exception") {
+                if (error.meta && error.meta.body && error.meta.body.error && error.meta.body.error.type !== "resource_already_exists_exception") {
+                    console.error('❌ Error creating templates index:', error.message);
                     throw error;
                 }
+                console.log('✅ Templates index already exists (resource_already_exists_exception)');
             }
         } else {
-            console.log('🔍 Templates index already exists, checking current mapping...');
-            // Check if we need to recreate due to mapping conflicts
-            try {
-                const mapping = await elasticClient.indices.getMapping({ index: 'templates' });
-                const currentMapping = mapping.body.templates.mappings.properties;
-                
-                console.log('📋 Current templates mapping structure:', JSON.stringify(currentMapping?.data?.properties?.fieldsInTemplate, null, 2));
-                
-                // Check if fieldsInTemplate has the wrong mapping (text instead of object)
-                const fieldsInTemplateMapping = currentMapping?.data?.properties?.fieldsInTemplate;
-                if (fieldsInTemplateMapping && fieldsInTemplateMapping.type === 'text') {
-                    console.log('⚠️  Detected incorrect fieldsInTemplate mapping, recreating templates index...');
-                    
-                    // Delete and recreate the index
-                    await elasticClient.indices.delete({ index: 'templates' });
-                    console.log('🗑️  Old templates index deleted');
-                    
-                    await elasticClient.indices.create({
-                        index: 'templates',
-                        body: {
-                            mappings: {
-                                properties: {
-                                    data: {
-                                        type: 'object',
-                                        properties: {
-                                            TxId: { type: 'text' },
-                                            template: { type: 'text' },
-                                            fields: { type: 'text' },
-                                            fieldsInTemplate: { 
-                                                type: 'object',
-                                                dynamic: true,
-                                                enabled: true
-                                            },
-                                            fieldsInTemplateCount: { type: 'integer' },
-                                            creator: { type: 'text' },
-                                            creatorSig: { type: 'text' }
-                                        }
-                                    },
-                                    oip: {
-                                        type: 'object',
-                                        properties: {
-                                            didTx: { type: 'keyword' },
-                                            inArweaveBlock: { type: 'long' },
-                                            indexedAt: { type: 'date' },
-                                            recordStatus: { type: 'text' },
-                                            ver: { type: 'text' },
-                                            creator: {
-                                                type: 'object',
-                                                properties: {
-                                                    creatorHandle: { type: 'text' },
-                                                    didAddress: { type: 'text' },
-                                                    didTx: { type: 'text' },
-                                                    publicKey: { type: 'text' }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-                    console.log('✅ Templates index recreated with correct mapping');
-                    
-                    // Show the recreated mapping
-                    const newMapping = await elasticClient.indices.getMapping({ index: 'templates' });
-                    console.log('📋 Recreated templates mapping structure:', JSON.stringify(newMapping.body.templates.mappings.properties.data.properties.fieldsInTemplate, null, 2));
-                } else {
-                    console.log('✅ Templates index mapping looks correct:', fieldsInTemplateMapping?.type || 'undefined');
-                }
-            } catch (mappingError) {
-                console.log('⚠️ Could not check template mapping, assuming it is correct:', mappingError.message);
-            }
+            console.log('✅ Templates index already exists');
         }
         const recordsExists = await elasticClient.indices.exists({ index: 'records' });
         if (!recordsExists.body) {
