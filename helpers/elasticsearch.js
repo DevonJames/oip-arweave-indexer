@@ -2189,6 +2189,8 @@ async function processNewTemplate(transaction) {
         
         // Parse the raw transaction data to understand the field structure
         const rawFieldsObject = JSON.parse(fieldsString);
+        console.log(getFileInfo(), getLineNumber(), `🔧 DEBUG Template ${templateName} raw fieldsString:`, fieldsString);
+        console.log(getFileInfo(), getLineNumber(), `🔧 DEBUG Template ${templateName} parsed rawFieldsObject:`, rawFieldsObject);
         
         // Create the correct enhanced field structures
         const fieldsForTranslation = {}; // For the 'fields' JSON string that translateJSONtoOIPData expects
