@@ -115,8 +115,26 @@ const translateJSONtoOIPData = async (record, recordType) => {
                         // New structure: fields as JSON string
                         fields = JSON.parse(template.data.fields);
                     } else if (template.data.fieldsInTemplate) {
-                        // Old structure: fieldsInTemplate as object
-                        fields = template.data.fieldsInTemplate;
+                        // Old/Updated structure: fieldsInTemplate as flat object
+                        const fieldsInTemplate = template.data.fieldsInTemplate;
+                        
+                        // Check if it's the old nested format or new flat format
+                        const firstField = Object.keys(fieldsInTemplate).find(key => !key.startsWith('index_') && !key.endsWith('Values'));
+                        if (firstField && typeof fieldsInTemplate[firstField] === 'object' && fieldsInTemplate[firstField].type) {
+                            // Old nested format: convert to flat format
+                            fields = {};
+                            Object.keys(fieldsInTemplate).forEach(fieldName => {
+                                if (typeof fieldsInTemplate[fieldName] === 'object' && fieldsInTemplate[fieldName].type) {
+                                    fields[fieldName] = fieldsInTemplate[fieldName].type;
+                                    fields[`index_${fieldName}`] = fieldsInTemplate[fieldName].index;
+                                } else {
+                                    fields[fieldName] = fieldsInTemplate[fieldName];
+                                }
+                            });
+                        } else {
+                            // New flat format: use directly
+                            fields = fieldsInTemplate;
+                        }
                     } else {
                         console.error('Template has no fields data:', template.data);
                         continue;

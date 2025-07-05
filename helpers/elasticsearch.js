@@ -2192,9 +2192,9 @@ async function processNewTemplate(transaction) {
         console.log(getFileInfo(), getLineNumber(), `🔧 DEBUG Template ${templateName} raw fieldsString:`, fieldsString);
         console.log(getFileInfo(), getLineNumber(), `🔧 DEBUG Template ${templateName} parsed rawFieldsObject:`, rawFieldsObject);
         
-        // Create the correct enhanced field structures
+        // Create the correct enhanced field structures  
         const fieldsForTranslation = {}; // For the 'fields' JSON string that translateJSONtoOIPData expects
-        const fieldsInTemplate = {};     // For the 'fieldsInTemplate' object
+        const fieldsInTemplate = {};     // For the 'fieldsInTemplate' object - keep it flat for Elasticsearch text mapping
         let fieldCount = 0;
         
         // Process each field from the transaction data
@@ -2211,11 +2211,10 @@ async function processNewTemplate(transaction) {
             fieldsForTranslation[fieldName] = fieldType;
             fieldsForTranslation[`index_${fieldName}`] = fieldIndex;
             
-            // For fieldsInTemplate object: field name -> {type, index}
-            fieldsInTemplate[fieldName] = {
-                type: fieldType,
-                index: fieldIndex
-            };
+            // For fieldsInTemplate object: store as flat structure compatible with text mapping
+            // Instead of nested objects, store the type and index as separate fields
+            fieldsInTemplate[fieldName] = fieldType;
+            fieldsInTemplate[`index_${fieldName}`] = fieldIndex;
             
             // Handle enum values if present
             if (fieldType === 'enum' && rawFieldsObject[`${fieldName}Values`]) {
