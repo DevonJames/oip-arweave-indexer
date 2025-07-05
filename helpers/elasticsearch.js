@@ -2345,6 +2345,11 @@ async function processNewTemplate(transaction) {
                     fieldCount: fieldCount
                 });
                 
+                // DEBUG: Log the actual fieldsObject and fieldsInTemplate
+                console.log(getFileInfo(), getLineNumber(), `🐛 DEBUG fieldsObject:`, fieldsObject);
+                console.log(getFileInfo(), getLineNumber(), `🐛 DEBUG fieldsInTemplate:`, fieldsInTemplate);
+                console.log(getFileInfo(), getLineNumber(), `🐛 DEBUG finalTemplate before storage:`, JSON.stringify(finalTemplate, null, 2));
+                
                 // Add enum values if they exist
                 for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
                     if (fieldValue === 'enum' && fieldsObject[`${fieldName}Values`]) {
@@ -2353,11 +2358,23 @@ async function processNewTemplate(transaction) {
                     }
                 }
                 
-                await elasticClient.index({
+                const indexResult = await elasticClient.index({
                     index: 'templates',
                     body: finalTemplate,
                 });
-                console.log(`✅ Template indexed successfully: ${finalTemplate.data.TxId}`);
+                console.log(`✅ Template indexed successfully: ${finalTemplate.data.TxId}`, indexResult.result);
+                
+                // DEBUG: Verify what was actually stored
+                const storedTemplate = await elasticClient.get({
+                    index: 'templates',
+                    id: oip.didTx
+                });
+                console.log(getFileInfo(), getLineNumber(), `🐛 DEBUG stored template verification:`, {
+                    hasFields: !!storedTemplate._source.data.fields,
+                    fieldsLength: storedTemplate._source.data.fields ? storedTemplate._source.data.fields.length : 0,
+                    fieldsInTemplateKeys: Object.keys(storedTemplate._source.data.fieldsInTemplate || {}),
+                    fieldsInTemplateCount: storedTemplate._source.data.fieldsInTemplateCount
+                });
             } else {
                 console.log(`Template already exists in DB: ${transaction.transactionId}`);
             }
