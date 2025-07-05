@@ -109,7 +109,18 @@ const translateJSONtoOIPData = async (record, recordType) => {
             try {
                 const template = await searchTemplateByTxId(templateTxid);
                 if (template !== null) {
-                    const fields = JSON.parse(template.data.fields);
+                    // Handle both old and new template field structures
+                    let fields;
+                    if (template.data.fields) {
+                        // New structure: fields as JSON string
+                        fields = JSON.parse(template.data.fields);
+                    } else if (template.data.fieldsInTemplate) {
+                        // Old structure: fieldsInTemplate as object
+                        fields = template.data.fieldsInTemplate;
+                    } else {
+                        console.error('Template has no fields data:', template.data);
+                        continue;
+                    }
                     const converted = {};
                     for (const key in json) {
                         const indexKey = `index_${key}`;

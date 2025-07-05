@@ -598,6 +598,13 @@ async function searchTemplateByTxId(templateTxid) {
         }
     });
     // console.log('1234 searchResponse hits hits:', searchResponse.hits.hits);
+    
+    // Check if any results were found
+    if (searchResponse.hits.hits.length === 0) {
+        console.log(`Template not found in database for TxId: ${templateTxid}`);
+        return null;
+    }
+    
     template = searchResponse.hits.hits[0]._source;
     // console.log('12345 template:', template);
     return template
@@ -2180,12 +2187,42 @@ async function processNewTemplate(transaction) {
         // Use the same block height approach as successful creator verification
         const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
         
+        // Create enhanced field structure with proper indexing and enum support
+        const fieldsObject = JSON.parse(fieldsString);
+        const enhancedFieldsObject = {};
+        let fieldCount = 0;
+        
+        for (const [fieldName, fieldConfig] of Object.entries(fieldsObject)) {
+            // Skip index_ and Values fields - they'll be added automatically
+            if (fieldName.startsWith('index_') || fieldName.endsWith('Values')) {
+                continue;
+            }
+            
+            const fieldType = fieldConfig.type || fieldConfig;
+            const fieldIndex = fieldConfig.index !== undefined ? fieldConfig.index : fieldCount;
+            
+            // Add the field type and index
+            enhancedFieldsObject[fieldName] = fieldType;
+            enhancedFieldsObject[`index_${fieldName}`] = fieldIndex;
+            
+            // If this is an enum field, add its values
+            if (fieldType === 'enum' && fieldsObject[`${fieldName}Values`]) {
+                enhancedFieldsObject[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
+            }
+            
+            fieldCount++;
+        }
+        
+        const enhancedFieldsString = JSON.stringify(enhancedFieldsObject);
+        
         const data = {
             TxId: transaction.transactionId,
             creator: transaction.creator,
             creatorSig: templateSignatureBase64, // Use the corrected signature
             template: templateName,
-            fields: fieldsString
+            fields: enhancedFieldsString, // JSON string format expected by translateJSONtoOIPData
+            fieldsInTemplate: enhancedFieldsObject, // Object format for other uses
+            fieldsInTemplateCount: fieldCount
         };
         
         const oip = {
