@@ -2187,13 +2187,17 @@ async function processNewTemplate(transaction) {
         // Use the same block height approach as successful creator verification
         const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
         
-        // Create enhanced field structure with proper indexing and enum support
-        const fieldsObject = JSON.parse(fieldsString);
-        const enhancedFieldsObject = {};
+        // Parse the raw transaction data to understand the field structure
+        const rawFieldsObject = JSON.parse(fieldsString);
+        
+        // Create the correct enhanced field structures
+        const fieldsForTranslation = {}; // For the 'fields' JSON string that translateJSONtoOIPData expects
+        const fieldsInTemplate = {};     // For the 'fieldsInTemplate' object
         let fieldCount = 0;
         
-        for (const [fieldName, fieldConfig] of Object.entries(fieldsObject)) {
-            // Skip index_ and Values fields - they'll be added automatically
+        // Process each field from the transaction data
+        for (const [fieldName, fieldConfig] of Object.entries(rawFieldsObject)) {
+            // Skip any existing index_ or Values fields in raw data
             if (fieldName.startsWith('index_') || fieldName.endsWith('Values')) {
                 continue;
             }
@@ -2201,19 +2205,27 @@ async function processNewTemplate(transaction) {
             const fieldType = fieldConfig.type || fieldConfig;
             const fieldIndex = fieldConfig.index !== undefined ? fieldConfig.index : fieldCount;
             
-            // Add the field type and index
-            enhancedFieldsObject[fieldName] = fieldType;
-            enhancedFieldsObject[`index_${fieldName}`] = fieldIndex;
+            // For translateJSONtoOIPData format: field name -> type, index_field -> index
+            fieldsForTranslation[fieldName] = fieldType;
+            fieldsForTranslation[`index_${fieldName}`] = fieldIndex;
             
-            // If this is an enum field, add its values
-            if (fieldType === 'enum' && fieldsObject[`${fieldName}Values`]) {
-                enhancedFieldsObject[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
+            // For fieldsInTemplate object: field name -> {type, index}
+            fieldsInTemplate[fieldName] = {
+                type: fieldType,
+                index: fieldIndex
+            };
+            
+            // Handle enum values if present
+            if (fieldType === 'enum' && rawFieldsObject[`${fieldName}Values`]) {
+                fieldsForTranslation[`${fieldName}Values`] = rawFieldsObject[`${fieldName}Values`];
+                fieldsInTemplate[`${fieldName}Values`] = rawFieldsObject[`${fieldName}Values`];
             }
             
             fieldCount++;
         }
         
-        const enhancedFieldsString = JSON.stringify(enhancedFieldsObject);
+        // Create the JSON string format that translateJSONtoOIPData expects
+        const enhancedFieldsString = JSON.stringify(fieldsForTranslation);
         
         const data = {
             TxId: transaction.transactionId,
@@ -2221,7 +2233,7 @@ async function processNewTemplate(transaction) {
             creatorSig: templateSignatureBase64, // Use the corrected signature
             template: templateName,
             fields: enhancedFieldsString, // JSON string format expected by translateJSONtoOIPData
-            fieldsInTemplate: enhancedFieldsObject, // Object format for other uses
+            fieldsInTemplate: fieldsInTemplate, // Object format for other uses
             fieldsInTemplateCount: fieldCount
         };
         
