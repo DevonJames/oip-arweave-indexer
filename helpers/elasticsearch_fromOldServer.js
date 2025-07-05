@@ -16,9 +16,8 @@ const path = require('path');
 const fs = require('fs');
 const e = require('express');
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
-// let startBlockHeight = 1463762
-
-let startBlockHeight = 1579580;
+let startBlockHeight = 1463762
+// 1579580;
 
 const elasticClient = new Client({
     node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
@@ -328,35 +327,27 @@ const ensureIndexExists = async () => {
                     body: {
                         mappings: {
                             properties: {
-                                data: {
-                                    type: 'object',
-                                    properties: {
-                                        TxId: { type: 'text' },
-                                        template: { type: 'text' },
-                                        fields: { type: 'text' },
-                                        fieldsInTemplate: { type: 'object', enabled: false }, // Store as-is without strict mapping
-                                        fieldsInTemplateCount: { type: 'integer' },
-                                        creator: { type: 'text' },
-                                        creatorSig: { type: 'text' }
-                                    }
-                                },
+                                TxId: { type: 'text' },
+                                template: { type: 'text' },
+                                fields: { type: 'text' },
+                                tags: { type: 'text' },
+                                creator: { type: 'text' },
+                                creatorSig: { type: 'text' },
                                 oip: {
                                     type: 'object',
                                     properties: {
                                         didTx: { type: 'keyword' },
                                         inArweaveBlock: { type: 'long' },
                                         indexedAt: { type: 'date' },
-                                        recordStatus: { type: 'text' },
                                         ver: { type: 'text' },
                                         creator: {
                                             type: 'object',
                                             properties: {
                                                 creatorHandle: { type: 'text' },
-                                                didAddress: { type: 'text' },
-                                                didTx: { type: 'text' },
-                                                publicKey: { type: 'text' }
+                                                didAddress: { type: 'text' }
                                             }
                                         }
+
                                     }
                                 }
                             }
@@ -560,18 +551,7 @@ const getTemplatesInDB = async () => {
         });
         const templatesInDB = searchResponse.hits.hits.map(hit => hit._source);
         const qtyTemplatesInDB = templatesInDB.length;
-        
-        // Filter out templates with "pending confirmation in Arweave" status when calculating max block height
-        const confirmedTemplates = templatesInDB.filter(template => 
-            template.oip.recordStatus !== "pending confirmation in Arweave"
-        );
-        const pendingTemplatesCount = templatesInDB.length - confirmedTemplates.length;
-        if (pendingTemplatesCount > 0) {
-            console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingTemplatesCount} pending templates from max block calculation`);
-        }
-        const maxArweaveBlockInDB = confirmedTemplates.length > 0 
-            ? Math.max(...confirmedTemplates.map(template => template.oip.inArweaveBlock)) || 0
-            : 0;
+        const maxArweaveBlockInDB = Math.max(...templatesInDB.map(template => template.oip.inArweaveBlock)) || 0;
         const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity);
         const finalMaxArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
         console.log(getFileInfo(), getLineNumber(), 'qtyTemplatesInDB:', qtyTemplatesInDB, 'finalMaxArweaveBlock:', finalMaxArweaveBlock);
@@ -606,13 +586,6 @@ async function searchTemplateByTxId(templateTxid) {
         }
     });
     // console.log('1234 searchResponse hits hits:', searchResponse.hits.hits);
-    
-    // Check if any results were found
-    if (searchResponse.hits.hits.length === 0) {
-        console.log(`Template not found in database for TxId: ${templateTxid}`);
-        return null;
-    }
-    
     template = searchResponse.hits.hits[0]._source;
     // console.log('12345 template:', template);
     return template
@@ -661,109 +634,6 @@ async function deleteRecordFromDB(creatorDid, transaction) {
         }
     } catch (error) {
         console.error('Error deleting record:', error);
-        throw error;
-    }
-}
-
-async function checkTemplateUsage(templateTxId) {
-    console.log(getFileInfo(), getLineNumber(), 'checkTemplateUsage:', templateTxId);
-    try {
-        // Get all records and templates once to avoid repeated calls
-        const result = await getRecordsInDB();
-        const templatesData = await getTemplatesInDB();
-        let records = result.records;
-        let templates = templatesData.templatesInDB;
-        
-        // Find the template by TxId to get its name
-        const targetTemplate = templates.find(t => t.data.TxId === templateTxId);
-        if (!targetTemplate) {
-            console.log(getFileInfo(), getLineNumber(), 'Template not found:', templateTxId);
-            return false;
-        }
-        
-        const templateName = targetTemplate.data.template;
-        console.log(getFileInfo(), getLineNumber(), 'Checking usage for template:', templateName);
-        
-        // Filter records that use the specified template
-        const recordsUsingTemplate = records.filter(record => {
-            // Check if record.data contains the template name as a key
-            if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
-                // For records where data is an object, check if any key matches the template name
-                return Object.keys(record.data).includes(templateName);
-            }
-            // If record.data is an array, check each object in the array
-            else if (Array.isArray(record.data)) {
-                return record.data.some(dataItem => 
-                    Object.keys(dataItem).includes(templateName)
-                );
-            }
-            return false;
-        });
-        
-        console.log(getFileInfo(), getLineNumber(), 'Records using template:', recordsUsingTemplate.length);
-        return recordsUsingTemplate.length > 0;
-    } catch (error) {
-        console.error('Error checking template usage:', error);
-        throw error;
-    }
-}
-
-async function deleteTemplateFromDB(creatorDid, transaction) {
-    console.log(getFileInfo(), getLineNumber(), 'deleteTemplateFromDB:', creatorDid);
-    try {
-        const didTxToDelete = typeof transaction.data === 'string' 
-            ? JSON.parse(transaction.data).delete.didTx 
-            : transaction.data.delete.didTx;
-        
-        console.log(getFileInfo(), getLineNumber(), 'template didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete });
-        
-        if (creatorDid === 'did:arweave:' + transaction.creator) {
-            console.log(getFileInfo(), getLineNumber(), 'same creator, template deletion authorized');
-
-            // First, check if the template exists
-            const searchResponse = await elasticClient.search({
-                index: 'templates',
-                body: {
-                    query: {
-                        match: {
-                            "oip.didTx": didTxToDelete
-                        }
-                    }
-                }
-            });
-
-            if (searchResponse.hits.hits.length === 0) {
-                console.log(getFileInfo(), getLineNumber(), 'No template found with the specified ID:', didTxToDelete);
-                return;
-            }
-
-            const template = searchResponse.hits.hits[0]._source;
-            const templateTxId = template.data.TxId;
-            
-            // Check if any records are using this template
-            const templateInUse = await checkTemplateUsage(templateTxId);
-            
-            if (templateInUse) {
-                console.log(getFileInfo(), getLineNumber(), 'Template is in use by existing records, deletion not allowed:', didTxToDelete);
-                return { error: 'Template is in use by existing records and cannot be deleted' };
-            }
-
-            // If template is not in use, proceed with deletion
-            const templateId = searchResponse.hits.hits[0]._id;
-
-            const response = await elasticClient.delete({
-                index: 'templates',
-                id: templateId
-            });
-            
-            console.log(getFileInfo(), getLineNumber(), 'Template deleted:', response);
-            return { success: true, message: 'Template deleted successfully' };
-        } else {
-            console.log(getFileInfo(), getLineNumber(), 'different creator, template deletion unauthorized');
-            return { error: 'Unauthorized: only the template creator can delete this template' };
-        }
-    } catch (error) {
-        console.error('Error deleting template:', error);
         throw error;
     }
 }
@@ -863,7 +733,6 @@ async function getRecords(queryParams) {
         didTx,
         didTxRef,
         tags,
-        tagsMatchMode = 'OR', // New parameter: 'AND' or 'OR' (default: 'OR' for backward compatibility)
         sortBy,
         recordType,
         limit,
@@ -904,8 +773,8 @@ async function getRecords(queryParams) {
             records = records.filter(record => 
                 {
                     const basicData = record.data.basic;
-                    if (basicData && basicData.date) {
-                        const recordDate = new Date(basicData.date); 
+                    if (basicData && basicData.basic.date) {
+                        const recordDate = new Date(basicData.basic.date); 
                         return recordDate >= dateStart;
                     }
                     return false;
@@ -917,8 +786,8 @@ async function getRecords(queryParams) {
         if (dateEnd != undefined) {
             records = records.filter(record => {
             const basicData = record.data.basic;
-            if (basicData && basicData.date) {
-                const recordDate = new Date(basicData.date); 
+            if (basicData && basicData.basic.date) {
+                const recordDate = new Date(basicData.basic.date); 
                 return recordDate <= dateEnd;
             }
             return false;
@@ -977,17 +846,7 @@ async function getRecords(queryParams) {
 
         if (template != undefined) {
             records = records.filter(record => {
-                // Check if record.data is an object (not an array) and look for template names as keys
-                if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
-                    return Object.keys(record.data).some(key => key.toLowerCase().includes(template.toLowerCase()));
-                }
-                // If record.data is an array, check each object in the array
-                else if (Array.isArray(record.data)) {
-                    return record.data.some(dataItem => 
-                        Object.keys(dataItem).some(key => key.toLowerCase().includes(template.toLowerCase()))
-                    );
-                }
-                return false;
+                return Object.keys(record.data[0]).some(key => key.toLowerCase().includes(template.toLowerCase()));
             });
             console.log('after filtering by template, there are', records.length, 'records');
         }
@@ -1028,33 +887,20 @@ async function getRecords(queryParams) {
         if (url !== undefined) {
             console.log('url to match:', url);
             records = records.filter(record => {
-                return record.data && record.data.basic && 
-                       (record.data.basic.url === url || record.data.basic.webUrl === url);
+                // console.log('record.data:', record);
+                return record.data && record.data.basic && record.data.basic.url === url;
             });
             console.log('after filtering by url:', url, 'there are', records.length, 'records');
         }
         if (tags != undefined) {
-            console.log('tags to match:', tags, 'match mode:', tagsMatchMode);
+            console.log('tags to match:', tags);
             const tagArray = tags.split(',').map(tag => tag.trim());
             console.log('type of tags:', typeof tagArray);
-            
-            // Filter records based on match mode (AND vs OR)
-            if (tagsMatchMode.toUpperCase() === 'AND') {
-                // AND behavior: record must have ALL specified tags
-                records = records.filter(record => {
-                    if (!record.data.basic || !record.data.basic.tagItems) return false;
-                    return tagArray.every(tag => record.data.basic.tagItems.includes(tag));
-                });
-                console.log('after filtering by tags (AND mode), there are', records.length, 'records');
-            } else {
-                // OR behavior: record must have at least ONE of the specified tags (default)
-                records = records.filter(record => {
-                    return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
-                });
-                console.log('after filtering by tags (OR mode), there are', records.length, 'records');
-            }
+            records = records.filter(record => {
+                return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
+            });
 
-            // Add tag match scores to all filtered records
+            // Sort the records by the number of matching tags and generate a score
             records = records.map(record => {
                 const countMatches = (record) => {
                     if (record.data && record.data.basic && record.data.basic.tagItems) {
@@ -1063,15 +909,13 @@ async function getRecords(queryParams) {
                     return 0;
                 };
 
-                const matches = countMatches(record);
-                const score = (matches / tagArray.length).toFixed(3); // Calculate the score as a ratio of matches to total tags and trim to three decimal places
-                return { ...record, score }; // Attach the score to the record
+            const matches = countMatches(record);
+            const score = (matches / tagArray.length).toFixed(3); // Calculate the score as a ratio of matches to total tags and trim to three decimal places
+            return { ...record, score }; // Attach the score to the record
             });
 
-            // Only sort automatically by score if sortBy is not specified or is not 'tags'
-            if (!sortBy || sortBy.split(':')[0] !== 'tags') {
-                records.sort((a, b) => b.score - a.score); // Sort in descending order by score
-            }
+            records.sort((a, b) => b.score - a.score); // Sort in descending order by score
+            console.log('after filtering by tags, there are', records.length, 'records', records[1], records[records.length - 1]);
         }
 
         // search records by search parameter
@@ -1080,7 +924,7 @@ async function getRecords(queryParams) {
             console.log('searching for:', searchTerms, 'in records');
             records = records.filter(record => {
                 const basicData = record.data.basic;
-                return searchTerms.every(term => {
+                return searchTerms.some(term => {
                     const titleMatches = basicData?.name?.toLowerCase().includes(term) || false;
                     const descriptionMatches = basicData?.description?.toLowerCase().includes(term) || false;
                     const tagsMatches = basicData?.tagItems?.some(tag => tag.toLowerCase().includes(term)) || false;
@@ -1165,105 +1009,75 @@ async function getRecords(queryParams) {
 
         console.log('after adding dateReadable field, there are', records.length, 'records');
 
-        // Helper function to sort records based on sortBy parameter
-        const applySorting = (recordsToSort, sortByParam) => {
-            if (sortByParam != undefined) {
-                console.log('sorting by:', sortByParam);
-                const fieldToSortBy = sortByParam.split(':')[0];
-                const order = sortByParam.split(':')[1];
-                
-                if (fieldToSortBy === 'inArweaveBlock') {
-                    recordsToSort.sort((a, b) => {
-                        if (order === 'asc') {
-                            return a.oip.inArweaveBlock - b.oip.inArweaveBlock;
-                        } else {
-                            return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
-                        }
-                    });
-                }
-
-                if (fieldToSortBy === 'indexedAt') {
-                    recordsToSort.sort((a, b) => {
-                        if (order === 'asc') {
-                            return new Date(a.oip.indexedAt) - new Date(b.oip.indexedAt);
-                        } else {
-                            return new Date(b.oip.indexedAt) - new Date(a.oip.indexedAt);
-                        }
-                    });
-                }
-
-                if (fieldToSortBy === 'ver') {
-                    recordsToSort.sort((a, b) => {
-                        if (order === 'asc') {
-                            return a.oip.ver - b.oip.ver;
-                        } else {
-                            return b.oip.ver - a.oip.ver;
-                        }
-                    });
-                }
-
-                if (fieldToSortBy === 'recordType') {
-                    recordsToSort.sort((a, b) => {
-                        if (order === 'asc') {
-                            return a.oip.recordType.localeCompare(b.oip.recordType);
-                        } else {
-                            return b.oip.recordType.localeCompare(a.oip.recordType);
-                        }
-                    });
-                }
-
-                if (fieldToSortBy === 'creatorHandle') {
-                    recordsToSort.sort((a, b) => {
-                        if (order === 'asc') {
-                            return a.oip.creator.creatorHandle.localeCompare(b.oip.creator.creatorHandle);
-                        } else {
-                            return b.oip.creator.creatorHandle.localeCompare(a.oip.creator.creatorHandle);
-                        }
-                    });
-                }
-
-                if (fieldToSortBy === 'date') {
-                    recordsToSort.sort((a, b) => {
-                        if (!a.data || !a.data.basic || !a.data.basic.date) return 1;
-                        if (!b.data || !b.data.basic || !b.data.basic.date) return -1;
-                        if (order === 'asc') {
-                            return a.data.basic.date - b.data.basic.date;
-                        } else {
-                            return b.data.basic.date - a.data.basic.date;
-                        }
-                    });
-                }
-
-                if (fieldToSortBy === 'score') {
-                    recordsToSort.sort((a, b) => {
-                        if (order === 'asc') {
-                            return (a.score || 0) - (b.score || 0);
-                        } else {
-                            return (b.score || 0) - (a.score || 0);
-                        }
-                    });
-                }
-
-                if (fieldToSortBy === 'tags') {
-                    // Only allow 'tags' sorting when tags parameter is provided
-                    if (tags != undefined) {
-                        recordsToSort.sort((a, b) => {
-                            if (order === 'asc') {
-                                return (a.score || 0) - (b.score || 0);
-                            } else {
-                                return (b.score || 0) - (a.score || 0);
-                            }
-                        });
-                        console.log('sorted by tags match score (' + order + ')');
-                    } else {
-                        console.log('Warning: sortBy=tags specified but no tags parameter provided - skipping tags sort');
-                    }
-                }
-            }
-        };
-
         // Sort records based on sortBy parameter
-        applySorting(records, sortBy);
+        if (sortBy != undefined) {
+            console.log('sorting by:', sortBy);
+            fieldToSortBy = sortBy.split(':')[0];
+            order = sortBy.split(':')[1];
+            // console.log('fieldToSortBy:', fieldToSortBy, 'order:', order);
+            if (fieldToSortBy === 'inArweaveBlock') {
+                records.sort((a, b) => {
+                    if (order === 'asc') {
+                        return a.oip.inArweaveBlock - b.oip.inArweaveBlock;
+                    } else {
+                        return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
+                    }
+                });
+            }
+
+            if (fieldToSortBy === 'indexedAt') {
+                records.sort((a, b) => {
+                    if (order === 'asc') {
+                        return new Date(a.oip.indexedAt) - new Date(b.oip.indexedAt);
+                    } else {
+                        return new Date(b.oip.indexedAt) - new Date(a.oip.indexedAt);
+                    }
+                });
+            }
+
+            if (fieldToSortBy === 'ver') {
+                records.sort((a, b) => {
+                    if (order === 'asc') {
+                        return a.oip.ver - b.oip.ver;
+                    } else {
+                        return b.oip.ver - a.oip.ver;
+                    }
+                });
+            }
+
+            if (fieldToSortBy === 'recordType') {
+                records.sort((a, b) => {
+                    if (order === 'asc') {
+                        return a.oip.recordType.localeCompare(b.oip.recordType);
+                    } else {
+                        return b.oip.recordType.localeCompare(a.oip.recordType);
+                    }
+                });
+            }
+
+            if (fieldToSortBy === 'creatorHandle') {
+                records.sort((a, b) => {
+                    if (order === 'asc') {
+                        return a.oip.creator.creatorHandle.localeCompare(b.oip.creator.creatorHandle);
+                    } else {
+                        return b.oip.creator.creatorHandle.localeCompare(a.oip.creator.creatorHandle);
+                    }
+                });
+            }
+
+            if (fieldToSortBy === 'date') {
+                records.sort((a, b) => {
+                    if (!a.data || !a.data.basic || !a.data.basic.date) return 1;
+                    if (!b.data || !b.data.basic || !b.data.basic.date) return -1;
+                    if (order === 'asc') {
+                        return a.data.basic.date - b.data.basic.date;
+                    } else {
+                        return b.data.basic.date - a.data.basic.date;
+                    }
+                });
+            }
+
+        }
 
         // Resolve records if resolveDepth is specified
         let resolvedRecords = await Promise.all(records.map(async (record) => {
@@ -1343,7 +1157,7 @@ async function getRecords(queryParams) {
             const filteredRecords = resolvedRecords.filter(record => {
                 return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
             });
-            // Add tag match scores to records
+            // Sort the records by the number of matching tags and generate a score
             const sortedRecords = filteredRecords.map(record => {
                 const countMatches = (record) => {
                     if (record.data && record.data.basic && record.data.basic.tagItems) {
@@ -1357,12 +1171,7 @@ async function getRecords(queryParams) {
                 return { ...record, score }; // Attach the score to the record
             });
 
-            // Apply sorting - use sortBy parameter if provided, otherwise sort by score
-            if (sortBy != undefined) {
-                applySorting(sortedRecords, sortBy);
-            } else {
-                sortedRecords.sort((a, b) => b.score - a.score); // Sort in descending order by score
-            }
+            sortedRecords.sort((a, b) => b.score - a.score); // Sort in descending order by score
 
             return {
                 message: "Records retrieved successfully",
@@ -1428,18 +1237,7 @@ const getCreatorsInDB = async () => {
         } else {
             console.log(getFileInfo(), getLineNumber(),  'Creators found in DB:', creatorsInDB.length);
             const qtyCreatorsInDB = creatorsInDB.length;
-            
-            // Filter out creators with "pending confirmation in Arweave" status when calculating max block height
-            const confirmedCreators = creatorsInDB.filter(creator => 
-                creator.oip.recordStatus !== "pending confirmation in Arweave"
-            );
-            const pendingCreatorsCount = creatorsInDB.length - confirmedCreators.length;
-            if (pendingCreatorsCount > 0) {
-                console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingCreatorsCount} pending creators from max block calculation`);
-            }
-            const maxArweaveCreatorRegBlockInDB = confirmedCreators.length > 0 
-                ? Math.max(...confirmedCreators.map(creator => creator.oip.inArweaveBlock))
-                : 0;
+            const maxArweaveCreatorRegBlockInDB = Math.max(...creatorsInDB.map(creator => creator.oip.inArweaveBlock));
             // console.log(getFileInfo(), getLineNumber(),  'maxArweaveCreatorRegBlockInDB:', maxArweaveCreatorRegBlockInDB);
             return { qtyCreatorsInDB, maxArweaveCreatorRegBlockInDB, creatorsInDB };
         }
@@ -1503,18 +1301,7 @@ const getRecordsInDB = async () => {
                     publicKey
                 };
                 const qtyRecordsInDB = records.length;
-                
-                // Filter out records with "pending confirmation in Arweave" status when calculating max block height
-                const confirmedRecords = records.filter(record => 
-                    record.oip.recordStatus !== "pending confirmation in Arweave"
-                );
-                const pendingRecordsCount = records.length - confirmedRecords.length;
-                if (pendingRecordsCount > 0) {
-                    console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingRecordsCount} pending records from max block calculation`);
-                }
-                const maxArweaveBlockInDB = confirmedRecords.length > 0 
-                    ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
-                    : 0;
+                const maxArweaveBlockInDB = Math.max(...records.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)));
                 // console.log(getFileInfo(), getLineNumber(), 'maxArweaveBlockInDB for records:', maxArweaveBlockInDB);
                 const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity) || (maxArweaveBlockInDB === -0) || (maxArweaveBlockInDB === null);
                 const finalMaxRecordArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
@@ -1676,7 +1463,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
     if (transaction.transactionId === 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y' || transaction.transactionId === '5lbSxo2TeD_fwZQwwCejjCUZAitJkNT63JBRdC7flgc' || transaction.transactionId === 'VPOc02NjJfJ-dYklnMTWWm3tEddEQPlmYRmJdDyzuP4') {
         // creator = creatorInfo;
         creatorHandle = (creatorHandle !== undefined) ? creatorHandle : await convertToCreatorHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["2"]);
-        block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
+        block = (block !== undefined) ? block : await getBlockHeightFromTxId(transaction.transactionId);
         console.log('1402 transaction:', transaction);
         creator = {
             data: {
@@ -1709,7 +1496,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         console.log(getFileInfo(), getLineNumber());
         const expandedRecord = await Promise.all(expandedRecordPromises);
         console.log(getFileInfo(), getLineNumber());
-        const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
+        const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
         console.log(getFileInfo(), getLineNumber());
 
         if (expandedRecord !== null) {
@@ -2021,9 +1808,7 @@ async function searchArweaveForNewTransactions(foundInDB) {
     await ensureIndexExists();
     const { qtyRecordsInDB, maxArweaveBlockInDB } = foundInDB;
     // const min = (qtyRecordsInDB === 0) ? 1463750 : (maxArweaveBlockInDB + 1);
-    // const min = (qtyRecordsInDB === 0) ? 1579580 : (maxArweaveBlockInDB + 1); // before todays templates
-    const min = Math.max(startBlockHeight, (maxArweaveBlockInDB + 1));
-
+    const min = (qtyRecordsInDB === 0) ? 1579580 : (maxArweaveBlockInDB + 1); // before todays templates
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
     console.log('Searching for new OIP data after block:', min, getFileInfo(), getLineNumber());
@@ -2129,10 +1914,9 @@ async function processTransaction(tx, remapTemplates) {
 
 async function processNewTemplate(transaction) {
     if (!transaction || !transaction.tags || !transaction.data) {
-        console.log(getFileInfo(), getLineNumber(),'cannot find transaction (or tags or fields), skipping txid:', transaction.transactionId);
+        console.log(getFileInfo(), getLineNumber(),'cannnot find transaction (or tags or fields), skipping txid:', transaction.transactionId);
         return null;
     }
-    
     const templateName = transaction.tags.find(tag => tag.name === 'TemplateName')?.value;
     let parsedData;
     try {
@@ -2142,83 +1926,49 @@ async function processNewTemplate(transaction) {
         console.error(getFileInfo(), getLineNumber(),`Invalid JSON data: ${transaction.data}`);
         return null;
     }
-    
     const fieldsString = JSON.stringify(parsedData);
+    const tags = transaction.tags.slice(0, -1);
+    const dataForSignature = fieldsString + JSON.stringify(tags);
     const isValid = validateTemplateFields(fieldsString);
     if (!isValid) {
         console.log(getFileInfo(), getLineNumber(),`Template failed - Field formatting validation failed for transaction ${transaction.transactionId}`);
         return null;
     }
-    
-    // For templates: DATA + TAGS (different from creators/records which use TAGS + DATA)
-    const tags = transaction.tags.slice(0, -1); // Remove signature tag
-    const dataForSignature = fieldsString + JSON.stringify(tags);
     const message = dataForSignature;
-    
     const didAddress = 'did:arweave:' + transaction.creator;
-    console.log(getFileInfo(), getLineNumber(), 'Template creator DID:', didAddress);
-    
+    console.log(getFileInfo(), getLineNumber(), didAddress);
     const creatorInfo = await searchCreatorByAddress(didAddress);
     if (!creatorInfo) {
         console.error(`Creator data not found for DID address: ${didAddress}`);
         return null;
     }
-    console.log(getFileInfo(), getLineNumber(), 'Creator info found:', creatorInfo.data.creatorHandle);
+    console.log(getFileInfo(), getLineNumber(), creatorInfo);
 
     const publicKey = creatorInfo.data.publicKey;
-    console.log(getFileInfo(), getLineNumber(), 'Public key:', publicKey ? 'found' : 'missing');
+    console.log(getFileInfo(), getLineNumber(), publicKey);
 
-    // Fix CreatorSig format - convert spaces back to + characters for proper base64
-    const templateCreatorSigRaw = transaction.creatorSig;
-    const templateSignatureBase64 = templateCreatorSigRaw ? templateCreatorSigRaw.replace(/ /g, '+') : undefined;
-    
-    if (templateCreatorSigRaw && templateCreatorSigRaw !== templateSignatureBase64) {
-        console.log(getFileInfo(), getLineNumber(), `Fixed CreatorSig format: converted ${(templateCreatorSigRaw.match(/ /g) || []).length} spaces to + characters`);
-    }
-    
-    console.log(getFileInfo(), getLineNumber(), 'Signature:', templateSignatureBase64 ? 'found' : 'missing');
-    
-    if (!templateSignatureBase64) {
-        console.error(getFileInfo(), getLineNumber(), `No signature found for template ${transaction.transactionId}`);
-        return null;
-    }
-    
-    const templateIsVerified = await verifySignature(message, templateSignatureBase64, publicKey, didAddress);
-    console.log(getFileInfo(), getLineNumber(), 'Signature verification result:', templateIsVerified);
-    
-    if (!templateIsVerified) {
-        console.error(getFileInfo(), getLineNumber(),`Signature verification failed for template ${transaction.transactionId}`);
+    const signatureBase64 = transaction.creatorSig;
+    console.log(getFileInfo(), getLineNumber()), signatureBase64;
+    const isVerified = await verifySignature(message, signatureBase64, publicKey, didAddress);
+    console.log(getFileInfo(), getLineNumber());
+    if (!isVerified) {
+        console.log(getFileInfo(), getLineNumber());
+        console.error(getFileInfo(), getLineNumber(),`Signature verification failed for transaction ${transaction.transactionId}`);
         return null;
     } else {
-        console.log(getFileInfo(), getLineNumber(), `✅ Template signature verified successfully for ${transaction.transactionId}`);
-        
-        // Use the same block height approach as successful creator verification
-        const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
-        
-        // Parse fields to check for enum values
-        const fieldsObject = JSON.parse(fieldsString);
-        
+        console.log(getFileInfo(), getLineNumber());
+        const inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
         const data = {
             TxId: transaction.transactionId,
             creator: transaction.creator,
-            creatorSig: templateSignatureBase64, // Use the corrected signature
+            creatorSig: transaction.creatorSig,
             template: templateName,
-            fields: fieldsString // Store the raw JSON string directly like the old version
+            fields: fieldsString
         };
-        
-        // Store enum values if they exist
-        for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
-            if (fieldValue === 'enum' && fieldsObject[`${fieldName}Values`]) {
-                data[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
-            }
-        }
-
-        
         const oip = {
             didTx: 'did:arweave:' + transaction.transactionId,
             inArweaveBlock: inArweaveBlock,
             indexedAt: new Date().toISOString(),
-            recordStatus: "original",
             ver: transaction.ver,
             creator: {
                 creatorHandle: creatorInfo.data.creatorHandle,
@@ -2227,33 +1977,28 @@ async function processNewTemplate(transaction) {
                 publicKey: creatorInfo.data.publicKey
             }
         }
-        
         const template = {
             data,
             oip
         };
-        
-        console.log(getFileInfo(), getLineNumber(), 'Template ready for indexing:', template.data.TxId);
+        console.log(getFileInfo(), getLineNumber(), template);
 
         try {
+
             const existingTemplate = await elasticClient.exists({
                 index: 'templates',
                 id: oip.didTx
             });
-            
             if (!existingTemplate.body) {
                 await elasticClient.index({
                     index: 'templates',
                     body: template,
                 });
-                console.log(`✅ Template indexed successfully: ${template.data.TxId}`);
-            } else {
-                console.log(`Template already exists in DB: ${template.data.TxId}`);
             }
+            console.log(`Template indexed successfully: ${template.data.TxId}`);
         } catch (error) {
-            console.error(`Error indexing template: ${template.data.TxId}`, error);
+            console.error(`Error indexing template: ${template.TxId}`, error);
         }
-        
         return template;
     }
 }
@@ -2303,12 +2048,6 @@ async function processNewRecord(transaction, remapTemplates = []) {
     
     creatorInfo = (!creatorInfo) ? await searchCreatorByAddress(creatorDid) : creatorInfo;
     console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
-    
-    // If creator is not found, skip this record for now
-    if (!creatorInfo) {
-        console.log(getFileInfo(), getLineNumber(), `Skipping record ${transaction.transactionId} - creator ${creatorDid} not found in database yet`);
-        return { records: newRecords, recordsToDelete };
-    }
     let transactionData;
     let isDeleteMessageFound = false;
 
@@ -2332,10 +2071,9 @@ async function processNewRecord(transaction, remapTemplates = []) {
     console.log(getFileInfo(), getLineNumber());
     let record;
     let currentBlockHeight = await getCurrentBlockHeight();
-    // Use block height from GraphQL data instead of making additional API calls
-    let inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
+    let inArweaveBlock = await getBlockHeightFromTxId(transaction.transactionId);
     let progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
-    console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}% (Block: ${inArweaveBlock})`);
+    console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}%`);
     // let dataArray = [];
     // dataArray.push(transactionData);
     // handle delete message
@@ -2557,59 +2295,6 @@ const deleteRecordsByIndex = async (index) => {
     }
 };
 
-const getRecordTypesSummary = async () => {
-    try {
-        // Since the recordType field is mapped as 'text', we need to use a different approach
-        // We'll fetch all records and manually count the recordTypes
-        const response = await elasticClient.search({
-            index: 'records',
-            body: {
-                size: 10000, // Fetch a large number of records to get all
-                _source: ['oip.recordType'], // Only fetch the recordType field
-                query: {
-                    exists: {
-                        field: 'oip.recordType'
-                    }
-                }
-            }
-        });
-
-        // Manual aggregation since the field doesn't support terms aggregation
-        const recordTypeCounts = {};
-        const records = response.hits.hits;
-
-        records.forEach(hit => {
-            const recordType = hit._source?.oip?.recordType;
-            if (recordType) {
-                recordTypeCounts[recordType] = (recordTypeCounts[recordType] || 0) + 1;
-            }
-        });
-
-        // Convert to array and sort by count descending
-        const recordTypeArray = Object.keys(recordTypeCounts)
-            .map(recordType => ({
-                recordType: recordType,
-                count: recordTypeCounts[recordType]
-            }))
-            .sort((a, b) => b.count - a.count);
-
-        // Get total count
-        const totalRecords = response.hits.total.value || response.hits.total;
-
-        console.log(getFileInfo(), getLineNumber(), `Found ${recordTypeArray.length} different record types across ${totalRecords} total records`);
-
-        return {
-            message: "Record types retrieved successfully",
-            totalRecords: totalRecords,
-            recordTypeCount: recordTypeArray.length,
-            recordTypes: recordTypeArray
-        };
-    } catch (error) {
-        console.error(getFileInfo(), getLineNumber(), 'Error retrieving record types summary:', error);
-        throw error;
-    }
-};
-
 module.exports = {
     ensureIndexExists,
     ensureUserIndexExists,
@@ -2626,12 +2311,9 @@ module.exports = {
     remapExistingRecords,
     verifyAdmin,
     deleteRecordFromDB,
-    deleteTemplateFromDB,
-    checkTemplateUsage,
     deleteRecordsByBlock,
     deleteRecordsByIndexedAt,
     deleteRecordsByIndex,
     getCreatorsInDB,
-    getRecordTypesSummary,
     elasticClient
 };
