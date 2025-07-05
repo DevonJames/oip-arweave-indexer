@@ -23,21 +23,13 @@ async function deleteAllTemplates() {
         });
         
         console.log(`✅ Deleted ${response.deleted} templates from the index`);
-        console.log('🔄 Templates will be re-indexed from the blockchain with the correct structure');
+        console.log('🔄 Templates will now be re-indexed from the blockchain with the correct structure (both fields and fieldsInTemplate)');
+        console.log('✅ Template deletion complete. The system will automatically re-index templates from the blockchain.');
         
-        return response;
     } catch (error) {
         console.error('❌ Error deleting templates:', error);
-        throw error;
+        process.exit(1);
     }
 }
 
-deleteAllTemplates()
-    .then(() => {
-        console.log('✅ Template deletion complete. Restart your application to re-index templates.');
-        process.exit(0);
-    })
-    .catch(error => {
-        console.error('❌ Template deletion failed:', error);
-        process.exit(1);
-    }); 
+deleteAllTemplates(); 
