@@ -880,6 +880,8 @@ async function getRecords(queryParams) {
         template,
         resolveDepth,
         resolveNamesOnly = false,
+        hideDateReadable = false,
+        hideNullValues = false,
         creator_name,
         creator_did_address,
         creatorHandle,
@@ -1178,10 +1180,10 @@ async function getRecords(queryParams) {
             });
         }
        
-    // Add a dateReadable field to each record that has a timestamp value at ...basic.date
+    // Add a dateReadable field to each record that has a timestamp value at ...basic.date (unless hideDateReadable is true)
     records = records.map(record => {
         const basicData = record.data?.basic; // Directly access `basic`
-        if (basicData?.date) {
+        if (basicData?.date && hideDateReadable !== 'true' && hideDateReadable !== true) {
             const date = new Date(basicData.date * 1000); // Convert Unix timestamp to milliseconds
             record.data.basic.dateReadable = date.toDateString();
         }
@@ -1295,6 +1297,30 @@ async function getRecords(queryParams) {
             let resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB, resolveNamesOnly === 'true' || resolveNamesOnly === true);
             return resolvedRecord;
         }));
+
+        // Helper function to recursively remove null values from an object
+        const removeNullValues = (obj) => {
+            if (Array.isArray(obj)) {
+                return obj.map(item => removeNullValues(item)).filter(item => item !== null);
+            } else if (obj !== null && typeof obj === 'object') {
+                const result = {};
+                for (const [key, value] of Object.entries(obj)) {
+                    if (value !== null) {
+                        const cleanedValue = removeNullValues(value);
+                        if (cleanedValue !== null) {
+                            result[key] = cleanedValue;
+                        }
+                    }
+                }
+                return result;
+            }
+            return obj;
+        };
+
+        // Remove null values if hideNullValues is true
+        if (hideNullValues === 'true' || hideNullValues === true) {
+            resolvedRecords = resolvedRecords.map(record => removeNullValues(record));
+        }
 
         if (hasAudio) {
             console.log('Filtering for records with audio...');
