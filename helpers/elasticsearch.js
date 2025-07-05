@@ -328,27 +328,35 @@ const ensureIndexExists = async () => {
                     body: {
                         mappings: {
                             properties: {
-                                TxId: { type: 'text' },
-                                template: { type: 'text' },
-                                fields: { type: 'text' },
-                                tags: { type: 'text' },
-                                creator: { type: 'text' },
-                                creatorSig: { type: 'text' },
+                                data: {
+                                    type: 'object',
+                                    properties: {
+                                        TxId: { type: 'text' },
+                                        template: { type: 'text' },
+                                        fields: { type: 'text' },
+                                        fieldsInTemplate: { type: 'object', enabled: false }, // Store as-is without strict mapping
+                                        fieldsInTemplateCount: { type: 'integer' },
+                                        creator: { type: 'text' },
+                                        creatorSig: { type: 'text' }
+                                    }
+                                },
                                 oip: {
                                     type: 'object',
                                     properties: {
                                         didTx: { type: 'keyword' },
                                         inArweaveBlock: { type: 'long' },
                                         indexedAt: { type: 'date' },
+                                        recordStatus: { type: 'text' },
                                         ver: { type: 'text' },
                                         creator: {
                                             type: 'object',
                                             properties: {
                                                 creatorHandle: { type: 'text' },
-                                                didAddress: { type: 'text' }
+                                                didAddress: { type: 'text' },
+                                                didTx: { type: 'text' },
+                                                publicKey: { type: 'text' }
                                             }
                                         }
-
                                     }
                                 }
                             }
