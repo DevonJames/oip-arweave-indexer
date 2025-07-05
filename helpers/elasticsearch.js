@@ -334,7 +334,7 @@ const ensureIndexExists = async () => {
                                         TxId: { type: 'text' },
                                         template: { type: 'text' },
                                         fields: { type: 'text' },
-                                        fieldsInTemplate: { type: 'object', enabled: false }, // Store as-is without strict mapping
+                                        fieldsInTemplate: { type: 'object', enabled: false },
                                         fieldsInTemplateCount: { type: 'integer' },
                                         creator: { type: 'text' },
                                         creatorSig: { type: 'text' }
@@ -2195,24 +2195,8 @@ async function processNewTemplate(transaction) {
         // Use the same block height approach as successful creator verification
         const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
         
-        // Parse fields to check for enum values
+        // Parse fields to check for enum values  
         const fieldsObject = JSON.parse(fieldsString);
-        
-        const data = {
-            TxId: transaction.transactionId,
-            creator: transaction.creator,
-            creatorSig: templateSignatureBase64, // Use the corrected signature
-            template: templateName,
-            fields: fieldsString // Store the raw JSON string directly like the old version
-        };
-        
-        // Store enum values if they exist
-        for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
-            if (fieldValue === 'enum' && fieldsObject[`${fieldName}Values`]) {
-                data[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
-            }
-        }
-
         
         const oip = {
             didTx: 'did:arweave:' + transaction.transactionId,
@@ -2227,13 +2211,6 @@ async function processNewTemplate(transaction) {
                 publicKey: creatorInfo.data.publicKey
             }
         }
-        
-        const template = {
-            data,
-            oip
-        };
-        
-        console.log(getFileInfo(), getLineNumber(), 'Template ready for indexing:', template.data.TxId);
 
         try {
             const existingTemplate = await elasticClient.exists({
@@ -2242,19 +2219,66 @@ async function processNewTemplate(transaction) {
             });
             
             if (!existingTemplate.body) {
+                // Create both formats - simple fields string AND complex fieldsInTemplate
+                const fieldsInTemplate = {};
+                let fieldCount = 0;
+                
+                for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
+                    if (fieldName.startsWith('index_') || fieldName.endsWith('Values')) {
+                        continue;
+                    }
+                    
+                    const fieldType = typeof fieldValue === 'object' ? fieldValue.type : fieldValue;
+                    const fieldIndex = typeof fieldValue === 'object' ? fieldValue.index : fieldCount;
+                    
+                    fieldsInTemplate[fieldName] = {
+                        type: fieldType,
+                        index: fieldIndex
+                    };
+                    fieldCount++;
+                }
+                
+                const finalTemplate = {
+                    data: {
+                        TxId: transaction.transactionId,
+                        creator: transaction.creator,
+                        creatorSig: templateSignatureBase64,
+                        template: templateName,
+                        fields: fieldsString,
+                        fieldsInTemplate: fieldsInTemplate,
+                        fieldsInTemplateCount: fieldCount
+                    },
+                    oip
+                };
+                
+                // Add enum values if they exist
+                for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
+                    if (fieldValue === 'enum' && fieldsObject[`${fieldName}Values`]) {
+                        finalTemplate.data[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
+                    }
+                }
+                
                 await elasticClient.index({
                     index: 'templates',
-                    body: template,
+                    body: finalTemplate,
                 });
-                console.log(`✅ Template indexed successfully: ${template.data.TxId}`);
+                console.log(`✅ Template indexed successfully: ${finalTemplate.data.TxId}`);
             } else {
-                console.log(`Template already exists in DB: ${template.data.TxId}`);
+                console.log(`Template already exists in DB: ${transaction.transactionId}`);
             }
         } catch (error) {
-            console.error(`Error indexing template: ${template.data.TxId}`, error);
+            console.error(`Error indexing template: ${transaction.transactionId}`, error);
         }
         
-        return template;
+        // Return simple structure for consistency
+        return {
+            data: {
+                TxId: transaction.transactionId,
+                template: templateName,
+                fields: fieldsString
+            },
+            oip
+        };
     }
 }
 
