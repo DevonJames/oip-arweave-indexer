@@ -879,6 +879,7 @@ async function getRecords(queryParams) {
     const {
         template,
         resolveDepth,
+        resolveNamesOnly = false,
         creator_name,
         creator_did_address,
         creatorHandle,
@@ -1291,7 +1292,7 @@ async function getRecords(queryParams) {
 
         // Resolve records if resolveDepth is specified
         let resolvedRecords = await Promise.all(records.map(async (record) => {
-            let resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB);
+            let resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB, resolveNamesOnly === 'true' || resolveNamesOnly === true);
             return resolvedRecord;
         }));
 
