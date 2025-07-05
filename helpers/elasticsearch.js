@@ -321,7 +321,10 @@ const expandData = async (compressedData, templates) => {
 const ensureIndexExists = async () => {
     try {
         const templatesExists = await elasticClient.indices.exists({ index: 'templates' });
+        console.log('🔍 Templates index exists check:', templatesExists.body);
+        
         if (!templatesExists.body) {
+            console.log('📝 Creating new templates index with correct mapping...');
             try {
                 await elasticClient.indices.create({
                     index: 'templates',
@@ -368,16 +371,24 @@ const ensureIndexExists = async () => {
                     }
                 });
                 console.log('✅ Templates index created with correct mapping');
+                
+                // Show the created mapping
+                const newMapping = await elasticClient.indices.getMapping({ index: 'templates' });
+                console.log('📋 New templates mapping structure:', JSON.stringify(newMapping.body.templates.mappings.properties.data.properties.fieldsInTemplate, null, 2));
+                
             } catch (error) {
                 if (error.meta.body.error.type !== "resource_already_exists_exception") {
                     throw error;
                 }
             }
         } else {
+            console.log('🔍 Templates index already exists, checking current mapping...');
             // Check if we need to recreate due to mapping conflicts
             try {
                 const mapping = await elasticClient.indices.getMapping({ index: 'templates' });
                 const currentMapping = mapping.body.templates.mappings.properties;
+                
+                console.log('📋 Current templates mapping structure:', JSON.stringify(currentMapping?.data?.properties?.fieldsInTemplate, null, 2));
                 
                 // Check if fieldsInTemplate has the wrong mapping (text instead of object)
                 const fieldsInTemplateMapping = currentMapping?.data?.properties?.fieldsInTemplate;
@@ -433,9 +444,15 @@ const ensureIndexExists = async () => {
                         }
                     });
                     console.log('✅ Templates index recreated with correct mapping');
+                    
+                    // Show the recreated mapping
+                    const newMapping = await elasticClient.indices.getMapping({ index: 'templates' });
+                    console.log('📋 Recreated templates mapping structure:', JSON.stringify(newMapping.body.templates.mappings.properties.data.properties.fieldsInTemplate, null, 2));
+                } else {
+                    console.log('✅ Templates index mapping looks correct:', fieldsInTemplateMapping?.type || 'undefined');
                 }
             } catch (mappingError) {
-                console.log('Could not check template mapping, assuming it is correct:', mappingError.message);
+                console.log('⚠️ Could not check template mapping, assuming it is correct:', mappingError.message);
             }
         }
         const recordsExists = await elasticClient.indices.exists({ index: 'records' });
