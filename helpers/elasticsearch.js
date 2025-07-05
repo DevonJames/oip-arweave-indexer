@@ -2330,17 +2330,26 @@ async function processNewTemplate(transaction) {
                         creator: transaction.creator,
                         creatorSig: templateSignatureBase64,
                         template: templateName,
-                        fields: fieldsString,
-                        fieldsInTemplate: fieldsInTemplate,
+                        fields: fieldsString,  // Store original JSON string for translateJSONtoOIPData
+                        fieldsInTemplate: fieldsInTemplate,  // Store processed object structure  
                         fieldsInTemplateCount: fieldCount
                     },
                     oip
                 };
                 
+                console.log(getFileInfo(), getLineNumber(), `🔍 Template data being stored for ${templateName}:`, {
+                    TxId: transaction.transactionId,
+                    hasFields: !!fieldsString,
+                    fieldsLength: fieldsString ? fieldsString.length : 0,
+                    fieldsInTemplateKeys: Object.keys(fieldsInTemplate),
+                    fieldCount: fieldCount
+                });
+                
                 // Add enum values if they exist
                 for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
                     if (fieldValue === 'enum' && fieldsObject[`${fieldName}Values`]) {
                         finalTemplate.data[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
+                        console.log(getFileInfo(), getLineNumber(), `📋 Added enum values for ${fieldName}:`, fieldsObject[`${fieldName}Values`].length, 'values');
                     }
                 }
                 

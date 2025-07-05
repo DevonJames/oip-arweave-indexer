@@ -88,9 +88,28 @@ async function forceRecreateTemplatesIndex() {
         console.log('✅ Templates index created with correct mapping');
         
         // Verify the mapping
-        const mapping = await elasticClient.indices.getMapping({ index: 'templates' });
-        const fieldsInTemplateMapping = mapping.body.templates.mappings.properties.data.properties.fieldsInTemplate;
-        console.log('📋 Verified fieldsInTemplate mapping:', JSON.stringify(fieldsInTemplateMapping, null, 2));
+        try {
+            const mapping = await elasticClient.indices.getMapping({ index: 'templates' });
+            console.log('📋 Full mapping response:', JSON.stringify(mapping.body, null, 2));
+            
+            // Try to access the fieldsInTemplate mapping - handle different response structures
+            let fieldsInTemplateMapping;
+            if (mapping.body.templates && mapping.body.templates.mappings) {
+                fieldsInTemplateMapping = mapping.body.templates.mappings.properties.data.properties.fieldsInTemplate;
+            } else if (mapping.body && mapping.body[Object.keys(mapping.body)[0]]) {
+                // Handle case where index name is a key in the response
+                const indexKey = Object.keys(mapping.body)[0];
+                fieldsInTemplateMapping = mapping.body[indexKey].mappings.properties.data.properties.fieldsInTemplate;
+            }
+            
+            if (fieldsInTemplateMapping) {
+                console.log('📋 Verified fieldsInTemplate mapping:', JSON.stringify(fieldsInTemplateMapping, null, 2));
+            } else {
+                console.log('📋 Could not verify specific mapping, but index was created successfully');
+            }
+        } catch (mappingError) {
+            console.log('📋 Mapping verification failed, but index creation succeeded:', mappingError.message);
+        }
         
         console.log('✅ Templates index recreation complete! Your application should now work correctly.');
         
