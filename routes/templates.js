@@ -91,8 +91,8 @@ router.get('/', async (req, res) => {
             delete template.data.creator;
             delete template.data.creatorSig;
 
-            // Remove fields from data
-            delete template.data.fields;
+            // Keep fields property - needed by translateJSONtoOIPData function
+            // delete template.data.fields;  // REMOVED: This was breaking nutritional info processing
         });
         let searchResults = templates.length;
         res.status(200).json({ message: "Templates retreived successfully", latestArweaveBlockInDB: finalMaxArweaveBlock, totalTemplates: qtyTemplatesInDB, searchResults, templates });
