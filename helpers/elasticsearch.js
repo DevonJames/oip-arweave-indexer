@@ -2299,19 +2299,18 @@ async function processNewTemplate(transaction) {
                 const indexResult = await elasticClient.index({
                     index: 'templates',
                     body: finalTemplate,
+                    refresh: 'wait_for'  // Ensure immediate availability
                 });
                 console.log(`✅ Template indexed successfully: ${finalTemplate.data.TxId}`, indexResult.result);
                 
-                // DEBUG: Verify what was actually stored
-                const storedTemplate = await elasticClient.get({
-                    index: 'templates',
-                    id: oip.didTx
-                });
-                console.log(getFileInfo(), getLineNumber(), `🐛 DEBUG stored template verification:`, {
-                    hasFields: !!storedTemplate._source.data.fields,
-                    fieldsLength: storedTemplate._source.data.fields ? storedTemplate._source.data.fields.length : 0,
-                    fieldsInTemplateKeys: Object.keys(storedTemplate._source.data.fieldsInTemplate || {}),
-                    fieldsInTemplateCount: storedTemplate._source.data.fieldsInTemplateCount
+                // Log what we attempted to store for debugging
+                console.log(getFileInfo(), getLineNumber(), `📋 Stored template with fields:`, {
+                    TxId: finalTemplate.data.TxId,
+                    hasFields: !!finalTemplate.data.fields,
+                    fieldsLength: finalTemplate.data.fields ? finalTemplate.data.fields.length : 0,
+                    hasFieldsInTemplate: !!finalTemplate.data.fieldsInTemplate,
+                    fieldsInTemplateKeys: Object.keys(finalTemplate.data.fieldsInTemplate || {}),
+                    fieldsInTemplateCount: finalTemplate.data.fieldsInTemplateCount
                 });
             } else {
                 console.log(`Template already exists in DB: ${transaction.transactionId}`);
