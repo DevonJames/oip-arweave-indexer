@@ -166,7 +166,7 @@ const getTemplateTxidByName = (templateName) => {
     return templateConfigTxid ? templateConfigTxid : null;
 };
 
-const resolveRecords = async (record, resolveDepth, recordsInDB) => {
+const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnly = false) => {
     if (resolveDepth === 0 || !record) {
         return record;
     }
@@ -182,14 +182,26 @@ const resolveRecords = async (record, resolveDepth, recordsInDB) => {
             if (typeof properties[key] === 'string' && properties[key].startsWith('did:')) {
                 const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key]);
                 if (refRecord) {
-                    properties[key] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB);
+                    if (resolveNamesOnly) {
+                        // Only return the name from the basic data
+                        const name = refRecord.data?.basic?.name || properties[key]; // fallback to DID if no name found
+                        properties[key] = name;
+                    } else {
+                        properties[key] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly);
+                    }
                 }
             } else if (Array.isArray(properties[key])) {
                 for (let i = 0; i < properties[key].length; i++) {
                     if (typeof properties[key][i] === 'string' && properties[key][i].startsWith('did:')) {
                         const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key][i]);
                         if (refRecord) {
-                            properties[key][i] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB);
+                            if (resolveNamesOnly) {
+                                // Only return the name from the basic data
+                                const name = refRecord.data?.basic?.name || properties[key][i]; // fallback to DID if no name found
+                                properties[key][i] = name;
+                            } else {
+                                properties[key][i] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly);
+                            }
                         }
                     }
                 }
