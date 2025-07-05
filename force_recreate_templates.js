@@ -12,14 +12,31 @@ async function forceRecreateTemplatesIndex() {
     try {
         console.log('🔍 Checking templates index...');
         
-        // Check if templates index exists
-        const exists = await elasticClient.indices.exists({ index: 'templates' });
-        console.log('Templates index exists:', exists.body);
+        // Check if templates index exists - handle undefined response
+        let exists;
+        try {
+            const existsResponse = await elasticClient.indices.exists({ index: 'templates' });
+            exists = existsResponse.body;
+            console.log('Templates index exists response:', exists);
+        } catch (error) {
+            console.log('Error checking if index exists, assuming it exists:', error.message);
+            exists = true; // Assume it exists if we can't check
+        }
         
-        if (exists.body) {
-            console.log('🗑️  Deleting existing templates index...');
-            await elasticClient.indices.delete({ index: 'templates' });
-            console.log('✅ Templates index deleted');
+        // Force delete the index regardless of exists check result
+        if (exists === true || exists === undefined) {
+            console.log('🗑️  Force deleting existing templates index...');
+            try {
+                await elasticClient.indices.delete({ index: 'templates' });
+                console.log('✅ Templates index deleted');
+            } catch (deleteError) {
+                if (deleteError.meta && deleteError.meta.body && deleteError.meta.body.error && deleteError.meta.body.error.type === 'index_not_found_exception') {
+                    console.log('✅ Templates index did not exist, continuing...');
+                } else {
+                    console.error('Error deleting index:', deleteError.message);
+                    throw deleteError;
+                }
+            }
         }
         
         console.log('📝 Creating templates index with correct mapping...');
@@ -75,7 +92,7 @@ async function forceRecreateTemplatesIndex() {
         const fieldsInTemplateMapping = mapping.body.templates.mappings.properties.data.properties.fieldsInTemplate;
         console.log('📋 Verified fieldsInTemplate mapping:', JSON.stringify(fieldsInTemplateMapping, null, 2));
         
-        console.log('✅ Templates index recreation complete! You can now restart your application.');
+        console.log('✅ Templates index recreation complete! Your application should now work correctly.');
         
     } catch (error) {
         console.error('❌ Error recreating templates index:', error);
