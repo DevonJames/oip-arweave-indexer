@@ -18,5 +18,6 @@ module.exports = {
         workout: "T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE",
         recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
         nutritionalInfo: "zEML8g9cKrda_wH5eDcI6FkYpx7LNUeYx_KZe1aoqhg",
+        podcastShow: "JQ_gsZucnD5aM9V9ue748R5COGFyOZYstGVSm1iX7rU",
     }
 };

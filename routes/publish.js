@@ -302,14 +302,14 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
         webUrl,
       },
       nutritionalInfo: {
-        standard_amount: standardAmount,
-        standard_unit: standardUnit,
+        standardAmount: standardAmount,
+        standardUnit: standardUnit,
         calories: nutritionTable.calories,
-        protein_g: nutritionTable.protein_g,
-        fat_g: nutritionTable.fat_g,
-        carbohydrates_g: nutritionTable.carbohydrates_g,
-        cholesterol_mg: nutritionTable.cholesterol_mg,
-        sodium_mg: nutritionTable.sodium_mg,
+        proteinG: nutritionTable.protein_g,
+        fatG: nutritionTable.fat_g,
+        carbohydratesG: nutritionTable.carbohydrates_g,
+        cholesterolMg: nutritionTable.cholesterol_mg,
+        sodiumMg: nutritionTable.sodium_mg,
       },
     };
 
@@ -584,8 +584,8 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
         console.log(`Found nutritional info for: ${trimmedName}`, nutritionalInfo);
 
         if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
-            ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standard_unit || 'unit';
-            ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standard_amount || 1;
+            ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standardUnit || 'unit';
+            ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standardAmount || 1;
 
             console.log(`Updated Units: ${ingredientUnits[unitIndex]}, Updated Amounts: ${ingredientAmounts[unitIndex]}`);
         } else {
@@ -664,8 +664,8 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
       console.log(`Found nutritional info for: ${normalizedName}`, nutritionalInfo);
       
       if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
-        ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standard_unit || 'unit';
-        ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standard_amount || 1;
+        ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standardUnit || 'unit';
+        ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standardAmount || 1;
       } else {
         console.log(`No nutritional info found for: ${normalizedName}`);
         ingredientUnits[unitIndex] = 'unit'; // Fallback unit
