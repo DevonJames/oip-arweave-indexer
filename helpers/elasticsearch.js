@@ -944,133 +944,166 @@ const isCountUnit = (unit) => {
 
 // Function to add nutritional summary to recipe records
 const addRecipeNutritionalSummary = async (record, recordsInDB) => {
-    const recipe = record.data.recipe;
-    
-    if (!recipe.ingredient || !recipe.ingredient_amount || !recipe.ingredient_unit) {
-        console.warn('Recipe missing required ingredient data for nutritional calculation');
-        return record;
-    }
-    
-    // Initialize totals
-    const totals = {
-        calories: 0,
-        proteinG: 0,
-        fatG: 0,
-        cholesterolMg: 0,
-        sodiumMg: 0,
-        carbohydratesG: 0
-    };
-    
-    // Process each ingredient
-    for (let i = 0; i < recipe.ingredient.length; i++) {
-        const ingredientRef = recipe.ingredient[i];
-        const recipeAmount = recipe.ingredient_amount[i];
-        const recipeUnit = recipe.ingredient_unit[i];
+    try {
+        const recipe = record.data.recipe;
         
-        if (!recipeAmount || !recipeUnit) continue;
-        
-        // Get the ingredient record - either resolved object or DID string
-        let ingredientRecord = null;
-        
-        if (typeof ingredientRef === 'string' && ingredientRef.startsWith('did:')) {
-            // Need to fetch the ingredient record for nutritional info
-            ingredientRecord = recordsInDB.find(r => r.oip.didTx === ingredientRef);
-        } else if (typeof ingredientRef === 'object' && ingredientRef.data) {
-            // Already resolved
-            ingredientRecord = ingredientRef;
+        if (!recipe || !recipe.ingredient || !recipe.ingredient_amount || !recipe.ingredient_unit) {
+            console.warn(`Recipe ${record.oip?.didTx || 'unknown'} missing required ingredient data for nutritional calculation`);
+            return record;
         }
         
-        if (!ingredientRecord || !ingredientRecord.data || !ingredientRecord.data.nutritionalInfo) {
-            console.warn(`No nutritional info found for ingredient ${i}`);
-            continue;
-        }
+        // Initialize totals and tracking
+        const totals = {
+            calories: 0,
+            proteinG: 0,
+            fatG: 0,
+            cholesterolMg: 0,
+            sodiumMg: 0,
+            carbohydratesG: 0
+        };
         
-        const nutritionalInfo = ingredientRecord.data.nutritionalInfo;
-        const standardAmount = nutritionalInfo.standardAmount;
-        const standardUnit = nutritionalInfo.standardUnit;
+        let processedIngredients = 0;
+        let totalIngredients = recipe.ingredient.length;
         
-        if (!standardAmount || !standardUnit) continue;
-        
-        // Handle different unit type combinations
-        let scalingFactor;
-        
-        if (isCountUnit(recipeUnit)) {
-            // Recipe uses count-based units (pieces, units, etc.)
-            if (isCountUnit(standardUnit)) {
-                // Both are count-based: direct comparison
-                scalingFactor = recipeAmount / standardAmount;
-            } else {
-                // Recipe is count-based, standard is weight/volume
-                // The standardAmount tells us what 1 unit weighs
-                // So recipeAmount units = recipeAmount * standardAmount weight
-                scalingFactor = recipeAmount;
-            }
-        } else {
-            // Recipe uses weight/volume units
-            const recipeAmountInGrams = convertToGrams(recipeAmount, recipeUnit);
-            
-            if (recipeAmountInGrams === null) {
-                console.warn(`Could not convert recipe unit: ${recipeUnit}`);
-                continue;
-            }
-            
-            if (isCountUnit(standardUnit)) {
-                // Recipe is weight/volume, standard is count-based
-                // This is unusual - can't easily convert
-                console.warn(`Cannot convert ${recipeUnit} to ${standardUnit} for ingredient ${i}`);
-                continue;
-            } else {
-                // Both are weight/volume: convert both to grams and compare
-                const standardAmountInGrams = convertToGrams(standardAmount, standardUnit);
-                if (standardAmountInGrams === null) {
-                    console.warn(`Could not convert standard unit: ${standardUnit}`);
+        // Process each ingredient
+        for (let i = 0; i < recipe.ingredient.length; i++) {
+            try {
+                const ingredientRef = recipe.ingredient[i];
+                const recipeAmount = recipe.ingredient_amount[i];
+                const recipeUnit = recipe.ingredient_unit[i];
+                
+                if (!recipeAmount || !recipeUnit) continue;
+                
+                // Get the ingredient record - either resolved object or DID string
+                let ingredientRecord = null;
+                
+                if (typeof ingredientRef === 'string' && ingredientRef.startsWith('did:')) {
+                    // Need to fetch the ingredient record for nutritional info
+                    ingredientRecord = recordsInDB.find(r => r && r.oip && r.oip.didTx === ingredientRef);
+                } else if (typeof ingredientRef === 'object' && ingredientRef && ingredientRef.data) {
+                    // Already resolved
+                    ingredientRecord = ingredientRef;
+                }
+                
+                if (!ingredientRecord || !ingredientRecord.data || !ingredientRecord.data.nutritionalInfo) {
+                    console.warn(`No nutritional info found for ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'}`);
                     continue;
                 }
-                scalingFactor = recipeAmountInGrams / standardAmountInGrams;
+                
+                const nutritionalInfo = ingredientRecord.data.nutritionalInfo;
+                const standardAmount = nutritionalInfo.standardAmount;
+                const standardUnit = nutritionalInfo.standardUnit;
+                
+                if (!standardAmount || !standardUnit) {
+                    console.warn(`Missing standard amount/unit for ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'}`);
+                    continue;
+                }
+                
+                // Handle different unit type combinations
+                let scalingFactor;
+                
+                if (isCountUnit(recipeUnit)) {
+                    // Recipe uses count-based units (pieces, units, etc.)
+                    if (isCountUnit(standardUnit)) {
+                        // Both are count-based: direct comparison
+                        scalingFactor = recipeAmount / standardAmount;
+                    } else {
+                        // Recipe is count-based, standard is weight/volume
+                        // The standardAmount tells us what 1 unit weighs
+                        // So recipeAmount units = recipeAmount * standardAmount weight
+                        scalingFactor = recipeAmount;
+                    }
+                } else {
+                    // Recipe uses weight/volume units
+                    const recipeAmountInGrams = convertToGrams(recipeAmount, recipeUnit);
+                    
+                    if (recipeAmountInGrams === null) {
+                        console.warn(`Could not convert recipe unit: ${recipeUnit} for ingredient ${i}`);
+                        continue;
+                    }
+                    
+                    if (isCountUnit(standardUnit)) {
+                        // Recipe is weight/volume, standard is count-based
+                        // This is unusual - can't easily convert
+                        console.warn(`Cannot convert ${recipeUnit} to ${standardUnit} for ingredient ${i}`);
+                        continue;
+                    } else {
+                        // Both are weight/volume: convert both to grams and compare
+                        const standardAmountInGrams = convertToGrams(standardAmount, standardUnit);
+                        if (standardAmountInGrams === null) {
+                            console.warn(`Could not convert standard unit: ${standardUnit} for ingredient ${i}`);
+                            continue;
+                        }
+                        scalingFactor = recipeAmountInGrams / standardAmountInGrams;
+                    }
+                }
+                
+                // Scale nutritional values and add to totals
+                totals.calories += (nutritionalInfo.calories || 0) * scalingFactor;
+                totals.proteinG += (nutritionalInfo.proteinG || 0) * scalingFactor;
+                totals.fatG += (nutritionalInfo.fatG || 0) * scalingFactor;
+                totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * scalingFactor;
+                totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * scalingFactor;
+                totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * scalingFactor;
+                
+                processedIngredients++;
+                
+            } catch (ingredientError) {
+                console.error(`Error processing ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'}:`, ingredientError.message);
+                continue;
             }
         }
         
-        // Scale nutritional values and add to totals
-        totals.calories += (nutritionalInfo.calories || 0) * scalingFactor;
-        totals.proteinG += (nutritionalInfo.proteinG || 0) * scalingFactor;
-        totals.fatG += (nutritionalInfo.fatG || 0) * scalingFactor;
-        totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * scalingFactor;
-        totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * scalingFactor;
-        totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * scalingFactor;
-    }
-    
-    // Round values to reasonable precision
-    const roundToDecimal = (num, decimals = 2) => Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
-    
-    const summaryNutritionalInfo = {
-        calories: roundToDecimal(totals.calories, 0),
-        proteinG: roundToDecimal(totals.proteinG),
-        fatG: roundToDecimal(totals.fatG),
-        cholesterolMg: roundToDecimal(totals.cholesterolMg),
-        sodiumMg: roundToDecimal(totals.sodiumMg),
-        carbohydratesG: roundToDecimal(totals.carbohydratesG)
-    };
-    
-    // Calculate per-serving values
-    const servings = recipe.servings || 1;
-    const summaryNutritionalInfoPerServing = {
-        calories: roundToDecimal(totals.calories / servings, 0),
-        proteinG: roundToDecimal(totals.proteinG / servings),
-        fatG: roundToDecimal(totals.fatG / servings),
-        cholesterolMg: roundToDecimal(totals.cholesterolMg / servings),
-        sodiumMg: roundToDecimal(totals.sodiumMg / servings),
-        carbohydratesG: roundToDecimal(totals.carbohydratesG / servings)
-    };
-    
-    // Add the summaries to the record
-    return {
-        ...record,
-        data: {
-            ...record.data,
-            summaryNutritionalInfo,
-            summaryNutritionalInfoPerServing
+        // Only add summary if we processed at least some ingredients (at least 25% or minimum 1)
+        const minimumThreshold = Math.max(1, Math.ceil(totalIngredients * 0.25));
+        if (processedIngredients < minimumThreshold) {
+            console.warn(`Recipe ${record.oip?.didTx || 'unknown'} has insufficient nutritional data (${processedIngredients}/${totalIngredients} ingredients), skipping summary`);
+            return record;
         }
-    };
+        
+        // Round values to reasonable precision
+        const roundToDecimal = (num, decimals = 2) => Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
+        
+        const summaryNutritionalInfo = {
+            calories: roundToDecimal(totals.calories, 0),
+            proteinG: roundToDecimal(totals.proteinG),
+            fatG: roundToDecimal(totals.fatG),
+            cholesterolMg: roundToDecimal(totals.cholesterolMg),
+            sodiumMg: roundToDecimal(totals.sodiumMg),
+            carbohydratesG: roundToDecimal(totals.carbohydratesG),
+            ingredientsProcessed: processedIngredients,
+            totalIngredients: totalIngredients
+        };
+        
+        // Calculate per-serving values
+        const servings = recipe.servings || 1;
+        const summaryNutritionalInfoPerServing = {
+            calories: roundToDecimal(totals.calories / servings, 0),
+            proteinG: roundToDecimal(totals.proteinG / servings),
+            fatG: roundToDecimal(totals.fatG / servings),
+            cholesterolMg: roundToDecimal(totals.cholesterolMg / servings),
+            sodiumMg: roundToDecimal(totals.sodiumMg / servings),
+            carbohydratesG: roundToDecimal(totals.carbohydratesG / servings),
+            ingredientsProcessed: processedIngredients,
+            totalIngredients: totalIngredients
+        };
+        
+        console.log(`Successfully calculated nutritional summary for recipe ${record.oip?.didTx || 'unknown'} using ${processedIngredients}/${totalIngredients} ingredients`);
+        
+        // Add the summaries to the record
+        return {
+            ...record,
+            data: {
+                ...record.data,
+                summaryNutritionalInfo,
+                summaryNutritionalInfoPerServing
+            }
+        };
+        
+    } catch (error) {
+        console.error(`Error calculating nutritional summary for recipe ${record.oip?.didTx || 'unknown'}:`, error.message);
+        return record; // Return original record without summary
+    }
 };
 
 async function getRecords(queryParams) {
