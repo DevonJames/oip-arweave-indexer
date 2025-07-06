@@ -12,11 +12,11 @@ module.exports = {
         video: "G73WplyxpNDOgDSFO6CP3O6hZXq8kNJXxkCqx3sgd1s",
         post: "op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
         podcast: "MojoZlLKaH-cHy_HbaGBlBA7Mxzf8dJl4MQZzFQAkMY",
-        nutritionalInfo: "yfBDmC1FPNan0mlixGNGUCGhmYZjM1PuDVXfpr_Cxlo",
-        recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
         jfkFilesPageOfDocument: "WP-tZ5nwxrMwr5wKHazTFUtGLRd6nQWRBl8E63Kqufg",
         jfkFilesDocument: "d3xoxXQ8hUlrgKTo1UZc4_GqaKTaApJs0tLFuK6Hxqk",
         exercise: "cXvkv5t6Rbs_-KghLW1MePxbyKONOkfjag2q_RIz9Z8",
         workout: "T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE",
+        recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
+        nutritionalInfo: "zEML8g9cKrda_wH5eDcI6FkYpx7LNUeYx_KZe1aoqhg",
     }
 };
