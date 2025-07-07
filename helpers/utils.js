@@ -176,6 +176,51 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
         return record;
     }
 
+    // Special handling for recipe records when resolveNamesOnly is true
+    if (resolveNamesOnly && record.data.recipe) {
+        const recipeData = record.data.recipe;
+        
+        // If this is a recipe with ingredient and ingredient_comment fields
+        if (Array.isArray(recipeData.ingredient) && Array.isArray(recipeData.ingredient_comment)) {
+            // Merge ingredient names with their comments
+            const mergedIngredients = recipeData.ingredient.map((ingredient, index) => {
+                const comment = recipeData.ingredient_comment[index] || '';
+                
+                // If there's a comment, merge it with the ingredient name
+                if (comment && comment.trim()) {
+                    // Handle different comment patterns
+                    if (comment.includes('ground') && !ingredient.includes('ground')) {
+                        // For "ground" comments, prepend to the ingredient name
+                        return `${comment} ${ingredient}`;
+                    } else if (comment.includes('virgin') && ingredient.includes('oil')) {
+                        // For "extra virgin" comments with oil, prepend and handle "divided"
+                        const parts = comment.split(' ');
+                        const virginParts = parts.filter(p => p.includes('virgin') || p.includes('extra'));
+                        const otherParts = parts.filter(p => !p.includes('virgin') && !p.includes('extra'));
+                        
+                        let result = `${virginParts.join(' ')} ${ingredient}`;
+                        if (otherParts.length > 0) {
+                            result += `, ${otherParts.join(' ')}`;
+                        }
+                        return result;
+                    } else if (comment.includes('boneless') || comment.includes('skinless')) {
+                        // For meat descriptions, prepend to ingredient name
+                        return `${comment} ${ingredient}`;
+                    } else {
+                        // For other comments (like "minced", "juiced", "halved and thinly sliced"), append with comma
+                        return `${ingredient}, ${comment}`;
+                    }
+                }
+                
+                // If no comment, return the ingredient as-is
+                return ingredient;
+            });
+            
+            // Replace the ingredient array with the merged version
+            recipeData.ingredient = mergedIngredients;
+        }
+    }
+
     for (const category of Object.keys(record.data)) {
         const properties = record.data[category];
         for (const key of Object.keys(properties)) {
