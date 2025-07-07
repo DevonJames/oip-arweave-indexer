@@ -213,15 +213,18 @@ const getTurbo = async () => {
 
 // Function to create new nutritional info records for missing ingredients
 async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave') {
-  // Try Nutritionix API first, fallback to scraping if needed
+    // Try Nutritionix API first, fallback to scraping if needed
   const nutritionixAppId = process.env.NUTRITIONIX_APP_ID;
   const nutritionixApiKey = process.env.NUTRITIONIX_API_KEY;
   
   try {
     console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
+    console.log(`DEBUG - NUTRITIONIX_APP_ID: ${nutritionixAppId ? 'SET' : 'NOT SET'}`);
+    console.log(`DEBUG - NUTRITIONIX_API_KEY: ${nutritionixApiKey ? 'SET' : 'NOT SET'}`);
+    console.log(`DEBUG - All env vars:`, Object.keys(process.env).filter(key => key.includes('NUTRITIONIX')));
 
-         // Option 1: Use Nutritionix API (preferred)
-     if (nutritionixAppId && nutritionixApiKey) {
+    // Option 1: Use Nutritionix API (preferred)
+    if (nutritionixAppId && nutritionixApiKey) {
        try {
          console.log('Using Nutritionix API...');
          const apiResponse = await axios.post(
@@ -527,6 +530,8 @@ router.post('/newRecipe', async (req, res) => {
 
     try {
         console.log('POST /api/publish/newRecipe', req.body)
+        console.log('ENV CHECK - NUTRITIONIX_APP_ID:', process.env.NUTRITIONIX_APP_ID ? 'EXISTS' : 'MISSING');
+        console.log('ENV CHECK - NUTRITIONIX_API_KEY:', process.env.NUTRITIONIX_API_KEY ? 'EXISTS' : 'MISSING');
         const record = req.body;
         const blockchain = req.body.blockchain || 'arweave'; // Get blockchain parameter, default to arweave
         let recordType = 'recipe';
