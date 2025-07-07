@@ -725,11 +725,9 @@ router.post('/newRecipe', async (req, res) => {
 
   let recordMap = {};
     
-  async function fetchIngredientRecordData(primaryIngredientSection) {
-    const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name.trim().toLowerCase().replace(/,$/, ''));
-
+  async function fetchIngredientRecordData(cleanedIngredientNames, originalIngredientNames) {
     // Query for all ingredients in one API call - use core ingredient terms only
-    const coreIngredientTerms = ingredientNames.map(name => {
+    const coreIngredientTerms = cleanedIngredientNames.map(name => {
       // Extract the main ingredient word (first 1-2 words)
       const words = name.split(' ');
       if (words.length <= 2) return name;
@@ -760,19 +758,23 @@ router.post('/newRecipe', async (req, res) => {
     const ingredientDidRefs = {};
     const nutritionalInfo = [];
 
-    for (const name of ingredientNames) {
-        const bestMatch = findBestMatch(name);
+    // Use cleaned names for searching, but map back to original names for keys
+    for (let i = 0; i < cleanedIngredientNames.length; i++) {
+        const cleanedName = cleanedIngredientNames[i];
+        const originalName = originalIngredientNames[i];
+        
+        const bestMatch = findBestMatch(cleanedName);
         if (bestMatch) {
-            ingredientDidRefs[name] = bestMatch.oip.didTx;
+            ingredientDidRefs[originalName] = bestMatch.oip.didTx;
             nutritionalInfo.push({
                 ingredientName: bestMatch.data.basic.name,
                 nutritionalInfo: bestMatch.data.nutritionalInfo || {},
                 ingredientSource: bestMatch.data.basic.webUrl,
                 ingredientDidRef: bestMatch.oip.didTx
             });
-            console.log(`Match found for ${name}:`, nutritionalInfo[nutritionalInfo.length - 1]);
+            console.log(`Match found for ${cleanedName} (original: ${originalName}):`, nutritionalInfo[nutritionalInfo.length - 1]);
         } else {
-            ingredientDidRefs[name] = null;
+            ingredientDidRefs[originalName] = null;
         }
     }
 
@@ -843,24 +845,39 @@ router.post('/newRecipe', async (req, res) => {
     return null;
   }
 
-  const ingredientRecords = await fetchIngredientRecordData(primaryIngredientSection);
+  // Create arrays for the function call
+  const originalIngredientNames = parsedIngredients.map(parsed => parsed.originalString);
+  
+  // Create a mapping from original names to cleaned names
+  const nameMapping = {};
+  parsedIngredients.forEach(parsed => {
+    nameMapping[parsed.originalString] = parsed.ingredient;
+  });
+  
+  const ingredientRecords = await fetchIngredientRecordData(ingredientNames, originalIngredientNames);
   console.log('Ingredient records:', ingredientRecords);
   
   let missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
     name => ingredientRecords.ingredientDidRefs[name] === null
   );
+  
   if (missingIngredientNames.length > 0) {
-    // Send the names of the missing ingredients through findBestMatch(ingredientName) to get the best match for each
+    
+    // Send the CLEANED names through findBestMatch to get the best match for each
     const bestMatches = await Promise.all(
-      missingIngredientNames.map(name => findBestMatch(name))
+      missingIngredientNames.map(originalName => {
+        const cleanedName = nameMapping[originalName];
+        console.log(`Looking for best match for cleaned name: "${cleanedName}" (original: "${originalName}")`);
+        return findBestMatch(cleanedName);
+      })
     );
     console.log('Best matches for missing ingredients:', bestMatches);
 
     // Assign matches and update ingredientDidRefs
     bestMatches.forEach((match, index) => {
       if (match) {
-        const name = missingIngredientNames[index];
-        ingredientRecords.ingredientDidRefs[name] = match.oip.didTx;
+        const originalName = missingIngredientNames[index];
+        ingredientRecords.ingredientDidRefs[originalName] = match.oip.didTx;
         ingredientRecords.nutritionalInfo.push({
           ingredientName: match.data.basic.name,
           nutritionalInfo: match.data.nutritionalInfo || {},
@@ -876,17 +893,23 @@ router.post('/newRecipe', async (req, res) => {
       .filter(name => name !== null);
     missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
 
+    // Create nutritional info records using CLEANED names, not original names
     const nutritionalInfoArray = await Promise.all(
-      missingIngredientNames.map(name => createNewNutritionalInfoRecord(name, blockchain))
+      missingIngredientNames.map(originalName => {
+        const cleanedName = nameMapping[originalName];
+        console.log(`Creating nutritional info record for cleaned name: "${cleanedName}" (original: "${originalName}")`);
+        return createNewNutritionalInfoRecord(cleanedName, blockchain);
+      })
     );
 
     // Update ingredientDidRefs with the newly created nutritional info records
     nutritionalInfoArray.forEach((newRecord, index) => {
       if (newRecord) {
-        const name = missingIngredientNames[index];
-        ingredientRecords.ingredientDidRefs[name] = newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`;
+        const originalName = missingIngredientNames[index];
+        const cleanedName = nameMapping[originalName];
+        ingredientRecords.ingredientDidRefs[originalName] = newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`;
         ingredientRecords.nutritionalInfo.push({
-          ingredientName: newRecord.data?.basic?.name || name,
+          ingredientName: newRecord.data?.basic?.name || cleanedName,
           nutritionalInfo: newRecord.data?.nutritionalInfo || {},
           ingredientSource: newRecord.data?.basic?.webUrl || '',
           ingredientDidRef: newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`
@@ -898,15 +921,15 @@ router.post('/newRecipe', async (req, res) => {
     missingIngredientNames = missingIngredientNames.filter((name, index) => !nutritionalInfoArray[index]);
   }
   // Check for empty values in ingredientUnits and assign standard_unit from nutritionalInfoArray
-  missingIngredientNames.forEach((name, index) => {
-    const trimmedName = name.trim().replace(/,$/, '');
-    const unitIndex = ingredientNames.findIndex(ingredientName => ingredientName === trimmedName);
+  missingIngredientNames.forEach((originalName, index) => {
+    const cleanedName = nameMapping[originalName];
+    const unitIndex = ingredientNames.findIndex(ingredientName => ingredientName === cleanedName);
 
-    console.log(`Processing missing ingredient: ${trimmedName}, Found at index: ${unitIndex}`);
+    console.log(`Processing missing ingredient: ${cleanedName} (original: ${originalName}), Found at index: ${unitIndex}`);
 
     if (unitIndex !== -1 && !ingredientUnits[unitIndex]) {
         const nutritionalInfo = nutritionalInfoArray[index];
-        console.log(`Found nutritional info for: ${trimmedName}`, nutritionalInfo);
+        console.log(`Found nutritional info for: ${cleanedName}`, nutritionalInfo);
 
         if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
             ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standardUnit || 'unit';
@@ -914,11 +937,11 @@ router.post('/newRecipe', async (req, res) => {
 
             console.log(`Updated Units: ${ingredientUnits[unitIndex]}, Updated Amounts: ${ingredientAmounts[unitIndex]}`);
         } else {
-            console.log(`No nutritional info found for: ${trimmedName}`);
+            console.log(`No nutritional info found for: ${cleanedName}`);
             ingredientUnits[unitIndex] = 'unit'; // Fallback unit
         }
     } else {
-        console.log(`Ingredient not found in ingredientNames or already has a unit: ${trimmedName}`);
+        console.log(`Ingredient not found in ingredientNames or already has a unit: ${cleanedName}`);
     }
 });
   // You can now use nutritionalInfoArray as needed
@@ -966,46 +989,15 @@ router.post('/newRecipe', async (req, res) => {
     console.log('Amounts Before Assignment:', ingredientAmounts);
     console.log('Ingredient Did Refs:', ingredientRecords);
 
-  // Normalize all ingredient names in `ingredientNames` upfront
-  const normalizedIngredientNames = ingredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase());
-
-  console.log('Normalized Ingredient Names:', normalizedIngredientNames);
-  console.log('Missing Ingredient Names:', missingIngredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase()));
-
-  // Normalize missing ingredients and process them
-  missingIngredientNames.forEach((name, index) => {
-    const normalizedName = name.trim().replace(/,$/, '').toLowerCase();
-    console.log(`Normalized Missing Ingredient Name: ${normalizedName}`);
-    
-    // Find the matching ingredient in the normalized array
-    const unitIndex = normalizedIngredientNames.findIndex(
-      ingredientName => ingredientName === normalizedName
-    );
-
-    console.log(`Processing ingredient: ${normalizedName}, Index in ingredientNames: ${unitIndex}`);
-    
-    if (unitIndex !== -1 && !ingredientUnits[unitIndex]) {
-      const nutritionalInfo = nutritionalInfoArray[index];
-      console.log(`Found nutritional info for: ${normalizedName}`, nutritionalInfo);
-      
-      if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
-        ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standardUnit || 'unit';
-        ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standardAmount || 1;
-      } else {
-        console.log(`No nutritional info found for: ${normalizedName}`);
-        ingredientUnits[unitIndex] = 'unit'; // Fallback unit
-      }
-    } else {
-      console.log(`Ingredient not found or already has unit: ${normalizedName}`);
-    }
-  });
+  // This section is now redundant since we handled the unit processing above
+  // The logic has been moved to the previous section to use proper name mapping
 
 let ingredientDRefs = [];
-ingredientNames.forEach((name, index) => {
+originalIngredientNames.forEach((originalName, index) => {
   // get the ingredientDidRef for each ingredient and put it in an array so that we can use it in the recipeData object
-  const ingredientDidRef = ingredientRecords.ingredientDidRefs[name] || null;
+  const ingredientDidRef = ingredientRecords.ingredientDidRefs[originalName] || null;
   ingredientDRefs.push(ingredientDidRef);
-  console.log(`Ingredient DID Ref for ${name}:`, ingredientDidRef);
+  console.log(`Ingredient DID Ref for ${originalName}:`, ingredientDidRef);
 });
 
 console.log('Final Units:', ingredientUnits);
@@ -1055,7 +1047,7 @@ ingredientDRefs = ingredientDRefs.filter(ref => ref !== null);
 
 console.log('Recipe data:', recipeData);
 console.log('Final ingredient processing summary:');
-console.log('- Original ingredients:', primaryIngredientSection.ingredients.map(ing => ing.name));
+console.log('- Original ingredients:', originalIngredientNames);
 console.log('- Cleaned ingredients for nutrition lookup:', ingredientNames);
 console.log('- Ingredient comments:', ingredientComments);
 console.log('- Ingredient DID references:', ingredientDRefs);
