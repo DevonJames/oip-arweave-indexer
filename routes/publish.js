@@ -221,6 +221,10 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
     console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
     console.log(`DEBUG - NUTRITIONIX_APP_ID: ${nutritionixAppId ? 'SET' : 'NOT SET'}`);
     console.log(`DEBUG - NUTRITIONIX_API_KEY: ${nutritionixApiKey ? 'SET' : 'NOT SET'}`);
+    console.log(`DEBUG - APP_ID value: "${nutritionixAppId}"`);
+    console.log(`DEBUG - API_KEY value: "${nutritionixApiKey}"`);
+    console.log(`DEBUG - APP_ID length: ${nutritionixAppId?.length}`);
+    console.log(`DEBUG - API_KEY length: ${nutritionixApiKey?.length}`);
     console.log(`DEBUG - All env vars:`, Object.keys(process.env).filter(key => key.includes('NUTRITIONIX')));
 
     // Option 1: Use Nutritionix API (preferred)
@@ -282,6 +286,10 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
                glutenFree: false,
                organic: false,
              },
+             image: {
+               webUrl: food.photo?.thumb || food.photo?.highres || food.photo || '',
+               contentType: 'image/jpeg'
+             }
            };
 
            console.log(`Successfully fetched from Nutritionix API for ${ingredientName}:`, formattedNutritionalInfo);
@@ -465,6 +473,10 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
         glutenFree: nutritionTable.gluten_free || false,
         organic: nutritionTable.organic || false,
       },
+      image: {
+        webUrl: '', // No image available from scraping
+        contentType: 'image/jpeg'
+      }
     };
 
     console.log(`*** PUBLISHING nutritionalInfo with calories = ${formattedNutritionalInfo.nutritionalInfo.calories}`);
@@ -515,6 +527,10 @@ async function createFallbackNutritionalInfo(ingredientName, blockchain = 'arwea
         glutenFree: false,
         organic: false,
       },
+      image: {
+        webUrl: '', // No image available for fallback
+        contentType: 'image/jpeg'
+      }
     };
 
     console.log(`Creating fallback record for ${ingredientName}:`, formattedNutritionalInfo);
@@ -622,13 +638,24 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
   async function fetchIngredientRecordData(primaryIngredientSection) {
     const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name.trim().toLowerCase().replace(/,$/, ''));
 
-    // Query for all ingredients in one API call
+    // Query for all ingredients in one API call - use core ingredient terms only
+    const coreIngredientTerms = ingredientNames.map(name => {
+      // Extract the main ingredient word (first 1-2 words)
+      const words = name.split(' ');
+      if (words.length <= 2) return name;
+      // For longer names, take first 2 words or detect main ingredient
+      const mainIngredients = ['garlic', 'paprika', 'allspice', 'nutmeg', 'cardamom', 'salt', 'pepper', 'olive', 'oil', 'chicken', 'onion', 'lemon'];
+      const mainWord = words.find(word => mainIngredients.includes(word));
+      return mainWord || words.slice(0, 2).join(' ');
+    });
+
     const queryParams = {
         recordType: 'nutritionalInfo',
-        search: ingredientNames.join(','),
+        search: coreIngredientTerms.join(','),
         limit: 50
     };
 
+    console.log('Core ingredient search terms:', coreIngredientTerms);
     const recordsInDB = await getRecords(queryParams);
     console.log('quantity of results:', recordsInDB.searchResults);
     // Populate the global recordMap
@@ -637,6 +664,8 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
         const recordName = record.data.basic.name.toLowerCase();
         recordMap[recordName] = record;
     });
+    
+    console.log(`recordMap populated with ${Object.keys(recordMap).length} records`);
 
     const ingredientDidRefs = {};
     const nutritionalInfo = [];
@@ -675,7 +704,7 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
   // Function to find the best match
   function findBestMatch(ingredientName) {
     if (!recordMap || Object.keys(recordMap).length === 0) {
-        console.error("Error: recordMap is not populated before calling findBestMatch().");
+        console.log(`No records available in recordMap for matching ${ingredientName}`);
         return null;
     }
     // const ingredientNames = primaryIngredientSection.ingredients.map(ing => {
