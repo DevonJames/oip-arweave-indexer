@@ -176,7 +176,41 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
         return record;
     }
 
-    // Special handling for recipe records when resolveNamesOnly is true
+    // First resolve all DIDs to names/records
+    for (const category of Object.keys(record.data)) {
+        const properties = record.data[category];
+        for (const key of Object.keys(properties)) {
+            if (typeof properties[key] === 'string' && properties[key].startsWith('did:')) {
+                const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key]);
+                if (refRecord) {
+                    if (resolveNamesOnly) {
+                        // Only return the name from the basic data
+                        const name = refRecord.data?.basic?.name || properties[key]; // fallback to DID if no name found
+                        properties[key] = name;
+                    } else {
+                        properties[key] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly);
+                    }
+                }
+            } else if (Array.isArray(properties[key])) {
+                for (let i = 0; i < properties[key].length; i++) {
+                    if (typeof properties[key][i] === 'string' && properties[key][i].startsWith('did:')) {
+                        const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key][i]);
+                        if (refRecord) {
+                            if (resolveNamesOnly) {
+                                // Only return the name from the basic data
+                                const name = refRecord.data?.basic?.name || properties[key][i]; // fallback to DID if no name found
+                                properties[key][i] = name;
+                            } else {
+                                properties[key][i] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // AFTER DID resolution, handle special recipe merging for resolveNamesOnly
     if (resolveNamesOnly && record.data.recipe) {
         const recipeData = record.data.recipe;
         
@@ -221,38 +255,6 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
         }
     }
 
-    for (const category of Object.keys(record.data)) {
-        const properties = record.data[category];
-        for (const key of Object.keys(properties)) {
-            if (typeof properties[key] === 'string' && properties[key].startsWith('did:')) {
-                const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key]);
-                if (refRecord) {
-                    if (resolveNamesOnly) {
-                        // Only return the name from the basic data
-                        const name = refRecord.data?.basic?.name || properties[key]; // fallback to DID if no name found
-                        properties[key] = name;
-                    } else {
-                        properties[key] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly);
-                    }
-                }
-            } else if (Array.isArray(properties[key])) {
-                for (let i = 0; i < properties[key].length; i++) {
-                    if (typeof properties[key][i] === 'string' && properties[key][i].startsWith('did:')) {
-                        const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key][i]);
-                        if (refRecord) {
-                            if (resolveNamesOnly) {
-                                // Only return the name from the basic data
-                                const name = refRecord.data?.basic?.name || properties[key][i]; // fallback to DID if no name found
-                                properties[key][i] = name;
-                            } else {
-                                properties[key][i] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
     return record;
 };
 
