@@ -211,6 +211,81 @@ const getTurbo = async () => {
     return turboInstance;
 };
 
+// Function to parse ingredient strings and separate base ingredient from comments
+function parseIngredientString(ingredientString) {
+    const original = ingredientString.trim();
+    let ingredient = original;
+    let comment = '';
+    
+    // Common preparation terms that indicate a comment
+    const preparationTerms = [
+        'minced', 'diced', 'chopped', 'sliced', 'shredded', 'grated', 'crushed', 'ground',
+        'halved', 'quartered', 'juiced', 'zested', 'peeled', 'seeded', 'divided', 'separated',
+        'melted', 'softened', 'room temperature', 'chilled', 'frozen', 'fresh', 'dried',
+        'to taste', 'or to taste', 'as needed', 'for serving', 'for garnish', 'optional',
+        'thinly sliced', 'finely chopped', 'coarsely chopped', 'finely minced', 'roughly chopped',
+        'freshly ground', 'freshly grated', 'freshly squeezed', 'lightly packed', 'firmly packed'
+    ];
+    
+    // Check for comma-separated comments (most common pattern)
+    const commaIndex = ingredient.indexOf(',');
+    if (commaIndex !== -1) {
+        const beforeComma = ingredient.substring(0, commaIndex).trim();
+        const afterComma = ingredient.substring(commaIndex + 1).trim();
+        
+        // Check if what's after the comma looks like a preparation comment
+        const isPreparationComment = preparationTerms.some(term => 
+            afterComma.toLowerCase().includes(term.toLowerCase())
+        );
+        
+        if (isPreparationComment) {
+            ingredient = beforeComma;
+            comment = afterComma;
+        }
+    }
+    
+    // Handle cases where the comment is at the beginning (e.g., "freshly ground black pepper")
+    const words = ingredient.split(' ');
+    if (words.length > 2) {
+        const firstTwoWords = words.slice(0, 2).join(' ').toLowerCase();
+        const remainingWords = words.slice(2).join(' ');
+        
+        if (preparationTerms.some(term => firstTwoWords.includes(term))) {
+            // Check if removing the first descriptive words leaves a valid ingredient
+            const coreIngredient = remainingWords;
+            if (coreIngredient.length > 3) { // Reasonable ingredient name length
+                ingredient = coreIngredient;
+                comment = words.slice(0, 2).join(' ');
+            }
+        }
+    }
+    
+    // Clean up common prefixes that aren't essential for nutrition lookup
+    const cleaningPatterns = [
+        /^(organic|fresh|frozen|dried|raw|cooked|canned|bottled)\s+/i,
+        /^(whole|ground|crushed|powdered)\s+/i,
+        /^(extra\s+virgin\s+|virgin\s+)/i, // for olive oil
+        /^(boneless\s+skinless\s+|boneless\s+|skinless\s+)/i, // for meat
+        /^(large|medium|small)\s+/i // size descriptors
+    ];
+    
+    for (const pattern of cleaningPatterns) {
+        const match = ingredient.match(pattern);
+        if (match) {
+            const removed = match[0].trim();
+            ingredient = ingredient.replace(pattern, '').trim();
+            comment = comment ? `${removed} ${comment}` : removed;
+            break; // Only apply one cleaning pattern to avoid over-cleaning
+        }
+    }
+    
+    return {
+        originalString: original,
+        ingredient: ingredient,
+        comment: comment
+    };
+}
+
 // Function to create new nutritional info records for missing ingredients
 async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave') {
     // Try Nutritionix API first, fallback to scraping if needed
@@ -597,13 +672,28 @@ router.post('/newRecipe', async (req, res) => {
 
   console.log('Instructions:', instructions);
 
-  const ingredientNames = primaryIngredientSection.ingredients.map(ing => {
-    const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
+  // Parse ingredient strings to separate base ingredients from comments
+  const parsedIngredients = primaryIngredientSection.ingredients.map(ing => {
+    const parsed = parseIngredientString(ing.name);
+    console.log(`Parsed ingredient: "${parsed.originalString}" -> ingredient: "${parsed.ingredient}", comment: "${parsed.comment}"`);
+    return parsed;
+  });
+
+  // Use the cleaned ingredient names for nutritional lookup
+  const ingredientNames = parsedIngredients.map(parsed => {
+    const normalizedIngredientName = parsed.ingredient.trim().toLowerCase().replace(/,$/, '');
     return normalizedIngredientName;
   });
+  
+  // Store the comments for the recipe record
+  const ingredientComments = parsedIngredients.map(parsed => parsed.comment);
+  
   const ingredientAmounts = primaryIngredientSection.ingredients.map(ing => ing.amount ?? 1);
-const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
+  const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
 
+  console.log('Parsed ingredients:', parsedIngredients);
+  console.log('Cleaned ingredient names for lookup:', ingredientNames);
+  console.log('Ingredient comments:', ingredientComments);
   console.log('Ingredient units:', ingredientUnits);
     
   // Define ingredient synonyms for better matching
@@ -947,6 +1037,7 @@ const recipeData = {
     ingredient_amount: ingredientAmounts.length ? ingredientAmounts : null,
     ingredient_unit: ingredientUnits.length ? ingredientUnits : null,
     ingredient: ingredientDRefs,
+    ingredient_comment: ingredientComments.length ? ingredientComments : null,
     instructions: firstRecipeSection.instructions,
     notes: firstRecipeSection.notes,
     cuisine: firstRecipeSection.cuisine,
@@ -963,6 +1054,12 @@ const recipeData = {
 ingredientDRefs = ingredientDRefs.filter(ref => ref !== null);
 
 console.log('Recipe data:', recipeData);
+console.log('Final ingredient processing summary:');
+console.log('- Original ingredients:', primaryIngredientSection.ingredients.map(ing => ing.name));
+console.log('- Cleaned ingredients for nutrition lookup:', ingredientNames);
+console.log('- Ingredient comments:', ingredientComments);
+console.log('- Ingredient DID references:', ingredientDRefs);
+
 recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
 
 
