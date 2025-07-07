@@ -16,7 +16,7 @@ module.exports = {
         jfkFilesDocument: "d3xoxXQ8hUlrgKTo1UZc4_GqaKTaApJs0tLFuK6Hxqk",
         exercise: "cXvkv5t6Rbs_-KghLW1MePxbyKONOkfjag2q_RIz9Z8",
         workout: "T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE",
-        recipe: "46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
+        recipe: "SLsJ91-Z82rRBPkDrZlG87aIpbw6zOlmK96nh5uf6G4",
         nutritionalInfo: "zEML8g9cKrda_wH5eDcI6FkYpx7LNUeYx_KZe1aoqhg",
         podcastShow: "JQ_gsZucnD5aM9V9ue748R5COGFyOZYstGVSm1iX7rU",
     }
