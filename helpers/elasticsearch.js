@@ -1336,7 +1336,7 @@ async function getRecords(queryParams) {
 
         // search records by search parameter
         if (search !== undefined) {
-            const searchTerms = search.toLowerCase().split(/\s+|,/).filter(Boolean); // Split on spaces and commas, remove empty strings
+            const searchTerms = search.toLowerCase().split(',').map(term => term.trim()).filter(Boolean); // Split only on commas, preserve multi-word terms
             console.log('searching for:', searchTerms, 'in records');
             records = records.filter(record => {
                 const basicData = record.data.basic;

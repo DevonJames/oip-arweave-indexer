@@ -302,13 +302,13 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
   
   try {
     console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
-    console.log(`DEBUG - NUTRITIONIX_APP_ID: ${nutritionixAppId ? 'SET' : 'NOT SET'}`);
-    console.log(`DEBUG - NUTRITIONIX_API_KEY: ${nutritionixApiKey ? 'SET' : 'NOT SET'}`);
-    console.log(`DEBUG - APP_ID value: "${nutritionixAppId}"`);
-    console.log(`DEBUG - API_KEY value: "${nutritionixApiKey}"`);
-    console.log(`DEBUG - APP_ID length: ${nutritionixAppId?.length}`);
-    console.log(`DEBUG - API_KEY length: ${nutritionixApiKey?.length}`);
-    console.log(`DEBUG - All env vars:`, Object.keys(process.env).filter(key => key.includes('NUTRITIONIX')));
+    // console.log(`DEBUG - NUTRITIONIX_APP_ID: ${nutritionixAppId ? 'SET' : 'NOT SET'}`);
+    // console.log(`DEBUG - NUTRITIONIX_API_KEY: ${nutritionixApiKey ? 'SET' : 'NOT SET'}`);
+    // console.log(`DEBUG - APP_ID value: "${nutritionixAppId}"`);
+    // console.log(`DEBUG - API_KEY value: "${nutritionixApiKey}"`);
+    // console.log(`DEBUG - APP_ID length: ${nutritionixAppId?.length}`);
+    // console.log(`DEBUG - API_KEY length: ${nutritionixApiKey?.length}`);
+    // console.log(`DEBUG - All env vars:`, Object.keys(process.env).filter(key => key.includes('NUTRITIONIX')));
 
     // Option 1: Use Nutritionix API (preferred)
     if (nutritionixAppId && nutritionixApiKey) {
@@ -329,12 +329,12 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
            }
          );
 
-         console.log(`Nutritionix API call status for ${ingredientName}:`, apiResponse.status);
-         console.log(`Nutritionix API response data:`, apiResponse.data);
+        //  console.log(`Nutritionix API call status for ${ingredientName}:`, apiResponse.status);
+        //  console.log(`Nutritionix API response data:`, apiResponse.data);
 
          if (apiResponse.data && apiResponse.data.foods && apiResponse.data.foods.length > 0) {
            const food = apiResponse.data.foods[0];
-           console.log(`Nutritionix API response for ${ingredientName}:`, JSON.stringify(food, null, 2));
+          //  console.log(`Nutritionix API response for ${ingredientName}:`, JSON.stringify(food, null, 2));
            
            // Format the API data into the required structure
            const formattedNutritionalInfo = {
@@ -375,7 +375,7 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
              }
            };
 
-           console.log(`Successfully fetched from Nutritionix API for ${ingredientName}:`, formattedNutritionalInfo);
+          //  console.log(`Successfully fetched from Nutritionix API for ${ingredientName}:`, formattedNutritionalInfo);
            const ingredientTx = await publishNewRecord(formattedNutritionalInfo, "nutritionalInfo", false, false, false, null, blockchain);
            return ingredientTx.recordToIndex;
          } else {
