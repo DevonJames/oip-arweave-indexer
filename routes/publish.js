@@ -1036,8 +1036,12 @@ const recipeData = {
   },
 };
 
-// Remove any null ingredients from the final arrays
-ingredientDRefs = ingredientDRefs.filter(ref => ref !== null);
+// Remove any null ingredients from ALL parallel arrays to maintain alignment
+const validIndices = ingredientDRefs.map((ref, index) => ref !== null ? index : null).filter(index => index !== null);
+ingredientDRefs = validIndices.map(index => ingredientDRefs[index]);
+ingredientComments = validIndices.map(index => ingredientComments[index]);
+ingredientAmounts = validIndices.map(index => ingredientAmounts[index]);
+ingredientUnits = validIndices.map(index => ingredientUnits[index]);
 
 console.log('Recipe data:', recipeData);
 console.log('Final ingredient processing summary:');
