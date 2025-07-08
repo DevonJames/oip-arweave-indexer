@@ -211,6 +211,296 @@ const getTurbo = async () => {
     return turboInstance;
 };
 
+// Add schema/example endpoints for proper JSON formatting
+router.get('/newRecipe/schema', (req, res) => {
+    try {
+        const recipeSchema = {
+            "description": "Complete JSON schema for publishing a new recipe via POST /api/publish/newRecipe",
+            "example": {
+                "basic": {
+                    "name": "Mediterranean Grilled Chicken",
+                    "language": "en",
+                    "date": Math.floor(Date.now() / 1000),
+                    "description": "Juicy grilled chicken thighs marinated in a bold Mediterranean-style blend of garlic, lemon, and spices.",
+                    "webUrl": "https://example.com/recipe",
+                    "nsfw": false,
+                    "tagItems": ["grilled", "mediterranean", "chicken", "healthy"]
+                },
+                "recipe": {
+                    "prep_time_mins": 15,
+                    "cook_time_mins": 25,
+                    "total_time_mins": 40,
+                    "servings": 4,
+                    "ingredient_amount": [4, 2, 1, 0.5, 2],
+                    "ingredient_unit": ["pieces", "tbsp", "lemon", "tsp", "cloves"],
+                    "ingredient": [
+                        "chicken thighs, boneless skinless",
+                        "olive oil, extra virgin", 
+                        "lemon, juiced",
+                        "oregano, dried",
+                        "garlic, minced"
+                    ],
+                    "instructions": "1. Marinate chicken in olive oil, lemon juice, oregano, and garlic for 30 minutes.\n2. Preheat grill to medium-high heat.\n3. Grill chicken for 6-7 minutes per side until cooked through.\n4. Let rest for 5 minutes before serving.",
+                    "notes": "For best results, marinate for at least 30 minutes or up to 4 hours.",
+                    "cuisine": "Mediterranean",
+                    "course": "Main Course",
+                    "author": "Chef Example"
+                },
+                "image": {
+                    "webUrl": "https://example.com/recipe-image.jpg",
+                    "contentType": "image/jpeg"
+                },
+                "blockchain": "arweave"
+            },
+            "field_descriptions": {
+                "basic.name": "Recipe title (required)",
+                "basic.language": "Language code (default: 'en')",
+                "basic.date": "Unix timestamp (default: current time)",
+                "basic.description": "Recipe description (required)",
+                "basic.webUrl": "Optional source URL",
+                "basic.nsfw": "Boolean for adult content (default: false)",
+                "basic.tagItems": "Array of tags for categorization",
+                "recipe.prep_time_mins": "Preparation time in minutes",
+                "recipe.cook_time_mins": "Cooking time in minutes", 
+                "recipe.total_time_mins": "Total time in minutes",
+                "recipe.servings": "Number of servings",
+                "recipe.ingredient_amount": "Array of amounts (numbers)",
+                "recipe.ingredient_unit": "Array of units (strings)",
+                "recipe.ingredient": "Array of ingredient names with optional descriptors",
+                "recipe.instructions": "Step-by-step cooking instructions",
+                "recipe.notes": "Optional additional notes",
+                "recipe.cuisine": "Cuisine type (e.g., 'Italian', 'Mexican')",
+                "recipe.course": "Course type (e.g., 'Main Course', 'Dessert')",
+                "recipe.author": "Recipe author name",
+                "image.webUrl": "URL to recipe image",
+                "image.contentType": "Image MIME type",
+                "blockchain": "Target blockchain ('arweave' or 'turbo')"
+            },
+            "ingredient_parsing_notes": {
+                "format": "Ingredients support automatic parsing of comments in parentheses or after commas",
+                "examples": [
+                    "chicken thighs, boneless skinless",
+                    "flour tortillas (12-inch)",
+                    "garlic cloves (minced)",
+                    "olive oil, extra virgin"
+                ],
+                "automatic_processing": "The system will automatically separate base ingredients from descriptive comments and look up nutritional information"
+            }
+        };
+
+        res.status(200).json(recipeSchema);
+    } catch (error) {
+        console.error('Error generating recipe schema:', error);
+        res.status(500).json({ error: 'Failed to generate recipe schema' });
+    }
+});
+
+// Add workout schema endpoint
+router.get('/newWorkout/schema', (req, res) => {
+    try {
+        const workoutSchema = {
+            "description": "Complete JSON schema for publishing a new workout via POST /api/publish/newWorkout",
+            "example": {
+                "basic": {
+                    "name": "Upper Body Strength Training",
+                    "language": "en", 
+                    "date": Math.floor(Date.now() / 1000),
+                    "description": "A comprehensive upper body workout focusing on strength and muscle building.",
+                    "webUrl": "https://example.com/workout",
+                    "nsfw": false,
+                    "tagItems": ["strength", "upper body", "muscle building", "intermediate"]
+                },
+                "workout_duration_minutes": 45,
+                "workout_difficulty": "intermediate",
+                "workout_category": "strength",
+                "equipment_required": ["dumbbells", "bench", "pull-up bar"],
+                "target_muscle_groups": ["chest", "shoulders", "arms", "back"],
+                "goal_tags": ["muscle building", "strength"],
+                "workout": [
+                    {
+                        "section_name": "Warm-up",
+                        "section_duration_minutes": 5,
+                        "exercises": [
+                            {
+                                "name": "arm circles",
+                                "sets": 1,
+                                "reps": 10,
+                                "duration_seconds": null,
+                                "rest_seconds": 30,
+                                "weight_lbs": null,
+                                "notes": "Forward and backward"
+                            }
+                        ]
+                    },
+                    {
+                        "section_name": "Main Workout", 
+                        "section_duration_minutes": 35,
+                        "exercises": [
+                            {
+                                "name": "push-ups",
+                                "sets": 3,
+                                "reps": 12,
+                                "duration_seconds": null,
+                                "rest_seconds": 60,
+                                "weight_lbs": null,
+                                "notes": "Focus on proper form"
+                            },
+                            {
+                                "name": "dumbbell bench press",
+                                "sets": 3,
+                                "reps": 10,
+                                "duration_seconds": null,
+                                "rest_seconds": 90,
+                                "weight_lbs": 25,
+                                "notes": "Control the weight"
+                            }
+                        ]
+                    }
+                ],
+                "notes": "Ensure proper form throughout all exercises",
+                "created_by": "Trainer Example",
+                "nonStandardWorkout": false,
+                "image": {
+                    "webUrl": "https://example.com/workout-image.jpg",
+                    "contentType": "image/jpeg"
+                },
+                "blockchain": "arweave"
+            },
+            "field_descriptions": {
+                "basic.*": "Same structure as recipe basic fields",
+                "workout_duration_minutes": "Total workout duration",
+                "workout_difficulty": "Difficulty level: 'beginner', 'intermediate', 'advanced'",
+                "workout_category": "Category: 'strength', 'cardio', 'flexibility', 'sports'",
+                "equipment_required": "Array of required equipment",
+                "target_muscle_groups": "Array of targeted muscle groups",
+                "goal_tags": "Array of fitness goals",
+                "workout": "Array of workout sections",
+                "workout[].section_name": "Name of workout section",
+                "workout[].exercises": "Array of exercises in this section",
+                "workout[].exercises[].name": "Exercise name (will be looked up in exercise database)",
+                "nonStandardWorkout": "Set to true to skip exercise database lookup",
+                "blockchain": "Target blockchain ('arweave' or 'turbo')"
+            },
+            "exercise_lookup_notes": {
+                "automatic_processing": "Exercise names are automatically looked up in the exercise database",
+                "fallback": "Missing exercises are created from Kaggle fitness dataset",
+                "bypass": "Set 'nonStandardWorkout: true' to skip exercise lookup and use custom exercises"
+            }
+        };
+
+        res.status(200).json(workoutSchema);
+    } catch (error) {
+        console.error('Error generating workout schema:', error);
+        res.status(500).json({ error: 'Failed to generate workout schema' });
+    }
+});
+
+// Add post schema endpoint
+router.get('/newPost/schema', (req, res) => {
+    try {
+        const postSchema = {
+            "description": "Complete JSON schema for publishing a new post via POST /api/publish/newPost",
+            "example": {
+                "basic": {
+                    "name": "Breaking: New Discovery in AI Research",
+                    "language": "en",
+                    "date": Math.floor(Date.now() / 1000),
+                    "description": "Scientists announce breakthrough in neural network efficiency",
+                    "webUrl": "https://example.com/article",
+                    "nsfw": false,
+                    "tagItems": ["AI", "research", "technology", "science"]
+                },
+                "post": {
+                    "webUrl": "https://example.com/full-article",
+                    "bylineWriter": "Dr. Jane Smith",
+                    "bylineWritersTitle": "Senior AI Researcher",
+                    "bylineWritersLocation": "Stanford University",
+                    "articleText": "In a groundbreaking study published today, researchers have developed a new neural network architecture that...",
+                    "featuredImage": "did:arweave:abc123...",
+                    "imageItems": ["did:arweave:img1...", "did:arweave:img2..."],
+                    "imageCaptionItems": ["Figure 1: Neural network diagram", "Figure 2: Performance comparison"],
+                    "videoItems": ["did:arweave:vid1..."],
+                    "audioItems": ["did:arweave:aud1..."],
+                    "audioCaptionItems": ["Interview with lead researcher"],
+                    "replyTo": "did:arweave:original-post..."
+                },
+                "blockchain": "arweave"
+            },
+            "field_descriptions": {
+                "basic.*": "Same structure as recipe basic fields",
+                "post.webUrl": "URL to full article or source",
+                "post.bylineWriter": "Author name",
+                "post.bylineWritersTitle": "Author title/position",
+                "post.bylineWritersLocation": "Author location/organization",
+                "post.articleText": "Main article content",
+                "post.featuredImage": "DID reference to main image",
+                "post.imageItems": "Array of DID references to images",
+                "post.imageCaptionItems": "Array of image captions (parallel to imageItems)",
+                "post.videoItems": "Array of DID references to videos",
+                "post.audioItems": "Array of DID references to audio files",
+                "post.audioCaptionItems": "Array of audio captions",
+                "post.replyTo": "DID reference to post being replied to (for comments/replies)",
+                "blockchain": "Target blockchain ('arweave' or 'turbo')"
+            }
+        };
+
+        res.status(200).json(postSchema);
+    } catch (error) {
+        console.error('Error generating post schema:', error);
+        res.status(500).json({ error: 'Failed to generate post schema' });
+    }
+});
+
+// Add general schema endpoint that lists all available schemas
+router.get('/schemas', (req, res) => {
+    try {
+        const availableSchemas = {
+            "description": "Available JSON schemas for OIP publishing endpoints",
+            "schemas": {
+                "recipe": {
+                    "endpoint": "POST /api/publish/newRecipe",
+                    "schema_url": "GET /api/publish/newRecipe/schema",
+                    "description": "Publish recipe records with automatic ingredient processing"
+                },
+                "workout": {
+                    "endpoint": "POST /api/publish/newWorkout", 
+                    "schema_url": "GET /api/publish/newWorkout/schema",
+                    "description": "Publish workout records with automatic exercise lookup"
+                },
+                "post": {
+                    "endpoint": "POST /api/publish/newPost",
+                    "schema_url": "GET /api/publish/newPost/schema", 
+                    "description": "Publish article/blog post records"
+                },
+                "video": {
+                    "endpoint": "POST /api/publish/newVideo",
+                    "description": "Publish video records with YouTube support"
+                },
+                "image": {
+                    "endpoint": "POST /api/publish/newImage",
+                    "description": "Publish image records"
+                },
+                "media": {
+                    "endpoint": "POST /api/publish/newMedia",
+                    "description": "General media publishing endpoint"
+                }
+            },
+            "common_parameters": {
+                "blockchain": "Target blockchain: 'arweave' (default) or 'turbo'",
+                "publishFiles": "Boolean to enable file publishing (default: varies by endpoint)",
+                "addMediaToArweave": "Boolean to store media on Arweave (default: true)",
+                "addMediaToIPFS": "Boolean to store media on IPFS (default: false)",
+                "addMediaToArFleet": "Boolean to store media on ArFleet (default: false)"
+            }
+        };
+
+        res.status(200).json(availableSchemas);
+    } catch (error) {
+        console.error('Error generating schemas list:', error);
+        res.status(500).json({ error: 'Failed to generate schemas list' });
+    }
+});
+
 // Function to parse ingredient strings and separate base ingredient from comments
 function parseIngredientString(ingredientString) {
     const original = ingredientString.trim();
