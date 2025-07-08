@@ -217,91 +217,73 @@ function parseIngredientString(ingredientString) {
     let ingredient = original;
     let comment = '';
     
-    // Common preparation terms that indicate a comment
-    const preparationTerms = [
-        'minced', 'diced', 'chopped', 'sliced', 'shredded', 'grated', 'crushed', 'ground',
-        'halved', 'quartered', 'juiced', 'zested', 'peeled', 'seeded', 'divided', 'separated',
-        'melted', 'softened', 'room temperature', 'chilled', 'frozen', 'fresh', 'dried',
-        'to taste', 'or to taste', 'as needed', 'for serving', 'for garnish', 'optional',
-        'thinly sliced', 'finely chopped', 'coarsely chopped', 'finely minced', 'roughly chopped',
-        'freshly ground', 'freshly grated', 'freshly squeezed', 'lightly packed', 'firmly packed',
-        'plus more', 'plus extra', 'about', 'approximately', 'thick', 'thin', 'large', 'medium', 'small',
-        'boneless', 'skinless', 'trimmed', 'lean', 'fat-free', 'low-fat', 'reduced-fat'
-    ];
+    // Strategy: Identify the core ingredient (usually a noun) and separate descriptive modifiers
     
-    // Check for parentheses-based comments first (e.g., "flour tortillas (12-inch)")
+    // 1. Handle parentheses first (e.g., "flour tortillas (12-inch)")
     const parenMatch = ingredient.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
     if (parenMatch) {
         const beforeParen = parenMatch[1].trim();
         const inParen = parenMatch[2].trim();
         
-        // Check if parentheses content looks like a comment (not just a unit or number)
-        const isLikelyComment = 
-            inParen.length > 2 && // More than just "oz" or "lb"
-            (preparationTerms.some(term => inParen.toLowerCase().includes(term.toLowerCase())) ||
-             inParen.toLowerCase().includes('inch') ||
-             inParen.toLowerCase().includes('each') ||
-             inParen.toLowerCase().includes('size') ||
-             inParen.toLowerCase().includes('diameter') ||
-             /\d+\s*-\s*inch/.test(inParen.toLowerCase()));
+        // Common parenthetical comments
+        const isComment = 
+            /\d+\s*-?\s*inch/i.test(inParen) ||
+            /\d+\s*oz/i.test(inParen) ||
+            /each|optional|plus more|for garnish|to taste/i.test(inParen);
         
-        if (isLikelyComment) {
+        if (isComment) {
             ingredient = beforeParen;
             comment = inParen;
+            return { originalString: original, ingredient, comment };
         }
     }
     
-    // Check for comma-separated comments (most common pattern) - only if no parentheses comment found
-    if (!comment) {
-        const commaIndex = ingredient.indexOf(',');
-        if (commaIndex !== -1) {
-            const beforeComma = ingredient.substring(0, commaIndex).trim();
-            const afterComma = ingredient.substring(commaIndex + 1).trim();
-            
-            // Check if what's after the comma looks like a preparation comment
-            const isPreparationComment = preparationTerms.some(term => 
-                afterComma.toLowerCase().includes(term.toLowerCase())
-            );
-            
-            if (isPreparationComment) {
-                ingredient = beforeComma;
-                comment = afterComma;
-            }
-        }
-    }
-    
-    // Handle cases where the comment is at the beginning (e.g., "freshly ground black pepper")
-    const words = ingredient.split(' ');
-    if (words.length > 2) {
-        const firstTwoWords = words.slice(0, 2).join(' ').toLowerCase();
-        const remainingWords = words.slice(2).join(' ');
+    // 2. Handle comma-separated descriptors (e.g., "ground beef, grass-fed")
+    const commaIndex = ingredient.indexOf(',');
+    if (commaIndex !== -1) {
+        const beforeComma = ingredient.substring(0, commaIndex).trim();
+        const afterComma = ingredient.substring(commaIndex + 1).trim();
         
-        if (preparationTerms.some(term => firstTwoWords.includes(term))) {
-            // Check if removing the first descriptive words leaves a valid ingredient
-            const coreIngredient = remainingWords;
-            if (coreIngredient.length > 3) { // Reasonable ingredient name length
-                ingredient = coreIngredient;
-                comment = words.slice(0, 2).join(' ');
-            }
+        // Check if after comma is a descriptor
+        const isDescriptor = 
+            /^(grass[- ]?fed|pasture[- ]?raised|free[- ]?range|wild[- ]?caught)$/i.test(afterComma) ||
+            /^(organic|fresh|frozen|dried|raw|canned|bottled)$/i.test(afterComma) ||
+            /^(extra|virgin|pure|unfiltered|cold[- ]?pressed)$/i.test(afterComma) ||
+            /^(minced|diced|chopped|sliced|shredded|grated|crushed)$/i.test(afterComma) ||
+            /^(to taste|optional|as needed|for serving|for garnish)$/i.test(afterComma) ||
+            /^(boneless|skinless|trimmed|lean)$/i.test(afterComma);
+        
+        if (isDescriptor) {
+            ingredient = beforeComma;
+            comment = afterComma;
+            return { originalString: original, ingredient, comment };
         }
     }
     
-    // Clean up common prefixes that aren't essential for nutrition lookup
-    const cleaningPatterns = [
-        /^(organic|fresh|frozen|dried|raw|cooked|canned|bottled)\s+/i,
-        /^(whole|ground|crushed|powdered)\s+/i,
-        /^(extra\s+virgin\s+|virgin\s+)/i, // for olive oil
-        /^(boneless\s+skinless\s+|boneless\s+|skinless\s+)/i, // for meat
-        /^(large|medium|small)\s+/i // size descriptors
-    ];
-    
-    for (const pattern of cleaningPatterns) {
-        const match = ingredient.match(pattern);
-        if (match) {
-            const removed = match[0].trim();
-            ingredient = ingredient.replace(pattern, '').trim();
-            comment = comment ? `${removed} ${comment}` : removed;
-            break; // Only apply one cleaning pattern to avoid over-cleaning
+    // 3. Handle leading descriptors (e.g., "ground beef" -> ingredient: "beef", comment: "ground")
+    const words = ingredient.split(' ');
+    if (words.length >= 2) {
+        const firstWord = words[0].toLowerCase();
+        const restOfWords = words.slice(1).join(' ');
+        
+        // Common leading descriptors
+        const leadingDescriptors = [
+            'ground', 'whole', 'fresh', 'dried', 'frozen', 'organic', 'raw', 'cooked',
+            'boneless', 'skinless', 'trimmed', 'lean', 'extra', 'virgin', 'pure'
+        ];
+        
+        if (leadingDescriptors.includes(firstWord) && restOfWords.length > 2) {
+            // Special case: don't separate "ground beef" or "ground pork" - these are distinct ingredients
+            if (firstWord === 'ground' && /^(beef|pork|turkey|chicken|lamb)$/i.test(words[1])) {
+                ingredient = `${words[0]} ${words[1]}`;
+                if (words.length > 2) {
+                    comment = words.slice(2).join(' ');
+                }
+            } else {
+                ingredient = restOfWords;
+                comment = firstWord;
+            }
+            return { originalString: original, ingredient, comment };
         }
     }
     
