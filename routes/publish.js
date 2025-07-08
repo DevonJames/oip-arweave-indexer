@@ -224,23 +224,49 @@ function parseIngredientString(ingredientString) {
         'melted', 'softened', 'room temperature', 'chilled', 'frozen', 'fresh', 'dried',
         'to taste', 'or to taste', 'as needed', 'for serving', 'for garnish', 'optional',
         'thinly sliced', 'finely chopped', 'coarsely chopped', 'finely minced', 'roughly chopped',
-        'freshly ground', 'freshly grated', 'freshly squeezed', 'lightly packed', 'firmly packed'
+        'freshly ground', 'freshly grated', 'freshly squeezed', 'lightly packed', 'firmly packed',
+        'plus more', 'plus extra', 'about', 'approximately', 'thick', 'thin', 'large', 'medium', 'small',
+        'boneless', 'skinless', 'trimmed', 'lean', 'fat-free', 'low-fat', 'reduced-fat'
     ];
     
-    // Check for comma-separated comments (most common pattern)
-    const commaIndex = ingredient.indexOf(',');
-    if (commaIndex !== -1) {
-        const beforeComma = ingredient.substring(0, commaIndex).trim();
-        const afterComma = ingredient.substring(commaIndex + 1).trim();
+    // Check for parentheses-based comments first (e.g., "flour tortillas (12-inch)")
+    const parenMatch = ingredient.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+    if (parenMatch) {
+        const beforeParen = parenMatch[1].trim();
+        const inParen = parenMatch[2].trim();
         
-        // Check if what's after the comma looks like a preparation comment
-        const isPreparationComment = preparationTerms.some(term => 
-            afterComma.toLowerCase().includes(term.toLowerCase())
-        );
+        // Check if parentheses content looks like a comment (not just a unit or number)
+        const isLikelyComment = 
+            inParen.length > 2 && // More than just "oz" or "lb"
+            (preparationTerms.some(term => inParen.toLowerCase().includes(term.toLowerCase())) ||
+             inParen.toLowerCase().includes('inch') ||
+             inParen.toLowerCase().includes('each') ||
+             inParen.toLowerCase().includes('size') ||
+             inParen.toLowerCase().includes('diameter') ||
+             /\d+\s*-\s*inch/.test(inParen.toLowerCase()));
         
-        if (isPreparationComment) {
-            ingredient = beforeComma;
-            comment = afterComma;
+        if (isLikelyComment) {
+            ingredient = beforeParen;
+            comment = inParen;
+        }
+    }
+    
+    // Check for comma-separated comments (most common pattern) - only if no parentheses comment found
+    if (!comment) {
+        const commaIndex = ingredient.indexOf(',');
+        if (commaIndex !== -1) {
+            const beforeComma = ingredient.substring(0, commaIndex).trim();
+            const afterComma = ingredient.substring(commaIndex + 1).trim();
+            
+            // Check if what's after the comma looks like a preparation comment
+            const isPreparationComment = preparationTerms.some(term => 
+                afterComma.toLowerCase().includes(term.toLowerCase())
+            );
+            
+            if (isPreparationComment) {
+                ingredient = beforeComma;
+                comment = afterComma;
+            }
         }
     }
     
