@@ -509,6 +509,22 @@ function parseIngredientString(ingredientString) {
     
     // Strategy: Identify the core ingredient (usually a noun) and separate descriptive modifiers
     
+    // Handle complex ingredient alternatives (e.g., "bacon, or prosciutto, pancetta, or sausage patties, crisped")
+    // These should be treated as the primary ingredient with alternatives as comments
+    if (ingredient.includes(' or ') && ingredient.includes(',')) {
+        // Split on first comma to get primary ingredient vs alternatives
+        const firstCommaIndex = ingredient.indexOf(',');
+        const primaryIngredient = ingredient.substring(0, firstCommaIndex).trim();
+        const alternatives = ingredient.substring(firstCommaIndex + 1).trim();
+        
+        // If alternatives start with "or", it's likely an ingredient choice
+        if (alternatives.startsWith('or ')) {
+            ingredient = primaryIngredient;
+            comment = alternatives;
+            return { originalString: original, ingredient, comment };
+        }
+    }
+    
     // 1. Handle parentheses first (e.g., "flour tortillas (12-inch)")
     const parenMatch = ingredient.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
     if (parenMatch) {
@@ -541,7 +557,8 @@ function parseIngredientString(ingredientString) {
             /^(extra|virgin|pure|unfiltered|cold[- ]?pressed)$/i.test(afterComma) ||
             /^(minced|diced|chopped|sliced|shredded|grated|crushed)$/i.test(afterComma) ||
             /^(to taste|optional|as needed|for serving|for garnish)$/i.test(afterComma) ||
-            /^(boneless|skinless|trimmed|lean)$/i.test(afterComma);
+            /^(boneless|skinless|trimmed|lean)$/i.test(afterComma) ||
+            /^(fried|baked|roasted|grilled|steamed|boiled)$/i.test(afterComma);
         
         if (isDescriptor) {
             ingredient = beforeComma;
@@ -592,13 +609,6 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
   
   try {
     console.log(`Fetching nutritional info for missing ingredient: ${ingredientName}`);
-    // console.log(`DEBUG - NUTRITIONIX_APP_ID: ${nutritionixAppId ? 'SET' : 'NOT SET'}`);
-    // console.log(`DEBUG - NUTRITIONIX_API_KEY: ${nutritionixApiKey ? 'SET' : 'NOT SET'}`);
-    // console.log(`DEBUG - APP_ID value: "${nutritionixAppId}"`);
-    // console.log(`DEBUG - API_KEY value: "${nutritionixApiKey}"`);
-    // console.log(`DEBUG - APP_ID length: ${nutritionixAppId?.length}`);
-    // console.log(`DEBUG - API_KEY length: ${nutritionixApiKey?.length}`);
-    // console.log(`DEBUG - All env vars:`, Object.keys(process.env).filter(key => key.includes('NUTRITIONIX')));
 
     // Option 1: Use Nutritionix API (preferred)
     if (nutritionixAppId && nutritionixApiKey) {
@@ -619,17 +629,14 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
            }
          );
 
-        //  console.log(`Nutritionix API call status for ${ingredientName}:`, apiResponse.status);
-        //  console.log(`Nutritionix API response data:`, apiResponse.data);
-
          if (apiResponse.data && apiResponse.data.foods && apiResponse.data.foods.length > 0) {
            const food = apiResponse.data.foods[0];
-          //  console.log(`Nutritionix API response for ${ingredientName}:`, JSON.stringify(food, null, 2));
            
-           // Format the API data into the required structure
+           // CRITICAL FIX: Always use the original ingredient name, not the API's normalized name
+           // This ensures that "grass-fed butter" creates a record called "grass-fed butter", not "butter"
            const formattedNutritionalInfo = {
              basic: {
-               name: food.food_name || ingredientName,
+               name: ingredientName, // Use original name instead of food.food_name
                date: Math.floor(Date.now() / 1000),
                language: 'en',
                nsfw: false,
@@ -658,6 +665,8 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
                allergens: [],
                glutenFree: false,
                organic: false,
+               // Store the API's normalized name for reference
+               nutritionixName: food.food_name || ingredientName,
              },
              image: {
                webUrl: food.photo?.thumb || food.photo?.highres || food.photo || '',
@@ -665,7 +674,7 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
              }
            };
 
-          //  console.log(`Successfully fetched from Nutritionix API for ${ingredientName}:`, formattedNutritionalInfo);
+           console.log(`Successfully fetched from Nutritionix API for ${ingredientName}:`, formattedNutritionalInfo);
            const ingredientTx = await publishNewRecord(formattedNutritionalInfo, "nutritionalInfo", false, false, false, null, blockchain);
            return ingredientTx.recordToIndex;
          } else {
@@ -870,7 +879,7 @@ async function createFallbackNutritionalInfo(ingredientName, blockchain = 'arwea
     
     const formattedNutritionalInfo = {
       basic: {
-        name: ingredientName,
+        name: ingredientName, // Always preserve the original ingredient name
         date: Math.floor(Date.now() / 1000),
         language: 'en',
         nsfw: false,
@@ -899,6 +908,7 @@ async function createFallbackNutritionalInfo(ingredientName, blockchain = 'arwea
         allergens: [],
         glutenFree: false,
         organic: false,
+        isFallback: true, // Mark as fallback for future reference
       },
       image: {
         webUrl: '', // No image available for fallback
@@ -994,51 +1004,19 @@ router.post('/newRecipe', async (req, res) => {
   let recordMap = {};
     
   async function fetchIngredientRecordData(cleanedIngredientNames, originalIngredientNames) {
-    // Query for all ingredients in one API call - use core ingredient terms only
+    // CRITICAL FIX: Use the full cleaned ingredient names for search
+    // This ensures "grass-fed butter" searches for "grass-fed butter" and creates "grass-fed butter"
+    // Instead of searching for "butter" but creating "grass-fed butter"
     const coreIngredientTerms = cleanedIngredientNames.map(name => {
       // Clean the name completely - remove commas, extra spaces
       const cleanName = name.replace(/,/g, '').replace(/\s+/g, ' ').trim();
-      const words = cleanName.split(' ');
       
-      // For simple names (1-2 words), return as-is
-      if (words.length <= 2) return cleanName;
-      
-      // Check for compound ingredient types that should NOT be simplified
-      const compoundTypes = [
-        'rub', 'seasoning', 'powder', 'sauce', 'paste', 'mix', 'blend', 
-        'extract', 'juice', 'oil', 'vinegar', 'broth', 'stock', 'cream',
-        'cheese', 'butter', 'milk', 'flour', 'sugar', 'salt', 'spice',
-        'marinade', 'dressing', 'glaze', 'coating', 'breading', 'stuffing',
-        'filling', 'topping', 'spread', 'chips', 'flakes', 'strips'
-      ];
-      
-      const hasCompoundType = compoundTypes.some(type => words.includes(type));
-      
-      // If it's a compound ingredient (like "beef rub"), keep the first 2-3 words
-      if (hasCompoundType) {
-        return words.slice(0, Math.min(3, words.length)).join(' ');
-      }
-      
-      // For longer names, find the core ingredient only if it's clearly a simple ingredient
-      const mainIngredients = ['beef', 'pork', 'chicken', 'garlic', 'onion', 'pepper', 'liver', 'eggs'];
-      const mainWord = words.find(word => mainIngredients.includes(word));
-      
-      // Only simplify to main ingredient if there's no compound type indicator
-      if (mainWord && !hasCompoundType) {
-        const mainIndex = words.indexOf(mainWord);
-        if (mainIndex > 0 && words[mainIndex - 1] === 'ground') {
-          return `ground ${mainWord}`;
-        } else if (mainIndex < words.length - 1 && words[mainIndex + 1] === 'liver') {
-          return `${mainWord} liver`;
-        }
-        return mainWord;
-      }
-      
-      // Otherwise, take first 2-3 words to preserve meaning
-      return words.slice(0, Math.min(3, words.length)).join(' ');
+      // For consistency, use the full cleaned name for both search and record creation
+      // This prevents the mismatch where we search for "butter" but create "grass-fed butter"
+      return cleanName;
     });
 
-    console.log('Core ingredient search terms:', coreIngredientTerms);
+    console.log('Core ingredient search terms (using full names):', coreIngredientTerms);
     
     // Search for each ingredient individually to avoid comma splitting issues
     recordMap = {};  // Reset before populating
@@ -1120,25 +1098,24 @@ router.post('/newRecipe', async (req, res) => {
     
   // Function to calculate minimum score threshold for accepting a match
   function calculateMinimumScoreThreshold(totalTerms, matchedTerms) {
-    // Require at least 60% of terms to be matched for multi-word ingredients
-    const minMatchPercentage = 0.6;
-    const requiredMatches = Math.ceil(totalTerms * minMatchPercentage);
-    
-    if (matchedTerms < requiredMatches) {
-        // If we don't have enough term matches, set a very high threshold
-        return 1000; // Effectively impossible to reach
-    }
+    // More lenient thresholds to avoid creating duplicate records
+    // Focus on finding reasonable matches rather than perfect ones
     
     // Calculate threshold based on ingredient complexity
     if (totalTerms === 1) {
-        // Single word: require exact match + completeness bonus
-        return 25; // 10 (base) + 20 (completeness) - small buffer
+        // Single word: require exact match
+        return 10; // Just the base score
     } else if (totalTerms === 2) {
-        // Two words: require both terms + some bonus
-        return 35; // 20 (base) + 20 (completeness) - buffer  
+        // Two words: require at least one core term match
+        // Example: "grass-fed butter" should match "butter" (score = 10)
+        return 8; // Allow matches with just one term
+    } else if (totalTerms === 3) {
+        // Three words: require at least one core term match
+        // Example: "raw grass-fed butter" should match "butter" (score = 10)
+        return 8; // Allow matches with just one key term
     } else {
-        // Three or more words: require most terms + bonuses
-        return Math.max(40, (totalTerms * 10) + 15);
+        // More than 3 words: require at least some terms to match
+        return Math.max(15, Math.ceil(totalTerms * 0.3) * 10); // 30% of terms minimum
     }
   }
 
@@ -1165,6 +1142,25 @@ router.post('/newRecipe', async (req, res) => {
         return recordMap[ingredientName];
     }
 
+    // Define descriptor words that are less important for matching
+    const descriptorWords = [
+        'grass-fed', 'free-range', 'organic', 'raw', 'fresh', 'frozen', 'dried', 'canned',
+        'whole', 'ground', 'chopped', 'minced', 'sliced', 'diced', 'shredded', 'grated',
+        'extra', 'virgin', 'pure', 'unrefined', 'unsweetened', 'unsalted', 'salted',
+        'lean', 'fat-free', 'low-fat', 'reduced-fat', 'light', 'heavy', 'thick', 'thin',
+        'large', 'medium', 'small', 'baby', 'mature', 'young', 'old',
+        'hot', 'mild', 'sweet', 'sour', 'bitter', 'spicy', 'bland',
+        'cooked', 'raw', 'roasted', 'baked', 'fried', 'grilled', 'steamed', 'boiled',
+        'boneless', 'skinless', 'trimmed', 'untrimmed', 'with', 'without',
+        'pastured', 'wild', 'farm-raised', 'cage-free', 'antibiotic-free', 'hormone-free'
+    ];
+
+    // Identify core ingredient terms (non-descriptors)
+    const coreTerms = searchTerms.filter(term => !descriptorWords.includes(term.toLowerCase()));
+    const descriptorTermsInSearch = searchTerms.filter(term => descriptorWords.includes(term.toLowerCase()));
+
+    console.log(`Core terms: [${coreTerms.join(', ')}], Descriptor terms: [${descriptorTermsInSearch.join(', ')}]`);
+
     // Look for matches and score them properly
     const scoredMatches = Object.keys(recordMap)
         .map(recordName => {
@@ -1174,13 +1170,20 @@ router.post('/newRecipe', async (req, res) => {
             // Calculate match score
             let score = 0;
             let matchedTerms = 0;
+            let coreMatchedTerms = 0;
             let exactSequenceBonus = 0;
             
-            // Count exact term matches
+            // Count exact term matches, with higher weight for core terms
             searchTerms.forEach(term => {
                 if (recordTerms.includes(term)) {
                     matchedTerms++;
-                    score += 10; // Base points for each matching term
+                    const isCoreIngredient = coreTerms.includes(term);
+                    if (isCoreIngredient) {
+                        coreMatchedTerms++;
+                        score += 15; // Higher points for core ingredient matches
+                    } else {
+                        score += 5; // Lower points for descriptor matches
+                    }
                 }
             });
             
@@ -1198,6 +1201,11 @@ router.post('/newRecipe', async (req, res) => {
                 score += 20;
             }
             
+            // Big bonus for matching all core terms
+            if (coreMatchedTerms === coreTerms.length && coreTerms.length > 0) {
+                score += 30;
+            }
+            
             // Penalty for extra terms in record name (prefer simpler matches)
             const extraTerms = recordTerms.length - matchedTerms;
             score -= extraTerms * 2;
@@ -1212,7 +1220,9 @@ router.post('/newRecipe', async (req, res) => {
                 recordName: normalizedRecordName,
                 score: score,
                 matchedTerms: matchedTerms,
+                coreMatchedTerms: coreMatchedTerms,
                 totalTerms: searchTerms.length,
+                totalCoreTerms: coreTerms.length,
                 exactSequence: exactSequenceBonus > 0
             };
         })
@@ -1226,7 +1236,7 @@ router.post('/newRecipe', async (req, res) => {
         const minScoreThreshold = calculateMinimumScoreThreshold(searchTerms.length, bestMatch.matchedTerms);
         
         console.log(`Best candidate for "${ingredientName}": "${bestMatch.recordName}" (score: ${bestMatch.score}, threshold: ${minScoreThreshold})`);
-        console.log(`   - Matched ${bestMatch.matchedTerms}/${bestMatch.totalTerms} terms`);
+        console.log(`   - Matched ${bestMatch.matchedTerms}/${bestMatch.totalTerms} terms (${bestMatch.coreMatchedTerms}/${bestMatch.totalCoreTerms} core)`);
         console.log(`   - Exact sequence match: ${bestMatch.exactSequence}`);
         
         // Log other close matches for debugging
