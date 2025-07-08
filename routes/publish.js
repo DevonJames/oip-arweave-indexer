@@ -627,53 +627,22 @@ router.post('/newRecipe', async (req, res) => {
         const blockchain = req.body.blockchain || 'arweave'; // Get blockchain parameter, default to arweave
         let recordType = 'recipe';
 
+    // Process ingredients directly from the single recipe object
+    const ingredients = record.recipe.ingredient.map((name, i) => ({
+        amount: parseFloat(record.recipe.ingredient_amount[i]) || null,
+        unit: record.recipe.ingredient_unit[i] || '',
+        name: name || '',
+    }));
 
-    // const recipeName = record.basic.name || null;
-    // const description = record.basic.description || null;
-    // const imageUrl = record.image.webUrl || null;
+    console.log('Processing single recipe section with', ingredients.length, 'ingredients');
 
-    // Parse ingredient sections from JSON
-    const ingredientSections = req.body.recipe.map((section, index) => {
-        const sectionName = section.section || `Section ${index + 1}`;
-        const ingredients = section.ingredient.map((name, i) => ({
-            amount: parseFloat(section.ingredient_amount[i]) || null,
-            unit: section.ingredient_unit[i] || '',
-            name: name || '',
-        }));
-
-        return {
-            section: sectionName,
-            ingredients,
-        };
-    });
-
-    // Primary ingredient section logic
-    let primaryIngredientSection = ingredientSections[0];
-    if (ingredientSections.length > 1) {
-        primaryIngredientSection = ingredientSections.reduce((prev, current) =>
-            prev.ingredients.length > current.ingredients.length ? prev : current
-        );
-    }
-
-    console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
-    console.log('Primary ingredient section:', primaryIngredientSection);
-
-    // Sort remaining ingredients sections by the number of ingredients
-    const remainingIngredientSections = ingredientSections.filter(section => section !== primaryIngredientSection);
-    remainingIngredientSections.sort((a, b) => b.ingredients.length - a.ingredients.length);
-
-  // Extract instructions
-  const instructions = record.recipe.instructions || [];
-
-//   $('.wprm-recipe-instruction').each((i, elem) => {
-    // const instruction = $(elem).text().replace(/\s+/g, ' ').trim();
-    // if (instruction) instructions.push(instruction);
-//   });
+  // Extract instructions directly from recipe object
+  const instructions = record.recipe.instructions || '';
 
   console.log('Instructions:', instructions);
 
   // Parse ingredient strings to separate base ingredients from comments
-  const parsedIngredients = primaryIngredientSection.ingredients.map(ing => {
+  const parsedIngredients = ingredients.map(ing => {
     const parsed = parseIngredientString(ing.name);
     console.log(`Parsed ingredient: "${parsed.originalString}" -> ingredient: "${parsed.ingredient}", comment: "${parsed.comment}"`);
     return parsed;
@@ -688,8 +657,8 @@ router.post('/newRecipe', async (req, res) => {
   // Store the comments for the recipe record
   const ingredientComments = parsedIngredients.map(parsed => parsed.comment);
   
-  const ingredientAmounts = primaryIngredientSection.ingredients.map(ing => ing.amount ?? 1);
-  const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
+  const ingredientAmounts = ingredients.map(ing => ing.amount ?? 1);
+  const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
 
   console.log('Parsed ingredients:', parsedIngredients);
   console.log('Cleaned ingredient names for lookup:', ingredientNames);
@@ -973,15 +942,14 @@ router.post('/newRecipe', async (req, res) => {
     // console.log('Nutritional info:', nutritionalInfo);
 
 
-    // Extract prep time, cook time, total time, cuisine, and course
-    const firstRecipeSection = record.recipe[0] || {};
-    const prep_time_mins = firstRecipeSection.prep_time_mins || null;
-    const cook_time_mins = firstRecipeSection.cook_time_mins || null;
-    const total_time_mins = firstRecipeSection.total_time_mins || null;
-    const servings = firstRecipeSection.servings || null;
-    const cuisine = firstRecipeSection.cuisine || null;
-    const course = firstRecipeSection.course || null;
-    const notes = firstRecipeSection.notes || null;
+    // Extract prep time, cook time, total time, cuisine, and course directly from recipe object
+    const prep_time_mins = record.recipe.prep_time_mins || null;
+    const cook_time_mins = record.recipe.cook_time_mins || null;
+    const total_time_mins = record.recipe.total_time_mins || null;
+    const servings = record.recipe.servings || null;
+    const cuisine = record.recipe.cuisine || null;
+    const course = record.recipe.course || null;
+    const notes = record.recipe.notes || null;
 
     console.log('Missing Ingredients:', missingIngredientNames);
     console.log('Original Ingredient Names:', ingredientNames);
@@ -1022,19 +990,19 @@ const recipeData = {
     tagItems: record.basic.tagItems || [],
   },
   recipe: {
-    prep_time_mins: firstRecipeSection.prep_time_mins,
-    cook_time_mins: firstRecipeSection.cook_time_mins,
-    total_time_mins: firstRecipeSection.total_time_mins,
-    servings: firstRecipeSection.servings,
+    prep_time_mins: record.recipe.prep_time_mins,
+    cook_time_mins: record.recipe.cook_time_mins,
+    total_time_mins: record.recipe.total_time_mins,
+    servings: record.recipe.servings,
     ingredient_amount: ingredientAmounts.length ? ingredientAmounts : null,
     ingredient_unit: ingredientUnits.length ? ingredientUnits : null,
     ingredient: ingredientDRefs,
     ingredient_comment: ingredientComments.length ? ingredientComments : null,
-    instructions: firstRecipeSection.instructions,
-    notes: firstRecipeSection.notes,
-    cuisine: firstRecipeSection.cuisine,
-    course: firstRecipeSection.course,
-    author: firstRecipeSection.author || null
+    instructions: record.recipe.instructions,
+    notes: record.recipe.notes,
+    cuisine: record.recipe.cuisine,
+    course: record.recipe.course,
+    author: record.recipe.author || null
   },
   image: {
     webUrl: record.image?.webUrl,
