@@ -948,7 +948,8 @@ router.post('/newRecipe', async (req, res) => {
 
   // Use the cleaned ingredient names for nutritional lookup
   const ingredientNames = parsedIngredients.map(parsed => {
-    const normalizedIngredientName = parsed.ingredient.trim().toLowerCase().replace(/,$/, '');
+    // Remove all commas and extra whitespace, convert to lowercase
+    const normalizedIngredientName = parsed.ingredient.trim().toLowerCase().replace(/,/g, '').replace(/\s+/g, ' ');
     return normalizedIngredientName;
   });
   
@@ -995,32 +996,64 @@ router.post('/newRecipe', async (req, res) => {
   async function fetchIngredientRecordData(cleanedIngredientNames, originalIngredientNames) {
     // Query for all ingredients in one API call - use core ingredient terms only
     const coreIngredientTerms = cleanedIngredientNames.map(name => {
-      // Extract the main ingredient word (first 1-2 words)
-      const words = name.split(' ');
-      if (words.length <= 2) return name;
-      // For longer names, take first 2 words or detect main ingredient
-      const mainIngredients = ['garlic', 'paprika', 'allspice', 'nutmeg', 'cardamom', 'salt', 'pepper', 'olive', 'oil', 'chicken', 'onion', 'lemon'];
+      // Clean the name completely - remove commas, extra spaces
+      const cleanName = name.replace(/,/g, '').replace(/\s+/g, ' ').trim();
+      const words = cleanName.split(' ');
+      
+      // For simple names (1-2 words), return as-is
+      if (words.length <= 2) return cleanName;
+      
+      // For longer names, find the core ingredient
+      const mainIngredients = ['beef', 'pork', 'chicken', 'garlic', 'onion', 'pepper', 'salt', 'oil', 'liver', 'eggs'];
       const mainWord = words.find(word => mainIngredients.includes(word));
-      return mainWord || words.slice(0, 2).join(' ');
+      
+      // If we find a main ingredient word, use it with one additional word if needed
+      if (mainWord) {
+        const mainIndex = words.indexOf(mainWord);
+        if (mainIndex > 0 && words[mainIndex - 1] === 'ground') {
+          return `ground ${mainWord}`;
+        } else if (mainIndex < words.length - 1 && words[mainIndex + 1] === 'liver') {
+          return `${mainWord} liver`;
+        }
+        return mainWord;
+      }
+      
+      // Otherwise, take first 2 words
+      return words.slice(0, 2).join(' ');
     });
-
-    const queryParams = {
-        recordType: 'nutritionalInfo',
-        search: coreIngredientTerms.join(','),
-        limit: 50
-    };
 
     console.log('Core ingredient search terms:', coreIngredientTerms);
-    const recordsInDB = await getRecords(queryParams);
-    console.log('quantity of results:', recordsInDB.searchResults);
-    // Populate the global recordMap
-    recordMap = {};  // Reset before populating
-    recordsInDB.records.forEach(record => {
-        const recordName = record.data.basic.name.toLowerCase();
-        recordMap[recordName] = record;
-    });
     
-    console.log(`recordMap populated with ${Object.keys(recordMap).length} records`);
+    // Search for each ingredient individually to avoid comma splitting issues
+    recordMap = {};  // Reset before populating
+    let totalRecordsFound = 0;
+    
+    for (const searchTerm of coreIngredientTerms) {
+        try {
+            const queryParams = {
+                recordType: 'nutritionalInfo',
+                search: searchTerm,
+                limit: 20
+            };
+            
+            console.log(`Searching for: "${searchTerm}"`);
+            const recordsInDB = await getRecords(queryParams);
+            console.log(`Found ${recordsInDB.searchResults} results for "${searchTerm}"`);
+            
+            // Add results to recordMap
+            recordsInDB.records.forEach(record => {
+                const recordName = record.data.basic.name.toLowerCase();
+                if (!recordMap[recordName]) {  // Avoid duplicates
+                    recordMap[recordName] = record;
+                    totalRecordsFound++;
+                }
+            });
+        } catch (error) {
+            console.error(`Error searching for ingredient "${searchTerm}":`, error);
+        }
+    }
+    
+    console.log(`recordMap populated with ${Object.keys(recordMap).length} unique records from ${totalRecordsFound} total results`);
 
     const ingredientDidRefs = {};
     const nutritionalInfo = [];
@@ -1029,6 +1062,12 @@ router.post('/newRecipe', async (req, res) => {
     for (let i = 0; i < cleanedIngredientNames.length; i++) {
         const cleanedName = cleanedIngredientNames[i];
         const originalName = originalIngredientNames[i];
+        const coreSearchTerm = coreIngredientTerms[i];
+        
+        console.log(`Processing ingredient ${i + 1}:`);
+        console.log(`  Original: "${originalName}"`);
+        console.log(`  Cleaned: "${cleanedName}"`);
+        console.log(`  Search term: "${coreSearchTerm}"`);
         
         const bestMatch = findBestMatch(cleanedName);
         if (bestMatch) {
@@ -1039,9 +1078,10 @@ router.post('/newRecipe', async (req, res) => {
                 ingredientSource: bestMatch.data.basic.webUrl,
                 ingredientDidRef: bestMatch.oip.didTx
             });
-            console.log(`Match found for ${cleanedName} (original: ${originalName}):`, nutritionalInfo[nutritionalInfo.length - 1]);
+            console.log(`  ✅ Match found: "${bestMatch.data.basic.name}" (${bestMatch.oip.didTx})`);
         } else {
             ingredientDidRefs[originalName] = null;
+            console.log(`  ❌ No match found`);
         }
     }
 
@@ -1308,12 +1348,56 @@ const recipeData = {
   },
 };
 
-// Remove any null ingredients from ALL parallel arrays to maintain alignment
-const validIndices = ingredientDRefs.map((ref, index) => ref !== null ? index : null).filter(index => index !== null);
-ingredientDRefs = validIndices.map(index => ingredientDRefs[index]);
-ingredientComments = validIndices.map(index => ingredientComments[index]);
-ingredientAmounts = validIndices.map(index => ingredientAmounts[index]);
-ingredientUnits = validIndices.map(index => ingredientUnits[index]);
+// Debug: Check array lengths before filtering
+console.log('Array lengths before filtering:');
+console.log('- ingredientDRefs:', ingredientDRefs.length);
+console.log('- ingredientComments:', ingredientComments.length);
+console.log('- ingredientAmounts:', ingredientAmounts.length);
+console.log('- ingredientUnits:', ingredientUnits.length);
+
+// Only filter if there are actually null values
+const hasNulls = ingredientDRefs.some(ref => ref === null);
+console.log('Has null ingredient references:', hasNulls);
+
+if (hasNulls) {
+  console.log('Filtering out null ingredients...');
+  const validIndices = ingredientDRefs.map((ref, index) => ref !== null ? index : null).filter(index => index !== null);
+  console.log('Valid indices:', validIndices);
+  
+  ingredientDRefs = validIndices.map(index => ingredientDRefs[index]);
+  ingredientComments = validIndices.map(index => ingredientComments[index]);
+  ingredientAmounts = validIndices.map(index => ingredientAmounts[index]);
+  ingredientUnits = validIndices.map(index => ingredientUnits[index]);
+  
+  console.log('Array lengths after filtering:');
+  console.log('- ingredientDRefs:', ingredientDRefs.length);
+  console.log('- ingredientComments:', ingredientComments.length);
+  console.log('- ingredientAmounts:', ingredientAmounts.length);
+  console.log('- ingredientUnits:', ingredientUnits.length);
+}
+
+// Validate final recipe data structure
+console.log('Final recipe data validation:');
+console.log('- Recipe has basic data:', !!recipeData.basic);
+console.log('- Recipe has recipe data:', !!recipeData.recipe);
+console.log('- All ingredient arrays same length:', 
+  recipeData.recipe.ingredient_amount.length === recipeData.recipe.ingredient_unit.length &&
+  recipeData.recipe.ingredient_unit.length === recipeData.recipe.ingredient.length &&
+  recipeData.recipe.ingredient.length === recipeData.recipe.ingredient_comment.length);
+
+console.log('Final array lengths:');
+console.log('- ingredient_amount:', recipeData.recipe.ingredient_amount?.length || 0);
+console.log('- ingredient_unit:', recipeData.recipe.ingredient_unit?.length || 0);
+console.log('- ingredient:', recipeData.recipe.ingredient?.length || 0);
+console.log('- ingredient_comment:', recipeData.recipe.ingredient_comment?.length || 0);
+
+console.log('Sample ingredient data:');
+if (recipeData.recipe.ingredient && recipeData.recipe.ingredient.length > 0) {
+  console.log('- First ingredient DID:', recipeData.recipe.ingredient[0]);
+  console.log('- First ingredient amount:', recipeData.recipe.ingredient_amount[0]);
+  console.log('- First ingredient unit:', recipeData.recipe.ingredient_unit[0]);
+  console.log('- First ingredient comment:', recipeData.recipe.ingredient_comment[0]);
+}
 
 console.log('Recipe data:', recipeData);
 console.log('Final ingredient processing summary:');
@@ -1322,7 +1406,15 @@ console.log('- Cleaned ingredients for nutrition lookup:', ingredientNames);
 console.log('- Ingredient comments:', ingredientComments);
 console.log('- Ingredient DID references:', ingredientDRefs);
 
-recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
+try {
+  console.log('Attempting to publish recipe...');
+  recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
+  console.log('Recipe published successfully:', recipeRecord.transactionId);
+} catch (publishError) {
+  console.error('Error publishing recipe:', publishError);
+  console.error('Recipe data that failed to publish:', JSON.stringify(recipeData, null, 2));
+  throw publishError;
+}
 
 
     // const newRecord = await publishNewRecord(record, recordType, publishFiles, addMediaToArweave, addMediaToIPFS, youtubeUrl);
