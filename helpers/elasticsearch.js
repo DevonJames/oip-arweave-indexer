@@ -1525,29 +1525,11 @@ async function getRecords(queryParams) {
         // Sort records based on sortBy parameter
         applySorting(records, sortBy);
 
-        // First, resolve records WITHOUT resolveNamesOnly to preserve DID references for nutritional calculations
+        // Resolve records if resolveDepth is specified
         let resolvedRecords = await Promise.all(records.map(async (record) => {
-            let resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB, false); // Always false here
+            let resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB, resolveNamesOnly === 'true' || resolveNamesOnly === true);
             return resolvedRecord;
         }));
-
-        // Add nutritional summaries for recipe records BEFORE applying resolveNamesOnly
-        if (summarizeRecipe === 'true' || summarizeRecipe === true) {
-            resolvedRecords = await Promise.all(resolvedRecords.map(async (record) => {
-                if (record.oip.recordType === 'recipe' && record.data.recipe) {
-                    return await addRecipeNutritionalSummary(record, recordsInDB);
-                }
-                return record;
-            }));
-        }
-
-        // Now apply resolveNamesOnly if requested (this happens AFTER nutritional summaries are calculated)
-        if (resolveNamesOnly === 'true' || resolveNamesOnly === true) {
-            resolvedRecords = await Promise.all(resolvedRecords.map(async (record) => {
-                let resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB, true);
-                return resolvedRecord;
-            }));
-        }
 
         // Helper function to recursively remove null values from an object
         const removeNullValues = (obj) => {
@@ -1567,6 +1549,16 @@ async function getRecords(queryParams) {
             }
             return obj;
         };
+
+        // Add nutritional summaries for recipe records if summarizeRecipe is true
+        if (summarizeRecipe === 'true' || summarizeRecipe === true) {
+            resolvedRecords = await Promise.all(resolvedRecords.map(async (record) => {
+                if (record.oip.recordType === 'recipe' && record.data.recipe) {
+                    return await addRecipeNutritionalSummary(record, recordsInDB);
+                }
+                return record;
+            }));
+        }
 
         // Remove null values if hideNullValues is true
         if (hideNullValues === 'true' || hideNullValues === true) {
