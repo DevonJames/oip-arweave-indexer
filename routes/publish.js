@@ -617,6 +617,8 @@ async function createFallbackNutritionalInfo(ingredientName, blockchain = 'arwea
   }
 }
 
+
+
 router.post('/newRecipe', async (req, res) => {
 
     try {
@@ -627,53 +629,36 @@ router.post('/newRecipe', async (req, res) => {
         const blockchain = req.body.blockchain || 'arweave'; // Get blockchain parameter, default to arweave
         let recordType = 'recipe';
 
+    // NOTE: This endpoint now handles recipe as a single object (not array)
+    // Multi-section recipe support would require a new template and significant changes
 
     // const recipeName = record.basic.name || null;
     // const description = record.basic.description || null;
     // const imageUrl = record.image.webUrl || null;
 
-    // Parse ingredient sections from JSON
-    const ingredientSections = req.body.recipe.map((section, index) => {
-        const sectionName = section.section || `Section ${index + 1}`;
-        const ingredients = section.ingredient.map((name, i) => ({
-            amount: parseFloat(section.ingredient_amount[i]) || null,
-            unit: section.ingredient_unit[i] || '',
-            name: name || '',
-        }));
-
-        return {
-            section: sectionName,
-            ingredients,
-        };
-    });
-
-    // Primary ingredient section logic
-    let primaryIngredientSection = ingredientSections[0];
-    if (ingredientSections.length > 1) {
-        primaryIngredientSection = ingredientSections.reduce((prev, current) =>
-            prev.ingredients.length > current.ingredients.length ? prev : current
-        );
+    // Process recipe as single object (not array)
+    const recipeSection = req.body.recipe;
+    
+    if (!recipeSection || !recipeSection.ingredient) {
+        return res.status(400).json({ error: 'Recipe must contain ingredients' });
     }
 
-    console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
-    console.log('Primary ingredient section:', primaryIngredientSection);
+    // Create ingredients array from the recipe data
+    const ingredients = recipeSection.ingredient.map((name, i) => ({
+        amount: parseFloat(recipeSection.ingredient_amount[i]) || null,
+        unit: recipeSection.ingredient_unit[i] || '',
+        name: name || '',
+    }));
 
-    // Sort remaining ingredients sections by the number of ingredients
-    const remainingIngredientSections = ingredientSections.filter(section => section !== primaryIngredientSection);
-    remainingIngredientSections.sort((a, b) => b.ingredients.length - a.ingredients.length);
+    console.log('Processing single recipe section with', ingredients.length, 'ingredients');
 
-  // Extract instructions
-  const instructions = record.recipe.instructions || [];
-
-//   $('.wprm-recipe-instruction').each((i, elem) => {
-    // const instruction = $(elem).text().replace(/\s+/g, ' ').trim();
-    // if (instruction) instructions.push(instruction);
-//   });
+  // Extract instructions (now directly from recipe object)
+  const instructions = recipeSection.instructions || '';
 
   console.log('Instructions:', instructions);
 
   // Parse ingredient strings to separate base ingredients from comments
-  const parsedIngredients = primaryIngredientSection.ingredients.map(ing => {
+  const parsedIngredients = ingredients.map(ing => {
     const parsed = parseIngredientString(ing.name);
     console.log(`Parsed ingredient: "${parsed.originalString}" -> ingredient: "${parsed.ingredient}", comment: "${parsed.comment}"`);
     return parsed;
@@ -688,8 +673,8 @@ router.post('/newRecipe', async (req, res) => {
   // Store the comments for the recipe record
   const ingredientComments = parsedIngredients.map(parsed => parsed.comment);
   
-  const ingredientAmounts = primaryIngredientSection.ingredients.map(ing => ing.amount ?? 1);
-  const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
+  const ingredientAmounts = ingredients.map(ing => ing.amount ?? 1);
+  const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
 
   console.log('Parsed ingredients:', parsedIngredients);
   console.log('Cleaned ingredient names for lookup:', ingredientNames);
@@ -974,14 +959,13 @@ router.post('/newRecipe', async (req, res) => {
 
 
     // Extract prep time, cook time, total time, cuisine, and course
-    const firstRecipeSection = record.recipe[0] || {};
-    const prep_time_mins = firstRecipeSection.prep_time_mins || null;
-    const cook_time_mins = firstRecipeSection.cook_time_mins || null;
-    const total_time_mins = firstRecipeSection.total_time_mins || null;
-    const servings = firstRecipeSection.servings || null;
-    const cuisine = firstRecipeSection.cuisine || null;
-    const course = firstRecipeSection.course || null;
-    const notes = firstRecipeSection.notes || null;
+    const prep_time_mins = recipeSection.prep_time_mins || null;
+    const cook_time_mins = recipeSection.cook_time_mins || null;
+    const total_time_mins = recipeSection.total_time_mins || null;
+    const servings = recipeSection.servings || null;
+    const cuisine = recipeSection.cuisine || null;
+    const course = recipeSection.course || null;
+    const notes = recipeSection.notes || null;
 
     console.log('Missing Ingredients:', missingIngredientNames);
     console.log('Original Ingredient Names:', ingredientNames);
@@ -1007,9 +991,10 @@ console.log('Final Amounts:', ingredientAmounts);
 console.log('Units After Assignment:', ingredientUnits);
 console.log('Amounts After Assignment:', ingredientAmounts);
 
-// Extract values from the first recipe section for the main recipe data
+// Extract values from the recipe data
 const recipeDate = record.basic.date || Math.floor(Date.now() / 1000);
 
+// Now processing recipe as single object (not array)
 // Assign to recipeData
 const recipeData = {
   basic: {
@@ -1022,19 +1007,19 @@ const recipeData = {
     tagItems: record.basic.tagItems || [],
   },
   recipe: {
-    prep_time_mins: firstRecipeSection.prep_time_mins,
-    cook_time_mins: firstRecipeSection.cook_time_mins,
-    total_time_mins: firstRecipeSection.total_time_mins,
-    servings: firstRecipeSection.servings,
+    prep_time_mins: prep_time_mins,
+    cook_time_mins: cook_time_mins,
+    total_time_mins: total_time_mins,
+    servings: servings,
     ingredient_amount: ingredientAmounts.length ? ingredientAmounts : null,
     ingredient_unit: ingredientUnits.length ? ingredientUnits : null,
     ingredient: ingredientDRefs,
     ingredient_comment: ingredientComments.length ? ingredientComments : null,
-    instructions: firstRecipeSection.instructions,
-    notes: firstRecipeSection.notes,
-    cuisine: firstRecipeSection.cuisine,
-    course: firstRecipeSection.course,
-    author: firstRecipeSection.author || null
+    instructions: instructions,
+    notes: notes,
+    cuisine: cuisine,
+    course: course,
+    author: recipeSection.author || null
   },
   image: {
     webUrl: record.image?.webUrl,
