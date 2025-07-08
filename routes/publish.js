@@ -660,13 +660,11 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
                calciumMg: food.nf_calcium || 0,
                ironMg: food.nf_iron || 0,
                potassiumMg: food.nf_potassium || 0,
-               vitaminAMcg: food.nf_vitamin_a_iu ? (food.nf_vitamin_a_iu * 0.3) : 0, // Convert IU to mcg
-               vitaminCMg: food.nf_vitamin_c || 0,
-               allergens: [],
-               glutenFree: false,
-               organic: false,
-               // Store the API's normalized name for reference
-               nutritionixName: food.food_name || ingredientName,
+                               vitaminAMcg: food.nf_vitamin_a_iu ? (food.nf_vitamin_a_iu * 0.3) : 0, // Convert IU to mcg
+                vitaminCMg: food.nf_vitamin_c || 0,
+                allergens: [],
+                gluten_free: false, // Fixed field name to match template
+                organic: false,
              },
              image: {
                webUrl: food.photo?.thumb || food.photo?.highres || food.photo || '',
@@ -849,11 +847,11 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
         calciumMg: nutritionTable.calcium_mg || 0,
         ironMg: nutritionTable.iron_mg || 0,
         potassiumMg: nutritionTable.potassium_mg || 0,
-        vitaminAMcg: nutritionTable.vitamin_a_mcg || 0,
-        vitaminCMg: nutritionTable.vitamin_c_mg || 0,
-        allergens: nutritionTable.allergens || [],
-        glutenFree: nutritionTable.gluten_free || false,
-        organic: nutritionTable.organic || false,
+                     vitaminAMcg: nutritionTable.vitamin_a_mcg || 0,
+             vitaminCMg: nutritionTable.vitamin_c_mg || 0,
+             allergens: nutritionTable.allergens || [],
+             gluten_free: nutritionTable.gluten_free || false, // Fixed field name to match template
+             organic: nutritionTable.organic || false,
       },
       image: {
         webUrl: '', // No image available from scraping
@@ -906,9 +904,8 @@ async function createFallbackNutritionalInfo(ingredientName, blockchain = 'arwea
         vitaminAMcg: 0,
         vitaminCMg: 0,
         allergens: [],
-        glutenFree: false,
-        organic: false,
-        isFallback: true, // Mark as fallback for future reference
+        gluten_free: false, // Fixed field name to match template
+        organic: false
       },
       image: {
         webUrl: '', // No image available for fallback
@@ -1445,9 +1442,9 @@ const recipeData = {
     ingredient_comment: ingredientComments.length ? ingredientComments : null,
     instructions: record.recipe.instructions,
     notes: record.recipe.notes,
-    cuisine: record.recipe.cuisine,
-    course: record.recipe.course,
-    author: record.recipe.author || null
+    cuisine: record.basic.cuisine || record.recipe.cuisine || '',
+    course: record.basic.course || record.recipe.course || '',
+    author: record.recipe.author || ''
   },
   image: {
     webUrl: record.image?.webUrl,
