@@ -1003,12 +1003,28 @@ router.post('/newRecipe', async (req, res) => {
       // For simple names (1-2 words), return as-is
       if (words.length <= 2) return cleanName;
       
-      // For longer names, find the core ingredient
-      const mainIngredients = ['beef', 'pork', 'chicken', 'garlic', 'onion', 'pepper', 'salt', 'oil', 'liver', 'eggs'];
+      // Check for compound ingredient types that should NOT be simplified
+      const compoundTypes = [
+        'rub', 'seasoning', 'powder', 'sauce', 'paste', 'mix', 'blend', 
+        'extract', 'juice', 'oil', 'vinegar', 'broth', 'stock', 'cream',
+        'cheese', 'butter', 'milk', 'flour', 'sugar', 'salt', 'spice',
+        'marinade', 'dressing', 'glaze', 'coating', 'breading', 'stuffing',
+        'filling', 'topping', 'spread', 'chips', 'flakes', 'strips'
+      ];
+      
+      const hasCompoundType = compoundTypes.some(type => words.includes(type));
+      
+      // If it's a compound ingredient (like "beef rub"), keep the first 2-3 words
+      if (hasCompoundType) {
+        return words.slice(0, Math.min(3, words.length)).join(' ');
+      }
+      
+      // For longer names, find the core ingredient only if it's clearly a simple ingredient
+      const mainIngredients = ['beef', 'pork', 'chicken', 'garlic', 'onion', 'pepper', 'liver', 'eggs'];
       const mainWord = words.find(word => mainIngredients.includes(word));
       
-      // If we find a main ingredient word, use it with one additional word if needed
-      if (mainWord) {
+      // Only simplify to main ingredient if there's no compound type indicator
+      if (mainWord && !hasCompoundType) {
         const mainIndex = words.indexOf(mainWord);
         if (mainIndex > 0 && words[mainIndex - 1] === 'ground') {
           return `ground ${mainWord}`;
@@ -1018,8 +1034,8 @@ router.post('/newRecipe', async (req, res) => {
         return mainWord;
       }
       
-      // Otherwise, take first 2 words
-      return words.slice(0, 2).join(' ');
+      // Otherwise, take first 2-3 words to preserve meaning
+      return words.slice(0, Math.min(3, words.length)).join(' ');
     });
 
     console.log('Core ingredient search terms:', coreIngredientTerms);
@@ -1032,7 +1048,9 @@ router.post('/newRecipe', async (req, res) => {
         try {
             const queryParams = {
                 recordType: 'nutritionalInfo',
+                template: 'nutritionalInfo',
                 search: searchTerm,
+                sortBy: 'inArweaveBlock:desc',
                 limit: 20
             };
             
