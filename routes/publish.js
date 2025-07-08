@@ -1100,20 +1100,38 @@ router.post('/newRecipe', async (req, res) => {
 
 
     
+  // Function to calculate minimum score threshold for accepting a match
+  function calculateMinimumScoreThreshold(totalTerms, matchedTerms) {
+    // Require at least 60% of terms to be matched for multi-word ingredients
+    const minMatchPercentage = 0.6;
+    const requiredMatches = Math.ceil(totalTerms * minMatchPercentage);
+    
+    if (matchedTerms < requiredMatches) {
+        // If we don't have enough term matches, set a very high threshold
+        return 1000; // Effectively impossible to reach
+    }
+    
+    // Calculate threshold based on ingredient complexity
+    if (totalTerms === 1) {
+        // Single word: require exact match + completeness bonus
+        return 25; // 10 (base) + 20 (completeness) - small buffer
+    } else if (totalTerms === 2) {
+        // Two words: require both terms + some bonus
+        return 35; // 20 (base) + 20 (completeness) - buffer  
+    } else {
+        // Three or more words: require most terms + bonuses
+        return Math.max(40, (totalTerms * 10) + 15);
+    }
+  }
+
   // Function to find the best match
   function findBestMatch(ingredientName) {
     if (!recordMap || Object.keys(recordMap).length === 0) {
         console.log(`No records available in recordMap for matching ${ingredientName}`);
         return null;
     }
-    // const ingredientNames = primaryIngredientSection.ingredients.map(ing => {
-    //   const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
-    //   return normalizedIngredientName;
-    // });
-  
-    // const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
-    const searchTerms = ingredientName.split(/\s+/).filter(Boolean);
 
+    const searchTerms = ingredientName.split(/\s+/).filter(Boolean);
     console.log(`Searching for ingredient: ${ingredientName}, Search terms:`, searchTerms);
 
     // Check if the ingredient has a predefined synonym
@@ -1123,29 +1141,90 @@ router.post('/newRecipe', async (req, res) => {
         return recordMap[synonym];
     }
 
-    // Direct match
+    // Direct exact match
     if (recordMap[ingredientName]) {
         console.log(`Direct match found for ${ingredientName}, nutritionalInfo:`, recordMap[ingredientName].data.nutritionalInfo);
         return recordMap[ingredientName];
     }
 
-    // Looser match using search terms
-    const matches = Object.keys(recordMap)
-        .filter(recordName => {
+    // Look for matches and score them properly
+    const scoredMatches = Object.keys(recordMap)
+        .map(recordName => {
             const normalizedRecordName = recordName.toLowerCase();
-            return searchTerms.some(term => normalizedRecordName.includes(term));
+            const recordTerms = normalizedRecordName.split(/\s+/).filter(Boolean);
+            
+            // Calculate match score
+            let score = 0;
+            let matchedTerms = 0;
+            let exactSequenceBonus = 0;
+            
+            // Count exact term matches
+            searchTerms.forEach(term => {
+                if (recordTerms.includes(term)) {
+                    matchedTerms++;
+                    score += 10; // Base points for each matching term
+                }
+            });
+            
+            // Bonus for exact sequence matches (e.g., "beef liver" in that order)
+            if (searchTerms.length >= 2) {
+                const searchSequence = searchTerms.join(' ');
+                if (normalizedRecordName.includes(searchSequence)) {
+                    exactSequenceBonus = 50; // Big bonus for exact sequence
+                    score += exactSequenceBonus;
+                }
+            }
+            
+            // Bonus for completeness (all search terms found)
+            if (matchedTerms === searchTerms.length) {
+                score += 20;
+            }
+            
+            // Penalty for extra terms in record name (prefer simpler matches)
+            const extraTerms = recordTerms.length - matchedTerms;
+            score -= extraTerms * 2;
+            
+            // Only consider matches that have at least one matching term
+            if (matchedTerms === 0) {
+                score = 0;
+            }
+            
+            return {
+                record: recordMap[recordName],
+                recordName: normalizedRecordName,
+                score: score,
+                matchedTerms: matchedTerms,
+                totalTerms: searchTerms.length,
+                exactSequence: exactSequenceBonus > 0
+            };
         })
-        .map(recordName => recordMap[recordName]);
+        .filter(match => match.score > 0) // Only keep matches with positive scores
+        .sort((a, b) => b.score - a.score); // Sort by score descending
 
-    if (matches.length > 0) {
-        matches.sort((a, b) => {
-            const aMatchCount = searchTerms.filter(term => a.data.basic.name.toLowerCase().includes(term)).length;
-            const bMatchCount = searchTerms.filter(term => b.data.basic.name.toLowerCase().includes(term)).length;
-            return bMatchCount - aMatchCount;
-        });
-
-        console.log(`Loose matches found for ${ingredientName}:`, matches);
-        return matches[0];
+    if (scoredMatches.length > 0) {
+        const bestMatch = scoredMatches[0];
+        
+        // Calculate minimum score threshold based on ingredient complexity
+        const minScoreThreshold = calculateMinimumScoreThreshold(searchTerms.length, bestMatch.matchedTerms);
+        
+        console.log(`Best candidate for "${ingredientName}": "${bestMatch.recordName}" (score: ${bestMatch.score}, threshold: ${minScoreThreshold})`);
+        console.log(`   - Matched ${bestMatch.matchedTerms}/${bestMatch.totalTerms} terms`);
+        console.log(`   - Exact sequence match: ${bestMatch.exactSequence}`);
+        
+        // Log other close matches for debugging
+        if (scoredMatches.length > 1) {
+            console.log(`   Other candidates:`, 
+                scoredMatches.slice(1, 3).map(m => `"${m.recordName}" (${m.score})`)
+            );
+        }
+        
+        // Only accept the match if it meets the quality threshold
+        if (bestMatch.score >= minScoreThreshold) {
+            console.log(`✅ Match accepted: "${bestMatch.recordName}" (score ${bestMatch.score} >= threshold ${minScoreThreshold})`);
+            return bestMatch.record;
+        } else {
+            console.log(`❌ Match rejected: score ${bestMatch.score} below threshold ${minScoreThreshold}. Will create new record.`);
+        }
     }
 
     console.log(`No match found for ${ingredientName}`);
