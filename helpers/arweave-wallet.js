@@ -44,8 +44,8 @@ class ArweaveWalletManager {
                              typeof data === 'string' ? Buffer.from(data) :
                              Buffer.from(JSON.stringify(data));
 
-            console.log('Uploading file with Turbo, size:', dataBuffer.length);
-            console.log('Upload file tags received:', tags);
+            // console.log('Uploading file with Turbo, size:', dataBuffer.length);
+            // console.log('Upload file tags received:', tags);
             
             // Create all required factories
             const fileStreamFactory = () => {
@@ -57,7 +57,7 @@ class ArweaveWalletManager {
             let uploadTags;
             if (tags && tags.length > 0) {
                 uploadTags = tags;
-                console.log('Using provided tags for upload:', uploadTags);
+                // console.log('Using provided tags for upload:', uploadTags);
             } else {
                 uploadTags = [
                     { name: 'Content-Type', value: contentType },
@@ -76,7 +76,7 @@ class ArweaveWalletManager {
                 }
             });
             
-            console.log('Upload successful:', result);
+            // console.log('Upload successful:', result);
             return { id: result.id, type: contentType };
         } catch (error) {
             console.error('Error uploading with Turbo:', error);
@@ -115,7 +115,7 @@ class ArweaveWalletManager {
                 const response = await this.arweave.transactions.post(transaction);
                 
                 if (response.status === 200) {
-                    console.log('Direct Arweave upload successful:', transaction.id);
+                    // console.log('Direct Arweave upload successful:', transaction.id);
                     return { id: transaction.id, type: contentType };
                 } else {
                     throw new Error(`Direct Arweave upload failed with status: ${response.status}`);
@@ -238,8 +238,8 @@ class ArweaveWalletManager {
     // Enhanced upload methods with status checking
     async uploadWithConfirmation(data, options = {}, waitForConfirmation = true) {
         try {
-            console.log('uploadWithConfirmation called with data size:', Buffer.byteLength(data, 'utf8'));
-            console.log('uploadWithConfirmation options:', options);
+            // console.log('uploadWithConfirmation called with data size:', Buffer.byteLength(data, 'utf8'));
+            // console.log('uploadWithConfirmation options:', options);
             
             // Extract content type from tags
             const contentType = options.tags?.find(tag => tag.name === 'Content-Type')?.value || 'application/json';
@@ -247,7 +247,7 @@ class ArweaveWalletManager {
             // Pass the tags to uploadFile
             const result = await this.uploadFile(data, contentType, options.tags);
             
-            console.log('Upload result:', result);
+            // console.log('Upload result:', result);
             
             // Return a simplified result without status
             return {

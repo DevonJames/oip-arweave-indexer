@@ -63,16 +63,34 @@ router.get('/', async (req, res) => {
                 type: fields[fieldName],
                 index: fields[key]
                 };
+                
+                // Add enum values if this field is an enum type
+                if (fields[fieldName] === 'enum') {
+                    const enumValuesKey = `${fieldName}Values`;
+                    if (fields[enumValuesKey]) {
+                        acc[fieldName].enumValues = fields[enumValuesKey];
+                    } else if (template.data[enumValuesKey]) {
+                        acc[fieldName].enumValues = template.data[enumValuesKey];
+                    }
+                }
             }
             return acc;
             }, {});
+            
             template.data.fieldsInTemplate = fieldsInTemplate;
             const fieldsInTemplateArray = Object.keys(fieldsInTemplate).map(key => {
-            return {
-                name: key,
-                type: fieldsInTemplate[key].type,
-                index: fieldsInTemplate[key].index
-            };
+                const fieldInfo = {
+                    name: key,
+                    type: fieldsInTemplate[key].type,
+                    index: fieldsInTemplate[key].index
+                };
+                
+                // Include enum values in the array format as well
+                if (fieldsInTemplate[key].enumValues) {
+                    fieldInfo.enumValues = fieldsInTemplate[key].enumValues;
+                }
+                
+                return fieldInfo;
             });
             template.data.fieldsInTemplateCount = fieldsInTemplateArray.length;
 
@@ -91,8 +109,8 @@ router.get('/', async (req, res) => {
             delete template.data.creator;
             delete template.data.creatorSig;
 
-            // Remove fields from data
-            delete template.data.fields;
+            // Keep fields property - needed by translateJSONtoOIPData function
+            // delete template.data.fields;  // REMOVED: This was breaking nutritional info processing
         });
         let searchResults = templates.length;
         res.status(200).json({ message: "Templates retreived successfully", latestArweaveBlockInDB: finalMaxArweaveBlock, totalTemplates: qtyTemplatesInDB, searchResults, templates });
