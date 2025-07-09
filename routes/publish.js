@@ -512,6 +512,11 @@ function parseIngredientString(ingredientString) {
     let ingredient = original;
     let comment = '';
     
+    // Don't process didTx values - handle them in the main parsing logic
+    if (original.startsWith('did:')) {
+        return { originalString: original, ingredient: original, comment: '' };
+    }
+    
     // Strategy: Identify the core ingredient (usually a noun) and separate descriptive modifiers
     
     // Handle complex ingredient alternatives (e.g., "bacon, or prosciutto, pancetta, or sausage patties, crisped")
@@ -968,9 +973,31 @@ router.post('/newRecipe', async (req, res) => {
     const originalString = parsed.originalString;
     const ingredient = parsed.ingredient;
     
-    // Check if this ingredient is already a didTx value
-    if (ingredient.startsWith('did:')) {
-      // This is already a didTx value, store it directly
+    // Check if this ingredient string starts with a didTx value
+    if (originalString.startsWith('did:')) {
+      // Handle didTx with potential comment: "did:arweave:abc123, comment text"
+      const commaIndex = originalString.indexOf(',');
+      if (commaIndex !== -1) {
+        // Extract didTx and comment separately
+        const didTx = originalString.substring(0, commaIndex).trim();
+        const comment = originalString.substring(commaIndex + 1).trim();
+        
+        // Store the clean didTx value
+        ingredientDidTxMap[originalString] = didTx;
+        ingredientNamesForDisplay.push(didTx); // For display purposes
+        
+        // Update the comment in the parsed ingredients
+        ingredientComments[index] = comment;
+        
+        console.log(`Found didTx with comment at index ${index}: ${didTx} (comment: "${comment}")`);
+      } else {
+        // didTx without comment
+        ingredientDidTxMap[originalString] = originalString;
+        ingredientNamesForDisplay.push(originalString); // For display purposes
+        console.log(`Found didTx without comment at index ${index}: ${originalString}`);
+      }
+    } else if (ingredient.startsWith('did:')) {
+      // This handles the case where parseIngredientString already processed it
       ingredientDidTxMap[originalString] = ingredient;
       ingredientNamesForDisplay.push(ingredient); // For display purposes
       console.log(`Found existing didTx at index ${index}: ${ingredient}`);
