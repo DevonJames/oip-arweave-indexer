@@ -375,14 +375,34 @@ router.post('/newRecipe', async (req, res) => {
 
   console.log('Instructions:', instructions);
 
-  const ingredientNames = primaryIngredientSection.ingredients.map(ing => {
-    const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
-    return normalizedIngredientName;
+  // Process ingredients and separate names from didTx values
+  const ingredientNames = [];
+  const ingredientDidTxValues = [];
+  const ingredientNameIndexMap = {}; // Maps array index to ingredient name (for names only)
+  
+  primaryIngredientSection.ingredients.forEach((ing, index) => {
+    const ingredientValue = ing.name.trim().replace(/,$/, '');
+    
+    // Check if this ingredient is already a didTx value
+    if (ingredientValue.startsWith('did:')) {
+      ingredientDidTxValues[index] = ingredientValue;
+      console.log(`Found existing didTx at index ${index}: ${ingredientValue}`);
+    } else {
+      // This is a name that needs to be looked up
+      const normalizedIngredientName = ingredientValue.toLowerCase();
+      ingredientNames.push(normalizedIngredientName);
+      ingredientNameIndexMap[normalizedIngredientName] = index;
+      ingredientDidTxValues[index] = null; // Placeholder for lookup
+      console.log(`Need to lookup ingredient at index ${index}: ${normalizedIngredientName}`);
+    }
   });
+  
   const ingredientAmounts = primaryIngredientSection.ingredients.map(ing => ing.amount ?? 1);
 const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
 
   console.log('Ingredient units:', ingredientUnits);
+  console.log('Ingredient names to lookup:', ingredientNames);
+  console.log('Existing didTx values:', ingredientDidTxValues);
     
   // Define ingredient synonyms for better matching
   const synonymMap = {
@@ -413,13 +433,16 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
 
   let recordMap = {};
     
-  async function fetchIngredientRecordData(primaryIngredientSection) {
-    const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name.trim().toLowerCase().replace(/,$/, ''));
+  async function fetchIngredientRecordData(ingredientNamesToLookup) {
+    // Only process ingredient names, not didTx values
+    if (ingredientNamesToLookup.length === 0) {
+      return { ingredientDidRefs: {}, nutritionalInfo: [] };
+    }
 
     // Query for all ingredients in one API call
     const queryParams = {
         recordType: 'nutritionalInfo',
-        search: ingredientNames.join(','),
+        search: ingredientNamesToLookup.join(','),
         limit: 50
     };
 
@@ -435,7 +458,7 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     const ingredientDidRefs = {};
     const nutritionalInfo = [];
 
-    for (const name of ingredientNames) {
+    for (const name of ingredientNamesToLookup) {
         const bestMatch = findBestMatch(name);
         if (bestMatch) {
             ingredientDidRefs[name] = bestMatch.oip.didTx;
@@ -518,7 +541,7 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     return null;
   }
 
-  const ingredientRecords = await fetchIngredientRecordData(primaryIngredientSection);
+  const ingredientRecords = await fetchIngredientRecordData(ingredientNames);
   console.log('Ingredient records:', ingredientRecords);
   
   let missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
@@ -641,46 +664,51 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     console.log('Amounts Before Assignment:', ingredientAmounts);
     console.log('Ingredient Did Refs:', ingredientRecords);
 
-  // Normalize all ingredient names in `ingredientNames` upfront
-  const normalizedIngredientNames = ingredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase());
-
-  console.log('Normalized Ingredient Names:', normalizedIngredientNames);
-  console.log('Missing Ingredient Names:', missingIngredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase()));
-
-  // Normalize missing ingredients and process them
+  // Process missing ingredients and update units/amounts
   missingIngredientNames.forEach((name, index) => {
     const normalizedName = name.trim().replace(/,$/, '').toLowerCase();
-    console.log(`Normalized Missing Ingredient Name: ${normalizedName}`);
+    console.log(`Processing missing ingredient: ${normalizedName}`);
     
-    // Find the matching ingredient in the normalized array
-    const unitIndex = normalizedIngredientNames.findIndex(
-      ingredientName => ingredientName === normalizedName
+    // Find the matching ingredient in the original ingredients array
+    const originalIndex = primaryIngredientSection.ingredients.findIndex(
+      ing => ing.name.trim().replace(/,$/, '').toLowerCase() === normalizedName
     );
 
-    console.log(`Processing ingredient: ${normalizedName}, Index in ingredientNames: ${unitIndex}`);
+    console.log(`Found ingredient at original index: ${originalIndex}`);
     
-    if (unitIndex !== -1 && !ingredientUnits[unitIndex]) {
+    if (originalIndex !== -1 && !ingredientUnits[originalIndex]) {
       const nutritionalInfo = nutritionalInfoArray[index];
       console.log(`Found nutritional info for: ${normalizedName}`, nutritionalInfo);
       
       if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
-        ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standard_unit || 'unit';
-        ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standard_amount || 1;
+        ingredientUnits[originalIndex] = nutritionalInfo.nutritionalInfo.standard_unit || 'unit';
+        ingredientAmounts[originalIndex] *= nutritionalInfo.nutritionalInfo.standard_amount || 1;
+        console.log(`Updated units/amounts for ${normalizedName}: ${ingredientUnits[originalIndex]}, ${ingredientAmounts[originalIndex]}`);
       } else {
         console.log(`No nutritional info found for: ${normalizedName}`);
-        ingredientUnits[unitIndex] = 'unit'; // Fallback unit
+        ingredientUnits[originalIndex] = 'unit'; // Fallback unit
       }
     } else {
       console.log(`Ingredient not found or already has unit: ${normalizedName}`);
     }
   });
 
+// Build final ingredientDRefs array by combining looked-up values with existing didTx values
 let ingredientDRefs = [];
-ingredientNames.forEach((name, index) => {
-  // get the ingredientDidRef for each ingredient and put it in an array so that we can use it in the recipeData object
-  const ingredientDidRef = ingredientRecords.ingredientDidRefs[name] || null;
-  ingredientDRefs.push(ingredientDidRef);
-  console.log(`Ingredient DID Ref for ${name}:`, ingredientDidRef);
+primaryIngredientSection.ingredients.forEach((ing, index) => {
+  const ingredientValue = ing.name.trim().replace(/,$/, '');
+  
+  if (ingredientValue.startsWith('did:')) {
+    // Use the existing didTx value
+    ingredientDRefs.push(ingredientValue);
+    console.log(`Using existing didTx at index ${index}: ${ingredientValue}`);
+  } else {
+    // Use the looked-up didTx value
+    const normalizedName = ingredientValue.toLowerCase();
+    const ingredientDidRef = ingredientRecords.ingredientDidRefs[normalizedName] || null;
+    ingredientDRefs.push(ingredientDidRef);
+    console.log(`Ingredient DID Ref for ${normalizedName} at index ${index}:`, ingredientDidRef);
+  }
 });
 
 console.log('Final Units:', ingredientUnits);
@@ -724,8 +752,26 @@ const recipeData = {
   },
 };
 
-// Remove any null ingredients from the final arrays
-ingredientDRefs = ingredientDRefs.filter(ref => ref !== null);
+// Filter out null ingredients and maintain array consistency
+const validIngredientIndices = [];
+ingredientDRefs.forEach((ref, index) => {
+  if (ref !== null) {
+    validIngredientIndices.push(index);
+  }
+});
+
+// Only keep ingredients that have valid didTx references
+const filteredIngredientDRefs = validIngredientIndices.map(index => ingredientDRefs[index]);
+const filteredIngredientAmounts = validIngredientIndices.map(index => ingredientAmounts[index]);
+const filteredIngredientUnits = validIngredientIndices.map(index => ingredientUnits[index]);
+
+console.log(`Filtered ${ingredientDRefs.length - filteredIngredientDRefs.length} ingredients with null didTx references`);
+console.log('Final filtered ingredients:', filteredIngredientDRefs);
+
+// Update the recipe data to use filtered arrays
+recipeData.recipe.ingredient_amount = filteredIngredientAmounts.length ? filteredIngredientAmounts : null;
+recipeData.recipe.ingredient_unit = filteredIngredientUnits.length ? filteredIngredientUnits : null;
+recipeData.recipe.ingredient = filteredIngredientDRefs;
 
 console.log('Recipe data:', recipeData);
 recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
@@ -1248,6 +1294,79 @@ router.post('/testEncrypt', async (req, res) => {
             error: error.message,
             details: error
         });
+    }
+});
+
+// Add newNutritionalInfo endpoint for publishing nutritional info records
+router.post('/newNutritionalInfo', async (req, res) => {
+    try {
+        console.log('POST /api/publish/newNutritionalInfo', req.body);
+        const inputData = req.body.data || req.body; // Handle both wrapped and unwrapped formats
+        const blockchain = req.body.blockchain || 'arweave';
+        let recordType = 'nutritionalInfo';
+
+        // Map the input format to the internal format
+        const nutritionalInfoRecord = {
+            basic: {
+                name: inputData.basic?.name || 'Nutritional Info Record',
+                date: inputData.basic?.date || Math.floor(Date.now() / 1000),
+                language: inputData.basic?.language || 'en',
+                nsfw: inputData.basic?.nsfw || false,
+                webUrl: inputData.basic?.webUrl || '',
+                tagItems: inputData.basic?.tagItems || []
+            },
+            nutritionalInfo: {
+                // Map camelCase to snake_case for internal consistency
+                standard_amount: inputData.nutritionalInfo?.standardAmount || 1,
+                standard_unit: inputData.nutritionalInfo?.standardUnit || 'unit',
+                calories: inputData.nutritionalInfo?.calories || 0,
+                protein_g: inputData.nutritionalInfo?.proteinG || 0,
+                fat_g: inputData.nutritionalInfo?.fatG || 0,
+                saturated_fat_g: inputData.nutritionalInfo?.saturatedFatG || 0,
+                trans_fat_g: inputData.nutritionalInfo?.transFatG || 0,
+                cholesterol_mg: inputData.nutritionalInfo?.cholesterolMg || 0,
+                sodium_mg: inputData.nutritionalInfo?.sodiumMg || 0,
+                carbohydrates_g: inputData.nutritionalInfo?.carbohydratesG || 0,
+                dietary_fiber_g: inputData.nutritionalInfo?.dietaryFiberG || 0,
+                sugars_g: inputData.nutritionalInfo?.sugarsG || 0,
+                added_sugars_g: inputData.nutritionalInfo?.addedSugarsG || 0,
+                vitamin_d_mcg: inputData.nutritionalInfo?.vitaminDMcg || 0,
+                calcium_mg: inputData.nutritionalInfo?.calciumMg || 0,
+                iron_mg: inputData.nutritionalInfo?.ironMg || 0,
+                potassium_mg: inputData.nutritionalInfo?.potassiumMg || 0,
+                vitamin_a_mcg: inputData.nutritionalInfo?.vitaminAMcg || 0,
+                vitamin_c_mg: inputData.nutritionalInfo?.vitaminCMg || 0,
+                allergens: inputData.nutritionalInfo?.allergens || [],
+                organic: inputData.nutritionalInfo?.organic || false
+            }
+        };
+
+        // Add image data if provided
+        if (inputData.image?.webUrl) {
+            nutritionalInfoRecord.image = {
+                webUrl: inputData.image.webUrl,
+                contentType: inputData.image.contentType || 'image/jpeg'
+            };
+        }
+
+        console.log('Final nutritional info data:', nutritionalInfoRecord);
+
+        // Publish the nutritional info record
+        const nutritionalInfoResult = await publishNewRecord(nutritionalInfoRecord, recordType, false, false, false, null, blockchain);
+
+        const transactionId = nutritionalInfoResult.transactionId;
+        const recordToIndex = nutritionalInfoResult.recordToIndex;
+
+        res.status(200).json({ 
+            transactionId, 
+            recordToIndex, 
+            blockchain,
+            message: 'Nutritional info published successfully'
+        });
+
+    } catch (error) {
+        console.error('Error publishing nutritional info:', error);
+        res.status(500).json({ error: 'Failed to publish nutritional info' });
     }
 });
 
