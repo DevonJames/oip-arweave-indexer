@@ -472,6 +472,11 @@ router.get('/schemas', (req, res) => {
                     "schema_url": "GET /api/publish/newPost/schema", 
                     "description": "Publish article/blog post records"
                 },
+                "nutritionalInfo": {
+                    "endpoint": "POST /api/publish/newNutritionalInfo",
+                    "schema_url": "GET /api/publish/newNutritionalInfo/schema",
+                    "description": "Publish nutritional information records"
+                },
                 "video": {
                     "endpoint": "POST /api/publish/newVideo",
                     "description": "Publish video records with YouTube support"
@@ -2044,6 +2049,92 @@ router.post('/testEncrypt', async (req, res) => {
     }
 });
 
+// Add nutritionalInfo schema endpoint
+router.get('/newNutritionalInfo/schema', (req, res) => {
+    try {
+        const nutritionalInfoSchema = {
+            "description": "Complete JSON schema for publishing nutritional info via POST /api/publish/newNutritionalInfo",
+            "example": {
+                "data": {
+                    "basic": {
+                        "name": "raw, grass-fed sharp cheddar cheese",
+                        "date": 1752015668,
+                        "language": "en",
+                        "nsfw": false,
+                        "webUrl": "https://www.nutritionix.com/food/raw,-grass-fed-sharp-cheddar-cheese"
+                    },
+                    "nutritionalInfo": {
+                        "standardAmount": 1,
+                        "standardUnit": "slice (1 oz)",
+                        "calories": 114.8,
+                        "proteinG": 6.79,
+                        "fatG": 9.47,
+                        "saturatedFatG": 5.42,
+                        "transFatG": 0,
+                        "cholesterolMg": 27.72,
+                        "sodiumMg": 180.32,
+                        "carbohydratesG": 0.6,
+                        "dietaryFiberG": 0,
+                        "sugarsG": 0.08,
+                        "addedSugarsG": 0,
+                        "vitaminDMcg": 0,
+                        "calciumMg": 0,
+                        "ironMg": 0,
+                        "potassiumMg": 21.28,
+                        "vitaminAMcg": 0,
+                        "vitaminCMg": 0,
+                        "allergens": [],
+                        "glutenFree": false,
+                        "organic": false
+                    },
+                    "image": {
+                        "webUrl": "https://nix-tag-images.s3.amazonaws.com/2203_thumb.jpg",
+                        "contentType": "image/jpeg"
+                    }
+                },
+                "blockchain": "arweave"
+            },
+            "field_descriptions": {
+                "basic.name": "Food item name (required)",
+                "basic.date": "Unix timestamp (default: current time)",
+                "basic.language": "Language code (default: 'en')",
+                "basic.nsfw": "Boolean for adult content (default: false)",
+                "basic.webUrl": "Optional source URL",
+                "nutritionalInfo.standardAmount": "Standard serving amount (default: 1)",
+                "nutritionalInfo.standardUnit": "Standard serving unit (default: 'unit')",
+                "nutritionalInfo.calories": "Calories per serving",
+                "nutritionalInfo.proteinG": "Protein in grams",
+                "nutritionalInfo.fatG": "Total fat in grams",
+                "nutritionalInfo.saturatedFatG": "Saturated fat in grams",
+                "nutritionalInfo.transFatG": "Trans fat in grams",
+                "nutritionalInfo.cholesterolMg": "Cholesterol in milligrams",
+                "nutritionalInfo.sodiumMg": "Sodium in milligrams",
+                "nutritionalInfo.carbohydratesG": "Total carbohydrates in grams",
+                "nutritionalInfo.dietaryFiberG": "Dietary fiber in grams",
+                "nutritionalInfo.sugarsG": "Total sugars in grams",
+                "nutritionalInfo.addedSugarsG": "Added sugars in grams",
+                "nutritionalInfo.vitaminDMcg": "Vitamin D in micrograms",
+                "nutritionalInfo.calciumMg": "Calcium in milligrams",
+                "nutritionalInfo.ironMg": "Iron in milligrams",
+                "nutritionalInfo.potassiumMg": "Potassium in milligrams",
+                "nutritionalInfo.vitaminAMcg": "Vitamin A in micrograms",
+                "nutritionalInfo.vitaminCMg": "Vitamin C in milligrams",
+                "nutritionalInfo.allergens": "Array of allergen strings",
+                "nutritionalInfo.glutenFree": "Boolean indicating if gluten-free",
+                "nutritionalInfo.organic": "Boolean indicating if organic",
+                "image.webUrl": "URL to food image",
+                "image.contentType": "Image MIME type",
+                "blockchain": "Target blockchain ('arweave' or 'turbo')"
+            }
+        };
+
+        res.status(200).json(nutritionalInfoSchema);
+    } catch (error) {
+        console.error('Error generating nutritional info schema:', error);
+        res.status(500).json({ error: 'Failed to generate nutritional info schema' });
+    }
+});
+
 // Add newNutritionalInfo endpoint for publishing nutritional info records
 router.post('/newNutritionalInfo', async (req, res) => {
     try {
@@ -2052,7 +2143,7 @@ router.post('/newNutritionalInfo', async (req, res) => {
         const blockchain = req.body.blockchain || 'arweave';
         let recordType = 'nutritionalInfo';
 
-        // Map the input format to the internal format
+        // Map the input format to the correct template format (camelCase)
         const nutritionalInfoRecord = {
             basic: {
                 name: inputData.basic?.name || 'Nutritional Info Record',
@@ -2063,27 +2154,28 @@ router.post('/newNutritionalInfo', async (req, res) => {
                 tagItems: inputData.basic?.tagItems || []
             },
             nutritionalInfo: {
-                // Map camelCase to snake_case for internal consistency
-                standard_amount: inputData.nutritionalInfo?.standardAmount || 1,
-                standard_unit: inputData.nutritionalInfo?.standardUnit || 'unit',
+                // Use camelCase field names to match the template
+                standardAmount: inputData.nutritionalInfo?.standardAmount || 1,
+                standardUnit: inputData.nutritionalInfo?.standardUnit || 'unit',
                 calories: inputData.nutritionalInfo?.calories || 0,
-                protein_g: inputData.nutritionalInfo?.proteinG || 0,
-                fat_g: inputData.nutritionalInfo?.fatG || 0,
-                saturated_fat_g: inputData.nutritionalInfo?.saturatedFatG || 0,
-                trans_fat_g: inputData.nutritionalInfo?.transFatG || 0,
-                cholesterol_mg: inputData.nutritionalInfo?.cholesterolMg || 0,
-                sodium_mg: inputData.nutritionalInfo?.sodiumMg || 0,
-                carbohydrates_g: inputData.nutritionalInfo?.carbohydratesG || 0,
-                dietary_fiber_g: inputData.nutritionalInfo?.dietaryFiberG || 0,
-                sugars_g: inputData.nutritionalInfo?.sugarsG || 0,
-                added_sugars_g: inputData.nutritionalInfo?.addedSugarsG || 0,
-                vitamin_d_mcg: inputData.nutritionalInfo?.vitaminDMcg || 0,
-                calcium_mg: inputData.nutritionalInfo?.calciumMg || 0,
-                iron_mg: inputData.nutritionalInfo?.ironMg || 0,
-                potassium_mg: inputData.nutritionalInfo?.potassiumMg || 0,
-                vitamin_a_mcg: inputData.nutritionalInfo?.vitaminAMcg || 0,
-                vitamin_c_mg: inputData.nutritionalInfo?.vitaminCMg || 0,
+                proteinG: inputData.nutritionalInfo?.proteinG || 0,
+                fatG: inputData.nutritionalInfo?.fatG || 0,
+                saturatedFatG: inputData.nutritionalInfo?.saturatedFatG || 0,
+                transFatG: inputData.nutritionalInfo?.transFatG || 0,
+                cholesterolMg: inputData.nutritionalInfo?.cholesterolMg || 0,
+                sodiumMg: inputData.nutritionalInfo?.sodiumMg || 0,
+                carbohydratesG: inputData.nutritionalInfo?.carbohydratesG || 0,
+                dietaryFiberG: inputData.nutritionalInfo?.dietaryFiberG || 0,
+                sugarsG: inputData.nutritionalInfo?.sugarsG || 0,
+                addedSugarsG: inputData.nutritionalInfo?.addedSugarsG || 0,
+                vitaminDMcg: inputData.nutritionalInfo?.vitaminDMcg || 0,
+                calciumMg: inputData.nutritionalInfo?.calciumMg || 0,
+                ironMg: inputData.nutritionalInfo?.ironMg || 0,
+                potassiumMg: inputData.nutritionalInfo?.potassiumMg || 0,
+                vitaminAMcg: inputData.nutritionalInfo?.vitaminAMcg || 0,
+                vitaminCMg: inputData.nutritionalInfo?.vitaminCMg || 0,
                 allergens: inputData.nutritionalInfo?.allergens || [],
+                glutenFree: inputData.nutritionalInfo?.glutenFree || false,
                 organic: inputData.nutritionalInfo?.organic || false
             }
         };
