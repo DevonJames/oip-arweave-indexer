@@ -958,25 +958,40 @@ router.post('/newRecipe', async (req, res) => {
     return parsed;
   });
 
-  // Use the cleaned ingredient names for nutritional lookup
-  const ingredientNames = parsedIngredients.map(parsed => {
-    // Remove all commas and extra whitespace, convert to lowercase
-    const normalizedIngredientName = parsed.ingredient.trim().toLowerCase().replace(/,/g, '').replace(/\s+/g, ' ');
-    return normalizedIngredientName;
-  });
-  
-  // Store the comments for the recipe record
+  // Separate ingredients that are didTx values from those that need lookup
+  const ingredientNames = []; // Only names that need lookup
+  const ingredientNamesForDisplay = []; // All cleaned names for display
   const ingredientComments = parsedIngredients.map(parsed => parsed.comment);
+  const ingredientDidTxMap = {}; // Map original ingredient string to didTx if it's already a didTx
+  
+  parsedIngredients.forEach((parsed, index) => {
+    const originalString = parsed.originalString;
+    const ingredient = parsed.ingredient;
+    
+    // Check if this ingredient is already a didTx value
+    if (ingredient.startsWith('did:')) {
+      // This is already a didTx value, store it directly
+      ingredientDidTxMap[originalString] = ingredient;
+      ingredientNamesForDisplay.push(ingredient); // For display purposes
+      console.log(`Found existing didTx at index ${index}: ${ingredient}`);
+    } else {
+      // This is a name that needs to be looked up
+      const normalizedName = ingredient.trim().toLowerCase().replace(/,/g, '').replace(/\s+/g, ' ');
+      ingredientNames.push(normalizedName);
+      ingredientNamesForDisplay.push(normalizedName);
+      console.log(`Need to lookup ingredient at index ${index}: ${normalizedName}`);
+    }
+  });
   
   const ingredientAmounts = ingredients.map(ing => ing.amount ?? 1);
   const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
 
   console.log('Parsed ingredients:', parsedIngredients);
-  console.log('Cleaned ingredient names for lookup:', ingredientNames);
+  console.log('Ingredient names for lookup only:', ingredientNames);
+  console.log('All ingredient names for display:', ingredientNamesForDisplay);
   console.log('Ingredient comments:', ingredientComments);
   console.log('Ingredient units:', ingredientUnits);
-  console.log('Ingredient names to lookup:', ingredientNames);
-  console.log('Existing didTx values:', ingredientDidTxValues);
+  console.log('Existing didTx values:', ingredientDidTxMap);
     
   // Define ingredient synonyms for better matching
   const synonymMap = {
@@ -1263,18 +1278,38 @@ router.post('/newRecipe', async (req, res) => {
     return null;
   }
 
-  // Create arrays for the function call
+  // Create arrays for the function call - only process names that need lookup
   const originalIngredientNames = parsedIngredients.map(parsed => parsed.originalString);
+  const originalNamesNeedingLookup = [];
+  const cleanedNamesNeedingLookup = [];
   
   // Create a mapping from original names to cleaned names
   const nameMapping = {};
   parsedIngredients.forEach(parsed => {
     nameMapping[parsed.originalString] = parsed.ingredient;
+    
+    // Only add to lookup arrays if it's not already a didTx
+    if (!parsed.ingredient.startsWith('did:')) {
+      originalNamesNeedingLookup.push(parsed.originalString);
+      const normalizedName = parsed.ingredient.trim().toLowerCase().replace(/,/g, '').replace(/\s+/g, ' ');
+      cleanedNamesNeedingLookup.push(normalizedName);
+    }
   });
   
-  const ingredientRecords = await fetchIngredientRecordData(ingredientNames, originalIngredientNames);
+  console.log('Names needing lookup:', cleanedNamesNeedingLookup);
+  console.log('Original names needing lookup:', originalNamesNeedingLookup);
+  
+  // Only call lookup function if there are names that need lookup
+  let ingredientRecords = { ingredientDidRefs: {}, nutritionalInfo: [] };
+  
+  if (cleanedNamesNeedingLookup.length > 0) {
+    ingredientRecords = await fetchIngredientRecordData(cleanedNamesNeedingLookup, originalNamesNeedingLookup);
+  } else {
+    console.log('No ingredients need lookup - all are already didTx values');
+  }
   console.log('Ingredient records:', ingredientRecords);
   
+  // Only check for missing ingredients among those that needed lookup (not didTx values)
   let missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
     name => ingredientRecords.ingredientDidRefs[name] === null
   );
@@ -1337,31 +1372,34 @@ router.post('/newRecipe', async (req, res) => {
 
     // Update missingIngredientNames to remove those that were successfully created
     missingIngredientNames = missingIngredientNames.filter((name, index) => !nutritionalInfoArray[index]);
+    
+    // Check for empty values in ingredientUnits and assign standard_unit from nutritionalInfoArray
+    missingIngredientNames.forEach((originalName, index) => {
+      const cleanedName = nameMapping[originalName];
+      const originalIndex = originalIngredientNames.findIndex(name => name === originalName);
+
+      console.log(`Processing missing ingredient: ${cleanedName} (original: ${originalName}), Found at original index: ${originalIndex}`);
+
+      if (originalIndex !== -1 && !ingredientUnits[originalIndex]) {
+          const nutritionalInfo = nutritionalInfoArray[index];
+          console.log(`Found nutritional info for: ${cleanedName}`, nutritionalInfo);
+
+          if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
+              ingredientUnits[originalIndex] = nutritionalInfo.nutritionalInfo.standardUnit || 'unit';
+              ingredientAmounts[originalIndex] *= nutritionalInfo.nutritionalInfo.standardAmount || 1;
+
+              console.log(`Updated Units: ${ingredientUnits[originalIndex]}, Updated Amounts: ${ingredientAmounts[originalIndex]}`);
+          } else {
+              console.log(`No nutritional info found for: ${cleanedName}`);
+              ingredientUnits[originalIndex] = 'unit'; // Fallback unit
+          }
+      } else {
+          console.log(`Ingredient not found in original array or already has a unit: ${cleanedName}`);
+      }
+    });
+  } else {
+    console.log('No missing ingredients to process');
   }
-  // Check for empty values in ingredientUnits and assign standard_unit from nutritionalInfoArray
-  missingIngredientNames.forEach((originalName, index) => {
-    const cleanedName = nameMapping[originalName];
-    const unitIndex = ingredientNames.findIndex(ingredientName => ingredientName === cleanedName);
-
-    console.log(`Processing missing ingredient: ${cleanedName} (original: ${originalName}), Found at index: ${unitIndex}`);
-
-    if (unitIndex !== -1 && !ingredientUnits[unitIndex]) {
-        const nutritionalInfo = nutritionalInfoArray[index];
-        console.log(`Found nutritional info for: ${cleanedName}`, nutritionalInfo);
-
-        if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
-            ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standardUnit || 'unit';
-            ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standardAmount || 1;
-
-            console.log(`Updated Units: ${ingredientUnits[unitIndex]}, Updated Amounts: ${ingredientAmounts[unitIndex]}`);
-        } else {
-            console.log(`No nutritional info found for: ${cleanedName}`);
-            ingredientUnits[unitIndex] = 'unit'; // Fallback unit
-        }
-    } else {
-        console.log(`Ingredient not found in ingredientNames or already has a unit: ${cleanedName}`);
-    }
-});
   // You can now use nutritionalInfoArray as needed
 
   console.log('Ingredient Did Refs:', ingredientRecords);
@@ -1401,7 +1439,8 @@ router.post('/newRecipe', async (req, res) => {
     const notes = record.recipe.notes || null;
 
     console.log('Missing Ingredients:', missingIngredientNames);
-    console.log('Original Ingredient Names:', ingredientNames);
+    console.log('Original Ingredient Names:', originalIngredientNames);
+    console.log('Names needing lookup:', cleanedNamesNeedingLookup);
     console.log('Units Before Assignment:', ingredientUnits);
     console.log('Amounts Before Assignment:', ingredientAmounts);
     console.log('Ingredient Did Refs:', ingredientRecords);
@@ -1412,10 +1451,18 @@ router.post('/newRecipe', async (req, res) => {
 // Build final ingredientDRefs array by combining looked-up values with existing didTx values
 let ingredientDRefs = [];
 originalIngredientNames.forEach((originalName, index) => {
-  // get the ingredientDidRef for each ingredient and put it in an array so that we can use it in the recipeData object
-  const ingredientDidRef = ingredientRecords.ingredientDidRefs[originalName] || null;
-  ingredientDRefs.push(ingredientDidRef);
-  console.log(`Ingredient DID Ref for ${originalName}:`, ingredientDidRef);
+  // Check if this ingredient is already a didTx value
+  if (ingredientDidTxMap[originalName]) {
+    // Use the existing didTx value directly
+    const didTx = ingredientDidTxMap[originalName];
+    ingredientDRefs.push(didTx);
+    console.log(`Using existing didTx for ${originalName}: ${didTx}`);
+  } else {
+    // Get the looked-up didTx value
+    const ingredientDidRef = ingredientRecords.ingredientDidRefs[originalName] || null;
+    ingredientDRefs.push(ingredientDidRef);
+    console.log(`Looked-up DID Ref for ${originalName}: ${ingredientDidRef}`);
+  }
 });
 
 console.log('Final Units:', ingredientUnits);
