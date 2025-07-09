@@ -421,11 +421,163 @@
             min-height: 600px;
         }
 
+        /* Records Header Styles */
+        #voice-records-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            gap: 20px;
+        }
+
+        .records-header-left {
+            flex: 1;
+        }
+
+        .records-header-right {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .header-control-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+        }
+
+        .header-control-group label {
+            font-size: 0.9rem;
+            color: #555;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .header-control-group select {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+        }
+
+        /* Records Grid View */
         .records-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
             gap: 20px;
             margin-top: 20px;
+        }
+
+        /* Records List View */
+        .records-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .record-card.list-view {
+            display: flex;
+            gap: 20px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f9f9f9;
+            transition: all 0.3s ease;
+            max-height: 180px;
+            overflow: hidden;
+        }
+
+        .record-card.list-view:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
+        }
+
+        .record-card.list-view .media-preview {
+            width: 140px;
+            height: 100px;
+            flex-shrink: 0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .record-card.list-view .record-content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .record-card.list-view .record-header {
+            margin-bottom: 8px;
+        }
+
+        .record-card.list-view .record-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            line-height: 1.3;
+        }
+
+        .record-card.list-view .record-description {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: #666;
+            margin-bottom: 10px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .record-card.list-view .list-meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+
+        .record-card.list-view .list-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .record-card.list-view .play-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .record-card.list-view .tags-container {
+            margin: 8px 0 0 0;
+        }
+
+        .record-card.list-view .tag-chip {
+            font-size: 10px;
+            padding: 2px 6px;
+        }
+
+        /* Podcast List View Specific */
+        .podcast-show-card.list-view {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #667eea;
+        }
+
+        .podcast-show-card.list-view .podcast-show-header {
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .podcast-show-card.list-view .podcast-show-header img {
+            width: 60px;
+            height: 60px;
+        }
+
+        .record-card.list-view .podcast-date {
+            font-size: 11px;
         }
 
         .record-card {
@@ -1105,9 +1257,21 @@
             transform: scale(1.02);
         }
 
-        /* Ensure body has padding for fixed audio player */
+                    /* Ensure body has padding for fixed audio player */
         body {
             margin-bottom: 80px;
+        }
+        
+        /* Main content adjustments for fixed header on mobile */
+        @media (max-width: 768px) {
+            .main-content {
+                margin-top: 0;
+                padding-top: 0;
+            }
+            
+            .container {
+                padding: 15px;
+            }
         }
 
         /* AI Chat Integration Styles */
@@ -2067,32 +2231,63 @@
         }
 
         @media (max-width: 768px) {
+            .header {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 1001;
+            }
+            
             .header-content {
-                flex-direction: column;
-                height: auto;
-                padding: 15px;
-                gap: 15px;
+                flex-direction: row;
+                height: 64px;
+                padding: 8px 15px;
+                gap: 10px;
+                align-items: center;
+                justify-content: space-between;
             }
             
             .logo {
-                font-size: 1.5rem;
-                letter-spacing: 2px;
+                font-size: 1.2rem;
+                letter-spacing: 1px;
+                flex: 1;
             }
             
             .logo-icon {
-                width: 32px;
-                height: 32px;
+                width: 28px;
+                height: 28px;
             }
             
             .nav-tabs {
-                order: -1;
-                justify-content: center;
-                width: 100%;
+                display: flex;
+                gap: 4px;
+                flex-shrink: 0;
+            }
+            
+            .nav-tab {
+                padding: 6px 12px;
+                font-size: 13px;
             }
             
             .auth-section {
-                justify-content: center;
-                width: 100%;
+                flex-shrink: 0;
+            }
+            
+            .ai-drawer-toggle {
+                padding: 6px 10px;
+                font-size: 12px;
+                gap: 4px;
+            }
+            
+            .ai-drawer-toggle svg {
+                width: 14px;
+                height: 14px;
+            }
+            
+            /* Add padding to body to account for fixed header */
+            body {
+                padding-top: 64px;
             }
             
             /* Header Search Mobile */
@@ -2106,8 +2301,10 @@
             .ai-drawer {
                 width: 100%;
                 right: -100%;
-                top: 120px;
-                height: calc(100vh - 120px);
+                top: 64px;
+                height: calc(100vh - 64px);
+                position: fixed;
+                z-index: 9999;
             }
             
             .main-content.drawer-open {
@@ -2115,10 +2312,40 @@
                 transform: translateX(-100%);
             }
             
+            /* Mobile AI drawer content adjustments */
+            .ai-drawer-content {
+                height: calc(100% - 160px); /* More space for header and input */
+                display: flex;
+                flex-direction: column;
+            }
+            
+            .chat-conversation {
+                flex: 1;
+                min-height: 150px;
+                max-height: calc(100vh - 400px); /* Reduced to make room for input */
+                overflow-y: auto;
+                margin-bottom: 20px;
+            }
+            
+            .ai-drawer.open .chat-input-container {
+                position: fixed;
+                bottom: 100px; /* Move up from bottom */
+                left: 0;
+                right: 0;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 20px;
+                border-top: 2px solid rgba(255, 255, 255, 0.3);
+                flex-shrink: 0;
+                z-index: 10000;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+            }
+            
             /* Welcome Interface Mobile */
             .welcome-interface {
                 padding: 20px 15px;
-                min-height: calc(100vh - 120px);
+                min-height: calc(100vh - 64px);
+                margin-top: 0;
             }
             
             .welcome-title {
@@ -2168,8 +2395,55 @@
                 flex: none;
             }
             
+            /* Records Header Mobile */
+            #voice-records-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 15px;
+            }
+            
+            .records-header-right {
+                justify-content: flex-end;
+                gap: 10px;
+            }
+            
+            .header-control-group {
+                min-width: 100px;
+            }
+            
+            .header-control-group select {
+                font-size: 12px;
+                padding: 5px 8px;
+            }
+            
             .records-grid {
                 grid-template-columns: 1fr;
+            }
+            
+            /* List View Mobile */
+            .records-list {
+                gap: 10px;
+            }
+            
+            .record-card.list-view {
+                flex-direction: column;
+                max-height: none;
+                gap: 15px;
+            }
+            
+            .record-card.list-view .media-preview {
+                width: 100%;
+                height: 120px;
+            }
+            
+            .record-card.list-view .list-meta-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            
+            .record-card.list-view .list-controls {
+                justify-content: center;
             }
             
             .field-row {
@@ -2190,30 +2464,113 @@
             /* Mobile adjustments for AI drawer */
             .ai-drawer-header {
                 padding: 15px;
+                position: sticky;
+                top: 0;
+                background: inherit;
+                z-index: 10001;
             }
             
             .ai-settings {
                 flex-direction: column;
                 gap: 10px;
+                margin-bottom: 15px;
             }
             
             .ai-setting {
-                display: block !important;
-                margin-right: 0 !important;
+                flex: 1;
+                min-width: auto;
+            }
+            
+            /* AI status area adjustments */
+            .ai-drawer.open .ai-status {
+                position: fixed;
+                bottom: 200px; /* Above the input area */
+                left: 20px;
+                right: 20px;
+                z-index: 9999;
+                text-align: center;
+                background: rgba(102, 126, 234, 0.9);
+                border-radius: 8px;
+                margin: 0;
             }
             
             .chat-input-row {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 8px;
+                flex-direction: row;
+                align-items: flex-end;
+                gap: 10px;
+                margin-bottom: 0;
+            }
+            
+            #ai-chat-input {
+                flex: 1;
+                min-height: 44px;
+                max-height: 120px;
+                font-size: 16px;
+                padding: 12px 16px;
             }
             
             .chat-send-btn {
-                width: 100%;
+                flex-shrink: 0;
+                min-width: 80px;
+                height: 44px;
+                padding: 8px 16px;
+                white-space: nowrap;
+                font-size: 14px;
+            }
+            
+            .mic-btn {
+                flex-shrink: 0;
+                width: 44px;
+                height: 44px;
+                min-width: 44px;
+                min-height: 44px;
+                padding: 10px;
+                margin-left: 0;
+                margin-right: 10px;
+            }
+            
+            .mic-btn svg {
+                width: 20px;
+                height: 20px;
             }
             
             .message-content {
-                max-width: 95%;
+                max-width: 85%;
+            }
+            
+            /* Ensure input area stays visible */
+            .ai-drawer.open {
+                height: 100vh;
+                height: 100dvh; /* Use dvh for better mobile support */
+            }
+            
+            /* Applied filters adjustments for mobile */
+            .applied-filters-display {
+                position: relative;
+                margin-bottom: 15px;
+                z-index: 9998;
+            }
+            
+            /* Only apply fixed positioning on small screens */
+            @media (max-width: 768px) and (max-height: 800px) {
+                .ai-drawer.open .chat-input-container {
+                    bottom: 120px; /* Even higher on smaller screens */
+                }
+                
+                .ai-drawer.open .ai-status {
+                    bottom: 220px;
+                }
+            }
+            
+            /* Fix for iOS Safari bottom bar */
+            @supports (-webkit-touch-callout: none) {
+                .ai-drawer.open {
+                    height: calc(100vh - env(safe-area-inset-bottom));
+                }
+                
+                .ai-drawer.open .chat-input-container {
+                    bottom: calc(100px + env(safe-area-inset-bottom));
+                }
             }
         }
 
@@ -2588,16 +2945,6 @@
                     </div>
                     
                     <div class="filter-group">
-                        <label for="voice-sort-by">Sort By</label>
-                        <select id="voice-sort-by" onchange="applyVoiceFilters()">
-                            <option value="inArweaveBlock:desc">Block (Newest)</option>
-                            <option value="inArweaveBlock:asc">Block (Oldest)</option>
-                            <option value="date:desc" selected>Date (Newest)</option>
-                            <option value="date:asc">Date (Oldest)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="filter-group">
                         <label for="voice-resolve-depth" title="Higher values resolve more linked records. Set to 1+ to see recipe images.">
                             Resolve Depth
                             <span style="opacity: 0.6; font-size: 0.8rem;">(?)</span>
@@ -2679,8 +3026,28 @@
             <!-- Records Display (Enhanced Version) -->
             <div class="records-container">
                 <div id="voice-records-header">
-                    <h2>OIP Records</h2>
-                    <div id="voice-pagination-info" class="pagination-info"></div>
+                    <div class="records-header-left">
+                        <h2>OIP Records</h2>
+                        <div id="voice-pagination-info" class="pagination-info"></div>
+                    </div>
+                    <div class="records-header-right">
+                        <div class="header-control-group">
+                            <label for="voice-sort-by">Sort By</label>
+                            <select id="voice-sort-by" onchange="applyVoiceFilters()">
+                                <option value="inArweaveBlock:desc">Block (Newest)</option>
+                                <option value="inArweaveBlock:asc">Block (Oldest)</option>
+                                <option value="date:desc" selected>Date (Newest)</option>
+                                <option value="date:asc">Date (Oldest)</option>
+                            </select>
+                        </div>
+                        <div class="header-control-group">
+                            <label for="voice-view-as">View As</label>
+                            <select id="voice-view-as" onchange="changeViewMode()">
+                                <option value="grid">Grid</option>
+                                <option value="list">List</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 
                 <div id="voice-loading-indicator" class="loading">
@@ -3019,14 +3386,14 @@
             const grid = document.getElementById('categories-grid');
             if (!grid) return;
             
-            // Icon mapping for different record types
+            // Icon mapping for different record types - using SVG icons
             const iconMap = {
-                'post': '📝',
+                'post': '<img src="noun-copywriting-4038314-9B9B9B.svg" alt="Post" style="width: 40px; height: 40px;">',
                 'video': '📹', 
-                'audio': '🎵',
-                'recipe': '🍳',
+                'audio': '<img src="noun-speaker-1445776-9B9B9B.svg" alt="Audio" style="width: 40px; height: 40px;">',
+                'recipe': '<img src="noun-plate-4303489-9B9B9B.svg" alt="Recipe" style="width: 40px; height: 40px;">',
                 'workout': '💪',
-                'podcast': '🎙️',
+                'podcast': '<img src="noun-podcast-7882058-9B9B9B.svg" alt="Podcast" style="width: 40px; height: 40px;">',
                 'movie': '🎬',
                 'music': '🎵',
                 'book': '📚',
@@ -3037,7 +3404,7 @@
             };
             
             // Record types to exclude from home page buttons
-            const excludedTypes = ['deletemessage', 'replyto', 'nutritionalinfo', 'image', 'text', 'audioitems', 'imageitems', 'videoitems'];
+            const excludedTypes = ['deletemessage', 'replyto', 'nutritionalinfo', 'image', 'text', 'audioitems', 'imageitems', 'videoitems', '0', 'featuredimage', 'delete'];
             
             grid.innerHTML = '';
             
@@ -4043,9 +4410,9 @@
         /**
          * Create a modern, media-focused record card with collapsible technical details
          */
-        function createRecordCard(record, recordIndex) {
+        function createRecordCard(record, recordIndex, isListView = false) {
             const card = document.createElement('div');
-            card.className = 'record-card';
+            card.className = isListView ? 'record-card list-view' : 'record-card';
             
             const recordType = record.oip?.recordType || 'unknown';
             const basicData = record.data?.basic || {};
@@ -4055,46 +4422,89 @@
             const mediaContent = extractMediaContent(record);
             const dateDisplay = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
             
-            // Build modern media card
-            card.innerHTML = `
-                <div class="record-header">
-                    <div class="record-type">${recordType}</div>
-                    <div class="record-date">${dateDisplay}</div>
-                </div>
-                
-                ${renderMediaPreview(mediaContent, recordIndex)}
-                
-                <div class="record-content">
-                    ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+            if (isListView) {
+                // List view layout - horizontal layout with thumbnail on left
+                card.innerHTML = `
+                    ${renderMediaPreview(mediaContent, recordIndex)}
                     
-                    ${renderMediaControls(mediaContent, record, recordIndex)}
-                    ${renderArticleTextButton(mediaContent, recordIndex)}
-                    ${renderWebUrlButton(mediaContent)}
-                    ${renderPodcastCitations(mediaContent, recordIndex)}
-                </div>
-                
-                ${createTagsDisplay(basicData.tagItems)}
-                
-                <div class="record-footer">
-                    <button class="show-structure-btn" onclick="toggleRecordStructure(${recordIndex})" title="Show technical record structure">
-                        <span class="structure-icon">🔧</span> Show Record Structure
-                    </button>
-                    <div class="record-did">DID: ${truncateText(record.oip?.didTx || 'Unknown', 20)}</div>
-                </div>
-                
-                <div id="structure-${recordIndex}" class="record-structure hidden">
-                    <div class="structure-header">
-                        <h4>🔧 Technical Record Structure</h4>
-                        <div class="template-info">
-                            <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
-                            <strong>Record Type:</strong> ${recordType}<br>
-                            <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth} 
-                            ${mediaContent.unresolvedImageDref ? '<br><span style="color: #dc3545;">⚠️ Images require resolve depth ≥ 1</span>' : ''}
+                    <div class="record-content-area">
+                        <div class="record-header">
+                            <div class="record-type">${recordType}</div>
+                            <div class="record-date">${dateDisplay}</div>
                         </div>
+                        
+                        ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+                        
+                        <div class="list-meta-row">
+                            <div class="list-controls">
+                                ${renderMediaControls(mediaContent, record, recordIndex)}
+                                ${renderArticleTextButton(mediaContent, recordIndex)}
+                                ${renderWebUrlButton(mediaContent)}
+                            </div>
+                            <button class="show-structure-btn" onclick="toggleRecordStructure(${recordIndex})" title="Show technical record structure">
+                                🔧
+                            </button>
+                        </div>
+                        
+                        ${createTagsDisplay(basicData.tagItems)}
+                        ${renderPodcastCitations(mediaContent, recordIndex)}
                     </div>
-                    ${renderAllTemplateData(record, templatesUsed)}
-                </div>
-            `;
+                    
+                    <div id="structure-${recordIndex}" class="record-structure hidden">
+                        <div class="structure-header">
+                            <h4>🔧 Technical Record Structure</h4>
+                            <div class="template-info">
+                                <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
+                                <strong>Record Type:</strong> ${recordType}<br>
+                                <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth} 
+                                ${mediaContent.unresolvedImageDref ? '<br><span style="color: #dc3545;">⚠️ Images require resolve depth ≥ 1</span>' : ''}
+                            </div>
+                        </div>
+                        ${renderAllTemplateData(record, templatesUsed)}
+                    </div>
+                `;
+            } else {
+                // Grid view layout - vertical layout (original)
+                card.innerHTML = `
+                    <div class="record-header">
+                        <div class="record-type">${recordType}</div>
+                        <div class="record-date">${dateDisplay}</div>
+                    </div>
+                    
+                    ${renderMediaPreview(mediaContent, recordIndex)}
+                    
+                    <div class="record-content">
+                        ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+                        
+                        ${renderMediaControls(mediaContent, record, recordIndex)}
+                        ${renderArticleTextButton(mediaContent, recordIndex)}
+                        ${renderWebUrlButton(mediaContent)}
+                        ${renderPodcastCitations(mediaContent, recordIndex)}
+                    </div>
+                    
+                    ${createTagsDisplay(basicData.tagItems)}
+                    
+                    <div class="record-footer">
+                        <button class="show-structure-btn" onclick="toggleRecordStructure(${recordIndex})" title="Show technical record structure">
+                            <span class="structure-icon">🔧</span> Show Record Structure
+                        </button>
+                        <div class="record-did">DID: ${truncateText(record.oip?.didTx || 'Unknown', 20)}</div>
+                    </div>
+                    
+                    <div id="structure-${recordIndex}" class="record-structure hidden">
+                        <div class="structure-header">
+                            <h4>🔧 Technical Record Structure</h4>
+                            <div class="template-info">
+                                <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
+                                <strong>Record Type:</strong> ${recordType}<br>
+                                <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth} 
+                                ${mediaContent.unresolvedImageDref ? '<br><span style="color: #dc3545;">⚠️ Images require resolve depth ≥ 1</span>' : ''}
+                            </div>
+                        </div>
+                        ${renderAllTemplateData(record, templatesUsed)}
+                    </div>
+                `;
+            }
             
             return card;
         }
@@ -6547,6 +6957,9 @@
                 // Initialize multi-tag filtering system
                 clearAllTagFilters();
                 
+                // Initialize view mode
+                document.getElementById('voice-view-as').value = currentViewMode;
+                
                 // Initialize STT features
                 
                 updateAIStatus('Ready to answer questions!');
@@ -6556,7 +6969,7 @@
                 // Load initial records for voice tab
                 await loadVoiceRecords(true);
                 
-                console.log('[Chat] AI chat features initialized successfully with multi-tag system');
+                console.log('[Chat] AI chat features initialized successfully with multi-tag system and view modes');
                 
                 return Promise.resolve();
                 
@@ -7497,6 +7910,45 @@
 
         // No conversation mode needed for text chat
 
+        // View Mode Management
+        let currentViewMode = 'grid'; // Default view mode
+        const viewModeDefaults = {
+            'podcast': 'list',
+            'post': 'grid', 
+            'recipe': 'grid',
+            'video': 'grid',
+            'audio': 'list',
+            'image': 'grid',
+            'text': 'list',
+            'workout': 'grid'
+        };
+
+        function changeViewMode() {
+            const newMode = document.getElementById('voice-view-as').value;
+            if (newMode !== currentViewMode) {
+                currentViewMode = newMode;
+                
+                // Re-render current records with new view mode
+                if (currentRecords.length > 0) {
+                    displayVoiceRecords(currentRecords, false);
+                }
+                
+                console.log(`[View Mode] Changed to ${newMode} view`);
+            }
+        }
+
+        function setDefaultViewMode() {
+            const recordType = currentFilters.recordType;
+            const defaultMode = viewModeDefaults[recordType] || 'grid';
+            
+            // Only change if we have a specific record type filter
+            if (recordType && currentViewMode !== defaultMode) {
+                currentViewMode = defaultMode;
+                document.getElementById('voice-view-as').value = defaultMode;
+                console.log(`[View Mode] Set default ${defaultMode} view for record type: ${recordType}`);
+            }
+        }
+
         // Voice Filtering Functions
         // ====== ENHANCED VOICE FILTER FUNCTIONS ======
         
@@ -7652,6 +8104,7 @@
         
         function applyVoiceFilters() {
             collectVoiceFilters();
+            setDefaultViewMode(); // Set appropriate default view mode based on record type
             loadVoiceRecords(true);
         }
 
@@ -7751,6 +8204,10 @@
             document.getElementById('voice-include-sigs-toggle').classList.remove('active');
             document.getElementById('voice-include-pubkeys-toggle').classList.remove('active');
             document.getElementById('voice-includes-audio-toggle').classList.remove('active');
+            
+            // Reset view mode to default grid
+            currentViewMode = 'grid';
+            document.getElementById('voice-view-as').value = 'grid';
             
             // Clear DID TX error
             clearDidTxError();
@@ -7900,10 +8357,17 @@
          * Display voice records using enhanced dynamic template rendering
          */
         function displayVoiceRecords(records, append = false) {
-            const grid = document.getElementById('voice-records-grid');
+            const container = document.getElementById('voice-records-grid');
             
             if (!append) {
-                grid.innerHTML = '';
+                container.innerHTML = '';
+            }
+            
+            // Update container class based on view mode
+            if (currentViewMode === 'list') {
+                container.className = 'records-list';
+            } else {
+                container.className = 'records-grid';
             }
             
             // Group podcast records by show
@@ -7925,25 +8389,37 @@
             const startIndex = currentRecords.length - records.length;
             let recordIndex = startIndex;
             
-            // Render podcast shows as grouped cards
+            // Render podcast shows
             Object.keys(podcastShows).forEach(showName => {
                 const episodes = podcastShows[showName];
-                const showCard = createPodcastShowCard(showName, episodes, recordIndex);
-                grid.appendChild(showCard);
-                recordIndex += episodes.length;
+                let showCard;
+                
+                if (currentViewMode === 'list') {
+                    // In list view, render individual podcast episodes instead of grouped shows
+                    episodes.forEach(episode => {
+                        const episodeCard = createRecordCard(episode, recordIndex, true);
+                        container.appendChild(episodeCard);
+                        recordIndex++;
+                    });
+                } else {
+                    // In grid view, use grouped podcast show cards
+                    showCard = createPodcastShowCard(showName, episodes, recordIndex);
+                    container.appendChild(showCard);
+                    recordIndex += episodes.length;
+                }
             });
             
-            // Render non-podcast records normally
+            // Render non-podcast records
             nonPodcastRecords.forEach(record => {
-                const card = createRecordCard(record, recordIndex);
-                grid.appendChild(card);
+                const card = createRecordCard(record, recordIndex, currentViewMode === 'list');
+                container.appendChild(card);
                 recordIndex++;
             });
             
-            grid.classList.remove('hidden');
+            container.classList.remove('hidden');
             document.getElementById('voice-no-results').classList.add('hidden');
             
-            console.log(`[Enhanced Display] Rendered ${records.length} records with dynamic templates (${Object.keys(podcastShows).length} podcast shows)`);
+            console.log(`[Enhanced Display] Rendered ${records.length} records in ${currentViewMode} view (${Object.keys(podcastShows).length} podcast shows)`);
         }
 
         function showVoiceNoResults() {
