@@ -17,7 +17,7 @@ module.exports = {
         exercise: "cXvkv5t6Rbs_-KghLW1MePxbyKONOkfjag2q_RIz9Z8",
         workout: "T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE",
         recipe: "SLsJ91-Z82rRBPkDrZlG87aIpbw6zOlmK96nh5uf6G4",
-        nutritionalInfo: "zEML8g9cKrda_wH5eDcI6FkYpx7LNUeYx_KZe1aoqhg",
+        nutritionalInfo: "_xuiAaVKxPL1Dsp-AceCpXqnc0C_WwHC-Ws1vN-cBUs",
         podcastShow: "JQ_gsZucnD5aM9V9ue748R5COGFyOZYstGVSm1iX7rU",
     }
 };
