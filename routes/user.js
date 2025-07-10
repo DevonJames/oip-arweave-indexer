@@ -374,7 +374,7 @@ router.post('/login', async (req, res) => {
 
         const searchResult = await findUserByEmail(email);
 
-        console.log('Search result...', searchResult.hits.hits[0]._source, searchResult.hits.hits[1]._source, searchResult.hits.hits[2]._source);
+        // console.log('Search result...', searchResult.hits.hits[0]._source, searchResult.hits.hits[1]._source, searchResult.hits.hits[2]._source);
 
         const user = searchResult.hits.hits[0]._source;
 

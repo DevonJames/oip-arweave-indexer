@@ -1115,7 +1115,7 @@ async function getRecords(queryParams) {
         summarizeRecipe = false,
         hideDateReadable = false,
         hideNullValues = false,
-        creator_name,
+        // creator_name,
         creator_did_address,
         creatorHandle,
         // txid,
@@ -1124,7 +1124,7 @@ async function getRecords(queryParams) {
         didTxRef,
         tags,
         tagsMatchMode = 'OR', // New parameter: 'AND' or 'OR' (default: 'OR' for backward compatibility)
-        sortBy,
+        sortBy = 'inArweaveBlock:desc',
         recordType,
         limit,
         page,
