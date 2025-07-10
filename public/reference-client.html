@@ -7912,6 +7912,7 @@
 
         // View Mode Management
         let currentViewMode = 'grid'; // Default view mode
+        let tagFilterIndex = 0; // Track multi-tag filter indices
         const viewModeDefaults = {
             'podcast': 'list',
             'post': 'grid', 
@@ -8314,6 +8315,77 @@
             console.log('[Multi-Tag] Cleared all tag filters');
         }
         
+        function setDefaultViewMode() {
+            // Set appropriate default view mode based on record type
+            const recordType = currentFilters.recordType;
+            if (recordType && viewModeDefaults[recordType]) {
+                const defaultMode = viewModeDefaults[recordType];
+                if (currentViewMode !== defaultMode) {
+                    currentViewMode = defaultMode;
+                    const viewAsElement = document.getElementById('voice-view-as');
+                    if (viewAsElement) {
+                        viewAsElement.value = defaultMode;
+                    }
+                    console.log(`[View Mode] Set default view mode for ${recordType}: ${defaultMode}`);
+                }
+            }
+        }
+
+        function getSelectedTags() {
+            // Get all selected tags from the multi-tag filter system
+            const tagSelects = document.querySelectorAll('.tag-filter-select');
+            const selectedTags = [];
+            
+            tagSelects.forEach(select => {
+                const value = select.value.trim();
+                if (value) {
+                    selectedTags.push(value);
+                }
+            });
+            
+            return selectedTags;
+        }
+
+        function addTagFilter() {
+            // Add another tag filter row
+            tagFilterIndex++;
+            const container = document.getElementById('tag-filters-container');
+            
+            const newRow = document.createElement('div');
+            newRow.className = 'tag-filter-row';
+            newRow.setAttribute('data-tag-index', tagFilterIndex);
+            
+            newRow.innerHTML = `
+                <select class="tag-filter-select" onchange="onTagFilterChange(${tagFilterIndex})" data-tag-index="${tagFilterIndex}">
+                    <option value="">Select a tag...</option>
+                </select>
+                <button type="button" class="add-tag-btn" onclick="addTagFilter()" title="Add another tag filter">+</button>
+                <button type="button" class="remove-tag-btn" onclick="removeTagFilter(${tagFilterIndex})" title="Remove this tag filter">×</button>
+            `;
+            
+            container.appendChild(newRow);
+            updateAllTagDropdowns();
+            console.log(`[Multi-Tag] Added tag filter ${tagFilterIndex}`);
+        }
+
+        function removeTagFilter(index) {
+            // Remove a specific tag filter
+            const row = document.querySelector(`[data-tag-index="${index}"]`);
+            if (row) {
+                row.remove();
+                updateAllTagDropdowns();
+                console.log(`[Multi-Tag] Removed tag filter ${index}`);
+            }
+        }
+
+        function onTagFilterChange(index) {
+            // Handle tag filter selection change
+            console.log(`[Multi-Tag] Tag filter ${index} changed`);
+            updateAllTagDropdowns();
+            // Auto-apply filters when tags are selected
+            applyVoiceFilters();
+        }
+
         function applyVoiceFilters() {
             collectVoiceFilters();
             setDefaultViewMode(); // Set appropriate default view mode based on record type
