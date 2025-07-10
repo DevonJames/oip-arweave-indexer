@@ -6,6 +6,13 @@ JWT_SECRET=
 # Arweave Configuration
 WALLET_FILE=config/arweave-keyfile.json
 
+# Turbo SDK Configuration (ArDrive)
+# These environment variables may help resolve ERR_INVALID_URL errors
+# TURBO_API=https://payment.ardrive.io
+# TURBO_LOGIN=https://payment.ardrive.io/login
+# TURBO_UPLOAD_SERVICE_URL=https://upload.ardrive.io
+# TURBO_PAYMENT_SERVICE_URL=https://payment.ardrive.io
+
 # Elasticsearch Configuration
 ELASTICSEARCHHOST=http://elasticsearch:9200
 ELASTICCLIENTUSERNAME=elastic

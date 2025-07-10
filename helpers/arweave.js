@@ -192,7 +192,9 @@ const getCurrentBlockHeight = async () => {
  */
 const upfrontFunding = async (amount, multiplier = 1) => {
     try {
+        console.log(`Starting upfront funding for ${amount} AR...`);
         const turbo = await getTurboArweave();
+        console.log('Turbo SDK obtained successfully for upfront funding');
         
         // Convert amount from AR to Winston (1 AR = 1000000000000 Winston)
         // Use the Turbo SDK's utility functions for proper conversion
@@ -201,6 +203,7 @@ const upfrontFunding = async (amount, multiplier = 1) => {
         const atomicAmount = arweave.ar.arToWinston(amount.toString());
         
         console.log(`Converting ${amount} AR to ${atomicAmount} Winston for funding`);
+        console.log('Calling topUpWithTokens with:', { tokenAmount: atomicAmount, feeMultiplier: multiplier });
         
         const response = await turbo.topUpWithTokens({ 
             tokenAmount: atomicAmount, 
@@ -209,7 +212,8 @@ const upfrontFunding = async (amount, multiplier = 1) => {
         console.log('Upfront funding successful:', response);
         return response;
     } catch (error) {
-        console.error('Error in upfront funding:', error);
+        console.error('Error in upfront funding at step:', error.message);
+        console.error('Full upfront funding error:', error);
         throw error;
     }
 };
@@ -222,16 +226,21 @@ const upfrontFunding = async (amount, multiplier = 1) => {
  */
 const lazyFunding = async (size, multiplier = 1) => {
     try {
+        console.log(`Starting lazy funding for ${size} bytes...`);
         const turbo = await getTurboArweave();
+        console.log('Turbo SDK obtained successfully, getting upload costs...');
         
         // Get upload costs in Winston Credits
+        console.log('Calling getUploadCosts with bytes:', [size]);
         const costs = await turbo.getUploadCosts({ bytes: [size] });
-        const requiredWinc = costs[0].winc;
+        console.log('Upload costs received:', costs);
         
+        const requiredWinc = costs[0].winc;
         console.log(`Upload size: ${size} bytes, required credits: ${requiredWinc} Winston`);
         
         // For lazy funding, we use the required Winston credits directly
         // as the topUpWithTokens expects the amount in atomic units
+        console.log('Calling topUpWithTokens with:', { tokenAmount: requiredWinc, feeMultiplier: multiplier });
         const response = await turbo.topUpWithTokens({ 
             tokenAmount: requiredWinc, 
             feeMultiplier: multiplier 
@@ -239,7 +248,8 @@ const lazyFunding = async (size, multiplier = 1) => {
         console.log('Lazy funding successful:', response);
         return response;
     } catch (error) {
-        console.error('Error in lazy funding:', error);
+        console.error('Error in lazy funding at step:', error.message);
+        console.error('Full error:', error);
         throw error;
     }
 };
