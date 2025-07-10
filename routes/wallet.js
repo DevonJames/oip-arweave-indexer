@@ -20,7 +20,7 @@ const client = new Client({
 });
 
 // Endpoint to check wallet balance
-router.get('/checkbalance', async (req, res) => {
+router.get('/checkbalance', authenticateToken, async (req, res) => {
     console.log('GET /api/wallet/checkbalance');
     try {
         const balance = await checkBalance();

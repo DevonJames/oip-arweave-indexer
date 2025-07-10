@@ -186,15 +186,22 @@ const getCurrentBlockHeight = async () => {
 
 /**
  * Funds the account with a specified upfront amount using Turbo SDK.
- * @param {number} amount - The amount to fund in standard units.
+ * @param {number} amount - The amount to fund in AR (will be converted to Winston).
  * @param {number} multiplier - Optional fee multiplier to prioritize processing.
  * @returns {Promise<Object>} The transaction response from the funding action.
  */
 const upfrontFunding = async (amount, multiplier = 1) => {
     try {
         const turbo = await getTurboArweave();
-        // Convert amount to atomic units (Winston)
-        const atomicAmount = Math.floor(amount * 1000000000000); // Convert AR to Winston
+        
+        // Convert amount from AR to Winston (1 AR = 1000000000000 Winston)
+        // Use the Turbo SDK's utility functions for proper conversion
+        const arweaveLib = require('arweave/node'); // Import arweave for conversion utilities
+        const arweave = arweaveLib.init({}); // Initialize for utilities
+        const atomicAmount = arweave.ar.arToWinston(amount.toString());
+        
+        console.log(`Converting ${amount} AR to ${atomicAmount} Winston for funding`);
+        
         const response = await turbo.topUpWithTokens({ 
             tokenAmount: atomicAmount, 
             feeMultiplier: multiplier 
@@ -216,15 +223,17 @@ const upfrontFunding = async (amount, multiplier = 1) => {
 const lazyFunding = async (size, multiplier = 1) => {
     try {
         const turbo = await getTurboArweave();
+        
+        // Get upload costs in Winston Credits
         const costs = await turbo.getUploadCosts({ bytes: [size] });
         const requiredWinc = costs[0].winc;
         
-        // Convert winc to AR for funding
-        const requiredAR = requiredWinc / 1000000000000;
-        const atomicAmount = Math.floor(requiredAR * 1000000000000);
+        console.log(`Upload size: ${size} bytes, required credits: ${requiredWinc} Winston`);
         
+        // For lazy funding, we use the required Winston credits directly
+        // as the topUpWithTokens expects the amount in atomic units
         const response = await turbo.topUpWithTokens({ 
-            tokenAmount: atomicAmount, 
+            tokenAmount: requiredWinc, 
             feeMultiplier: multiplier 
         });
         console.log('Lazy funding successful:', response);
