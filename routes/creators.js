@@ -68,12 +68,18 @@ router.get('/', async (req, res) => {
 //         }
 //     });
 
-router.post('/newCreator', async (req, res) => {
+router.post('/newCreator', authenticateToken, async (req, res) => {
     try {
         console.log('POST /api/creators/newCreator', req.body)
         const record = req.body;
-        const blockchain = req.body.blockchain || 'arweave'; // Accept blockchain parameter
+        // const blockchain = req.query.blockchain || req.body.blockchain || 'arweave'; // Accept from query or body
         let recordType = 'creatorRegistration';
+        
+        // Remove blockchain from record data if it exists to prevent template processing errors
+        if (record.blockchain) {
+            delete record.blockchain;
+        }
+        
         const newRecord = await publishNewRecord(record, recordType, false, false, false, null, blockchain);
         const transactionId = newRecord.transactionId;
         const recordToIndex = newRecord.recordToIndex;

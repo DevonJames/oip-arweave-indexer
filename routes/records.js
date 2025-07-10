@@ -66,7 +66,7 @@ router.get('/recordTypes', async (req, res) => {
     }
 });
 
-router.post('/newRecord', async (req, res) => {
+router.post('/newRecord', authenticateToken, async (req, res) => {
 // router.post('/newRecord', authenticateToken, async (req, res) => {
     try {
         console.log('POST /api/records/newRecord', req.body)
