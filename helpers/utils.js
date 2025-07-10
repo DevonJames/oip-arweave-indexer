@@ -44,8 +44,23 @@ dotenv.config();
 const getTurboArweave = async () => {
     const walletFileLocation = getWalletFilePath();
     const key = JSON.parse(fs.readFileSync(walletFileLocation).toString());
-    const turbo = TurboFactory.authenticated({ privateKey: key });
-    return turbo;
+    
+    console.log('Initializing Turbo SDK...');
+    console.log('Environment check:');
+    console.log('- TURBO_API:', process.env.TURBO_API || 'not set');
+    console.log('- TURBO_LOGIN:', process.env.TURBO_LOGIN || 'not set'); 
+    console.log('- NODE_ENV:', process.env.NODE_ENV || 'not set');
+    
+    try {
+        const turbo = TurboFactory.authenticated({ 
+            privateKey: key
+        });
+        console.log('Turbo SDK initialized successfully');
+        return turbo;
+    } catch (error) {
+        console.error('Error initializing Turbo SDK:', error);
+        throw error;
+    }
 };
 
 const getFileInfo = () => {
