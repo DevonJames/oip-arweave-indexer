@@ -1,10 +1,11 @@
 const axios = require('axios');
 const bitcoin = require('bitcoinjs-lib');
 const ecc = require('@bitcoinerlab/secp256k1');
-const bip32 = require('bip32');
+const { BIP32Factory } = require('bip32');
 const bip39 = require('bip39');
 
 bitcoin.initEccLib(ecc);
+const bip32 = BIP32Factory(ecc);
 
 class PaymentManager {
     constructor() {
