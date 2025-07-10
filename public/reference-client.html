@@ -7923,97 +7923,309 @@
             'workout': 'grid'
         };
 
+        // Enhanced view mode functionality with error handling
         function changeViewMode() {
-            const newMode = document.getElementById('voice-view-as').value;
-            if (newMode !== currentViewMode) {
-                currentViewMode = newMode;
-                
-                // Re-render current records with new view mode
-                if (currentRecords.length > 0) {
-                    displayVoiceRecords(currentRecords, false);
+            try {
+                const viewAsElement = document.getElementById('voice-view-as');
+                if (!viewAsElement) {
+                    console.error('[View Mode] voice-view-as element not found');
+                    return;
                 }
                 
-                console.log(`[View Mode] Changed to ${newMode} view`);
+                const newMode = viewAsElement.value;
+                console.log(`[View Mode] Attempting to change from ${currentViewMode} to ${newMode}`);
+                
+                if (newMode !== currentViewMode) {
+                    currentViewMode = newMode;
+                    
+                    // Re-render current records with new view mode
+                    if (currentRecords && currentRecords.length > 0) {
+                        console.log(`[View Mode] Re-rendering ${currentRecords.length} records with ${newMode} view`);
+                        displayVoiceRecords(currentRecords, false);
+                    } else {
+                        console.log('[View Mode] No records to re-render');
+                        // Still update the container class even if no records
+                        const container = document.getElementById('voice-records-grid');
+                        if (container) {
+                            container.className = newMode === 'list' ? 'records-list' : 'records-grid';
+                        }
+                    }
+                    
+                    console.log(`[View Mode] Successfully changed to ${newMode} view`);
+                } else {
+                    console.log('[View Mode] No change needed - already in', newMode, 'mode');
+                }
+            } catch (error) {
+                console.error('[View Mode] Error in changeViewMode:', error);
+                // Show user-friendly error message
+                const statusDiv = document.getElementById('voice-loading-indicator');
+                if (statusDiv) {
+                    statusDiv.innerHTML = '❌ View mode change failed. Please refresh the page.';
+                    statusDiv.classList.remove('hidden');
+                    setTimeout(() => {
+                        statusDiv.classList.add('hidden');
+                    }, 5000);
+                }
             }
         }
 
-        function setDefaultViewMode() {
-            const recordType = currentFilters.recordType;
-            const defaultMode = viewModeDefaults[recordType] || 'grid';
-            
-            // Only change if we have a specific record type filter
-            if (recordType && currentViewMode !== defaultMode) {
-                currentViewMode = defaultMode;
-                document.getElementById('voice-view-as').value = defaultMode;
-                console.log(`[View Mode] Set default ${defaultMode} view for record type: ${recordType}`);
+        // Enhanced displayVoiceRecords function with improved error handling
+        function displayVoiceRecords(records, append = false) {
+            try {
+                const container = document.getElementById('voice-records-grid');
+                if (!container) {
+                    console.error('[Enhanced Display] voice-records-grid container not found');
+                    return;
+                }
+                
+                console.log(`[Enhanced Display] Displaying ${records.length} records, append=${append}, currentViewMode=${currentViewMode}`);
+                
+                if (!append) {
+                    container.innerHTML = '';
+                }
+                
+                // Update container class based on view mode
+                const containerClass = currentViewMode === 'list' ? 'records-list' : 'records-grid';
+                container.className = containerClass;
+                console.log(`[Enhanced Display] Set container class to: ${containerClass}`);
+                
+                // Group podcast records by show
+                const podcastShows = {};
+                const nonPodcastRecords = [];
+                
+                records.forEach(record => {
+                    try {
+                        if (record.oip?.recordType === 'podcast' && record.data?.podcast?.show) {
+                            const showName = record.data.podcast.show;
+                            if (!podcastShows[showName]) {
+                                podcastShows[showName] = [];
+                            }
+                            podcastShows[showName].push(record);
+                        } else {
+                            nonPodcastRecords.push(record);
+                        }
+                    } catch (recordError) {
+                        console.error('[Enhanced Display] Error processing record:', recordError, record);
+                        nonPodcastRecords.push(record); // Add to non-podcast as fallback
+                    }
+                });
+                
+                const startIndex = currentRecords.length - records.length;
+                let recordIndex = startIndex;
+                
+                // Render podcast shows
+                Object.keys(podcastShows).forEach(showName => {
+                    try {
+                        const episodes = podcastShows[showName];
+                        
+                        if (currentViewMode === 'list') {
+                            // In list view, render individual podcast episodes
+                            episodes.forEach(episode => {
+                                const episodeCard = createRecordCard(episode, recordIndex, true);
+                                container.appendChild(episodeCard);
+                                recordIndex++;
+                            });
+                        } else {
+                            // In grid view, use grouped podcast show cards
+                            const showCard = createPodcastShowCard(showName, episodes, recordIndex);
+                            container.appendChild(showCard);
+                            recordIndex += episodes.length;
+                        }
+                    } catch (showError) {
+                        console.error('[Enhanced Display] Error rendering podcast show:', showError, showName);
+                    }
+                });
+                
+                // Render non-podcast records
+                nonPodcastRecords.forEach(record => {
+                    try {
+                        const card = createRecordCard(record, recordIndex, currentViewMode === 'list');
+                        container.appendChild(card);
+                        recordIndex++;
+                    } catch (cardError) {
+                        console.error('[Enhanced Display] Error creating record card:', cardError, record);
+                    }
+                });
+                
+                container.classList.remove('hidden');
+                document.getElementById('voice-no-results').classList.add('hidden');
+                
+                console.log(`[Enhanced Display] Successfully rendered ${records.length} records in ${currentViewMode} view (${Object.keys(podcastShows).length} podcast shows)`);
+                
+            } catch (error) {
+                console.error('[Enhanced Display] Error in displayVoiceRecords:', error);
+                
+                // Show error message to user
+                const container = document.getElementById('voice-records-grid');
+                if (container) {
+                    container.innerHTML = `
+                        <div style="padding: 20px; text-align: center; background: #f8d7da; color: #721c24; border-radius: 8px; margin: 20px 0;">
+                            <h4>❌ Error Displaying Records</h4>
+                            <p>There was an error displaying the records. Please try refreshing the page.</p>
+                            <small>Error: ${error.message}</small>
+                        </div>
+                    `;
+                    container.classList.remove('hidden');
+                }
             }
         }
 
-        // Voice Filtering Functions
-        // ====== ENHANCED VOICE FILTER FUNCTIONS ======
-        
-        // Multi-Tag Filter Management
-        let tagFilterIndex = 0;
-        
-        function addTagFilter() {
-            tagFilterIndex++;
-            const container = document.getElementById('tag-filters-container');
-            
-            const newRow = document.createElement('div');
-            newRow.className = 'tag-filter-row';
-            newRow.setAttribute('data-tag-index', tagFilterIndex);
-            
-            newRow.innerHTML = `
-                <select class="tag-filter-select" onchange="onTagFilterChange(${tagFilterIndex})" data-tag-index="${tagFilterIndex}">
-                    <option value="">Select a tag...</option>
-                </select>
-                <button type="button" class="remove-tag-btn" onclick="removeTagFilter(${tagFilterIndex})" title="Remove this tag filter">×</button>
-            `;
-            
-            container.appendChild(newRow);
-            updateAllTagDropdowns(); // This will handle compact styling
-            console.log('[Multi-Tag] Added tag filter', tagFilterIndex, 'Total filters:', document.querySelectorAll('.tag-filter-select').length);
-        }
-        
-        function removeTagFilter(index) {
-            const row = document.querySelector(`[data-tag-index="${index}"]`);
-            if (row) {
-                row.remove();
-                updateAllTagDropdowns(); // This will handle compact styling
-                applyVoiceFilters();
-                console.log('[Multi-Tag] Removed tag filter', index, 'Remaining filters:', document.querySelectorAll('.tag-filter-select').length);
+        // Enhanced createRecordCard function with better error handling
+        function createRecordCard(record, recordIndex, isListView = false) {
+            try {
+                const card = document.createElement('div');
+                card.className = isListView ? 'record-card list-view' : 'record-card';
+                
+                const recordType = record.oip?.recordType || 'unknown';
+                const basicData = record.data?.basic || {};
+                
+                let templatesUsed = [];
+                try {
+                    templatesUsed = analyzeRecordTemplates(record);
+                } catch (error) {
+                    console.warn('[Card Creation] Error analyzing templates:', error);
+                    templatesUsed = [recordType];
+                }
+                
+                // Extract media and content for modern display
+                let mediaContent = {};
+                try {
+                    mediaContent = extractMediaContent(record);
+                } catch (error) {
+                    console.warn('[Card Creation] Error extracting media content:', error);
+                    mediaContent = { featuredImage: null, audioItems: [], videoItems: [] };
+                }
+                
+                const dateDisplay = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
+                
+                if (isListView) {
+                    // List view layout - horizontal layout with thumbnail on left
+                    card.innerHTML = `
+                        ${renderMediaPreview(mediaContent, recordIndex)}
+                        
+                        <div class="record-content-area">
+                            <div class="record-header">
+                                <div class="record-type">${recordType}</div>
+                                <div class="record-date">${dateDisplay}</div>
+                            </div>
+                            
+                            ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+                            
+                            <div class="list-meta-row">
+                                <div class="list-controls">
+                                    ${renderMediaControls(mediaContent, record, recordIndex)}
+                                    ${renderArticleTextButton(mediaContent, recordIndex)}
+                                    ${renderWebUrlButton(mediaContent)}
+                                </div>
+                                <button class="show-structure-btn" onclick="toggleRecordStructure(${recordIndex})" title="Show technical record structure">
+                                    🔧
+                                </button>
+                            </div>
+                            
+                            ${createTagsDisplay(basicData.tagItems)}
+                            ${renderPodcastCitations(mediaContent, recordIndex)}
+                        </div>
+                        
+                        <div id="structure-${recordIndex}" class="record-structure hidden">
+                            <div class="structure-header">
+                                <h4>🔧 Technical Record Structure</h4>
+                                <div class="template-info">
+                                    <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
+                                    <strong>Record Type:</strong> ${recordType}<br>
+                                    <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth} 
+                                    ${mediaContent.unresolvedImageDref ? '<br><span style="color: #dc3545;">⚠️ Images require resolve depth ≥ 1</span>' : ''}
+                                </div>
+                            </div>
+                            ${renderAllTemplateData(record, templatesUsed)}
+                        </div>
+                    `;
+                } else {
+                    // Grid view layout - vertical layout (original)
+                    card.innerHTML = `
+                        <div class="record-header">
+                            <div class="record-type">${recordType}</div>
+                            <div class="record-date">${dateDisplay}</div>
+                        </div>
+                        
+                        ${renderMediaPreview(mediaContent, recordIndex)}
+                        
+                        <div class="record-content">
+                            ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+                            
+                            ${renderMediaControls(mediaContent, record, recordIndex)}
+                            ${renderArticleTextButton(mediaContent, recordIndex)}
+                            ${renderWebUrlButton(mediaContent)}
+                            ${renderPodcastCitations(mediaContent, recordIndex)}
+                        </div>
+                        
+                        ${createTagsDisplay(basicData.tagItems)}
+                        
+                        <div class="record-footer">
+                            <button class="show-structure-btn" onclick="toggleRecordStructure(${recordIndex})" title="Show technical record structure">
+                                <span class="structure-icon">🔧</span> Show Record Structure
+                            </button>
+                            <div class="record-did">DID: ${truncateText(record.oip?.didTx || 'Unknown', 20)}</div>
+                        </div>
+                        
+                        <div id="structure-${recordIndex}" class="record-structure hidden">
+                            <div class="structure-header">
+                                <h4>🔧 Technical Record Structure</h4>
+                                <div class="template-info">
+                                    <strong>Templates Used:</strong> ${templatesUsed.join(', ')}<br>
+                                    <strong>Record Type:</strong> ${recordType}<br>
+                                    <strong>Resolve Depth:</strong> ${currentFilters.resolveDepth} 
+                                    ${mediaContent.unresolvedImageDref ? '<br><span style="color: #dc3545;">⚠️ Images require resolve depth ≥ 1</span>' : ''}
+                                </div>
+                            </div>
+                            ${renderAllTemplateData(record, templatesUsed)}
+                        </div>
+                    `;
+                }
+                
+                return card;
+                
+            } catch (error) {
+                console.error('[Card Creation] Error creating record card:', error, record);
+                
+                // Return a fallback error card
+                const errorCard = document.createElement('div');
+                errorCard.className = isListView ? 'record-card list-view' : 'record-card';
+                errorCard.innerHTML = `
+                    <div style="padding: 15px; text-align: center; background: #f8d7da; color: #721c24; border-radius: 8px;">
+                        <h4>❌ Error Displaying Record</h4>
+                        <p>There was an error displaying this record.</p>
+                        <small>Record Type: ${record.oip?.recordType || 'Unknown'}</small>
+                    </div>
+                `;
+                return errorCard;
             }
         }
-        
-        function onTagFilterChange(index) {
-            const select = document.querySelector(`[data-tag-index="${index}"] .tag-filter-select`);
-            const selectedValue = select ? select.value : 'NOT_FOUND';
-            console.log(`[Multi-Tag] Tag filter ${index} changed to: "${selectedValue}"`);
-            
-            // Debug: show all current selections before update
-            const currentSelections = getSelectedTags();
-            console.log(`[Multi-Tag] All current selections before update:`, currentSelections);
-            
-            updateAllTagDropdowns();
-            
-            // Debug: show all selections after update
-            const updatedSelections = getSelectedTags();
-            console.log(`[Multi-Tag] All selections after update:`, updatedSelections);
-            
-            applyVoiceFilters();
-        }
-        
-        function getSelectedTags() {
-            const selects = document.querySelectorAll('.tag-filter-select');
-            const selectedTags = [];
-            
-            selects.forEach(select => {
-                if (select.value && select.value.trim()) {
-                    selectedTags.push(select.value.trim());
+
+        // Add initialization check to ensure view mode works on page load
+        function initializeViewMode() {
+            try {
+                const viewAsElement = document.getElementById('voice-view-as');
+                if (viewAsElement) {
+                    viewAsElement.value = currentViewMode;
+                    console.log(`[View Mode] Initialized with mode: ${currentViewMode}`);
+                } else {
+                    console.warn('[View Mode] voice-view-as element not found during initialization');
                 }
-            });
-            
-            return selectedTags;
+            } catch (error) {
+                console.error('[View Mode] Error during initialization:', error);
+            }
+        }
+
+        // Call initialization when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeViewMode();
+        });
+
+        // Also initialize if DOM is already loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeViewMode);
+        } else {
+            initializeViewMode();
         }
         
         function updateAllTagDropdowns() {
@@ -8357,69 +8569,103 @@
          * Display voice records using enhanced dynamic template rendering
          */
         function displayVoiceRecords(records, append = false) {
-            const container = document.getElementById('voice-records-grid');
-            
-            if (!append) {
-                container.innerHTML = '';
-            }
-            
-            // Update container class based on view mode
-            if (currentViewMode === 'list') {
-                container.className = 'records-list';
-            } else {
-                container.className = 'records-grid';
-            }
-            
-            // Group podcast records by show
-            const podcastShows = {};
-            const nonPodcastRecords = [];
-            
-            records.forEach(record => {
-                if (record.oip?.recordType === 'podcast' && record.data?.podcast?.show) {
-                    const showName = record.data.podcast.show;
-                    if (!podcastShows[showName]) {
-                        podcastShows[showName] = [];
-                    }
-                    podcastShows[showName].push(record);
-                } else {
-                    nonPodcastRecords.push(record);
+            try {
+                const container = document.getElementById('voice-records-grid');
+                if (!container) {
+                    console.error('[Enhanced Display] voice-records-grid container not found');
+                    return;
                 }
-            });
-            
-            const startIndex = currentRecords.length - records.length;
-            let recordIndex = startIndex;
-            
-            // Render podcast shows
-            Object.keys(podcastShows).forEach(showName => {
-                const episodes = podcastShows[showName];
-                let showCard;
                 
-                if (currentViewMode === 'list') {
-                    // In list view, render individual podcast episodes instead of grouped shows
-                    episodes.forEach(episode => {
-                        const episodeCard = createRecordCard(episode, recordIndex, true);
-                        container.appendChild(episodeCard);
-                        recordIndex++;
-                    });
-                } else {
-                    // In grid view, use grouped podcast show cards
-                    showCard = createPodcastShowCard(showName, episodes, recordIndex);
-                    container.appendChild(showCard);
-                    recordIndex += episodes.length;
+                console.log(`[Enhanced Display] Displaying ${records.length} records, append=${append}, currentViewMode=${currentViewMode}`);
+                
+                if (!append) {
+                    container.innerHTML = '';
                 }
-            });
-            
-            // Render non-podcast records
-            nonPodcastRecords.forEach(record => {
-                const card = createRecordCard(record, recordIndex, currentViewMode === 'list');
-                container.appendChild(card);
-                recordIndex++;
-            });
-            
-            container.classList.remove('hidden');
-            document.getElementById('voice-no-results').classList.add('hidden');
-            
-            console.log(`[Enhanced Display] Rendered ${records.length} records in ${currentViewMode} view (${Object.keys(podcastShows).length} podcast shows)`);
+                
+                // Update container class based on view mode
+                const containerClass = currentViewMode === 'list' ? 'records-list' : 'records-grid';
+                container.className = containerClass;
+                console.log(`[Enhanced Display] Set container class to: ${containerClass}`);
+                
+                // Group podcast records by show
+                const podcastShows = {};
+                const nonPodcastRecords = [];
+                
+                records.forEach(record => {
+                    try {
+                        if (record.oip?.recordType === 'podcast' && record.data?.podcast?.show) {
+                            const showName = record.data.podcast.show;
+                            if (!podcastShows[showName]) {
+                                podcastShows[showName] = [];
+                            }
+                            podcastShows[showName].push(record);
+                        } else {
+                            nonPodcastRecords.push(record);
+                        }
+                    } catch (recordError) {
+                        console.error('[Enhanced Display] Error processing record:', recordError, record);
+                        nonPodcastRecords.push(record); // Add to non-podcast as fallback
+                    }
+                });
+                
+                const startIndex = currentRecords.length - records.length;
+                let recordIndex = startIndex;
+                
+                // Render podcast shows
+                Object.keys(podcastShows).forEach(showName => {
+                    try {
+                        const episodes = podcastShows[showName];
+                        
+                        if (currentViewMode === 'list') {
+                            // In list view, render individual podcast episodes
+                            episodes.forEach(episode => {
+                                const episodeCard = createRecordCard(episode, recordIndex, true);
+                                container.appendChild(episodeCard);
+                                recordIndex++;
+                            });
+                        } else {
+                            // In grid view, use grouped podcast show cards
+                            const showCard = createPodcastShowCard(showName, episodes, recordIndex);
+                            container.appendChild(showCard);
+                            recordIndex += episodes.length;
+                        }
+                    } catch (showError) {
+                        console.error('[Enhanced Display] Error rendering podcast show:', showError, showName);
+                    }
+                });
+                
+                // Render non-podcast records
+                nonPodcastRecords.forEach(record => {
+                    try {
+                        const card = createRecordCard(record, recordIndex, currentViewMode === 'list');
+                        container.appendChild(card);
+                        recordIndex++;
+                    } catch (cardError) {
+                        console.error('[Enhanced Display] Error creating record card:', cardError, record);
+                    }
+                });
+                
+                container.classList.remove('hidden');
+                document.getElementById('voice-no-results').classList.add('hidden');
+                
+                console.log(`[Enhanced Display] Successfully rendered ${records.length} records in ${currentViewMode} view (${Object.keys(podcastShows).length} podcast shows)`);
+                
+            } catch (error) {
+                console.error('[Enhanced Display] Error in displayVoiceRecords:', error);
+                
+                // Show error message to user
+                const container = document.getElementById('voice-records-grid');
+                if (container) {
+                    container.innerHTML = `
+                        <div style="padding: 20px; text-align: center; background: #f8d7da; color: #721c24; border-radius: 8px; margin: 20px 0;">
+                            <h4>❌ Error Displaying Records</h4>
+                            <p>There was an error displaying the records. Please try refreshing the page.</p>
+                            <small>Error: ${error.message}</small>
+                        </div>
+                    `;
+                    container.classList.remove('hidden');
+                }
+            }
         }
 
         function showVoiceNoResults() {
@@ -8479,63 +8725,63 @@
             loadVoiceRecords(false);
         }
 
-                 // Voice-specific text content toggle (for embedded text content)
-         async function toggleVoiceTextContent(recordIndex, sourceType, sourceUrl) {
-             const textContent = document.getElementById(`voice-textContent-${recordIndex}`);
-             const toggleBtn = document.getElementById(`voice-textBtn-${recordIndex}`);
-             
-             if (textContent.classList.contains('hidden')) {
-                 // Show content
-                 textContent.classList.remove('hidden');
-                 
-                 if (sourceType === 'fetch' && sourceUrl) {
-                     // Check if we already fetched the content
-                     if (!textContent.dataset.fetched) {
-                         try {
-                             toggleBtn.textContent = '📄 Loading...';
-                             toggleBtn.disabled = true;
-                             
-                             const response = await fetch(sourceUrl);
-                             if (!response.ok) {
-                                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                             }
-                             const text = await response.text();
-                             
-                             textContent.innerHTML = `<div style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(text)}</div>`;
-                             textContent.dataset.fetched = 'true';
-                             toggleBtn.textContent = '📄 Hide Full Text';
-                             toggleBtn.disabled = false;
-                         } catch (error) {
-                             console.error('Error fetching text content:', error);
-                             textContent.innerHTML = `<div style="color: #dc3545; padding: 10px;">
-                                 <strong>Error loading text:</strong><br>
-                                 ${escapeHtml(error.message)}<br>
-                                 <small>URL: ${escapeHtml(sourceUrl)}</small>
-                             </div>`;
-                             toggleBtn.textContent = '❌ Failed to Load';
-                             toggleBtn.disabled = false;
-                         }
-                     } else {
-                         toggleBtn.textContent = '📄 Hide Full Text';
-                     }
-                 } else if (sourceType === 'static') {
-                     // Static content - just show it
-                     const staticContent = textContent.dataset.staticContent;
-                     if (staticContent) {
-                         textContent.innerHTML = staticContent;
-                     }
-                     toggleBtn.textContent = '📄 Hide Full Text';
-                 }
-             } else {
-                 // Hide content
-                 textContent.classList.add('hidden');
-                 if (sourceType === 'fetch') {
-                     toggleBtn.textContent = '📄 Show Full Text';
-                 } else {
-                     toggleBtn.textContent = '📄 Show Full Text';
-                 }
-             }
-         }
+        // Voice-specific text content toggle (for embedded text content)
+        async function toggleVoiceTextContent(recordIndex, sourceType, sourceUrl) {
+            const textContent = document.getElementById(`voice-textContent-${recordIndex}`);
+            const toggleBtn = document.getElementById(`voice-textBtn-${recordIndex}`);
+            
+            if (textContent.classList.contains('hidden')) {
+                // Show content
+                textContent.classList.remove('hidden');
+                
+                if (sourceType === 'fetch' && sourceUrl) {
+                    // Check if we already fetched the content
+                    if (!textContent.dataset.fetched) {
+                        try {
+                            toggleBtn.textContent = '📄 Loading...';
+                            toggleBtn.disabled = true;
+                            
+                            const response = await fetch(sourceUrl);
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            }
+                            const text = await response.text();
+                            
+                            textContent.innerHTML = `<div style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(text)}</div>`;
+                            textContent.dataset.fetched = 'true';
+                            toggleBtn.textContent = '📄 Hide Full Text';
+                            toggleBtn.disabled = false;
+                        } catch (error) {
+                            console.error('Error fetching text content:', error);
+                            textContent.innerHTML = `<div style="color: #dc3545; padding: 10px;">
+                                <strong>Error loading text:</strong><br>
+                                ${escapeHtml(error.message)}<br>
+                                <small>URL: ${escapeHtml(sourceUrl)}</small>
+                            </div>`;
+                            toggleBtn.textContent = '❌ Failed to Load';
+                            toggleBtn.disabled = false;
+                        }
+                    } else {
+                        toggleBtn.textContent = '📄 Hide Full Text';
+                    }
+                } else if (sourceType === 'static') {
+                    // Static content - just show it
+                    const staticContent = textContent.dataset.staticContent;
+                    if (staticContent) {
+                        textContent.innerHTML = staticContent;
+                    }
+                    toggleBtn.textContent = '📄 Hide Full Text';
+                }
+            } else {
+                // Hide content
+                textContent.classList.add('hidden');
+                if (sourceType === 'fetch') {
+                    toggleBtn.textContent = '📄 Show Full Text';
+                } else {
+                    toggleBtn.textContent = '📄 Show Full Text';
+                }
+            }
+        }
 
         // Text content toggle function
         async function toggleTextContent(recordIndex, sourceType, sourceUrl) {
