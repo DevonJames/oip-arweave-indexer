@@ -2,7 +2,9 @@
 const express = require('express');
 const { getCreatorsInDB } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
+const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const { Client } = require('@elastic/elasticsearch');
+
 require('dotenv').config();
 
 const elasticClient = new Client({
