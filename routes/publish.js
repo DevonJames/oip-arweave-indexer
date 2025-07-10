@@ -2291,36 +2291,52 @@ router.post('/newPost', authenticateToken, async (req, res) => {
         const blockchain = req.body.blockchain || 'arweave'; // Get blockchain parameter, default to arweave
         let recordType = 'post';
 
-        // Create post record structure using the correct post template fields
-        const postRecord = {
-            basic: {
-                name: record.basic?.name || 'Post Record',
-                description: record.basic?.description || '',
-                language: record.basic?.language || 'en',
-                date: record.basic?.date || Math.floor(Date.now() / 1000),
-                nsfw: record.basic?.nsfw || false,
-                tagItems: record.basic?.tagItems || []
-            },
-            post: {
-                webUrl: record.post?.webUrl || '',
-                bylineWriter: record.post?.bylineWriter || '',
-                bylineWritersTitle: record.post?.bylineWritersTitle || '',
-                bylineWritersLocation: record.post?.bylineWritersLocation || '',
-                articleText: record.post?.articleText || '',
-                featuredImage: record.post?.featuredImage || '',
-                imageItems: record.post?.imageItems || [],
-                imageCaptionItems: record.post?.imageCaptionItems || [],
-                videoItems: record.post?.videoItems || [],
-                audioItems: record.post?.audioItems || [],
-                audioCaptionItems: record.post?.audioCaptionItems || [],
-                replyTo: record.post?.replyTo || ''
+        // Helper function to check if an object has meaningful data
+        function hasData(obj) {
+            if (!obj || typeof obj !== 'object') return false;
+            if (Array.isArray(obj)) return obj.length > 0;
+            
+            // Check if object has any non-empty, non-null values
+            return Object.values(obj).some(value => {
+                if (value === null || value === undefined || value === '') return false;
+                if (Array.isArray(value)) return value.length > 0;
+                if (typeof value === 'object') return hasData(value);
+                return true;
+            });
+        }
+
+        // Filter out empty arrays and objects before passing to publishNewRecord
+        const cleanedRecord = { ...record };
+        
+        // Clean post section
+        if (cleanedRecord.post) {
+            // Remove empty arrays to prevent empty record creation
+            if (Array.isArray(cleanedRecord.post.imageItems) && cleanedRecord.post.imageItems.length === 0) {
+                delete cleanedRecord.post.imageItems;
             }
-        };
+            if (Array.isArray(cleanedRecord.post.videoItems) && cleanedRecord.post.videoItems.length === 0) {
+                delete cleanedRecord.post.videoItems;
+            }
+            if (Array.isArray(cleanedRecord.post.audioItems) && cleanedRecord.post.audioItems.length === 0) {
+                delete cleanedRecord.post.audioItems;
+            }
+            if (Array.isArray(cleanedRecord.post.imageCaptionItems) && cleanedRecord.post.imageCaptionItems.length === 0) {
+                delete cleanedRecord.post.imageCaptionItems;
+            }
+            if (Array.isArray(cleanedRecord.post.audioCaptionItems) && cleanedRecord.post.audioCaptionItems.length === 0) {
+                delete cleanedRecord.post.audioCaptionItems;
+            }
+            
+            // Remove empty string fields that would create empty records
+            if (!cleanedRecord.post.replyTo || cleanedRecord.post.replyTo === '') {
+                delete cleanedRecord.post.replyTo;
+            }
+        }
 
-        console.log('Final post data:', postRecord);
+        console.log('Final post data:', cleanedRecord);
 
-        // Publish the post record
-        const postResult = await publishNewRecord(postRecord, recordType, false, false, false, null, blockchain);
+        // Publish the post record - let translateJSONtoOIPData handle the dref processing
+        const postResult = await publishNewRecord(cleanedRecord, recordType, false, false, false, null, blockchain);
 
         const transactionId = postResult.transactionId;
         const recordToIndex = postResult.recordToIndex;
