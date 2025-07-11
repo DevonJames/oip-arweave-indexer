@@ -1,9 +1,11 @@
 require('dotenv').config();
 const bip39 = require('bip39');
-const bip32 = require('bip32');
 const bitcoin = require('bitcoinjs-lib');
 const ecc = require('@bitcoinerlab/secp256k1');
 bitcoin.initEccLib(ecc);
+
+// Use the direct require that should work with sub-dependency versions
+const bip32 = require('bip32');
 
 (async () => {
     try {
