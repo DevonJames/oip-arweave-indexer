@@ -16,7 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@11labs/react": "^0.0.7",
-    "@ardrive/turbo-sdk": "^1.28.3",
+    "@ardrive/turbo-sdk": "^1.22.1",
     "@bitcoinerlab/secp256k1": "^1.2.0",
     "@elastic/elasticsearch": "^8.17.0",
     "@google-cloud/common": "^5.0.2",
@@ -29,7 +29,7 @@
     "@postlight/parser": "^2.2.3",
     "@samouraiwallet/electrum-client": "^1.5.2",
     "arbundles": "^0.11.0",
-    "arweave": "^1.15.7",
+    "arweave": "^1.11.8",
     "arweave-graphql": "^0.0.5",
     "arweave-wallet-connector": "^1.0.2",
     "arweavekit": "^1.5.1",

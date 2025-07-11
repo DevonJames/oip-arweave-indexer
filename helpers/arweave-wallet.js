@@ -23,15 +23,23 @@ class ArweaveWalletManager {
                 console.log('DEBUG: Initializing Turbo SDK...');
                 console.log('DEBUG: Environment check:');
                 console.log('- TURBO_URL:', process.env.TURBO_URL || 'undefined (using defaults)');
+                console.log('- TURBO_UPLOAD_URL:', process.env.TURBO_UPLOAD_URL || 'undefined');
+                console.log('- TURBO_PAYMENT_URL:', process.env.TURBO_PAYMENT_URL || 'undefined');
                 console.log('- NODE_ENV:', process.env.NODE_ENV || 'undefined');
+                console.log('- All TURBO_* env vars:', Object.keys(process.env).filter(key => key.startsWith('TURBO')));
                 
                 // Use the recommended factory method for initialization with default endpoints
-                this.turboInstance = TurboFactory.authenticated({
-                    privateKey: wallet
-                    // Let SDK use default endpoints: upload.ardrive.io and payment.ardrive.io
-                });
-                
-                console.log('✅ Turbo SDK initialized successfully with default endpoints');
+                try {
+                    this.turboInstance = TurboFactory.authenticated({
+                        privateKey: wallet
+                        // Let SDK use default endpoints: upload.ardrive.io and payment.ardrive.io
+                    });
+                    console.log('✅ Turbo SDK initialized successfully with default endpoints');
+                } catch (initError) {
+                    console.error('❌ ERROR during Turbo SDK initialization:', initError);
+                    console.error('❌ This might be a URL configuration issue');
+                    throw initError;
+                }
             } catch (error) {
                 console.error('Failed to initialize Turbo:', error);
                 throw error;
@@ -71,6 +79,10 @@ class ArweaveWalletManager {
             }
 
             // Simplified upload with all required parameters
+            console.log('DEBUG: About to call turbo.uploadFile...');
+            console.log('DEBUG: Data buffer size:', dataBuffer.length);
+            console.log('DEBUG: Upload tags:', uploadTags);
+            
             const result = await turbo.uploadFile({
                 fileStreamFactory,
                 fileSizeFactory: () => dataBuffer.length,
