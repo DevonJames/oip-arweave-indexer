@@ -673,7 +673,7 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
                                vitaminAMcg: food.nf_vitamin_a_iu ? (food.nf_vitamin_a_iu * 0.3) : 0, // Convert IU to mcg
                 vitaminCMg: food.nf_vitamin_c || 0,
                 allergens: [],
-                gluten_free: false, // Fixed field name to match template
+                glutenFree: false, // Fixed field name to match template
                 organic: false,
              },
              image: {
@@ -860,7 +860,7 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
                      vitaminAMcg: nutritionTable.vitamin_a_mcg || 0,
              vitaminCMg: nutritionTable.vitamin_c_mg || 0,
              allergens: nutritionTable.allergens || [],
-             gluten_free: nutritionTable.gluten_free || false, // Fixed field name to match template
+             glutenFree: nutritionTable.gluten_free || false, // Fixed field name to match template
              organic: nutritionTable.organic || false,
       },
       image: {
@@ -914,7 +914,7 @@ async function createFallbackNutritionalInfo(ingredientName, blockchain = 'arwea
         vitaminAMcg: 0,
         vitaminCMg: 0,
         allergens: [],
-        gluten_free: false, // Fixed field name to match template
+        glutenFree: false, // Fixed field name to match template
         organic: false
       },
       image: {
