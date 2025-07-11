@@ -20,14 +20,18 @@ class ArweaveWalletManager {
                 const walletData = await fs.readFile(process.env.WALLET_FILE, 'utf8');
                 const wallet = JSON.parse(walletData);
                 
-                // Use the recommended factory method for initialization
-                this.turboInstance = await TurboFactory.authenticated({
-                    privateKey: wallet,
-                    url: process.env.TURBO_URL || 'https://turbo.ardrive.io'
+                console.log('DEBUG: Initializing Turbo SDK...');
+                console.log('DEBUG: Environment check:');
+                console.log('- TURBO_URL:', process.env.TURBO_URL || 'undefined (using defaults)');
+                console.log('- NODE_ENV:', process.env.NODE_ENV || 'undefined');
+                
+                // Use the recommended factory method for initialization with default endpoints
+                this.turboInstance = TurboFactory.authenticated({
+                    privateKey: wallet
+                    // Let SDK use default endpoints: upload.ardrive.io and payment.ardrive.io
                 });
                 
-                console.log('Turbo initialized with factory method');
-                console.log('Available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(this.turboInstance)));
+                console.log('✅ Turbo SDK initialized successfully with default endpoints');
             } catch (error) {
                 console.error('Failed to initialize Turbo:', error);
                 throw error;
