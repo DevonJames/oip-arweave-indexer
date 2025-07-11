@@ -69,8 +69,8 @@ RUN npm install --verbose --build-from-source
 # Rebuild native modules to ensure they work with current environment
 RUN npm rebuild canvas bcrypt sharp
 
-# Move node_modules to parent directory
-RUN mv node_modules ../
+# Keep node_modules in app directory to ensure package updates take effect
+# (Removed the problematic 'mv node_modules ../' that was caching old packages)
 
 # Copy wait-for-it.sh script and make it executable
 COPY wait-for-it.sh wait-for-it.sh
