@@ -1203,12 +1203,12 @@ async function getRecords(queryParams) {
             }
         }
 
-        if (creator_name != undefined) {
-            records = records.filter(record => {
-            return record.oip.creator.name.toLowerCase() === creator_name.toLowerCase();
-            });
-            console.log('after filtering by creator_name, there are', records.length, 'records');
-        }
+        // if (creator_name != undefined) {
+        //     records = records.filter(record => {
+        //     return record.oip.creator.name.toLowerCase() === creator_name.toLowerCase();
+        //     });
+        //     console.log('after filtering by creator_name, there are', records.length, 'records');
+        // }
 
         if (creatorHandle != undefined) {
             records = records.filter(record => {
