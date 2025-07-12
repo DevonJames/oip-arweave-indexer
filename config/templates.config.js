@@ -14,7 +14,7 @@ module.exports = {
         podcast: "MojoZlLKaH-cHy_HbaGBlBA7Mxzf8dJl4MQZzFQAkMY",
         jfkFilesPageOfDocument: "WP-tZ5nwxrMwr5wKHazTFUtGLRd6nQWRBl8E63Kqufg",
         jfkFilesDocument: "d3xoxXQ8hUlrgKTo1UZc4_GqaKTaApJs0tLFuK6Hxqk",
-        exercise: "cXvkv5t6Rbs_-KghLW1MePxbyKONOkfjag2q_RIz9Z8",
+        exercise: "XVu78TY-4LX6-vOajc7AKAk9jn1amFSC87XMTGTz4Mw",
         workout: "T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE",
         recipe: "SLsJ91-Z82rRBPkDrZlG87aIpbw6zOlmK96nh5uf6G4",
         nutritionalInfo: "_xuiAaVKxPL1Dsp-AceCpXqnc0C_WwHC-Ws1vN-cBUs",
