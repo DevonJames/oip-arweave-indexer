@@ -54,8 +54,9 @@ const getTurboArweave = async () => {
     try {
         const turbo = TurboFactory.authenticated({ 
             privateKey: key
+            // Let SDK use default endpoints: upload.ardrive.io and payment.ardrive.io
         });
-        console.log('Turbo SDK initialized successfully');
+        console.log('Turbo SDK initialized successfully with default endpoints');
         return turbo;
     } catch (error) {
         console.error('Error initializing Turbo SDK:', error);
