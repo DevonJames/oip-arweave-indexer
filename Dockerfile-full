@@ -24,7 +24,8 @@ RUN pip3 install torch transformers flask TTS
 # Install app dependencies
 COPY package*.json ./
 RUN npm install --production --silent
-# Keep node_modules in app directory to ensure package updates take effect
+# Move node_modules to parent directory for caching - this is how the working container works
+RUN mv node_modules ../
 
 # Copy wait-for-it.sh script and make it executable
 COPY wait-for-it.sh wait-for-it.sh
