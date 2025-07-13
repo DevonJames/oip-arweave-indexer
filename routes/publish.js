@@ -1588,7 +1588,7 @@ try {
 });
 
 // Add workout publishing endpoint
-router.post('/newWorkout', authenticateToken, async (req, res) => {
+router.post('/newWorkout', async (req, res) => {
     try {
         console.log('POST /api/publish/newWorkout', req.body);
         const record = req.body;
