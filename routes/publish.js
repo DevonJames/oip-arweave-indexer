@@ -310,56 +310,22 @@ router.get('/newWorkout/schema', (req, res) => {
                     "nsfw": false,
                     "tagItems": ["strength", "upper body", "muscle building", "intermediate"]
                 },
-                "workout_duration_minutes": 45,
-                "workout_difficulty": "intermediate",
-                "workout_category": "strength",
-                "equipment_required": ["dumbbells", "bench", "pull-up bar"],
-                "target_muscle_groups": ["chest", "shoulders", "arms", "back"],
-                "goal_tags": ["muscle building", "strength"],
-                "workout": [
-                    {
-                        "section_name": "Warm-up",
-                        "section_duration_minutes": 5,
-                        "exercises": [
-                            {
-                                "name": "arm circles",
-                                "sets": 1,
-                                "reps": 10,
-                                "duration_seconds": null,
-                                "rest_seconds": 30,
-                                "weight_lbs": null,
-                                "notes": "Forward and backward"
-                            }
-                        ]
-                    },
-                    {
-                        "section_name": "Main Workout", 
-                        "section_duration_minutes": 35,
-                        "exercises": [
-                            {
-                                "name": "push-ups",
-                                "sets": 3,
-                                "reps": 12,
-                                "duration_seconds": null,
-                                "rest_seconds": 60,
-                                "weight_lbs": null,
-                                "notes": "Focus on proper form"
-                            },
-                            {
-                                "name": "dumbbell bench press",
-                                "sets": 3,
-                                "reps": 10,
-                                "duration_seconds": null,
-                                "rest_seconds": 90,
-                                "weight_lbs": 25,
-                                "notes": "Control the weight"
-                            }
-                        ]
-                    }
-                ],
-                "notes": "Ensure proper form throughout all exercises",
-                "created_by": "Trainer Example",
-                "nonStandardWorkout": false,
+                "workout": {
+                    "total_duration_minutes": 45,
+                    "estimated_calories_burned": 300,
+                    "includesWarmup": true,
+                    "includesMain": true,
+                    "includesCooldown": true,
+                    "nonStandardWorkout": false,
+                    "exercise_amount": [1, 3, 3, 2],
+                    "exercise_unit": ["sets", "sets", "sets", "sets"],
+                    "exercise": ["did:arweave:arm-circles", "did:arweave:push-ups", "did:arweave:dumbbell-bench-press", "did:arweave:stretching"],
+                    "instructions": "1. Start with 5-minute warm-up\n2. Perform main exercises with proper form\n3. Rest 60-90 seconds between sets\n4. Finish with cooldown stretches",
+                    "goalTags": ["muscle building", "strength", "upper body"],
+                    "author": "Trainer Example",
+                    "authorDRef": "did:arweave:trainer-example",
+                    "notes": "Ensure proper form throughout all exercises. Adjust weights as needed."
+                },
                 "image": {
                     "webUrl": "https://example.com/workout-image.jpg",
                     "contentType": "image/jpeg"
@@ -368,23 +334,29 @@ router.get('/newWorkout/schema', (req, res) => {
             },
             "field_descriptions": {
                 "basic.*": "Same structure as recipe basic fields",
-                "workout_duration_minutes": "Total workout duration",
-                "workout_difficulty": "Difficulty level: 'beginner', 'intermediate', 'advanced'",
-                "workout_category": "Category: 'strength', 'cardio', 'flexibility', 'sports'",
-                "equipment_required": "Array of required equipment",
-                "target_muscle_groups": "Array of targeted muscle groups",
-                "goal_tags": "Array of fitness goals",
-                "workout": "Array of workout sections",
-                "workout[].section_name": "Name of workout section",
-                "workout[].exercises": "Array of exercises in this section",
-                "workout[].exercises[].name": "Exercise name (will be looked up in exercise database)",
-                "nonStandardWorkout": "Set to true to skip exercise database lookup",
+                "workout.total_duration_minutes": "Total workout duration in minutes",
+                "workout.estimated_calories_burned": "Estimated calories burned during workout",
+                "workout.includesWarmup": "Boolean indicating if workout includes warm-up",
+                "workout.includesMain": "Boolean indicating if workout includes main workout",
+                "workout.includesCooldown": "Boolean indicating if workout includes cooldown",
+                "workout.nonStandardWorkout": "Set to true to skip exercise database lookup",
+                "workout.exercise_amount": "Array of amounts for each exercise (e.g., number of sets)",
+                "workout.exercise_unit": "Array of units for each exercise (e.g., 'sets', 'minutes', 'reps')",
+                "workout.exercise": "Array of exercise DID references or names (names will be looked up)",
+                "workout.instructions": "Step-by-step workout instructions",
+                "workout.goalTags": "Array of fitness goals and tags",
+                "workout.author": "Workout creator name",
+                "workout.authorDRef": "DID reference to workout author",
+                "workout.notes": "Additional notes about the workout",
+                "image.webUrl": "URL to workout image",
+                "image.contentType": "Image MIME type",
                 "blockchain": "Target blockchain ('arweave' or 'turbo')"
             },
             "exercise_lookup_notes": {
-                "automatic_processing": "Exercise names are automatically looked up in the exercise database",
+                "automatic_processing": "Exercise names in workout.exercise array are automatically looked up in the exercise database",
                 "fallback": "Missing exercises are created from Kaggle fitness dataset",
-                "bypass": "Set 'nonStandardWorkout: true' to skip exercise lookup and use custom exercises"
+                "bypass": "Set 'workout.nonStandardWorkout: true' to skip exercise lookup and use custom exercises",
+                "array_alignment": "exercise_amount, exercise_unit, and exercise arrays must have the same length"
             }
         };
 
