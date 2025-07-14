@@ -15,7 +15,7 @@ async function fetchNutritionalData(ingredientName) {
 
       if (apiResponse.data && apiResponse.data.foods && apiResponse.data.foods.length > 0) {
         const food = apiResponse.data.foods[0];
-        return {
+        const formattedNutritionalInfo = {
           basic: {
             name: ingredientName,
             date: Math.floor(Date.now() / 1000),
@@ -52,6 +52,18 @@ async function fetchNutritionalData(ingredientName) {
             contentType: 'image/jpeg'
           }
         };
+
+        const nameLower = formattedNutritionalInfo.basic.name.toLowerCase();
+        formattedNutritionalInfo.nutritionalInfo.organic = nameLower.includes('organic');
+
+        // Gluten-free logic
+        const glutenKeywords = ['wheat', 'barley', 'rye', 'bread', 'pasta', 'flour', 'cake', 'cookie', 'pastry', 'cereal', 'malt'];
+        const glutenFreeKeywords = ['salt', 'pepper', 'herb', 'spice', 'fruit', 'vegetable', 'meat', 'fish', 'egg', 'rice', 'quinoa', 'corn', 'potato', 'nut', 'seed', 'bean', 'lentil', 'cheese', 'milk', 'yogurt', 'butter', 'oil', 'vinegar'];
+        const hasGlutenWord = glutenKeywords.some(word => nameLower.includes(word));
+        const isLikelyGlutenFree = glutenFreeKeywords.some(word => nameLower.includes(word)) || nameLower.includes('gluten free') || nameLower.includes('gluten-free');
+        formattedNutritionalInfo.nutritionalInfo.glutenFree = isLikelyGlutenFree && !hasGlutenWord;
+
+        return formattedNutritionalInfo;
       }
     }
 
@@ -82,7 +94,7 @@ async function fetchNutritionalData(ingredientName) {
     // ...
 
     // If no data found, return fallback
-    return {
+    const formattedNutritionalInfo = {
       basic: {
         name: ingredientName,
         date: Math.floor(Date.now() / 1000),
@@ -104,6 +116,18 @@ async function fetchNutritionalData(ingredientName) {
         contentType: 'image/jpeg'
       }
     };
+
+    const nameLower = formattedNutritionalInfo.basic.name.toLowerCase();
+    formattedNutritionalInfo.nutritionalInfo.organic = nameLower.includes('organic');
+
+    // Gluten-free logic
+    const glutenKeywords = ['wheat', 'barley', 'rye', 'bread', 'pasta', 'flour', 'cake', 'cookie', 'pastry', 'cereal', 'malt'];
+    const glutenFreeKeywords = ['salt', 'pepper', 'herb', 'spice', 'fruit', 'vegetable', 'meat', 'fish', 'egg', 'rice', 'quinoa', 'corn', 'potato', 'nut', 'seed', 'bean', 'lentil', 'cheese', 'milk', 'yogurt', 'butter', 'oil', 'vinegar'];
+    const hasGlutenWord = glutenKeywords.some(word => nameLower.includes(word));
+    const isLikelyGlutenFree = glutenFreeKeywords.some(word => nameLower.includes(word)) || nameLower.includes('gluten free') || nameLower.includes('gluten-free');
+    formattedNutritionalInfo.nutritionalInfo.glutenFree = isLikelyGlutenFree && !hasGlutenWord;
+
+    return formattedNutritionalInfo;
   } catch (error) {
     console.error(`Error fetching nutritional data for ${ingredientName}:`, error);
     // Return basic fallback
