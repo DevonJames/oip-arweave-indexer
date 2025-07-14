@@ -1596,20 +1596,11 @@ router.post('/newWorkout', async (req, res) => {
         const nonStandardWorkout = req.body.nonStandardWorkout || false;
         let recordType = 'workout';
 
-        // Extract workout sections from JSON
-        const workoutSections = req.body.workout || [];
-        
-        // Extract exercise names from all sections
-        let allExerciseNames = [];
-        workoutSections.forEach(section => {
-            if (section.exercises && Array.isArray(section.exercises)) {
-                section.exercises.forEach(exercise => {
-                    if (exercise.name) {
-                        allExerciseNames.push(exercise.name.trim().toLowerCase());
-                    }
-                });
-            }
-        });
+        // Extract workout data as single object
+        const workoutInput = req.body.workout || {};
+
+        // Extract exercise names from workout.exercise array
+        let allExerciseNames = (workoutInput.exercise || []).map(name => name.trim().toLowerCase());
 
         console.log('All exercise names found:', allExerciseNames);
         console.log('Non-standard workout flag:', nonStandardWorkout);
@@ -1668,24 +1659,21 @@ router.post('/newWorkout', async (req, res) => {
                 });
             }
 
-            // Step 4: Replace exercise names with didTx references in workout sections
-            workoutSections.forEach(section => {
-                if (section.exercises && Array.isArray(section.exercises)) {
-                    section.exercises.forEach(exercise => {
-                        if (exercise.name) {
-                            const exerciseName = exercise.name.trim().toLowerCase();
-                            const didTx = exerciseDidRefs[exerciseName];
-                            if (didTx) {
-                                exercise.exerciseDidTx = didTx;
-                                console.log(`Replaced ${exercise.name} with didTx: ${didTx}`);
-                            }
-                        }
-                    });
-                }
+            // Step 4: Replace exercise names with didTx references
+            workoutInput.exercise = workoutInput.exercise.map(exName => {
+                const normalizedName = exName.trim().toLowerCase();
+                return exerciseDidRefs[normalizedName] || exName;
             });
         }
 
-        // Step 5: Create final workout data structure
+        // Validate array lengths
+        const exerciseLength = workoutInput.exercise?.length || 0;
+        if ((workoutInput.exercise_amount?.length || 0) !== exerciseLength ||
+            (workoutInput.exercise_unit?.length || 0) !== exerciseLength) {
+            throw new Error('exercise, exercise_amount, and exercise_unit arrays must have the same length');
+        }
+
+        // Step 5: Create final workout data structure matching template
         const workoutData = {
             basic: {
                 name: record.basic.name,
@@ -1697,16 +1685,20 @@ router.post('/newWorkout', async (req, res) => {
                 tagItems: record.basic.tagItems || [],
             },
             workout: {
-                duration_minutes: record.workout_duration_minutes || null,
-                difficulty: record.workout_difficulty || 'intermediate',
-                category: record.workout_category || 'general',
-                equipment_required: record.equipment_required || [],
-                target_muscle_groups: record.target_muscle_groups || [],
-                goal_tags: record.goal_tags || [],
-                workout_sections: workoutSections,
-                is_non_standard: nonStandardWorkout,
-                notes: record.notes || '',
-                created_by: record.created_by || null
+                total_duration_minutes: workoutInput.total_duration_minutes || 0,
+                estimated_calories_burned: workoutInput.estimated_calories_burned || 0,
+                includesWarmup: workoutInput.includesWarmup || false,
+                includesMain: workoutInput.includesMain || false,
+                includesCooldown: workoutInput.includesCooldown || false,
+                nonStandardWorkout: nonStandardWorkout,
+                exercise_amount: workoutInput.exercise_amount || [],
+                exercise_unit: workoutInput.exercise_unit || [],
+                exercise: workoutInput.exercise || [],
+                instructions: workoutInput.instructions || '',
+                goalTags: workoutInput.goalTags || [],
+                author: workoutInput.author || '',
+                authorDRef: workoutInput.authorDRef || null,
+                notes: workoutInput.notes || ''
             },
             image: {
                 webUrl: record.image?.webUrl,
