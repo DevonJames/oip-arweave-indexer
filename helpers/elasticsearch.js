@@ -1139,6 +1139,7 @@ async function getRecords(queryParams) {
         includeDeleteMessages = false,
         includeSigs = true,
         includePubKeys = true,
+        exactMatch,
     } = queryParams;
 
     // console.log('get records using:', {queryParams});
