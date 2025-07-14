@@ -1291,119 +1291,63 @@ router.post('/newWorkout', async (req, res) => {
         const nonStandardWorkout = req.body.nonStandardWorkout || false;
         let recordType = 'workout';
 
-        // Extract workout data as single object
-        const workoutInput = req.body.workout || {};
-
-        // Extract exercise names from workout.exercise array
-        let allExerciseNames = (workoutInput.exercise || []).map(name => name.trim().toLowerCase());
-
-        console.log('All exercise names found:', allExerciseNames);
-        console.log('Non-standard workout flag:', nonStandardWorkout);
-
-        let exerciseDidRefs = {};
-
-        // Only process exercise lookups if NOT a non-standard workout
-        if (!nonStandardWorkout && allExerciseNames.length > 0) {
-            // Step 1: Query existing exercise records in OIP
-            const queryParams = {
-                recordType: 'exercise',
-                search: allExerciseNames.join(','),
-                limit: 50
-            };
-
-            const existingExercises = await getRecords(queryParams);
-            console.log('Existing exercises found:', existingExercises.searchResults);
-
-            // Create exercise record map for fast lookup
-            const exerciseRecordMap = {};
-            existingExercises.records.forEach(record => {
-                const recordName = record.data.basic.name.toLowerCase();
-                exerciseRecordMap[recordName] = record;
-            });
-
-            // Step 2: Find best matches for each exercise
-            for (const exerciseName of allExerciseNames) {
-                const bestMatch = findBestExerciseMatch(exerciseName, exerciseRecordMap);
-                if (bestMatch) {
-                    exerciseDidRefs[exerciseName] = bestMatch.oip.didTx;
-                    console.log(`Found existing exercise for ${exerciseName}:`, bestMatch.oip.didTx);
-                } else {
-                    exerciseDidRefs[exerciseName] = null;
-                }
-            }
-
-            // Step 3: Create missing exercise records from Kaggle data
-            const missingExerciseNames = Object.keys(exerciseDidRefs).filter(
-                name => exerciseDidRefs[name] === null
-            );
-
-            if (missingExerciseNames.length > 0) {
-                console.log('Creating exercise records for missing exercises:', missingExerciseNames);
-                
-                const newExerciseRecords = await Promise.all(
-                    missingExerciseNames.map(name => createNewExerciseRecord(name, blockchain))
-                );
-
-                // Update exerciseDidRefs with newly created records
-                newExerciseRecords.forEach((newRecord, index) => {
-                    if (newRecord) {
-                        const exerciseName = missingExerciseNames[index];
-                        exerciseDidRefs[exerciseName] = newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`;
-                        console.log(`Created new exercise record for ${exerciseName}:`, exerciseDidRefs[exerciseName]);
-                    }
-                });
-            }
-
-            // Step 4: Replace exercise names with didTx references
-            workoutInput.exercise = workoutInput.exercise.map(exName => {
-                const normalizedName = exName.trim().toLowerCase();
-                return exerciseDidRefs[normalizedName] || exName;
-            });
+        const nonStandardWorkout = req.body.workout?.nonStandardWorkout || false;
+        let resolvedWorkout;
+        if (!nonStandardWorkout) {
+          resolvedWorkout = await resolveDrefsInRecord(req.body, 'workout', {exercise: 'exercise'}, blockchain);
+        } else {
+          resolvedWorkout = req.body;
         }
 
-        // Validate array lengths
-        const exerciseLength = workoutInput.exercise?.length || 0;
-        if ((workoutInput.exercise_amount?.length || 0) !== exerciseLength ||
-            (workoutInput.exercise_unit?.length || 0) !== exerciseLength) {
-            throw new Error('exercise, exercise_amount, and exercise_unit arrays must have the same length');
+        if (!resolvedWorkout.workout.total_duration_minutes) {
+          let total = 0;
+          const exercises = Array.isArray(resolvedWorkout.workout.exercise) ? resolvedWorkout.workout.exercise : [];
+          for (const exDid of exercises) {
+            if (typeof exDid === 'string' && exDid.startsWith('did:')) {
+              const exResults = await getRecords({ didTx: exDid, recordType: 'exercise', sortBy: 'inArweaveBlock:desc', limit: 1 });
+              if (exResults.searchResults > 0) {
+                const exRecord = exResults.records[0];
+                total += exRecord.data.exercise.duration_minutes || 0;
+              }
+            }
+          }
+          resolvedWorkout.workout.total_duration_minutes = total;
         }
 
-        // Step 5: Create final workout data structure matching template
         const workoutData = {
-            basic: {
-                name: record.basic.name,
-                language: record.basic.language || "en",
-                date: record.basic.date || Math.floor(Date.now() / 1000),
-                description: record.basic.description,
-                webUrl: record.basic.webUrl,
-                nsfw: record.basic.nsfw || false,
-                tagItems: record.basic.tagItems || [],
-            },
-            workout: {
-                total_duration_minutes: workoutInput.total_duration_minutes || 0,
-                estimated_calories_burned: workoutInput.estimated_calories_burned || 0,
-                includesWarmup: workoutInput.includesWarmup || false,
-                includesMain: workoutInput.includesMain || false,
-                includesCooldown: workoutInput.includesCooldown || false,
-                nonStandardWorkout: nonStandardWorkout,
-                exercise_amount: workoutInput.exercise_amount || [],
-                exercise_unit: workoutInput.exercise_unit || [],
-                exercise: workoutInput.exercise || [],
-                instructions: workoutInput.instructions || '',
-                goalTags: workoutInput.goalTags || [],
-                author: workoutInput.author || '',
-                authorDRef: workoutInput.authorDRef || null,
-                notes: workoutInput.notes || ''
-            },
-            image: {
-                webUrl: record.image?.webUrl,
-                contentType: record.image?.contentType
-            }
+          basic: {
+            name: resolvedWorkout.basic?.name || '',
+            language: resolvedWorkout.basic?.language || 'en',
+            date: resolvedWorkout.basic?.date || Math.floor(Date.now() / 1000),
+            description: resolvedWorkout.basic?.description || '',
+            webUrl: resolvedWorkout.basic?.webUrl || '',
+            nsfw: resolvedWorkout.basic?.nsfw || false,
+            tagItems: resolvedWorkout.basic?.tagItems || [],
+          },
+          workout: {
+            total_duration_minutes: resolvedWorkout.workout?.total_duration_minutes || 0,
+            estimated_calories_burned: resolvedWorkout.workout?.estimated_calories_burned || 0,
+            includesWarmup: resolvedWorkout.workout?.includesWarmup || false,
+            includesMain: resolvedWorkout.workout?.includesMain || false,
+            includesCooldown: resolvedWorkout.workout?.includesCooldown || false,
+            nonStandardWorkout: nonStandardWorkout,
+            exercise_amount: resolvedWorkout.workout?.exercise_amount || [],
+            exercise_unit: resolvedWorkout.workout?.exercise_unit || [],
+            exercise: resolvedWorkout.workout?.exercise || [],
+            exercise_comment: resolvedWorkout.workout?.exercise_comment || [],
+            instructions: resolvedWorkout.workout?.instructions || '',
+            muscleGroups: resolvedWorkout.workout?.muscleGroups || [],
+            goalTags: resolvedWorkout.workout?.goalTags || [],
+            author: resolvedWorkout.workout?.author || '',
+            authorDRef: resolvedWorkout.workout?.authorDRef || null,
+            notes: resolvedWorkout.workout?.notes || ''
+          },
+          image: {
+            webUrl: resolvedWorkout.image?.webUrl || '',
+            contentType: resolvedWorkout.image?.contentType || ''
+          }
         };
 
-        console.log('Final workout data:', workoutData);
-
-        // Step 6: Publish workout record
         const workoutRecord = await publishNewRecord(workoutData, "workout", false, false, false, null, blockchain);
 
         const transactionId = workoutRecord.transactionId;
@@ -1413,7 +1357,6 @@ router.post('/newWorkout', async (req, res) => {
             transactionId, 
             recordToIndex, 
             blockchain,
-            exerciseDidRefs: !nonStandardWorkout ? exerciseDidRefs : null,
             message: `Workout published successfully${!nonStandardWorkout ? ' with exercise references' : ' as non-standard workout'}`
         });
 
