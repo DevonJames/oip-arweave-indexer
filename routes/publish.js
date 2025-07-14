@@ -1288,7 +1288,7 @@ router.post('/newWorkout', async (req, res) => {
         console.log('POST /api/publish/newWorkout', req.body);
         const record = req.body;
         const blockchain = req.body.blockchain || 'arweave';
-        const nonStandardWorkout = req.body.nonStandardWorkout || false;
+        const nonStandardWorkout = req.body.workout?.nonStandardWorkout || false;
         let recordType = 'workout';
 
         const nonStandardWorkout = req.body.workout?.nonStandardWorkout || false;
