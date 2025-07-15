@@ -1152,12 +1152,12 @@ async function getRecords(queryParams) {
 
         // Perform filtering based on query parameters
 
-        console.log('before filtering, there are', qtyRecordsInDB, 'records');
+        // console.log('before filtering, there are', qtyRecordsInDB, 'records');
 
 
         if (includeDeleteMessages === false) {
             records = records.filter(record => record.oip.recordType !== 'deleteMessage');
-            console.log('after filtering out deleteMessages, there are', records.length, 'records');
+            // console.log('after filtering out deleteMessages, there are', records.length, 'records');
         }
             
 
@@ -1172,7 +1172,7 @@ async function getRecords(queryParams) {
                     return false;
                 }
             );
-            console.log('after filtering by dateStart, there are', records.length, 'records');
+            // console.log('after filtering by dateStart, there are', records.length, 'records');
         }
 
         if (dateEnd != undefined) {
@@ -1184,7 +1184,7 @@ async function getRecords(queryParams) {
             }
             return false;
             });
-            console.log('after filtering by dateEnd, there are', records.length, 'records');
+            // console.log('after filtering by dateEnd, there are', records.length, 'records');
         }
 
         if (inArweaveBlock != undefined) {
@@ -1193,14 +1193,14 @@ async function getRecords(queryParams) {
                 const inArweaveBlock = record.oip.inArweaveBlock;
                 return isNaN(inArweaveBlock) || inArweaveBlock === null || inArweaveBlock === undefined || typeof inArweaveBlock !== 'number';
             });
-            console.log('after filtering by invalid inArweaveBlock, there are', records.length, 'records');
+            // console.log('after filtering by invalid inArweaveBlock, there are', records.length, 'records');
             }
             else {
             // otherwise inArweaveBlock is a number
             records = records.filter(record => {
                 return record.oip.inArweaveBlock === inArweaveBlock;
             });
-            console.log('after filtering by valid inArweaveBlock, there are', records.length, 'records');
+            // console.log('after filtering by valid inArweaveBlock, there are', records.length, 'records');
             }
         }
 
@@ -1215,7 +1215,7 @@ async function getRecords(queryParams) {
             records = records.filter(record => {
             return record.oip.creator.creatorHandle === creatorHandle;
             });
-            console.log('after filtering by creatorHandle, there are', records.length, 'records');
+            // console.log('after filtering by creatorHandle, there are', records.length, 'records');
         }
 
         if (creator_did_address != undefined) {
@@ -1223,7 +1223,7 @@ async function getRecords(queryParams) {
             records = records.filter(record => {
             return record.oip.creator.didAddress === decodedCreatorDidAddress;
             });
-            console.log('after filtering by creator_did_address, there are', records.length, 'records');
+            // console.log('after filtering by creator_did_address, there are', records.length, 'records');
         }
 
         // if (txid) {
@@ -1233,7 +1233,7 @@ async function getRecords(queryParams) {
 
         if (didTx != undefined) {
             records = records.filter(record => record.oip.didTx === didTx);
-            console.log('after filtering by didTx, there are', records.length, 'records');
+            // console.log('after filtering by didTx, there are', records.length, 'records');
         }
 
         if (template != undefined) {
@@ -1250,7 +1250,7 @@ async function getRecords(queryParams) {
                 }
                 return false;
             });
-            console.log('after filtering by template, there are', records.length, 'records');
+            // console.log('after filtering by template, there are', records.length, 'records');
         }
 
         if (recordType != undefined) {
@@ -1258,11 +1258,11 @@ async function getRecords(queryParams) {
                 // console.log('record', record);
                 return record.oip.recordType && record.oip.recordType.toLowerCase() === recordType.toLowerCase();
             });
-            console.log('after filtering by recordType, there are', records.length, 'records');
+            // console.log('after filtering by recordType, there are', records.length, 'records');
         }
 
         if (didTxRef != undefined) {
-            console.log('didTxRef:', didTxRef);
+            // console.log('didTxRef:', didTxRef);
 
             // Helper function to recursively search through objects and arrays for matching values
             const searchForDidTxRef = (obj) => {
@@ -1284,15 +1284,15 @@ async function getRecords(queryParams) {
                 // record.data.some(item => searchForDidTxRef(item))
                 searchForDidTxRef(record.data)
             );
-            console.log('after filtering by didTxRef, there are', records.length, 'records');
+            // console.log('after filtering by didTxRef, there are', records.length, 'records');
         }
         
         // Add exactMatch filtering
         if (exactMatch != undefined) {
-            console.log('exactMatch:', exactMatch);
+            // console.log('exactMatch:', exactMatch);
             try {
                 const exactMatchObj = JSON.parse(exactMatch);
-                console.log('parsed exactMatch:', exactMatchObj);
+                // console.log('parsed exactMatch:', exactMatchObj);
                 
                 records = records.filter(record => {
                     return Object.entries(exactMatchObj).every(([fieldPath, expectedValue]) => {
@@ -1312,24 +1312,24 @@ async function getRecords(queryParams) {
                         return currentValue === expectedValue;
                     });
                 });
-                console.log('after filtering by exactMatch, there are', records.length, 'records');
+                // console.log('after filtering by exactMatch, there are', records.length, 'records');
             } catch (error) {
                 console.error('Error parsing exactMatch JSON:', error);
             }
         }
         
         if (url !== undefined) {
-            console.log('url to match:', url);
+            // console.log('url to match:', url);
             records = records.filter(record => {
                 return record.data && record.data.basic && 
                        (record.data.basic.url === url || record.data.basic.webUrl === url);
             });
-            console.log('after filtering by url:', url, 'there are', records.length, 'records');
+            // console.log('after filtering by url:', url, 'there are', records.length, 'records');
         }
         if (tags != undefined) {
-            console.log('tags to match:', tags, 'match mode:', tagsMatchMode);
+            // console.log('tags to match:', tags, 'match mode:', tagsMatchMode);
             const tagArray = tags.split(',').map(tag => tag.trim());
-            console.log('type of tags:', typeof tagArray);
+            // console.log('type of tags:', typeof tagArray);
             
             // Filter records based on match mode (AND vs OR)
             if (tagsMatchMode.toUpperCase() === 'AND') {
@@ -1338,13 +1338,13 @@ async function getRecords(queryParams) {
                     if (!record.data.basic || !record.data.basic.tagItems) return false;
                     return tagArray.every(tag => record.data.basic.tagItems.includes(tag));
                 });
-                console.log('after filtering by tags (AND mode), there are', records.length, 'records');
+                // console.log('after filtering by tags (AND mode), there are', records.length, 'records');
             } else {
                 // OR behavior: record must have at least ONE of the specified tags (default)
                 records = records.filter(record => {
                     return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
                 });
-                console.log('after filtering by tags (OR mode), there are', records.length, 'records');
+                // console.log('after filtering by tags (OR mode), there are', records.length, 'records');
             }
 
             // Add tag match scores to all filtered records
@@ -1370,7 +1370,7 @@ async function getRecords(queryParams) {
         // search records by search parameter
         if (search !== undefined) {
             const searchTerms = search.toLowerCase().split(',').map(term => term.trim()).filter(Boolean); // Split only on commas, preserve multi-word terms
-            console.log('searching for:', searchTerms, 'in records');
+            // console.log('searching for:', searchTerms, 'in records');
             records = records.filter(record => {
                 const basicData = record.data.basic;
                 return searchTerms.every(term => {
@@ -1419,7 +1419,7 @@ async function getRecords(queryParams) {
                 return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
             });
 
-            console.log('after search filtering and sorting, there are', records.length, 'records');
+            // console.log('after search filtering and sorting, there are', records.length, 'records');
         }
 
         
@@ -1456,7 +1456,7 @@ async function getRecords(queryParams) {
         return record;
     });
 
-        console.log('after adding dateReadable field, there are', records.length, 'records');
+        // console.log('after adding dateReadable field, there are', records.length, 'records');
 
         // Helper function to sort records based on sortBy parameter
         const applySorting = (recordsToSort, sortByParam) => {
@@ -1599,7 +1599,7 @@ async function getRecords(queryParams) {
         }
 
         if (hasAudio) {
-            console.log('Filtering for records with audio...');
+            // console.log('Filtering for records with audio...');
             const initialResolvedRecords = resolvedRecords;
             resolvedRecords = resolvedRecords.filter(record => {
                 return Object.values(record.data).some(item => {
@@ -1624,10 +1624,10 @@ async function getRecords(queryParams) {
             // console.log('count of resolvedRecords, initialResolvedRecords', resolvedRecords.length, initialResolvedRecords.length);
             // remove the records in resolvedRecords from initialResolvedRecords and return the remaining records
             resolvedRecords = initialResolvedRecords.filter(record => !resolvedRecords.includes(record));
-            console.log('After filtering for records without audio, there are', resolvedRecords.length, 'records');
+            // console.log('After filtering for records without audio, there are', resolvedRecords.length, 'records');
             }
             else {
-            console.log('After filtering for records with audio, there are', resolvedRecords.length, 'records');
+            // console.log('After filtering for records with audio, there are', resolvedRecords.length, 'records');
             }
         }
 
