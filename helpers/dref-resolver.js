@@ -29,24 +29,60 @@ async function resolveDrefsInRecord(recordJson, templateName, fieldToSubTemplate
   async function processSubObject(subObj, subTemplateName) {
     // Build exactMatch from subObj, focusing on basic.name
     const exactMatch = {};
-    if (subObj.basic && subObj.basic.name) {
-      exactMatch['data.basic.name'] = subObj.basic.name;
+    
+    // Handle nested dref structure like {exercise: {basic: {name: "..."}}}
+    let basicName = null;
+    let recordData = null;
+    
+    if (subObj[subTemplateName]) {
+      // This is the expected nested structure: {exercise: {basic: {name: "..."}}}
+      recordData = subObj[subTemplateName];
+      if (recordData.basic && recordData.basic.name) {
+        basicName = recordData.basic.name;
+      }
+    } else if (subObj.basic && subObj.basic.name) {
+      // Fallback: flat structure {basic: {name: "..."}}
+      recordData = subObj;
+      basicName = subObj.basic.name;
     }
-    // Add more fields if needed
-
+    
+    if (basicName) {
+      exactMatch['data.basic.name'] = basicName;
+    }
+    
+    console.log(`Processing subObject for ${subTemplateName}:`, JSON.stringify(subObj, null, 2));
+    console.log(`Extracted recordData:`, JSON.stringify(recordData, null, 2));
+    console.log(`Built exactMatch:`, exactMatch);
+    
     const results = await getRecords({ exactMatch: JSON.stringify(exactMatch), recordType: subTemplateName, limit: 1, sortBy: 'inArweaveBlock:desc' });
     if (results.records.length > 0) {
+      console.log(`Found existing record for ${basicName}:`, results.records[0].oip.didTx);
       return results.records[0].oip.didTx;
     } else {
-      let enhancedObj = { ...subObj };
-      if (subTemplateName === 'nutritionalInfo' && enhancedObj.basic && enhancedObj.basic.name) {
-        const fetched = await fetchNutritionalData(enhancedObj.basic.name);
+      console.log(`No existing record found for ${basicName}, creating new one`);
+      
+      // Use the extracted recordData for publishing
+      let enhancedObj = { ...recordData };
+      
+      // Ensure we have proper basic structure
+      if (!enhancedObj.basic) {
+        enhancedObj.basic = {};
+      }
+      if (basicName) {
+        enhancedObj.basic.name = basicName;
+      }
+      
+      // Add nutritional data enhancement if needed
+      if (subTemplateName === 'nutritionalInfo' && basicName) {
+        const fetched = await fetchNutritionalData(basicName);
         enhancedObj.nutritionalInfo = { ...(enhancedObj.nutritionalInfo || {}), ...fetched.nutritionalInfo };
         if (fetched.image) enhancedObj.image = { ...enhancedObj.image, ...fetched.image };
-        // Optionally merge basic fields if needed
         enhancedObj.basic = { ...enhancedObj.basic, ...fetched.basic };
       }
+      
+      console.log(`Publishing new ${subTemplateName} record:`, JSON.stringify(enhancedObj, null, 2));
       const newRecord = await publishNewRecord(enhancedObj, subTemplateName, false, false, false, null, blockchain);
+      console.log(`Created new record:`, newRecord.recordToIndex.oip.didTx);
       return newRecord.recordToIndex.oip.didTx;
     }
   }

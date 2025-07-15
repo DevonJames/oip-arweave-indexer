@@ -139,20 +139,20 @@ async function createNewExerciseRecord(exerciseName, blockchain = 'arweave') {
         // Search for exercise in Kaggle dataset
         const exerciseData = await dataset.searchExercise(exerciseName);
         
-        if (!exerciseData) {
-            console.log(`No exercise found in Kaggle dataset for: ${exerciseName}`);
+        if (!exerciseData || !exerciseData.name) {
+            console.log(`No valid exercise data found for: ${exerciseName}`);
             return null;
         }
         
         // Format the exercise data according to OIP exercise template
         const formattedExerciseInfo = {
             basic: {
-                name: exerciseData.name,
+                name: exerciseData.name || exerciseName, // Use exerciseName as fallback
                 date: Math.floor(Date.now() / 1000),
                 language: 'en',
                 nsfw: false,
-                webUrl: exerciseData.source_url,
-                description: `${exerciseData.name} - ${exerciseData.category} exercise targeting ${exerciseData.muscle_groups.join(', ')}`,
+                webUrl: exerciseData.source_url || '',
+                description: `${exerciseData.name || exerciseName} - ${exerciseData.category || 'exercise'} exercise targeting ${(exerciseData.muscle_groups || ['general']).join(', ')}`,
                 tagItems: exerciseData.goal_tags || []
             },
             exercise: {
