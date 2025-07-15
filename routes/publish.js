@@ -518,110 +518,7 @@ router.get('/schemas', (req, res) => {
     }
 });
 
-// Function to parse ingredient strings and separate base ingredient from comments
-function parseIngredientString(ingredientString) {
-    const original = ingredientString.trim();
-    let ingredient = original;
-    let comment = '';
-    
-    // Don't process didTx values - handle them in the main parsing logic
-    if (original.startsWith('did:')) {
-        return { originalString: original, ingredient: original, comment: '' };
-    }
-    
-    // Strategy: Identify the core ingredient (usually a noun) and separate descriptive modifiers
-    
-    // Handle complex ingredient alternatives (e.g., "bacon, or prosciutto, pancetta, or sausage patties, crisped")
-    // These should be treated as the primary ingredient with alternatives as comments
-    if (ingredient.includes(' or ') && ingredient.includes(',')) {
-        // Split on first comma to get primary ingredient vs alternatives
-        const firstCommaIndex = ingredient.indexOf(',');
-        const primaryIngredient = ingredient.substring(0, firstCommaIndex).trim();
-        const alternatives = ingredient.substring(firstCommaIndex + 1).trim();
-        
-        // If alternatives start with "or", it's likely an ingredient choice
-        if (alternatives.startsWith('or ')) {
-            ingredient = primaryIngredient;
-            comment = alternatives;
-            return { originalString: original, ingredient, comment };
-        }
-    }
-    
-    // 1. Handle parentheses first (e.g., "flour tortillas (12-inch)")
-    const parenMatch = ingredient.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-    if (parenMatch) {
-        const beforeParen = parenMatch[1].trim();
-        const inParen = parenMatch[2].trim();
-        
-        // Common parenthetical comments
-        const isComment = 
-            /\d+\s*-?\s*inch/i.test(inParen) ||
-            /\d+\s*oz/i.test(inParen) ||
-            /each|optional|plus more|for garnish|to taste/i.test(inParen);
-        
-        if (isComment) {
-            ingredient = beforeParen;
-            comment = inParen;
-            return { originalString: original, ingredient, comment };
-        }
-    }
-    
-    // 2. Handle comma-separated descriptors (e.g., "ground beef, grass-fed")
-    const commaIndex = ingredient.indexOf(',');
-    if (commaIndex !== -1) {
-        const beforeComma = ingredient.substring(0, commaIndex).trim();
-        const afterComma = ingredient.substring(commaIndex + 1).trim();
-        
-        // Check if after comma is a descriptor
-        const isDescriptor = 
-            /^(grass[- ]?fed|pasture[- ]?raised|free[- ]?range|wild[- ]?caught)$/i.test(afterComma) ||
-            /^(organic|fresh|frozen|dried|raw|canned|bottled)$/i.test(afterComma) ||
-            /^(extra|virgin|pure|unfiltered|cold[- ]?pressed)$/i.test(afterComma) ||
-            /^(minced|diced|chopped|sliced|shredded|grated|crushed)$/i.test(afterComma) ||
-            /^(to taste|optional|as needed|for serving|for garnish)$/i.test(afterComma) ||
-            /^(boneless|skinless|trimmed|lean)$/i.test(afterComma) ||
-            /^(fried|baked|roasted|grilled|steamed|boiled)$/i.test(afterComma);
-        
-        if (isDescriptor) {
-            ingredient = beforeComma;
-            comment = afterComma;
-            return { originalString: original, ingredient, comment };
-        }
-    }
-    
-    // 3. Handle leading descriptors (e.g., "ground beef" -> ingredient: "beef", comment: "ground")
-    const words = ingredient.split(' ');
-    if (words.length >= 2) {
-        const firstWord = words[0].toLowerCase();
-        const restOfWords = words.slice(1).join(' ');
-        
-        // Common leading descriptors
-        const leadingDescriptors = [
-            'ground', 'whole', 'fresh', 'dried', 'frozen', 'organic', 'raw', 'cooked',
-            'boneless', 'skinless', 'trimmed', 'lean', 'extra', 'virgin', 'pure'
-        ];
-        
-        if (leadingDescriptors.includes(firstWord) && restOfWords.length > 2) {
-            // Special case: don't separate "ground beef" or "ground pork" - these are distinct ingredients
-            if (firstWord === 'ground' && /^(beef|pork|turkey|chicken|lamb)$/i.test(words[1])) {
-                ingredient = `${words[0]} ${words[1]}`;
-                if (words.length > 2) {
-                    comment = words.slice(2).join(' ');
-                }
-            } else {
-                ingredient = restOfWords;
-                comment = firstWord;
-            }
-            return { originalString: original, ingredient, comment };
-        }
-    }
-    
-    return {
-        originalString: original,
-        ingredient: ingredient,
-        comment: comment
-    };
-}
+
 
 
 // Function to create new nutritional info records for missing ingredients
@@ -661,17 +558,17 @@ router.post('/newRecipe', authenticateToken, async (req, res) => {
 
   console.log('Instructions:', instructions);
 
-  // Parse ingredient strings to separate base ingredients from comments
-  const parsedIngredients = ingredients.map(ing => {
-    const parsed = parseIngredientString(ing.name);
-    console.log(`Parsed ingredient: "${parsed.originalString}" -> ingredient: "${parsed.ingredient}", comment: "${parsed.comment}"`);
-    return parsed;
-  });
+  // Since ingredient_comment is now provided explicitly, use ingredients as-is
+  const parsedIngredients = ingredients.map(ing => ({
+    originalString: ing.name,
+    ingredient: ing.name,
+    comment: ''
+  }));
 
   // Separate ingredients that are didTx values from those that need lookup
   const ingredientNames = []; // Only names that need lookup
   const ingredientNamesForDisplay = []; // All cleaned names for display
-  const ingredientComments = parsedIngredients.map(parsed => parsed.comment);
+  const ingredientComments = record.recipe.ingredient_comment || [];
   const ingredientDidTxMap = {}; // Map original ingredient string to didTx if it's already a didTx
   
   parsedIngredients.forEach((parsed, index) => {
@@ -691,8 +588,7 @@ router.post('/newRecipe', authenticateToken, async (req, res) => {
         ingredientDidTxMap[originalString] = didTx;
         ingredientNamesForDisplay.push(didTx); // For display purposes
         
-        // Update the comment in the parsed ingredients
-        ingredientComments[index] = comment;
+        // Comments are already provided in ingredient_comment array
         
         console.log(`Found didTx with comment at index ${index}: ${didTx} (comment: "${comment}")`);
       } else {
@@ -702,7 +598,7 @@ router.post('/newRecipe', authenticateToken, async (req, res) => {
         console.log(`Found didTx without comment at index ${index}: ${originalString}`);
       }
     } else if (ingredient.startsWith('did:')) {
-      // This handles the case where parseIngredientString already processed it
+      // This handles the case where ingredient is already a didTx
       ingredientDidTxMap[originalString] = ingredient;
       ingredientNamesForDisplay.push(ingredient); // For display purposes
       console.log(`Found existing didTx at index ${index}: ${ingredient}`);
@@ -718,7 +614,6 @@ router.post('/newRecipe', authenticateToken, async (req, res) => {
   const ingredientAmounts = ingredients.map(ing => ing.amount ?? 1);
   const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
 
-  console.log('Parsed ingredients:', parsedIngredients);
   console.log('Ingredient names for lookup only:', ingredientNames);
   console.log('All ingredient names for display:', ingredientNamesForDisplay);
   console.log('Ingredient comments:', ingredientComments);
@@ -1293,7 +1188,7 @@ if (recipeData.recipe.ingredient && recipeData.recipe.ingredient.length > 0) {
 console.log('Recipe data:', recipeData);
 console.log('Final ingredient processing summary:');
 console.log('- Original ingredients:', originalIngredientNames);
-console.log('- Cleaned ingredients for nutrition lookup:', ingredientNames);
+console.log('- Ingredients for nutrition lookup:', ingredientNames);
 console.log('- Ingredient comments:', ingredientComments);
 console.log('- Ingredient DID references:', ingredientDRefs);
 
