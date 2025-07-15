@@ -1286,6 +1286,38 @@ async function getRecords(queryParams) {
             );
             console.log('after filtering by didTxRef, there are', records.length, 'records');
         }
+        
+        // Add exactMatch filtering
+        if (exactMatch != undefined) {
+            console.log('exactMatch:', exactMatch);
+            try {
+                const exactMatchObj = JSON.parse(exactMatch);
+                console.log('parsed exactMatch:', exactMatchObj);
+                
+                records = records.filter(record => {
+                    return Object.entries(exactMatchObj).every(([fieldPath, expectedValue]) => {
+                        // Navigate through the nested object structure
+                        const pathParts = fieldPath.split('.');
+                        let currentValue = record;
+                        
+                        for (const part of pathParts) {
+                            if (currentValue && typeof currentValue === 'object' && part in currentValue) {
+                                currentValue = currentValue[part];
+                            } else {
+                                return false; // Path doesn't exist
+                            }
+                        }
+                        
+                        // Check if the final value matches exactly
+                        return currentValue === expectedValue;
+                    });
+                });
+                console.log('after filtering by exactMatch, there are', records.length, 'records');
+            } catch (error) {
+                console.error('Error parsing exactMatch JSON:', error);
+            }
+        }
+        
         if (url !== undefined) {
             console.log('url to match:', url);
             records = records.filter(record => {
