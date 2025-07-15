@@ -58,13 +58,13 @@ async function resolveDrefsInRecord(recordJson, templateName, fieldToSubTemplate
       const subTemplate = fieldToSubTemplate[key] || key;
 
       if (fieldType === 'dref') {
-        if (typeof props[key] === 'object' && props[key] !== null && !props[key].startsWith('did:')) {
+        if (typeof props[key] === 'object' && props[key] !== null && !(typeof props[key] === 'string' && props[key].startsWith('did:'))) {
           props[key] = await processSubObject(props[key], subTemplate);
         }
       } else if (fieldType === 'repeated dref') {
         if (Array.isArray(props[key])) {
           props[key] = await Promise.all(props[key].map(async (item) => {
-            if (typeof item === 'object' && item !== null && !item.startsWith('did:')) {
+            if (typeof item === 'object' && item !== null && !(typeof item === 'string' && item.startsWith('did:'))) {
               return await processSubObject(item, subTemplate);
             }
             return item;
