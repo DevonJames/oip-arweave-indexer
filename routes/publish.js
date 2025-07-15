@@ -167,13 +167,51 @@ async function createNewExerciseRecord(exerciseName, blockchain = 'arweave') {
                 alternativeEquipment: exerciseData.alternative_equipment || [],
                 isBodyweight: exerciseData.is_bodyweight || false,
                 exercise_type: exerciseData.exercise_type,
-                duration_minutes: exerciseData.duration_minutes || 0,
-                duration_target: exerciseData.duration_minutes || 0,
+                // measurement_type: 
+                est_duration_minutes: exerciseData.duration_minutes || 0,
+                target_duration_seconds: exerciseData.duration_minutes * 60 || 0,
                 recommended_sets: exerciseData.recommended_sets || 3,
                 recommended_reps: exerciseData.recommended_reps || 12,
                 goalTags: exerciseData.goal_tags || []
             }
         };
+        
+        // Add measurement_type determination logic after creating formattedExerciseInfo
+        let measurementType = 'reps'; // default
+
+        const exerciseNameLower = (exerciseData.name || exerciseName).toLowerCase();
+        const categoryLower = (exerciseData.category || '').toLowerCase();
+        const exerciseTypeLower = (exerciseData.exercise_type || '').toLowerCase();
+
+        // Check for timed exercises
+        if (exerciseData.duration_minutes > 0 || 
+            categoryLower.includes('cardio') || 
+            exerciseTypeLower.includes('cardio') ||
+            exerciseNameLower.includes('running') ||
+            exerciseNameLower.includes('cycling') ||
+            exerciseNameLower.includes('walking') ||
+            exerciseNameLower.includes('jogging')) {
+          measurementType = 'timed';
+        }
+        // Check for hold exercises
+        else if (exerciseNameLower.includes('plank') ||
+                 exerciseNameLower.includes('hold') ||
+                 exerciseNameLower.includes('wall sit') ||
+                 exerciseNameLower.includes('static') ||
+                 exerciseNameLower.includes('isometric') ||
+                 exerciseNameLower.includes('bridge') ||
+                 exerciseNameLower.includes('pose')) {
+          measurementType = 'hold';
+        }
+        // Check for max duration exercises
+        else if ((exerciseNameLower.includes('max') && exerciseNameLower.includes('duration')) ||
+                 exerciseNameLower.includes('as long as possible') ||
+                 exerciseNameLower.includes('until failure')) {
+          measurementType = 'maxdur';
+        }
+
+        // Add measurement_type to the exercise object
+        formattedExerciseInfo.exercise.measurement_type = measurementType;
         
         // Publish the exercise record
         const exerciseTx = await publishNewRecord(formattedExerciseInfo, "exercise", false, false, false, null, blockchain);
@@ -1306,7 +1344,7 @@ router.post('/newWorkout', async (req, res) => {
               const exResults = await getRecords({ didTx: exDid, recordType: 'exercise', sortBy: 'inArweaveBlock:desc', limit: 1 });
               if (exResults.searchResults > 0) {
                 const exRecord = exResults.records[0];
-                total += exRecord.data.exercise.duration_minutes || 0;
+                total += exRecord.data.exercise.est_duration_minutes || 0;
               }
             }
           }
