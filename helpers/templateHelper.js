@@ -158,10 +158,14 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 } else {
                                     console.log(`Value not found in enum values for key: ${key}`);
                                 }
-                            } else if (fieldType === 'dref' && key !== "show" && fieldType === 'dref' && key !== "license") {
-                                const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
-                                const templatesArray = (json[key][0] !== undefined) ? Object.keys(json[key][0]) : Object.keys(json[key]);
-                                recordType = findMatchingString(JSON.stringify(key), templatesArray)
+                                        } else if (fieldType === 'dref' && key !== "show" && fieldType === 'dref' && key !== "license") {
+                // Skip processing if the field is null or undefined
+                if (json[key] === null || json[key] === undefined) {
+                    continue;
+                }
+                const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
+                const templatesArray = (json[key][0] !== undefined) ? Object.keys(json[key][0]) : Object.keys(json[key]);
+                recordType = findMatchingString(JSON.stringify(key), templatesArray)
                                 console.log('thx 133', subRecord, templatesArray, { key }, recordType)
                                 if (!recordType) {
                                     // check if there is only one template in the array
@@ -179,12 +183,16 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 subRecordTypes.push(recordType);
                                 // console.log('recordType 143', recordType, {didTxRefs}, {subRecords})
                                 converted[fields[indexKey]] = dref;
-                            } else if (fieldType === 'repeated dref' && key !== "citations" && key !== "hosts" && key !== "ingredient") {
-                                // Check if the array already contains resolved didTx strings
-                                if (Array.isArray(json[key]) && json[key].length > 0 && typeof json[key][0] === 'string' && json[key][0].startsWith('did:')) {
-                                    // Already resolved - just use the didTx strings
-                                    converted[fields[indexKey]] = json[key];
-                                } else {
+                                        } else if (fieldType === 'repeated dref' && key !== "citations" && key !== "hosts" && key !== "ingredient") {
+                // Skip processing if the field is null or undefined
+                if (json[key] === null || json[key] === undefined) {
+                    continue;
+                }
+                // Check if the array already contains resolved didTx strings
+                if (Array.isArray(json[key]) && json[key].length > 0 && typeof json[key][0] === 'string' && json[key][0].startsWith('did:')) {
+                    // Already resolved - just use the didTx strings
+                    converted[fields[indexKey]] = json[key];
+                } else {
                                     // console.log('149 Processing repeated dref:', json[key], fields[indexKey]);
                                     const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
                                     // console.log('151b Processing repeated dref:', subRecord);
