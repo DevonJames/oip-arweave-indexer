@@ -1291,7 +1291,6 @@ router.post('/newWorkout', async (req, res) => {
         const nonStandardWorkout = req.body.workout?.nonStandardWorkout || false;
         let recordType = 'workout';
 
-        const nonStandardWorkout = req.body.workout?.nonStandardWorkout || false;
         let resolvedWorkout;
         if (!nonStandardWorkout) {
           resolvedWorkout = await resolveDrefsInRecord(req.body, 'workout', {exercise: 'exercise'}, blockchain);
