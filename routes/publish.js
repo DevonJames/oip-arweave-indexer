@@ -1363,7 +1363,7 @@ router.post('/newWorkout', async (req, res) => {
             description: resolvedWorkout.basic?.description || '',
             webUrl: resolvedWorkout.basic?.webUrl || '',
             nsfw: resolvedWorkout.basic?.nsfw || false,
-            tagItems: resolvedWorkout.basic?.tagItems || [],
+            tagItems: resolvedWorkout.workout?.goalTags || [],
           },
           workout: {
             total_duration_minutes: resolvedWorkout.workout?.total_duration_minutes || 0,
@@ -1377,15 +1377,14 @@ router.post('/newWorkout', async (req, res) => {
             exercise: resolvedWorkout.workout?.exercise || [],
             exercise_comment: resolvedWorkout.workout?.exercise_comment || [],
             instructions: resolvedWorkout.workout?.instructions || '',
-            muscleGroups: resolvedWorkout.workout?.muscleGroups || [],
-            goalTags: resolvedWorkout.workout?.goalTags || [],
+            // goalTags: resolvedWorkout.workout?.goalTags || [],
             author: resolvedWorkout.workout?.author || '',
             authorDRef: resolvedWorkout.workout?.authorDRef || null,
             notes: resolvedWorkout.workout?.notes || ''
-          },
-          image: {
-            webUrl: resolvedWorkout.image?.webUrl || '',
-            contentType: resolvedWorkout.image?.contentType || ''
+        //   },
+        //   image: {
+        //     webUrl: resolvedWorkout.image?.webUrl || '',
+        //     contentType: resolvedWorkout.image?.contentType || ''
           }
         };
 
