@@ -1348,6 +1348,10 @@ router.post('/newWorkout', async (req, res) => {
               }
             }
           }
+          // Add 2 minutes between each exercise (exercises.length - 1 transitions)
+          if (exercises.length > 1) {
+            total += (exercises.length - 1) * 2;
+          }
           resolvedWorkout.workout.total_duration_minutes = total;
         }
 
