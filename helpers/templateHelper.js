@@ -180,34 +180,42 @@ const translateJSONtoOIPData = async (record, recordType) => {
                                 // console.log('recordType 143', recordType, {didTxRefs}, {subRecords})
                                 converted[fields[indexKey]] = dref;
                             } else if (fieldType === 'repeated dref' && key !== "citations" && key !== "hosts" && key !== "ingredient") {
-                                // console.log('149 Processing repeated dref:', json[key], fields[indexKey]);
-                                const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
-                                // console.log('151b Processing repeated dref:', subRecord);
+                                // Check if the array already contains resolved didTx strings
+                                if (Array.isArray(json[key]) && json[key].length > 0 && typeof json[key][0] === 'string' && json[key][0].startsWith('did:')) {
+                                    // Already resolved - just use the didTx strings
+                                    converted[fields[indexKey]] = json[key];
+                                } else {
+                                    // console.log('149 Processing repeated dref:', json[key], fields[indexKey]);
+                                    const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
+                                    // console.log('151b Processing repeated dref:', subRecord);
 
-                                // console.log('th 113 Processing repeated dref for template:', template, json[key][0], subRecord, { key })
-                                const templatesArray = (json[key][0] !== undefined) ? Object.keys(json[key][0]) : Object.keys(json[key]);
-                                recordType = findMatchingString(JSON.stringify(key)[0], templatesArray)
-                                console.log('th 158', templatesArray, recordType)
-                                if (!recordType) {
-                                    // check if there is only one template in the array
-                                    if (templatesArray.length === 1) {
-                                        recordType = templatesArray[0];
-                                    } else {
-                                        recordType = key;
-                                        // console.log('Record type not found', { key });
+                                    // console.log('th 113 Processing repeated dref for template:', template, json[key][0], subRecord, { key })
+                                    const templatesArray = (json[key][0] !== undefined) ? Object.keys(json[key][0]) : Object.keys(json[key]);
+                                    recordType = findMatchingString(JSON.stringify(key)[0], templatesArray)
+                                    console.log('th 158', templatesArray, recordType)
+                                    console.log('th 158 json[key]:', JSON.stringify(json[key], null, 2));
+                                    console.log('th 158 json[key][0]:', JSON.stringify(json[key][0], null, 2));
+                                    if (!recordType) {
+                                        // check if there is only one template in the array
+                                        if (templatesArray.length === 1) {
+                                            recordType = templatesArray[0];
+                                        } else {
+                                            recordType = key;
+                                            // console.log('Record type not found', { key });
+                                        }
                                     }
+
+                                    // console.log('th 155 recordType', recordType)
+                                    const newRecord = await publishNewRecord(subRecord, recordType);
+                                    const dref = newRecord.didTx;
+                                    subRecords.push(subRecord);
+                                    didTxRefs.push(dref);
+                                    subRecordTypes.push(recordType);
+                                    console.log('recordType 166', recordType, {didTxRefs}, {subRecords})
+
+                                    const repeatedDref = [dref];
+                                    converted[fields[indexKey]] = repeatedDref;
                                 }
-
-                                // console.log('th 155 recordType', recordType)
-                                const newRecord = await publishNewRecord(subRecord, recordType);
-                                const dref = newRecord.didTx;
-                                subRecords.push(subRecord);
-                                didTxRefs.push(dref);
-                                subRecordTypes.push(recordType);
-                                console.log('recordType 166', recordType, {didTxRefs}, {subRecords})
-
-                                const repeatedDref = [dref];
-                                converted[fields[indexKey]] = repeatedDref;
                             } else {
                                 converted[fields[indexKey]] = json[key];
                             }
