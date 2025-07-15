@@ -289,13 +289,13 @@ const translateOIPDataToJSON = async (record, template) => {
 
 const expandData = async (compressedData, templates) => {
     const records = JSON.parse(compressedData);
-    console.log('es 68 records:', records);
+    // console.log('es 68 records:', records);
 
     const expandedRecords = await Promise.all(records.map(async record => {
-        console.log('es 72 record:', record.t);
+        // console.log('es 72 record:', record.t);
 
         let template = findTemplateByTxId(record.t, templates);
-        console.log('es 70 template:', record.t, template);
+        // console.log('es 70 template:', record.t, template);
 
         let jsonData = await translateOIPDataToJSON(record, template);
         if (!jsonData) {
@@ -2545,62 +2545,65 @@ async function processNewTemplate(transaction) {
                 id: oip.didTx
             });
             
-            if (!existingTemplate.body) {
-                // Create both formats - simple fields string AND complex fieldsInTemplate
-                const fieldsInTemplate = {};
-                let fieldCount = 0;
-                
-                for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
-                    if (fieldName.startsWith('index_') || fieldName.endsWith('Values')) {
-                        continue;
-                    }
-                    
-                    const fieldType = typeof fieldValue === 'object' ? fieldValue.type : fieldValue;
-                    const fieldIndex = typeof fieldValue === 'object' ? fieldValue.index : fieldCount;
-                    
-                    fieldsInTemplate[fieldName] = {
-                        type: fieldType,
-                        index: fieldIndex
-                    };
-                    fieldCount++;
+            // Create both formats - simple fields string AND complex fieldsInTemplate
+            const fieldsInTemplate = {};
+            let fieldCount = 0;
+            
+            for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
+                if (fieldName.startsWith('index_') || fieldName.endsWith('Values')) {
+                    continue;
                 }
                 
-                const finalTemplate = {
-                    data: {
-                        TxId: transaction.transactionId,
-                        creator: transaction.creator,
-                        creatorSig: templateSignatureBase64,
-                        template: templateName,
-                        fields: fieldsString,  // Store original JSON string for translateJSONtoOIPData
-                        fieldsInTemplate: fieldsInTemplate,  // Store processed object structure  
-                        fieldsInTemplateCount: fieldCount
-                    },
-                    oip
+                const fieldType = typeof fieldValue === 'object' ? fieldValue.type : fieldValue;
+                const fieldIndex = typeof fieldValue === 'object' ? fieldValue.index : fieldCount;
+                
+                fieldsInTemplate[fieldName] = {
+                    type: fieldType,
+                    index: fieldIndex
                 };
-                
-                console.log(getFileInfo(), getLineNumber(), `🔍 Template data being stored for ${templateName}:`, {
+                fieldCount++;
+            }
+            
+            const finalTemplate = {
+                data: {
                     TxId: transaction.transactionId,
-                    hasFields: !!fieldsString,
-                    fieldsLength: fieldsString ? fieldsString.length : 0,
-                    fieldsInTemplateKeys: Object.keys(fieldsInTemplate),
-                    fieldCount: fieldCount
-                });
-                
-                // DEBUG: Log the actual fieldsObject and fieldsInTemplate
-                console.log(getFileInfo(), getLineNumber(), `🐛 DEBUG fieldsObject:`, fieldsObject);
-                console.log(getFileInfo(), getLineNumber(), `🐛 DEBUG fieldsInTemplate:`, fieldsInTemplate);
-                console.log(getFileInfo(), getLineNumber(), `🐛 DEBUG finalTemplate before storage:`, JSON.stringify(finalTemplate, null, 2));
-                
-                // Add enum values if they exist
-                for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
-                    if (fieldValue === 'enum' && fieldsObject[`${fieldName}Values`]) {
-                        finalTemplate.data[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
-                        console.log(getFileInfo(), getLineNumber(), `📋 Added enum values for ${fieldName}:`, fieldsObject[`${fieldName}Values`].length, 'values');
-                    }
+                    creator: transaction.creator,
+                    creatorSig: templateSignatureBase64,
+                    template: templateName,
+                    fields: fieldsString,  // Store original JSON string for translateJSONtoOIPData
+                    fieldsInTemplate: fieldsInTemplate,  // Store processed object structure  
+                    fieldsInTemplateCount: fieldCount
+                },
+                oip
+            };
+            
+            // Add enum values if they exist
+            for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
+                if (fieldValue === 'enum' && fieldsObject[`${fieldName}Values`]) {
+                    finalTemplate.data[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
+                    console.log(getFileInfo(), getLineNumber(), `📋 Added enum values for ${fieldName}:`, fieldsObject[`${fieldName}Values`].length, 'values');
                 }
-                
+            }
+            
+            if (existingTemplate.body) {
+                // Update existing pending template with confirmed data
+                const response = await elasticClient.update({
+                    index: 'templates',
+                    id: oip.didTx,
+                    body: {
+                        doc: {
+                            ...finalTemplate,
+                            "oip.recordStatus": "original"
+                        }
+                    },
+                    refresh: 'wait_for'
+                });
+                console.log(getFileInfo(), getLineNumber(), `✅ Template updated successfully: ${oip.didTx}`, response.result);
+            } else {
+                // Create new template
                 const indexResult = await elasticClient.index({
                     index: 'templates',
+                    id: oip.didTx,
                     body: finalTemplate,
                     refresh: 'wait_for'  // Ensure immediate availability
                 });
@@ -2615,8 +2618,6 @@ async function processNewTemplate(transaction) {
                     fieldsInTemplateKeys: Object.keys(finalTemplate.data.fieldsInTemplate || {}),
                     fieldsInTemplateCount: finalTemplate.data.fieldsInTemplateCount
                 });
-            } else {
-                console.log(`Template already exists in DB: ${transaction.transactionId}`);
             }
         } catch (error) {
             console.error(`Error indexing template: ${transaction.transactionId}`, error);
