@@ -1140,6 +1140,7 @@ async function getRecords(queryParams) {
         includeSigs = true,
         includePubKeys = true,
         exactMatch,
+        exerciseNames, // New parameter for workout exercise filtering
     } = queryParams;
 
     // console.log('get records using:', {queryParams});
@@ -1552,6 +1553,22 @@ async function getRecords(queryParams) {
                         console.log('Warning: sortBy=tags specified but no tags parameter provided - skipping tags sort');
                     }
                 }
+
+                if (fieldToSortBy === 'exerciseScore') {
+                    // Only allow 'exerciseScore' sorting when exerciseNames parameter is provided
+                    if (exerciseNames != undefined) {
+                        recordsToSort.sort((a, b) => {
+                            if (order === 'asc') {
+                                return (a.exerciseScore || 0) - (b.exerciseScore || 0);
+                            } else {
+                                return (b.exerciseScore || 0) - (a.exerciseScore || 0);
+                            }
+                        });
+                        console.log('sorted by exercise score (' + order + ')');
+                    } else {
+                        console.log('Warning: sortBy=exerciseScore specified but no exerciseNames parameter provided - skipping exerciseScore sort');
+                    }
+                }
             }
         };
 
@@ -1596,6 +1613,74 @@ async function getRecords(queryParams) {
         // Remove null values if hideNullValues is true
         if (hideNullValues === 'true' || hideNullValues === true) {
             resolvedRecords = resolvedRecords.map(record => removeNullValues(record));
+        }
+
+        // Filter workouts by exercise names if exerciseNames parameter is provided
+        if (exerciseNames && recordType === 'workout') {
+            console.log('Filtering workouts by exercise names:', exerciseNames);
+            const requestedExercises = exerciseNames.split(',').map(name => name.trim().toLowerCase());
+            
+            // Helper function to calculate order similarity score
+            const calculateOrderSimilarity = (workoutExercises, requestedExercises) => {
+                const workoutExercisesLower = workoutExercises.map(ex => ex.toLowerCase());
+                let score = 0;
+                let matchedCount = 0;
+                
+                // Check how many requested exercises are present
+                for (const requestedExercise of requestedExercises) {
+                    if (workoutExercisesLower.includes(requestedExercise)) {
+                        matchedCount++;
+                    }
+                }
+                
+                // Base score is the ratio of matched exercises
+                const matchRatio = matchedCount / requestedExercises.length;
+                
+                // Bonus points for maintaining order
+                let orderBonus = 0;
+                let lastFoundIndex = -1;
+                
+                for (const requestedExercise of requestedExercises) {
+                    const foundIndex = workoutExercisesLower.indexOf(requestedExercise);
+                    if (foundIndex > lastFoundIndex) {
+                        orderBonus += 0.1; // Small bonus for maintaining order
+                        lastFoundIndex = foundIndex;
+                    }
+                }
+                
+                score = matchRatio + (orderBonus / requestedExercises.length);
+                return { score, matchedCount };
+            };
+            
+            // Filter and score workout records
+            resolvedRecords = resolvedRecords.filter(record => {
+                if (record.oip.recordType !== 'workout' || !record.data.workout || !record.data.workout.exercise) {
+                    return false;
+                }
+                
+                const workoutExercises = record.data.workout.exercise;
+                const { score, matchedCount } = calculateOrderSimilarity(workoutExercises, requestedExercises);
+                
+                // Only include workouts that have at least one matching exercise
+                if (matchedCount > 0) {
+                    record.exerciseScore = score;
+                    record.exerciseMatchedCount = matchedCount;
+                    return true;
+                }
+                
+                return false;
+            });
+            
+            // Sort by exercise score (best matches first)
+            resolvedRecords.sort((a, b) => {
+                // Sort by exercise score descending, then by matched count descending
+                if (b.exerciseScore !== a.exerciseScore) {
+                    return b.exerciseScore - a.exerciseScore;
+                }
+                return b.exerciseMatchedCount - a.exerciseMatchedCount;
+            });
+            
+            console.log('After filtering by exercise names, there are', resolvedRecords.length, 'workout records');
         }
 
         if (hasAudio) {
