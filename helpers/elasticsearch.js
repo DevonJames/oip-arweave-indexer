@@ -1141,6 +1141,7 @@ async function getRecords(queryParams) {
         includePubKeys = true,
         exactMatch,
         exerciseNames, // New parameter for workout exercise filtering
+        ingredientNames, // New parameter for recipe ingredient filtering
     } = queryParams;
 
     // console.log('get records using:', {queryParams});
@@ -1569,6 +1570,22 @@ async function getRecords(queryParams) {
                         console.log('Warning: sortBy=exerciseScore specified but no exerciseNames parameter provided - skipping exerciseScore sort');
                     }
                 }
+
+                if (fieldToSortBy === 'ingredientScore') {
+                    // Only allow 'ingredientScore' sorting when ingredientNames parameter is provided
+                    if (ingredientNames != undefined) {
+                        recordsToSort.sort((a, b) => {
+                            if (order === 'asc') {
+                                return (a.ingredientScore || 0) - (b.ingredientScore || 0);
+                            } else {
+                                return (b.ingredientScore || 0) - (a.ingredientScore || 0);
+                            }
+                        });
+                        console.log('sorted by ingredient score (' + order + ')');
+                    } else {
+                        console.log('Warning: sortBy=ingredientScore specified but no ingredientNames parameter provided - skipping ingredientScore sort');
+                    }
+                }
             }
         };
 
@@ -1681,6 +1698,83 @@ async function getRecords(queryParams) {
             });
             
             console.log('After filtering by exercise names, there are', resolvedRecords.length, 'workout records');
+        }
+
+        // Filter recipes by ingredient names if ingredientNames parameter is provided
+        if (ingredientNames && recordType === 'recipe') {
+            console.log('Filtering recipes by ingredient names:', ingredientNames);
+            const requestedIngredients = ingredientNames.split(',').map(name => name.trim().toLowerCase());
+            
+            // Helper function to calculate order similarity score for ingredients
+            const calculateIngredientOrderSimilarity = (recipeIngredients, requestedIngredients) => {
+                // Extract ingredient names from resolved records
+                const recipeIngredientNames = recipeIngredients.map(ingredient => {
+                    if (typeof ingredient === 'string') {
+                        return ingredient.toLowerCase();
+                    } else if (ingredient && ingredient.data && ingredient.data.basic && ingredient.data.basic.name) {
+                        return ingredient.data.basic.name.toLowerCase();
+                    }
+                    return '';
+                }).filter(name => name);
+                
+                let score = 0;
+                let matchedCount = 0;
+                
+                // Check how many requested ingredients are present
+                for (const requestedIngredient of requestedIngredients) {
+                    if (recipeIngredientNames.includes(requestedIngredient)) {
+                        matchedCount++;
+                    }
+                }
+                
+                // Base score is the ratio of matched ingredients
+                const matchRatio = matchedCount / requestedIngredients.length;
+                
+                // Bonus points for maintaining order
+                let orderBonus = 0;
+                let lastFoundIndex = -1;
+                
+                for (const requestedIngredient of requestedIngredients) {
+                    const foundIndex = recipeIngredientNames.indexOf(requestedIngredient);
+                    if (foundIndex > lastFoundIndex) {
+                        orderBonus += 0.1; // Small bonus for maintaining order
+                        lastFoundIndex = foundIndex;
+                    }
+                }
+                
+                score = matchRatio + (orderBonus / requestedIngredients.length);
+                return { score, matchedCount };
+            };
+            
+            // Filter and score recipe records
+            resolvedRecords = resolvedRecords.filter(record => {
+                if (record.oip.recordType !== 'recipe' || !record.data.recipe || !record.data.recipe.ingredient) {
+                    return false;
+                }
+                
+                const recipeIngredients = record.data.recipe.ingredient;
+                const { score, matchedCount } = calculateIngredientOrderSimilarity(recipeIngredients, requestedIngredients);
+                
+                // Only include recipes that have at least one matching ingredient
+                if (matchedCount > 0) {
+                    record.ingredientScore = score;
+                    record.ingredientMatchedCount = matchedCount;
+                    return true;
+                }
+                
+                return false;
+            });
+            
+            // Sort by ingredient score (best matches first)
+            resolvedRecords.sort((a, b) => {
+                // Sort by ingredient score descending, then by matched count descending
+                if (b.ingredientScore !== a.ingredientScore) {
+                    return b.ingredientScore - a.ingredientScore;
+                }
+                return b.ingredientMatchedCount - a.ingredientMatchedCount;
+            });
+            
+            console.log('After filtering by ingredient names, there are', resolvedRecords.length, 'recipe records');
         }
 
         if (hasAudio) {
