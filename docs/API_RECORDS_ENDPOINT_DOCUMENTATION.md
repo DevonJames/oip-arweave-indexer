@@ -34,6 +34,29 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - Returns records matching ALL search terms (AND behavior)
   - Automatically sorts by match relevance
 
+### 🏋️ **Exercise Filtering (Workouts)**
+
+#### `exerciseNames`
+- **Type:** String (comma-separated)
+- **Description:** Filter workout records by exercise names they contain
+- **Example:** `exerciseNames=Deadlifts,Plank,High%20Knees`
+- **Behavior:** 
+  - Only works with `recordType=workout`
+  - Requires `resolveDepth=1` or higher (or `resolveNamesOnly=true`)
+  - Searches the `data.workout.exercise` array for exercise names
+  - Returns workouts that contain ANY of the specified exercises
+  - Automatically sorts by order similarity (how closely the exercise order matches the request)
+  - Adds `exerciseScore` and `exerciseMatchedCount` fields to matching records
+
+#### `sortBy=exerciseScore`
+- **Type:** String
+- **Description:** Sort results by exercise matching score
+- **Values:** 
+  - `exerciseScore:desc` (default) - Best matches first
+  - `exerciseScore:asc` - Worst matches first
+- **Example:** `exerciseNames=Deadlifts,Plank&sortBy=exerciseScore:desc`
+- **Note:** Only works when `exerciseNames` parameter is provided
+
 ### 🏷️ **Tag Filtering**
 
 #### `tags`
@@ -135,10 +158,12 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `date` - Record creation date
   - `score` - Match score (for search/tag queries)
   - `tags` - Tag match score (only works with `tags` parameter)
+  - `exerciseScore` - Exercise match score (only works with `exerciseNames` parameter)
 - **Examples:**
   - `sortBy=date:desc` - Newest first
   - `sortBy=inArweaveBlock:asc` - Oldest block first
   - `sortBy=tags:desc` - Best tag matches first (requires `tags` parameter)
+  - `sortBy=exerciseScore:desc` - Best exercise matches first (requires `exerciseNames` parameter)
 
 ### 📄 **Pagination**
 
@@ -236,6 +261,16 @@ GET /api/records?creatorHandle=chef_alex&recordType=recipe
 GET /api/records?dateStart=2024-01-01&dateEnd=2024-06-30&hasAudio=true
 ```
 
+### Exercise Search in Workouts
+```
+GET /api/records?recordType=workout&exerciseNames=Deadlifts,Plank,High%20Knees&resolveDepth=2&resolveNamesOnly=true&limit=10
+```
+
+### Exercise Search with Custom Sorting
+```
+GET /api/records?recordType=workout&exerciseNames=Squats,Push-ups&sortBy=exerciseScore:desc&resolveDepth=1&limit=5
+```
+
 ### Complex Query with Multiple Filters
 ```
 GET /api/records?search=mediterranean&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3
@@ -265,6 +300,23 @@ GET /api/records?summarizeTags=true&tagCount=100&recordType=post
 }
 ```
 
+### Exercise Search Response Fields
+
+When using the `exerciseNames` parameter with workout records, the response includes additional fields:
+
+```json
+{
+  "records": [
+    {
+      "data": { /* workout data */ },
+      "oip": { /* metadata */ },
+      "exerciseScore": 0.85,
+      "exerciseMatchedCount": 3
+    }
+  ]
+}
+```
+
 ## Performance Tips
 
 1. **Use appropriate `limit`** - Smaller limits = faster responses
@@ -272,11 +324,22 @@ GET /api/records?summarizeTags=true&tagCount=100&recordType=post
 3. **Combine filters strategically** - More specific filters reduce processing load
 4. **Use `includeSigs=false` and `includePubKeys=false`** for lighter responses
 5. **Tag filtering is more efficient than full-text search** for known categories
+6. **Exercise search requires resolution** - Use `resolveDepth=1` minimum for exercise filtering
 
 ## Advanced Features
 
 ### Tag Match Scoring
 When using the `tags` parameter, records automatically receive a score based on how many of the specified tags they match. This score can be used for sorting with `sortBy=tags:desc`.
+
+### Exercise Match Scoring
+When using the `exerciseNames` parameter with workout records, records receive:
+- **exerciseScore**: Combination of match ratio and order similarity (0-1 scale)
+- **exerciseMatchedCount**: Number of requested exercises found in the workout
+
+The scoring algorithm:
+1. Calculates the ratio of matched exercises to requested exercises
+2. Adds bonus points for exercises appearing in the same order as requested
+3. Automatically sorts by best matches first
 
 ### Reference Resolution
 The `resolveDepth` parameter controls how deeply the system follows references (drefs) to other records, providing rich, interconnected data.
@@ -284,8 +347,9 @@ The `resolveDepth` parameter controls how deeply the system follows references (
 ### Flexible Search Modes
 - **Full-text search** (`search`) - Searches across name, description, and tags
 - **Tag filtering** (`tags`) - Precise tag-based filtering with AND/OR modes
-- **Combined approach** - Use both for maximum precision
+- **Exercise filtering** (`exerciseNames`) - Search workouts by exercise content
+- **Combined approach** - Use multiple parameters for maximum precision
 
 ---
 
-*This documentation reflects the current implementation as of the latest update. For the most up-to-date information, refer to the source code in `helpers/elasticsearch.js`.* 
+*This documentation reflects the current implementation as of the latest update. For the most up-to-date information, refer to the source code in `helpers/elasticsearch.js`.*
