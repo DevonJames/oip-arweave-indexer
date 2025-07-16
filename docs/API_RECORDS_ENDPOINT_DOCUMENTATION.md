@@ -57,6 +57,29 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Example:** `exerciseNames=Deadlifts,Plank&sortBy=exerciseScore:desc`
 - **Note:** Only works when `exerciseNames` parameter is provided
 
+### 🍳 **Ingredient Filtering (Recipes)**
+
+#### `ingredientNames`
+- **Type:** String (comma-separated)
+- **Description:** Filter recipe records by ingredient names they contain
+- **Example:** `ingredientNames=chicken,garlic,olive%20oil`
+- **Behavior:** 
+  - Only works with `recordType=recipe`
+  - Requires `resolveDepth=1` or higher (or `resolveNamesOnly=true`)
+  - Searches the resolved `data.recipe.ingredient` array for ingredient names at `data.basic.name`
+  - Returns recipes that contain ANY of the specified ingredients
+  - Automatically sorts by order similarity (how closely the ingredient order matches the request)
+  - Adds `ingredientScore` and `ingredientMatchedCount` fields to matching records
+
+#### `sortBy=ingredientScore`
+- **Type:** String
+- **Description:** Sort results by ingredient matching score
+- **Values:** 
+  - `ingredientScore:desc` (default) - Best matches first
+  - `ingredientScore:asc` - Worst matches first
+- **Example:** `ingredientNames=chicken,garlic&sortBy=ingredientScore:desc`
+- **Note:** Only works when `ingredientNames` parameter is provided
+
 ### 🏷️ **Tag Filtering**
 
 #### `tags`
@@ -159,11 +182,13 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `score` - Match score (for search/tag queries)
   - `tags` - Tag match score (only works with `tags` parameter)
   - `exerciseScore` - Exercise match score (only works with `exerciseNames` parameter)
+  - `ingredientScore` - Ingredient match score (only works with `ingredientNames` parameter)
 - **Examples:**
   - `sortBy=date:desc` - Newest first
   - `sortBy=inArweaveBlock:asc` - Oldest block first
   - `sortBy=tags:desc` - Best tag matches first (requires `tags` parameter)
   - `sortBy=exerciseScore:desc` - Best exercise matches first (requires `exerciseNames` parameter)
+  - `sortBy=ingredientScore:desc` - Best ingredient matches first (requires `ingredientNames` parameter)
 
 ### 📄 **Pagination**
 
@@ -271,6 +296,16 @@ GET /api/records?recordType=workout&exerciseNames=Deadlifts,Plank,High%20Knees&r
 GET /api/records?recordType=workout&exerciseNames=Squats,Push-ups&sortBy=exerciseScore:desc&resolveDepth=1&limit=5
 ```
 
+### Ingredient Search in Recipes
+```
+GET /api/records?recordType=recipe&ingredientNames=chicken,garlic,olive%20oil&resolveDepth=2&resolveNamesOnly=true&limit=10
+```
+
+### Ingredient Search with Custom Sorting
+```
+GET /api/records?recordType=recipe&ingredientNames=tomatoes,basil&sortBy=ingredientScore:desc&resolveDepth=1&limit=5
+```
+
 ### Complex Query with Multiple Filters
 ```
 GET /api/records?search=mediterranean&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3
@@ -317,6 +352,23 @@ When using the `exerciseNames` parameter with workout records, the response incl
 }
 ```
 
+### Ingredient Search Response Fields
+
+When using the `ingredientNames` parameter with recipe records, the response includes additional fields:
+
+```json
+{
+  "records": [
+    {
+      "data": { /* recipe data with resolved ingredient names */ },
+      "oip": { /* metadata */ },
+      "ingredientScore": 0.92,
+      "ingredientMatchedCount": 4
+    }
+  ]
+}
+```
+
 ## Performance Tips
 
 1. **Use appropriate `limit`** - Smaller limits = faster responses
@@ -325,6 +377,7 @@ When using the `exerciseNames` parameter with workout records, the response incl
 4. **Use `includeSigs=false` and `includePubKeys=false`** for lighter responses
 5. **Tag filtering is more efficient than full-text search** for known categories
 6. **Exercise search requires resolution** - Use `resolveDepth=1` minimum for exercise filtering
+7. **Ingredient search requires resolution** - Use `resolveDepth=1` minimum for ingredient filtering
 
 ## Advanced Features
 
@@ -341,6 +394,17 @@ The scoring algorithm:
 2. Adds bonus points for exercises appearing in the same order as requested
 3. Automatically sorts by best matches first
 
+### Ingredient Match Scoring
+When using the `ingredientNames` parameter with recipe records, records receive:
+- **ingredientScore**: Combination of match ratio and order similarity (0-1 scale)
+- **ingredientMatchedCount**: Number of requested ingredients found in the recipe
+
+The scoring algorithm:
+1. Calculates the ratio of matched ingredients to requested ingredients
+2. Adds bonus points for ingredients appearing in the same order as requested
+3. Automatically sorts by best matches first
+4. Searches resolved ingredient records at `data.basic.name` for ingredient names
+
 ### Reference Resolution
 The `resolveDepth` parameter controls how deeply the system follows references (drefs) to other records, providing rich, interconnected data.
 
@@ -348,6 +412,7 @@ The `resolveDepth` parameter controls how deeply the system follows references (
 - **Full-text search** (`search`) - Searches across name, description, and tags
 - **Tag filtering** (`tags`) - Precise tag-based filtering with AND/OR modes
 - **Exercise filtering** (`exerciseNames`) - Search workouts by exercise content
+- **Ingredient filtering** (`ingredientNames`) - Search recipes by ingredient content
 - **Combined approach** - Use multiple parameters for maximum precision
 
 ---
