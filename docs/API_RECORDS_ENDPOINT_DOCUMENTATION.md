@@ -44,6 +44,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - Only works with `recordType=workout`
   - Requires `resolveDepth=1` or higher (or `resolveNamesOnly=true`)
   - Searches the `data.workout.exercise` array for exercise names
+  - Handles various data structures (strings, resolved objects, or simple objects)
   - Returns workouts that contain ANY of the specified exercises
   - Automatically sorts by order similarity (how closely the exercise order matches the request)
   - Adds `exerciseScore` and `exerciseMatchedCount` fields to matching records
@@ -67,6 +68,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - Only works with `recordType=recipe`
   - Requires `resolveDepth=1` or higher (or `resolveNamesOnly=true`)
   - Searches the resolved `data.recipe.ingredient` array for ingredient names at `data.basic.name`
+  - Handles various data structures (strings, resolved objects, or simple objects)
   - Returns recipes that contain ANY of the specified ingredients
   - Automatically sorts by order similarity (how closely the ingredient order matches the request)
   - Adds `ingredientScore` and `ingredientMatchedCount` fields to matching records
@@ -404,6 +406,14 @@ The scoring algorithm:
 2. Adds bonus points for ingredients appearing in the same order as requested
 3. Automatically sorts by best matches first
 4. Searches resolved ingredient records at `data.basic.name` for ingredient names
+
+### Data Structure Handling
+Both exercise and ingredient search functions handle various data structures robustly:
+- **String values**: Direct string matching (e.g., `"Push-ups"`)
+- **Resolved objects**: Extracts names from `data.basic.name` (e.g., `{data: {basic: {name: "Push-ups"}}}`)
+- **Simple objects**: Extracts names from `name` property (e.g., `{name: "Push-ups"}`)
+- **Mixed arrays**: Handles combinations of the above structures in the same array
+- **Error handling**: Logs warnings for unexpected data structures and continues processing
 
 ### Reference Resolution
 The `resolveDepth` parameter controls how deeply the system follows references (drefs) to other records, providing rich, interconnected data.

@@ -1639,7 +1639,20 @@ async function getRecords(queryParams) {
             
             // Helper function to calculate order similarity score
             const calculateOrderSimilarity = (workoutExercises, requestedExercises) => {
-                const workoutExercisesLower = workoutExercises.map(ex => ex.toLowerCase());
+                // Extract exercise names from various data structures
+                const workoutExercisesLower = workoutExercises.map(ex => {
+                    if (typeof ex === 'string') {
+                        return ex.toLowerCase();
+                    } else if (ex && typeof ex === 'object' && ex.data && ex.data.basic && ex.data.basic.name) {
+                        return ex.data.basic.name.toLowerCase();
+                    } else if (ex && typeof ex === 'object' && ex.name) {
+                        return ex.name.toLowerCase();
+                    } else {
+                        console.warn('Unexpected exercise data structure:', ex);
+                        return '';
+                    }
+                }).filter(name => name); // Remove empty strings
+                
                 let score = 0;
                 let matchedCount = 0;
                 
@@ -1676,6 +1689,12 @@ async function getRecords(queryParams) {
                 }
                 
                 const workoutExercises = record.data.workout.exercise;
+                
+                // Ensure workoutExercises is an array
+                if (!Array.isArray(workoutExercises) || workoutExercises.length === 0) {
+                    return false;
+                }
+                
                 const { score, matchedCount } = calculateOrderSimilarity(workoutExercises, requestedExercises);
                 
                 // Only include workouts that have at least one matching exercise
@@ -1711,11 +1730,15 @@ async function getRecords(queryParams) {
                 const recipeIngredientNames = recipeIngredients.map(ingredient => {
                     if (typeof ingredient === 'string') {
                         return ingredient.toLowerCase();
-                    } else if (ingredient && ingredient.data && ingredient.data.basic && ingredient.data.basic.name) {
+                    } else if (ingredient && typeof ingredient === 'object' && ingredient.data && ingredient.data.basic && ingredient.data.basic.name) {
                         return ingredient.data.basic.name.toLowerCase();
+                    } else if (ingredient && typeof ingredient === 'object' && ingredient.name) {
+                        return ingredient.name.toLowerCase();
+                    } else {
+                        console.warn('Unexpected ingredient data structure:', ingredient);
+                        return '';
                     }
-                    return '';
-                }).filter(name => name);
+                }).filter(name => name); // Remove empty strings
                 
                 let score = 0;
                 let matchedCount = 0;
@@ -1753,6 +1776,12 @@ async function getRecords(queryParams) {
                 }
                 
                 const recipeIngredients = record.data.recipe.ingredient;
+                
+                // Ensure recipeIngredients is an array
+                if (!Array.isArray(recipeIngredients) || recipeIngredients.length === 0) {
+                    return false;
+                }
+                
                 const { score, matchedCount } = calculateIngredientOrderSimilarity(recipeIngredients, requestedIngredients);
                 
                 // Only include recipes that have at least one matching ingredient
