@@ -82,6 +82,37 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Example:** `ingredientNames=chicken,garlic&sortBy=ingredientScore:desc`
 - **Note:** Only works when `ingredientNames` parameter is provided
 
+### 🏋️ **Equipment Filtering (Exercises)**
+
+#### `equipmentRequired`
+- **Type:** String (comma-separated)
+- **Description:** Filter exercise records by equipment they require
+- **Example:** `equipmentRequired=dumbbells,barbell,bench`
+- **Behavior:** 
+  - Only works with `recordType=exercise`
+  - Default behavior: Returns exercises that require ALL of the specified equipment (AND behavior)
+  - Searches both `data.exercise.equipmentRequired` (array) and `data.exercise.equipment` (string/array)
+  - Uses fuzzy matching (partial string matching) for equipment names
+  - Automatically sorts by equipment match score (best matches first)
+  - Adds `equipmentScore` and `equipmentMatchedCount` fields to matching records
+
+#### `equipmentMatchMode`
+- **Type:** String
+- **Description:** Controls equipment matching behavior
+- **Values:** 
+  - `AND` (default) - Exercises that require ALL of the specified equipment
+  - `OR` - Exercises that require ANY of the specified equipment
+- **Example:** `equipmentRequired=dumbbells,barbell&equipmentMatchMode=OR`
+
+#### `sortBy=equipmentScore`
+- **Type:** String
+- **Description:** Sort results by equipment matching score
+- **Values:** 
+  - `equipmentScore:desc` (default) - Best matches first
+  - `equipmentScore:asc` - Worst matches first
+- **Example:** `equipmentRequired=dumbbells,barbell&sortBy=equipmentScore:desc`
+- **Note:** Only works when `equipmentRequired` parameter is provided
+
 ### 🏷️ **Tag Filtering**
 
 #### `tags`
@@ -185,12 +216,14 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `tags` - Tag match score (only works with `tags` parameter)
   - `exerciseScore` - Exercise match score (only works with `exerciseNames` parameter)
   - `ingredientScore` - Ingredient match score (only works with `ingredientNames` parameter)
+  - `equipmentScore` - Equipment match score (only works with `equipmentRequired` parameter)
 - **Examples:**
   - `sortBy=date:desc` - Newest first
   - `sortBy=inArweaveBlock:asc` - Oldest block first
   - `sortBy=tags:desc` - Best tag matches first (requires `tags` parameter)
   - `sortBy=exerciseScore:desc` - Best exercise matches first (requires `exerciseNames` parameter)
   - `sortBy=ingredientScore:desc` - Best ingredient matches first (requires `ingredientNames` parameter)
+  - `sortBy=equipmentScore:desc` - Best equipment matches first (requires `equipmentRequired` parameter)
 
 ### 📄 **Pagination**
 
@@ -308,6 +341,21 @@ GET /api/records?recordType=recipe&ingredientNames=chicken,garlic,olive%20oil&re
 GET /api/records?recordType=recipe&ingredientNames=tomatoes,basil&sortBy=ingredientScore:desc&resolveDepth=1&limit=5
 ```
 
+### Equipment Search in Exercises (AND behavior)
+```
+GET /api/records?recordType=exercise&equipmentRequired=dumbbells,barbell&limit=10
+```
+
+### Equipment Search with OR Behavior
+```
+GET /api/records?recordType=exercise&equipmentRequired=dumbbells,barbell&equipmentMatchMode=OR&limit=10
+```
+
+### Equipment Search with Custom Sorting
+```
+GET /api/records?recordType=exercise&equipmentRequired=bench,dumbbells&sortBy=equipmentScore:desc&limit=5
+```
+
 ### Complex Query with Multiple Filters
 ```
 GET /api/records?search=mediterranean&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3
@@ -371,6 +419,23 @@ When using the `ingredientNames` parameter with recipe records, the response inc
 }
 ```
 
+### Equipment Search Response Fields
+
+When using the `equipmentRequired` parameter with exercise records, the response includes additional fields:
+
+```json
+{
+  "records": [
+    {
+      "data": { /* exercise data */ },
+      "oip": { /* metadata */ },
+      "equipmentScore": 1.0,
+      "equipmentMatchedCount": 2
+    }
+  ]
+}
+```
+
 ## Performance Tips
 
 1. **Use appropriate `limit`** - Smaller limits = faster responses
@@ -380,6 +445,8 @@ When using the `ingredientNames` parameter with recipe records, the response inc
 5. **Tag filtering is more efficient than full-text search** for known categories
 6. **Exercise search requires resolution** - Use `resolveDepth=1` minimum for exercise filtering
 7. **Ingredient search requires resolution** - Use `resolveDepth=1` minimum for ingredient filtering
+8. **Equipment search is efficient** - No resolution required, searches existing exercise record data
+9. **Equipment OR mode is more flexible** - Use `equipmentMatchMode=OR` to find exercises with any of the specified equipment
 
 ## Advanced Features
 
@@ -407,6 +474,21 @@ The scoring algorithm:
 3. Automatically sorts by best matches first
 4. Searches resolved ingredient records at `data.basic.name` for ingredient names
 
+### Equipment Match Scoring
+When using the `equipmentRequired` parameter with exercise records, records receive:
+- **equipmentScore**: Ratio of matched equipment to requested equipment (0-1 scale)
+- **equipmentMatchedCount**: Number of requested equipment items found in the exercise
+
+The scoring algorithm:
+1. Calculates the ratio of matched equipment to requested equipment
+2. Uses fuzzy matching to handle partial equipment name matches
+3. Automatically sorts by best matches first
+4. Supports both AND and OR matching modes via `equipmentMatchMode`
+5. Searches both `data.exercise.equipmentRequired` and `data.exercise.equipment` fields
+
+**AND Mode (default):** Only returns exercises that have ALL specified equipment
+**OR Mode:** Returns exercises that have ANY of the specified equipment
+
 ### Data Structure Handling
 Both exercise and ingredient search functions handle various data structures robustly:
 - **String values**: Direct string matching (e.g., `"Push-ups"`)
@@ -423,6 +505,7 @@ The `resolveDepth` parameter controls how deeply the system follows references (
 - **Tag filtering** (`tags`) - Precise tag-based filtering with AND/OR modes
 - **Exercise filtering** (`exerciseNames`) - Search workouts by exercise content
 - **Ingredient filtering** (`ingredientNames`) - Search recipes by ingredient content
+- **Equipment filtering** (`equipmentRequired`) - Search exercises by equipment requirements with AND/OR modes
 - **Combined approach** - Use multiple parameters for maximum precision
 
 ---
