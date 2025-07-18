@@ -1144,6 +1144,8 @@ async function getRecords(queryParams) {
         ingredientNames, // New parameter for recipe ingredient filtering
         equipmentRequired, // New parameter for exercise equipment filtering
         equipmentMatchMode = 'AND', // New parameter for equipment match behavior (AND/OR)
+        exerciseType, // New parameter for exercise type filtering
+        exerciseTypeMatchMode = 'OR', // New parameter for exercise type match behavior (AND/OR, default OR)
     } = queryParams;
 
     // console.log('get records using:', {queryParams});
@@ -1469,6 +1471,84 @@ async function getRecords(queryParams) {
             console.log('After filtering by equipment required, there are', records.length, 'exercise records');
         }
 
+        // Filter exercises by exercise type if exerciseType parameter is provided
+        if (exerciseType && recordType === 'exercise') {
+            console.log('Filtering exercises by exercise type:', exerciseType, 'match mode:', exerciseTypeMatchMode);
+            const exerciseTypeArray = exerciseType.split(',').map(type => type.trim().toLowerCase());
+            
+            // Define enum mapping for exercise types
+            const exerciseTypeEnumMap = {
+                'warmup': 'warmup',
+                'warm-up': 'warmup',
+                'main': 'main',
+                'cooldown': 'cooldown',
+                'cool-down': 'cooldown'
+            };
+            
+            // Normalize requested types to enum codes
+            const normalizedTypes = exerciseTypeArray.map(type => exerciseTypeEnumMap[type] || type);
+            
+            // Filter records based on match mode (AND vs OR)
+            if (exerciseTypeMatchMode.toUpperCase() === 'AND') {
+                // AND behavior: exercise must have ALL specified types
+                records = records.filter(record => {
+                    if (!record.data.exercise || !record.data.exercise.exercise_type) return false;
+                    
+                    const exerciseTypeValue = record.data.exercise.exercise_type.toLowerCase();
+                    
+                    // For AND mode with single enum value, just check if it matches
+                    // For multiple types, this would be unusual for enum fields but we'll support it
+                    return normalizedTypes.every(requestedType => 
+                        exerciseTypeValue === requestedType ||
+                        exerciseTypeValue === requestedType.replace('-', '') ||
+                        requestedType === exerciseTypeValue
+                    );
+                });
+                console.log('after filtering by exercise type (AND mode), there are', records.length, 'records');
+            } else {
+                // OR behavior: exercise must have ANY of the specified types (default)
+                records = records.filter(record => {
+                    if (!record.data.exercise || !record.data.exercise.exercise_type) return false;
+                    
+                    const exerciseTypeValue = record.data.exercise.exercise_type.toLowerCase();
+                    
+                    // Check if ANY requested type matches
+                    return normalizedTypes.some(requestedType => 
+                        exerciseTypeValue === requestedType ||
+                        exerciseTypeValue === requestedType.replace('-', '') ||
+                        requestedType === exerciseTypeValue
+                    );
+                });
+                console.log('after filtering by exercise type (OR mode), there are', records.length, 'records');
+            }
+            
+            // Add exercise type match scores to all filtered records
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.exercise || !record.data.exercise.exercise_type) return 0;
+                    
+                    const exerciseTypeValue = record.data.exercise.exercise_type.toLowerCase();
+                    
+                    return normalizedTypes.filter(requestedType => 
+                        exerciseTypeValue === requestedType ||
+                        exerciseTypeValue === requestedType.replace('-', '') ||
+                        requestedType === exerciseTypeValue
+                    ).length;
+                };
+
+                const matches = countMatches(record);
+                const score = (matches / normalizedTypes.length).toFixed(3);
+                return { ...record, exerciseTypeScore: score, exerciseTypeMatchedCount: matches };
+            });
+            
+            // Sort by exercise type score if no other sorting is specified
+            if (!sortBy || sortBy.split(':')[0] !== 'exerciseTypeScore') {
+                records.sort((a, b) => (b.exerciseTypeScore || 0) - (a.exerciseTypeScore || 0));
+            }
+            
+            console.log('After filtering by exercise type, there are', records.length, 'exercise records');
+        }
+
         // search records by search parameter
         if (search !== undefined) {
             const searchTerms = search.toLowerCase().split(',').map(term => term.trim()).filter(Boolean); // Split only on commas, preserve multi-word terms
@@ -1700,6 +1780,22 @@ async function getRecords(queryParams) {
                         console.log('sorted by equipment score (' + order + ')');
                     } else {
                         console.log('Warning: sortBy=equipmentScore specified but no equipmentRequired parameter provided - skipping equipmentScore sort');
+                    }
+                }
+
+                if (fieldToSortBy === 'exerciseTypeScore') {
+                    // Only allow 'exerciseTypeScore' sorting when exerciseType parameter is provided
+                    if (exerciseType != undefined) {
+                        recordsToSort.sort((a, b) => {
+                            if (order === 'asc') {
+                                return (a.exerciseTypeScore || 0) - (b.exerciseTypeScore || 0);
+                            } else {
+                                return (b.exerciseTypeScore || 0) - (a.exerciseTypeScore || 0);
+                            }
+                        });
+                        console.log('sorted by exercise type score (' + order + ')');
+                    } else {
+                        console.log('Warning: sortBy=exerciseTypeScore specified but no exerciseType parameter provided - skipping exerciseTypeScore sort');
                     }
                 }
             }

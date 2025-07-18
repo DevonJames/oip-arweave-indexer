@@ -113,6 +113,41 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Example:** `equipmentRequired=dumbbells,barbell&sortBy=equipmentScore:desc`
 - **Note:** Only works when `equipmentRequired` parameter is provided
 
+### 🏃 **Exercise Type Filtering (Exercises)**
+
+#### `exerciseType`
+- **Type:** String (comma-separated)
+- **Description:** Filter exercise records by their type (enum values)
+- **Example:** `exerciseType=warmup,main` or `exerciseType=Warm-Up,Main`
+- **Valid Values:** 
+  - `warmup` or `Warm-Up` - Warm-up exercises
+  - `main` or `Main` - Main workout exercises  
+  - `cooldown` or `Cool-Down` - Cool-down exercises
+- **Behavior:** 
+  - Only works with `recordType=exercise`
+  - Default behavior: Returns exercises that are ANY of the specified types (OR behavior)
+  - Searches by both enum codes (`warmup`) and display names (`Warm-Up`)
+  - Case-insensitive matching
+  - Automatically sorts by exercise type match score (best matches first)
+  - Adds `exerciseTypeScore` and `exerciseTypeMatchedCount` fields to matching records
+
+#### `exerciseTypeMatchMode`
+- **Type:** String
+- **Description:** Controls exercise type matching behavior
+- **Values:** 
+  - `OR` (default) - Exercises that are ANY of the specified types
+  - `AND` - Exercises that are ALL of the specified types (unusual for enum fields)
+- **Example:** `exerciseType=warmup,main&exerciseTypeMatchMode=OR`
+
+#### `sortBy=exerciseTypeScore`
+- **Type:** String
+- **Description:** Sort results by exercise type matching score
+- **Values:** 
+  - `exerciseTypeScore:desc` (default) - Best matches first
+  - `exerciseTypeScore:asc` - Worst matches first
+- **Example:** `exerciseType=warmup,main&sortBy=exerciseTypeScore:desc`
+- **Note:** Only works when `exerciseType` parameter is provided
+
 ### 🏷️ **Tag Filtering**
 
 #### `tags`
@@ -217,6 +252,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `exerciseScore` - Exercise match score (only works with `exerciseNames` parameter)
   - `ingredientScore` - Ingredient match score (only works with `ingredientNames` parameter)
   - `equipmentScore` - Equipment match score (only works with `equipmentRequired` parameter)
+  - `exerciseTypeScore` - Exercise type match score (only works with `exerciseType` parameter)
 - **Examples:**
   - `sortBy=date:desc` - Newest first
   - `sortBy=inArweaveBlock:asc` - Oldest block first
@@ -224,6 +260,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `sortBy=exerciseScore:desc` - Best exercise matches first (requires `exerciseNames` parameter)
   - `sortBy=ingredientScore:desc` - Best ingredient matches first (requires `ingredientNames` parameter)
   - `sortBy=equipmentScore:desc` - Best equipment matches first (requires `equipmentRequired` parameter)
+  - `sortBy=exerciseTypeScore:desc` - Best exercise type matches first (requires `exerciseType` parameter)
 
 ### 📄 **Pagination**
 
@@ -356,6 +393,21 @@ GET /api/records?recordType=exercise&equipmentRequired=dumbbells,barbell&equipme
 GET /api/records?recordType=exercise&equipmentRequired=bench,dumbbells&sortBy=equipmentScore:desc&limit=5
 ```
 
+### Exercise Type Search
+```
+GET /api/records?recordType=exercise&exerciseType=warmup,main&limit=10
+```
+
+### Exercise Type Search with Display Names
+```
+GET /api/records?recordType=exercise&exerciseType=Warm-Up,Cool-Down&exerciseTypeMatchMode=OR&limit=10
+```
+
+### Exercise Type Search with Custom Sorting
+```
+GET /api/records?recordType=exercise&exerciseType=main&sortBy=exerciseTypeScore:desc&limit=5
+```
+
 ### Complex Query with Multiple Filters
 ```
 GET /api/records?search=mediterranean&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3
@@ -436,6 +488,23 @@ When using the `equipmentRequired` parameter with exercise records, the response
 }
 ```
 
+### Exercise Type Search Response Fields
+
+When using the `exerciseType` parameter with exercise records, the response includes additional fields:
+
+```json
+{
+  "records": [
+    {
+      "data": { /* exercise data */ },
+      "oip": { /* metadata */ },
+      "exerciseTypeScore": 1.0,
+      "exerciseTypeMatchedCount": 2
+    }
+  ]
+}
+```
+
 ## Performance Tips
 
 1. **Use appropriate `limit`** - Smaller limits = faster responses
@@ -447,6 +516,7 @@ When using the `equipmentRequired` parameter with exercise records, the response
 7. **Ingredient search requires resolution** - Use `resolveDepth=1` minimum for ingredient filtering
 8. **Equipment search is efficient** - No resolution required, searches existing exercise record data
 9. **Equipment OR mode is more flexible** - Use `equipmentMatchMode=OR` to find exercises with any of the specified equipment
+10. **Exercise type search is enum-aware** - Supports both codes (`warmup`) and display names (`Warm-Up`)
 
 ## Advanced Features
 
@@ -489,6 +559,21 @@ The scoring algorithm:
 **AND Mode (default):** Only returns exercises that have ALL specified equipment
 **OR Mode:** Returns exercises that have ANY of the specified equipment
 
+### Exercise Type Match Scoring
+When using the `exerciseType` parameter with exercise records, records receive:
+- **exerciseTypeScore**: Ratio of matched types to requested types (0-1 scale)
+- **exerciseTypeMatchedCount**: Number of requested exercise types found
+
+The scoring algorithm:
+1. Calculates the ratio of matched types to requested types
+2. Normalizes enum codes and display names (e.g., `warmup` = `Warm-Up`)
+3. Performs case-insensitive matching
+4. Supports both AND and OR matching modes via `exerciseTypeMatchMode`
+5. Searches the `data.exercise.exercise_type` field
+
+**OR Mode (default):** Returns exercises that match ANY of the specified types
+**AND Mode:** Returns exercises that match ALL of the specified types (unusual for enum fields)
+
 ### Data Structure Handling
 Both exercise and ingredient search functions handle various data structures robustly:
 - **String values**: Direct string matching (e.g., `"Push-ups"`)
@@ -506,6 +591,7 @@ The `resolveDepth` parameter controls how deeply the system follows references (
 - **Exercise filtering** (`exerciseNames`) - Search workouts by exercise content
 - **Ingredient filtering** (`ingredientNames`) - Search recipes by ingredient content
 - **Equipment filtering** (`equipmentRequired`) - Search exercises by equipment requirements with AND/OR modes
+- **Exercise type filtering** (`exerciseType`) - Search exercises by type (warmup/main/cooldown) with enum code/name support
 - **Combined approach** - Use multiple parameters for maximum precision
 
 ---
