@@ -255,6 +255,9 @@ services:
     networks:
       - oip-network
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     profiles:
       - standard
       - standard-monolithic
@@ -269,6 +272,9 @@ services:
     networks:
       - oip-network
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     profiles:
       - standard-gpu
       - gpu
