@@ -534,7 +534,7 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
   }
 }
 
-router.post('/newRecipe', authenticateToken, async (req, res) => {
+router.post('/newRecipe', async (req, res) => {
 
     try {
         console.log('POST /api/publish/newRecipe', req.body)
