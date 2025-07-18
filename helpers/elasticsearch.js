@@ -1142,6 +1142,8 @@ async function getRecords(queryParams) {
         exactMatch,
         exerciseNames, // New parameter for workout exercise filtering
         ingredientNames, // New parameter for recipe ingredient filtering
+        equipmentRequired, // New parameter for exercise equipment filtering
+        equipmentMatchMode = 'AND', // New parameter for equipment match behavior (AND/OR)
     } = queryParams;
 
     // console.log('get records using:', {queryParams});
@@ -1369,6 +1371,104 @@ async function getRecords(queryParams) {
             }
         }
 
+        // Filter exercises by equipment required if equipmentRequired parameter is provided
+        if (equipmentRequired && recordType === 'exercise') {
+            console.log('Filtering exercises by equipment required:', equipmentRequired, 'match mode:', equipmentMatchMode);
+            const equipmentArray = equipmentRequired.split(',').map(equipment => equipment.trim().toLowerCase());
+            
+            // Filter records based on match mode (AND vs OR)
+            if (equipmentMatchMode.toUpperCase() === 'OR') {
+                // OR behavior: exercise must have at least ONE of the specified equipment
+                records = records.filter(record => {
+                    if (!record.data.exercise) return false;
+                    
+                    let exerciseEquipment = [];
+                    
+                    // Handle different equipment data structures
+                    if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
+                        exerciseEquipment = record.data.exercise.equipmentRequired.map(eq => eq.toLowerCase());
+                    } else if (record.data.exercise.equipment) {
+                        // Handle single equipment string
+                        if (typeof record.data.exercise.equipment === 'string') {
+                            exerciseEquipment = [record.data.exercise.equipment.toLowerCase()];
+                        } else if (Array.isArray(record.data.exercise.equipment)) {
+                            exerciseEquipment = record.data.exercise.equipment.map(eq => eq.toLowerCase());
+                        }
+                    }
+                    
+                    // Check if ANY required equipment is present
+                    return equipmentArray.some(requiredEquipment => 
+                        exerciseEquipment.some(exerciseEq => 
+                            exerciseEq.includes(requiredEquipment) || requiredEquipment.includes(exerciseEq)
+                        )
+                    );
+                });
+                console.log('after filtering by equipment (OR mode), there are', records.length, 'records');
+            } else {
+                // AND behavior: exercise must have ALL specified equipment (default)
+                records = records.filter(record => {
+                    if (!record.data.exercise) return false;
+                    
+                    let exerciseEquipment = [];
+                    
+                    // Handle different equipment data structures
+                    if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
+                        exerciseEquipment = record.data.exercise.equipmentRequired.map(eq => eq.toLowerCase());
+                    } else if (record.data.exercise.equipment) {
+                        // Handle single equipment string
+                        if (typeof record.data.exercise.equipment === 'string') {
+                            exerciseEquipment = [record.data.exercise.equipment.toLowerCase()];
+                        } else if (Array.isArray(record.data.exercise.equipment)) {
+                            exerciseEquipment = record.data.exercise.equipment.map(eq => eq.toLowerCase());
+                        }
+                    }
+                    
+                    // Check if ALL required equipment is present
+                    return equipmentArray.every(requiredEquipment => 
+                        exerciseEquipment.some(exerciseEq => 
+                            exerciseEq.includes(requiredEquipment) || requiredEquipment.includes(exerciseEq)
+                        )
+                    );
+                });
+                console.log('after filtering by equipment (AND mode), there are', records.length, 'records');
+            }
+            
+            // Add equipment match scores to all filtered records
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.exercise) return 0;
+                    
+                    let exerciseEquipment = [];
+                    if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
+                        exerciseEquipment = record.data.exercise.equipmentRequired.map(eq => eq.toLowerCase());
+                    } else if (record.data.exercise.equipment) {
+                        if (typeof record.data.exercise.equipment === 'string') {
+                            exerciseEquipment = [record.data.exercise.equipment.toLowerCase()];
+                        } else if (Array.isArray(record.data.exercise.equipment)) {
+                            exerciseEquipment = record.data.exercise.equipment.map(eq => eq.toLowerCase());
+                        }
+                    }
+                    
+                    return equipmentArray.filter(requiredEquipment => 
+                        exerciseEquipment.some(exerciseEq => 
+                            exerciseEq.includes(requiredEquipment) || requiredEquipment.includes(exerciseEq)
+                        )
+                    ).length;
+                };
+
+                const matches = countMatches(record);
+                const score = (matches / equipmentArray.length).toFixed(3);
+                return { ...record, equipmentScore: score, equipmentMatchedCount: matches };
+            });
+            
+            // Sort by equipment score if no other sorting is specified
+            if (!sortBy || sortBy.split(':')[0] !== 'equipmentScore') {
+                records.sort((a, b) => (b.equipmentScore || 0) - (a.equipmentScore || 0));
+            }
+            
+            console.log('After filtering by equipment required, there are', records.length, 'exercise records');
+        }
+
         // search records by search parameter
         if (search !== undefined) {
             const searchTerms = search.toLowerCase().split(',').map(term => term.trim()).filter(Boolean); // Split only on commas, preserve multi-word terms
@@ -1584,6 +1684,22 @@ async function getRecords(queryParams) {
                         console.log('sorted by ingredient score (' + order + ')');
                     } else {
                         console.log('Warning: sortBy=ingredientScore specified but no ingredientNames parameter provided - skipping ingredientScore sort');
+                    }
+                }
+
+                if (fieldToSortBy === 'equipmentScore') {
+                    // Only allow 'equipmentScore' sorting when equipmentRequired parameter is provided
+                    if (equipmentRequired != undefined) {
+                        recordsToSort.sort((a, b) => {
+                            if (order === 'asc') {
+                                return (a.equipmentScore || 0) - (b.equipmentScore || 0);
+                            } else {
+                                return (b.equipmentScore || 0) - (a.equipmentScore || 0);
+                            }
+                        });
+                        console.log('sorted by equipment score (' + order + ')');
+                    } else {
+                        console.log('Warning: sortBy=equipmentScore specified but no equipmentRequired parameter provided - skipping equipmentScore sort');
                     }
                 }
             }
@@ -2499,9 +2615,9 @@ async function keepDBUpToDate(remapTemplates) {
         console.log(getFileInfo(), getLineNumber(), 'Creators:', { maxArweaveCreatorRegBlockInDB, qtyCreatorsInDB, creatorsInDB });
         // to do standardize these names a bit better
         const { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
-        console.log(getFileInfo(), getLineNumber(), 'Templates:', { finalMaxArweaveBlock, qtyTemplatesInDB });
+        // console.log(getFileInfo(), getLineNumber(), 'Templates:', { finalMaxArweaveBlock, qtyTemplatesInDB });
         const { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB();
-        console.log(getFileInfo(), getLineNumber(), 'Records:', { finalMaxRecordArweaveBlock, qtyRecordsInDB });
+        // console.log(getFileInfo(), getLineNumber(), 'Records:', { finalMaxRecordArweaveBlock, qtyRecordsInDB });
         foundInDB.maxArweaveBlockInDB = Math.max(
             maxArweaveCreatorRegBlockInDB || 0,
             finalMaxArweaveBlock || 0,
@@ -2527,7 +2643,7 @@ async function keepDBUpToDate(remapTemplates) {
             templates: templatesInDB,
             records: records
         };
-        console.log(getFileInfo(), getLineNumber(), 'Found in DB:', foundInDB);
+        // console.log(getFileInfo(), getLineNumber(), 'Found in DB:', foundInDB);
 
         const newTransactions = await searchArweaveForNewTransactions(foundInDB);
         if (newTransactions && newTransactions.length > 0) {
@@ -2552,7 +2668,7 @@ async function keepDBUpToDate(remapTemplates) {
 }
 
 async function searchArweaveForNewTransactions(foundInDB) {
-    console.log('foundinDB:', foundInDB);
+    // console.log('foundinDB:', foundInDB);
     await ensureIndexExists();
     const { qtyRecordsInDB, maxArweaveBlockInDB } = foundInDB;
     // const min = (qtyRecordsInDB === 0) ? 1463750 : (maxArweaveBlockInDB + 1);
