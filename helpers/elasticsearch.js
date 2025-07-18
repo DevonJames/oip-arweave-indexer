@@ -1148,7 +1148,8 @@ async function getRecords(queryParams) {
         exerciseTypeMatchMode = 'OR', // New parameter for exercise type match behavior (AND/OR, default OR)
     } = queryParams;
 
-    // console.log('get records using:', {queryParams});
+    console.log('DEBUG: get records using queryParams:', {queryParams});
+    console.log('DEBUG: extracted exerciseType:', exerciseType, 'exerciseTypeMatchMode:', exerciseTypeMatchMode);
     try {
         const result = await getRecordsInDB();
         let records = result.records;
@@ -1158,7 +1159,7 @@ async function getRecords(queryParams) {
 
         // Perform filtering based on query parameters
 
-        // console.log('before filtering, there are', qtyRecordsInDB, 'records');
+        console.log('DEBUG: before filtering, there are', qtyRecordsInDB, 'records');
 
 
         if (includeDeleteMessages === false) {
@@ -1472,6 +1473,7 @@ async function getRecords(queryParams) {
         }
 
         // Filter exercises by exercise type if exerciseType parameter is provided
+        console.log('DEBUG: exerciseType param:', exerciseType, 'recordType:', recordType);
         if (exerciseType && recordType === 'exercise') {
             console.log('Filtering exercises by exercise type:', exerciseType, 'match mode:', exerciseTypeMatchMode);
             const exerciseTypeArray = exerciseType.split(',').map(type => type.trim().toLowerCase());
