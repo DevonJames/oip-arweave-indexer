@@ -1148,8 +1148,7 @@ async function getRecords(queryParams) {
         exerciseTypeMatchMode = 'OR', // New parameter for exercise type match behavior (AND/OR, default OR)
     } = queryParams;
 
-    console.log('DEBUG: get records using queryParams:', {queryParams});
-    console.log('DEBUG: extracted exerciseType:', exerciseType, 'exerciseTypeMatchMode:', exerciseTypeMatchMode);
+    // console.log('get records using:', {queryParams});
     try {
         const result = await getRecordsInDB();
         let records = result.records;
@@ -1159,7 +1158,7 @@ async function getRecords(queryParams) {
 
         // Perform filtering based on query parameters
 
-        console.log('DEBUG: before filtering, there are', qtyRecordsInDB, 'records');
+        // console.log('before filtering, there are', qtyRecordsInDB, 'records');
 
 
         if (includeDeleteMessages === false) {
@@ -1473,21 +1472,20 @@ async function getRecords(queryParams) {
         }
 
         // Filter exercises by exercise type if exerciseType parameter is provided
-        console.log('DEBUG: exerciseType param:', exerciseType, 'recordType:', recordType);
         if (exerciseType && recordType === 'exercise') {
             console.log('Filtering exercises by exercise type:', exerciseType, 'match mode:', exerciseTypeMatchMode);
             const exerciseTypeArray = exerciseType.split(',').map(type => type.trim().toLowerCase());
             
-            // Define enum mapping for exercise types
+            // Define enum mapping for exercise types (user input -> database values)
             const exerciseTypeEnumMap = {
-                'warmup': 'warmup',
-                'warm-up': 'warmup',
-                'main': 'main',
-                'cooldown': 'cooldown',
-                'cool-down': 'cooldown'
+                'warmup': 'Warm-Up',
+                'warm-up': 'Warm-Up',
+                'main': 'Main',
+                'cooldown': 'Cool-Down',
+                'cool-down': 'Cool-Down'
             };
             
-            // Normalize requested types to enum codes
+            // Normalize requested types to match database format
             const normalizedTypes = exerciseTypeArray.map(type => exerciseTypeEnumMap[type] || type);
             
             // Filter records based on match mode (AND vs OR)
@@ -1496,14 +1494,12 @@ async function getRecords(queryParams) {
                 records = records.filter(record => {
                     if (!record.data.exercise || !record.data.exercise.exercise_type) return false;
                     
-                    const exerciseTypeValue = record.data.exercise.exercise_type.toLowerCase();
+                    const exerciseTypeValue = record.data.exercise.exercise_type;
                     
                     // For AND mode with single enum value, just check if it matches
                     // For multiple types, this would be unusual for enum fields but we'll support it
                     return normalizedTypes.every(requestedType => 
-                        exerciseTypeValue === requestedType ||
-                        exerciseTypeValue === requestedType.replace('-', '') ||
-                        requestedType === exerciseTypeValue
+                        exerciseTypeValue === requestedType
                     );
                 });
                 console.log('after filtering by exercise type (AND mode), there are', records.length, 'records');
@@ -1512,13 +1508,11 @@ async function getRecords(queryParams) {
                 records = records.filter(record => {
                     if (!record.data.exercise || !record.data.exercise.exercise_type) return false;
                     
-                    const exerciseTypeValue = record.data.exercise.exercise_type.toLowerCase();
+                    const exerciseTypeValue = record.data.exercise.exercise_type;
                     
                     // Check if ANY requested type matches
                     return normalizedTypes.some(requestedType => 
-                        exerciseTypeValue === requestedType ||
-                        exerciseTypeValue === requestedType.replace('-', '') ||
-                        requestedType === exerciseTypeValue
+                        exerciseTypeValue === requestedType
                     );
                 });
                 console.log('after filtering by exercise type (OR mode), there are', records.length, 'records');
@@ -1529,12 +1523,10 @@ async function getRecords(queryParams) {
                 const countMatches = (record) => {
                     if (!record.data.exercise || !record.data.exercise.exercise_type) return 0;
                     
-                    const exerciseTypeValue = record.data.exercise.exercise_type.toLowerCase();
+                    const exerciseTypeValue = record.data.exercise.exercise_type;
                     
                     return normalizedTypes.filter(requestedType => 
-                        exerciseTypeValue === requestedType ||
-                        exerciseTypeValue === requestedType.replace('-', '') ||
-                        requestedType === exerciseTypeValue
+                        exerciseTypeValue === requestedType
                     ).length;
                 };
 
