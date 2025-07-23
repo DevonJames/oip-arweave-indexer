@@ -3,52 +3,476 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Assistant</title>
+    <title>AI Voice Assistant - Chatterbox TTS</title>
     <link rel="stylesheet" href="css/style.css">
-    <!-- Remove these as they're no longer needed -->
-    <!-- <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script> -->
-    <!-- <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script> -->
-    <!-- <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script> -->
+    <style>
+        .chatterbox-controls {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #4CAF50;
+        }
+        .chatterbox-title {
+            color: #4CAF50;
+            font-weight: bold;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .voice-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .voice-preview {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Voice Assistant</h1>
+            <h1>🎭 AI Voice Assistant - Chatterbox TTS</h1>
+            <p>Powered by Resemble AI's neural TTS with emotion control</p>
         </header>
         
         <main>
-            <div id="voice-assistant-root"></div>
+            <!-- Chatterbox TTS Controls -->
+            <div class="chatterbox-controls">
+                <h3 class="chatterbox-title">
+                    <span class="status-indicator"></span>
+                    Chatterbox Voice Engine (High Quality)
+                </h3>
+                
+                <div class="voice-controls">
+                    <div class="control-group">
+                        <label for="voice-style">Voice Style:</label>
+                        <select id="voice-style" onchange="updateVoiceStyle()">
+                            <option value="default">Default (High Quality)</option>
+                            <option value="expressive" selected>Expressive (Recommended)</option>
+                            <option value="calm">Calm & Measured</option>
+                            <option value="dramatic">Dramatic</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="tts-enabled" checked onchange="toggleTTS()">
+                            Enable Chatterbox TTS
+                        </label>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="emotion-slider">Emotion Level: <span id="emotion-value">70%</span></label>
+                        <div class="slider-container">
+                            <span>😐</span>
+                            <input type="range" id="emotion-slider" class="slider" min="0" max="100" value="70" oninput="updateEmotion(this.value)">
+                            <span>🎭</span>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="pacing-slider">Speech Pacing: <span id="pacing-value">40%</span></label>
+                        <div class="slider-container">
+                            <span>🐌</span>
+                            <input type="range" id="pacing-slider" class="slider" min="30" max="70" value="40" oninput="updatePacing(this.value)">
+                            <span>🚀</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="voice-preview" id="voice-preview">
+                    Current settings: Expressive voice with 70% emotion and deliberate pacing for maximum quality and expressiveness.
+                </div>
+            </div>
             
-            <!-- Legacy UI can remain hidden -->
-            <div class="legacy-ui hidden">
+            <!-- Voice Assistant Interface -->
+            <div id="voice-assistant-root">
                 <div class="waveform-container">
                     <canvas id="waveform"></canvas>
                 </div>
                 
                 <div class="controls">
-                    <button id="microphone-btn" class="mic-btn">
+                    <button id="microphone-btn" class="mic-btn" onclick="toggleMicrophone()">
                         <span class="mic-icon">🎙️</span>
+                        <span id="mic-status">Click to Start</span>
                     </button>
-                    <button id="transcript-btn" class="control-btn">
-                        <span>📄 View Transcript</span>
+                    <button id="test-voice-btn" class="control-btn" onclick="testChatterboxVoice()">
+                        <span>🎵 Test Voice</span>
                     </button>
-                    <button id="stop-btn" class="control-btn">
+                    <button id="transcript-btn" class="control-btn" onclick="toggleTranscript()">
+                        <span>📄 Transcript</span>
+                    </button>
+                    <button id="stop-btn" class="control-btn" onclick="stopAll()">
                         <span>⏹️ Stop</span>
                     </button>
                 </div>
+            </div>
+            
+            <!-- Status Display -->
+            <div id="status-display" style="margin-top: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                <strong>Status:</strong> <span id="current-status">Chatterbox TTS Ready</span>
             </div>
         </main>
         
         <div id="transcript-panel" class="transcript-panel hidden">
             <div class="transcript-header">
                 <h2>Conversation Transcript</h2>
-                <button id="close-transcript" class="close-btn">✕</button>
+                <button id="close-transcript" class="close-btn" onclick="toggleTranscript()">✕</button>
             </div>
             <div id="transcript-content" class="transcript-content"></div>
         </div>
     </div>
-    
-    <!-- Note: Voice Assistant now uses Next.js frontend on port 3000 -->
-    <!-- This HTML is kept for legacy API endpoints only -->
+
+    <script>
+        // Chatterbox TTS Configuration - High Quality Defaults
+        const chatterboxConfig = {
+            enabled: true,
+            voice_id: 'expressive',  // Default to high-quality expressive voice
+            exaggeration: 0.7,       // 70% emotion for engaging speech
+            cfg_weight: 0.4,         // Slower pacing for clarity and quality
+            baseUrl: window.location.origin, // Use current server
+            fallbackTTS: 'edge'      // Fallback to Edge TTS if needed
+        };
+
+        // Voice style presets for optimal Chatterbox experience
+        const voicePresets = {
+            'default': { exaggeration: 0.5, cfg_weight: 0.5, description: 'Balanced, natural speech' },
+            'expressive': { exaggeration: 0.7, cfg_weight: 0.4, description: 'High emotion with deliberate pacing for maximum quality' },
+            'calm': { exaggeration: 0.2, cfg_weight: 0.6, description: 'Low emotion, measured pace' },
+            'dramatic': { exaggeration: 1.0, cfg_weight: 0.2, description: 'Maximum drama, very slow delivery' }
+        };
+
+        let isListening = false;
+        let currentAudio = null;
+
+        // Initialize Chatterbox TTS on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎭 Initializing Chatterbox TTS Voice Assistant...');
+            checkChatterboxStatus();
+            updateVoicePreview();
+        });
+
+        // Check if Chatterbox TTS service is available
+        async function checkChatterboxStatus() {
+            try {
+                const response = await fetch('/api/voice/health');
+                const data = await response.json();
+                
+                if (data.chatterbox_available) {
+                    updateStatus('✅ Chatterbox TTS Ready - High Quality Neural Voice Active');
+                    document.querySelector('.status-indicator').style.background = '#4CAF50';
+                } else {
+                    updateStatus('⚠️ Chatterbox TTS Unavailable - Using Fallback Voice Engine');
+                    document.querySelector('.status-indicator').style.background = '#FF9800';
+                }
+            } catch (error) {
+                console.error('Failed to check Chatterbox status:', error);
+                updateStatus('❌ Voice Service Connection Error');
+                document.querySelector('.status-indicator').style.background = '#f44336';
+            }
+        }
+
+        // Update voice style and apply preset
+        function updateVoiceStyle() {
+            const style = document.getElementById('voice-style').value;
+            const preset = voicePresets[style];
+            
+            chatterboxConfig.voice_id = style;
+            chatterboxConfig.exaggeration = preset.exaggeration;
+            chatterboxConfig.cfg_weight = preset.cfg_weight;
+            
+            // Update sliders to match preset
+            document.getElementById('emotion-slider').value = Math.round(preset.exaggeration * 100);
+            document.getElementById('pacing-slider').value = Math.round(preset.cfg_weight * 100);
+            
+            updateEmotion(Math.round(preset.exaggeration * 100));
+            updatePacing(Math.round(preset.cfg_weight * 100));
+            updateVoicePreview();
+            
+            console.log('🎵 Voice style updated:', style, preset);
+        }
+
+        // Update emotion level
+        function updateEmotion(value) {
+            chatterboxConfig.exaggeration = value / 100;
+            document.getElementById('emotion-value').textContent = value + '%';
+            updateVoicePreview();
+        }
+
+        // Update pacing
+        function updatePacing(value) {
+            chatterboxConfig.cfg_weight = value / 100;
+            document.getElementById('pacing-value').textContent = value + '%';
+            updateVoicePreview();
+        }
+
+        // Toggle TTS on/off
+        function toggleTTS() {
+            chatterboxConfig.enabled = document.getElementById('tts-enabled').checked;
+            updateStatus(chatterboxConfig.enabled ? 'Chatterbox TTS Enabled' : 'TTS Disabled');
+            updateVoicePreview();
+        }
+
+        // Update voice preview description
+        function updateVoicePreview() {
+            const style = chatterboxConfig.voice_id;
+            const emotion = Math.round(chatterboxConfig.exaggeration * 100);
+            const pacing = Math.round(chatterboxConfig.cfg_weight * 100);
+            
+            let preview = `Current: ${style} voice with ${emotion}% emotion and ${pacing}% pacing speed.`;
+            
+            if (!chatterboxConfig.enabled) {
+                preview = '⚠️ TTS is currently disabled.';
+            } else if (style === 'expressive' && emotion >= 60) {
+                preview += ' 🎭 Optimized for engaging, high-quality speech.';
+            } else if (style === 'calm' && pacing <= 50) {
+                preview += ' 😌 Perfect for clear, measured delivery.';
+            }
+            
+            document.getElementById('voice-preview').textContent = preview;
+        }
+
+        // Test Chatterbox voice with current settings
+        async function testChatterboxVoice() {
+            if (!chatterboxConfig.enabled) {
+                updateStatus('❌ TTS is disabled. Enable it first.');
+                return;
+            }
+
+            const testText = `Hello! I'm your AI assistant powered by Chatterbox TTS. This is ${chatterboxConfig.voice_id} voice with ${Math.round(chatterboxConfig.exaggeration * 100)} percent emotion and advanced neural synthesis.`;
+            
+            updateStatus('🎵 Testing Chatterbox voice...');
+            
+            try {
+                await synthesizeWithChatterbox(testText);
+                updateStatus('✅ Voice test completed successfully!');
+            } catch (error) {
+                console.error('Voice test failed:', error);
+                updateStatus('❌ Voice test failed - check console for details');
+            }
+        }
+
+        // Synthesize speech using Chatterbox TTS
+        async function synthesizeWithChatterbox(text) {
+            if (!chatterboxConfig.enabled) {
+                console.log('TTS disabled, skipping synthesis');
+                return;
+            }
+
+            try {
+                updateStatus('🎵 Synthesizing with Chatterbox TTS...');
+                
+                const response = await fetch('/api/voice/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voice_id: chatterboxConfig.voice_id,
+                        exaggeration: chatterboxConfig.exaggeration,
+                        cfg_weight: chatterboxConfig.cfg_weight,
+                        engine: 'chatterbox'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Stop any currently playing audio
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                
+                // Play the new audio
+                currentAudio = new Audio(audioUrl);
+                currentAudio.play();
+                
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    updateStatus('🎭 Chatterbox TTS Ready');
+                };
+                
+                updateStatus('🔊 Playing Chatterbox synthesis...');
+                
+            } catch (error) {
+                console.error('Chatterbox synthesis failed:', error);
+                updateStatus('❌ Synthesis failed - trying fallback...');
+                
+                // Fallback to browser TTS if Chatterbox fails
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.0;
+                    utterance.volume = 0.8;
+                    speechSynthesis.speak(utterance);
+                    updateStatus('🔊 Using browser TTS fallback');
+                }
+            }
+        }
+
+        // Microphone functionality (placeholder)
+        function toggleMicrophone() {
+            isListening = !isListening;
+            const btn = document.getElementById('microphone-btn');
+            const status = document.getElementById('mic-status');
+            
+            if (isListening) {
+                btn.classList.add('listening');
+                status.textContent = 'Listening...';
+                updateStatus('🎤 Listening for voice input...');
+                // TODO: Implement actual speech recognition
+                setTimeout(() => {
+                    toggleMicrophone(); // Auto-stop after demo
+                    simulateResponse();
+                }, 3000);
+            } else {
+                btn.classList.remove('listening');
+                status.textContent = 'Click to Start';
+                updateStatus('🎭 Chatterbox TTS Ready');
+            }
+        }
+
+        // Simulate AI response for demo
+        function simulateResponse() {
+            const responses = [
+                "Hello! I'm your AI assistant powered by Chatterbox TTS with emotion control.",
+                "I can help you with various tasks using high-quality neural voice synthesis.",
+                "This is an example of expressive speech with advanced emotion control.",
+                "Chatterbox TTS provides the most natural and engaging voice experience."
+            ];
+            
+            const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+            addToTranscript('Assistant', randomResponse);
+            synthesizeWithChatterbox(randomResponse);
+        }
+
+        // Transcript functionality
+        function toggleTranscript() {
+            const panel = document.getElementById('transcript-panel');
+            panel.classList.toggle('hidden');
+        }
+
+        function addToTranscript(speaker, text) {
+            const content = document.getElementById('transcript-content');
+            const entry = document.createElement('div');
+            entry.innerHTML = `<strong>${speaker}:</strong> ${text}`;
+            entry.style.marginBottom = '10px';
+            content.appendChild(entry);
+            content.scrollTop = content.scrollHeight;
+        }
+
+        // Stop all audio
+        function stopAll() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            if ('speechSynthesis' in window) {
+                speechSynthesis.cancel();
+            }
+            isListening = false;
+            document.getElementById('mic-status').textContent = 'Click to Start';
+            document.getElementById('microphone-btn').classList.remove('listening');
+            updateStatus('⏹️ All audio stopped');
+        }
+
+        // Update status display
+        function updateStatus(message) {
+            document.getElementById('current-status').textContent = message;
+            console.log('Status:', message);
+        }
+
+        // Add some CSS for dynamic effects
+        const style = document.createElement('style');
+        style.textContent = `
+            .mic-btn.listening {
+                background: #f44336 !important;
+                animation: pulse 1s infinite;
+            }
+            .transcript-panel.hidden {
+                display: none;
+            }
+            .transcript-panel {
+                position: fixed;
+                top: 50px;
+                right: 20px;
+                width: 300px;
+                height: 400px;
+                background: white;
+                border: 2px solid #4CAF50;
+                border-radius: 10px;
+                padding: 20px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                z-index: 1000;
+                overflow-y: auto;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Initialize with a welcome message
+        setTimeout(() => {
+            if (chatterboxConfig.enabled) {
+                synthesizeWithChatterbox("Welcome to your AI Voice Assistant powered by Chatterbox TTS! I'm ready to help you with high-quality neural voice synthesis.");
+            }
+        }, 1000);
+    </script>
 </body>
 </html> 
