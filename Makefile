@@ -33,6 +33,7 @@ help: ## Show this help message
 	@echo "$(YELLOW)Examples:$(NC)"
 	@echo "  make chatterbox-gpu            # Deploy Chatterbox TTS with GPU acceleration + ngrok"
 	@echo "  make rebuild-standard          # Build complete stack with Chatterbox TTS + ngrok"
+	@echo "  make ngrok-test                # Test ngrok configuration (NGROK_AUTH_TOKEN setup)"
 	@echo "  make install-models            # Install LLM models only (if already running)"
 	@echo "  make install-chatterbox        # Install/update Chatterbox TTS model"
 	@echo "  make status                    # Check service status"
@@ -40,7 +41,8 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(YELLOW)ngrok Integration:$(NC)"
 	@echo "  🌐 API available at: $(GREEN)https://api.oip.onl$(NC)"
-	@echo "  🔧 Requires ~/.ngrok.yml configuration (see setup below)"
+	@echo "  🔧 Setup: Add NGROK_AUTH_TOKEN=your_token to .env file"
+	@echo "  🧪 Test setup: $(GREEN)make ngrok-test$(NC)"
 
 # Default profile - now uses Chatterbox as primary TTS
 PROFILE ?= standard
@@ -54,38 +56,54 @@ check-ngrok:
 		echo "   $(BLUE)# Linux$(NC)"; \
 		echo "   curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && echo 'deb https://ngrok-agent.s3.amazonaws.com buster main' | sudo tee /etc/apt/sources.list.d/ngrok.list && sudo apt update && sudo apt install ngrok"; \
 		echo ""; \
-		echo "$(YELLOW)Then configure ~/.ngrok.yml:$(NC)"; \
-		echo "$(BLUE)version: \"2\"$(NC)"; \
-		echo "$(BLUE)authtoken: YOUR_NGROK_AUTHTOKEN_HERE$(NC)"; \
-		echo ""; \
-		echo "$(BLUE)tunnels:$(NC)"; \
-		echo "$(BLUE)  oip-api:$(NC)"; \
-		echo "$(BLUE)    proto: http$(NC)"; \
-		echo "$(BLUE)    addr: 8000$(NC)"; \
-		echo "$(BLUE)    domain: api.oip.onl$(NC)"; \
+		echo "$(YELLOW)Then configure either:$(NC)"; \
+		echo "$(BLUE)Option 1: Environment variable (recommended)$(NC)"; \
+		echo "   Add NGROK_AUTH_TOKEN=your_token_here to your .env file"; \
+		echo "$(BLUE)Option 2: Direct config file$(NC)"; \
+		echo "   Edit ~/.ngrok.yml with your authtoken"; \
 		echo ""; \
 		echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
 		exit 1; \
 	fi
-	@if [ ! -f ~/.ngrok.yml ]; then \
-		echo "$(YELLOW)⚠️  ~/.ngrok.yml not found. Creating template...$(NC)"; \
-		echo "version: \"2\"" > ~/.ngrok.yml; \
-		echo "authtoken: YOUR_NGROK_AUTHTOKEN_HERE" >> ~/.ngrok.yml; \
-		echo "" >> ~/.ngrok.yml; \
-		echo "tunnels:" >> ~/.ngrok.yml; \
-		echo "  oip-api:" >> ~/.ngrok.yml; \
-		echo "    proto: http" >> ~/.ngrok.yml; \
-		echo "    addr: 8000" >> ~/.ngrok.yml; \
-		echo "    domain: api.oip.onl" >> ~/.ngrok.yml; \
+	@NGROK_CONFIG_FILE=""; \
+	if [ -f ngrok/ngrok.yml ]; then \
+		NGROK_CONFIG_FILE="ngrok/ngrok.yml"; \
+	elif [ -f ~/.ngrok.yml ]; then \
+		NGROK_CONFIG_FILE="~/.ngrok.yml"; \
+	fi; \
+	if [ -z "$$NGROK_CONFIG_FILE" ]; then \
+		echo "$(YELLOW)⚠️  ngrok config not found. Creating template...$(NC)"; \
+		mkdir -p ngrok; \
+		echo "version: \"2\"" > ngrok/ngrok.yml; \
+		echo "authtoken_from_env: true" >> ngrok/ngrok.yml; \
+		echo "" >> ngrok/ngrok.yml; \
+		echo "tunnels:" >> ngrok/ngrok.yml; \
+		echo "  oip-api:" >> ngrok/ngrok.yml; \
+		echo "    proto: http" >> ngrok/ngrok.yml; \
+		echo "    addr: 8000" >> ngrok/ngrok.yml; \
+		echo "    domain: api.oip.onl" >> ngrok/ngrok.yml; \
 		echo ""; \
-		echo "$(GREEN)✅ Template created at ~/.ngrok.yml$(NC)"; \
-		echo "$(YELLOW)⚠️  Please edit ~/.ngrok.yml and add your ngrok authtoken$(NC)"; \
+		echo "$(GREEN)✅ Template created at ngrok/ngrok.yml$(NC)"; \
+		echo "$(YELLOW)⚠️  Please add NGROK_AUTH_TOKEN=your_token_here to your .env file$(NC)"; \
 		echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
 		exit 1; \
 	fi
-	@if grep -q "YOUR_NGROK_AUTHTOKEN_HERE" ~/.ngrok.yml; then \
-		echo "$(RED)❌ Please update your authtoken in ~/.ngrok.yml$(NC)"; \
-		echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
+	@if [ -f .env ]; then \
+		if grep -q "authtoken_from_env.*true" ngrok/ngrok.yml 2>/dev/null || grep -q "authtoken_from_env.*true" ~/.ngrok.yml 2>/dev/null; then \
+			if ! grep -q "NGROK_AUTH_TOKEN=" .env || grep -q "NGROK_AUTH_TOKEN=$$" .env; then \
+				echo "$(RED)❌ NGROK_AUTH_TOKEN not set in .env file$(NC)"; \
+				echo "$(YELLOW)Please add: NGROK_AUTH_TOKEN=your_token_here$(NC)"; \
+				echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
+				exit 1; \
+			fi; \
+		elif grep -q "YOUR_NGROK_AUTHTOKEN_HERE" ~/.ngrok.yml 2>/dev/null; then \
+			echo "$(RED)❌ Please update your authtoken in ~/.ngrok.yml$(NC)"; \
+			echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "$(RED)❌ .env file not found$(NC)"; \
+		echo "$(YELLOW)Please create .env file with NGROK_AUTH_TOKEN=your_token_here$(NC)"; \
 		exit 1; \
 	fi
 
@@ -93,12 +111,22 @@ check-ngrok:
 start-ngrok: check-ngrok
 	@if ! pgrep -f "ngrok start oip-api" > /dev/null 2>&1; then \
 		echo "$(BLUE)🔗 Starting ngrok tunnel for api.oip.onl...$(NC)"; \
-		(ngrok start oip-api --config ~/.ngrok.yml > /dev/null 2>&1 &); \
+		NGROK_CONFIG=""; \
+		if [ -f ngrok/ngrok.yml ]; then \
+			NGROK_CONFIG="--config ngrok/ngrok.yml"; \
+		elif [ -f ~/.ngrok.yml ]; then \
+			NGROK_CONFIG="--config ~/.ngrok.yml"; \
+		fi; \
+		if [ -f .env ]; then \
+			export $$(grep -v '^#' .env | grep NGROK_AUTH_TOKEN | xargs); \
+		fi; \
+		(ngrok start oip-api $$NGROK_CONFIG > /dev/null 2>&1 &); \
 		sleep 3; \
 		if pgrep -f "ngrok start oip-api" > /dev/null 2>&1; then \
 			echo "$(GREEN)🔗 ngrok: ✅ API available at https://api.oip.onl$(NC)"; \
 		else \
 			echo "$(RED)❌ ngrok failed to start. Check your configuration.$(NC)"; \
+			echo "$(YELLOW)Debug: Check if NGROK_AUTH_TOKEN is set in .env$(NC)"; \
 			exit 1; \
 		fi; \
 	else \
@@ -392,6 +420,49 @@ ngrok-stop: stop-ngrok ## Stop ngrok tunnel only
 ngrok-restart: ## Restart ngrok tunnel
 	@make stop-ngrok
 	@make start-ngrok
+
+ngrok-test: ## Test ngrok configuration and environment setup
+	@echo "$(BLUE)Testing ngrok configuration...$(NC)"
+	@echo "$(YELLOW)Checking ngrok installation:$(NC)"
+	@if command -v ngrok >/dev/null 2>&1; then \
+		echo "  ✅ ngrok is installed: $$(ngrok version)"; \
+	else \
+		echo "  ❌ ngrok not found"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)Checking config file:$(NC)"
+	@if [ -f ngrok/ngrok.yml ]; then \
+		echo "  ✅ Found ngrok/ngrok.yml"; \
+		if grep -q "authtoken_from_env.*true" ngrok/ngrok.yml; then \
+			echo "  ✅ Using environment variable for auth token"; \
+		else \
+			echo "  ⚠️  Not using environment variable for auth token"; \
+		fi; \
+	elif [ -f ~/.ngrok.yml ]; then \
+		echo "  ✅ Found ~/.ngrok.yml"; \
+	else \
+		echo "  ❌ No ngrok config file found"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)Checking .env file:$(NC)"
+	@if [ -f .env ]; then \
+		if grep -q "NGROK_AUTH_TOKEN=" .env; then \
+			if grep -q "NGROK_AUTH_TOKEN=$$" .env; then \
+				echo "  ❌ NGROK_AUTH_TOKEN is empty in .env"; \
+				exit 1; \
+			else \
+				echo "  ✅ NGROK_AUTH_TOKEN is set in .env"; \
+			fi; \
+		else \
+			echo "  ❌ NGROK_AUTH_TOKEN not found in .env"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "  ❌ .env file not found"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)✅ ngrok configuration looks good!$(NC)"
+	@echo "$(BLUE)You can now run: make start-ngrok$(NC)"
 
 # Development helpers
 dev-build: ## Development: Build without cache
