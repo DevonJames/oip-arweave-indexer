@@ -2854,7 +2854,7 @@
                         <option value="tinyllama:latest">TinyLlama (Ultra Fast)</option>
                     </select>
                 </div>
-                <div class="ai-setting" style="display: inline-block;">
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px;">
                     <label for="stt-language">Speech Language</label>
                     <select id="stt-language">
                         <option value="auto">Auto-detect</option>
@@ -2865,6 +2865,45 @@
                         <option value="it">Italian</option>
                         <option value="pt">Portuguese</option>
                     </select>
+                </div>
+                <div class="ai-setting" style="display: inline-block;">
+                    <label for="tts-voice-select">🎭 Voice Style</label>
+                    <select id="tts-voice-select" onchange="updateVoiceStyle()">
+                        <option value="default">Chatterbox Default</option>
+                        <option value="expressive">Chatterbox Expressive</option>
+                        <option value="calm">Chatterbox Calm</option>
+                        <option value="dramatic">Chatterbox Dramatic</option>
+                        <option value="efficient">Chatterbox Efficient</option>
+                        <option value="edge_female">Edge Female (Fallback)</option>
+                        <option value="edge_male">Edge Male (Fallback)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Chatterbox Advanced Voice Controls -->
+            <div class="ai-settings" style="margin-top: 10px; padding: 12px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); font-weight: 600;">🎛️ Chatterbox Voice Controls</div>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(255, 255, 255, 0.8); cursor: pointer;">
+                        <input type="checkbox" id="tts-enabled" checked style="accent-color: #3b82f6;" onchange="toggleTTSEnabled()">
+                        Speak Responses
+                    </label>
+                </div>
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px; min-width: 140px;">
+                    <label for="emotion-slider" style="font-size: 12px;">Emotion Level</label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="range" id="emotion-slider" min="0" max="100" value="50" 
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updateEmotionDisplay(this.value)">
+                        <span id="emotion-value" style="font-size: 11px; min-width: 30px; color: rgba(255,255,255,0.8);">0.5</span>
+                    </div>
+                </div>
+                <div class="ai-setting" style="display: inline-block; min-width: 140px;">
+                    <label for="pacing-slider" style="font-size: 12px;">Speech Pacing</label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="range" id="pacing-slider" min="30" max="70" value="50" 
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updatePacingDisplay(this.value)">
+                        <span id="pacing-value" style="font-size: 11px; min-width: 30px; color: rgba(255,255,255,0.8);">0.5</span>
+                    </div>
                 </div>
             </div>
 
@@ -6981,14 +7020,160 @@
         }
 
 
+        // Chatterbox TTS Configuration
+        let chatterboxConfig = {
+            voice: 'default',
+            exaggeration: 0.5,  // Emotion level (0.0-1.0+)
+            cfg_weight: 0.5,    // Pacing control (0.3-0.7)
+            engine: 'chatterbox',
+            enabled: true       // Whether TTS is enabled
+        };
+
+        // Update Chatterbox voice style
+        function updateVoiceStyle() {
+            const voiceSelect = document.getElementById('tts-voice-select');
+            chatterboxConfig.voice = voiceSelect.value;
+            
+            // Update emotion and pacing based on voice style
+            switch(chatterboxConfig.voice) {
+                case 'expressive':
+                    chatterboxConfig.exaggeration = 0.8;
+                    chatterboxConfig.cfg_weight = 0.3;
+                    break;
+                case 'calm':
+                    chatterboxConfig.exaggeration = 0.2;
+                    chatterboxConfig.cfg_weight = 0.6;
+                    break;
+                case 'dramatic':
+                    chatterboxConfig.exaggeration = 1.0;
+                    chatterboxConfig.cfg_weight = 0.2;
+                    break;
+                case 'efficient':
+                    chatterboxConfig.exaggeration = 0.3;
+                    chatterboxConfig.cfg_weight = 0.7;
+                    break;
+                default:
+                    chatterboxConfig.exaggeration = 0.5;
+                    chatterboxConfig.cfg_weight = 0.5;
+            }
+            
+            // Update sliders to reflect the preset
+            document.getElementById('emotion-slider').value = Math.round(chatterboxConfig.exaggeration * 100);
+            document.getElementById('pacing-slider').value = Math.round(chatterboxConfig.cfg_weight * 100);
+            updateEmotionDisplay(Math.round(chatterboxConfig.exaggeration * 100));
+            updatePacingDisplay(Math.round(chatterboxConfig.cfg_weight * 100));
+            
+            console.log(`[Chatterbox] Voice style updated to ${chatterboxConfig.voice}:`, chatterboxConfig);
+        }
+
+        // Update emotion level display
+        function updateEmotionDisplay(value) {
+            chatterboxConfig.exaggeration = value / 100;
+            document.getElementById('emotion-value').textContent = (value / 100).toFixed(1);
+        }
+
+        // Update pacing display
+        function updatePacingDisplay(value) {
+            chatterboxConfig.cfg_weight = value / 100;
+            document.getElementById('pacing-value').textContent = (value / 100).toFixed(1);
+        }
+
+        // Toggle TTS enabled/disabled
+        function toggleTTSEnabled() {
+            const checkbox = document.getElementById('tts-enabled');
+            chatterboxConfig.enabled = checkbox.checked;
+            
+            console.log(`[Chatterbox] TTS ${chatterboxConfig.enabled ? 'enabled' : 'disabled'}`);
+            
+            // Update status if needed
+            if (!chatterboxConfig.enabled) {
+                updateAIStatus('Ready to answer questions! (TTS disabled)');
+            } else {
+                updateAIStatus('Ready to answer questions!');
+            }
+        }
+
+        // Synthesize AI response with Chatterbox TTS
+        async function synthesizeResponseWithChatterbox(text) {
+            try {
+                console.log(`[Chatterbox] Synthesizing AI response with voice=${chatterboxConfig.voice}, emotion=${chatterboxConfig.exaggeration}, pacing=${chatterboxConfig.cfg_weight}`);
+                updateAIStatus('🎭 Synthesizing with Chatterbox TTS...');
+                
+                const synthesisPayload = {
+                    text: text,
+                    voice_id: chatterboxConfig.voice,
+                    exaggeration: chatterboxConfig.exaggeration,
+                    cfg_weight: chatterboxConfig.cfg_weight,
+                    speed: 1.0
+                };
+                
+                // Use fallback engine if voice starts with 'edge_'
+                if (chatterboxConfig.voice.startsWith('edge_')) {
+                    synthesisPayload.voice_id = chatterboxConfig.voice;
+                    console.log(`[Chatterbox] Using Edge TTS fallback for voice: ${chatterboxConfig.voice}`);
+                }
+                
+                const response = await fetch('/api/voice/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(synthesisPayload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`TTS synthesis failed: ${response.status}`);
+                }
+                
+                const audioBlob = await response.blob();
+                
+                // Play the synthesized audio
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                audio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    updateAIStatus('Ready to answer questions!');
+                };
+                
+                audio.onerror = (error) => {
+                    console.error('[Chatterbox] Audio playback failed:', error);
+                    URL.revokeObjectURL(audioUrl);
+                    updateAIStatus('Ready to answer questions!');
+                };
+                
+                await audio.play();
+                console.log('[Chatterbox] Audio synthesis and playback successful');
+                
+            } catch (error) {
+                console.error('[Chatterbox] TTS synthesis failed:', error);
+                updateAIStatus('TTS synthesis failed - Ready for next question');
+            }
+        }
+
         async function loadVoiceSettings() {
             try {
-                // Load available voices from backend
+                // Load available voices from backend (including Chatterbox)
                 const response = await fetch('/api/voice/voices');
                 const data = await response.json();
                 
                 if (data.voices) {
                     voiceState.availableVoices = data.voices;
+                    
+                    // Update voice selector with real Chatterbox voices
+                    const voiceSelect = document.getElementById('tts-voice-select');
+                    
+                    // Clear existing options and add Chatterbox voices
+                    const chatterboxOptions = voiceSelect.querySelectorAll('option[value^="default"], option[value^="expressive"], option[value^="calm"], option[value^="dramatic"], option[value^="efficient"]');
+                    
+                    // Update Chatterbox options if service is available
+                    if (data.voices.some(v => v.engine === 'Chatterbox' || v.engine === 'chatterbox')) {
+                        console.log('[Chatterbox] Chatterbox TTS service is available');
+                        chatterboxConfig.engine = 'chatterbox';
+                    } else {
+                        console.warn('[Chatterbox] Chatterbox TTS not available, using fallback voices');
+                    }
+                    
                     populateVoiceSelect();
                 }
                 
@@ -6998,8 +7183,8 @@
                 console.warn('[Voice] Could not load voice settings:', error);
                 // Set default voices if API fails
                 voiceState.availableVoices = [
-                    { id: 'female_1', name: 'Female Voice 1', engine: 'TTS' },
-                    { id: 'male_1', name: 'Male Voice 1', engine: 'TTS' }
+                    { id: 'default', name: 'Chatterbox Default', engine: 'Chatterbox' },
+                    { id: 'edge_female', name: 'Edge Female (Fallback)', engine: 'Edge TTS' }
                 ];
                 populateVoiceSelect();
             }
@@ -7228,6 +7413,11 @@
                     isFollowUp: true
                 });
                 
+                // Synthesize AI response with Chatterbox TTS
+                if (chatterboxConfig.enabled && aiData.response_text) {
+                    await synthesizeResponseWithChatterbox(aiData.response_text);
+                }
+                
             } catch (fetchError) {
                 clearTimeout(timeoutId);
                 
@@ -7313,6 +7503,11 @@
                     filtersApplied: appliedFilters,
                     isFollowUp: false
                 });
+                
+                // Synthesize AI response with Chatterbox TTS
+                if (chatterboxConfig.enabled && aiData.response_text) {
+                    await synthesizeResponseWithChatterbox(aiData.response_text);
+                }
                 
             } catch (fetchError) {
                 clearTimeout(timeoutId);
