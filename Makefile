@@ -43,7 +43,7 @@ help: ## Show this help message
 	@echo "$(YELLOW)ngrok Integration (Simplified v3 Command):$(NC)"
 	@echo "  🌐 API available at: $(GREEN)https://api.oip.onl$(NC)"
 	@echo "  🔧 Setup: Add NGROK_AUTH_TOKEN=your_token to .env file"
-	@echo "  ⚡ Simple command: $(GREEN)ngrok http --url=api.oip.onl 8000$(NC)"
+	@echo "  ⚡ Simple command: $(GREEN)ngrok http --url=api.oip.onl 3005$(NC)"
 	@echo "  💰 Requires: Paid ngrok plan for custom domain api.oip.onl"
 	@echo "  🧪 Test setup: $(GREEN)make ngrok-test$(NC)"
 
@@ -96,7 +96,7 @@ check-ngrok:
 			echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
 			echo ""; \
 			echo "$(BLUE)Then simply run: make start-ngrok$(NC)"; \
-			echo "$(BLUE)Or manually: ngrok http --url=api.oip.onl 8000$(NC)"; \
+			echo "$(BLUE)Or manually: ngrok http --url=api.oip.onl 3005$(NC)"; \
 			exit 1; \
 		fi; \
 	else \
@@ -122,15 +122,15 @@ start-ngrok: check-ngrok
 		if [ -f .env ]; then \
 			export $$(grep -v '^#' .env | grep NGROK_AUTH_TOKEN | xargs); \
 		fi; \
-		echo "$(YELLOW)Starting: $$NGROK_CMD http --url=api.oip.onl 8000$(NC)"; \
-		($$NGROK_CMD http --url=api.oip.onl 8000 > /dev/null 2>&1 &); \
+		echo "$(YELLOW)Starting: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
+		($$NGROK_CMD http --url=api.oip.onl 3005 > /dev/null 2>&1 &); \
 		sleep 3; \
 		if pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
 			echo "$(GREEN)🔗 ngrok: ✅ API available at https://api.oip.onl$(NC)"; \
 		else \
 			echo "$(RED)❌ ngrok failed to start.$(NC)"; \
 			echo "$(YELLOW)Debug: Check if NGROK_AUTH_TOKEN is set in .env$(NC)"; \
-			echo "$(YELLOW)Try running manually: $$NGROK_CMD http --url=api.oip.onl 8000$(NC)"; \
+			echo "$(YELLOW)Try running manually: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
 			exit 1; \
 		fi; \
 	else \
@@ -468,7 +468,7 @@ ngrok-debug: ## Debug ngrok setup (simple v3 command)
 		echo "  ❌ .env file not found"; \
 	fi
 	@echo "$(YELLOW)Simple command test:$(NC)"
-	@echo "  📋 Full command: $(GREEN)ngrok http --url=api.oip.onl 8000$(NC)"
+	@echo "  📋 Full command: $(GREEN)ngrok http --url=api.oip.onl 3005$(NC)"
 	@echo "  🎯 This requires your paid plan with custom domain access"
 	@echo "  💡 No config files needed with ngrok v3!"
 
