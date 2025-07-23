@@ -1,6 +1,8 @@
 version: "2"
-authtoken_from_env: true
+authtoken: ${NGROK_AUTH_TOKEN}
+
 tunnels:
-  oip:
+  oip-api:
     proto: http
-    addr: oip-gpu:3005
+    addr: 8000
+    domain: api.oip.onl
