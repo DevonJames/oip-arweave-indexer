@@ -91,11 +91,11 @@ check-ngrok:
 
 # Start ngrok tunnel
 start-ngrok: check-ngrok
-	@if ! pgrep -f "ngrok" > /dev/null; then \
+	@if ! pgrep -f "ngrok start" > /dev/null; then \
 		echo "$(BLUE)🔗 Starting ngrok tunnel for api.oip.onl...$(NC)"; \
 		(ngrok start oip-api --config ~/.ngrok.yml > /dev/null 2>&1 &); \
 		sleep 3; \
-		if pgrep -f "ngrok" > /dev/null; then \
+		if pgrep -f "ngrok start" > /dev/null; then \
 			echo "$(GREEN)🔗 ngrok: ✅ API available at https://api.oip.onl$(NC)"; \
 		else \
 			echo "$(RED)❌ ngrok failed to start. Check your configuration.$(NC)"; \
@@ -107,9 +107,10 @@ start-ngrok: check-ngrok
 
 # Stop ngrok
 stop-ngrok:
-	@if pgrep -f "ngrok" > /dev/null; then \
+	@if pgrep -f "ngrok start" > /dev/null; then \
 		echo "$(BLUE)🛑 Stopping ngrok tunnel...$(NC)"; \
-		pkill -f "ngrok"; \
+		pkill -f "ngrok start" || true; \
+		sleep 1; \
 		echo "$(GREEN)🔗 ngrok stopped$(NC)"; \
 	else \
 		echo "$(YELLOW)🔗 ngrok: not running$(NC)"; \
@@ -194,7 +195,7 @@ status: ## Show service status + ngrok status
 	@docker-compose ps || echo "No services running"
 	@echo ""
 	@echo "$(BLUE)ngrok Status:$(NC)"
-	@if pgrep -f "ngrok" > /dev/null; then \
+	@if pgrep -f "ngrok start" > /dev/null; then \
 		echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
 		echo "$(GREEN)🌐 API: https://api.oip.onl$(NC)"; \
 		if command -v curl >/dev/null 2>&1; then \
@@ -366,7 +367,7 @@ test-chatterbox: ## Test Chatterbox TTS functionality
 # ngrok Management
 ngrok-status: ## Check ngrok tunnel status
 	@echo "$(BLUE)ngrok Tunnel Status:$(NC)"
-	@if pgrep -f "ngrok" > /dev/null; then \
+	@if pgrep -f "ngrok start" > /dev/null; then \
 		echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
 		echo "$(GREEN)🌐 API: https://api.oip.onl$(NC)"; \
 		if command -v curl >/dev/null 2>&1; then \
