@@ -91,11 +91,11 @@ check-ngrok:
 
 # Start ngrok tunnel
 start-ngrok: check-ngrok
-	@if ! pgrep -f "ngrok start" > /dev/null; then \
+	@if ! pgrep -f "ngrok start oip-api" > /dev/null 2>&1; then \
 		echo "$(BLUE)🔗 Starting ngrok tunnel for api.oip.onl...$(NC)"; \
 		(ngrok start oip-api --config ~/.ngrok.yml > /dev/null 2>&1 &); \
 		sleep 3; \
-		if pgrep -f "ngrok start" > /dev/null; then \
+		if pgrep -f "ngrok start oip-api" > /dev/null 2>&1; then \
 			echo "$(GREEN)🔗 ngrok: ✅ API available at https://api.oip.onl$(NC)"; \
 		else \
 			echo "$(RED)❌ ngrok failed to start. Check your configuration.$(NC)"; \
@@ -107,10 +107,16 @@ start-ngrok: check-ngrok
 
 # Stop ngrok
 stop-ngrok:
-	@if pgrep -f "ngrok start" > /dev/null; then \
-		echo "$(BLUE)🛑 Stopping ngrok tunnel...$(NC)"; \
-		pkill -f "ngrok start" || true; \
-		sleep 1; \
+	@echo "$(BLUE)🛑 Stopping ngrok tunnel...$(NC)"
+	@NGROK_PID=$$(pgrep -f "ngrok start oip-api" 2>/dev/null | head -1); \
+	if [ -n "$$NGROK_PID" ]; then \
+		echo "$(YELLOW)Found ngrok process: $$NGROK_PID$(NC)"; \
+		kill -TERM $$NGROK_PID 2>/dev/null || true; \
+		sleep 2; \
+		if kill -0 $$NGROK_PID 2>/dev/null; then \
+			echo "$(YELLOW)Force killing ngrok...$(NC)"; \
+			kill -KILL $$NGROK_PID 2>/dev/null || true; \
+		fi; \
 		echo "$(GREEN)🔗 ngrok stopped$(NC)"; \
 	else \
 		echo "$(YELLOW)🔗 ngrok: not running$(NC)"; \
@@ -195,7 +201,7 @@ status: ## Show service status + ngrok status
 	@docker-compose ps || echo "No services running"
 	@echo ""
 	@echo "$(BLUE)ngrok Status:$(NC)"
-	@if pgrep -f "ngrok start" > /dev/null; then \
+	@if pgrep -f "ngrok start oip-api" > /dev/null 2>&1; then \
 		echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
 		echo "$(GREEN)🌐 API: https://api.oip.onl$(NC)"; \
 		if command -v curl >/dev/null 2>&1; then \
@@ -367,7 +373,7 @@ test-chatterbox: ## Test Chatterbox TTS functionality
 # ngrok Management
 ngrok-status: ## Check ngrok tunnel status
 	@echo "$(BLUE)ngrok Tunnel Status:$(NC)"
-	@if pgrep -f "ngrok start" > /dev/null; then \
+	@if pgrep -f "ngrok start oip-api" > /dev/null 2>&1; then \
 		echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
 		echo "$(GREEN)🌐 API: https://api.oip.onl$(NC)"; \
 		if command -v curl >/dev/null 2>&1; then \
