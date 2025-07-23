@@ -33,6 +33,7 @@ help: ## Show this help message
 	@echo "$(YELLOW)Examples:$(NC)"
 	@echo "  make chatterbox-gpu            # Deploy Chatterbox TTS with GPU acceleration + ngrok"
 	@echo "  make rebuild-standard          # Build complete stack with Chatterbox TTS + ngrok"
+	@echo "  make ngrok-find                # Find ngrok installation on your system"
 	@echo "  make ngrok-test                # Test ngrok configuration (NGROK_AUTH_TOKEN setup)"
 	@echo "  make install-models            # Install LLM models only (if already running)"
 	@echo "  make install-chatterbox        # Install/update Chatterbox TTS model"
@@ -42,6 +43,7 @@ help: ## Show this help message
 	@echo "$(YELLOW)ngrok Integration:$(NC)"
 	@echo "  🌐 API available at: $(GREEN)https://api.oip.onl$(NC)"
 	@echo "  🔧 Setup: Add NGROK_AUTH_TOKEN=your_token to .env file"
+	@echo "  🔍 Find ngrok: $(GREEN)make ngrok-find$(NC)"
 	@echo "  🧪 Test setup: $(GREEN)make ngrok-test$(NC)"
 
 # Default profile - now uses Chatterbox as primary TTS
@@ -49,21 +51,42 @@ PROFILE ?= standard
 
 # Check if ngrok is available and configured
 check-ngrok:
-	@if ! command -v ngrok >/dev/null 2>&1; then \
-		echo "$(YELLOW)⚠️  ngrok not installed. Install with:$(NC)"; \
-		echo "   $(BLUE)# macOS$(NC)"; \
-		echo "   brew install ngrok"; \
-		echo "   $(BLUE)# Linux$(NC)"; \
-		echo "   curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && echo 'deb https://ngrok-agent.s3.amazonaws.com buster main' | sudo tee /etc/apt/sources.list.d/ngrok.list && sudo apt update && sudo apt install ngrok"; \
+	@NGROK_FOUND=false; \
+	if command -v ngrok >/dev/null 2>&1; then \
+		NGROK_FOUND=true; \
+	elif [ -f /usr/local/bin/ngrok ]; then \
+		NGROK_FOUND=true; \
+		NGROK_PATH="/usr/local/bin/ngrok"; \
+	elif [ -f ~/bin/ngrok ]; then \
+		NGROK_FOUND=true; \
+		NGROK_PATH="~/bin/ngrok"; \
+	elif [ -f ./ngrok ]; then \
+		NGROK_FOUND=true; \
+		NGROK_PATH="./ngrok"; \
+	elif which ngrok >/dev/null 2>&1; then \
+		NGROK_FOUND=true; \
+	fi; \
+	if [ "$$NGROK_FOUND" = "false" ]; then \
+		echo "$(RED)❌ ngrok not found in PATH or common locations$(NC)"; \
+		echo "$(YELLOW)Debug info:$(NC)"; \
+		echo "  PATH: $$PATH"; \
+		echo "  Checked locations: /usr/local/bin/ngrok, ~/bin/ngrok, ./ngrok"; \
 		echo ""; \
-		echo "$(YELLOW)Then configure either:$(NC)"; \
-		echo "$(BLUE)Option 1: Environment variable (recommended)$(NC)"; \
-		echo "   Add NGROK_AUTH_TOKEN=your_token_here to your .env file"; \
-		echo "$(BLUE)Option 2: Direct config file$(NC)"; \
-		echo "   Edit ~/.ngrok.yml with your authtoken"; \
+		echo "$(YELLOW)To fix this:$(NC)"; \
+		echo "$(BLUE)Option 1: Add ngrok to PATH$(NC)"; \
+		echo "  Find ngrok: find / -name ngrok -type f 2>/dev/null | head -5"; \
+		echo "  Then: export PATH=\$$PATH:/path/to/ngrok/directory"; \
+		echo "$(BLUE)Option 2: Install ngrok$(NC)"; \
+		echo "  # macOS: brew install ngrok"; \
+		echo "  # Linux: snap install ngrok OR download from ngrok.com"; \
 		echo ""; \
 		echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
 		exit 1; \
+	else \
+		echo "$(GREEN)✅ ngrok found$(NC)"; \
+		if command -v ngrok >/dev/null 2>&1; then \
+			echo "$(BLUE)📍 ngrok version: $$(ngrok version 2>/dev/null || echo 'version check failed')$(NC)"; \
+		fi; \
 	fi
 	@NGROK_CONFIG_FILE=""; \
 	if [ -f ngrok/ngrok.yml ]; then \
@@ -111,6 +134,16 @@ check-ngrok:
 start-ngrok: check-ngrok
 	@if ! pgrep -f "ngrok start oip-api" > /dev/null 2>&1; then \
 		echo "$(BLUE)🔗 Starting ngrok tunnel for api.oip.onl...$(NC)"; \
+		NGROK_CMD="ngrok"; \
+		if ! command -v ngrok >/dev/null 2>&1; then \
+			if [ -f /usr/local/bin/ngrok ]; then \
+				NGROK_CMD="/usr/local/bin/ngrok"; \
+			elif [ -f ~/bin/ngrok ]; then \
+				NGROK_CMD="~/bin/ngrok"; \
+			elif [ -f ./ngrok ]; then \
+				NGROK_CMD="./ngrok"; \
+			fi; \
+		fi; \
 		NGROK_CONFIG=""; \
 		if [ -f ngrok/ngrok.yml ]; then \
 			NGROK_CONFIG="--config ngrok/ngrok.yml"; \
@@ -120,13 +153,15 @@ start-ngrok: check-ngrok
 		if [ -f .env ]; then \
 			export $$(grep -v '^#' .env | grep NGROK_AUTH_TOKEN | xargs); \
 		fi; \
-		(ngrok start oip-api $$NGROK_CONFIG > /dev/null 2>&1 &); \
+		echo "$(YELLOW)Starting: $$NGROK_CMD start oip-api $$NGROK_CONFIG$(NC)"; \
+		($$NGROK_CMD start oip-api $$NGROK_CONFIG > /dev/null 2>&1 &); \
 		sleep 3; \
 		if pgrep -f "ngrok start oip-api" > /dev/null 2>&1; then \
 			echo "$(GREEN)🔗 ngrok: ✅ API available at https://api.oip.onl$(NC)"; \
 		else \
 			echo "$(RED)❌ ngrok failed to start. Check your configuration.$(NC)"; \
 			echo "$(YELLOW)Debug: Check if NGROK_AUTH_TOKEN is set in .env$(NC)"; \
+			echo "$(YELLOW)Try running manually: $$NGROK_CMD start oip-api $$NGROK_CONFIG$(NC)"; \
 			exit 1; \
 		fi; \
 	else \
@@ -421,13 +456,54 @@ ngrok-restart: ## Restart ngrok tunnel
 	@make stop-ngrok
 	@make start-ngrok
 
+ngrok-find: ## Find ngrok installation on your system
+	@echo "$(BLUE)🔍 Searching for ngrok installation...$(NC)"
+	@echo "$(YELLOW)Checking PATH:$(NC)"
+	@if command -v ngrok >/dev/null 2>&1; then \
+		echo "  ✅ Found in PATH: $$(which ngrok)"; \
+		echo "  📍 Version: $$(ngrok version 2>/dev/null)"; \
+	else \
+		echo "  ❌ Not in PATH"; \
+	fi
+	@echo "$(YELLOW)Checking common locations:$(NC)"
+	@for path in /usr/local/bin/ngrok ~/bin/ngrok ./ngrok /usr/bin/ngrok /opt/ngrok/ngrok ~/.local/bin/ngrok; do \
+		if [ -f "$$path" ]; then \
+			echo "  ✅ Found: $$path"; \
+			echo "    Version: $$($$path version 2>/dev/null || echo 'version check failed')"; \
+		fi; \
+	done
+	@echo "$(YELLOW)Searching entire system (this may take a moment):$(NC)"
+	@find / -name ngrok -type f -executable 2>/dev/null | head -10 | while read path; do \
+		echo "  🔍 Found: $$path"; \
+	done || echo "  Search completed"
+	@echo ""
+	@echo "$(BLUE)💡 To fix PATH issues:$(NC)"
+	@echo "  1. Find ngrok location from above"
+	@echo "  2. Add to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
+	@echo "     export PATH=\$$PATH:/path/to/ngrok/directory"
+	@echo "  3. Reload: source ~/.bashrc (or restart terminal)"
+
 ngrok-test: ## Test ngrok configuration and environment setup
 	@echo "$(BLUE)Testing ngrok configuration...$(NC)"
 	@echo "$(YELLOW)Checking ngrok installation:$(NC)"
-	@if command -v ngrok >/dev/null 2>&1; then \
-		echo "  ✅ ngrok is installed: $$(ngrok version)"; \
+	@NGROK_CMD=""; \
+	if command -v ngrok >/dev/null 2>&1; then \
+		NGROK_CMD="ngrok"; \
+	elif [ -f /usr/local/bin/ngrok ]; then \
+		NGROK_CMD="/usr/local/bin/ngrok"; \
+	elif [ -f ~/bin/ngrok ]; then \
+		NGROK_CMD="~/bin/ngrok"; \
+	elif [ -f ./ngrok ]; then \
+		NGROK_CMD="./ngrok"; \
+	elif which ngrok >/dev/null 2>&1; then \
+		NGROK_CMD="ngrok"; \
+	fi; \
+	if [ -n "$$NGROK_CMD" ]; then \
+		echo "  ✅ ngrok found at: $$NGROK_CMD"; \
+		echo "  📍 Version: $$($$NGROK_CMD version 2>/dev/null || echo 'version check failed')"; \
 	else \
-		echo "  ❌ ngrok not found"; \
+		echo "  ❌ ngrok not found in PATH or common locations"; \
+		echo "  🔍 Try: find / -name ngrok -type f 2>/dev/null | head -5"; \
 		exit 1; \
 	fi
 	@echo "$(YELLOW)Checking config file:$(NC)"
