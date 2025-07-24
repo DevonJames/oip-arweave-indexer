@@ -210,7 +210,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
  * POST /api/voice/synthesize
  * Convert text to speech audio using Chatterbox TTS service
  */
-router.post('/synthesize', async (req, res) => {
+router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
     try {
         const { 
             text, 
@@ -221,8 +221,12 @@ router.post('/synthesize', async (req, res) => {
             gender,
             emotion,
             exaggeration,
-            cfg_weight
+            cfg_weight,
+            voice_cloning = 'false'
         } = req.body;
+
+        // Check if an audio file was uploaded for voice cloning
+        const audioFile = req.file;
 
         if (!text || !text.trim()) {
             return res.status(400).json({ error: 'Text is required' });
@@ -293,9 +297,30 @@ router.post('/synthesize', async (req, res) => {
         formData.append('emotion', chatterboxParams.emotion);  
         formData.append('exaggeration', chatterboxParams.exaggeration.toString());
         formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
-        formData.append('voice_cloning', 'false');
         
-        console.log(`[TTS] Sending FormData with text length: ${finalText.length} chars`);
+        // Handle voice cloning if enabled and audio file is provided
+        if (voice_cloning === 'true' && audioFile) {
+            console.log(`[TTS] Voice cloning enabled with audio file: ${audioFile.originalname} (${audioFile.size} bytes)`);
+            formData.append('voice_cloning', 'true'); // TTS service expects string 'true', not boolean
+            // Create a proper stream from the buffer for the TTS service
+            const { Readable } = require('stream');
+            const audioStream = new Readable();
+            audioStream.push(audioFile.buffer);
+            audioStream.push(null); // End the stream
+            
+            formData.append('audio_prompt', audioStream, {
+                filename: audioFile.originalname,
+                contentType: audioFile.mimetype,
+                knownLength: audioFile.size
+            });
+        } else {
+            formData.append('voice_cloning', 'false'); // TTS service expects string 'false', not boolean
+            if (voice_cloning === 'true') {
+                console.log(`[TTS] Voice cloning requested but no audio file provided`);
+            }
+        }
+        
+        console.log(`[TTS] Sending FormData with text length: ${finalText.length} chars, voice_cloning: ${voice_cloning}`);
 
         const ttsResponse = await safeAxiosCall(
             `${TTS_SERVICE_URL}/synthesize`,
@@ -308,6 +333,9 @@ router.post('/synthesize', async (req, res) => {
                 responseType: 'arraybuffer'
             }
         );
+        
+        // Log successful response
+        console.log(`[TTS] Successfully synthesized ${ttsResponse.data.length} bytes`);
 
         // Set appropriate headers
         res.set({
@@ -491,7 +519,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     formData.append('emotion', chatterboxParams.emotion);
                     formData.append('exaggeration', chatterboxParams.exaggeration.toString());
                     formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
-                    formData.append('voice_cloning', 'false');
+                    formData.append('voice_cloning', 'false'); // Voice cloning typically not used in real-time chat
                     
                     console.log(`[Voice Chat] Sending FormData with text length: ${textForTTS.length} chars`);
                     

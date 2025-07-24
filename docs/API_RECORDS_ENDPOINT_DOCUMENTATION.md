@@ -16,7 +16,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Type:** String
 - **Description:** Filter records by their specific type
 - **Example:** `recordType=post`
-- **Common Values:** `post`, `image`, `audio`, `video`, `text`, `recipe`, `workout`, `deleteMessage`
+- **Common Values:** `post`, `image`, `audio`, `video`, `text`, `recipe`, `workout`, `exercise`, `deleteMessage`, `creatorRegistration`
 
 #### `template`
 - **Type:** String
@@ -33,6 +33,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - Searches name, description, and tags fields
   - Returns records matching ALL search terms (AND behavior)
   - Automatically sorts by match relevance
+  - Adds `matchCount` field to records showing number of search terms matched
 
 ### 🏋️ **Exercise Filtering (Workouts)**
 
@@ -172,11 +173,6 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Description:** Filter by exact creator handle
 - **Example:** `creatorHandle=john_creator`
 
-#### `creator_name`
-- **Type:** String
-- **Description:** Filter by creator name (case-insensitive)
-- **Example:** `creator_name=John Smith`
-
 #### `creator_did_address`
 - **Type:** String (URL-encoded)
 - **Description:** Filter by creator's DID address
@@ -200,6 +196,14 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Description:** Filter by URL (checks both `url` and `webUrl` fields)
 - **Example:** `url=https://example.com/article`
 
+### 🔍 **Advanced Filtering**
+
+#### `exactMatch`
+- **Type:** String (JSON)
+- **Description:** Filter records by exact field matches using JSON object notation
+- **Example:** `exactMatch={"data.basic.language":"en","oip.recordType":"post"}`
+- **Note:** Uses dot notation to navigate nested object structures
+
 ### 📅 **Date Filtering**
 
 #### `dateStart`
@@ -207,12 +211,14 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Description:** Filter records created on or after this date
 - **Example:** `dateStart=2024-01-01`
 - **Format:** ISO date string or Unix timestamp
+- **Note:** Filters on `data.basic.date` field
 
 #### `dateEnd`
 - **Type:** Date
 - **Description:** Filter records created on or before this date
 - **Example:** `dateEnd=2024-12-31`
 - **Format:** ISO date string or Unix timestamp
+- **Note:** Filters on `data.basic.date` field
 
 ### ⛓️ **Blockchain Filtering**
 
@@ -233,6 +239,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `true`: Only records with audio content
   - `false`: Only records without audio content
 - **Example:** `hasAudio=true`
+- **Note:** Searches for audio in `audioItems` arrays and `webUrl` fields
 
 ### 📊 **Sorting**
 
@@ -246,7 +253,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `ver` - Record version
   - `recordType` - Record type
   - `creatorHandle` - Creator handle
-  - `date` - Record creation date
+  - `date` - Record creation date (from `data.basic.date`)
   - `score` - Match score (for search/tag queries)
   - `tags` - Tag match score (only works with `tags` parameter)
   - `exerciseScore` - Exercise match score (only works with `exerciseNames` parameter)
@@ -283,6 +290,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Description:** Whether to include tag summary in response
 - **Values:** `"true"` or `"false"`
 - **Example:** `summarizeTags=true`
+- **Note:** When enabled, returns tag counts and filters records to match the paginated tag summary
 
 #### `tagCount`
 - **Type:** Number
@@ -300,29 +308,75 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 
 #### `resolveDepth`
 - **Type:** Number
-- **Description:** How deeply to resolve referenced records
+- **Description:** How deeply to resolve referenced records (dref fields)
 - **Default:** `2`
 - **Range:** `1-5`
 - **Example:** `resolveDepth=3`
-- **Note:** Higher values provide more complete data but slower responses
+- **Note:** 
+  - Higher values provide more complete data but slower responses
+  - Required for `exerciseNames` and `ingredientNames` filtering
+
+#### `resolveNamesOnly`
+- **Type:** Boolean | String
+- **Description:** Whether to resolve only record names instead of full record data
+- **Values:** `true`, `false`, `"true"`, `"false"`
+- **Default:** `false`
+- **Example:** `resolveNamesOnly=true`
+- **Note:** Faster than full resolution, suitable for exercise and ingredient name filtering
+
+### 🍳 **Recipe Features**
+
+#### `summarizeRecipe`
+- **Type:** Boolean | String
+- **Description:** Whether to calculate and include nutritional summaries for recipe records
+- **Values:** `true`, `false`, `"true"`, `"false"`
+- **Default:** `false`
+- **Example:** `summarizeRecipe=true`
+- **Behavior:**
+  - Only works with recipe records that have ingredient data
+  - Calculates total nutritional values based on resolved ingredient records
+  - Adds `summaryNutritionalInfo` and `summaryNutritionalInfoPerServing` fields
+  - Requires ingredients to have nutritional information
+  - Handles unit conversions (grams, ounces, cups, etc.)
+
+### 🎨 **Display Options**
+
+#### `hideDateReadable`
+- **Type:** Boolean | String
+- **Description:** Whether to exclude human-readable date formatting
+- **Values:** `true`, `false`, `"true"`, `"false"`
+- **Default:** `false`
+- **Example:** `hideDateReadable=true`
+- **Note:** By default, adds `dateReadable` field to records with timestamp dates
+
+#### `hideNullValues`
+- **Type:** Boolean | String
+- **Description:** Whether to remove null values from response data
+- **Values:** `true`, `false`, `"true"`, `"false"`
+- **Default:** `false`
+- **Example:** `hideNullValues=true`
+- **Note:** Recursively removes null values from all record data structures
 
 ### 🛡️ **Security & Privacy**
 
 #### `includeSigs`
-- **Type:** Boolean
+- **Type:** Boolean | String
 - **Description:** Whether to include cryptographic signatures
+- **Values:** `true`, `false`, `"true"`, `"false"`
 - **Default:** `true`
 - **Example:** `includeSigs=false`
 
 #### `includePubKeys`
-- **Type:** Boolean
+- **Type:** Boolean | String
 - **Description:** Whether to include public keys
+- **Values:** `true`, `false`, `"true"`, `"false"`
 - **Default:** `true`
 - **Example:** `includePubKeys=false`
 
 #### `includeDeleteMessages`
-- **Type:** Boolean
+- **Type:** Boolean | String
 - **Description:** Whether to include delete message records
+- **Values:** `true`, `false`, `"true"`, `"false"`
 - **Default:** `false`
 - **Example:** `includeDeleteMessages=true`
 
@@ -378,6 +432,11 @@ GET /api/records?recordType=recipe&ingredientNames=chicken,garlic,olive%20oil&re
 GET /api/records?recordType=recipe&ingredientNames=tomatoes,basil&sortBy=ingredientScore:desc&resolveDepth=1&limit=5
 ```
 
+### Recipe with Nutritional Summary
+```
+GET /api/records?recordType=recipe&summarizeRecipe=true&resolveDepth=2&limit=10
+```
+
 ### Equipment Search in Exercises (AND behavior)
 ```
 GET /api/records?recordType=exercise&equipmentRequired=dumbbells,barbell&limit=10
@@ -408,9 +467,14 @@ GET /api/records?recordType=exercise&exerciseType=Warm-Up,Cool-Down&exerciseType
 GET /api/records?recordType=exercise&exerciseType=main&sortBy=exerciseTypeScore:desc&limit=5
 ```
 
+### Exact Match Filtering
+```
+GET /api/records?exactMatch={"data.basic.language":"en","oip.recordType":"post"}&limit=20
+```
+
 ### Complex Query with Multiple Filters
 ```
-GET /api/records?search=mediterranean&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3
+GET /api/records?search=mediterranean&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3&summarizeRecipe=true
 ```
 
 ### Tag Summary for Analytics
@@ -418,7 +482,14 @@ GET /api/records?search=mediterranean&tags=healthy,diet&tagsMatchMode=AND&record
 GET /api/records?summarizeTags=true&tagCount=100&recordType=post
 ```
 
+### Clean Display Format
+```
+GET /api/records?hideNullValues=true&hideDateReadable=false&includeSigs=false&includePubKeys=false&limit=10
+```
+
 ## Response Format
+
+### Standard Response Structure
 
 ```json
 {
@@ -431,9 +502,29 @@ GET /api/records?summarizeTags=true&tagCount=100&recordType=post
   "currentPage": 1,
   "totalPages": 8,
   "queryParams": { /* original query parameters */ },
-  "records": [ /* array of record objects */ ],
-  "tagSummary": [ /* array of tag objects with counts (if summarizeTags=true) */ ],
-  "tagCount": 245 /* total unique tags (if summarizeTags=true) */
+  "records": [ /* array of record objects */ ]
+}
+```
+
+### Tag Summary Response (when summarizeTags=true)
+
+```json
+{
+  "message": "Records retrieved successfully",
+  "latestArweaveBlockInDB": 1234567,
+  "indexingProgress": "85%",
+  "totalRecords": 50000,
+  "searchResults": 150,
+  "tagSummary": [
+    { "tag": "cooking", "count": 1250 },
+    { "tag": "recipe", "count": 890 },
+    { "tag": "healthy", "count": 670 }
+  ],
+  "tagCount": 245,
+  "pageSize": 20,
+  "currentPage": 1,
+  "totalPages": 8,
+  "records": [ /* filtered records matching paginated tag summary */ ]
 }
 ```
 
@@ -445,7 +536,7 @@ When using the `exerciseNames` parameter with workout records, the response incl
 {
   "records": [
     {
-      "data": { /* workout data */ },
+      "data": { /* workout data with resolved exercise information */ },
       "oip": { /* metadata */ },
       "exerciseScore": 0.85,
       "exerciseMatchedCount": 3
@@ -505,18 +596,58 @@ When using the `exerciseType` parameter with exercise records, the response incl
 }
 ```
 
+### Recipe Nutritional Summary Fields
+
+When using `summarizeRecipe=true` with recipe records, the response includes nutritional summary fields:
+
+```json
+{
+  "records": [
+    {
+      "data": {
+        "recipe": { /* recipe data */ },
+        "summaryNutritionalInfo": {
+          "calories": 450,
+          "proteinG": 28.5,
+          "fatG": 18.2,
+          "cholesterolMg": 85,
+          "sodiumMg": 920,
+          "carbohydratesG": 42.1,
+          "ingredientsProcessed": 8,
+          "totalIngredients": 10
+        },
+        "summaryNutritionalInfoPerServing": {
+          "calories": 113,
+          "proteinG": 7.1,
+          "fatG": 4.6,
+          "cholesterolMg": 21,
+          "sodiumMg": 230,
+          "carbohydratesG": 10.5,
+          "ingredientsProcessed": 8,
+          "totalIngredients": 10
+        }
+      },
+      "oip": { /* metadata */ }
+    }
+  ]
+}
+```
+
 ## Performance Tips
 
 1. **Use appropriate `limit`** - Smaller limits = faster responses
 2. **Optimize `resolveDepth`** - Lower values = faster processing
-3. **Combine filters strategically** - More specific filters reduce processing load
-4. **Use `includeSigs=false` and `includePubKeys=false`** for lighter responses
-5. **Tag filtering is more efficient than full-text search** for known categories
-6. **Exercise search requires resolution** - Use `resolveDepth=1` minimum for exercise filtering
-7. **Ingredient search requires resolution** - Use `resolveDepth=1` minimum for ingredient filtering
-8. **Equipment search is efficient** - No resolution required, searches existing exercise record data
-9. **Equipment OR mode is more flexible** - Use `equipmentMatchMode=OR` to find exercises with any of the specified equipment
-10. **Exercise type search is enum-aware** - Supports both codes (`warmup`) and display names (`Warm-Up`)
+3. **Use `resolveNamesOnly=true`** - For exercise/ingredient filtering when full data isn't needed
+4. **Combine filters strategically** - More specific filters reduce processing load
+5. **Use `includeSigs=false` and `includePubKeys=false`** for lighter responses
+6. **Use `hideNullValues=true`** to reduce response size
+7. **Tag filtering is more efficient than full-text search** for known categories
+8. **Exercise search requires resolution** - Use `resolveDepth=1` minimum for exercise filtering
+9. **Ingredient search requires resolution** - Use `resolveDepth=1` minimum for ingredient filtering
+10. **Equipment search is efficient** - No resolution required, searches existing exercise record data
+11. **Equipment OR mode is more flexible** - Use `equipmentMatchMode=OR` to find exercises with any of the specified equipment
+12. **Exercise type search is enum-aware** - Supports both codes (`warmup`) and display names (`Warm-Up`)
+13. **Recipe nutritional summaries require resolution** - Use `resolveDepth=1` minimum with `summarizeRecipe=true`
 
 ## Advanced Features
 
@@ -574,8 +705,17 @@ The scoring algorithm:
 **OR Mode (default):** Returns exercises that match ANY of the specified types
 **AND Mode:** Returns exercises that match ALL of the specified types (unusual for enum fields)
 
+### Recipe Nutritional Summary
+When using `summarizeRecipe=true` with recipe records, the system:
+1. Resolves ingredient references to get nutritional data
+2. Calculates total nutritional values based on recipe amounts and units
+3. Handles unit conversions (grams, ounces, cups, ml, etc.)
+4. Provides both total recipe nutrition and per-serving nutrition
+5. Includes metadata about ingredient processing success
+6. Only processes recipes with sufficient ingredient data (minimum 25% or 1 ingredient)
+
 ### Data Structure Handling
-Both exercise and ingredient search functions handle various data structures robustly:
+Exercise, ingredient, and equipment search functions handle various data structures robustly:
 - **String values**: Direct string matching (e.g., `"Push-ups"`)
 - **Resolved objects**: Extracts names from `data.basic.name` (e.g., `{data: {basic: {name: "Push-ups"}}}`)
 - **Simple objects**: Extracts names from `name` property (e.g., `{name: "Push-ups"}`)
@@ -583,7 +723,7 @@ Both exercise and ingredient search functions handle various data structures rob
 - **Error handling**: Logs warnings for unexpected data structures and continues processing
 
 ### Reference Resolution
-The `resolveDepth` parameter controls how deeply the system follows references (drefs) to other records, providing rich, interconnected data.
+The `resolveDepth` parameter controls how deeply the system follows references (drefs) to other records, providing rich, interconnected data. The `resolveNamesOnly` parameter provides a lightweight alternative that only resolves record names.
 
 ### Flexible Search Modes
 - **Full-text search** (`search`) - Searches across name, description, and tags
@@ -592,6 +732,7 @@ The `resolveDepth` parameter controls how deeply the system follows references (
 - **Ingredient filtering** (`ingredientNames`) - Search recipes by ingredient content
 - **Equipment filtering** (`equipmentRequired`) - Search exercises by equipment requirements with AND/OR modes
 - **Exercise type filtering** (`exerciseType`) - Search exercises by type (warmup/main/cooldown) with enum code/name support
+- **Exact field matching** (`exactMatch`) - Precise filtering by field values using JSON notation
 - **Combined approach** - Use multiple parameters for maximum precision
 
 ---
