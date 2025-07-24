@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const axios = require('axios');
+const FormData = require('form-data');
 const ragService = require('../helpers/ragService');
 const fs = require('fs');
 const path = require('path');
@@ -285,16 +286,24 @@ router.post('/synthesize', async (req, res) => {
 
         console.log(`[TTS] Using Chatterbox params:`, chatterboxParams);
 
+        // Create FormData for TTS service (required for compatibility with voice cloning)
+        const formData = new FormData();
+        formData.append('text', finalText);
+        formData.append('gender', chatterboxParams.gender);
+        formData.append('emotion', chatterboxParams.emotion);  
+        formData.append('exaggeration', chatterboxParams.exaggeration.toString());
+        formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
+        formData.append('voice_cloning', 'false');
+        
+        console.log(`[TTS] Sending FormData with text length: ${finalText.length} chars`);
+
         const ttsResponse = await safeAxiosCall(
             `${TTS_SERVICE_URL}/synthesize`,
             {
                 method: 'POST',
-                data: {
-                    text: finalText,
-                    gender: chatterboxParams.gender,
-                    emotion: chatterboxParams.emotion,
-                    exaggeration: chatterboxParams.exaggeration,
-                    cfg_weight: chatterboxParams.cfg_weight
+                data: formData,
+                headers: {
+                    ...formData.getHeaders(),
                 },
                 responseType: 'arraybuffer'
             }
@@ -475,16 +484,24 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     const chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
                     console.log(`[Voice Chat] Using Chatterbox params:`, chatterboxParams);
                     
+                    // Create FormData for TTS service (required for compatibility with voice cloning)
+                    const formData = new FormData();
+                    formData.append('text', textForTTS);
+                    formData.append('gender', chatterboxParams.gender);
+                    formData.append('emotion', chatterboxParams.emotion);
+                    formData.append('exaggeration', chatterboxParams.exaggeration.toString());
+                    formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
+                    formData.append('voice_cloning', 'false');
+                    
+                    console.log(`[Voice Chat] Sending FormData with text length: ${textForTTS.length} chars`);
+                    
                     const ttsResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
                             method: 'POST',
-                            data: {
-                                text: textForTTS,
-                                gender: chatterboxParams.gender,
-                                emotion: chatterboxParams.emotion,
-                                exaggeration: chatterboxParams.exaggeration,
-                                cfg_weight: chatterboxParams.cfg_weight
+                            data: formData,
+                            headers: {
+                                ...formData.getHeaders(),
                             },
                             responseType: 'arraybuffer'
                         }
@@ -513,7 +530,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         ? responseText.substring(0, maxTextLength) + '...'
                         : responseText;
                     
-                    audioData = await synthesizeWithEspeak(textForEspeak, voice_id, speed);
+                    audioData = await synthesizeWithEspeak(textForEspeak, voice_id, 1.0);
                     engineUsed = 'espeak-fallback';
                 }
 
