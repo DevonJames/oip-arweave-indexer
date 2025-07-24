@@ -171,25 +171,31 @@ check-network:
 		docker network create oiparweave_oip-network; \
 	fi
 
-up: validate-profile check-env check-network start-ngrok ## Start services with specified profile + ngrok
+up: validate-profile check-env check-network ## Start services with specified profile + ngrok
 	@echo "$(BLUE)Starting OIP Arweave with profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Deploying with Chatterbox TTS as primary voice engine...$(NC)"; \
 	fi
 	docker-compose --profile $(PROFILE) up -d
 	@echo "$(GREEN)Services started successfully$(NC)"
+	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
+	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	@make start-ngrok
 	@make status
 
-build: validate-profile check-env check-network start-ngrok ## Build and start services with specified profile + ngrok
+build: validate-profile check-env check-network ## Build and start services with specified profile + ngrok
 	@echo "$(BLUE)Building and starting OIP Arweave with profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Building with Chatterbox TTS integration...$(NC)"; \
 	fi
 	docker-compose --profile $(PROFILE) up -d --build
 	@echo "$(GREEN)Services built and started successfully$(NC)"
+	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
+	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	@make start-ngrok
 	@make status
 
-rebuild: validate-profile check-env check-network start-ngrok ## Rebuild and start services with --no-cache and specified profile + ngrok
+rebuild: validate-profile check-env check-network ## Rebuild and start services with --no-cache and specified profile + ngrok
 	@echo "$(BLUE)Rebuilding OIP Arweave with --no-cache and profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Rebuilding with Chatterbox TTS from scratch...$(NC)"; \
@@ -197,6 +203,9 @@ rebuild: validate-profile check-env check-network start-ngrok ## Rebuild and sta
 	docker-compose --profile $(PROFILE) build --no-cache
 	docker-compose --profile $(PROFILE) up -d
 	@echo "$(GREEN)Services rebuilt and started successfully$(NC)"
+	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
+	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	@make start-ngrok
 	@make status
 
 down: ## Stop all services + ngrok
@@ -359,8 +368,13 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI)
 		TTS_FOUND=true; \
 	elif docker-compose ps | grep -q oip; then \
 		echo "$(YELLOW)Installing Chatterbox model in main OIP container...$(NC)"; \
-		docker-compose exec oip bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in OIP container!')\""; \
-		TTS_FOUND=true; \
+		if docker-compose exec -T oip bash -c "cat /etc/os-release" | grep -q "Alpine"; then \
+			echo "$(YELLOW)⚠️  Alpine Linux detected - skipping Chatterbox in OIP container$(NC)"; \
+			TTS_FOUND=false; \
+		else \
+			docker-compose exec oip bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in OIP container!')\""; \
+			TTS_FOUND=true; \
+		fi; \
 	elif docker-compose ps | grep -q oip-gpu; then \
 		echo "$(YELLOW)Installing Chatterbox model in GPU OIP container...$(NC)"; \
 		docker-compose exec oip-gpu bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in GPU OIP container!')\""; \
@@ -368,7 +382,12 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI)
 	fi; \
 	if [ "$$TTS_FOUND" = "false" ]; then \
 		echo "$(BLUE)Installing Chatterbox in main OIP container...$(NC)"; \
-		docker-compose exec -T oip bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')\"" || echo "$(YELLOW)Installation will complete once container is ready$(NC)"; \
+		if docker-compose exec -T oip bash -c "cat /etc/os-release" | grep -q "Alpine"; then \
+			echo "$(YELLOW)⚠️  Alpine Linux detected - Chatterbox requires glibc-based system$(NC)"; \
+			echo "$(YELLOW)💡 Chatterbox will work in TTS service container instead$(NC)"; \
+		else \
+			docker-compose exec -T oip bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')\"" || echo "$(YELLOW)Installation will complete once container is ready$(NC)"; \
+		fi; \
 	fi
 
 test-chatterbox: ## Test Chatterbox TTS functionality
