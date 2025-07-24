@@ -211,7 +211,17 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
  */
 router.post('/synthesize', async (req, res) => {
     try {
-        const { text, voice_id = 'female_1', speed = 1.0, language = 'en' } = req.body;
+        const { 
+            text, 
+            voice_id = 'female_1', 
+            speed = 1.0, 
+            language = 'en',
+            // New Chatterbox parameters
+            gender,
+            emotion,
+            exaggeration,
+            cfg_weight
+        } = req.body;
 
         if (!text || !text.trim()) {
             return res.status(400).json({ error: 'Text is required' });
@@ -231,44 +241,72 @@ router.post('/synthesize', async (req, res) => {
             console.log(`[TTS] Text truncated from ${textToSynthesize.length} to ${finalText.length} characters`);
         }
 
-        // Use TTS service with appropriate engine selection
-                    // Map voice names to high-quality alternatives
-                    const voiceMapping = {
-                        'edge_female': 'female_1',
-                        'edge_male': 'male_1', 
-                        'edge_expressive': 'female_2',
-                        'chatterbox': 'female_1',
-                        'female': 'female_1', 
-                        'male': 'male_1',
-                        'female_1': 'female_1',
-                        'male_1': 'male_1',
-                        'default': 'female_1'
-                    };
-                    
-                    // Determine best engine based on voice selection
-                    const useEdgeTTS = voice_id.startsWith('edge_');
-                    const enginePreference = useEdgeTTS ? 'edge' : 'auto';
-                    
-                    const mappedVoice = voiceMapping[voice_id] || voice_id;
-                    
-                    const ttsResponse = await safeAxiosCall(
-                        `${TTS_SERVICE_URL}/synthesize`,
-                        {
-                            method: 'POST',
-                            data: {
-                                text: finalText,
-                                voice: mappedVoice,
-                                engine: enginePreference  // Use edge for edge_ voices, auto for others
-                            },
-                            responseType: 'arraybuffer'
-                        }
-                    );
+        // Convert legacy voice_id to gender/emotion format for Chatterbox
+        function convertVoiceIdToChatterboxParams(voice_id) {
+            const voiceMatrix = {
+                'female_1': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                'female_2': { gender: 'female', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                'female_expressive': { gender: 'female', emotion: 'expressive', exaggeration: 0.6, cfg_weight: 0.7 },
+                'female_calm': { gender: 'female', emotion: 'calm', exaggeration: 0.2, cfg_weight: 0.5 },
+                'female_dramatic': { gender: 'female', emotion: 'dramatic', exaggeration: 0.9, cfg_weight: 0.8 },
+                'female_neutral': { gender: 'female', emotion: 'neutral', exaggeration: 0.3, cfg_weight: 0.6 },
+                'male_1': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                'male_2': { gender: 'male', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                'male_expressive': { gender: 'male', emotion: 'expressive', exaggeration: 0.6, cfg_weight: 0.7 },
+                'male_calm': { gender: 'male', emotion: 'calm', exaggeration: 0.2, cfg_weight: 0.5 },
+                'male_dramatic': { gender: 'male', emotion: 'dramatic', exaggeration: 0.9, cfg_weight: 0.8 },
+                'male_neutral': { gender: 'male', emotion: 'neutral', exaggeration: 0.3, cfg_weight: 0.6 },
+                'chatterbox': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                'edge_female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                'edge_male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                'edge_expressive': { gender: 'female', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                'female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                'male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                'default': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }
+            };
+            
+            return voiceMatrix[voice_id] || voiceMatrix['default'];
+        }
+
+        // Use provided Chatterbox parameters or convert from voice_id
+        let chatterboxParams;
+        if (gender && emotion) {
+            // New format - use provided parameters
+            chatterboxParams = {
+                gender: gender,
+                emotion: emotion,
+                exaggeration: exaggeration || 0.5,
+                cfg_weight: cfg_weight || 0.7
+            };
+        } else {
+            // Legacy format - convert voice_id to Chatterbox parameters
+            chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
+        }
+
+        console.log(`[TTS] Using Chatterbox params:`, chatterboxParams);
+
+        const ttsResponse = await safeAxiosCall(
+            `${TTS_SERVICE_URL}/synthesize`,
+            {
+                method: 'POST',
+                data: {
+                    text: finalText,
+                    gender: chatterboxParams.gender,
+                    emotion: chatterboxParams.emotion,
+                    exaggeration: chatterboxParams.exaggeration,
+                    cfg_weight: chatterboxParams.cfg_weight
+                },
+                responseType: 'arraybuffer'
+            }
+        );
 
         // Set appropriate headers
         res.set({
             'Content-Type': 'audio/wav',
             'X-Engine-Used': 'chatterbox',
             'X-Voice-ID': voice_id,
+            'X-Gender': chatterboxParams.gender,
+            'X-Emotion': chatterboxParams.emotion,
             'Content-Length': ttsResponse.data.length.toString()
         });
 
@@ -276,6 +314,8 @@ router.post('/synthesize', async (req, res) => {
         if (!ttsResponse.data || ttsResponse.data.length === 0) {
             throw new Error('Chatterbox returned empty audio data');
         }
+
+        console.log(`[TTS] Successfully synthesized ${ttsResponse.data.length} bytes`);
 
         // Send audio data directly
         res.send(ttsResponse.data);
@@ -293,21 +333,17 @@ router.post('/synthesize', async (req, res) => {
         // Fallback to eSpeak if Chatterbox service fails
         try {
             console.log('[TTS] Chatterbox failed, falling back to eSpeak...');
-            // Safely access text from req.body in case of scope issues
-            const { text: requestText, voice_id: requestVoiceId = 'chatterbox', speed: requestSpeed = 1.0 } = req.body;
+            console.log(`[TTS] Synthesizing with espeak: voice=en, speed=${speed || 175}`);
             
-            if (!requestText || !requestText.trim()) {
-                throw new Error('No text available for eSpeak fallback');
-            }
-            
-            const audioData = await synthesizeWithEspeak(requestText.trim(), requestVoiceId, requestSpeed);
+            // Use the same text that was prepared for Chatterbox
+            const audioData = await synthesizeWithEspeak(finalText, voice_id, speed || 1.0);
             
             res.set({
                 'Content-Type': 'audio/wav',
-                'X-Engine-Used': 'espeak-fallback',
-                'X-Voice-ID': requestVoiceId,
-                'Content-Length': audioData.length.toString(),
-                'X-Fallback-Reason': 'chatterbox-unavailable'
+                'X-Engine-Used': 'espeak-fallback', 
+                'X-Voice-ID': voice_id,
+                'X-Fallback-Reason': 'chatterbox-unavailable',
+                'Content-Length': audioData.length.toString()
             });
             
             res.send(audioData);
@@ -409,24 +445,35 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         console.log(`[Voice Chat] Text truncated from ${responseText.length} to ${textForTTS.length} characters`);
                     }
                     
-                    // Map voice names to high-quality alternatives
-                    const voiceMapping = {
-                        'edge_female': 'female_1',
-                        'edge_male': 'male_1', 
-                        'edge_expressive': 'female_2',
-                        'chatterbox': 'female_1',
-                        'female': 'female_1', 
-                        'male': 'male_1',
-                        'female_1': 'female_1',
-                        'male_1': 'male_1',
-                        'default': 'female_1'
-                    };
-                    
-                    // Determine best engine based on voice selection
-                    const useEdgeTTS = voice_id.startsWith('edge_');
-                    const enginePreference = useEdgeTTS ? 'edge' : 'auto';
-                    
-                    const mappedVoice = voiceMapping[voice_id] || voice_id;
+                    // Convert legacy voice_id to gender/emotion format for Chatterbox
+                    function convertVoiceIdToChatterboxParams(voice_id) {
+                        const voiceMatrix = {
+                            'female_1': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                            'female_2': { gender: 'female', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                            'female_expressive': { gender: 'female', emotion: 'expressive', exaggeration: 0.6, cfg_weight: 0.7 },
+                            'female_calm': { gender: 'female', emotion: 'calm', exaggeration: 0.2, cfg_weight: 0.5 },
+                            'female_dramatic': { gender: 'female', emotion: 'dramatic', exaggeration: 0.9, cfg_weight: 0.8 },
+                            'female_neutral': { gender: 'female', emotion: 'neutral', exaggeration: 0.3, cfg_weight: 0.6 },
+                            'male_1': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                            'male_2': { gender: 'male', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                            'male_expressive': { gender: 'male', emotion: 'expressive', exaggeration: 0.6, cfg_weight: 0.7 },
+                            'male_calm': { gender: 'male', emotion: 'calm', exaggeration: 0.2, cfg_weight: 0.5 },
+                            'male_dramatic': { gender: 'male', emotion: 'dramatic', exaggeration: 0.9, cfg_weight: 0.8 },
+                            'male_neutral': { gender: 'male', emotion: 'neutral', exaggeration: 0.3, cfg_weight: 0.6 },
+                            'chatterbox': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                            'edge_female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                            'edge_male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                            'edge_expressive': { gender: 'female', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                            'female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                            'male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                            'default': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }
+                        };
+                        
+                        return voiceMatrix[voice_id] || voiceMatrix['default'];
+                    }
+
+                    const chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
+                    console.log(`[Voice Chat] Using Chatterbox params:`, chatterboxParams);
                     
                     const ttsResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
@@ -434,8 +481,10 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                             method: 'POST',
                             data: {
                                 text: textForTTS,
-                                voice: mappedVoice,
-                                engine: enginePreference  // Use edge for edge_ voices, auto for others
+                                gender: chatterboxParams.gender,
+                                emotion: chatterboxParams.emotion,
+                                exaggeration: chatterboxParams.exaggeration,
+                                cfg_weight: chatterboxParams.cfg_weight
                             },
                             responseType: 'arraybuffer'
                         }
