@@ -99,10 +99,11 @@
                     <div class="control-group">
                         <label for="voice-style">Voice Style:</label>
                         <select id="voice-style" onchange="updateVoiceStyle()">
-                            <option value="default">Default (High Quality)</option>
-                            <option value="expressive" selected>Expressive (Recommended)</option>
+                            <option value="female_1" selected>Female Expressive (Recommended)</option>
+                            <option value="male_1">Male Deep Voice</option>
+                            <option value="expressive">Neutral Expressive</option>
                             <option value="calm">Calm & Measured</option>
-                            <option value="dramatic">Dramatic</option>
+                            <option value="default">Default (High Quality)</option>
                         </select>
                     </div>
                     
@@ -133,7 +134,7 @@
                 </div>
                 
                 <div class="voice-preview" id="voice-preview">
-                    Current settings: Expressive voice with 70% emotion and deliberate pacing for maximum quality and expressiveness.
+                    Current: Female expressive voice with 70% emotion and 40% pacing speed. 🎭 Optimized for engaging, high-quality speech.
                 </div>
             </div>
             
@@ -179,7 +180,7 @@
         // Chatterbox TTS Configuration - High Quality Defaults
         const chatterboxConfig = {
             enabled: true,
-            voice_id: 'expressive',  // Default to high-quality expressive voice
+            voice_id: 'female_1',    // Default to high-quality female voice
             exaggeration: 0.7,       // 70% emotion for engaging speech
             cfg_weight: 0.4,         // Slower pacing for clarity and quality
             baseUrl: window.location.origin, // Use current server
@@ -188,10 +189,11 @@
 
         // Voice style presets for optimal Chatterbox experience
         const voicePresets = {
-            'default': { exaggeration: 0.5, cfg_weight: 0.5, description: 'Balanced, natural speech' },
-            'expressive': { exaggeration: 0.7, cfg_weight: 0.4, description: 'High emotion with deliberate pacing for maximum quality' },
-            'calm': { exaggeration: 0.2, cfg_weight: 0.6, description: 'Low emotion, measured pace' },
-            'dramatic': { exaggeration: 1.0, cfg_weight: 0.2, description: 'Maximum drama, very slow delivery' }
+            'female_1': { exaggeration: 0.7, cfg_weight: 0.4, description: 'Natural female voice with expressive emotion' },
+            'male_1': { exaggeration: 0.4, cfg_weight: 0.3, description: 'Deep male voice with moderate emotion' },
+            'expressive': { exaggeration: 0.9, cfg_weight: 0.5, description: 'Neutral gender, maximum expressiveness' },
+            'calm': { exaggeration: 0.2, cfg_weight: 0.6, description: 'Calm, soothing voice with slow pacing' },
+            'default': { exaggeration: 0.5, cfg_weight: 0.5, description: 'Balanced, natural speech' }
         };
 
         let isListening = false;
@@ -291,7 +293,7 @@
                 return;
             }
 
-            const testText = `Hello! I'm your AI assistant powered by Chatterbox TTS. This is ${chatterboxConfig.voice_id} voice with ${Math.round(chatterboxConfig.exaggeration * 100)} percent emotion and advanced neural synthesis.`;
+            const testText = `Hello! I'm your AI assistant powered by Chatterbox TTS. This is a ${chatterboxConfig.voice_id.replace('_', ' ')} voice with ${Math.round(chatterboxConfig.exaggeration * 100)} percent emotion and advanced neural synthesis.`;
             
             updateStatus('🎵 Testing Chatterbox voice...');
             
@@ -470,7 +472,7 @@
         // Initialize with a welcome message
         setTimeout(() => {
             if (chatterboxConfig.enabled) {
-                synthesizeWithChatterbox("Welcome to your AI Voice Assistant powered by Chatterbox TTS! I'm ready to help you with high-quality neural voice synthesis.");
+                synthesizeWithChatterbox("Welcome to your AI Voice Assistant powered by Chatterbox TTS! I'm speaking with a natural female voice using advanced neural synthesis. You can switch to male or other voice styles anytime!");
             }
         }, 1000);
     </script>
