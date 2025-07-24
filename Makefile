@@ -119,17 +119,39 @@ start-ngrok: check-ngrok
 		fi; \
 	fi; \
 	if [ -f .env ]; then \
+		echo "$(BLUE)🔑 Loading auth token from .env...$(NC)"; \
 		export $$(grep -v '^#' .env | grep NGROK_AUTH_TOKEN | xargs); \
+		if [ -z "$$NGROK_AUTH_TOKEN" ]; then \
+			echo "$(RED)❌ NGROK_AUTH_TOKEN is empty or not found in .env$(NC)"; \
+			echo "$(YELLOW)💡 Add: NGROK_AUTH_TOKEN=your_token_here$(NC)"; \
+			exit 1; \
+		else \
+			echo "$(GREEN)✅ Auth token loaded (length: $${#NGROK_AUTH_TOKEN} chars)$(NC)"; \
+			$$NGROK_CMD config add-authtoken "$$NGROK_AUTH_TOKEN" > /dev/null 2>&1 || true; \
+		fi; \
 	fi; \
-	echo "$(YELLOW)Starting: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
-	($$NGROK_CMD http --url=api.oip.onl 3005 > /dev/null 2>&1 &); \
-	sleep 3; \
+	echo "$(YELLOW)🚀 Starting: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
+	($$NGROK_CMD http --url=api.oip.onl 3005 > /tmp/ngrok.log 2>&1 &); \
+	sleep 5; \
 	if pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
-		echo "$(GREEN)🔗 ngrok: ✅ API available at https://api.oip.onl$(NC)"; \
+		echo "$(GREEN)🔗 ngrok: ✅ Process running$(NC)"; \
+		echo "$(BLUE)🔍 Checking tunnel status...$(NC)"; \
+		sleep 2; \
+		if curl -s --max-time 5 http://localhost:4040/api/tunnels | grep -q "api.oip.onl"; then \
+			echo "$(GREEN)✅ Tunnel verified: https://api.oip.onl$(NC)"; \
+		else \
+			echo "$(RED)❌ Tunnel not ready. Checking logs...$(NC)"; \
+			if [ -f /tmp/ngrok.log ]; then \
+				echo "$(YELLOW)Last few lines of ngrok output:$(NC)"; \
+				tail -5 /tmp/ngrok.log; \
+			fi; \
+		fi; \
 	else \
-		echo "$(RED)❌ ngrok failed to start.$(NC)"; \
-		echo "$(YELLOW)Debug: Check if NGROK_AUTH_TOKEN is set in .env$(NC)"; \
-		echo "$(YELLOW)Try running manually: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
+		echo "$(RED)❌ ngrok process failed to start$(NC)"; \
+		if [ -f /tmp/ngrok.log ]; then \
+			echo "$(YELLOW)ngrok error output:$(NC)"; \
+			cat /tmp/ngrok.log; \
+		fi; \
 		exit 1; \
 	fi
 

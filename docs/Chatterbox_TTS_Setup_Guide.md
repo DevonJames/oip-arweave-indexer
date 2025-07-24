@@ -136,9 +136,9 @@ async def startup_event():
     
     try:
         # Determine device (CUDA preferred)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {device}")
-        
+    
         # Load Chatterbox model
         chatterbox_model = ChatterboxTTS.from_pretrained(device=device)
         
@@ -195,7 +195,7 @@ async def list_voices():
             },
             {
                 "id": "expressive",
-                "name": "Chatterbox Expressive", 
+                "name": "Chatterbox Expressive",
                 "description": "More emotional and dynamic",
                 "features": ["high_exaggeration", "emotion_control"]
             },
