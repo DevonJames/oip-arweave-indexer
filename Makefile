@@ -376,40 +376,18 @@ install-models: ## Install LLM models using Ollama
 	@chmod +x ./install_llm_models.sh
 	@./install_llm_models.sh
 
-# Chatterbox TTS Model Management
-install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI)
-	@echo "$(BLUE)Installing Chatterbox TTS model from Resemble AI...$(NC)"
-	@TTS_FOUND=false; \
-	if docker-compose ps | grep -q chatterbox-tts; then \
-		echo "$(YELLOW)Installing Chatterbox model in dedicated chatterbox-tts container...$(NC)"; \
-		docker-compose exec chatterbox-tts python -c "from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')"; \
-		TTS_FOUND=true; \
-	elif docker-compose ps | grep -q tts-service; then \
-		echo "$(YELLOW)Installing Chatterbox model in tts-service container...$(NC)"; \
-		docker-compose exec tts-service python -c "from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')"; \
-		TTS_FOUND=true; \
-	elif docker-compose ps | grep -q oip; then \
-		echo "$(YELLOW)Installing Chatterbox model in main OIP container...$(NC)"; \
-		if docker-compose exec -T oip bash -c "cat /etc/os-release" | grep -q "Alpine"; then \
-			echo "$(YELLOW)⚠️  Alpine Linux detected - skipping Chatterbox in OIP container$(NC)"; \
-			TTS_FOUND=false; \
-		else \
-			docker-compose exec oip bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in OIP container!')\""; \
-			TTS_FOUND=true; \
-		fi; \
-	elif docker-compose ps | grep -q oip-gpu; then \
-		echo "$(YELLOW)Installing Chatterbox model in GPU OIP container...$(NC)"; \
-		docker-compose exec oip-gpu bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in GPU OIP container!')\""; \
-		TTS_FOUND=true; \
-	fi; \
-	if [ "$$TTS_FOUND" = "false" ]; then \
-		echo "$(BLUE)Installing Chatterbox in main OIP container...$(NC)"; \
-		if docker-compose exec -T oip bash -c "cat /etc/os-release" | grep -q "Alpine"; then \
-			echo "$(YELLOW)⚠️  Alpine Linux detected - Chatterbox requires glibc-based system$(NC)"; \
-			echo "$(YELLOW)💡 Chatterbox will work in TTS service container instead$(NC)"; \
-		else \
-			docker-compose exec -T oip bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')\"" || echo "$(YELLOW)Installation will complete once container is ready$(NC)"; \
-		fi; \
+# Chatterbox TTS Model Management  
+install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI) in TTS service
+	@echo "$(BLUE)🎭 Installing Chatterbox TTS from Resemble AI...$(NC)"
+	@if docker-compose ps | grep -q tts-service; then \
+		echo "$(YELLOW)📦 Installing Chatterbox in TTS service container (where voice synthesis happens)...$(NC)"; \
+		echo "$(BLUE)⏳ This may take a few moments to download and initialize the model...$(NC)"; \
+		docker-compose exec tts-service bash -c "python -c \"import chatterbox; print('Chatterbox already available')\" 2>/dev/null || (echo '📥 Installing Chatterbox package...' && pip install --no-cache-dir chatterbox-tts soundfile)" && \
+		docker-compose exec tts-service python -c "print('🚀 Initializing Chatterbox TTS...'); from chatterbox.tts import ChatterboxTTS; import torch; device='cuda' if torch.cuda.is_available() else 'cpu'; print(f'🖥️  Using device: {device}'); model = ChatterboxTTS.from_pretrained(device=device); print('✅ Chatterbox TTS (Resemble AI) ready! High-quality neural voice available.'); print('🎉 Voice assistant will now use Chatterbox instead of robotic fallback!')" || \
+		echo "$(YELLOW)⚠️  Chatterbox installation failed - will use fallback engines (Edge TTS, gTTS, eSpeak)$(NC)"; \
+	else \
+		echo "$(RED)❌ TTS service container not running$(NC)"; \
+		echo "$(YELLOW)💡 Run 'make standard' first to start the TTS service$(NC)"; \
 	fi
 
 test-chatterbox: ## Test Chatterbox TTS functionality

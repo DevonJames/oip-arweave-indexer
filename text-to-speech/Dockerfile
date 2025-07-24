@@ -26,7 +26,13 @@ RUN pip install --no-cache-dir \
     edge-tts==6.1.9 \
     python-multipart==0.0.6 \
     httpx==0.25.2 \
-    pydantic==2.5.0
+    pydantic==2.5.0 \
+    soundfile==0.12.1 \
+    torch>=2.0.0 \
+    numpy
+
+# Install Chatterbox TTS (allow failures for containers without GPU support)
+RUN pip install --no-cache-dir chatterbox-tts || echo "Chatterbox TTS installation failed - will fallback to other engines"
 
 # Copy service files
 COPY . .

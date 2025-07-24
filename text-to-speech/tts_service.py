@@ -16,6 +16,18 @@ import edge_tts
 from gtts import gTTS
 import subprocess
 
+# Try to import Chatterbox TTS
+try:
+    from chatterbox.tts import ChatterboxTTS
+    CHATTERBOX_AVAILABLE = True
+    logger.info("Chatterbox TTS imported successfully")
+except ImportError as e:
+    CHATTERBOX_AVAILABLE = False
+    logger.warning(f"Chatterbox TTS not available: {e}")
+except Exception as e:
+    CHATTERBOX_AVAILABLE = False
+    logger.error(f"Error importing Chatterbox TTS: {e}")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -73,52 +85,70 @@ class TTSEngine(ABC):
         """Return available voices for this engine."""
         pass
 
-# Chatterbox Engine (Primary - using pyttsx3)
+# Chatterbox Engine (Resemble AI Neural TTS)
 class ChatterboxEngine(TTSEngine):
     def __init__(self):
         super().__init__("chatterbox")
+        self.model = None
         
     def _initialize(self):
+        if not CHATTERBOX_AVAILABLE:
+            logger.warning("Chatterbox TTS package not available")
+            self.available = False
+            return
+            
         try:
-            self.engine = pyttsx3.init()
+            import torch
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            logger.info(f"Initializing Chatterbox TTS on device: {device}")
+            
+            self.model = ChatterboxTTS.from_pretrained(device=device)
+            
             self.voice_configs = {
-                "default": {"rate": 200, "volume": 0.9, "voice_id": 0},
-                "female_1": {"rate": 180, "volume": 0.9, "voice_id": 0},
-                "male_1": {"rate": 200, "volume": 0.9, "voice_id": 1},
-                "expressive": {"rate": 220, "volume": 1.0, "voice_id": 0},
-                "calm": {"rate": 160, "volume": 0.8, "voice_id": 0}
+                "default": {"exaggeration": 0.5, "cfg_weight": 0.3},
+                "female_1": {"exaggeration": 0.7, "cfg_weight": 0.4}, 
+                "male_1": {"exaggeration": 0.4, "cfg_weight": 0.3},
+                "expressive": {"exaggeration": 0.9, "cfg_weight": 0.5},
+                "calm": {"exaggeration": 0.2, "cfg_weight": 0.2}
             }
+            
             self.available = True
-            logger.info("Chatterbox engine initialized successfully")
+            logger.info("✅ Chatterbox TTS (Resemble AI) initialized successfully")
+            
         except Exception as e:
-            logger.error(f"Failed to initialize Chatterbox engine: {str(e)}")
+            logger.error(f"Failed to initialize Chatterbox TTS: {str(e)}")
             self.available = False
     
     async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
+        if not self.model:
+            raise Exception("Chatterbox model not initialized")
+            
         try:
             config = self.voice_configs.get(voice_id, self.voice_configs["default"])
             
-            # Configure voice properties
-            voices = self.engine.getProperty('voices')
-            if voices and len(voices) > config["voice_id"]:
-                self.engine.setProperty('voice', voices[config["voice_id"]].id)
+            logger.info(f"Synthesizing with Chatterbox: voice={voice_id}, exaggeration={config['exaggeration']}")
             
-            # Apply speed and volume
-            rate = int(config["rate"] * speed)
-            self.engine.setProperty('rate', rate)
-            self.engine.setProperty('volume', config["volume"])
+            # Generate audio with Chatterbox TTS
+            audio = self.model.synthesize(
+                text=text,
+                exaggeration=config["exaggeration"],
+                cfg_weight=config["cfg_weight"]
+            )
             
-            # Generate audio to temporary file
+            # Convert to bytes (assuming audio is a numpy array or tensor)
+            import soundfile as sf
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                self.engine.save_to_file(text, tmp_file.name)
-                self.engine.runAndWait()
+                # Write audio to temporary WAV file
+                sf.write(tmp_file.name, audio, 22050)  # Chatterbox typically uses 22kHz
                 
-                # Read generated audio
+                # Read back as bytes
                 with open(tmp_file.name, 'rb') as f:
                     audio_data = f.read()
                 
                 os.unlink(tmp_file.name)
-                return audio_data
+                
+            logger.info(f"✅ Chatterbox synthesis successful: {len(audio_data)} bytes")
+            return audio_data
                 
         except Exception as e:
             logger.error(f"Chatterbox synthesis error: {str(e)}")
