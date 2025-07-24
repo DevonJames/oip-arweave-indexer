@@ -97,13 +97,20 @@
                 
                 <div class="voice-controls">
                     <div class="control-group">
-                        <label for="voice-style">Voice Style:</label>
-                        <select id="voice-style" onchange="updateVoiceStyle()">
-                            <option value="female_1" selected>Female Expressive (Recommended)</option>
-                            <option value="male_1">Male Deep Voice</option>
-                            <option value="expressive">Neutral Expressive</option>
+                        <label for="voice-gender">Voice Gender:</label>
+                        <select id="voice-gender" onchange="updateVoiceSettings()">
+                            <option value="female" selected>Female Voice</option>
+                            <option value="male">Male Voice</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="voice-emotion">Emotional Tone:</label>
+                        <select id="voice-emotion" onchange="updateVoiceSettings()">
+                            <option value="expressive" selected>Expressive & Engaging</option>
                             <option value="calm">Calm & Measured</option>
-                            <option value="default">Default (High Quality)</option>
+                            <option value="dramatic">Dramatic & Intense</option>
+                            <option value="neutral">Neutral & Balanced</option>
                         </select>
                     </div>
                     
@@ -111,8 +118,8 @@
                         <label>
                             <input type="checkbox" id="tts-enabled" checked onchange="toggleTTS()">
                             Enable Chatterbox TTS
-                        </label>
-                    </div>
+                                                  </label>
+                      </div>
                     
                     <div class="control-group">
                         <label for="emotion-slider">Emotion Level: <span id="emotion-value">70%</span></label>
@@ -131,10 +138,32 @@
                             <span>🚀</span>
                         </div>
                     </div>
+                    
+                    <!-- Voice Cloning Section -->
+                    <div style="margin-top: 15px; border-top: 2px solid #4CAF50; padding-top: 15px;">
+                        <h4 style="color: #4CAF50; margin-bottom: 10px;">🎤 Voice Cloning (Zero-Shot)</h4>
+                        
+                        <div class="control-group">
+                            <label for="voice-sample-upload">Upload Voice Sample (WAV/MP3):</label>
+                            <input type="file" id="voice-sample-upload" accept="audio/*" onchange="handleVoiceSampleUpload(this)" style="width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 3px;">
+                            <small style="color: #666;">Upload a 3-10 second audio sample to clone any voice</small>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label>
+                                <input type="checkbox" id="voice-cloning-enabled" onchange="toggleVoiceCloning()">
+                                Enable Voice Cloning Mode
+                            </label>
+                        </div>
+                        
+                        <div id="voice-clone-status" style="padding: 8px; background: #f0f0f0; border-radius: 5px; font-size: 12px; color: #666;">
+                            No voice sample uploaded. Using default Chatterbox voices.
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="voice-preview" id="voice-preview">
-                    Current: Female expressive voice with 70% emotion and 40% pacing speed. 🎭 Optimized for engaging, high-quality speech.
+                    Current: Female expressive voice with 70% emotion and 30% pacing speed. Engaging female voice with natural expressiveness. ✨ Optimized for engaging, natural speech.
                 </div>
             </div>
             
@@ -151,6 +180,9 @@
                     </button>
                     <button id="test-voice-btn" class="control-btn" onclick="testChatterboxVoice()">
                         <span>🎵 Test Voice</span>
+                    </button>
+                    <button id="test-clone-btn" class="control-btn" onclick="testVoiceCloning()" style="display: none;">
+                        <span>🎤 Test Clone</span>
                     </button>
                     <button id="transcript-btn" class="control-btn" onclick="toggleTranscript()">
                         <span>📄 Transcript</span>
@@ -180,20 +212,33 @@
         // Chatterbox TTS Configuration - High Quality Defaults
         const chatterboxConfig = {
             enabled: true,
-            voice_id: 'female_1',    // Default to high-quality female voice
+            gender: 'female',        // Default to female voice
+            emotion: 'expressive',   // Default to expressive tone
             exaggeration: 0.7,       // 70% emotion for engaging speech
-            cfg_weight: 0.4,         // Slower pacing for clarity and quality
+            cfg_weight: 0.3,         // Lower weight for better pacing with expressive tone
             baseUrl: window.location.origin, // Use current server
-            fallbackTTS: 'edge'      // Fallback to Edge TTS if needed
+            fallbackTTS: 'edge',     // Fallback to Edge TTS if needed
+            voiceCloning: {
+                enabled: false,
+                audioFile: null,
+                fileName: null
+            }
         };
 
-        // Voice style presets for optimal Chatterbox experience
-        const voicePresets = {
-            'female_1': { exaggeration: 0.7, cfg_weight: 0.4, description: 'Natural female voice with expressive emotion' },
-            'male_1': { exaggeration: 0.4, cfg_weight: 0.3, description: 'Deep male voice with moderate emotion' },
-            'expressive': { exaggeration: 0.9, cfg_weight: 0.5, description: 'Neutral gender, maximum expressiveness' },
-            'calm': { exaggeration: 0.2, cfg_weight: 0.6, description: 'Calm, soothing voice with slow pacing' },
-            'default': { exaggeration: 0.5, cfg_weight: 0.5, description: 'Balanced, natural speech' }
+        // Voice configuration matrix: Gender + Emotion combinations
+        const voiceMatrix = {
+            'female': {
+                'expressive': { exaggeration: 0.7, cfg_weight: 0.3, description: 'Engaging female voice with natural expressiveness' },
+                'calm': { exaggeration: 0.2, cfg_weight: 0.6, description: 'Soothing female voice with measured pacing' },
+                'dramatic': { exaggeration: 0.9, cfg_weight: 0.2, description: 'Intense female voice with maximum emotion' },
+                'neutral': { exaggeration: 0.5, cfg_weight: 0.5, description: 'Balanced female voice for general use' }
+            },
+            'male': {
+                'expressive': { exaggeration: 0.6, cfg_weight: 0.3, description: 'Dynamic male voice with controlled emotion' },
+                'calm': { exaggeration: 0.3, cfg_weight: 0.6, description: 'Deep, calming male voice with slow delivery' },
+                'dramatic': { exaggeration: 0.8, cfg_weight: 0.2, description: 'Powerful male voice with commanding presence' },
+                'neutral': { exaggeration: 0.4, cfg_weight: 0.5, description: 'Professional male voice for clear communication' }
+            }
         };
 
         let isListening = false;
@@ -203,7 +248,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎭 Initializing Chatterbox TTS Voice Assistant...');
             checkChatterboxStatus();
-            updateVoicePreview();
+            updateVoiceSettings(); // This will set sliders and update preview
         });
 
         // Check if Chatterbox TTS service is available
@@ -226,24 +271,26 @@
             }
         }
 
-        // Update voice style and apply preset
-        function updateVoiceStyle() {
-            const style = document.getElementById('voice-style').value;
-            const preset = voicePresets[style];
+        // Update voice settings based on gender and emotion selection
+        function updateVoiceSettings() {
+            const gender = document.getElementById('voice-gender').value;
+            const emotion = document.getElementById('voice-emotion').value;
+            const config = voiceMatrix[gender][emotion];
             
-            chatterboxConfig.voice_id = style;
-            chatterboxConfig.exaggeration = preset.exaggeration;
-            chatterboxConfig.cfg_weight = preset.cfg_weight;
+            chatterboxConfig.gender = gender;
+            chatterboxConfig.emotion = emotion;
+            chatterboxConfig.exaggeration = config.exaggeration;
+            chatterboxConfig.cfg_weight = config.cfg_weight;
             
-            // Update sliders to match preset
-            document.getElementById('emotion-slider').value = Math.round(preset.exaggeration * 100);
-            document.getElementById('pacing-slider').value = Math.round(preset.cfg_weight * 100);
+            // Update sliders to match configuration
+            document.getElementById('emotion-slider').value = Math.round(config.exaggeration * 100);
+            document.getElementById('pacing-slider').value = Math.round(config.cfg_weight * 100);
             
-            updateEmotion(Math.round(preset.exaggeration * 100));
-            updatePacing(Math.round(preset.cfg_weight * 100));
+            updateEmotion(Math.round(config.exaggeration * 100));
+            updatePacing(Math.round(config.cfg_weight * 100));
             updateVoicePreview();
             
-            console.log('🎵 Voice style updated:', style, preset);
+            console.log('🎵 Voice settings updated:', gender, emotion, config);
         }
 
         // Update emotion level
@@ -267,20 +314,121 @@
             updateVoicePreview();
         }
 
+        // Handle voice sample file upload
+        function handleVoiceSampleUpload(input) {
+            const file = input.files[0];
+            if (!file) {
+                chatterboxConfig.voiceCloning.audioFile = null;
+                chatterboxConfig.voiceCloning.fileName = null;
+                updateVoiceCloneStatus('No voice sample uploaded. Using default Chatterbox voices.');
+                return;
+            }
+
+            // Validate file type
+            const validTypes = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/webm'];
+            if (!validTypes.includes(file.type)) {
+                alert('Please upload a valid audio file (WAV, MP3, OGG, or WebM)');
+                input.value = '';
+                return;
+            }
+
+            // Validate file size (max 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('File size must be less than 10MB');
+                input.value = '';
+                return;
+            }
+
+            chatterboxConfig.voiceCloning.audioFile = file;
+            chatterboxConfig.voiceCloning.fileName = file.name;
+            
+            updateVoiceCloneStatus(`Voice sample loaded: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB). Enable voice cloning to use it.`);
+            
+            console.log('🎤 Voice sample uploaded:', file.name, file.type);
+        }
+
+        // Toggle voice cloning mode
+        function toggleVoiceCloning() {
+            const enabled = document.getElementById('voice-cloning-enabled').checked;
+            
+            if (enabled && !chatterboxConfig.voiceCloning.audioFile) {
+                alert('Please upload a voice sample first!');
+                document.getElementById('voice-cloning-enabled').checked = false;
+                return;
+            }
+            
+            chatterboxConfig.voiceCloning.enabled = enabled;
+            
+            // Show/hide voice cloning test button
+            const testCloneBtn = document.getElementById('test-clone-btn');
+            if (enabled) {
+                testCloneBtn.style.display = 'inline-block';
+                updateVoiceCloneStatus(`✅ Voice cloning active with ${chatterboxConfig.voiceCloning.fileName}. Your AI will speak in the uploaded voice!`);
+                updateStatus('🎤 Voice cloning mode enabled - AI will use your uploaded voice sample');
+            } else {
+                testCloneBtn.style.display = 'none';
+                updateVoiceCloneStatus(`Voice sample available: ${chatterboxConfig.voiceCloning.fileName}. Enable voice cloning to use it.`);
+                updateStatus('🎭 Using default Chatterbox voices');
+            }
+            
+            updateVoicePreview();
+        }
+
+        // Test voice cloning specifically
+        async function testVoiceCloning() {
+            if (!chatterboxConfig.voiceCloning.enabled || !chatterboxConfig.voiceCloning.audioFile) {
+                updateStatus('❌ Voice cloning not enabled or no audio file uploaded');
+                return;
+            }
+
+            const testText = `Hello! This is a test of voice cloning using your uploaded voice sample. I should now sound like the person in your audio file, with ${Math.round(chatterboxConfig.exaggeration * 100)} percent emotional expression.`;
+            
+            updateStatus('🎤 Testing voice cloning...');
+            
+            try {
+                await synthesizeWithChatterbox(testText);
+                updateStatus('✅ Voice cloning test completed successfully!');
+            } catch (error) {
+                console.error('Voice cloning test failed:', error);
+                updateStatus('❌ Voice cloning test failed - check console for details');
+            }
+        }
+
+        // Update voice clone status display
+        function updateVoiceCloneStatus(message) {
+            document.getElementById('voice-clone-status').textContent = message;
+        }
+
         // Update voice preview description
         function updateVoicePreview() {
-            const style = chatterboxConfig.voice_id;
-            const emotion = Math.round(chatterboxConfig.exaggeration * 100);
+            const gender = chatterboxConfig.gender;
+            const emotion = chatterboxConfig.emotion;
+            const emotionLevel = Math.round(chatterboxConfig.exaggeration * 100);
             const pacing = Math.round(chatterboxConfig.cfg_weight * 100);
             
-            let preview = `Current: ${style} voice with ${emotion}% emotion and ${pacing}% pacing speed.`;
-            
             if (!chatterboxConfig.enabled) {
-                preview = '⚠️ TTS is currently disabled.';
-            } else if (style === 'expressive' && emotion >= 60) {
-                preview += ' 🎭 Optimized for engaging, high-quality speech.';
-            } else if (style === 'calm' && pacing <= 50) {
+                document.getElementById('voice-preview').textContent = '⚠️ TTS is currently disabled.';
+                return;
+            }
+            
+            // Voice cloning mode
+            if (chatterboxConfig.voiceCloning.enabled && chatterboxConfig.voiceCloning.fileName) {
+                let preview = `🎤 Voice Cloning Active: Using uploaded voice sample "${chatterboxConfig.voiceCloning.fileName}" with ${emotionLevel}% emotion and ${pacing}% pacing speed. The AI will speak in your custom voice!`;
+                document.getElementById('voice-preview').textContent = preview;
+                return;
+            }
+            
+            // Default Chatterbox voice mode
+            const config = voiceMatrix[gender][emotion];
+            let preview = `Current: ${gender.charAt(0).toUpperCase() + gender.slice(1)} ${emotion} voice with ${emotionLevel}% emotion and ${pacing}% pacing speed. ${config.description}`;
+            
+            // Add contextual hints
+            if (emotion === 'dramatic' && emotionLevel >= 80) {
+                preview += ' 🎭 Maximum intensity for powerful delivery.';
+            } else if (emotion === 'calm' && pacing >= 60) {
                 preview += ' 😌 Perfect for clear, measured delivery.';
+            } else if (emotion === 'expressive' && emotionLevel >= 60) {
+                preview += ' ✨ Optimized for engaging, natural speech.';
             }
             
             document.getElementById('voice-preview').textContent = preview;
@@ -293,7 +441,7 @@
                 return;
             }
 
-            const testText = `Hello! I'm your AI assistant powered by Chatterbox TTS. This is a ${chatterboxConfig.voice_id.replace('_', ' ')} voice with ${Math.round(chatterboxConfig.exaggeration * 100)} percent emotion and advanced neural synthesis.`;
+            const testText = `Hello! I'm your AI assistant powered by Chatterbox TTS. This is a ${chatterboxConfig.gender} ${chatterboxConfig.emotion} voice with ${Math.round(chatterboxConfig.exaggeration * 100)} percent emotion and advanced neural synthesis.`;
             
             updateStatus('🎵 Testing Chatterbox voice...');
             
@@ -314,20 +462,44 @@
             }
 
             try {
-                updateStatus('🎵 Synthesizing with Chatterbox TTS...');
+                updateStatus(chatterboxConfig.voiceCloning.enabled ? 
+                    '🎤 Synthesizing with voice cloning...' : 
+                    '🎵 Synthesizing with Chatterbox TTS...');
                 
-                const response = await fetch('/api/voice/synthesize', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
+                // Prepare form data for voice cloning or JSON for regular synthesis
+                let requestBody, headers;
+                
+                if (chatterboxConfig.voiceCloning.enabled && chatterboxConfig.voiceCloning.audioFile) {
+                    // Voice cloning mode - use FormData to send audio file
+                    const formData = new FormData();
+                    formData.append('text', text);
+                    formData.append('gender', chatterboxConfig.gender);
+                    formData.append('emotion', chatterboxConfig.emotion);
+                    formData.append('exaggeration', chatterboxConfig.exaggeration.toString());
+                    formData.append('cfg_weight', chatterboxConfig.cfg_weight.toString());
+                    formData.append('engine', 'chatterbox');
+                    formData.append('voice_cloning', 'true');
+                    formData.append('audio_prompt', chatterboxConfig.voiceCloning.audioFile);
+                    
+                    requestBody = formData;
+                    headers = {}; // Don't set Content-Type, let browser set it for FormData
+                } else {
+                    // Regular synthesis mode
+                    requestBody = JSON.stringify({
                         text: text,
-                        voice_id: chatterboxConfig.voice_id,
+                        gender: chatterboxConfig.gender,
+                        emotion: chatterboxConfig.emotion,
                         exaggeration: chatterboxConfig.exaggeration,
                         cfg_weight: chatterboxConfig.cfg_weight,
                         engine: 'chatterbox'
-                    })
+                    });
+                    headers = { 'Content-Type': 'application/json' };
+                }
+                
+                const response = await fetch('/api/voice/synthesize', {
+                    method: 'POST',
+                    headers: headers,
+                    body: requestBody
                 });
 
                 if (!response.ok) {
@@ -472,7 +644,7 @@
         // Initialize with a welcome message
         setTimeout(() => {
             if (chatterboxConfig.enabled) {
-                synthesizeWithChatterbox("Welcome to your AI Voice Assistant powered by Chatterbox TTS! I'm speaking with a natural female voice using advanced neural synthesis. You can switch to male or other voice styles anytime!");
+                synthesizeWithChatterbox("Welcome to your AI Voice Assistant powered by Chatterbox TTS! I'm speaking with a natural female expressive voice using advanced neural synthesis. You can easily switch between male and female voices, adjust the emotional tone from calm to dramatic, and even clone any voice by uploading a short audio sample!");
             }
         }, 1000);
     </script>
