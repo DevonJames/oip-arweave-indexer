@@ -16,9 +16,14 @@ import edge_tts
 from gtts import gTTS
 import subprocess
 
+# Configure logging first
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Try to import Chatterbox TTS
 try:
     from chatterbox.tts import ChatterboxTTS
+    import soundfile as sf
     CHATTERBOX_AVAILABLE = True
     logger.info("Chatterbox TTS imported successfully")
 except ImportError as e:
@@ -27,10 +32,6 @@ except ImportError as e:
 except Exception as e:
     CHATTERBOX_AVAILABLE = False
     logger.error(f"Error importing Chatterbox TTS: {e}")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Multi-Engine TTS Service", version="1.0.0")
 
