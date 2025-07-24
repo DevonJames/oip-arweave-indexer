@@ -337,11 +337,15 @@ rebuild-minimal-with-scrape: ## Quick rebuild: Core services + scraping (elastic
 
 rebuild-standard: ## Quick rebuild: Distributed full stack with Chatterbox TTS + ngrok
 	@make rebuild PROFILE=standard
+	@echo "$(YELLOW)⏳ Waiting for TTS service to be ready...$(NC)"
+	@timeout 60 bash -c 'until docker ps | grep -E "tts-service.*Up|oip-arweave-indexer-tts-service.*Up" | grep -q Up; do echo "Waiting for TTS service..."; sleep 2; done' || echo "$(YELLOW)⚠️ TTS service didn't start in time, trying anyway...$(NC)"
 	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
 	@make install-chatterbox
 
 rebuild-standard-monolithic: ## Quick rebuild: Monolithic (all services in one container + separate AI services) + ngrok
 	@make rebuild PROFILE=standard-monolithic
+	@echo "$(YELLOW)⏳ Waiting for TTS service to be ready...$(NC)"
+	@timeout 60 bash -c 'until docker ps | grep -E "tts-service.*Up|oip-full.*Up|oip-arweave-indexer-tts-service.*Up|oip-arweave-indexer-oip-full.*Up" | grep -q Up; do echo "Waiting for TTS service..."; sleep 2; done' || echo "$(YELLOW)⚠️ TTS service didn't start in time, trying anyway...$(NC)"
 	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
 	@make install-chatterbox
 
@@ -387,13 +391,24 @@ install-models: ## Install LLM models using Ollama
 	@./install_llm_models.sh
 
 # Chatterbox TTS Model Management  
-install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI) in TTS service
+install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI) in TTS service  
 	@echo "$(BLUE)🎭 Installing Chatterbox TTS from Resemble AI...$(NC)"
-	@if docker-compose ps | grep -q tts-service; then \
+	@CONTAINER_FOUND=false; \
+	for i in {1..10}; do \
+		if docker ps | grep -E "tts-service.*Up|oip-arweave-indexer-tts-service.*Up" | grep -q Up; then \
+			CONTAINER_FOUND=true; \
+			break; \
+		fi; \
+		echo "$(YELLOW)⏳ Waiting for TTS service container (attempt $$i/10)...$(NC)"; \
+		sleep 2; \
+	done; \
+	if [ "$$CONTAINER_FOUND" = "true" ]; then \
 		echo "$(YELLOW)📦 Installing Chatterbox in TTS service container (where voice synthesis happens)...$(NC)"; \
 		echo "$(BLUE)⏳ This may take a few moments to download and initialize the model...$(NC)"; \
-		docker-compose exec tts-service bash -c "python -c \"import chatterbox; print('Chatterbox already available')\" 2>/dev/null || (echo '📥 Installing Chatterbox package...' && pip install --no-cache-dir chatterbox-tts soundfile)" && \
-		docker-compose exec tts-service python -c "print('🚀 Initializing Chatterbox TTS...'); from chatterbox.tts import ChatterboxTTS; import torch; device='cuda' if torch.cuda.is_available() else 'cpu'; print(f'🖥️  Using device: {device}'); model = ChatterboxTTS.from_pretrained(device=device); print('✅ Chatterbox TTS (Resemble AI) ready! High-quality neural voice available.'); print('🎉 Voice assistant will now use Chatterbox instead of robotic fallback!')" || \
+		CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep tts-service | head -1); \
+		echo "$(BLUE)🔧 Using container: $$CONTAINER_NAME$(NC)"; \
+		docker exec $$CONTAINER_NAME bash -c "python -c \"import chatterbox; print('Chatterbox already available')\" 2>/dev/null || (echo '📥 Installing Chatterbox package...' && pip install --no-cache-dir chatterbox-tts soundfile)" && \
+		docker exec $$CONTAINER_NAME python -c "print('🚀 Initializing Chatterbox TTS...'); from chatterbox.tts import ChatterboxTTS; import torch; device='cuda' if torch.cuda.is_available() else 'cpu'; print(f'🖥️  Using device: {device}'); model = ChatterboxTTS.from_pretrained(device=device); print('✅ Chatterbox TTS (Resemble AI) ready! High-quality neural voice available.'); print('🎉 Voice assistant will now use Chatterbox instead of robotic fallback!')" || \
 		echo "$(YELLOW)⚠️  Chatterbox installation failed - will use fallback engines (Edge TTS, gTTS, eSpeak)$(NC)"; \
 	else \
 		echo "$(RED)❌ TTS service container not running$(NC)"; \
