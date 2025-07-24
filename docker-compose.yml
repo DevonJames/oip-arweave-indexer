@@ -382,21 +382,21 @@ services:
       - standard-monolithic
       - standard
 
-  # Ngrok for public access - for distributed deployments
-  ngrok:
-    image: ngrok/ngrok
-    command: ["ngrok", "http", "oip:3005", "--log=stdout"]
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
-    depends_on:
-      - oip
-    ports:
-      - "4040:4040"
-    networks:
-      - oip-network
-    restart: unless-stopped
-    profiles:
-      - standard
+  # Ngrok for public access - DISABLED: Using Makefile ngrok with custom domain instead
+  # ngrok:
+  #   image: ngrok/ngrok
+  #   command: ["ngrok", "http", "oip:3005", "--log=stdout"]
+  #   environment:
+  #     - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+  #   depends_on:
+  #     - oip
+  #   ports:
+  #     - "4040:4040"
+  #   networks:
+  #     - oip-network
+  #   restart: unless-stopped
+  #   profiles:
+  #     - standard
 
   # Ngrok for GPU deployments
   ngrok-gpu:
