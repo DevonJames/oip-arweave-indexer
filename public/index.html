@@ -281,6 +281,9 @@
 
         let isListening = false;
         let currentAudio = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let conversationHistory = [];
 
         // Initialize Chatterbox TTS on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -642,35 +645,27 @@
                     '🎤 Synthesizing with voice cloning...' : 
                     '🎵 Synthesizing with Chatterbox TTS...');
                 
-                // Prepare form data for voice cloning or JSON for regular synthesis
-                let requestBody, headers;
+                // Always use FormData for consistency with backend expectations
+                const formData = new FormData();
+                formData.append('text', text);
+                formData.append('gender', chatterboxConfig.gender);
+                formData.append('emotion', chatterboxConfig.emotion);
+                formData.append('exaggeration', chatterboxConfig.exaggeration.toString());
+                formData.append('cfg_weight', chatterboxConfig.cfg_weight.toString());
+                formData.append('engine', 'chatterbox');
                 
                 if (chatterboxConfig.voiceCloning.enabled && chatterboxConfig.voiceCloning.audioFile) {
-                    // Voice cloning mode - use FormData to send audio file
-                    const formData = new FormData();
-                    formData.append('text', text);
-                    formData.append('gender', chatterboxConfig.gender);
-                    formData.append('emotion', chatterboxConfig.emotion);
-                    formData.append('exaggeration', chatterboxConfig.exaggeration.toString());
-                    formData.append('cfg_weight', chatterboxConfig.cfg_weight.toString());
-                    formData.append('engine', 'chatterbox');
+                    // Voice cloning mode - add audio file
                     formData.append('voice_cloning', 'true');
                     formData.append('audio_prompt', chatterboxConfig.voiceCloning.audioFile);
-                    
-                    requestBody = formData;
-                    headers = {}; // Don't set Content-Type, let browser set it for FormData
+                    console.log('🎤 Adding voice cloning audio file to request:', chatterboxConfig.voiceCloning.audioFile.name);
                 } else {
                     // Regular synthesis mode
-                    requestBody = JSON.stringify({
-                        text: text,
-                        gender: chatterboxConfig.gender,
-                        emotion: chatterboxConfig.emotion,
-                        exaggeration: chatterboxConfig.exaggeration,
-                        cfg_weight: chatterboxConfig.cfg_weight,
-                        engine: 'chatterbox'
-                    });
-                    headers = { 'Content-Type': 'application/json' };
+                    formData.append('voice_cloning', 'false');
                 }
+                
+                const requestBody = formData;
+                const headers = {}; // Don't set Content-Type, let browser set it for FormData
                 
                 const response = await fetch('/api/voice/synthesize', {
                     method: 'POST',
@@ -718,41 +713,155 @@
             }
         }
 
-        // Microphone functionality (placeholder)
-        function toggleMicrophone() {
-            isListening = !isListening;
-            const btn = document.getElementById('microphone-btn');
-            const status = document.getElementById('mic-status');
-            
+        // Real microphone functionality with STT integration
+        async function toggleMicrophone() {
             if (isListening) {
-                btn.classList.add('listening');
-                status.textContent = 'Listening...';
-                updateStatus('🎤 Listening for voice input...');
-                // TODO: Implement actual speech recognition
-                setTimeout(() => {
-                    toggleMicrophone(); // Auto-stop after demo
-                    simulateResponse();
-                }, 3000);
+                stopListening();
             } else {
-                btn.classList.remove('listening');
-                status.textContent = 'Click to Start';
-                updateStatus('🎭 Chatterbox TTS Ready');
+                await startListening();
             }
         }
 
-        // Simulate AI response for demo
-        function simulateResponse() {
-            const responses = [
-                "Hello! I'm your AI assistant powered by Chatterbox TTS with emotion control.",
-                "I can help you with various tasks using high-quality neural voice synthesis.",
-                "This is an example of expressive speech with advanced emotion control.",
-                "Chatterbox TTS provides the most natural and engaging voice experience."
-            ];
-            
-            const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-            addToTranscript('Assistant', randomResponse);
-            synthesizeWithChatterbox(randomResponse);
+        async function startListening() {
+            try {
+                // Request microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 16000,  // Optimal for Whisper STT  
+                        channelCount: 1,
+                        volume: 1.0,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    } 
+                });
+
+                // Set up MediaRecorder
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                audioChunks = [];
+
+                // Update UI
+                isListening = true;
+                const btn = document.getElementById('microphone-btn');
+                const status = document.getElementById('mic-status');
+                btn.classList.add('listening');
+                status.textContent = 'Listening...';
+                updateStatus('🎤 Listening for voice input...');
+
+                // Handle recording data
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                // Handle recording stop
+                mediaRecorder.onstop = async () => {
+                    updateStatus('🔄 Processing speech...');
+                    
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    
+                    // Send to chat endpoint for STT + AI response
+                    await sendAudioToChat(audioBlob);
+                    
+                    // Stop all tracks to release microphone
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                // Start recording
+                mediaRecorder.start();
+
+                // Auto-stop after 30 seconds max
+                setTimeout(() => {
+                    if (isListening) {
+                        stopListening();
+                    }
+                }, 30000);
+
+            } catch (error) {
+                console.error('Failed to start listening:', error);
+                updateStatus('❌ Microphone access denied or not available');
+                alert('Could not access microphone. Please check permissions and try again.');
+            }
         }
+
+        function stopListening() {
+            if (!isListening) return;
+
+            isListening = false;
+            
+            // Stop MediaRecorder
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+
+            // Reset UI
+            const btn = document.getElementById('microphone-btn');
+            const status = document.getElementById('mic-status');
+            btn.classList.remove('listening');
+            status.textContent = 'Click to Start';
+            updateStatus('🔄 Processing...');
+        }
+
+        // Send recorded audio to chat endpoint for STT + AI response
+        async function sendAudioToChat(audioBlob) {
+            try {
+                // Create FormData with audio file
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                
+                // Add conversation history if available
+                if (conversationHistory.length > 0) {
+                    formData.append('conversationHistory', JSON.stringify(conversationHistory));
+                }
+
+                // Send to chat endpoint
+                const response = await fetch('/api/generate/chat', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                // Handle the response
+                if (result.success) {
+                    const userText = result.transcription || result.userInput || 'Audio processed';
+                    const aiResponse = result.response || result.text || 'No response generated';
+                    
+                    // Add to conversation history
+                    conversationHistory.push(
+                        { role: 'user', content: userText },
+                        { role: 'assistant', content: aiResponse }
+                    );
+                    
+                    // Add to transcript
+                    addToTranscript('You', userText);
+                    addToTranscript('Assistant', aiResponse);
+                    
+                    // Speak the AI response using Chatterbox TTS
+                    await synthesizeWithChatterbox(aiResponse);
+                    
+                    updateStatus('✅ Conversation complete');
+                } else {
+                    throw new Error(result.error || 'Chat request failed');
+                }
+
+            } catch (error) {
+                console.error('Failed to process audio:', error);
+                updateStatus('❌ Failed to process speech - try again');
+                
+                // Fallback to transcript message
+                addToTranscript('System', 'Failed to process audio. Please try again.');
+            }
+        }
+
+        // Real-time conversation is now handled by sendAudioToChat()
+        // No need for simulated responses - using actual AI!
 
         // Transcript functionality
         function toggleTranscript() {
@@ -769,8 +878,9 @@
             content.scrollTop = content.scrollHeight;
         }
 
-        // Stop all audio
+        // Stop all audio and recording
         function stopAll() {
+            // Stop any currently playing audio
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
@@ -779,14 +889,16 @@
                 speechSynthesis.cancel();
             }
             
-            // Stop recording if active
+            // Stop voice sample recording if active
             if (chatterboxConfig.recording.isRecording) {
                 stopRecording();
             }
             
-            isListening = false;
-            document.getElementById('mic-status').textContent = 'Click to Start';
-            document.getElementById('microphone-btn').classList.remove('listening');
+            // Stop STT recording if active
+            if (isListening) {
+                stopListening();
+            }
+            
             updateStatus('⏹️ All audio stopped');
         }
 
@@ -826,7 +938,7 @@
         // Initialize with a welcome message
         setTimeout(() => {
             if (chatterboxConfig.enabled) {
-                synthesizeWithChatterbox("Welcome to your AI Voice Assistant powered by Chatterbox TTS! I'm speaking with a natural female expressive voice using advanced neural synthesis. You can switch between male and female voices, adjust emotional tones, and clone any voice by recording a sample with your microphone or uploading an audio file!");
+                synthesizeWithChatterbox("Hello! I'm your AI voice assistant powered by Chatterbox TTS. Click the microphone button to start a conversation with me. I can hear what you say, understand it, and respond naturally using neural voice synthesis. You can also customize my voice, adjust emotions, or even clone your own voice!");
             }
         }, 1000);
     </script>
