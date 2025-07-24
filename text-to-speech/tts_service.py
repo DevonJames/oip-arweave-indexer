@@ -444,6 +444,16 @@ async def synthesize_text(
 ):
     """Synthesize text to speech using the best available engine with optional voice cloning."""
     
+    # Debug logging to see what parameters we're actually receiving
+    logger.info(f"[TTS Service] Received request:")
+    logger.info(f"  text: {text[:50]}...")
+    logger.info(f"  gender: {gender} (type: {type(gender)})")
+    logger.info(f"  emotion: {emotion} (type: {type(emotion)})")
+    logger.info(f"  exaggeration: {exaggeration} (type: {type(exaggeration)})")
+    logger.info(f"  cfg_weight: {cfg_weight} (type: {type(cfg_weight)})")
+    logger.info(f"  voice_cloning: {voice_cloning} (type: {type(voice_cloning)})")
+    logger.info(f"  audio_prompt: {audio_prompt.filename if audio_prompt else 'None'}")
+    
     if not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     
