@@ -373,12 +373,12 @@ rebuild-tts: ## Rebuild only the TTS service (no cache) - fast fix for TTS issue
 	@echo "$(BLUE)🔧 Rebuilding TTS service only...$(NC)"
 	docker-compose build --no-cache tts-service
 	@echo "$(GREEN)✅ TTS service rebuilt$(NC)"
-	@echo "$(BLUE)🔄 Restarting TTS service...$(NC)"
-	docker-compose restart tts-service
-	@echo "$(GREEN)✅ TTS service restarted$(NC)"
+	@echo "$(BLUE)🚀 Starting TTS service...$(NC)"
+	docker-compose up -d tts-service
+	@echo "$(GREEN)✅ TTS service started$(NC)"
 	@echo "$(BLUE)🔍 Checking TTS service logs...$(NC)"
-	@sleep 3
-	docker logs oip-arweave-indexer-tts-service-1 --tail 10 || echo "$(YELLOW)⚠️ Check container name with 'docker ps'$(NC)"
+	@sleep 5
+	docker logs oip-arweave-indexer-tts-service-1 --tail 15 || echo "$(YELLOW)⚠️ Check container name with 'docker ps'$(NC)"
 
 # LLM Model Management
 install-models: ## Install LLM models using Ollama

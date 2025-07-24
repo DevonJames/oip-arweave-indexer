@@ -80,9 +80,14 @@ services:
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
+      - STT_SERVICE_URL=http://stt-service:8003
+      - TTS_SERVICE_URL=http://tts-service:8005
+      - TEXT_GENERATOR_URL=http://text-generator:8081
     depends_on:
       - elasticsearch
       - text-generator
+      - tts-service
+      - stt-service
       - ollama
     networks:
       - oip-network
