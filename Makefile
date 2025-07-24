@@ -230,7 +230,7 @@ endif
 
 status: ## Show service status + ngrok status
 	@echo "$(BLUE)Service Status:$(NC)"
-	@docker-compose ps || echo "No services running"
+	@docker-compose ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || echo "No services running"
 	@echo ""
 	@echo "$(BLUE)ngrok Status:$(NC)"
 	@if pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
