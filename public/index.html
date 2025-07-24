@@ -78,6 +78,14 @@
             font-style: italic;
             color: #666;
         }
+        .recording-active {
+            animation: recordingPulse 1s infinite;
+        }
+        @keyframes recordingPulse {
+            0% { background-color: #f44336; }
+            50% { background-color: #d32f2f; }
+            100% { background-color: #f44336; }
+        }
     </style>
 </head>
 <body>
@@ -144,9 +152,31 @@
                         <h4 style="color: #4CAF50; margin-bottom: 10px;">🎤 Voice Cloning (Zero-Shot)</h4>
                         
                         <div class="control-group">
-                            <label for="voice-sample-upload">Upload Voice Sample (WAV/MP3):</label>
-                            <input type="file" id="voice-sample-upload" accept="audio/*" onchange="handleVoiceSampleUpload(this)" style="width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 3px;">
-                            <small style="color: #666;">Upload a 3-10 second audio sample to clone any voice</small>
+                            <label>Voice Sample Options:</label>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <button type="button" id="record-sample-btn" class="control-btn" onclick="toggleRecording()" style="flex: 1; padding: 8px;">
+                                    <span id="record-btn-text">🎙️ Record Sample</span>
+                                </button>
+                                <button type="button" onclick="document.getElementById('voice-sample-upload').click()" class="control-btn" style="flex: 1; padding: 8px;">
+                                    📁 Upload File
+                                </button>
+                            </div>
+                            <input type="file" id="voice-sample-upload" accept="audio/*" onchange="handleVoiceSampleUpload(this)" style="display: none;">
+                            <div id="recording-controls" style="display: none; background: #f9f9f9; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span id="recording-timer">00:00</span>
+                                    <div style="flex: 1; background: #ddd; height: 4px; border-radius: 2px;">
+                                        <div id="recording-progress" style="background: #f44336; height: 100%; width: 0%; border-radius: 2px; transition: width 0.1s;"></div>
+                                    </div>
+                                    <span style="font-size: 12px; color: #666;">10s max</span>
+                                </div>
+                                <small style="color: #666; display: block; margin-top: 5px;">
+                                    💡 <strong>Speak clearly for 3-10 seconds.</strong> Say anything: your name, a sentence, count to ten, or read some text aloud.
+                                </small>
+                            </div>
+                            <small style="color: #666;">
+                                Record a 3-10 second voice sample or upload an audio file (WAV/MP3). Content doesn't matter - just speak clearly!
+                            </small>
                         </div>
                         
                         <div class="control-group">
@@ -222,6 +252,14 @@
                 enabled: false,
                 audioFile: null,
                 fileName: null
+            },
+            recording: {
+                isRecording: false,
+                mediaRecorder: null,
+                audioChunks: [],
+                startTime: null,
+                maxDuration: 10000, // 10 seconds
+                timer: null
             }
         };
 
@@ -397,6 +435,144 @@
         // Update voice clone status display
         function updateVoiceCloneStatus(message) {
             document.getElementById('voice-clone-status').textContent = message;
+        }
+
+        // Toggle microphone recording for voice sample
+        async function toggleRecording() {
+            if (chatterboxConfig.recording.isRecording) {
+                stopRecording();
+            } else {
+                await startRecording();
+            }
+        }
+
+        // Start recording voice sample
+        async function startRecording() {
+            try {
+                // Request microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 44100,
+                        channelCount: 1,
+                        volume: 1.0,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    } 
+                });
+
+                // Set up MediaRecorder
+                chatterboxConfig.recording.mediaRecorder = new MediaRecorder(stream);
+                chatterboxConfig.recording.audioChunks = [];
+                chatterboxConfig.recording.startTime = Date.now();
+
+                // Update UI for recording state
+                chatterboxConfig.recording.isRecording = true;
+                document.getElementById('record-btn-text').textContent = '⏹️ Stop Recording';
+                document.getElementById('record-sample-btn').classList.add('recording-active');
+                document.getElementById('recording-controls').style.display = 'block';
+
+                // Start timer and progress
+                updateRecordingTimer();
+
+                // Handle recording data
+                chatterboxConfig.recording.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        chatterboxConfig.recording.audioChunks.push(event.data);
+                    }
+                };
+
+                // Handle recording stop
+                chatterboxConfig.recording.mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(chatterboxConfig.recording.audioChunks, { 
+                        type: 'audio/wav' 
+                    });
+                    
+                    // Create a File object from the blob
+                    const audioFile = new File([audioBlob], `voice_sample_${Date.now()}.wav`, {
+                        type: 'audio/wav'
+                    });
+                    
+                    // Use the recorded audio as voice sample
+                    chatterboxConfig.voiceCloning.audioFile = audioFile;
+                    chatterboxConfig.voiceCloning.fileName = audioFile.name;
+                    
+                    const duration = ((Date.now() - chatterboxConfig.recording.startTime) / 1000).toFixed(1);
+                    updateVoiceCloneStatus(`Voice sample recorded: ${duration}s audio. Enable voice cloning to use it.`);
+                    
+                    // Stop all tracks to release microphone
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    console.log('🎤 Voice sample recorded:', audioFile.name, `${duration}s`);
+                };
+
+                // Start recording
+                chatterboxConfig.recording.mediaRecorder.start();
+                updateStatus('🎤 Recording voice sample... Speak clearly for 3-10 seconds');
+
+                // Auto-stop after max duration
+                setTimeout(() => {
+                    if (chatterboxConfig.recording.isRecording) {
+                        stopRecording();
+                    }
+                }, chatterboxConfig.recording.maxDuration);
+
+            } catch (error) {
+                console.error('Failed to start recording:', error);
+                updateStatus('❌ Microphone access denied or not available');
+                alert('Could not access microphone. Please check permissions and try again.');
+            }
+        }
+
+        // Stop recording voice sample
+        function stopRecording() {
+            if (!chatterboxConfig.recording.isRecording) return;
+
+            chatterboxConfig.recording.isRecording = false;
+            
+            // Stop MediaRecorder
+            if (chatterboxConfig.recording.mediaRecorder && 
+                chatterboxConfig.recording.mediaRecorder.state !== 'inactive') {
+                chatterboxConfig.recording.mediaRecorder.stop();
+            }
+
+            // Clear timer
+            if (chatterboxConfig.recording.timer) {
+                clearInterval(chatterboxConfig.recording.timer);
+            }
+
+            // Reset UI
+            document.getElementById('record-btn-text').textContent = '🎙️ Record Sample';
+            document.getElementById('record-sample-btn').classList.remove('recording-active');
+            document.getElementById('recording-controls').style.display = 'none';
+            document.getElementById('recording-timer').textContent = '00:00';
+            document.getElementById('recording-progress').style.width = '0%';
+
+            updateStatus('🎵 Recording completed - voice sample ready for cloning');
+        }
+
+        // Update recording timer and progress
+        function updateRecordingTimer() {
+            chatterboxConfig.recording.timer = setInterval(() => {
+                if (!chatterboxConfig.recording.isRecording) return;
+
+                const elapsed = Date.now() - chatterboxConfig.recording.startTime;
+                const seconds = Math.floor(elapsed / 1000);
+                const progress = Math.min((elapsed / chatterboxConfig.recording.maxDuration) * 100, 100);
+
+                // Update timer display
+                const minutes = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                document.getElementById('recording-timer').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+                // Update progress bar
+                document.getElementById('recording-progress').style.width = `${progress}%`;
+
+                // Auto-stop if max duration reached
+                if (elapsed >= chatterboxConfig.recording.maxDuration) {
+                    stopRecording();
+                }
+            }, 100);
         }
 
         // Update voice preview description
@@ -602,6 +778,12 @@
             if ('speechSynthesis' in window) {
                 speechSynthesis.cancel();
             }
+            
+            // Stop recording if active
+            if (chatterboxConfig.recording.isRecording) {
+                stopRecording();
+            }
+            
             isListening = false;
             document.getElementById('mic-status').textContent = 'Click to Start';
             document.getElementById('microphone-btn').classList.remove('listening');
@@ -644,7 +826,7 @@
         // Initialize with a welcome message
         setTimeout(() => {
             if (chatterboxConfig.enabled) {
-                synthesizeWithChatterbox("Welcome to your AI Voice Assistant powered by Chatterbox TTS! I'm speaking with a natural female expressive voice using advanced neural synthesis. You can easily switch between male and female voices, adjust the emotional tone from calm to dramatic, and even clone any voice by uploading a short audio sample!");
+                synthesizeWithChatterbox("Welcome to your AI Voice Assistant powered by Chatterbox TTS! I'm speaking with a natural female expressive voice using advanced neural synthesis. You can switch between male and female voices, adjust emotional tones, and clone any voice by recording a sample with your microphone or uploading an audio file!");
             }
         }, 1000);
     </script>
