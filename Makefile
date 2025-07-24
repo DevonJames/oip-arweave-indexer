@@ -362,12 +362,15 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI)
 		TTS_FOUND=true; \
 	fi; \
 	if [ "$$TTS_FOUND" = "false" ]; then \
-		echo "$(RED)No suitable container found for Chatterbox TTS installation.$(NC)"; \
-		echo "$(YELLOW)Available containers:$(NC)"; \
-		docker-compose ps | tail -n +2 | awk '{print $$1}' | head -10; \
-		echo ""; \
-		echo "$(BLUE)💡 Note: Chatterbox installation will work in any running container$(NC)"; \
-		echo "$(YELLOW)Containers should be starting up - wait a moment and try again$(NC)"; \
+		echo "$(YELLOW)⏳ Waiting for containers to fully start...$(NC)"; \
+		sleep 10; \
+		if docker-compose ps | grep -q "oip.*Up"; then \
+			echo "$(BLUE)Installing Chatterbox in main OIP container...$(NC)"; \
+			docker-compose exec -T oip bash -c "pip install chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in OIP container!')\""; \
+		else \
+			echo "$(RED)Containers still starting up. Try again in a minute with:$(NC)"; \
+			echo "$(GREEN)make install-chatterbox$(NC)"; \
+		fi; \
 	fi
 
 test-chatterbox: ## Test Chatterbox TTS functionality
