@@ -3,11 +3,11 @@
 import os
 import io
 import tempfile
-import logging
+import logging  
 import asyncio
 from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -46,7 +46,11 @@ app.add_middleware(
 
 class TTSRequest(BaseModel):
     text: str
-    voice_id: str = "default"
+    gender: str = "female"
+    emotion: str = "neutral"
+    exaggeration: float = 0.5
+    cfg_weight: float = 0.5
+    voice_id: str = "default"  # Keep for backward compatibility
     speed: float = 1.0
     language: str = "en"
 
@@ -120,21 +124,34 @@ class ChatterboxEngine(TTSEngine):
             logger.error(f"Failed to initialize Chatterbox TTS: {str(e)}")
             self.available = False
     
-    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
+    async def synthesize(self, text: str, gender: str = "female", emotion: str = "neutral", 
+                          exaggeration: float = 0.5, cfg_weight: float = 0.5, 
+                          audio_prompt_path: str = None, **kwargs) -> bytes:
         if not self.model:
             raise Exception("Chatterbox model not initialized")
             
         try:
-            config = self.voice_configs.get(voice_id, self.voice_configs["default"])
+            if audio_prompt_path:
+                logger.info(f"Synthesizing with Chatterbox voice cloning: audio_prompt={audio_prompt_path}, exaggeration={exaggeration}, cfg_weight={cfg_weight}")
+            else:
+                logger.info(f"Synthesizing with Chatterbox: gender={gender}, emotion={emotion}, exaggeration={exaggeration}, cfg_weight={cfg_weight}")
             
-            logger.info(f"Synthesizing with Chatterbox: voice={voice_id}, exaggeration={config['exaggeration']}")
-            
-            # Generate audio with Chatterbox TTS
-            audio = self.model.synthesize(
-                text=text,
-                exaggeration=config["exaggeration"],
-                cfg_weight=config["cfg_weight"]
-            )
+            # Generate audio with Chatterbox TTS using the generate method
+            if audio_prompt_path and os.path.exists(audio_prompt_path):
+                # Voice cloning mode with audio prompt
+                audio = self.model.generate(
+                    text=text,
+                    audio_prompt_path=audio_prompt_path,
+                    exaggeration=exaggeration,
+                    cfg_weight=cfg_weight
+                )
+            else:
+                # Default voice mode
+                audio = self.model.generate(
+                    text=text,
+                    exaggeration=exaggeration,
+                    cfg_weight=cfg_weight
+                )
             
             # Convert to bytes (assuming audio is a numpy array or tensor)
             import soundfile as sf
@@ -156,40 +173,28 @@ class ChatterboxEngine(TTSEngine):
             raise
     
     def get_voices(self) -> List[VoiceInfo]:
-        return [
-            VoiceInfo(
-                id="female_1", 
-                name="Chatterbox Female",
-                language="en",
-                gender="female",
-                engine="chatterbox",
-                description="Natural female voice"
-            ),
-            VoiceInfo(
-                id="male_1",
-                name="Chatterbox Male", 
-                language="en",
-                gender="male",
-                engine="chatterbox",
-                description="Deep male voice"
-            ),
-            VoiceInfo(
-                id="expressive",
-                name="Chatterbox Expressive",
-                language="en", 
-                gender="neutral",
-                engine="chatterbox",
-                description="Expressive, dynamic voice"
-            ),
-            VoiceInfo(
-                id="calm",
-                name="Chatterbox Calm",
-                language="en",
-                gender="neutral",
-                engine="chatterbox",
-                description="Calm, soothing voice"
-            )
-        ]
+        voices = []
+        
+        # Generate voice combinations for gender + emotion matrix
+        genders = ["female", "male"]
+        emotions = ["expressive", "calm", "dramatic", "neutral"]
+        
+        for gender in genders:
+            for emotion in emotions:
+                voice_id = f"{gender}_{emotion}"
+                name = f"Chatterbox {gender.title()} ({emotion.title()})"
+                description = f"{gender.title()} voice with {emotion} emotional tone"
+                
+                voices.append(VoiceInfo(
+                    id=voice_id,
+                    name=name,
+                    language="en",
+                    gender=gender,
+                    engine="chatterbox",
+                    description=description
+                ))
+        
+        return voices
 
 # Edge TTS Engine (Microsoft)
 class EdgeTTSEngine(TTSEngine):
@@ -425,41 +430,97 @@ async def health_check():
     }
 
 @app.post("/synthesize")
-async def synthesize_text(request: TTSRequest):
-    """Synthesize text to speech using the best available engine."""
+async def synthesize_text(
+    text: str = Form(...),
+    gender: str = Form("female"),
+    emotion: str = Form("neutral"),
+    exaggeration: float = Form(0.5),
+    cfg_weight: float = Form(0.5),
+    voice_id: str = Form("default"),  # For backward compatibility
+    speed: float = Form(1.0),
+    engine: str = Form("auto"),
+    voice_cloning: bool = Form(False),
+    audio_prompt: UploadFile = File(None)
+):
+    """Synthesize text to speech using the best available engine with optional voice cloning."""
     
-    if not request.text.strip():
+    if not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     
     last_error = None
+    audio_prompt_path = None
+    
+    # Handle voice cloning file upload
+    if voice_cloning and audio_prompt:
+        try:
+            # Save uploaded audio file temporarily
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            audio_prompt_path = os.path.join(temp_dir, f"voice_prompt_{int(asyncio.get_event_loop().time())}.wav")
+            
+            # Read and save the audio file
+            audio_content = await audio_prompt.read()
+            with open(audio_prompt_path, "wb") as f:
+                f.write(audio_content)
+                
+            logger.info(f"Voice cloning audio saved to: {audio_prompt_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save audio prompt: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to process audio file: {str(e)}")
     
     # Try engines in priority order
-    for engine in engines:
-        if not engine.available:
+    for eng in engines:
+        if not eng.available:
             continue
             
         try:
-            logger.info(f"Attempting synthesis with {engine.name}")
-            audio_data = await engine.synthesize(
-                request.text, 
-                request.voice_id, 
-                request.speed
-            )
+            logger.info(f"Attempting synthesis with {eng.name}")
             
-            logger.info(f"Successfully synthesized with {engine.name}")
+            # Handle Chatterbox engine with new parameters
+            if eng.name == "chatterbox":
+                audio_data = await eng.synthesize(
+                    text=text,
+                    gender=gender,
+                    emotion=emotion,
+                    exaggeration=exaggeration,
+                    cfg_weight=cfg_weight,
+                    audio_prompt_path=audio_prompt_path
+                )
+            else:
+                # Use legacy parameters for other engines
+                audio_data = await eng.synthesize(text, voice_id, speed)
+            
+            logger.info(f"Successfully synthesized with {eng.name}")
+            
+            # Clean up temporary file
+            if audio_prompt_path and os.path.exists(audio_prompt_path):
+                try:
+                    os.unlink(audio_prompt_path)
+                except:
+                    pass
+            
             return Response(
                 content=audio_data,
                 media_type="audio/wav",
                 headers={
-                    "X-Engine-Used": engine.name,
-                    "X-Voice-ID": request.voice_id
+                    "X-Engine-Used": eng.name,
+                    "X-Voice-ID": voice_id if not voice_cloning else "voice_clone",
+                    "X-Voice-Cloning": "true" if voice_cloning else "false"
                 }
             )
             
         except Exception as e:
             last_error = str(e)
-            logger.warning(f"Engine {engine.name} failed: {str(e)}")
+            logger.warning(f"Engine {eng.name} failed: {str(e)}")
             continue
+    
+    # Clean up temporary file on failure
+    if audio_prompt_path and os.path.exists(audio_prompt_path):
+        try:
+            os.unlink(audio_prompt_path)
+        except:
+            pass
     
     # If all engines failed
     raise HTTPException(
