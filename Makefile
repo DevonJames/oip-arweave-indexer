@@ -107,34 +107,30 @@ check-ngrok:
 
 # Start ngrok tunnel
 start-ngrok: check-ngrok
-	@if ! pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
-		echo "$(BLUE)🔗 Starting ngrok tunnel for api.oip.onl...$(NC)"; \
-		NGROK_CMD="ngrok"; \
-		if ! command -v ngrok >/dev/null 2>&1; then \
-			if [ -f /usr/local/bin/ngrok ]; then \
-				NGROK_CMD="/usr/local/bin/ngrok"; \
-			elif [ -f ~/bin/ngrok ]; then \
-				NGROK_CMD="~/bin/ngrok"; \
-			elif [ -f ./ngrok ]; then \
-				NGROK_CMD="./ngrok"; \
-			fi; \
+	@echo "$(BLUE)🔗 Starting ngrok tunnel for api.oip.onl...$(NC)"
+	@NGROK_CMD="ngrok"; \
+	if ! command -v ngrok >/dev/null 2>&1; then \
+		if [ -f /usr/local/bin/ngrok ]; then \
+			NGROK_CMD="/usr/local/bin/ngrok"; \
+		elif [ -f ~/bin/ngrok ]; then \
+			NGROK_CMD="~/bin/ngrok"; \
+		elif [ -f ./ngrok ]; then \
+			NGROK_CMD="./ngrok"; \
 		fi; \
-		if [ -f .env ]; then \
-			export $$(grep -v '^#' .env | grep NGROK_AUTH_TOKEN | xargs); \
-		fi; \
-		echo "$(YELLOW)Starting: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
-		($$NGROK_CMD http --url=api.oip.onl 3005 > /dev/null 2>&1 &); \
-		sleep 3; \
-		if pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
-			echo "$(GREEN)🔗 ngrok: ✅ API available at https://api.oip.onl$(NC)"; \
-		else \
-			echo "$(RED)❌ ngrok failed to start.$(NC)"; \
-			echo "$(YELLOW)Debug: Check if NGROK_AUTH_TOKEN is set in .env$(NC)"; \
-			echo "$(YELLOW)Try running manually: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
-			exit 1; \
-		fi; \
+	fi; \
+	if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep NGROK_AUTH_TOKEN | xargs); \
+	fi; \
+	echo "$(YELLOW)Starting: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
+	($$NGROK_CMD http --url=api.oip.onl 3005 > /dev/null 2>&1 &); \
+	sleep 3; \
+	if pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
+		echo "$(GREEN)🔗 ngrok: ✅ API available at https://api.oip.onl$(NC)"; \
 	else \
-		echo "$(GREEN)🔗 ngrok: ✅ Already running$(NC)"; \
+		echo "$(RED)❌ ngrok failed to start.$(NC)"; \
+		echo "$(YELLOW)Debug: Check if NGROK_AUTH_TOKEN is set in .env$(NC)"; \
+		echo "$(YELLOW)Try running manually: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
+		exit 1; \
 	fi
 
 # Stop ngrok  
