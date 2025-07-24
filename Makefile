@@ -137,22 +137,17 @@ start-ngrok: check-ngrok
 		echo "$(GREEN)🔗 ngrok: ✅ Already running$(NC)"; \
 	fi
 
-# Stop ngrok
+# Stop ngrok  
 stop-ngrok:
 	@echo "$(BLUE)🛑 Stopping ngrok tunnel...$(NC)"
-	@NGROK_PID=$$(pgrep -f "ngrok http.*api.oip.onl" 2>/dev/null | head -1); \
-	if [ -n "$$NGROK_PID" ]; then \
-		echo "$(YELLOW)Found ngrok process: $$NGROK_PID$(NC)"; \
-		kill -TERM $$NGROK_PID 2>/dev/null || true; \
-		sleep 2; \
-		if kill -0 $$NGROK_PID 2>/dev/null; then \
-			echo "$(YELLOW)Force killing ngrok...$(NC)"; \
-			kill -KILL $$NGROK_PID 2>/dev/null || true; \
+	@ps aux | grep "ngrok http" | grep -v grep | awk '{print $$2}' | while read pid; do \
+		if [ -n "$$pid" ]; then \
+			echo "$(YELLOW)Stopping ngrok PID: $$pid$(NC)"; \
+			kill $$pid 2>/dev/null || true; \
 		fi; \
-		echo "$(GREEN)🔗 ngrok stopped$(NC)"; \
-	else \
-		echo "$(YELLOW)🔗 ngrok: not running$(NC)"; \
-	fi
+	done; \
+	sleep 1; \
+	echo "$(GREEN)🔗 ngrok stopped$(NC)"
 
 # Validate profile
 validate-profile:
@@ -230,7 +225,7 @@ endif
 
 status: ## Show service status + ngrok status
 	@echo "$(BLUE)Service Status:$(NC)"
-	@docker-compose ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || echo "No services running"
+	@docker-compose ps || echo "No services running"
 	@echo ""
 	@echo "$(BLUE)ngrok Status:$(NC)"
 	@if pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
