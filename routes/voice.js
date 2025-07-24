@@ -704,11 +704,19 @@ router.get('/health', async (req, res) => {
 
     // Add fallback info for TTS
     const ttsStatus = services.tts.status === 'healthy' ? 'Chatterbox Available' : 'eSpeak Fallback Active';
+    
+    // Check if Chatterbox TTS is specifically available
+    const chatterboxAvailable = services.tts.status === 'healthy' && 
+        services.tts.details && 
+        (services.tts.details.primary_engine === 'chatterbox' ||
+         (services.tts.details.engines && 
+          services.tts.details.engines.some(engine => engine.name === 'chatterbox' && engine.available)));
 
     res.json({
         status: allHealthy ? 'healthy' : 'degraded',
         services,
         tts_status: ttsStatus,
+        chatterbox_available: chatterboxAvailable,
         timestamp: new Date().toISOString()
     });
 });
