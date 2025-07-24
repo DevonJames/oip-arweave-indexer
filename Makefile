@@ -135,15 +135,15 @@ start-ngrok: check-ngrok
 
 # Stop ngrok  
 stop-ngrok:
-	@echo "$(BLUE)🛑 Stopping ngrok tunnel...$(NC)"
-	@ps aux | grep "ngrok http" | grep -v grep | awk '{print $$2}' | while read pid; do \
+	@echo "$(BLUE)🛑 Stopping ALL ngrok processes...$(NC)"
+	@ps aux | grep ngrok | grep -v grep | awk '{print $$2}' | while read pid; do \
 		if [ -n "$$pid" ]; then \
-			echo "$(YELLOW)Stopping ngrok PID: $$pid$(NC)"; \
-			kill $$pid 2>/dev/null || true; \
+			echo "$(YELLOW)Killing ngrok PID: $$pid$(NC)"; \
+			kill -9 $$pid 2>/dev/null || true; \
 		fi; \
 	done; \
-	sleep 1; \
-	echo "$(GREEN)🔗 ngrok stopped$(NC)"
+	sleep 2; \
+	echo "$(GREEN)🔗 All ngrok processes stopped$(NC)"
 
 # Validate profile
 validate-profile:
@@ -354,16 +354,16 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI)
 		TTS_FOUND=true; \
 	elif docker-compose ps | grep -q oip; then \
 		echo "$(YELLOW)Installing Chatterbox model in main OIP container...$(NC)"; \
-		docker-compose exec oip bash -c "pip install chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in OIP container!')\""; \
+		docker-compose exec oip bash -c "pip install --break-system-packages chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in OIP container!')\""; \
 		TTS_FOUND=true; \
 	elif docker-compose ps | grep -q oip-gpu; then \
 		echo "$(YELLOW)Installing Chatterbox model in GPU OIP container...$(NC)"; \
-		docker-compose exec oip-gpu bash -c "pip install chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in GPU OIP container!')\""; \
+		docker-compose exec oip-gpu bash -c "pip install --break-system-packages chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in GPU OIP container!')\""; \
 		TTS_FOUND=true; \
 	fi; \
 	if [ "$$TTS_FOUND" = "false" ]; then \
 		echo "$(BLUE)Installing Chatterbox in main OIP container...$(NC)"; \
-		docker-compose exec -T oip bash -c "pip install chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')\"" || echo "$(YELLOW)Installation will complete once container is ready$(NC)"; \
+		docker-compose exec -T oip bash -c "pip install --break-system-packages chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')\"" || echo "$(YELLOW)Installation will complete once container is ready$(NC)"; \
 	fi
 
 test-chatterbox: ## Test Chatterbox TTS functionality
