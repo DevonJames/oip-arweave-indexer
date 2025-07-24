@@ -250,6 +250,11 @@ clean: ## Stop services and remove containers, networks, volumes + stop ngrok
 	@make stop-ngrok
 	@echo "$(GREEN)Cleanup completed$(NC)"
 
+clean-orphans: ## Remove orphaned containers (like old ngrok containers)
+	@echo "$(BLUE)🧹 Removing orphaned containers...$(NC)"
+	docker-compose down --remove-orphans
+	@echo "$(GREEN)✅ Orphaned containers removed$(NC)"
+
 # Quick deployment targets for common scenarios
 minimal: ## Quick deploy: Core services only (elasticsearch, kibana, oip - no canvas) + ngrok
 	@make up PROFILE=minimal
@@ -354,16 +359,16 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI)
 		TTS_FOUND=true; \
 	elif docker-compose ps | grep -q oip; then \
 		echo "$(YELLOW)Installing Chatterbox model in main OIP container...$(NC)"; \
-		docker-compose exec oip bash -c "pip install --break-system-packages chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in OIP container!')\""; \
+		docker-compose exec oip bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in OIP container!')\""; \
 		TTS_FOUND=true; \
 	elif docker-compose ps | grep -q oip-gpu; then \
 		echo "$(YELLOW)Installing Chatterbox model in GPU OIP container...$(NC)"; \
-		docker-compose exec oip-gpu bash -c "pip install --break-system-packages chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in GPU OIP container!')\""; \
+		docker-compose exec oip-gpu bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully in GPU OIP container!')\""; \
 		TTS_FOUND=true; \
 	fi; \
 	if [ "$$TTS_FOUND" = "false" ]; then \
 		echo "$(BLUE)Installing Chatterbox in main OIP container...$(NC)"; \
-		docker-compose exec -T oip bash -c "pip install --break-system-packages chatterbox-tts && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')\"" || echo "$(YELLOW)Installation will complete once container is ready$(NC)"; \
+		docker-compose exec -T oip bash -c "pip install --break-system-packages --no-deps chatterbox-tts && pip install --break-system-packages torch>=2.0.0 librosa numpy s3tokenizer && python -c \"from chatterbox.tts import ChatterboxTTS; model = ChatterboxTTS.from_pretrained(device='cuda' if __import__('torch').cuda.is_available() else 'cpu'); print('✅ Chatterbox TTS model installed successfully!')\"" || echo "$(YELLOW)Installation will complete once container is ready$(NC)"; \
 	fi
 
 test-chatterbox: ## Test Chatterbox TTS functionality
