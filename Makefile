@@ -368,7 +368,17 @@ rebuild-chatterbox: ## Quick rebuild: Standard deployment with Chatterbox TTS fo
 rebuild-chatterbox-gpu: ## Quick rebuild: Chatterbox TTS with GPU acceleration (RTX 4090 optimized) + ngrok
 	@make rebuild PROFILE=chatterbox-gpu
 	@echo "$(YELLOW)🎭 Installing GPU-optimized Chatterbox TTS model...$(NC)"
-	@make install-chatterbox
+
+rebuild-tts: ## Rebuild only the TTS service (no cache) - fast fix for TTS issues
+	@echo "$(BLUE)🔧 Rebuilding TTS service only...$(NC)"
+	docker-compose build --no-cache tts-service
+	@echo "$(GREEN)✅ TTS service rebuilt$(NC)"
+	@echo "$(BLUE)🔄 Restarting TTS service...$(NC)"
+	docker-compose restart tts-service
+	@echo "$(GREEN)✅ TTS service restarted$(NC)"
+	@echo "$(BLUE)🔍 Checking TTS service logs...$(NC)"
+	@sleep 3
+	docker logs oip-arweave-indexer-tts-service-1 --tail 10 || echo "$(YELLOW)⚠️ Check container name with 'docker ps'$(NC)"
 
 # LLM Model Management
 install-models: ## Install LLM models using Ollama
