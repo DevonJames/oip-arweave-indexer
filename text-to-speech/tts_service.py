@@ -175,6 +175,8 @@ class ChatterboxEngine(TTSEngine):
                 audio = model_to_use.generate(
                     text=text,
                     audio_prompt_path=audio_prompt_path,
+                    gender=gender,
+                    emotion=emotion,
                     exaggeration=exaggeration,
                     cfg_weight=cfg_weight
                 )
@@ -182,6 +184,8 @@ class ChatterboxEngine(TTSEngine):
                 # Default voice mode
                 audio = model_to_use.generate(
                     text=text,
+                    gender=gender,
+                    emotion=emotion,
                     exaggeration=exaggeration,
                     cfg_weight=cfg_weight
                 )
@@ -254,31 +258,57 @@ class ChatterboxEngine(TTSEngine):
 class EdgeTTSEngine(TTSEngine):
     def __init__(self):
         super().__init__("edge_tts")
+        self.all_voices = []
         
-    def _initialize(self):
+    async def _initialize(self):
         try:
-            # Test Edge TTS availability
-            self.voice_map = {
+            # Load ALL available voices dynamically
+            self.all_voices = await edge_tts.list_voices()
+            
+            # Create comprehensive voice mapping
+            self.voice_map = {}
+            for voice in self.all_voices:
+                self.voice_map[voice["ShortName"]] = voice["ShortName"]
+            
+            # Add convenient aliases for popular voices
+            self.voice_map.update({
                 "default": "en-US-AriaNeural",
-                "female_1": "en-US-AriaNeural",
-                "male_1": "en-US-GuyNeural",
-                "expressive": "en-US-JennyNeural",
-                "calm": "en-US-SaraNeural"
-            }
+                "female_professional": "en-US-AriaNeural",
+                "female_expressive": "en-US-JennyNeural", 
+                "female_calm": "en-US-SaraNeural",
+                "female_cheerful": "en-US-AmberNeural",
+                "male_deep": "en-US-GuyNeural",
+                "male_professional": "en-US-DavisNeural",
+                "male_young": "en-US-JasonNeural",
+                "british_female": "en-GB-SoniaNeural",
+                "british_male": "en-GB-RyanNeural",
+                "australian_female": "en-AU-NatashaNeural",
+                "australian_male": "en-AU-WilliamNeural"
+            })
+            
             self.available = True
-            logger.info("Edge TTS engine initialized successfully")
+            logger.info(f"Edge TTS initialized with {len(self.all_voices)} voices")
+            
         except Exception as e:
-            logger.error(f"Failed to initialize Edge TTS engine: {str(e)}")
+            logger.error(f"Failed to initialize Edge TTS: {e}")
             self.available = False
     
-    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0) -> bytes:
+    async def synthesize(self, text: str, voice_id: str = "default", speed: float = 1.0, 
+                        pitch: str = "+0Hz", volume: str = "+0%") -> bytes:
         try:
-            voice = self.voice_map.get(voice_id, self.voice_map["default"])
+            voice = self.voice_map.get(voice_id, voice_id)
             
-            # Calculate rate adjustment
-            rate_adjust = "+0%" if speed == 1.0 else f"+{int((speed - 1) * 100)}%"
+            # Convert speed to rate percentage
+            rate_adjust = f"+{int((speed - 1) * 100)}%" if speed != 1.0 else "+0%"
             
-            communicate = edge_tts.Communicate(text, voice, rate=rate_adjust)
+            # Create communicate instance with advanced controls
+            communicate = edge_tts.Communicate(
+                text, 
+                voice, 
+                rate=rate_adjust,
+                pitch=pitch,      # e.g., "+5Hz", "-3Hz"
+                volume=volume     # e.g., "+20%", "-10%"
+            )
             
             # Generate audio
             audio_data = b""
@@ -289,28 +319,38 @@ class EdgeTTSEngine(TTSEngine):
             return audio_data
             
         except Exception as e:
-            logger.error(f"Edge TTS synthesis error: {str(e)}")
+            logger.error(f"Edge TTS synthesis error: {e}")
             raise
     
     def get_voices(self) -> List[VoiceInfo]:
-        return [
-            VoiceInfo(
-                id="female_1",
-                name="Edge Aria",
-                language="en",
-                gender="female", 
+        voices = []
+        
+        for voice in self.all_voices:
+            # Parse gender from voice data
+            gender = voice.get("Gender", "unknown").lower()
+            if gender not in ["male", "female"]:
+                gender = "female" if "female" in voice["ShortName"].lower() else "male"
+            
+            # Extract language code
+            lang_parts = voice["ShortName"].split("-")
+            language = "-".join(lang_parts[:2]) if len(lang_parts) >= 2 else "en"
+            
+            # Create friendly name
+            voice_name = lang_parts[-1].replace("Neural", "") if len(lang_parts) > 2 else voice["ShortName"]
+            region = lang_parts[1] if len(lang_parts) > 1 else ""
+            
+            friendly_name = f"Edge {voice_name} ({region} {gender.title()})"
+            
+            voices.append(VoiceInfo(
+                id=voice["ShortName"],
+                name=friendly_name,
+                language=language,
+                gender=gender,
                 engine="edge_tts",
-                description="Microsoft Aria neural voice"
-            ),
-            VoiceInfo(
-                id="male_1",
-                name="Edge Guy",
-                language="en",
-                gender="male",
-                engine="edge_tts", 
-                description="Microsoft Guy neural voice"
-            )
-        ]
+                description=f"Microsoft {voice_name} neural voice - {region}"
+            ))
+        
+        return voices
 
 # Google TTS Engine
 class GTTSEngine(TTSEngine):
@@ -460,8 +500,8 @@ if chatterbox_engine.available:
     logger.info(f"Added ChatterboxEngine to engines list at index 0")
 
 edge_tts_engine = EdgeTTSEngine()
-if edge_tts_engine.available:
-    engines.append(edge_tts_engine)
+# Note: EdgeTTS initialization will be completed during startup
+engines.append(edge_tts_engine)
 
 gtts_engine = GTTSEngine()
 if gtts_engine.available:
@@ -475,6 +515,17 @@ if espeak_engine.available:
 engines.append(SilenceEngine())
 
 logger.info(f"Initialized {len(engines)} TTS engines: {[e.name for e in engines]}")
+
+@app.on_event("startup")
+async def startup_event():
+    """Handle async initialization on startup."""
+    global edge_tts_engine
+    logger.info("Running startup initialization...")
+    
+    # Initialize EdgeTTS engine async
+    if edge_tts_engine:
+        await edge_tts_engine._initialize()
+        logger.info(f"EdgeTTS engine initialized: available={edge_tts_engine.available}")
 
 @app.get("/health")
 async def health_check():
@@ -545,7 +596,7 @@ async def synthesize_text(
             if eng.name == "chatterbox":
                 logger.info(f"Chatterbox engine details: model={eng.model is not None if hasattr(eng, 'model') else 'no model attr'}, available={eng.available}")
             
-            # Handle Chatterbox engine with new parameters
+            # Handle different engines with their specific parameters
             if eng.name == "chatterbox":
                 audio_data = await eng.synthesize(
                     text=text,
@@ -554,6 +605,17 @@ async def synthesize_text(
                     exaggeration=exaggeration,
                     cfg_weight=cfg_weight,
                     audio_prompt_path=audio_prompt_path
+                )
+            elif eng.name == "edge_tts":
+                # Edge TTS supports additional parameters
+                pitch = f"+{int((exaggeration - 0.5) * 10)}Hz"  # Convert exaggeration to pitch
+                volume = f"+{int((cfg_weight - 0.5) * 20)}%"    # Convert cfg_weight to volume
+                audio_data = await eng.synthesize(
+                    text=text,
+                    voice_id=voice_id,
+                    speed=speed,
+                    pitch=pitch,
+                    volume=volume
                 )
             else:
                 # Use legacy parameters for other engines
@@ -610,6 +672,28 @@ async def list_voices():
         "voices": all_voices,
         "primary_engine": engines[0].name if engines else "none",
         "engine_count": len([e for e in engines if e.available])
+    }
+
+@app.get("/voices/{engine_name}")
+async def list_voices_by_engine(engine_name: str):
+    """List available voices for a specific engine."""
+    engine = None
+    for e in engines:
+        if e.name == engine_name and e.available:
+            engine = e
+            break
+    
+    if not engine:
+        return {
+            "error": f"Engine '{engine_name}' not found or not available",
+            "available_engines": [e.name for e in engines if e.available]
+        }
+    
+    voices = engine.get_voices()
+    return {
+        "engine": engine_name,
+        "voices": voices,
+        "voice_count": len(voices)
     }
 
 @app.get("/engines")
