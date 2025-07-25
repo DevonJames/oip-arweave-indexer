@@ -1356,6 +1356,249 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
 }
 
 /**
+ * Stream text to speech using chunked approach for low latency
+ * @param {string} text - Individual text chunk from streaming LLM
+ * @param {Object} textAccumulator - Object to track accumulated text and state
+ * @param {Object} voiceConfig - Voice configuration
+ * @param {Function} onAudioChunk - Callback for audio chunks
+ * @param {string} dialogueId - Dialogue ID for client streaming
+ * @returns {Promise<void>}
+ */
+async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}, onAudioChunk, dialogueId = null) {
+    try {
+        const socketManager = require('../socket/socketManager');
+        
+        // Initialize accumulator if needed
+        if (!textAccumulator.buffer) {
+            textAccumulator.buffer = '';
+            textAccumulator.sentenceCount = 0;
+            textAccumulator.lastSentTime = Date.now();
+        }
+        
+        // Add new text to buffer
+        textAccumulator.buffer += text;
+        
+        // Define chunking parameters
+        const MIN_CHUNK_LENGTH = 75;   // Minimum characters before considering TTS
+        const MAX_CHUNK_LENGTH = 150;  // Maximum characters to prevent very long chunks
+        const SENTENCE_ENDINGS = /[.!?]+[\s]*$/; // Sentence ending patterns
+        const PHRASE_ENDINGS = /[,;:]+[\s]*$/;   // Phrase ending patterns
+        const MAX_WAIT_TIME = 2000;    // Max time to wait before forcing TTS (2 seconds)
+        
+        let shouldProcessChunk = false;
+        let chunkToProcess = '';
+        
+        // Check if we should process a chunk
+        const timeSinceLastSent = Date.now() - textAccumulator.lastSentTime;
+        
+        if (textAccumulator.buffer.length >= MIN_CHUNK_LENGTH) {
+            // Look for sentence endings first (best breaking points)
+            if (SENTENCE_ENDINGS.test(textAccumulator.buffer)) {
+                shouldProcessChunk = true;
+                chunkToProcess = textAccumulator.buffer.trim();
+                console.log(`🎤 Chunking at sentence end: "${chunkToProcess.substring(0, 50)}..."`);
+            }
+            // If buffer is getting long, look for phrase endings
+            else if (textAccumulator.buffer.length >= 100 && PHRASE_ENDINGS.test(textAccumulator.buffer)) {
+                shouldProcessChunk = true;
+                chunkToProcess = textAccumulator.buffer.trim();
+                console.log(`🎤 Chunking at phrase end: "${chunkToProcess.substring(0, 50)}..."`);
+            }
+            // Force chunking if buffer is too long or too much time has passed
+            else if (textAccumulator.buffer.length >= MAX_CHUNK_LENGTH || timeSinceLastSent >= MAX_WAIT_TIME) {
+                // Try to break at a space to avoid cutting words
+                let breakPoint = textAccumulator.buffer.lastIndexOf(' ', MAX_CHUNK_LENGTH);
+                if (breakPoint === -1 || breakPoint < MIN_CHUNK_LENGTH) {
+                    breakPoint = Math.min(textAccumulator.buffer.length, MAX_CHUNK_LENGTH);
+                }
+                
+                chunkToProcess = textAccumulator.buffer.substring(0, breakPoint).trim();
+                textAccumulator.buffer = textAccumulator.buffer.substring(breakPoint).trim();
+                shouldProcessChunk = true;
+                console.log(`🎤 Force chunking at length/time: "${chunkToProcess.substring(0, 50)}..."`);
+            }
+        }
+        
+        // Process the chunk if ready
+        if (shouldProcessChunk && chunkToProcess.length > 0) {
+            console.log(`🎤 Processing TTS chunk (${chunkToProcess.length} chars): "${chunkToProcess.substring(0, 100)}..."`);
+            
+            // Clear the buffer if we used all of it
+            if (chunkToProcess === textAccumulator.buffer.trim()) {
+                textAccumulator.buffer = '';
+            }
+            
+            textAccumulator.lastSentTime = Date.now();
+            textAccumulator.sentenceCount++;
+            
+            // Check if clients are still connected
+            if (dialogueId && !socketManager.hasClients(dialogueId)) {
+                console.log(`No active clients for dialogueId: ${dialogueId}, skipping chunk TTS`);
+                return;
+            }
+            
+            // Call TTS service for this chunk
+            try {
+                const FormData = require('form-data');
+                const formData = new FormData();
+                formData.append('text', chunkToProcess);
+                formData.append('gender', 'female');
+                formData.append('emotion', 'expressive');
+                formData.append('exaggeration', '0.5');
+                formData.append('cfg_weight', '0.7');
+                formData.append('voice_cloning', 'false');
+                
+                const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                    headers: {
+                        ...formData.getHeaders()
+                    },
+                    responseType: 'arraybuffer',
+                    timeout: 30000
+                });
+                
+                if (ttsResponse.status === 200 && ttsResponse.data) {
+                    console.log(`🎤 Generated ${ttsResponse.data.byteLength} bytes for chunk ${textAccumulator.sentenceCount}`);
+                    
+                    // Convert to base64 and send to client
+                    const audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                    
+                    if (onAudioChunk && typeof onAudioChunk === 'function') {
+                        await onAudioChunk(audioBase64, textAccumulator.sentenceCount, chunkToProcess);
+                    }
+                    
+                    // Also send via socket manager
+                    if (dialogueId) {
+                        socketManager.sendToClients(dialogueId, {
+                            type: 'audioChunk',
+                            audio: audioBase64,
+                            chunkIndex: textAccumulator.sentenceCount,
+                            text: chunkToProcess
+                        });
+                    }
+                } else {
+                    console.error('TTS service returned non-200 status:', ttsResponse.status);
+                }
+                
+            } catch (ttsError) {
+                console.error('Error calling TTS service for chunk:', ttsError.message);
+                
+                // Try ElevenLabs fallback for this chunk
+                try {
+                    console.log('🎤 Trying ElevenLabs fallback for chunk');
+                    const elevenLabsResponse = await axios.post(
+                        `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
+                        {
+                            text: chunkToProcess,
+                            model_id: 'eleven_turbo_v2',
+                            voice_settings: {
+                                stability: 0.5,
+                                similarity_boost: 0.75
+                            },
+                            output_format: 'mp3_44100_128'
+                        },
+                        {
+                            headers: {
+                                'xi-api-key': process.env.ELEVENLABS_API_KEY,
+                                'Content-Type': 'application/json'
+                            },
+                            responseType: 'arraybuffer'
+                        }
+                    );
+                    
+                    if (elevenLabsResponse.status === 200 && elevenLabsResponse.data) {
+                        console.log(`🎤 ElevenLabs fallback generated ${elevenLabsResponse.data.byteLength} bytes`);
+                        
+                        const audioBase64 = Buffer.from(elevenLabsResponse.data).toString('base64');
+                        
+                        if (onAudioChunk && typeof onAudioChunk === 'function') {
+                            await onAudioChunk(audioBase64, textAccumulator.sentenceCount, chunkToProcess);
+                        }
+                        
+                        if (dialogueId) {
+                            socketManager.sendToClients(dialogueId, {
+                                type: 'audioChunk',  
+                                audio: audioBase64,
+                                chunkIndex: textAccumulator.sentenceCount,
+                                text: chunkToProcess
+                            });
+                        }
+                    }
+                } catch (fallbackError) {
+                    console.error('ElevenLabs fallback also failed:', fallbackError.message);
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error in streamChunkedTextToSpeech:', error);
+    }
+}
+
+/**
+ * Process any remaining text in the accumulator when stream completes
+ * @param {Object} textAccumulator - The text accumulator object
+ * @param {Object} voiceConfig - Voice configuration
+ * @param {Function} onAudioChunk - Callback for audio chunks
+ * @param {string} dialogueId - Dialogue ID for client streaming
+ */
+async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChunk, dialogueId = null) {
+    if (textAccumulator.buffer && textAccumulator.buffer.trim().length > 0) {
+        console.log(`🎤 Flushing remaining text: "${textAccumulator.buffer.substring(0, 50)}..."`);
+        await streamChunkedTextToSpeech('', textAccumulator, voiceConfig, onAudioChunk, dialogueId, true);
+        
+        // Force process whatever is left
+        if (textAccumulator.buffer.trim().length > 0) {
+            const remainingText = textAccumulator.buffer.trim();
+            textAccumulator.buffer = '';
+            textAccumulator.lastSentTime = Date.now();
+            textAccumulator.sentenceCount++;
+            
+            console.log(`🎤 Processing final chunk: "${remainingText}"`);
+            
+            try {
+                const FormData = require('form-data');
+                const formData = new FormData();
+                formData.append('text', remainingText);
+                formData.append('gender', 'female');
+                formData.append('emotion', 'expressive');
+                formData.append('exaggeration', '0.5');
+                formData.append('cfg_weight', '0.7');
+                formData.append('voice_cloning', 'false');
+                
+                const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                    headers: {
+                        ...formData.getHeaders()
+                    },
+                    responseType: 'arraybuffer',
+                    timeout: 30000
+                });
+                
+                if (ttsResponse.status === 200 && ttsResponse.data) {
+                    const audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                    
+                    if (onAudioChunk && typeof onAudioChunk === 'function') {
+                        await onAudioChunk(audioBase64, textAccumulator.sentenceCount, remainingText, true);
+                    }
+                    
+                    if (dialogueId) {
+                        const socketManager = require('../socket/socketManager');
+                        socketManager.sendToClients(dialogueId, {
+                            type: 'audioChunk',
+                            audio: audioBase64,
+                            chunkIndex: textAccumulator.sentenceCount,
+                            text: remainingText,
+                            isFinal: true
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error processing final text chunk:', error);
+            }
+        }
+    }
+}
+
+/**
  * Get available voice options from ElevenLabs
  * @returns {Promise<Array>} List of available voices
  */
@@ -1693,6 +1936,8 @@ module.exports = {
     callXaiApi,
     directXaiCall,
     callOpenAiBackup,
-    callOpenAiVision
+    callOpenAiVision,
+    streamChunkedTextToSpeech,
+    flushRemainingText
 }
 

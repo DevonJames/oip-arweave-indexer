@@ -9,7 +9,7 @@ const { authenticateToken } = require('../helpers/utils'); // Import the authent
 const fs = require('fs');
 const crypto = require('crypto');  // For generating a unique hash
 const path = require('path');
-const { generateCombinedSummaryFromArticles, replaceAcronyms, synthesizeSpeech, transcribeAudio, generateStreamingResponse, streamTextToSpeech, getElevenLabsVoices } = require('../helpers/generators');
+const { generateCombinedSummaryFromArticles, replaceAcronyms, synthesizeSpeech, transcribeAudio, generateStreamingResponse, streamTextToSpeech, getElevenLabsVoices, streamChunkedTextToSpeech, flushRemainingText } = require('../helpers/generators');
 const { generatePodcastFromArticles, generateInvestigativeReportFromDocuments, synthesizeDialogueTurn, getAudioDuration, personalities } = require('../helpers/podcast-generator');
 const e = require('express');
 const multer = require('multer');
@@ -731,10 +731,12 @@ router.post('/converse', async (req, res) => {
             dialogueId: dialogueId
         });
         
-        // CRITICAL FIX: Break this into separate steps
+        // UPDATED: Use chunked streaming approach for real-time TTS
         
-        // 1. Define a text handler - FIXED to only stream text, not fragmented audio
+        // 1. Define a chunked text handler for immediate audio generation
         let responseText = '';
+        const textAccumulator = {}; // Initialize text accumulator for chunking
+        
         const handleTextChunk = async (textChunk) => {
             responseText += textChunk;
             
@@ -753,7 +755,39 @@ router.post('/converse', async (req, res) => {
                 }
             });
             
-            // NOTE: Removed fragmented TTS calls - we'll call TTS once with complete response
+            // NEW: Use chunked streaming TTS for immediate audio generation
+            try {
+                await streamChunkedTextToSpeech(
+                    textChunk,
+                    textAccumulator,
+                    { useLocalTTS: true },
+                    (audioChunk, chunkIndex, chunkText, isFinal = false) => {
+                        console.log(`🎤 Streaming audio chunk ${chunkIndex} via /converse for text: "${chunkText.substring(0, 50)}..."`);
+                        
+                        // Send audio chunk to client immediately
+                        socketManager.sendToClients(dialogueId, {
+                            type: 'audioChunk',
+                            audio: audioChunk,
+                            chunkIndex: chunkIndex,
+                            text: chunkText,
+                            isFinal: isFinal
+                        });
+                        
+                        ongoingStream.data.push({
+                            event: 'audioChunk',
+                            data: {
+                                audio: audioChunk,
+                                chunkIndex: chunkIndex,
+                                text: chunkText,
+                                isFinal: isFinal
+                            }
+                        });
+                    },
+                    String(dialogueId)
+                );
+            } catch (ttsError) {
+                console.error('Error in chunked TTS via /converse:', ttsError.message);
+            }
         };
         
         // 2. Call the function with very explicit parameters
@@ -772,34 +806,37 @@ router.post('/converse', async (req, res) => {
                 handleTextChunk                 // Parameter 4: callback function
             );
             
-            // NEW: Now call TTS once with the complete response
-            if (responseText && responseText.trim()) {
-                console.log('Streaming text to speech with local TTS service');
-                console.log('Text to speech input:', responseText);
-                
-                try {
-                    await streamTextToSpeech(
-                        responseText,
-                        { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
-                        (audioChunk) => {
-                            // Send complete audio to client
-                            socketManager.sendToClients(dialogueId, {
-                                type: 'audio',
-                                audio: audioChunk
-                            });
-                            
-                            ongoingStream.data.push({
-                                event: 'audio',
-                                data: {
-                                    audio: audioChunk
-                                }
-                            });
-                        },
-                        String(dialogueId)  // Add explicit dialogueId as string
-                    );
-                } catch (audioError) {
-                    console.error('Error generating audio for complete response:', audioError);
-                }
+            // NEW: Flush any remaining text in the accumulator
+            try {
+                await flushRemainingText(
+                    textAccumulator,
+                    { useLocalTTS: true },
+                    (audioChunk, chunkIndex, chunkText, isFinal = true) => {
+                        console.log(`🎤 Flushing final audio chunk ${chunkIndex} via /converse for text: "${chunkText.substring(0, 50)}..."`);
+                        
+                        // Send final audio chunk to client
+                        socketManager.sendToClients(dialogueId, {
+                            type: 'audioChunk',
+                            audio: audioChunk,
+                            chunkIndex: chunkIndex,
+                            text: chunkText,
+                            isFinal: true
+                        });
+                        
+                        ongoingStream.data.push({
+                            event: 'audioChunk',
+                            data: {
+                                audio: audioChunk,
+                                chunkIndex: chunkIndex,
+                                text: chunkText,
+                                isFinal: true
+                            }
+                        });
+                    },
+                    String(dialogueId)
+                );
+            } catch (flushError) {
+                console.error('Error flushing remaining text via /converse:', flushError.message);
             }
             
         } catch (error) {
@@ -1147,7 +1184,9 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     }
                 }
                 
-                // FIXED: Define the text chunk handler to only stream text, not audio
+                // NEW: Define the chunked text handler for real-time TTS
+                const textAccumulator = {}; // Initialize text accumulator for chunking
+                
                 const handleTextChunk = async (textChunk) => {
                     responseText += textChunk;
                     
@@ -1166,7 +1205,39 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         }
                     });
                     
-                    // NOTE: Removed TTS calls from here - we'll call TTS once with complete response
+                    // NEW: Use chunked streaming TTS for immediate audio generation
+                    try {
+                        await streamChunkedTextToSpeech(
+                            textChunk,
+                            textAccumulator,
+                            { useLocalTTS: true },
+                            (audioChunk, chunkIndex, chunkText, isFinal = false) => {
+                                console.log(`🎤 Streaming audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
+                                
+                                // Send audio chunk to client immediately
+                                socketManager.sendToClients(dialogueId, {
+                                    type: 'audioChunk',
+                                    audio: audioChunk,
+                                    chunkIndex: chunkIndex,
+                                    text: chunkText,
+                                    isFinal: isFinal
+                                });
+                                
+                                ongoingStream.data.push({
+                                    event: 'audioChunk',
+                                    data: {
+                                        audio: audioChunk,
+                                        chunkIndex: chunkIndex,
+                                        text: chunkText,
+                                        isFinal: isFinal
+                                    }
+                                });
+                            },
+                            String(dialogueId)
+                        );
+                    } catch (ttsError) {
+                        console.error('Error in chunked TTS:', ttsError.message);
+                    }
                 };
                 
                 try {
@@ -1182,34 +1253,37 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         handleTextChunk      // Pass the properly defined text chunk handler
                     );
                     
-                    // NEW: Now call TTS once with the complete response
-                    if (responseText && responseText.trim()) {
-                        console.log('Streaming text to speech with local TTS service');
-                        console.log('Text to speech input:', responseText);
-                        
-                        try {
-                            await streamTextToSpeech(
-                                responseText,
-                                { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
-                                (audioChunk) => {
-                                    // Send complete audio to client
-                                    socketManager.sendToClients(dialogueId, {
-                                        type: 'audio',
-                                        audio: audioChunk
-                                    });
-                                    
-                                    ongoingStream.data.push({
-                                        event: 'audio',
-                                        data: {
-                                            audio: audioChunk
-                                        }
-                                    });
-                                },
-                                String(dialogueId)  // Add explicit dialogueId as string
-                            );
-                        } catch (audioError) {
-                            console.error('Error generating audio for complete response:', audioError);
-                        }
+                    // NEW: Flush any remaining text in the accumulator
+                    try {
+                        await flushRemainingText(
+                            textAccumulator,
+                            { useLocalTTS: true },
+                            (audioChunk, chunkIndex, chunkText, isFinal = true) => {
+                                console.log(`🎤 Flushing final audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
+                                
+                                // Send final audio chunk to client
+                                socketManager.sendToClients(dialogueId, {
+                                    type: 'audioChunk',
+                                    audio: audioChunk,
+                                    chunkIndex: chunkIndex,
+                                    text: chunkText,
+                                    isFinal: true
+                                });
+                                
+                                ongoingStream.data.push({
+                                    event: 'audioChunk',
+                                    data: {
+                                        audio: audioChunk,
+                                        chunkIndex: chunkIndex,
+                                        text: chunkText,
+                                        isFinal: true
+                                    }
+                                });
+                            },
+                            String(dialogueId)
+                        );
+                    } catch (flushError) {
+                        console.error('Error flushing remaining text:', flushError.message);
                     }
                     
                 } catch (error) {
@@ -1232,24 +1306,59 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         }
                     });
                     
-                    // Generate audio for the default response
+                    // Generate audio for the default response using chunked approach
                     try {
-                        await streamTextToSpeech(
+                        const defaultTextAccumulator = {};
+                        await streamChunkedTextToSpeech(
                             defaultResponse,
-                            { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
-                            (audioChunk) => {
+                            defaultTextAccumulator,
+                            { useLocalTTS: true },
+                            (audioChunk, chunkIndex, chunkText, isFinal = false) => {
                                 socketManager.sendToClients(dialogueId, {
-                                    type: 'audio',
-                                    audio: audioChunk.toString('base64')
+                                    type: 'audioChunk',
+                                    audio: audioChunk,
+                                    chunkIndex: chunkIndex,
+                                    text: chunkText,
+                                    isFinal: isFinal
                                 });
                                 
                                 ongoingStream.data.push({
-                                    event: 'audio',
+                                    event: 'audioChunk',
                                     data: {
-                                        audio: audioChunk.toString('base64')
+                                        audio: audioChunk,
+                                        chunkIndex: chunkIndex,
+                                        text: chunkText,
+                                        isFinal: isFinal
                                     }
                                 });
-                            }
+                            },
+                            String(dialogueId)
+                        );
+                        
+                        // Flush any remaining text
+                        await flushRemainingText(
+                            defaultTextAccumulator,
+                            { useLocalTTS: true },
+                            (audioChunk, chunkIndex, chunkText, isFinal = true) => {
+                                socketManager.sendToClients(dialogueId, {
+                                    type: 'audioChunk',
+                                    audio: audioChunk,
+                                    chunkIndex: chunkIndex,
+                                    text: chunkText,
+                                    isFinal: true
+                                });
+                                
+                                ongoingStream.data.push({
+                                    event: 'audioChunk',
+                                    data: {
+                                        audio: audioChunk,
+                                        chunkIndex: chunkIndex,
+                                        text: chunkText,
+                                        isFinal: true
+                                    }
+                                });
+                            },
+                            String(dialogueId)
                         );
                     } catch (audioError) {
                         console.error('Error generating audio for default response:', audioError);
