@@ -1437,31 +1437,76 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                 return;
             }
             
-            // Call TTS service for this chunk
+            // Call TTS service for this chunk based on selected engine
             try {
-                const FormData = require('form-data');
-                const formData = new FormData();
-                formData.append('text', chunkToProcess);
-                formData.append('gender', 'female');
-                formData.append('emotion', 'expressive');
-                formData.append('exaggeration', '0.5');
-                formData.append('cfg_weight', '0.7');
-                formData.append('voice_cloning', 'false');
+                let audioBase64;
                 
-                const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
-                    headers: {
-                        ...formData.getHeaders()
-                    },
-                    responseType: 'arraybuffer',
-                    timeout: 30000
-                });
+                if (voiceConfig.engine === 'edge_tts') {
+                    console.log(`🎤 Using Edge TTS for chunk with voice: ${voiceConfig.edge.selectedVoice}`);
+                    
+                    // Call Edge TTS via the voice service
+                    const FormData = require('form-data');
+                    const formData = new FormData();
+                    formData.append('text', chunkToProcess);
+                    formData.append('voice_id', voiceConfig.edge.selectedVoice);
+                    formData.append('speed', voiceConfig.edge.speed.toString());
+                    formData.append('pitch', voiceConfig.edge.pitch.toString());
+                    formData.append('volume', voiceConfig.edge.volume.toString());
+                    formData.append('engine', 'edge_tts');
+                    
+                    const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                        headers: {
+                            ...formData.getHeaders()
+                        },
+                        responseType: 'arraybuffer',
+                        timeout: 15000 // Edge TTS is faster
+                    });
+                    
+                    if (ttsResponse.status === 200 && ttsResponse.data) {
+                        console.log(`🎤 Edge TTS generated ${ttsResponse.data.byteLength} bytes for chunk ${textAccumulator.sentenceCount}`);
+                        audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                    } else {
+                        throw new Error(`Edge TTS returned status: ${ttsResponse.status}`);
+                    }
+                    
+                } else {
+                    // Use Chatterbox TTS (default)
+                    console.log(`🎤 Using Chatterbox TTS for chunk with voice: ${voiceConfig.chatterbox.selectedVoice}`);
+                    
+                    const FormData = require('form-data');
+                    const formData = new FormData();
+                    formData.append('text', chunkToProcess);
+                    formData.append('gender', 'female'); // Could be mapped from voice selection
+                    formData.append('emotion', 'expressive');
+                    formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                    formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                    
+                    // Handle voice cloning if enabled
+                    if (voiceConfig.chatterbox.voiceCloning && voiceConfig.chatterbox.voiceCloning.enabled && voiceConfig.chatterbox.voiceCloning.audioFile) {
+                        formData.append('voice_cloning', 'true');
+                        formData.append('audio_prompt', voiceConfig.chatterbox.voiceCloning.audioFile);
+                    } else {
+                        formData.append('voice_cloning', 'false');
+                    }
+                    
+                    const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                        headers: {
+                            ...formData.getHeaders()
+                        },
+                        responseType: 'arraybuffer',
+                        timeout: 30000
+                    });
+                    
+                    if (ttsResponse.status === 200 && ttsResponse.data) {
+                        console.log(`🎤 Chatterbox generated ${ttsResponse.data.byteLength} bytes for chunk ${textAccumulator.sentenceCount}`);
+                        audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                    } else {
+                        throw new Error(`Chatterbox returned status: ${ttsResponse.status}`);
+                    }
+                }
                 
-                if (ttsResponse.status === 200 && ttsResponse.data) {
-                    console.log(`🎤 Generated ${ttsResponse.data.byteLength} bytes for chunk ${textAccumulator.sentenceCount}`);
-                    
-                    // Convert to base64 and send to client
-                    const audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
-                    
+                // Send audio chunk to client
+                if (audioBase64) {
                     if (onAudioChunk && typeof onAudioChunk === 'function') {
                         await onAudioChunk(audioBase64, textAccumulator.sentenceCount, chunkToProcess);
                     }
@@ -1475,12 +1520,10 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                             text: chunkToProcess
                         });
                     }
-                } else {
-                    console.error('TTS service returned non-200 status:', ttsResponse.status);
                 }
                 
             } catch (ttsError) {
-                console.error('Error calling TTS service for chunk:', ttsError.message);
+                console.error(`Error calling ${voiceConfig.engine} TTS service for chunk:`, ttsError.message);
                 
                 // Try ElevenLabs fallback for this chunk
                 try {
@@ -1556,26 +1599,65 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
             console.log(`🎤 Processing final chunk: "${remainingText}"`);
             
             try {
-                const FormData = require('form-data');
-                const formData = new FormData();
-                formData.append('text', remainingText);
-                formData.append('gender', 'female');
-                formData.append('emotion', 'expressive');
-                formData.append('exaggeration', '0.5');
-                formData.append('cfg_weight', '0.7');
-                formData.append('voice_cloning', 'false');
+                let audioBase64;
                 
-                const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
-                    headers: {
-                        ...formData.getHeaders()
-                    },
-                    responseType: 'arraybuffer',
-                    timeout: 30000
-                });
-                
-                if (ttsResponse.status === 200 && ttsResponse.data) {
-                    const audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                if (voiceConfig.engine === 'edge_tts') {
+                    console.log(`🎤 Using Edge TTS for final chunk with voice: ${voiceConfig.edge.selectedVoice}`);
                     
+                    const FormData = require('form-data');
+                    const formData = new FormData();
+                    formData.append('text', remainingText);
+                    formData.append('voice_id', voiceConfig.edge.selectedVoice);
+                    formData.append('speed', voiceConfig.edge.speed.toString());
+                    formData.append('pitch', voiceConfig.edge.pitch.toString());
+                    formData.append('volume', voiceConfig.edge.volume.toString());
+                    formData.append('engine', 'edge_tts');
+                    
+                    const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                        headers: {
+                            ...formData.getHeaders()
+                        },
+                        responseType: 'arraybuffer',
+                        timeout: 15000
+                    });
+                    
+                    if (ttsResponse.status === 200 && ttsResponse.data) {
+                        audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                    }
+                } else {
+                    // Use Chatterbox TTS (default)
+                    console.log(`🎤 Using Chatterbox TTS for final chunk with voice: ${voiceConfig.chatterbox.selectedVoice}`);
+                    
+                    const FormData = require('form-data');
+                    const formData = new FormData();
+                    formData.append('text', remainingText);
+                    formData.append('gender', 'female');
+                    formData.append('emotion', 'expressive');
+                    formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                    formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                    
+                    // Handle voice cloning if enabled
+                    if (voiceConfig.chatterbox.voiceCloning && voiceConfig.chatterbox.voiceCloning.enabled && voiceConfig.chatterbox.voiceCloning.audioFile) {
+                        formData.append('voice_cloning', 'true');
+                        formData.append('audio_prompt', voiceConfig.chatterbox.voiceCloning.audioFile);
+                    } else {
+                        formData.append('voice_cloning', 'false');
+                    }
+                    
+                    const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                        headers: {
+                            ...formData.getHeaders()
+                        },
+                        responseType: 'arraybuffer',
+                        timeout: 30000
+                    });
+                    
+                    if (ttsResponse.status === 200 && ttsResponse.data) {
+                        audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                    }
+                }
+                
+                if (audioBase64) {
                     if (onAudioChunk && typeof onAudioChunk === 'function') {
                         await onAudioChunk(audioBase64, textAccumulator.sentenceCount, remainingText, true);
                     }

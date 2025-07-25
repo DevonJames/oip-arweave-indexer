@@ -1149,6 +1149,27 @@
                     formData.append('conversationHistory', JSON.stringify(conversationHistory));
                     console.log('📝 Added conversation history:', conversationHistory.length, 'messages');
                 }
+                
+                // Add voice configuration based on user's selected engine
+                const voiceSettings = {
+                    engine: voiceConfig.selectedEngine,
+                    enabled: voiceConfig.enabled,
+                    chatterbox: {
+                        selectedVoice: voiceConfig.chatterbox.selectedVoice,
+                        exaggeration: voiceConfig.chatterbox.exaggeration,
+                        cfg_weight: voiceConfig.chatterbox.cfg_weight,
+                        voiceCloning: voiceConfig.chatterbox.voiceCloning
+                    },
+                    edge: {
+                        selectedVoice: voiceConfig.edge.selectedVoice,
+                        speed: voiceConfig.edge.speed,
+                        pitch: voiceConfig.edge.pitch,
+                        volume: voiceConfig.edge.volume
+                    }
+                };
+                
+                formData.append('voiceConfig', JSON.stringify(voiceSettings));
+                console.log('🎵 Added voice configuration:', voiceConfig.selectedEngine, 'engine selected');
 
                 console.log('📡 Sending request to /api/generate/chat...');
                 
