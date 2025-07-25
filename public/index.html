@@ -1124,6 +1124,8 @@
         // Send recorded audio to chat endpoint for STT + AI response
         async function sendAudioToChat(audioBlob) {
             try {
+                updateStatus('🎯 Processing audio...');
+                
                 // Create FormData with audio file
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'recording.webm');
@@ -1146,24 +1148,12 @@
                 const result = await response.json();
                 
                 // Handle the response
-                if (result.success) {
-                    const userText = result.transcription || result.userInput || 'Audio processed';
-                    const aiResponse = result.response || result.text || 'No response generated';
+                if (result.success && result.dialogueId) {
+                    updateStatus('🔄 Connecting to stream...');
                     
-                    // Add to conversation history
-                    conversationHistory.push(
-                        { role: 'user', content: userText },
-                        { role: 'assistant', content: aiResponse }
-                    );
+                    // Connect to streaming endpoint to receive the actual response
+                    await connectToStream(result.dialogueId);
                     
-                    // Add to transcript
-                    addToTranscript('You', userText);
-                    addToTranscript('Assistant', aiResponse);
-                    
-                    // Speak the AI response using selected voice engine
-                    await synthesizeVoice(aiResponse);
-                    
-                    updateStatus('✅ Conversation complete');
                 } else {
                     throw new Error(result.error || 'Chat request failed');
                 }
@@ -1174,6 +1164,190 @@
                 
                 // Fallback to transcript message
                 addToTranscript('System', 'Failed to process audio. Please try again.');
+            }
+        }
+
+        // Global variables for streaming
+        let currentEventSource = null;
+        let currentUserText = '';
+        let currentAiResponse = '';
+
+        async function connectToStream(dialogueId) {
+            return new Promise((resolve, reject) => {
+                console.log(`Connecting to stream with dialogueId: ${dialogueId}`);
+                
+                // Close any existing connection
+                if (currentEventSource) {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                }
+                
+                // Reset response accumulator
+                currentAiResponse = '';
+                
+                // Create EventSource connection
+                const streamUrl = `/api/generate/open-stream?id=${dialogueId}`;
+                currentEventSource = new EventSource(streamUrl);
+                
+                let responseStarted = false;
+                let conversationComplete = false;
+                
+                // Handle connection open
+                currentEventSource.addEventListener('open', function(event) {
+                    console.log('Stream connection opened');
+                    updateStatus('🎧 Listening for response...');
+                });
+                
+                // Handle connected event
+                currentEventSource.addEventListener('connected', function(event) {
+                    console.log('Stream connected:', event.data);
+                });
+                
+                // Handle text chunks
+                currentEventSource.addEventListener('textChunk', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Received text chunk:', data);
+                        
+                        if (data.role === 'user') {
+                            // Store user text for conversation history
+                            currentUserText = data.text;
+                            addToTranscript('You', data.text);
+                        } else if (data.role === 'assistant') {
+                            if (!responseStarted) {
+                                responseStarted = true;
+                                updateStatus('🤖 AI responding...');
+                            }
+                            // Accumulate AI response
+                            currentAiResponse += data.text;
+                            // Update transcript in real-time
+                            updateTranscriptRealtime('Assistant', currentAiResponse);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing text chunk:', e);
+                    }
+                });
+                
+                // Handle audio chunks
+                currentEventSource.addEventListener('audio', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.audio) {
+                            // Play audio chunk immediately
+                            playAudioChunk(data.audio);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing audio chunk:', e);
+                    }
+                });
+                
+                // Handle completion
+                currentEventSource.addEventListener('done', function(event) {
+                    console.log('Stream completed');
+                    conversationComplete = true;
+                    
+                    // Add to conversation history
+                    if (currentUserText && currentAiResponse) {
+                        conversationHistory.push(
+                            { role: 'user', content: currentUserText },
+                            { role: 'assistant', content: currentAiResponse }
+                        );
+                    }
+                    
+                    updateStatus('✅ Conversation complete');
+                    
+                    // Close connection
+                    if (currentEventSource) {
+                        currentEventSource.close();
+                        currentEventSource = null;
+                    }
+                    
+                    resolve();
+                });
+                
+                // Handle errors
+                currentEventSource.addEventListener('error', function(event) {
+                    console.error('Stream error:', event);
+                    updateStatus('❌ Stream connection error');
+                    
+                    if (currentEventSource) {
+                        currentEventSource.close();
+                        currentEventSource = null;
+                    }
+                    
+                    if (!conversationComplete) {
+                        reject(new Error('Stream connection failed'));
+                    }
+                });
+                
+                // Handle generic messages
+                currentEventSource.onmessage = function(event) {
+                    console.log('Generic message:', event.data);
+                };
+                
+                // Timeout after 30 seconds
+                setTimeout(() => {
+                    if (!conversationComplete) {
+                        console.warn('Stream timeout');
+                        updateStatus('⏱️ Response timeout');
+                        
+                        if (currentEventSource) {
+                            currentEventSource.close();
+                            currentEventSource = null;
+                        }
+                        
+                        reject(new Error('Stream timeout'));
+                    }
+                }, 30000);
+            });
+        }
+
+        // Helper function to update transcript in real-time
+        function updateTranscriptRealtime(speaker, text) {
+            const transcriptDiv = document.getElementById('transcript-content');
+            const messages = transcriptDiv.querySelectorAll('.transcript-message');
+            const lastMessage = messages[messages.length - 1];
+            
+            // If the last message is from the same speaker, update it
+            if (lastMessage && lastMessage.querySelector('.speaker').textContent === speaker + ':') {
+                lastMessage.querySelector('.message').textContent = text;
+            } else {
+                // Otherwise, add a new message
+                addToTranscript(speaker, text);
+            }
+        }
+
+        // Helper function to play audio chunks
+        function playAudioChunk(base64Audio) {
+            try {
+                // Convert base64 to blob
+                const byteCharacters = atob(base64Audio);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+                
+                // Create audio URL and play
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                audio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                };
+                
+                audio.onerror = (e) => {
+                    console.error('Audio playback error:', e);
+                    URL.revokeObjectURL(audioUrl);
+                };
+                
+                audio.play().catch(e => {
+                    console.error('Failed to play audio chunk:', e);
+                });
+                
+            } catch (error) {
+                console.error('Error processing audio chunk:', error);
             }
         }
 
