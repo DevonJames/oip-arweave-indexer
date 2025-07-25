@@ -371,24 +371,24 @@
         // Load available voices from API
         async function loadAvailableVoices() {
             try {
-                // Load Chatterbox voices
-                const chatterboxResponse = await fetch('/api/voice/voices/chatterbox');
-                if (chatterboxResponse.ok) {
-                    const chatterboxData = await chatterboxResponse.json();
-                    availableVoices.chatterbox = chatterboxData.voices || [];
+                // Load all voices from the single voices endpoint
+                const response = await fetch('/api/voice/voices');
+                if (response.ok) {
+                    const data = await response.json();
+                    const voices = data.voices || [];
+                    
+                    // Separate voices by engine
+                    availableVoices.chatterbox = voices.filter(v => v.engine === 'chatterbox');
+                    availableVoices.edge_tts = voices.filter(v => v.engine === 'Edge TTS' || v.engine === 'edge_tts');
+                    
+                    console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices and ${availableVoices.edge_tts.length} Edge TTS voices`);
+                    
+                    // Populate dropdown for default engine
+                    await populateVoiceDropdown(voiceConfig.selectedEngine);
+                } else {
+                    console.error('Failed to load voices:', response.status, await response.text());
+                    updateStatus('⚠️ Failed to load voice options');
                 }
-                
-                // Load Edge TTS voices
-                const edgeResponse = await fetch('/api/voice/voices/edge_tts');
-                if (edgeResponse.ok) {
-                    const edgeData = await edgeResponse.json();
-                    availableVoices.edge_tts = edgeData.voices || [];
-                }
-                
-                console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices and ${availableVoices.edge_tts.length} Edge TTS voices`);
-                
-                // Populate dropdown for default engine
-                await populateVoiceDropdown(voiceConfig.selectedEngine);
                 
             } catch (error) {
                 console.error('Failed to load voices:', error);
@@ -858,71 +858,6 @@
             }
         }
         
-        // Synthesize with Chatterbox TTS (existing function updated)
-        async function synthesizeWithChatterbox(text) {
-            try {
-                const isCloning = voiceConfig.chatterbox.voiceCloning.enabled;
-                updateStatus(isCloning ? '🎤 Synthesizing with voice cloning...' : '🎵 Synthesizing with Chatterbox TTS...');
-                
-                // Always use FormData for consistency with backend expectations
-                const formData = new FormData();
-                formData.append('text', text);
-                formData.append('voice_id', voiceConfig.chatterbox.selectedVoice);
-                formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
-                formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
-                formData.append('engine', 'chatterbox');
-                
-                if (isCloning && voiceConfig.chatterbox.voiceCloning.audioFile) {
-                    formData.append('voice_cloning', 'true');
-                    formData.append('audio_prompt', voiceConfig.chatterbox.voiceCloning.audioFile);
-                    console.log('🎤 Adding voice cloning audio file to request:', voiceConfig.chatterbox.voiceCloning.audioFile.name);
-                } else {
-                    formData.append('voice_cloning', 'false');
-                }
-                
-                // Create abort controller for timeout (2 minutes for Chatterbox synthesis)
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 120000);
-                
-                const response = await fetch('/api/voice/synthesize', {
-                    method: 'POST',
-                    body: formData,
-                    signal: controller.signal
-                });
-                
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const audioBlob = await response.blob();
-                const audioUrl = URL.createObjectURL(audioBlob);
-                
-                // Stop any currently playing audio and play new audio
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                }
-                
-                currentAudio = new Audio(audioUrl);
-                currentAudio.play();
-                
-                currentAudio.onended = () => {
-                    URL.revokeObjectURL(audioUrl);
-                    updateStatus('🎭 Chatterbox TTS Ready');
-                };
-                
-                updateStatus('🔊 Playing Chatterbox synthesis...');
-                
-            } catch (error) {
-                console.error('Chatterbox synthesis failed:', error);
-                if (error.name === 'AbortError') {
-                    updateStatus('⏱️ Chatterbox synthesis taking longer than expected...');
-                }
-                throw error;
-            }
-        }
         
         // Synthesize with Edge TTS (new function)
         async function synthesizeWithEdge(text) {
