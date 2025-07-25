@@ -757,10 +757,22 @@ router.post('/converse', async (req, res) => {
             
             // NEW: Use chunked streaming TTS for immediate audio generation
             try {
+                // For /converse endpoint, use default voice settings since no voice config is passed
+                const defaultVoiceSettings = {
+                    engine: 'chatterbox',
+                    enabled: true,
+                    chatterbox: {
+                        selectedVoice: 'female_expressive',
+                        exaggeration: 0.6,
+                        cfg_weight: 0.7,
+                        voiceCloning: { enabled: false }
+                    }
+                };
+                
                 await streamChunkedTextToSpeech(
                     textChunk,
                     textAccumulator,
-                    { useLocalTTS: true },
+                    defaultVoiceSettings,
                     (audioChunk, chunkIndex, chunkText, isFinal = false) => {
                         console.log(`🎤 Streaming audio chunk ${chunkIndex} via /converse for text: "${chunkText.substring(0, 50)}..."`);
                         
@@ -810,7 +822,7 @@ router.post('/converse', async (req, res) => {
             try {
                 await flushRemainingText(
                     textAccumulator,
-                    { useLocalTTS: true },
+                    defaultVoiceSettings,
                     (audioChunk, chunkIndex, chunkText, isFinal = true) => {
                         console.log(`🎤 Flushing final audio chunk ${chunkIndex} via /converse for text: "${chunkText.substring(0, 50)}..."`);
                         
@@ -1102,6 +1114,35 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             }
         }
         
+        // Parse voice configuration from frontend
+        let voiceSettings = {
+            engine: 'chatterbox', // Default
+            enabled: true,
+            chatterbox: {
+                selectedVoice: 'female_expressive',
+                exaggeration: 0.6,
+                cfg_weight: 0.7,
+                voiceCloning: { enabled: false }
+            },
+            edge: {
+                selectedVoice: 'en-US-AriaNeural',
+                speed: 1.0,
+                pitch: 0,
+                volume: 0
+            }
+        };
+        
+        if (req.body.voiceConfig) {
+            try {
+                const parsedVoiceConfig = JSON.parse(req.body.voiceConfig);
+                voiceSettings = { ...voiceSettings, ...parsedVoiceConfig };
+                console.log('🎵 Parsed voice configuration:', voiceSettings.engine, 'engine selected');
+            } catch (error) {
+                console.error('Error parsing voice configuration:', error);
+                // Continue with defaults
+            }
+        }
+        
         // Add the current user input to conversation history
         if (userInput) {
             conversationHistory.push({
@@ -1210,7 +1251,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         await streamChunkedTextToSpeech(
                             textChunk,
                             textAccumulator,
-                            { useLocalTTS: true },
+                            voiceSettings, // Pass the actual voice configuration
                             (audioChunk, chunkIndex, chunkText, isFinal = false) => {
                                 console.log(`🎤 Streaming audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
                                 
@@ -1257,7 +1298,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     try {
                         await flushRemainingText(
                             textAccumulator,
-                            { useLocalTTS: true },
+                            voiceSettings, // Pass the actual voice configuration
                             (audioChunk, chunkIndex, chunkText, isFinal = true) => {
                                 console.log(`🎤 Flushing final audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
                                 
@@ -1312,7 +1353,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         await streamChunkedTextToSpeech(
                             defaultResponse,
                             defaultTextAccumulator,
-                            { useLocalTTS: true },
+                            voiceSettings, // Use the user's voice configuration for error responses too
                             (audioChunk, chunkIndex, chunkText, isFinal = false) => {
                                 socketManager.sendToClients(dialogueId, {
                                     type: 'audioChunk',
@@ -1338,7 +1379,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         // Flush any remaining text
                         await flushRemainingText(
                             defaultTextAccumulator,
-                            { useLocalTTS: true },
+                            voiceSettings, // Use the user's voice configuration
                             (audioChunk, chunkIndex, chunkText, isFinal = true) => {
                                 socketManager.sendToClients(dialogueId, {
                                     type: 'audioChunk',
