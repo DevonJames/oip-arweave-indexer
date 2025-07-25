@@ -332,10 +332,21 @@
         let mediaRecorder = null;
         let audioChunks = [];
         let conversationHistory = [];
+        
+        // Debug conversation history
+        console.log('🧹 Initial conversation history:', conversationHistory);
 
         // Initialize Voice Assistant on page load
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎭 Initializing Voice Assistant...');
+            
+            // Clear any cached conversation history that might contain "No response generated"
+            if (conversationHistory.length > 0) {
+                console.log('🧹 Clearing conversation history. Previous length:', conversationHistory.length);
+                console.log('🧹 Previous history:', conversationHistory);
+                conversationHistory = [];
+                console.log('🧹 Conversation history cleared');
+            }
             loadAvailableVoices();
             checkVoiceStatus();
         });
@@ -827,6 +838,8 @@
         
         // Universal voice synthesis function (handles both engines)
         async function synthesizeVoice(text) {
+            console.log('🎵 synthesizeVoice called with text:', text);
+            
             if (!voiceConfig.enabled) {
                 console.log('Voice synthesis disabled, skipping');
                 return;
@@ -1123,6 +1136,7 @@
 
         // Send recorded audio to chat endpoint for STT + AI response
         async function sendAudioToChat(audioBlob) {
+            console.log('🚀 sendAudioToChat called with blob size:', audioBlob.size);
             try {
                 updateStatus('🎯 Processing audio...');
                 
@@ -1133,33 +1147,41 @@
                 // Add conversation history if available
                 if (conversationHistory.length > 0) {
                     formData.append('conversationHistory', JSON.stringify(conversationHistory));
+                    console.log('📝 Added conversation history:', conversationHistory.length, 'messages');
                 }
 
+                console.log('📡 Sending request to /api/generate/chat...');
+                
                 // Send to chat endpoint
                 const response = await fetch('/api/generate/chat', {
                     method: 'POST',
                     body: formData
                 });
 
+                console.log('📡 Response status:', response.status, response.statusText);
+
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const result = await response.json();
+                console.log('📡 Response data:', result);
                 
                 // Handle the response
                 if (result.success && result.dialogueId) {
                     updateStatus('🔄 Connecting to stream...');
+                    console.log('🔗 Connecting to stream with dialogueId:', result.dialogueId);
                     
                     // Connect to streaming endpoint to receive the actual response
                     await connectToStream(result.dialogueId);
                     
                 } else {
+                    console.error('❌ Chat request failed:', result);
                     throw new Error(result.error || 'Chat request failed');
                 }
 
             } catch (error) {
-                console.error('Failed to process audio:', error);
+                console.error('❌ Failed to process audio:', error);
                 updateStatus('❌ Failed to process speech - try again');
                 
                 // Fallback to transcript message
