@@ -108,6 +108,7 @@ class ChatterboxEngine(TTSEngine):
             logger.info(f"Initializing Chatterbox TTS on device: {device}")
             
             self.model = ChatterboxTTS.from_pretrained(device=device)
+            logger.info(f"Chatterbox model created: {type(self.model)} at {id(self.model)}")
             
             self.voice_configs = {
                 "default": {"exaggeration": 0.5, "cfg_weight": 0.3},
@@ -118,7 +119,7 @@ class ChatterboxEngine(TTSEngine):
             }
             
             self.available = True
-            logger.info("✅ Chatterbox TTS (Resemble AI) initialized successfully")
+            logger.info(f"✅ Chatterbox TTS (Resemble AI) initialized successfully. Model: {self.model is not None}")
             
         except Exception as e:
             logger.error(f"Failed to initialize Chatterbox TTS: {str(e)}")
@@ -127,7 +128,9 @@ class ChatterboxEngine(TTSEngine):
     async def synthesize(self, text: str, gender: str = "female", emotion: str = "neutral", 
                           exaggeration: float = 0.5, cfg_weight: float = 0.5, 
                           audio_prompt_path: str = None, **kwargs) -> bytes:
+        logger.info(f"ChatterboxEngine synthesize called: model={self.model}, available={self.available}")
         if not self.model:
+            logger.error(f"Chatterbox model not initialized! Model object: {self.model}, Available: {self.available}")
             raise Exception("Chatterbox model not initialized")
             
         try:
@@ -400,8 +403,10 @@ engines = []
 
 # Add engines in fallback order
 chatterbox_engine = ChatterboxEngine()
+logger.info(f"Created ChatterboxEngine: available={chatterbox_engine.available}, model={chatterbox_engine.model is not None if chatterbox_engine.model else None}")
 if chatterbox_engine.available:
     engines.append(chatterbox_engine)
+    logger.info(f"Added ChatterboxEngine to engines list at index 0")
 
 edge_tts_engine = EdgeTTSEngine()
 if edge_tts_engine.available:
@@ -485,7 +490,9 @@ async def synthesize_text(
             continue
             
         try:
-            logger.info(f"Attempting synthesis with {eng.name}")
+            logger.info(f"Attempting synthesis with {eng.name} (id: {id(eng)})")
+            if eng.name == "chatterbox":
+                logger.info(f"Chatterbox engine details: model={eng.model is not None if hasattr(eng, 'model') else 'no model attr'}, available={eng.available}")
             
             # Handle Chatterbox engine with new parameters
             if eng.name == "chatterbox":
