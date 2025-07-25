@@ -119,7 +119,10 @@ async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
 // Utility function for safe axios calls with error handling
 async function safeAxiosCall(url, options, serviceName = 'Service') {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    
+    // Set timeout based on service type
+    const timeout = serviceName.includes('TTS') || serviceName.includes('Chatterbox') ? 120000 : 15000; // 2 minutes for TTS, 15s for others
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     try {
         const response = await axiosInstance({
@@ -133,7 +136,8 @@ async function safeAxiosCall(url, options, serviceName = 'Service') {
         clearTimeout(timeoutId);
         
         if (error.name === 'AbortError') {
-            console.error(`[${serviceName}] Request aborted (15s timeout)`);
+            const timeoutSeconds = timeout / 1000;
+            console.error(`[${serviceName}] Request aborted (${timeoutSeconds}s timeout)`);
             throw new Error(`${serviceName} timeout - service may be overloaded`);
         }
         
@@ -331,7 +335,8 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
                     ...formData.getHeaders(),
                 },
                 responseType: 'arraybuffer'
-            }
+            },
+            'Chatterbox TTS'
         );
         
         // Log successful response
