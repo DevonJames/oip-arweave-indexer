@@ -96,58 +96,90 @@
         </header>
         
         <main>
-            <!-- Chatterbox TTS Controls -->
+            <!-- Voice Engine Controls -->
             <div class="chatterbox-controls">
                 <h3 class="chatterbox-title">
                     <span class="status-indicator"></span>
-                    Chatterbox Voice Engine (High Quality)
+                    <span id="engine-title">Voice Engine</span>
                 </h3>
                 
                 <div class="voice-controls">
                     <div class="control-group">
-                        <label for="voice-gender">Voice Gender:</label>
-                        <select id="voice-gender" onchange="updateVoiceSettings()">
-                            <option value="female" selected>Female Voice</option>
-                            <option value="male">Male Voice</option>
+                        <label for="voice-engine">Voice Engine:</label>
+                        <select id="voice-engine" onchange="switchEngine()">
+                            <option value="chatterbox" selected>Chatterbox TTS (High Quality + Voice Cloning)</option>
+                            <option value="edge_tts">Edge TTS (Fast + Many Voices)</option>
                         </select>
                     </div>
                     
-                    <div class="control-group">
-                        <label for="voice-emotion">Emotional Tone:</label>
-                        <select id="voice-emotion" onchange="updateVoiceSettings()">
-                            <option value="expressive" selected>Expressive & Engaging</option>
-                            <option value="calm">Calm & Measured</option>
-                            <option value="dramatic">Dramatic & Intense</option>
-                            <option value="neutral">Neutral & Balanced</option>
+                    <!-- Dynamic voice selection based on engine -->
+                    <div class="control-group" id="voice-selection-group">
+                        <label for="voice-select" id="voice-select-label">Voice:</label>
+                        <select id="voice-select" onchange="updateVoiceSelection()">
+                            <option value="loading">Loading voices...</option>
                         </select>
                     </div>
                     
                     <div class="control-group">
                         <label>
                             <input type="checkbox" id="tts-enabled" checked onchange="toggleTTS()">
-                            Enable Chatterbox TTS
-                                                  </label>
-                      </div>
+                            <span id="tts-enable-label">Enable Voice Synthesis</span>
+                        </label>
+                    </div>
                     
-                    <div class="control-group">
-                        <label for="emotion-slider">Emotion Level: <span id="emotion-value">70%</span></label>
-                        <div class="slider-container">
-                            <span>😐</span>
-                            <input type="range" id="emotion-slider" class="slider" min="0" max="100" value="70" oninput="updateEmotion(this.value)">
-                            <span>🎭</span>
+                    <!-- Chatterbox-specific controls -->
+                    <div id="chatterbox-controls" style="display: block;">
+                        <div class="control-group">
+                            <label for="emotion-slider">Emotion Level: <span id="emotion-value">70%</span></label>
+                            <div class="slider-container">
+                                <span>😐</span>
+                                <input type="range" id="emotion-slider" class="slider" min="0" max="100" value="70" oninput="updateEmotion(this.value)">
+                                <span>🎭</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="pacing-slider">Speech Pacing: <span id="pacing-value">40%</span></label>
+                            <div class="slider-container">
+                                <span>🐌</span>
+                                <input type="range" id="pacing-slider" class="slider" min="30" max="70" value="40" oninput="updatePacing(this.value)">
+                                <span>🚀</span>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="control-group">
-                        <label for="pacing-slider">Speech Pacing: <span id="pacing-value">40%</span></label>
-                        <div class="slider-container">
-                            <span>🐌</span>
-                            <input type="range" id="pacing-slider" class="slider" min="30" max="70" value="40" oninput="updatePacing(this.value)">
-                            <span>🚀</span>
+                    <!-- Edge TTS-specific controls -->
+                    <div id="edge-controls" style="display: none;">
+                        <div class="control-group">
+                            <label for="edge-speed">Speech Speed: <span id="speed-value">100%</span></label>
+                            <div class="slider-container">
+                                <span>🐌</span>
+                                <input type="range" id="edge-speed" class="slider" min="50" max="200" value="100" oninput="updateSpeed(this.value)">
+                                <span>🚀</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="edge-pitch">Pitch: <span id="pitch-value">0Hz</span></label>
+                            <div class="slider-container">
+                                <span>🔽</span>
+                                <input type="range" id="edge-pitch" class="slider" min="-10" max="10" value="0" oninput="updatePitch(this.value)">
+                                <span>🔼</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="edge-volume">Volume: <span id="volume-value">0%</span></label>
+                            <div class="slider-container">
+                                <span>🔉</span>
+                                <input type="range" id="edge-volume" class="slider" min="-20" max="20" value="0" oninput="updateVolume(this.value)">
+                                <span>🔊</span>
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- Voice Cloning Section -->
+                    <!-- Voice Cloning Section (Chatterbox only) -->
+                    <div id="voice-cloning-section" style="display: block;">
                     <div style="margin-top: 15px; border-top: 2px solid #4CAF50; padding-top: 15px;">
                         <h4 style="color: #4CAF50; margin-bottom: 10px;">🎤 Voice Cloning (Zero-Shot)</h4>
                         
@@ -190,6 +222,7 @@
                             No voice sample uploaded. Using default Chatterbox voices.
                         </div>
                     </div>
+                    </div> <!-- End voice-cloning-section -->
                 </div>
                 
                 <div class="voice-preview" id="voice-preview">
@@ -239,28 +272,43 @@
     </div>
 
     <script>
-        // Chatterbox TTS Configuration - High Quality Defaults
-        const chatterboxConfig = {
+        // Voice Engine Configuration
+        const voiceConfig = {
             enabled: true,
-            gender: 'female',        // Default to female voice
-            emotion: 'expressive',   // Default to expressive tone
-            exaggeration: 0.7,       // 70% emotion for engaging speech
-            cfg_weight: 0.3,         // Lower weight for better pacing with expressive tone
-            baseUrl: window.location.origin, // Use current server
-            fallbackTTS: 'edge',     // Fallback to Edge TTS if needed
-            voiceCloning: {
-                enabled: false,
-                audioFile: null,
-                fileName: null
+            selectedEngine: 'chatterbox',
+            baseUrl: window.location.origin,
+            // Chatterbox-specific settings
+            chatterbox: {
+                selectedVoice: 'female_expressive',
+                exaggeration: 0.7,       // 70% emotion for engaging speech
+                cfg_weight: 0.3,         // Lower weight for better pacing with expressive tone
+                voiceCloning: {
+                    enabled: false,
+                    audioFile: null,
+                    fileName: null
+                },
+                recording: {
+                    isRecording: false,
+                    mediaRecorder: null,
+                    audioChunks: [],
+                    startTime: null,
+                    maxDuration: 10000, // 10 seconds
+                    timer: null
+                }
             },
-            recording: {
-                isRecording: false,
-                mediaRecorder: null,
-                audioChunks: [],
-                startTime: null,
-                maxDuration: 10000, // 10 seconds
-                timer: null
+            // Edge TTS-specific settings
+            edge: {
+                selectedVoice: 'en-US-AriaNeural',
+                speed: 1.0,              // Normal speed
+                pitch: 0,                // No pitch adjustment
+                volume: 0                // No volume adjustment
             }
+        };
+        
+        // Available voices for each engine (loaded dynamically)
+        let availableVoices = {
+            chatterbox: [],
+            edge_tts: []
         };
 
         // Voice configuration matrix: Gender + Emotion combinations
@@ -285,73 +333,228 @@
         let audioChunks = [];
         let conversationHistory = [];
 
-        // Initialize Chatterbox TTS on page load
+        // Initialize Voice Assistant on page load
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🎭 Initializing Chatterbox TTS Voice Assistant...');
-            checkChatterboxStatus();
-            updateVoiceSettings(); // This will set sliders and update preview
+            console.log('🎭 Initializing Voice Assistant...');
+            loadAvailableVoices();
+            checkVoiceStatus();
         });
+        
+        // Switch between voice engines
+        async function switchEngine() {
+            const selectedEngine = document.getElementById('voice-engine').value;
+            voiceConfig.selectedEngine = selectedEngine;
+            
+            console.log(`🔄 Switching to engine: ${selectedEngine}`);
+            
+            // Update UI visibility
+            if (selectedEngine === 'chatterbox') {
+                document.getElementById('chatterbox-controls').style.display = 'block';
+                document.getElementById('edge-controls').style.display = 'none';
+                document.getElementById('voice-cloning-section').style.display = 'block';
+                document.getElementById('engine-title').textContent = 'Chatterbox TTS (High Quality)';
+                document.getElementById('tts-enable-label').textContent = 'Enable Chatterbox TTS';
+            } else {
+                document.getElementById('chatterbox-controls').style.display = 'none';
+                document.getElementById('edge-controls').style.display = 'block';
+                document.getElementById('voice-cloning-section').style.display = 'none';
+                document.getElementById('engine-title').textContent = 'Edge TTS (Fast Response)';
+                document.getElementById('tts-enable-label').textContent = 'Enable Edge TTS';
+            }
+            
+            // Load voices for selected engine
+            await populateVoiceDropdown(selectedEngine);
+            updateVoicePreview();
+            updateStatus(`🔄 Switched to ${selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : 'Edge TTS'}`);
+        }
+        
+        // Load available voices from API
+        async function loadAvailableVoices() {
+            try {
+                // Load Chatterbox voices
+                const chatterboxResponse = await fetch('/api/voice/voices/chatterbox');
+                if (chatterboxResponse.ok) {
+                    const chatterboxData = await chatterboxResponse.json();
+                    availableVoices.chatterbox = chatterboxData.voices || [];
+                }
+                
+                // Load Edge TTS voices
+                const edgeResponse = await fetch('/api/voice/voices/edge_tts');
+                if (edgeResponse.ok) {
+                    const edgeData = await edgeResponse.json();
+                    availableVoices.edge_tts = edgeData.voices || [];
+                }
+                
+                console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices and ${availableVoices.edge_tts.length} Edge TTS voices`);
+                
+                // Populate dropdown for default engine
+                await populateVoiceDropdown(voiceConfig.selectedEngine);
+                
+            } catch (error) {
+                console.error('Failed to load voices:', error);
+                updateStatus('⚠️ Failed to load voice options');
+            }
+        }
+        
+        // Populate voice dropdown based on selected engine
+        async function populateVoiceDropdown(engine) {
+            const voiceSelect = document.getElementById('voice-select');
+            voiceSelect.innerHTML = ''; // Clear existing options
+            
+            const voices = availableVoices[engine] || [];
+            
+            if (voices.length === 0) {
+                voiceSelect.innerHTML = '<option value="">No voices available</option>';
+                return;
+            }
+            
+            // Group voices by gender for better organization
+            const groupedVoices = {
+                female: voices.filter(v => v.gender === 'female'),
+                male: voices.filter(v => v.gender === 'male'),
+                other: voices.filter(v => !['female', 'male'].includes(v.gender))
+            };
+            
+            // Add female voices
+            if (groupedVoices.female.length > 0) {
+                const femaleGroup = document.createElement('optgroup');
+                femaleGroup.label = 'Female Voices';
+                groupedVoices.female.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    option.title = voice.description || '';
+                    femaleGroup.appendChild(option);
+                });
+                voiceSelect.appendChild(femaleGroup);
+            }
+            
+            // Add male voices
+            if (groupedVoices.male.length > 0) {
+                const maleGroup = document.createElement('optgroup');
+                maleGroup.label = 'Male Voices';
+                groupedVoices.male.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    option.title = voice.description || '';
+                    maleGroup.appendChild(option);
+                });
+                voiceSelect.appendChild(maleGroup);
+            }
+            
+            // Add other voices
+            if (groupedVoices.other.length > 0) {
+                const otherGroup = document.createElement('optgroup');
+                otherGroup.label = 'Other Voices';
+                groupedVoices.other.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    option.title = voice.description || '';
+                    otherGroup.appendChild(option);
+                });
+                voiceSelect.appendChild(otherGroup);
+            }
+            
+            // Set default selection
+            if (engine === 'chatterbox') {
+                const defaultVoice = voices.find(v => v.id === 'female_expressive') || voices[0];
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.id;
+                    voiceConfig.chatterbox.selectedVoice = defaultVoice.id;
+                }
+            } else if (engine === 'edge_tts') {
+                const defaultVoice = voices.find(v => v.id === 'en-US-AriaNeural') || voices[0];
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.id;
+                    voiceConfig.edge.selectedVoice = defaultVoice.id;
+                }
+            }
+            
+            console.log(`🎵 Populated ${voices.length} voices for ${engine}`);
+        }
+        
+        // Handle voice selection change
+        function updateVoiceSelection() {
+            const selectedVoice = document.getElementById('voice-select').value;
+            const engine = voiceConfig.selectedEngine;
+            
+            if (engine === 'chatterbox') {
+                voiceConfig.chatterbox.selectedVoice = selectedVoice;
+            } else if (engine === 'edge_tts') {
+                voiceConfig.edge.selectedVoice = selectedVoice;
+            }
+            
+            updateVoicePreview();
+            console.log(`🎵 Selected voice: ${selectedVoice} for engine: ${engine}`);
+        }
 
-        // Check if Chatterbox TTS service is available
-        async function checkChatterboxStatus() {
+        // Check voice service status
+        async function checkVoiceStatus() {
             try {
                 const response = await fetch('/api/voice/health');
                 const data = await response.json();
                 
-                if (data.chatterbox_available) {
-                    updateStatus('✅ Chatterbox TTS Ready - High Quality Neural Voice Active');
+                const engines = data.engines || [];
+                const chatterboxAvailable = engines.find(e => e.name === 'chatterbox')?.available || false;
+                const edgeAvailable = engines.find(e => e.name === 'edge_tts')?.available || false;
+                
+                if (chatterboxAvailable && edgeAvailable) {
+                    updateStatus('✅ All Voice Engines Ready - Chatterbox & Edge TTS Available');
                     document.querySelector('.status-indicator').style.background = '#4CAF50';
-                } else {
-                    updateStatus('⚠️ Chatterbox TTS Unavailable - Using Fallback Voice Engine');
+                } else if (chatterboxAvailable || edgeAvailable) {
+                    updateStatus('⚠️ Some Voice Engines Available - Check Engine Selection');
                     document.querySelector('.status-indicator').style.background = '#FF9800';
+                } else {
+                    updateStatus('❌ No Voice Engines Available');
+                    document.querySelector('.status-indicator').style.background = '#f44336';
                 }
             } catch (error) {
-                console.error('Failed to check Chatterbox status:', error);
+                console.error('Failed to check voice status:', error);
                 updateStatus('❌ Voice Service Connection Error');
                 document.querySelector('.status-indicator').style.background = '#f44336';
             }
         }
-
-        // Update voice settings based on gender and emotion selection
-        function updateVoiceSettings() {
-            const gender = document.getElementById('voice-gender').value;
-            const emotion = document.getElementById('voice-emotion').value;
-            const config = voiceMatrix[gender][emotion];
-            
-            chatterboxConfig.gender = gender;
-            chatterboxConfig.emotion = emotion;
-            chatterboxConfig.exaggeration = config.exaggeration;
-            chatterboxConfig.cfg_weight = config.cfg_weight;
-            
-            // Update sliders to match configuration
-            document.getElementById('emotion-slider').value = Math.round(config.exaggeration * 100);
-            document.getElementById('pacing-slider').value = Math.round(config.cfg_weight * 100);
-            
-            updateEmotion(Math.round(config.exaggeration * 100));
-            updatePacing(Math.round(config.cfg_weight * 100));
+        
+        // Edge TTS slider update functions
+        function updateSpeed(value) {
+            voiceConfig.edge.speed = value / 100;
+            document.getElementById('speed-value').textContent = value + '%';
             updateVoicePreview();
-            
-            console.log('🎵 Voice settings updated:', gender, emotion, config);
+        }
+        
+        function updatePitch(value) {
+            voiceConfig.edge.pitch = parseInt(value);
+            document.getElementById('pitch-value').textContent = value + 'Hz';
+            updateVoicePreview();
+        }
+        
+        function updateVolume(value) {
+            voiceConfig.edge.volume = parseInt(value);
+            document.getElementById('volume-value').textContent = value + '%';
+            updateVoicePreview();
         }
 
-        // Update emotion level
+        // Update emotion level (Chatterbox)
         function updateEmotion(value) {
-            chatterboxConfig.exaggeration = value / 100;
+            voiceConfig.chatterbox.exaggeration = value / 100;
             document.getElementById('emotion-value').textContent = value + '%';
             updateVoicePreview();
         }
 
-        // Update pacing
+        // Update pacing (Chatterbox)
         function updatePacing(value) {
-            chatterboxConfig.cfg_weight = value / 100;
+            voiceConfig.chatterbox.cfg_weight = value / 100;
             document.getElementById('pacing-value').textContent = value + '%';
             updateVoicePreview();
         }
 
         // Toggle TTS on/off
         function toggleTTS() {
-            chatterboxConfig.enabled = document.getElementById('tts-enabled').checked;
-            updateStatus(chatterboxConfig.enabled ? 'Chatterbox TTS Enabled' : 'TTS Disabled');
+            voiceConfig.enabled = document.getElementById('tts-enabled').checked;
+            const engineName = voiceConfig.selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : 'Edge TTS';
+            updateStatus(voiceConfig.enabled ? `${engineName} Enabled` : 'TTS Disabled');
             updateVoicePreview();
         }
 
@@ -359,8 +562,8 @@
         function handleVoiceSampleUpload(input) {
             const file = input.files[0];
             if (!file) {
-                chatterboxConfig.voiceCloning.audioFile = null;
-                chatterboxConfig.voiceCloning.fileName = null;
+                voiceConfig.chatterbox.voiceCloning.audioFile = null;
+                voiceConfig.chatterbox.voiceCloning.fileName = null;
                 updateVoiceCloneStatus('No voice sample uploaded. Using default Chatterbox voices.');
                 return;
             }
@@ -380,8 +583,8 @@
                 return;
             }
 
-            chatterboxConfig.voiceCloning.audioFile = file;
-            chatterboxConfig.voiceCloning.fileName = file.name;
+            voiceConfig.chatterbox.voiceCloning.audioFile = file;
+            voiceConfig.chatterbox.voiceCloning.fileName = file.name;
             
             updateVoiceCloneStatus(`Voice sample loaded: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB). Enable voice cloning to use it.`);
             
@@ -392,23 +595,23 @@
         function toggleVoiceCloning() {
             const enabled = document.getElementById('voice-cloning-enabled').checked;
             
-            if (enabled && !chatterboxConfig.voiceCloning.audioFile) {
+            if (enabled && !voiceConfig.chatterbox.voiceCloning.audioFile) {
                 alert('Please upload a voice sample first!');
                 document.getElementById('voice-cloning-enabled').checked = false;
                 return;
             }
             
-            chatterboxConfig.voiceCloning.enabled = enabled;
+            voiceConfig.chatterbox.voiceCloning.enabled = enabled;
             
             // Show/hide voice cloning test button
             const testCloneBtn = document.getElementById('test-clone-btn');
             if (enabled) {
                 testCloneBtn.style.display = 'inline-block';
-                updateVoiceCloneStatus(`✅ Voice cloning active with ${chatterboxConfig.voiceCloning.fileName}. Your AI will speak in the uploaded voice!`);
+                updateVoiceCloneStatus(`✅ Voice cloning active with ${voiceConfig.chatterbox.voiceCloning.fileName}. Your AI will speak in the uploaded voice!`);
                 updateStatus('🎤 Voice cloning mode enabled - AI will use your uploaded voice sample');
             } else {
                 testCloneBtn.style.display = 'none';
-                updateVoiceCloneStatus(`Voice sample available: ${chatterboxConfig.voiceCloning.fileName}. Enable voice cloning to use it.`);
+                updateVoiceCloneStatus(`Voice sample available: ${voiceConfig.chatterbox.voiceCloning.fileName}. Enable voice cloning to use it.`);
                 updateStatus('🎭 Using default Chatterbox voices');
             }
             
@@ -417,17 +620,17 @@
 
         // Test voice cloning specifically
         async function testVoiceCloning() {
-            if (!chatterboxConfig.voiceCloning.enabled || !chatterboxConfig.voiceCloning.audioFile) {
+            if (!voiceConfig.chatterbox.voiceCloning.enabled || !voiceConfig.chatterbox.voiceCloning.audioFile) {
                 updateStatus('❌ Voice cloning not enabled or no audio file uploaded');
                 return;
             }
 
-            const testText = `Hello! This is a test of voice cloning using your uploaded voice sample. I should now sound like the person in your audio file, with ${Math.round(chatterboxConfig.exaggeration * 100)} percent emotional expression.`;
+            const testText = `Hello! This is a test of voice cloning using your uploaded voice sample. I should now sound like the person in your audio file, with ${Math.round(voiceConfig.chatterbox.exaggeration * 100)} percent emotional expression.`;
             
             updateStatus('🎤 Testing voice cloning...');
             
             try {
-                await synthesizeWithChatterbox(testText);
+                await synthesizeVoice(testText);
                 updateStatus('✅ Voice cloning test completed successfully!');
             } catch (error) {
                 console.error('Voice cloning test failed:', error);
@@ -442,7 +645,7 @@
 
         // Toggle microphone recording for voice sample
         async function toggleRecording() {
-            if (chatterboxConfig.recording.isRecording) {
+            if (voiceConfig.chatterbox.recording.isRecording) {
                 stopRecording();
             } else {
                 await startRecording();
@@ -464,12 +667,12 @@
                 });
 
                 // Set up MediaRecorder
-                chatterboxConfig.recording.mediaRecorder = new MediaRecorder(stream);
-                chatterboxConfig.recording.audioChunks = [];
-                chatterboxConfig.recording.startTime = Date.now();
+                voiceConfig.chatterbox.recording.mediaRecorder = new MediaRecorder(stream);
+                voiceConfig.chatterbox.recording.audioChunks = [];
+                voiceConfig.chatterbox.recording.startTime = Date.now();
 
                 // Update UI for recording state
-                chatterboxConfig.recording.isRecording = true;
+                voiceConfig.chatterbox.recording.isRecording = true;
                 document.getElementById('record-btn-text').textContent = '⏹️ Stop Recording';
                 document.getElementById('record-sample-btn').classList.add('recording-active');
                 document.getElementById('recording-controls').style.display = 'block';
@@ -478,15 +681,15 @@
                 updateRecordingTimer();
 
                 // Handle recording data
-                chatterboxConfig.recording.mediaRecorder.ondataavailable = (event) => {
+                voiceConfig.chatterbox.recording.mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0) {
-                        chatterboxConfig.recording.audioChunks.push(event.data);
+                        voiceConfig.chatterbox.recording.audioChunks.push(event.data);
                     }
                 };
 
                 // Handle recording stop
-                chatterboxConfig.recording.mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(chatterboxConfig.recording.audioChunks, { 
+                voiceConfig.chatterbox.recording.mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(voiceConfig.chatterbox.recording.audioChunks, { 
                         type: 'audio/wav' 
                     });
                     
@@ -496,10 +699,10 @@
                     });
                     
                     // Use the recorded audio as voice sample
-                    chatterboxConfig.voiceCloning.audioFile = audioFile;
-                    chatterboxConfig.voiceCloning.fileName = audioFile.name;
+                    voiceConfig.chatterbox.voiceCloning.audioFile = audioFile;
+                    voiceConfig.chatterbox.voiceCloning.fileName = audioFile.name;
                     
-                    const duration = ((Date.now() - chatterboxConfig.recording.startTime) / 1000).toFixed(1);
+                    const duration = ((Date.now() - voiceConfig.chatterbox.recording.startTime) / 1000).toFixed(1);
                     updateVoiceCloneStatus(`Voice sample recorded: ${duration}s audio. Enable voice cloning to use it.`);
                     
                     // Stop all tracks to release microphone
@@ -509,15 +712,15 @@
                 };
 
                 // Start recording
-                chatterboxConfig.recording.mediaRecorder.start();
+                voiceConfig.chatterbox.recording.mediaRecorder.start();
                 updateStatus('🎤 Recording voice sample... Speak clearly for 3-10 seconds');
 
                 // Auto-stop after max duration
                 setTimeout(() => {
-                    if (chatterboxConfig.recording.isRecording) {
+                    if (voiceConfig.chatterbox.recording.isRecording) {
                         stopRecording();
                     }
-                }, chatterboxConfig.recording.maxDuration);
+                }, voiceConfig.chatterbox.recording.maxDuration);
 
             } catch (error) {
                 console.error('Failed to start recording:', error);
@@ -528,19 +731,19 @@
 
         // Stop recording voice sample
         function stopRecording() {
-            if (!chatterboxConfig.recording.isRecording) return;
+            if (!voiceConfig.chatterbox.recording.isRecording) return;
 
-            chatterboxConfig.recording.isRecording = false;
+            voiceConfig.chatterbox.recording.isRecording = false;
             
             // Stop MediaRecorder
-            if (chatterboxConfig.recording.mediaRecorder && 
-                chatterboxConfig.recording.mediaRecorder.state !== 'inactive') {
-                chatterboxConfig.recording.mediaRecorder.stop();
+            if (voiceConfig.chatterbox.recording.mediaRecorder && 
+                voiceConfig.chatterbox.recording.mediaRecorder.state !== 'inactive') {
+                voiceConfig.chatterbox.recording.mediaRecorder.stop();
             }
 
             // Clear timer
-            if (chatterboxConfig.recording.timer) {
-                clearInterval(chatterboxConfig.recording.timer);
+            if (voiceConfig.chatterbox.recording.timer) {
+                clearInterval(voiceConfig.chatterbox.recording.timer);
             }
 
             // Reset UI
@@ -555,12 +758,12 @@
 
         // Update recording timer and progress
         function updateRecordingTimer() {
-            chatterboxConfig.recording.timer = setInterval(() => {
-                if (!chatterboxConfig.recording.isRecording) return;
+            voiceConfig.chatterbox.recording.timer = setInterval(() => {
+                if (!voiceConfig.chatterbox.recording.isRecording) return;
 
-                const elapsed = Date.now() - chatterboxConfig.recording.startTime;
+                const elapsed = Date.now() - voiceConfig.chatterbox.recording.startTime;
                 const seconds = Math.floor(elapsed / 1000);
-                const progress = Math.min((elapsed / chatterboxConfig.recording.maxDuration) * 100, 100);
+                const progress = Math.min((elapsed / voiceConfig.chatterbox.recording.maxDuration) * 100, 100);
 
                 // Update timer display
                 const minutes = Math.floor(seconds / 60);
@@ -572,7 +775,7 @@
                 document.getElementById('recording-progress').style.width = `${progress}%`;
 
                 // Auto-stop if max duration reached
-                if (elapsed >= chatterboxConfig.recording.maxDuration) {
+                if (elapsed >= voiceConfig.chatterbox.recording.maxDuration) {
                     stopRecording();
                 }
             }, 100);
@@ -580,52 +783,219 @@
 
         // Update voice preview description
         function updateVoicePreview() {
-            const gender = chatterboxConfig.gender;
-            const emotion = chatterboxConfig.emotion;
-            const emotionLevel = Math.round(chatterboxConfig.exaggeration * 100);
-            const pacing = Math.round(chatterboxConfig.cfg_weight * 100);
-            
-            if (!chatterboxConfig.enabled) {
-                document.getElementById('voice-preview').textContent = '⚠️ TTS is currently disabled.';
+            if (!voiceConfig.enabled) {
+                document.getElementById('voice-preview').textContent = '⚠️ Voice synthesis is currently disabled.';
                 return;
             }
             
-            // Voice cloning mode
-            if (chatterboxConfig.voiceCloning.enabled && chatterboxConfig.voiceCloning.fileName) {
-                let preview = `🎤 Voice Cloning Active: Using uploaded voice sample "${chatterboxConfig.voiceCloning.fileName}" with ${emotionLevel}% emotion and ${pacing}% pacing speed. The AI will speak in your custom voice!`;
-                document.getElementById('voice-preview').textContent = preview;
-                return;
-            }
+            const engine = voiceConfig.selectedEngine;
+            let preview = '';
             
-            // Default Chatterbox voice mode
-            const config = voiceMatrix[gender][emotion];
-            let preview = `Current: ${gender.charAt(0).toUpperCase() + gender.slice(1)} ${emotion} voice with ${emotionLevel}% emotion and ${pacing}% pacing speed. ${config.description}`;
-            
-            // Add contextual hints
-            if (emotion === 'dramatic' && emotionLevel >= 80) {
-                preview += ' 🎭 Maximum intensity for powerful delivery.';
-            } else if (emotion === 'calm' && pacing >= 60) {
-                preview += ' 😌 Perfect for clear, measured delivery.';
-            } else if (emotion === 'expressive' && emotionLevel >= 60) {
-                preview += ' ✨ Optimized for engaging, natural speech.';
+            if (engine === 'chatterbox') {
+                const emotionLevel = Math.round(voiceConfig.chatterbox.exaggeration * 100);
+                const pacing = Math.round(voiceConfig.chatterbox.cfg_weight * 100);
+                const selectedVoice = voiceConfig.chatterbox.selectedVoice;
+                
+                // Voice cloning mode
+                if (voiceConfig.chatterbox.voiceCloning.enabled && voiceConfig.chatterbox.voiceCloning.fileName) {
+                    preview = `🎤 Voice Cloning Active: Using uploaded voice sample "${voiceConfig.chatterbox.voiceCloning.fileName}" with ${emotionLevel}% emotion and ${pacing}% pacing. The AI will speak in your custom voice!`;
+                } else {
+                    // Get voice info from available voices
+                    const voiceInfo = availableVoices.chatterbox.find(v => v.id === selectedVoice);
+                    const voiceName = voiceInfo ? voiceInfo.name : selectedVoice;
+                    
+                    preview = `Current: ${voiceName} with ${emotionLevel}% emotion and ${pacing}% pacing. High-quality neural synthesis with advanced emotion control. ✨ Optimized for engaging, natural speech.`;
+                }
+            } else if (engine === 'edge_tts') {
+                const speed = Math.round(voiceConfig.edge.speed * 100);
+                const pitch = voiceConfig.edge.pitch;
+                const volume = voiceConfig.edge.volume;
+                const selectedVoice = voiceConfig.edge.selectedVoice;
+                
+                // Get voice info from available voices
+                const voiceInfo = availableVoices.edge_tts.find(v => v.id === selectedVoice);
+                const voiceName = voiceInfo ? voiceInfo.name : selectedVoice;
+                
+                preview = `Current: ${voiceName} at ${speed}% speed`;
+                if (pitch !== 0) preview += `, ${pitch > 0 ? '+' : ''}${pitch}Hz pitch`;
+                if (volume !== 0) preview += `, ${volume > 0 ? '+' : ''}${volume}% volume`;
+                preview += '. Fast response neural voice perfect for real-time conversation. ⚡ Instant synthesis.';
             }
             
             document.getElementById('voice-preview').textContent = preview;
         }
-
-        // Test Chatterbox voice with current settings
-        async function testChatterboxVoice() {
-            if (!chatterboxConfig.enabled) {
-                updateStatus('❌ TTS is disabled. Enable it first.');
+        
+        // Universal voice synthesis function (handles both engines)
+        async function synthesizeVoice(text) {
+            if (!voiceConfig.enabled) {
+                console.log('Voice synthesis disabled, skipping');
                 return;
             }
 
-            const testText = `Hello! I'm your AI assistant powered by Chatterbox TTS. This is a ${chatterboxConfig.gender} ${chatterboxConfig.emotion} voice with ${Math.round(chatterboxConfig.exaggeration * 100)} percent emotion and advanced neural synthesis.`;
-            
-            updateStatus('🎵 Testing Chatterbox voice...');
+            const engine = voiceConfig.selectedEngine;
             
             try {
-                await synthesizeWithChatterbox(testText);
+                if (engine === 'chatterbox') {
+                    await synthesizeWithChatterbox(text);
+                } else if (engine === 'edge_tts') {
+                    await synthesizeWithEdge(text);
+                } else {
+                    throw new Error(`Unknown engine: ${engine}`);
+                }
+            } catch (error) {
+                console.error(`Voice synthesis failed with ${engine}:`, error);
+                updateStatus(`❌ ${engine} synthesis failed - trying fallback...`);
+                
+                // Fallback to browser TTS if both engines fail
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.0;
+                    utterance.volume = 0.8;
+                    speechSynthesis.speak(utterance);
+                    updateStatus('🔊 Using browser TTS fallback');
+                }
+            }
+        }
+        
+        // Synthesize with Chatterbox TTS (existing function updated)
+        async function synthesizeWithChatterbox(text) {
+            try {
+                const isCloning = voiceConfig.chatterbox.voiceCloning.enabled;
+                updateStatus(isCloning ? '🎤 Synthesizing with voice cloning...' : '🎵 Synthesizing with Chatterbox TTS...');
+                
+                // Always use FormData for consistency with backend expectations
+                const formData = new FormData();
+                formData.append('text', text);
+                formData.append('voice_id', voiceConfig.chatterbox.selectedVoice);
+                formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                formData.append('engine', 'chatterbox');
+                
+                if (isCloning && voiceConfig.chatterbox.voiceCloning.audioFile) {
+                    formData.append('voice_cloning', 'true');
+                    formData.append('audio_prompt', voiceConfig.chatterbox.voiceCloning.audioFile);
+                    console.log('🎤 Adding voice cloning audio file to request:', voiceConfig.chatterbox.voiceCloning.audioFile.name);
+                } else {
+                    formData.append('voice_cloning', 'false');
+                }
+                
+                // Create abort controller for timeout (2 minutes for Chatterbox synthesis)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 120000);
+                
+                const response = await fetch('/api/voice/synthesize', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Stop any currently playing audio and play new audio
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                
+                currentAudio = new Audio(audioUrl);
+                currentAudio.play();
+                
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    updateStatus('🎭 Chatterbox TTS Ready');
+                };
+                
+                updateStatus('🔊 Playing Chatterbox synthesis...');
+                
+            } catch (error) {
+                console.error('Chatterbox synthesis failed:', error);
+                if (error.name === 'AbortError') {
+                    updateStatus('⏱️ Chatterbox synthesis taking longer than expected...');
+                }
+                throw error;
+            }
+        }
+        
+        // Synthesize with Edge TTS (new function)
+        async function synthesizeWithEdge(text) {
+            try {
+                updateStatus('⚡ Synthesizing with Edge TTS...');
+                
+                // Prepare form data for Edge TTS
+                const formData = new FormData();
+                formData.append('text', text);
+                formData.append('voice_id', voiceConfig.edge.selectedVoice);
+                formData.append('speed', voiceConfig.edge.speed.toString());
+                formData.append('engine', 'edge_tts');
+                
+                // Add exaggeration and cfg_weight for compatibility (Edge will convert these to pitch/volume)
+                formData.append('exaggeration', (voiceConfig.edge.pitch / 10 + 0.5).toString()); // Convert pitch to exaggeration range
+                formData.append('cfg_weight', (voiceConfig.edge.volume / 20 + 0.5).toString());  // Convert volume to cfg_weight range
+                
+                const response = await fetch('/api/voice/synthesize', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Stop any currently playing audio and play new audio
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                
+                currentAudio = new Audio(audioUrl);
+                currentAudio.play();
+                
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    updateStatus('⚡ Edge TTS Ready');
+                };
+                
+                updateStatus('🔊 Playing Edge TTS synthesis...');
+                
+            } catch (error) {
+                console.error('Edge TTS synthesis failed:', error);
+                throw error;
+            }
+        }
+
+        // Test current voice settings
+        async function testChatterboxVoice() {
+            if (!voiceConfig.enabled) {
+                updateStatus('❌ Voice synthesis is disabled. Enable it first.');
+                return;
+            }
+
+            const engine = voiceConfig.selectedEngine;
+            let testText = '';
+            
+            if (engine === 'chatterbox') {
+                const emotionLevel = Math.round(voiceConfig.chatterbox.exaggeration * 100);
+                testText = `Hello! I'm your AI assistant powered by Chatterbox TTS. This voice has ${emotionLevel} percent emotion and advanced neural synthesis with voice cloning capabilities.`;
+            } else if (engine === 'edge_tts') {
+                const speed = Math.round(voiceConfig.edge.speed * 100);
+                testText = `Hello! I'm your AI assistant using Edge TTS at ${speed} percent speed. This is perfect for fast, real-time conversation with natural neural voices.`;
+            }
+            
+            updateStatus(`🎵 Testing ${engine === 'chatterbox' ? 'Chatterbox' : 'Edge TTS'} voice...`);
+            
+            try {
+                await synthesizeVoice(testText);
                 updateStatus('✅ Voice test completed successfully!');
             } catch (error) {
                 console.error('Voice test failed:', error);
@@ -856,8 +1226,8 @@
                     addToTranscript('You', userText);
                     addToTranscript('Assistant', aiResponse);
                     
-                    // Speak the AI response using Chatterbox TTS
-                    await synthesizeWithChatterbox(aiResponse);
+                    // Speak the AI response using selected voice engine
+                    await synthesizeVoice(aiResponse);
                     
                     updateStatus('✅ Conversation complete');
                 } else {
@@ -903,7 +1273,7 @@
             }
             
             // Stop voice sample recording if active
-            if (chatterboxConfig.recording.isRecording) {
+            if (voiceConfig.chatterbox.recording.isRecording) {
                 stopRecording();
             }
             
@@ -950,10 +1320,15 @@
 
         // Initialize with a welcome message
         setTimeout(() => {
-            if (chatterboxConfig.enabled) {
-                synthesizeWithChatterbox("Hello! I'm your AI voice assistant powered by Chatterbox TTS. Click the microphone button to start a conversation with me. I can hear what you say, understand it, and respond naturally using neural voice synthesis. You can also customize my voice, adjust emotions, or even clone your own voice!");
+            if (voiceConfig.enabled) {
+                const engine = voiceConfig.selectedEngine;
+                if (engine === 'chatterbox') {
+                    synthesizeVoice("Hello! I'm your AI voice assistant with dual voice engines. Currently using Chatterbox TTS for high-quality neural synthesis with emotion control and voice cloning. Click the microphone to start a conversation, or switch to Edge TTS for faster responses!");
+                } else {
+                    synthesizeVoice("Hello! I'm your AI voice assistant using Edge TTS for fast, real-time conversation. I have hundreds of neural voices available in multiple languages. Click the microphone to start chatting, or switch to Chatterbox for advanced features like voice cloning!");
+                }
             }
-        }, 1000);
+        }, 2000);
     </script>
 </body>
 </html> 
