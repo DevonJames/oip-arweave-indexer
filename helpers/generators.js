@@ -83,7 +83,7 @@ async function identifyAuthorNameFromContent(content) {
   
   try {
       const response = await axios.post('https://api.x.ai/v1/chat/completions', {
-        model: 'grok-2-latest',  // Updated to latest model instead of grok-beta
+        model: 'grok-4',  // Updated to latest model instead of grok-beta
         messages: messages,
         stream: false,
         temperature: 0
@@ -150,7 +150,7 @@ async function identifyPublishDateFromContent(content) {
   
   try {
       const response = await axios.post('https://api.x.ai/v1/chat/completions', {
-        model: 'grok-2-latest',  // Updated to latest model instead of grok-beta
+        model: 'grok-4',  // Updated to latest model instead of grok-beta
         messages: messages,
         stream: false,  // Based on the curl data
         temperature: 0  // Same temperature setting as in the curl command
@@ -420,7 +420,7 @@ async function tryXaiGeneration(title, processedContent, messages, allErrors) {
     
     // Set a shorter timeout for xAI
     const xaiPromise = directXaiCall({
-      model: 'grok-2-latest',
+      model: 'grok-4',
       messages: messages,
       max_tokens: 500
     });
@@ -841,7 +841,7 @@ async function generateCombinedSummaryFromArticles(articles, model, useSelfHoste
 
     try {
       const response = await axios.post('https://api.x.ai/v1/chat/completions', {
-        model: 'grok-2-latest',  // Updated to latest model instead of grok-beta
+        model: 'grok-4',  // Updated to latest model instead of grok-beta
         messages: messages,
         stream: false,  // Based on the curl data
         temperature: 0  // Same temperature setting as in the curl command
@@ -1156,7 +1156,7 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
                 'Content-Type': 'application/json'
             },
             data: {
-                model: options.model || 'grok-2-latest',
+                model: options.model || 'grok-4',
                 messages: messages,
                 stream: true,
                 temperature: options.temperature || 0.7
@@ -1245,6 +1245,13 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
         
         const socketManager = require('../socket/socketManager');
         
+        // Set up ElevenLabs configuration with defaults
+        const voiceId = voiceConfig.voice_id || 'pNInz6obpgDQGcFmaJgB';
+        const modelId = voiceConfig.model_id || 'eleven_turbo_v2';
+        const stability = voiceConfig.stability || 0.5;
+        const similarityBoost = voiceConfig.similarity_boost || 0.75;
+        const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+        
         // Add a short delay to ensure client connection is fully established
         if (dialogueId) {
             console.log(`Waiting for client connection to stabilize for dialogueId: ${dialogueId}`);
@@ -1262,7 +1269,7 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             method: 'post',
             url: apiUrl,
             headers: {
-                'xi-api-key': elevenLabsConfig.apiKey,
+                'xi-api-key': process.env.ELEVENLABS_API_KEY,
                 'Content-Type': 'application/json',
                 'Accept': 'audio/mpeg'
             },
@@ -1381,7 +1388,7 @@ async function streamAudioToClient(dialogueId, text, voiceConfig) {
  */
 async function directXaiCall(params) {
   const { 
-    model = 'grok-2-latest',
+    model = 'grok-4',
     messages,
     max_tokens = 500
   } = params;
@@ -1477,7 +1484,7 @@ async function directXaiCall(params) {
  */
 async function callXaiApi(params) {
   const {
-    model = 'grok-2-latest',
+    model = 'grok-4',
     messages,
     isVision = false,
     maxRetries = 5, // Changed back to 5 from 0

@@ -1124,7 +1124,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 // Parse personality settings
                 let personalitySettings = {
                     name: "Assistant",
-                    model: "grok-beta",
+                    model: "grok-4",
                     temperature: 0.7,
                     systemPrompt: "You are a helpful assistant for a construction company. You provide coordination between customers and the construction company and its subcontractors. Answer questions about scheduling concisely and accurately and do not ever use asterisks or other markdown formatting.",
                     voices: {
