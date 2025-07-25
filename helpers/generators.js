@@ -1282,15 +1282,16 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             if (ttsResponse.status === 200 && ttsResponse.data) {
                 console.log(`🎤 Local TTS generated ${ttsResponse.data.byteLength} bytes of audio`);
                 
-                // Convert to base64 and send to client
+                // Convert to base64 for streaming
                 const audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
                 
-                socketManager.sendToClients(dialogueId, {
-                    type: 'audio',
-                    audio: audioBase64
-                });
-                
-                console.log(`🎤 Sent ${audioBase64.length} characters of base64 audio to client`);
+                // Call the onAudioChunk callback to stream to client via EventSource
+                if (onAudioChunk && typeof onAudioChunk === 'function') {
+                    console.log(`🎤 Calling onAudioChunk with ${audioBase64.length} characters of base64 audio`);
+                    await onAudioChunk(audioBase64);
+                } else {
+                    console.log('🎤 No onAudioChunk callback provided, audio will not be streamed');
+                }
                 
                 return Buffer.from(ttsResponse.data);
             } else {
@@ -1331,15 +1332,16 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             if (elevenLabsResponse.status === 200 && elevenLabsResponse.data) {
                 console.log(`🎤 ElevenLabs generated ${elevenLabsResponse.data.byteLength} bytes of audio`);
                 
-                // Convert to base64 and send to client
+                // Convert to base64 for streaming
                 const audioBase64 = Buffer.from(elevenLabsResponse.data).toString('base64');
                 
-                socketManager.sendToClients(dialogueId, {
-                    type: 'audio',
-                    audio: audioBase64
-                });
-                
-                console.log(`🎤 Sent ${audioBase64.length} characters of base64 audio to client`);
+                // Call the onAudioChunk callback to stream to client via EventSource
+                if (onAudioChunk && typeof onAudioChunk === 'function') {
+                    console.log(`🎤 Calling onAudioChunk with ${audioBase64.length} characters of base64 audio (ElevenLabs fallback)`);
+                    await onAudioChunk(audioBase64);
+                } else {
+                    console.log('🎤 No onAudioChunk callback provided, audio will not be streamed (ElevenLabs fallback)');
+                }
                 
                 return Buffer.from(elevenLabsResponse.data);
             } else {
