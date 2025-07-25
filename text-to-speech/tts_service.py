@@ -186,17 +186,38 @@ class ChatterboxEngine(TTSEngine):
                     cfg_weight=cfg_weight
                 )
             
-            # Convert to bytes (assuming audio is a numpy array or tensor)
+            # Convert to bytes (audio is a numpy array or tensor from Chatterbox)
             import soundfile as sf
+            import numpy as np
+            
+            # Ensure audio is numpy array and properly formatted
+            if hasattr(audio, 'cpu'):  # If it's a torch tensor
+                audio = audio.cpu().numpy()
+            
+            # Ensure audio is the right shape and format
+            audio = np.array(audio).astype(np.float32)
+            if audio.ndim > 1:
+                audio = audio.squeeze()  # Remove extra dimensions
+            
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                # Write audio to temporary WAV file
-                sf.write(tmp_file.name, audio, 22050)  # Chatterbox typically uses 22kHz
-                
-                # Read back as bytes
-                with open(tmp_file.name, 'rb') as f:
-                    audio_data = f.read()
-                
-                os.unlink(tmp_file.name)
+                try:
+                    # Write audio to temporary WAV file with explicit format
+                    sf.write(tmp_file.name, audio, samplerate=22050, format='WAV', subtype='PCM_16')
+                    logger.info(f"Audio written to {tmp_file.name}, shape: {audio.shape}, dtype: {audio.dtype}")
+                    
+                    # Read back as bytes
+                    with open(tmp_file.name, 'rb') as f:
+                        audio_data = f.read()
+                    
+                    logger.info(f"Audio file size: {len(audio_data)} bytes")
+                    
+                except Exception as write_error:
+                    logger.error(f"Failed to write audio file: {write_error}")
+                    raise
+                finally:
+                    # Clean up temp file
+                    if os.path.exists(tmp_file.name):
+                        os.unlink(tmp_file.name)
                 
             logger.info(f"✅ Chatterbox synthesis successful: {len(audio_data)} bytes")
             return audio_data
