@@ -667,11 +667,18 @@
                 const requestBody = formData;
                 const headers = {}; // Don't set Content-Type, let browser set it for FormData
                 
+                // Create abort controller for timeout (2 minutes for Chatterbox synthesis)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 120000);
+                
                 const response = await fetch('/api/voice/synthesize', {
                     method: 'POST',
                     headers: headers,
-                    body: requestBody
+                    body: requestBody,
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -699,7 +706,13 @@
                 
             } catch (error) {
                 console.error('Chatterbox synthesis failed:', error);
-                updateStatus('❌ Synthesis failed - trying fallback...');
+                
+                // Handle timeout specifically
+                if (error.name === 'AbortError') {
+                    updateStatus('⏱️ Chatterbox synthesis taking longer than expected - trying fallback...');
+                } else {
+                    updateStatus('❌ Synthesis failed - trying fallback...');
+                }
                 
                 // Fallback to browser TTS if Chatterbox fails
                 if ('speechSynthesis' in window) {
