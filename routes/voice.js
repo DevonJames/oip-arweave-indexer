@@ -11,7 +11,7 @@ const router = express.Router();
 
 // Configure axios with better connection management
 const axiosConfig = {
-    timeout: 15000, // Reduced from 30000ms to 15000ms
+    // timeout: 15000, // Removed global timeout - let individual requests control timeouts
     headers: {
         'Connection': 'close', // Force connection close to prevent hanging
         'User-Agent': 'OIP-Voice-Service/1.0'
@@ -128,6 +128,7 @@ async function safeAxiosCall(url, options, serviceName = 'Service') {
         const response = await axiosInstance({
             ...options,
             url,
+            timeout: timeout, // Set timeout explicitly for this request
             signal: controller.signal
         });
         clearTimeout(timeoutId);
