@@ -733,16 +733,12 @@ router.post('/converse', async (req, res) => {
         
         // CRITICAL FIX: Break this into separate steps
         
-        // 1. Define a text handler
+        // 1. Define a text handler - FIXED to only stream text, not fragmented audio
+        let responseText = '';
         const handleTextChunk = async (textChunk) => {
-            let responseText = '';
-            let pendingText = '';
-            const textChunkThreshold = 15;
-            
             responseText += textChunk;
-            pendingText += textChunk;
             
-            // Send text chunk to client
+            // Send text chunk to client for real-time display
             socketManager.sendToClients(dialogueId, {
                 type: 'textChunk',
                 role: 'assistant',
@@ -757,34 +753,7 @@ router.post('/converse', async (req, res) => {
                 }
             });
             
-            // If we have enough text, generate audio
-            if (pendingText.length >= textChunkThreshold) {
-                const textToProcess = pendingText;
-                pendingText = '';
-                
-                try {
-                    await streamTextToSpeech(
-                        textToProcess,
-                        { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
-                        (audioChunk) => {
-                            // Send audio chunk
-                            socketManager.sendToClients(dialogueId, {
-                                type: 'audio',
-                                audio: audioChunk.toString('base64')
-                            });
-                            
-                            ongoingStream.data.push({
-                                event: 'audio',
-                                data: {
-                                    audio: audioChunk.toString('base64')
-                                }
-                            });
-                        }
-                    );
-                } catch (error) {
-                    console.error('Error generating audio:', error);
-                }
-            }
+            // NOTE: Removed fragmented TTS calls - we'll call TTS once with complete response
         };
         
         // 2. Call the function with very explicit parameters
@@ -802,6 +771,37 @@ router.post('/converse', async (req, res) => {
                 },
                 handleTextChunk                 // Parameter 4: callback function
             );
+            
+            // NEW: Now call TTS once with the complete response
+            if (responseText && responseText.trim()) {
+                console.log('Streaming text to speech with local TTS service');
+                console.log('Text to speech input:', responseText);
+                
+                try {
+                    await streamTextToSpeech(
+                        responseText,
+                        { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
+                        (audioChunk) => {
+                            // Send complete audio to client
+                            socketManager.sendToClients(dialogueId, {
+                                type: 'audio',
+                                audio: audioChunk
+                            });
+                            
+                            ongoingStream.data.push({
+                                event: 'audio',
+                                data: {
+                                    audio: audioChunk
+                                }
+                            });
+                        },
+                        String(dialogueId)  // Add explicit dialogueId as string
+                    );
+                } catch (audioError) {
+                    console.error('Error generating audio for complete response:', audioError);
+                }
+            }
+            
         } catch (error) {
             console.error('Error in generateStreamingResponse:', error);
         }
@@ -1147,12 +1147,11 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     }
                 }
                 
-                // CRITICAL FIX: Define the text chunk handler separately
+                // FIXED: Define the text chunk handler to only stream text, not audio
                 const handleTextChunk = async (textChunk) => {
                     responseText += textChunk;
-                    pendingText += textChunk;
                     
-                    // Send text chunk to client
+                    // Send text chunk to client for real-time display
                     socketManager.sendToClients(dialogueId, {
                         type: 'textChunk',
                         role: 'assistant',
@@ -1167,40 +1166,12 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         }
                     });
                     
-                    // If we have enough text, generate audio
-                    if (pendingText.length >= textChunkThreshold) {
-                        const textToProcess = pendingText;
-                        pendingText = '';
-                        
-                        try {
-                            await streamTextToSpeech(
-                                textToProcess,
-                                { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
-                                (audioChunk) => {
-                                    // Send audio chunk
-                                    socketManager.sendToClients(dialogueId, {
-                                        type: 'audio',
-                                        audio: audioChunk.toString('base64')
-                                    });
-                                    
-                                    ongoingStream.data.push({
-                                        event: 'audio',
-                                        data: {
-                                            audio: audioChunk.toString('base64')
-                                        }
-                                    });
-                                },
-                                String(dialogueId)  // Add explicit dialogueId as string
-                            );
-                        } catch (error) {
-                            console.error('Error generating audio:', error);
-                        }
-                    }
+                    // NOTE: Removed TTS calls from here - we'll call TTS once with complete response
                 };
                 
                 try {
                     // CRITICAL FIX: Call generateStreamingResponse with ALL parameters in the correct order
-                    await generateStreamingResponse(
+                    const streamResult = await generateStreamingResponse(
                         conversationHistory,  // Pass the actual conversation history array
                         String(dialogueId),   // Ensure dialogueId is a string
                         {
@@ -1210,6 +1181,37 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         },
                         handleTextChunk      // Pass the properly defined text chunk handler
                     );
+                    
+                    // NEW: Now call TTS once with the complete response
+                    if (responseText && responseText.trim()) {
+                        console.log('Streaming text to speech with local TTS service');
+                        console.log('Text to speech input:', responseText);
+                        
+                        try {
+                            await streamTextToSpeech(
+                                responseText,
+                                { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
+                                (audioChunk) => {
+                                    // Send complete audio to client
+                                    socketManager.sendToClients(dialogueId, {
+                                        type: 'audio',
+                                        audio: audioChunk
+                                    });
+                                    
+                                    ongoingStream.data.push({
+                                        event: 'audio',
+                                        data: {
+                                            audio: audioChunk
+                                        }
+                                    });
+                                },
+                                String(dialogueId)  // Add explicit dialogueId as string
+                            );
+                        } catch (audioError) {
+                            console.error('Error generating audio for complete response:', audioError);
+                        }
+                    }
+                    
                 } catch (error) {
                     console.error('Error in generateStreamingResponse:', error);
                     
