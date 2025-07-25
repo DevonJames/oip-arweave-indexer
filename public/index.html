@@ -1244,6 +1244,11 @@
                             currentAiResponse += data.text;
                             // Update transcript in real-time
                             updateTranscriptRealtime('Assistant', currentAiResponse);
+                            
+                            // Update status to show TTS preparation after substantial response
+                            if (currentAiResponse.length > 100) {
+                                updateStatus('🎵 Generating voice response...');
+                            }
                         }
                     } catch (e) {
                         console.error('Error parsing text chunk:', e);
@@ -1282,7 +1287,7 @@
                         );
                     }
                     
-                    updateStatus('✅ Conversation complete');
+                    updateStatus('✅ Conversation complete - audio ready');
                     
                     // Close connection
                     if (currentEventSource) {
@@ -1313,7 +1318,7 @@
                     console.log('Generic message:', event.data);
                 };
                 
-                // Timeout after 30 seconds
+                // Timeout after 2 minutes (120 seconds) to allow for TTS synthesis
                 setTimeout(() => {
                     if (!conversationComplete) {
                         console.warn('Stream timeout');
@@ -1326,7 +1331,7 @@
                         
                         reject(new Error('Stream timeout'));
                     }
-                }, 30000);
+                }, 120000);
             });
         }
 
