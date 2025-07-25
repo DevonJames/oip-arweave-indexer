@@ -321,7 +321,17 @@ class SocketManager {
 
 // Create a singleton instance
 const socketManager = new SocketManager();
+
+// Export both legacy functions and the class instance
 module.exports = {
   sendToClients,
-  // ... other functions
+  hasClients: (dialogueId) => {
+    // Use the legacy hasClients function which checks connections
+    if (connections.has(dialogueId) && connections.get(dialogueId).size > 0) {
+      return true;
+    }
+    // Also check the class instance as fallback
+    return socketManager.hasClients(dialogueId);
+  },
+  socketManager  // Export the class instance too
 }; 
