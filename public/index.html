@@ -1207,6 +1207,9 @@
                 // Reset response accumulator
                 currentAiResponse = '';
                 
+                // Reset audio queue for new conversation
+                resetAudioQueue();
+                
                 // Create EventSource connection
                 const streamUrl = `/api/generate/open-stream?id=${dialogueId}`;
                 currentEventSource = new EventSource(streamUrl);
@@ -1255,22 +1258,47 @@
                     }
                 });
                 
-                // Handle audio chunks
+                // Handle old-style complete audio (for backwards compatibility)
                 currentEventSource.addEventListener('audio', function(event) {
                     try {
                         const data = JSON.parse(event.data);
-                        console.log('🔊 Received audio event:', data);
+                        console.log('🔊 Received complete audio event:', data);
                         
                         if (data.audio) {
-                            console.log('🔊 Processing audio chunk');
+                            console.log('🔊 Processing complete audio');
                             // Play audio chunk immediately
                             playAudioChunk(data.audio);
                         } else {
                             console.warn('🔊 Audio event without audio data:', data);
                         }
                     } catch (e) {
-                        console.error('🔊 Error parsing audio chunk:', e);
+                        console.error('🔊 Error parsing complete audio:', e);
                         console.error('🔊 Raw audio event data:', event.data);
+                    }
+                });
+                
+                // Handle new chunked audio 
+                currentEventSource.addEventListener('audioChunk', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log(`🔊 Received audio chunk ${data.chunkIndex} for text: "${data.text ? data.text.substring(0, 50) : 'N/A'}..."`);
+                        
+                        if (data.audio) {
+                            console.log(`🔊 Queueing audio chunk ${data.chunkIndex} (${data.isFinal ? 'FINAL' : 'PARTIAL'})`);
+                            
+                            // Queue the audio chunk with metadata
+                            queueAudioChunk({
+                                audio: data.audio,
+                                chunkIndex: data.chunkIndex,
+                                text: data.text,
+                                isFinal: data.isFinal
+                            });
+                        } else {
+                            console.warn('🔊 Audio chunk event without audio data:', data);
+                        }
+                    } catch (e) {
+                        console.error('🔊 Error parsing audio chunk:', e);
+                        console.error('🔊 Raw audio chunk event data:', event.data);
                     }
                 });
                 
@@ -1350,8 +1378,78 @@
             }
         }
 
+        // Audio chunk queue management for sequenced playback
+        let audioChunkQueue = [];
+        let currentlyPlaying = false;
+        let nextExpectedChunkIndex = 1;
+        let isAudioFinished = false;
+        
+        function queueAudioChunk(chunkData) {
+            console.log(`🎵 Queueing audio chunk ${chunkData.chunkIndex}, queue length: ${audioChunkQueue.length}`);
+            
+            // Add to queue
+            audioChunkQueue.push(chunkData);
+            
+            // Sort queue by chunk index to ensure proper order
+            audioChunkQueue.sort((a, b) => a.chunkIndex - b.chunkIndex);
+            
+            // Try to play next chunk if ready
+            processAudioQueue();
+        }
+        
+        function processAudioQueue() {
+            // If already playing, wait for current chunk to finish
+            if (currentlyPlaying) {
+                console.log(`🎵 Currently playing, will process queue after current chunk`);
+                return;
+            }
+            
+            // Find the next chunk we're expecting
+            const nextChunk = audioChunkQueue.find(chunk => chunk.chunkIndex === nextExpectedChunkIndex);
+            
+            if (nextChunk) {
+                console.log(`🎵 Playing chunk ${nextChunk.chunkIndex}: "${nextChunk.text ? nextChunk.text.substring(0, 30) : 'N/A'}..."`);
+                
+                // Remove from queue
+                audioChunkQueue = audioChunkQueue.filter(chunk => chunk.chunkIndex !== nextChunk.chunkIndex);
+                
+                // Play this chunk
+                currentlyPlaying = true;
+                nextExpectedChunkIndex++;
+                
+                playAudioChunk(nextChunk.audio, () => {
+                    // Callback when chunk finishes playing
+                    currentlyPlaying = false;
+                    
+                    // Mark as finished if this was the final chunk
+                    if (nextChunk.isFinal) {
+                        isAudioFinished = true;
+                        console.log(`🎵 Audio playback completed with final chunk ${nextChunk.chunkIndex}`);
+                        updateStatus('🎤 Listening for voice input...');
+                    }
+                    
+                    // Process next chunk if available
+                    if (!isAudioFinished) {
+                        setTimeout(processAudioQueue, 50); // Small delay between chunks
+                    }
+                });
+                
+            } else {
+                // No next chunk ready yet
+                console.log(`🎵 Waiting for chunk ${nextExpectedChunkIndex}, have chunks: ${audioChunkQueue.map(c => c.chunkIndex).join(', ')}`);
+            }
+        }
+        
+        function resetAudioQueue() {
+            audioChunkQueue = [];
+            currentlyPlaying = false;
+            nextExpectedChunkIndex = 1;
+            isAudioFinished = false;
+            console.log(`🎵 Audio queue reset`);
+        }
+
         // Helper function to play audio chunks
-        function playAudioChunk(base64Audio) {
+        function playAudioChunk(base64Audio, onComplete = null) {
             try {
                 console.log('🔊 Playing audio chunk, base64 length:', base64Audio.length);
                 
@@ -1402,7 +1500,14 @@
                 audio.onended = () => {
                     console.log('🔊 Audio playback finished');
                     URL.revokeObjectURL(audioUrl);
-                    updateStatus('🎤 Listening for voice input...');
+                    // Only update status to listening if this is not part of a sequence
+                    if (!onComplete) {
+                        updateStatus('🎤 Listening for voice input...');
+                    }
+                    // Call completion callback if provided
+                    if (onComplete && typeof onComplete === 'function') {
+                        onComplete();
+                    }
                 };
                 
                 audio.onerror = (e) => {
@@ -1410,6 +1515,10 @@
                     console.error('🔊 Audio error details:', audio.error);
                     URL.revokeObjectURL(audioUrl);
                     updateStatus('❌ Audio playback failed');
+                    // Call completion callback even on error
+                    if (onComplete && typeof onComplete === 'function') {
+                        onComplete();
+                    }
                 };
                 
                 // Attempt to play with better error handling
