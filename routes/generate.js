@@ -765,7 +765,7 @@ router.post('/converse', async (req, res) => {
                 try {
                     await streamTextToSpeech(
                         textToProcess,
-                        personality.voices.elevenLabs,
+                        { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
                         (audioChunk) => {
                             // Send audio chunk
                             socketManager.sendToClients(dialogueId, {
@@ -1175,7 +1175,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         try {
                             await streamTextToSpeech(
                                 textToProcess,
-                                personalitySettings.voices.elevenLabs,
+                                { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
                                 (audioChunk) => {
                                     // Send audio chunk
                                     socketManager.sendToClients(dialogueId, {
@@ -1234,7 +1234,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     try {
                         await streamTextToSpeech(
                             defaultResponse,
-                            personalitySettings.voices.elevenLabs,
+                            { useLocalTTS: true }, // Use local TTS service instead of ElevenLabs
                             (audioChunk) => {
                                 socketManager.sendToClients(dialogueId, {
                                     type: 'audio',
