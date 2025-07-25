@@ -175,8 +175,6 @@ class ChatterboxEngine(TTSEngine):
                 audio = model_to_use.generate(
                     text=text,
                     audio_prompt_path=audio_prompt_path,
-                    gender=gender,
-                    emotion=emotion,
                     exaggeration=exaggeration,
                     cfg_weight=cfg_weight
                 )
@@ -184,8 +182,6 @@ class ChatterboxEngine(TTSEngine):
                 # Default voice mode
                 audio = model_to_use.generate(
                     text=text,
-                    gender=gender,
-                    emotion=emotion,
                     exaggeration=exaggeration,
                     cfg_weight=cfg_weight
                 )
