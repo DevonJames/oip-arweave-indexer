@@ -337,6 +337,16 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         // Log successful response
         console.log(`[TTS] Successfully synthesized ${ttsResponse.data.length} bytes`);
 
+        // Check if audio data is valid
+        if (!ttsResponse.data || ttsResponse.data.length === 0) {
+            console.error('[TTS] Error: Chatterbox returned empty audio data');
+            throw new Error('Chatterbox returned empty audio data');
+        }
+
+        // Log response details for debugging
+        console.log(`[TTS] Response details: status=${ttsResponse.status}, headers=${JSON.stringify(ttsResponse.headers)}`);
+        console.log(`[TTS] Audio data type: ${typeof ttsResponse.data}, length: ${ttsResponse.data.length}`);
+
         // Set appropriate headers
         res.set({
             'Content-Type': 'audio/wav',
@@ -344,18 +354,16 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             'X-Voice-ID': voice_id,
             'X-Gender': chatterboxParams.gender,
             'X-Emotion': chatterboxParams.emotion,
+            'X-Voice-Cloning': voice_cloning === 'true' ? 'enabled' : 'disabled',
             'Content-Length': ttsResponse.data.length.toString()
         });
 
-        // Check if audio data is empty
-        if (!ttsResponse.data || ttsResponse.data.length === 0) {
-            throw new Error('Chatterbox returned empty audio data');
-        }
-
-        console.log(`[TTS] Successfully synthesized ${ttsResponse.data.length} bytes`);
+        console.log(`[TTS] Sending ${ttsResponse.data.length} bytes to browser`);
 
         // Send audio data directly
         res.send(ttsResponse.data);
+
+        console.log(`[TTS] Audio response sent successfully`);
 
     } catch (error) {
         console.error('[TTS] Chatterbox TTS Error:', error.message);
