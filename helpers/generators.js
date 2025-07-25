@@ -975,10 +975,14 @@ async function retryAsync(asyncFunction, args = [], options = { maxRetries: 5, d
 
 async function synthesizeSpeech(text, voiceConfig, outputFileName, api = 'elevenLabs') {
   console.log('synthesizing speech with:', voiceConfig, outputFileName, api);
+  
+  // Strip emojis from text before synthesis
+  const cleanText = stripEmojisForTTS(text);
+  
   if (api === 'google') {
-    const output_format = 'MP3';
+          const output_format = 'MP3';
       const request = {
-          input: { text },
+          input: { text: cleanText },
           voice: voiceConfig.google,
           audioConfig: { audioEncoding: output_format }
       };
@@ -998,7 +1002,7 @@ async function synthesizeSpeech(text, voiceConfig, outputFileName, api = 'eleven
           const response = await axios.post(
               `https://api.elevenlabs.io/v1/text-to-speech/${voiceConfig.elevenLabs.voice_id}`,
               {
-                  text,
+                  text: cleanText,
                   model_id: voiceConfig.elevenLabs.model_id || 'eleven_monolingual_v1',
                   voice_settings: {
                     stability: voiceConfig.elevenLabs.stability || 0.75,
@@ -1140,12 +1144,23 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
         console.log(`Conversation history length: ${conversationHistory.length}`);
         
         // Format messages for xAI API
-        const messages = Array.isArray(conversationHistory) ? 
+        let messages = Array.isArray(conversationHistory) ? 
             conversationHistory.map(msg => ({
                 role: msg.role,
                 content: msg.content
             })) : 
             [{ role: "user", content: "Hello, how can I help you today?" }];
+            
+        // Add system prompt if provided, or use a default one
+        const systemPrompt = options.systemPrompt || "You are a helpful AI assistant. IMPORTANT: Do not use emojis, asterisks, or other special symbols in your responses as they interfere with text-to-speech synthesis. Keep your responses conversational and natural.";
+        
+        // Prepend system message to conversation
+        messages.unshift({
+            role: "system",
+            content: systemPrompt
+        });
+        
+        console.log(`Added system prompt, total messages: ${messages.length}`);
         
         // Make API request to xAI with streaming enabled
         const response = await axios({
@@ -1248,7 +1263,10 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
 async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogueId = null) {
     try {
         console.log('Streaming text to speech with local TTS service');
-        console.log('Text to speech input:', text);
+        
+        // Strip emojis from text before processing
+        const cleanText = stripEmojisForTTS(text);
+        console.log('Text to speech input:', cleanText);
         
         const socketManager = require('../socket/socketManager');
         
@@ -1271,7 +1289,7 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             // Call the local TTS service that supports streaming
             const FormData = require('form-data');
             const formData = new FormData();
-            formData.append('text', text);
+            formData.append('text', cleanText);
             formData.append('gender', 'female');
             formData.append('emotion', 'expressive');
             formData.append('exaggeration', '0.5');
@@ -1319,7 +1337,7 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             const elevenLabsResponse = await axios.post(
                 `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
                 {
-                    text: text,
+                    text: cleanText,
                     model_id: modelId,
                     voice_settings: {
                         stability: stability,
@@ -1360,6 +1378,37 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
         console.error('Error streaming text to speech:', error);
         throw error;
     }
+}
+
+/**
+ * Remove emojis and other problematic Unicode characters for TTS
+ * @param {string} text - Text that may contain emojis
+ * @returns {string} - Text with emojis removed
+ */
+function stripEmojisForTTS(text) {
+    if (!text || typeof text !== 'string') return text;
+    
+    // Remove emojis using comprehensive Unicode ranges
+    const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F018}-\u{1F270}]|[\u{238C}-\u{2454}]|[\u{20D0}-\u{20FF}]|[\u{FE0F}]|[\u{200D}]/gu;
+    
+    // Also remove other problematic characters that TTS might struggle with
+    const problematicChars = /[^\x00-\x7F\u00A0-\u00FF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF]/g;
+    
+    // First remove emojis specifically
+    let cleanText = text.replace(emojiRegex, '');
+    
+    // Then remove other problematic Unicode characters, but preserve common accented characters
+    cleanText = cleanText.replace(problematicChars, '');
+    
+    // Clean up any multiple spaces that might result from emoji removal
+    cleanText = cleanText.replace(/\s+/g, ' ').trim();
+    
+    if (cleanText !== text) {
+        console.log(`🚫 EMOJI STRIPPED: Original="${text.substring(0, 50)}..." → Clean="${cleanText.substring(0, 50)}..."`);
+        console.log(`🚫 Stripped characters: ${text.length - cleanText.length} chars removed`);
+    }
+    
+    return cleanText;
 }
 
 /**
@@ -1407,8 +1456,11 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
             };
         }
         
-        // Add new text to buffer
-        textAccumulator.buffer += text;
+        // Strip emojis from text before processing
+        const cleanText = stripEmojisForTTS(text);
+        
+        // Add new clean text to buffer  
+        textAccumulator.buffer += cleanText;
         
         // Define chunking parameters
         const MIN_CHUNK_LENGTH = 75;   // Minimum characters before considering TTS
@@ -1629,7 +1681,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
         
         // Force process whatever is left
         if (textAccumulator.buffer.trim().length > 0) {
-            const remainingText = textAccumulator.buffer.trim();
+            const remainingText = stripEmojisForTTS(textAccumulator.buffer.trim());
             textAccumulator.buffer = '';
             textAccumulator.lastSentTime = Date.now();
             textAccumulator.sentenceCount++;
@@ -2064,6 +2116,7 @@ module.exports = {
     callOpenAiBackup,
     callOpenAiVision,
     streamChunkedTextToSpeech,
-    flushRemainingText
+    flushRemainingText,
+    stripEmojisForTTS
 }
 

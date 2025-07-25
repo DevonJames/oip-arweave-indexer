@@ -1201,10 +1201,10 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 
                 // Parse personality settings
                 let personalitySettings = {
-                    name: "Assistant",
+                    name: "Assistant",  
                     model: "grok-4",
                     temperature: 0.7,
-                    systemPrompt: "You are a helpful assistant for a construction company. You provide coordination between customers and the construction company and its subcontractors. Answer questions about scheduling concisely and accurately and do not ever use asterisks or other markdown formatting.",
+                    systemPrompt: "You are a helpful assistant for a construction company. You provide coordination between customers and the construction company and its subcontractors. Answer questions about scheduling concisely and accurately. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses as they interfere with text-to-speech synthesis.",
                     voices: {
                         elevenLabs: {
                             voice_id: "pNInz6obpgDQGcFmaJgB",
