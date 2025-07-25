@@ -1254,12 +1254,18 @@
                 currentEventSource.addEventListener('audio', function(event) {
                     try {
                         const data = JSON.parse(event.data);
+                        console.log('🔊 Received audio event:', data);
+                        
                         if (data.audio) {
+                            console.log('🔊 Processing audio chunk');
                             // Play audio chunk immediately
                             playAudioChunk(data.audio);
+                        } else {
+                            console.warn('🔊 Audio event without audio data:', data);
                         }
                     } catch (e) {
-                        console.error('Error parsing audio chunk:', e);
+                        console.error('🔊 Error parsing audio chunk:', e);
+                        console.error('🔊 Raw audio event data:', event.data);
                     }
                 });
                 
@@ -1342,6 +1348,8 @@
         // Helper function to play audio chunks
         function playAudioChunk(base64Audio) {
             try {
+                console.log('🔊 Playing audio chunk, base64 length:', base64Audio.length);
+                
                 // Convert base64 to blob
                 const byteCharacters = atob(base64Audio);
                 const byteNumbers = new Array(byteCharacters.length);
@@ -1349,27 +1357,67 @@
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+                
+                // Try both WAV and MP3 formats (local TTS uses WAV, ElevenLabs uses MP3)
+                let audioBlob;
+                if (base64Audio.length > 100) {
+                    // Check if it's a WAV file (starts with "RIFF")
+                    const firstFourBytes = byteArray.slice(0, 4);
+                    const isWav = String.fromCharCode(...firstFourBytes) === 'RIFF';
+                    
+                    if (isWav) {
+                        console.log('🔊 Detected WAV format');
+                        audioBlob = new Blob([byteArray], { type: 'audio/wav' });
+                    } else {
+                        console.log('🔊 Assuming MP3 format');
+                        audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+                    }
+                } else {
+                    // Default to MP3 for small chunks
+                    audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+                }
                 
                 // Create audio URL and play
                 const audioUrl = URL.createObjectURL(audioBlob);
                 const audio = new Audio(audioUrl);
                 
+                audio.onloadstart = () => {
+                    console.log('🔊 Audio loading started');
+                };
+                
+                audio.oncanplay = () => {
+                    console.log('🔊 Audio can play');
+                };
+                
+                audio.onplay = () => {
+                    console.log('🔊 Audio playing');
+                    updateStatus('🔊 Playing AI response...');
+                };
+                
                 audio.onended = () => {
+                    console.log('🔊 Audio playback finished');
                     URL.revokeObjectURL(audioUrl);
+                    updateStatus('🎤 Listening for voice input...');
                 };
                 
                 audio.onerror = (e) => {
-                    console.error('Audio playback error:', e);
+                    console.error('🔊 Audio playback error:', e);
+                    console.error('🔊 Audio error details:', audio.error);
                     URL.revokeObjectURL(audioUrl);
+                    updateStatus('❌ Audio playback failed');
                 };
                 
-                audio.play().catch(e => {
-                    console.error('Failed to play audio chunk:', e);
+                // Attempt to play with better error handling
+                audio.play().then(() => {
+                    console.log('🔊 Audio play() succeeded');
+                }).catch(e => {
+                    console.error('🔊 Failed to play audio chunk:', e);
+                    updateStatus('❌ Failed to play audio - click to enable audio');
                 });
                 
             } catch (error) {
-                console.error('Error processing audio chunk:', error);
+                console.error('🔊 Error processing audio chunk:', error);
+                updateStatus('❌ Error processing audio');
             }
         }
 

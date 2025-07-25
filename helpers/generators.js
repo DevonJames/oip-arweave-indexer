@@ -1231,31 +1231,24 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
 }
 
 /**
- * Stream text to speech using ElevenLabs
+ * Stream text to speech using local TTS service (Chatterbox/Edge TTS)
  * @param {string} text - The text to convert to speech
- * @param {Object} voiceConfig - Voice configuration
- * @param {Function} onAudioChunk - Callback for audio chunks
+ * @param {Object} voiceConfig - Voice configuration (local TTS settings)
+ * @param {Function} onAudioChunk - Callback for audio chunks (optional)
  * @param {string} dialogueId - Optional dialogue ID
  * @returns {Promise<Buffer>} - The complete audio buffer
  */
 async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogueId = null) {
     try {
-        console.log('Streaming text to speech with ElevenLabs');
+        console.log('Streaming text to speech with local TTS service');
         console.log('Text to speech input:', text);
         
         const socketManager = require('../socket/socketManager');
         
-        // Set up ElevenLabs configuration with defaults
-        const voiceId = voiceConfig.voice_id || 'pNInz6obpgDQGcFmaJgB';
-        const modelId = voiceConfig.model_id || 'eleven_turbo_v2';
-        const stability = voiceConfig.stability || 0.5;
-        const similarityBoost = voiceConfig.similarity_boost || 0.75;
-        const apiUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
-        
         // Add a short delay to ensure client connection is fully established
         if (dialogueId) {
             console.log(`Waiting for client connection to stabilize for dialogueId: ${dialogueId}`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
         
         // Check if there are still clients for this dialogue before proceeding
@@ -1264,54 +1257,96 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             return Buffer.from([]);
         }
         
-        // Set up the API call to ElevenLabs
-        const response = await axios({
-            method: 'post',
-            url: apiUrl,
-            headers: {
-                'xi-api-key': process.env.ELEVENLABS_API_KEY,
-                'Content-Type': 'application/json',
-                'Accept': 'audio/mpeg'
-            },
-            data: {
-                text: text,
-                model_id: modelId,
-                voice_settings: {
-                    stability: stability,
-                    similarity_boost: similarityBoost
+        // Use local TTS service instead of ElevenLabs for real-time streaming
+        try {
+            console.log('🎤 Using local TTS service for streaming audio');
+            
+            // Call the local TTS service that supports streaming
+            const FormData = require('form-data');
+            const formData = new FormData();
+            formData.append('text', text);
+            formData.append('gender', 'female');
+            formData.append('emotion', 'expressive');
+            formData.append('exaggeration', '0.5');
+            formData.append('cfg_weight', '0.7');
+            formData.append('voice_cloning', 'false');
+            
+            const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                headers: {
+                    ...formData.getHeaders()
+                },
+                responseType: 'arraybuffer',
+                timeout: 30000
+            });
+            
+            if (ttsResponse.status === 200 && ttsResponse.data) {
+                console.log(`🎤 Local TTS generated ${ttsResponse.data.byteLength} bytes of audio`);
+                
+                // Convert to base64 and send to client
+                const audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                
+                socketManager.sendToClients(dialogueId, {
+                    type: 'audio',
+                    audio: audioBase64
+                });
+                
+                console.log(`🎤 Sent ${audioBase64.length} characters of base64 audio to client`);
+                
+                return Buffer.from(ttsResponse.data);
+            } else {
+                throw new Error('Local TTS service failed');
+            }
+            
+        } catch (localTtsError) {
+            console.error('Local TTS service failed:', localTtsError.message);
+            
+            // Fallback to ElevenLabs non-streaming
+            console.log('🎤 Falling back to ElevenLabs non-streaming');
+            
+            const voiceId = voiceConfig.voice_id || 'pNInz6obpgDQGcFmaJgB';
+            const modelId = voiceConfig.model_id || 'eleven_turbo_v2';
+            const stability = voiceConfig.stability || 0.5;
+            const similarityBoost = voiceConfig.similarity_boost || 0.75;
+            
+            const elevenLabsResponse = await axios.post(
+                `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+                {
+                    text: text,
+                    model_id: modelId,
+                    voice_settings: {
+                        stability: stability,
+                        similarity_boost: similarityBoost
+                    },
+                    output_format: 'mp3_44100_128'
+                },
+                {
+                    headers: {
+                        'xi-api-key': process.env.ELEVENLABS_API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    responseType: 'arraybuffer'
                 }
-            },
-            responseType: 'stream'
-        });
-        
-        // Process the streaming audio response
-        let audioChunks = [];
-        
-        response.data.on('data', (chunk) => {
-            audioChunks.push(chunk);
+            );
             
-            // IMPORTANT: Log the audio chunk info before sending
-            console.log(`Received audio chunk of size: ${chunk.length} bytes`);
-            
-            // Send to client with explicit type and conversion to base64
-            socketManager.sendToClients(dialogueId, {
-                type: 'audio',
-                audio: chunk.toString('base64')
-            });
-        });
+            if (elevenLabsResponse.status === 200 && elevenLabsResponse.data) {
+                console.log(`🎤 ElevenLabs generated ${elevenLabsResponse.data.byteLength} bytes of audio`);
+                
+                // Convert to base64 and send to client
+                const audioBase64 = Buffer.from(elevenLabsResponse.data).toString('base64');
+                
+                socketManager.sendToClients(dialogueId, {
+                    type: 'audio',
+                    audio: audioBase64
+                });
+                
+                console.log(`🎤 Sent ${audioBase64.length} characters of base64 audio to client`);
+                
+                return Buffer.from(elevenLabsResponse.data);
+            } else {
+                throw new Error('ElevenLabs TTS also failed');
+            }
+        }
         
-        // Handle completion
-        return new Promise((resolve, reject) => {
-            response.data.on('end', () => {
-                console.log('Text-to-speech streaming completed');
-                resolve(Buffer.concat(audioChunks));
-            });
-            
-            response.data.on('error', (error) => {
-                console.error('Error streaming text to speech:', error);
-                reject(error);
-            });
-        });
     } catch (error) {
         console.error('Error streaming text to speech:', error);
         throw error;
