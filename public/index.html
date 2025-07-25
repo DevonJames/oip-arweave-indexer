@@ -1005,30 +1005,29 @@
 
         // Synthesize speech using Chatterbox TTS
         async function synthesizeWithChatterbox(text) {
-            if (!chatterboxConfig.enabled) {
+            if (!voiceConfig.enabled) {
                 console.log('TTS disabled, skipping synthesis');
                 return;
             }
 
             try {
-                updateStatus(chatterboxConfig.voiceCloning.enabled ? 
+                updateStatus(voiceConfig.chatterbox.voiceCloning.enabled ? 
                     '🎤 Synthesizing with voice cloning...' : 
                     '🎵 Synthesizing with Chatterbox TTS...');
                 
                 // Always use FormData for consistency with backend expectations
                 const formData = new FormData();
                 formData.append('text', text);
-                formData.append('gender', chatterboxConfig.gender);
-                formData.append('emotion', chatterboxConfig.emotion);
-                formData.append('exaggeration', chatterboxConfig.exaggeration.toString());
-                formData.append('cfg_weight', chatterboxConfig.cfg_weight.toString());
+                formData.append('voice_id', voiceConfig.chatterbox.selectedVoice);
+                formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
                 formData.append('engine', 'chatterbox');
                 
-                if (chatterboxConfig.voiceCloning.enabled && chatterboxConfig.voiceCloning.audioFile) {
+                if (voiceConfig.chatterbox.voiceCloning.enabled && voiceConfig.chatterbox.voiceCloning.audioFile) {
                     // Voice cloning mode - add audio file
                     formData.append('voice_cloning', 'true');
-                    formData.append('audio_prompt', chatterboxConfig.voiceCloning.audioFile);
-                    console.log('🎤 Adding voice cloning audio file to request:', chatterboxConfig.voiceCloning.audioFile.name);
+                    formData.append('audio_prompt', voiceConfig.chatterbox.voiceCloning.audioFile);
+                    console.log('🎤 Adding voice cloning audio file to request:', voiceConfig.chatterbox.voiceCloning.audioFile.name);
                 } else {
                     // Regular synthesis mode
                     formData.append('voice_cloning', 'false');
