@@ -1400,11 +1400,12 @@ function stripEmojisForTTS(text) {
     // Then remove other problematic Unicode characters, but preserve common accented characters
     cleanText = cleanText.replace(problematicChars, '');
     
-    // Clean up any multiple spaces that might result from emoji removal
-    cleanText = cleanText.replace(/\s+/g, ' ').trim();
+    // IMPORTANT: For streaming chunks, preserve spaces! Only collapse multiple consecutive spaces
+    // but do NOT trim leading/trailing spaces as they might be important for word boundaries
+    cleanText = cleanText.replace(/\s{2,}/g, ' '); // Only replace 2+ spaces with 1 space
     
     if (cleanText !== text) {
-        console.log(`🚫 EMOJI STRIPPED: Original="${text.substring(0, 50)}..." → Clean="${cleanText.substring(0, 50)}..."`);
+        console.log(`🚫 EMOJI STRIPPED: Original="${text}" → Clean="${cleanText}"`);
         console.log(`🚫 Stripped characters: ${text.length - cleanText.length} chars removed`);
     }
     
