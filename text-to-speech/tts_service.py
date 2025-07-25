@@ -107,6 +107,7 @@ class ChatterboxEngine(TTSEngine):
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             logger.info(f"Initializing Chatterbox TTS on device: {device}")
             
+            # Store reference to prevent garbage collection
             self.model = ChatterboxTTS.from_pretrained(device=device)
             
             # Wait for model to fully load (PerthNet loading happens after initialization)
@@ -114,13 +115,18 @@ class ChatterboxEngine(TTSEngine):
             logger.info("Waiting for Chatterbox model to fully load...")
             time.sleep(2)  # Give time for PerthNet to load
             
-            # Test that model is actually ready
+            # Test that model is actually ready and store reference
             try:
                 # Try a small test synthesis to ensure model is ready
                 test_audio = self.model.generate(text="test", exaggeration=0.5, cfg_weight=0.5)
                 logger.info("✅ Chatterbox model test synthesis successful")
+                # Explicitly store model reference to ensure it persists
+                self._chatterbox_model = self.model
+                logger.info(f"Model reference stored: {self.model is not None}, {self._chatterbox_model is not None}")
             except Exception as e:
                 logger.warning(f"Chatterbox model test failed: {e}")
+                self.model = None
+                self._chatterbox_model = None
                 self.available = False
                 return
             
@@ -133,18 +139,28 @@ class ChatterboxEngine(TTSEngine):
             }
             
             self.available = True
-            logger.info("✅ Chatterbox TTS (Resemble AI) fully initialized and ready for synthesis")
+            logger.info(f"✅ Chatterbox TTS (Resemble AI) fully initialized. Model refs: {self.model is not None}, {self._chatterbox_model is not None}")
             
         except Exception as e:
             logger.error(f"Failed to initialize Chatterbox TTS: {str(e)}")
+            self.model = None
+            self._chatterbox_model = None
             self.available = False
     
     async def synthesize(self, text: str, gender: str = "female", emotion: str = "neutral", 
                           exaggeration: float = 0.5, cfg_weight: float = 0.5, 
                           audio_prompt_path: str = None, **kwargs) -> bytes:
-        logger.info(f"ChatterboxEngine synthesize called: model={self.model}, available={self.available}")
-        if not self.model:
-            logger.error(f"Chatterbox model not initialized! Model object: {self.model}, Available: {self.available}")
+        logger.info(f"ChatterboxEngine synthesize called: model={self.model is not None}, backup={hasattr(self, '_chatterbox_model') and self._chatterbox_model is not None}, available={self.available}")
+        
+        # Use backup model reference if primary is lost
+        model_to_use = self.model
+        if not model_to_use and hasattr(self, '_chatterbox_model'):
+            logger.info("Primary model reference lost, using backup reference")
+            model_to_use = self._chatterbox_model
+            self.model = self._chatterbox_model  # Restore primary reference
+        
+        if not model_to_use:
+            logger.error(f"Chatterbox model not initialized! Primary: {self.model is not None}, Backup: {hasattr(self, '_chatterbox_model') and self._chatterbox_model is not None}, Available: {self.available}")
             raise Exception("Chatterbox model not initialized")
             
         try:
@@ -156,7 +172,7 @@ class ChatterboxEngine(TTSEngine):
             # Generate audio with Chatterbox TTS using the generate method
             if audio_prompt_path and os.path.exists(audio_prompt_path):
                 # Voice cloning mode with audio prompt
-                audio = self.model.generate(
+                audio = model_to_use.generate(
                     text=text,
                     audio_prompt_path=audio_prompt_path,
                     exaggeration=exaggeration,
@@ -164,7 +180,7 @@ class ChatterboxEngine(TTSEngine):
                 )
             else:
                 # Default voice mode
-                audio = self.model.generate(
+                audio = model_to_use.generate(
                     text=text,
                     exaggeration=exaggeration,
                     cfg_weight=cfg_weight
