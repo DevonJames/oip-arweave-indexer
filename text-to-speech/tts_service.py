@@ -108,7 +108,21 @@ class ChatterboxEngine(TTSEngine):
             logger.info(f"Initializing Chatterbox TTS on device: {device}")
             
             self.model = ChatterboxTTS.from_pretrained(device=device)
-            logger.info(f"Chatterbox model created: {type(self.model)} at {id(self.model)}")
+            
+            # Wait for model to fully load (PerthNet loading happens after initialization)
+            import time
+            logger.info("Waiting for Chatterbox model to fully load...")
+            time.sleep(2)  # Give time for PerthNet to load
+            
+            # Test that model is actually ready
+            try:
+                # Try a small test synthesis to ensure model is ready
+                test_audio = self.model.generate(text="test", exaggeration=0.5, cfg_weight=0.5)
+                logger.info("✅ Chatterbox model test synthesis successful")
+            except Exception as e:
+                logger.warning(f"Chatterbox model test failed: {e}")
+                self.available = False
+                return
             
             self.voice_configs = {
                 "default": {"exaggeration": 0.5, "cfg_weight": 0.3},
@@ -119,7 +133,7 @@ class ChatterboxEngine(TTSEngine):
             }
             
             self.available = True
-            logger.info(f"✅ Chatterbox TTS (Resemble AI) initialized successfully. Model: {self.model is not None}")
+            logger.info("✅ Chatterbox TTS (Resemble AI) fully initialized and ready for synthesis")
             
         except Exception as e:
             logger.error(f"Failed to initialize Chatterbox TTS: {str(e)}")
