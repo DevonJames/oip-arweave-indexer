@@ -364,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const personality = {
             name: "Assistant",
             description: "A helpful AI assistant.",
-            model: "grok-beta",
+            model: "grok-4",
             temperature: 0.7,
             systemPrompt: "You are a helpful assistant. Answer questions concisely and accurately.",
             voices: {
@@ -707,7 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add personality configuration
         const personality = {
             name: "Assistant",
-            model: "grok-beta",
+            model: "grok-4",
             temperature: 0.7,
             systemPrompt: "You are a helpful assistant. Answer questions concisely and accurately.",
             voices: {
@@ -1150,7 +1150,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const personality = {
             name: "Assistant",
             description: "A helpful AI assistant.",
-            model: "grok-beta",
+            model: "grok-4",
             temperature: 0.7,
             systemPrompt: "You are a helpful assistant. Answer questions concisely and accurately.",
             voices: {

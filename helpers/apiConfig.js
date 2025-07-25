@@ -9,7 +9,7 @@ const llmConfig = {
     grok: {
         baseUrl: 'https://api.x.ai/v1',
         chatEndpoint: '/chat/completions',
-        model: 'grok-2-latest',
+        model: 'grok-4',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${process.env.XAI_API_KEY}`
