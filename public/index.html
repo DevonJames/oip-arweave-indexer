@@ -1138,6 +1138,9 @@
         async function sendAudioToChat(audioBlob) {
             console.log('🚀 sendAudioToChat called with blob size:', audioBlob.size);
             try {
+                // Stop any currently playing audio to prevent conflicts
+                stopAll();
+                
                 updateStatus('🎯 Processing audio...');
                 
                 // Create FormData with audio file
@@ -1631,17 +1634,17 @@
         `;
         document.head.appendChild(style);
 
-        // Initialize with a welcome message
-        setTimeout(() => {
-            if (voiceConfig.enabled) {
-                const engine = voiceConfig.selectedEngine;
-                if (engine === 'chatterbox') {
-                    synthesizeVoice("Hello! I'm your AI voice assistant with dual voice engines. Currently using Chatterbox TTS for high-quality neural synthesis with emotion control and voice cloning. Click the microphone to start a conversation, or switch to Edge TTS for faster responses!");
-                } else {
-                    synthesizeVoice("Hello! I'm your AI voice assistant using Edge TTS for fast, real-time conversation. I have hundreds of neural voices available in multiple languages. Click the microphone to start chatting, or switch to Chatterbox for advanced features like voice cloning!");
-                }
-            }
-        }, 2000);
+        // Initialize with a welcome message (commented out to prevent conflicts with conversation audio)
+        // setTimeout(() => {
+        //     if (voiceConfig.enabled) {
+        //         const engine = voiceConfig.selectedEngine;
+        //         if (engine === 'chatterbox') {
+        //             synthesizeVoice("Hello! I'm your AI voice assistant with dual voice engines. Currently using Chatterbox TTS for high-quality neural synthesis with emotion control and voice cloning. Click the microphone to start a conversation, or switch to Edge TTS for faster responses!");
+        //         } else {
+        //             synthesizeVoice("Hello! I'm your AI voice assistant using Edge TTS for fast, real-time conversation. I have hundreds of neural voices available in multiple languages. Click the microphone to start chatting, or switch to Chatterbox for advanced features like voice cloning!");
+        //         }
+        //     }
+        // }, 2000);
     </script>
 </body>
 </html> 

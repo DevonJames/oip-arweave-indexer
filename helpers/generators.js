@@ -1180,6 +1180,9 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
                     if (data === '[DONE]') continue;
                     
                     try {
+                        // Skip empty data lines
+                        if (!data.trim()) return;
+                        
                         const parsed = JSON.parse(data);
                         const content = parsed.choices?.[0]?.delta?.content || '';
                         
@@ -1199,7 +1202,11 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
                             }
                         }
                     } catch (e) {
-                        console.error('Error parsing stream data:', e);
+                        // Only log JSON parsing errors if the data isn't empty
+                        if (data.trim()) {
+                            console.error('Error parsing stream data:', e);
+                            console.error('Problematic data chunk:', data.substring(0, 100));
+                        }
                     }
                 }
             }
@@ -1375,6 +1382,31 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
             textAccumulator.lastSentTime = Date.now();
         }
         
+        // Debug voice configuration
+        console.log(`🎤 streamChunkedTextToSpeech called with engine: ${voiceConfig.engine}`);
+        console.log(`🎤 Full voice config:`, JSON.stringify(voiceConfig, null, 2));
+        
+        // Ensure voice config has proper structure
+        if (!voiceConfig.engine) {
+            console.warn(`🎤 No engine specified in voiceConfig, defaulting to chatterbox`);
+            voiceConfig.engine = 'chatterbox';
+        }
+        
+        if (voiceConfig.engine === 'edge_tts' && !voiceConfig.edge) {
+            console.warn(`🎤 Edge TTS selected but no edge config found, defaulting to chatterbox`);
+            voiceConfig.engine = 'chatterbox';
+        }
+        
+        if (voiceConfig.engine === 'chatterbox' && !voiceConfig.chatterbox) {
+            console.warn(`🎤 Chatterbox selected but no chatterbox config found, using defaults`);
+            voiceConfig.chatterbox = {
+                selectedVoice: 'female_expressive',
+                exaggeration: 0.6,
+                cfg_weight: 0.7,
+                voiceCloning: { enabled: false }
+            };
+        }
+        
         // Add new text to buffer
         textAccumulator.buffer += text;
         
@@ -1441,8 +1473,11 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
             try {
                 let audioBase64;
                 
+                console.log(`🎤 Checking engine selection: voiceConfig.engine="${voiceConfig.engine}"`);
+                
                 if (voiceConfig.engine === 'edge_tts') {
                     console.log(`🎤 Using Edge TTS for chunk with voice: ${voiceConfig.edge.selectedVoice}`);
+                    console.log(`🎤 Voice config for Edge TTS:`, JSON.stringify(voiceConfig.edge, null, 2));
                     
                     // Call Edge TTS via the voice service
                     const FormData = require('form-data');
@@ -1453,6 +1488,8 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     formData.append('pitch', voiceConfig.edge.pitch.toString());
                     formData.append('volume', voiceConfig.edge.volume.toString());
                     formData.append('engine', 'edge_tts');
+                    
+                    console.log(`🎤 Sending Edge TTS request with parameters: voice_id=${voiceConfig.edge.selectedVoice}, engine=edge_tts`);
                     
                     const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
                         headers: {
@@ -1587,6 +1624,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
 async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChunk, dialogueId = null) {
     if (textAccumulator.buffer && textAccumulator.buffer.trim().length > 0) {
         console.log(`🎤 Flushing remaining text: "${textAccumulator.buffer.substring(0, 50)}..."`);
+        console.log(`🎤 Flush function using engine: ${voiceConfig.engine}`);
         await streamChunkedTextToSpeech('', textAccumulator, voiceConfig, onAudioChunk, dialogueId, true);
         
         // Force process whatever is left
@@ -1601,8 +1639,14 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
             try {
                 let audioBase64;
                 
+                // Ensure voice config has proper structure for final chunk too
+                if (!voiceConfig.engine) {
+                    console.warn(`🎤 No engine specified for final chunk, defaulting to chatterbox`);
+                    voiceConfig.engine = 'chatterbox';
+                }
+                
                 if (voiceConfig.engine === 'edge_tts') {
-                    console.log(`🎤 Using Edge TTS for final chunk with voice: ${voiceConfig.edge.selectedVoice}`);
+                    console.log(`🎤 Using Edge TTS for final chunk with voice: ${voiceConfig.edge?.selectedVoice || 'unknown'}`);
                     
                     const FormData = require('form-data');
                     const formData = new FormData();
