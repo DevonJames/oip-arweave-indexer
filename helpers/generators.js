@@ -1561,7 +1561,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                             ...formData.getHeaders()
                         },
                         responseType: 'arraybuffer',
-                        timeout: 25000 // Increased timeout - Edge TTS can be slow on first request
+                        timeout: 15000 // Reduced timeout - faster fallback to ElevenLabs if Edge TTS is slow
                     });
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
@@ -1609,7 +1609,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                             ...formData.getHeaders()
                         },
                         responseType: 'arraybuffer',
-                        timeout: 30000
+                        timeout: 12000 // Reduced timeout - if Chatterbox takes >12s, use ElevenLabs fallback
                     });
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
@@ -1748,7 +1748,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                             ...formData.getHeaders()
                         },
                         responseType: 'arraybuffer',
-                        timeout: 30000 // Increased timeout for final chunk processing
+                        timeout: 15000 // Reduced timeout for Edge TTS final chunk
                     });
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
@@ -1792,7 +1792,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                             ...formData.getHeaders()
                         },
                         responseType: 'arraybuffer',
-                        timeout: 30000
+                        timeout: 12000 // Reduced timeout - fast fallback to ElevenLabs if Chatterbox is slow
                     });
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
