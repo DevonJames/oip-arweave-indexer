@@ -1433,8 +1433,8 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
         }
         
         // Debug voice configuration
-        console.log(`🎤 streamChunkedTextToSpeech called with engine: ${voiceConfig.engine}`);
-        console.log(`🎤 Full voice config:`, JSON.stringify(voiceConfig, null, 2));
+        // console.log(`🎤 streamChunkedTextToSpeech called with engine: ${voiceConfig.engine}`);
+        // console.log(`🎤 Full voice config:`, JSON.stringify(voiceConfig, null, 2));
         
         // Ensure voice config has proper structure
         if (!voiceConfig.engine) {
