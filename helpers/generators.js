@@ -1516,6 +1516,9 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
             textAccumulator.lastSentTime = Date.now();
             textAccumulator.sentenceCount++;
             
+            // Store the current chunk index to use consistently throughout this chunk processing
+            const currentChunkIndex = textAccumulator.sentenceCount;
+            
             // Check if clients are still connected
             if (dialogueId && !socketManager.hasClients(dialogueId)) {
                 console.log(`No active clients for dialogueId: ${dialogueId}, skipping chunk TTS`);
@@ -1529,7 +1532,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                 console.log(`🎤 Checking engine selection: voiceConfig.engine="${voiceConfig.engine}"`);
                 
                 if (voiceConfig.engine === 'edge_tts') {
-                    console.log(`🎤 Using Edge TTS for chunk with voice: ${voiceConfig.edge.selectedVoice}`);
+                    console.log(`🎤 Using Edge TTS for chunk ${currentChunkIndex} with voice: ${voiceConfig.edge.selectedVoice}`);
                     console.log(`🎤 Voice config for Edge TTS:`, JSON.stringify(voiceConfig.edge, null, 2));
                     
                     // Call Edge TTS via the voice service
@@ -1553,7 +1556,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     });
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
-                        console.log(`🎤 Edge TTS generated ${ttsResponse.data.byteLength} bytes for chunk ${textAccumulator.sentenceCount}`);
+                        console.log(`🎤 Edge TTS generated ${ttsResponse.data.byteLength} bytes for chunk ${currentChunkIndex}`);
                         audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
                     } else {
                         throw new Error(`Edge TTS returned status: ${ttsResponse.status}`);
@@ -1561,7 +1564,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     
                 } else {
                     // Use Chatterbox TTS (default)
-                    console.log(`🎤 Using Chatterbox TTS for chunk with voice: ${voiceConfig.chatterbox.selectedVoice}`);
+                    console.log(`🎤 Using Chatterbox TTS for chunk ${currentChunkIndex} with voice: ${voiceConfig.chatterbox.selectedVoice}`);
                     
                     const FormData = require('form-data');
                     const formData = new FormData();
@@ -1588,7 +1591,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     });
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
-                        console.log(`🎤 Chatterbox generated ${ttsResponse.data.byteLength} bytes for chunk ${textAccumulator.sentenceCount}`);
+                        console.log(`🎤 Chatterbox generated ${ttsResponse.data.byteLength} bytes for chunk ${currentChunkIndex}`);
                         audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
                     } else {
                         throw new Error(`Chatterbox returned status: ${ttsResponse.status}`);
@@ -1597,8 +1600,10 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                 
                 // Send audio chunk to client
                 if (audioBase64) {
+                    console.log(`🎤 Streaming audio chunk ${currentChunkIndex} for text: "${chunkToProcess.substring(0, 50)}..."`);
+                    
                     if (onAudioChunk && typeof onAudioChunk === 'function') {
-                        await onAudioChunk(audioBase64, textAccumulator.sentenceCount, chunkToProcess);
+                        await onAudioChunk(audioBase64, currentChunkIndex, chunkToProcess);
                     }
                     
                     // Also send via socket manager
@@ -1606,7 +1611,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                         socketManager.sendToClients(dialogueId, {
                             type: 'audioChunk',
                             audio: audioBase64,
-                            chunkIndex: textAccumulator.sentenceCount,
+                            chunkIndex: currentChunkIndex,
                             text: chunkToProcess
                         });
                     }
@@ -1644,14 +1649,14 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                         const audioBase64 = Buffer.from(elevenLabsResponse.data).toString('base64');
                         
                         if (onAudioChunk && typeof onAudioChunk === 'function') {
-                            await onAudioChunk(audioBase64, textAccumulator.sentenceCount, chunkToProcess);
+                            await onAudioChunk(audioBase64, currentChunkIndex, chunkToProcess);
                         }
                         
                         if (dialogueId) {
                             socketManager.sendToClients(dialogueId, {
                                 type: 'audioChunk',  
                                 audio: audioBase64,
-                                chunkIndex: textAccumulator.sentenceCount,
+                                chunkIndex: currentChunkIndex,
                                 text: chunkToProcess
                             });
                         }
@@ -1687,7 +1692,10 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
             textAccumulator.lastSentTime = Date.now();
             textAccumulator.sentenceCount++;
             
-            console.log(`🎤 Processing final chunk: "${remainingText}"`);
+            // Store the current chunk index for consistent use throughout final chunk processing
+            const finalChunkIndex = textAccumulator.sentenceCount;
+            
+            console.log(`🎤 Processing final chunk ${finalChunkIndex}: "${remainingText}"`);
             
             try {
                 let audioBase64;
@@ -1699,7 +1707,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                 }
                 
                 if (voiceConfig.engine === 'edge_tts') {
-                    console.log(`🎤 Using Edge TTS for final chunk with voice: ${voiceConfig.edge?.selectedVoice || 'unknown'}`);
+                    console.log(`🎤 Using Edge TTS for final chunk ${finalChunkIndex} with voice: ${voiceConfig.edge?.selectedVoice || 'unknown'}`);
                     
                     const FormData = require('form-data');
                     const formData = new FormData();
@@ -1723,7 +1731,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                     }
                 } else {
                     // Use Chatterbox TTS (default)
-                    console.log(`🎤 Using Chatterbox TTS for final chunk with voice: ${voiceConfig.chatterbox.selectedVoice}`);
+                    console.log(`🎤 Using Chatterbox TTS for final chunk ${finalChunkIndex} with voice: ${voiceConfig.chatterbox.selectedVoice}`);
                     
                     const FormData = require('form-data');
                     const formData = new FormData();
@@ -1755,8 +1763,10 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                 }
                 
                 if (audioBase64) {
+                    console.log(`🎤 Flushing final audio chunk ${finalChunkIndex} for text: "${remainingText.substring(0, 50)}..."`);
+                    
                     if (onAudioChunk && typeof onAudioChunk === 'function') {
-                        await onAudioChunk(audioBase64, textAccumulator.sentenceCount, remainingText, true);
+                        await onAudioChunk(audioBase64, finalChunkIndex, remainingText, true);
                     }
                     
                     if (dialogueId) {
@@ -1764,7 +1774,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                         socketManager.sendToClients(dialogueId, {
                             type: 'audioChunk',
                             audio: audioBase64,
-                            chunkIndex: textAccumulator.sentenceCount,
+                            chunkIndex: finalChunkIndex,
                             text: remainingText,
                             isFinal: true
                         });
