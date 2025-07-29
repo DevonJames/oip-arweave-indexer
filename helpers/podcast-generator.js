@@ -10,9 +10,10 @@ const { isInt16Array } = require('util/types');
 const { publishNewRecord } = require('../helpers/templateHelper');
 const { host } = require('../config/arweave.config');
 const {getCurrentBlockHeight} = require('../helpers/arweave');
-const { indexRecord, searchCreatorByAddress } = require('../helpers/elasticsearch');
+const { indexRecord, searchCreatorByAddress, getRecords } = require('../helpers/elasticsearch');
 const base64url = require('base64url');
 const { getWalletFilePath } = require('./utils');
+const ragService = require('./ragService');
 
 
 // Initialize Text-to-Speech client
@@ -2516,5 +2517,133 @@ module.exports = {
   generatePodcast,
   mergeAudioFiles,
   getAudioDuration,
-  groupRelatedDocuments  // Add the new function to exports
+  groupRelatedDocuments,  // Add the new function to exports
+  convertDidTxRecordsToArticles  // Add the new conversion function
 };
+
+/**
+ * Convert didTx records to articles format for podcast generation
+ * @param {string|string[]} didTxInput - Single didTx string or array of didTx strings
+ * @returns {Promise<Array>} - Array of articles in expected format
+ */
+async function convertDidTxRecordsToArticles(didTxInput) {
+  console.log('Converting didTx records to articles format:', didTxInput);
+  
+  // Normalize input to array
+  const didTxArray = Array.isArray(didTxInput) ? didTxInput : [didTxInput];
+  
+  const articles = [];
+  
+  for (const didTx of didTxArray) {
+    try {
+      // Fetch the record with sufficient resolve depth to get dref content
+      const recordsResponse = await getRecords({
+        didTx: didTx,
+        resolveDepth: 3, // Deep resolution to get all referenced content
+        limit: 1
+      });
+      
+      if (!recordsResponse.records || recordsResponse.records.length === 0) {
+        console.warn(`No record found for didTx: ${didTx}`);
+        continue;
+      }
+      
+      const record = recordsResponse.records[0];
+      const recordType = record.oip?.recordType || 'unknown';
+      const basicData = record.data?.basic || {};
+      
+      console.log(`Processing ${recordType} record: ${basicData.name || 'Unnamed'}`);
+      
+      // Extract basic article info
+      const article = {
+        didTx: didTx,
+        title: basicData.name || 'Untitled',
+        description: basicData.description || '',
+        tags: basicData.tagItems ? (Array.isArray(basicData.tagItems) ? basicData.tagItems.join(',') : basicData.tagItems) : '',
+        relatedScore: 1.0, // Default score for explicitly requested records
+        url: null,
+        content: null
+      };
+      
+      // Extract content URL based on record type
+      let contentUrl = null;
+      
+      switch (recordType) {
+        case 'post':
+          // Check for direct webUrl first
+          if (record.data.post?.webUrl) {
+            contentUrl = record.data.post.webUrl;
+            article.url = contentUrl;
+          }
+          // Check for articleText dref with webUrl
+          else if (record.data.post?.articleText?.data?.text?.webUrl) {
+            contentUrl = record.data.post.articleText.data.text.webUrl;
+            article.url = contentUrl;
+          }
+          // Check if articleText is a direct string
+          else if (record.data.post?.articleText && typeof record.data.post.articleText === 'string') {
+            article.content = record.data.post.articleText;
+          }
+          break;
+          
+        case 'text':
+          // For text records, check for webUrl
+          if (record.data.text?.webUrl) {
+            contentUrl = record.data.text.webUrl;
+            article.url = contentUrl;
+          }
+          // Check for direct text content
+          else if (record.data.text?.text) {
+            article.content = record.data.text.text;
+          }
+          break;
+          
+        default:
+          // For other record types, try to extract full text URL using RAG service
+          const extractedUrl = ragService.extractFullTextUrl(record);
+          if (extractedUrl) {
+            contentUrl = extractedUrl;
+            article.url = contentUrl;
+          }
+          // Fall back to basic description
+          else if (basicData.description) {
+            article.content = basicData.description;
+          }
+          break;
+      }
+      
+      // If we have a content URL, fetch the actual text content
+      if (contentUrl && !article.content) {
+        console.log(`Fetching content from URL: ${contentUrl}`);
+        try {
+          const fetchedContent = await ragService.fetchFullTextContent(contentUrl, article.title);
+          if (fetchedContent) {
+            article.content = fetchedContent;
+            console.log(`Successfully fetched ${fetchedContent.length} characters of content`);
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch content from ${contentUrl}:`, error.message);
+        }
+      }
+      
+      // If we still don't have content, use description as fallback
+      if (!article.content && article.description) {
+        article.content = article.description;
+      }
+      
+      // Only add articles that have some content
+      if (article.content || article.url) {
+        articles.push(article);
+        console.log(`Added article: ${article.title} (${article.content ? article.content.length + ' chars' : 'URL: ' + article.url})`);
+      } else {
+        console.warn(`Skipping article with no content: ${article.title}`);
+      }
+      
+    } catch (error) {
+      console.error(`Error processing didTx ${didTx}:`, error);
+    }
+  }
+  
+  console.log(`Converted ${didTxArray.length} didTx records to ${articles.length} articles`);
+  return articles;
+}

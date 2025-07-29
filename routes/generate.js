@@ -10,7 +10,7 @@ const fs = require('fs');
 const crypto = require('crypto');  // For generating a unique hash
 const path = require('path');
 const { generateCombinedSummaryFromArticles, replaceAcronyms, synthesizeSpeech, transcribeAudio, generateStreamingResponse, streamTextToSpeech, getElevenLabsVoices, streamChunkedTextToSpeech, flushRemainingText } = require('../helpers/generators');
-const { generatePodcastFromArticles, generateInvestigativeReportFromDocuments, synthesizeDialogueTurn, getAudioDuration, personalities } = require('../helpers/podcast-generator');
+const { generatePodcastFromArticles, generateInvestigativeReportFromDocuments, synthesizeDialogueTurn, getAudioDuration, personalities, convertDidTxRecordsToArticles } = require('../helpers/podcast-generator');
 const e = require('express');
 const multer = require('multer');
 const socketManager = require('../socket/socketManager');
@@ -78,9 +78,48 @@ router.post('/text', async (req, res) => {
 });
 
 router.post('/podcast', async (req, res) => {
-    let { articles, selectedHosts, targetLengthSeconds } = req.body;
-    if (!articles || !selectedHosts) {
-        return res.status(400).json({ error: 'articles & selectedHosts are required' });
+    let { articles, selectedHosts, targetLengthSeconds, didTx, didTxs } = req.body;
+    
+    // Handle didTx/didTxs input by converting to articles format
+    let processedArticles = articles || [];
+    
+    if (didTx || didTxs) {
+        console.log('Processing didTx input for podcast generation:', { didTx, didTxs });
+        
+        try {
+            // Determine which didTx input to use
+            const didTxInput = didTxs || didTx;
+            
+            // Convert didTx records to articles format
+            const convertedArticles = await convertDidTxRecordsToArticles(didTxInput);
+            
+            if (convertedArticles.length === 0) {
+                return res.status(400).json({ 
+                    error: 'No valid articles could be extracted from the provided didTx records' 
+                });
+            }
+            
+            // Merge with any existing articles
+            processedArticles = [...processedArticles, ...convertedArticles];
+            console.log(`Successfully converted didTx records. Total articles: ${processedArticles.length}`);
+            
+        } catch (error) {
+            console.error('Error converting didTx records to articles:', error);
+            return res.status(500).json({ 
+                error: 'Failed to process didTx records: ' + error.message 
+            });
+        }
+    }
+    
+    // Validate that we have articles and hosts
+    if (!processedArticles || processedArticles.length === 0) {
+        return res.status(400).json({ 
+            error: 'Either articles or didTx/didTxs parameter is required' 
+        });
+    }
+    
+    if (!selectedHosts) {
+        return res.status(400).json({ error: 'selectedHosts parameter is required' });
     }
 
     // Set SSE headers
@@ -92,7 +131,7 @@ router.post('/podcast', async (req, res) => {
     console.log('Received podcast generation request');
 
     const podcastId = generateAudioFileName(
-        articles.map(article => article.url).join(', ') + JSON.stringify(selectedHosts),
+        processedArticles.map(article => article.url || article.title).join(', ') + JSON.stringify(selectedHosts),
         'mp3'
     );
 
@@ -107,9 +146,9 @@ router.post('/podcast', async (req, res) => {
         res.write(`event: generatingPodcast\n`);
         res.write(`data: "Podcast generation starting for ID: ${podcastId}"\n\n`);
 
-        // Generate podcast
+        // Generate podcast with processed articles
         const podcastFile = await generatePodcastFromArticles(
-            articles,
+            processedArticles,
             selectedHosts,
             targetLengthSeconds || 3500,
             podcastId,
@@ -1204,7 +1243,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     name: "Assistant",  
                     model: "grok-4",
                     temperature: 0.7,
-                    systemPrompt: "You are an efficient and knowledgeable assistant for a high-profile podcaster. Your primary role is to monitor breaking news, trending stories, and relevant developments across politics, technology, culture, and media. Summarize key information concisely, prioritize credibility, and always aim to keep the host one step ahead. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses as they interfere with text-to-speech synthesis.",
+                    systemPrompt: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help a high-profile podcaster stay informed and productive by answering questions, retrieving information from stored records, summarizing documents, and generating media-ready content such as podcast scripts or segment outlines. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis.",
+                    // systemPrompt: "You are an efficient and knowledgeable assistant for a high-profile podcaster. Your primary role is to monitor breaking news, trending stories, and relevant developments across politics, technology, culture, and media. Summarize key information concisely, prioritize credibility, and always aim to keep the host one step ahead. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses as they interfere with text-to-speech synthesis.",
                     // systemPrompt: "You are a helpful assistant for a construction company. You provide coordination between customers and the construction company and its subcontractors. Answer questions about scheduling concisely and accurately. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses as they interfere with text-to-speech synthesis.",
                     voices: {
                         elevenLabs: {
@@ -1408,9 +1448,9 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 }
                 
                 // CRITICAL FIX: Wait for all TTS processing to complete before sending 'done'
-                // Add a small delay to ensure all async TTS chunks have been processed
-                console.log('🎤 Waiting for TTS processing to complete before sending done event...');
-                await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+                // Give TTS service more time - Edge TTS can be slow, ElevenLabs fallback takes time
+                console.log('🎤 Waiting longer for TTS processing to complete before sending done event...');
+                await new Promise(resolve => setTimeout(resolve, 8000)); // 8 seconds for TTS completion
                 
                 // Check if stream still has clients before sending completion
                 if (socketManager.hasClients(dialogueId)) {

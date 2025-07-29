@@ -1514,10 +1514,13 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
             }
             
             textAccumulator.lastSentTime = Date.now();
-            textAccumulator.sentenceCount++;
             
-            // Store the current chunk index to use consistently throughout this chunk processing
-            const currentChunkIndex = textAccumulator.sentenceCount;
+            // Atomic increment to prevent race conditions in concurrent TTS processing
+            if (!textAccumulator.chunkCounter) {
+                textAccumulator.chunkCounter = 0;
+            }
+            const currentChunkIndex = ++textAccumulator.chunkCounter;
+            textAccumulator.sentenceCount = currentChunkIndex;
             
             // Check if clients are still connected
             if (dialogueId && !socketManager.hasClients(dialogueId)) {
@@ -1690,10 +1693,13 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
             const remainingText = stripEmojisForTTS(textAccumulator.buffer.trim());
             textAccumulator.buffer = '';
             textAccumulator.lastSentTime = Date.now();
-            textAccumulator.sentenceCount++;
             
-            // Store the current chunk index for consistent use throughout final chunk processing
-            const finalChunkIndex = textAccumulator.sentenceCount;
+            // Atomic increment for final chunk to prevent race conditions  
+            if (!textAccumulator.chunkCounter) {
+                textAccumulator.chunkCounter = 0;
+            }
+            const finalChunkIndex = ++textAccumulator.chunkCounter;
+            textAccumulator.sentenceCount = finalChunkIndex;
             
             console.log(`🎤 Processing final chunk ${finalChunkIndex}: "${remainingText}"`);
             
