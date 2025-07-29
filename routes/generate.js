@@ -1407,17 +1407,29 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     }
                 }
                 
-                // Mark conversation as complete
-                ongoingStream.status = 'completed';
-                socketManager.sendToClients(dialogueId, {
-                    type: 'done',
-                    data: "Conversation complete"
-                });
+                // CRITICAL FIX: Wait for all TTS processing to complete before sending 'done'
+                // Add a small delay to ensure all async TTS chunks have been processed
+                console.log('🎤 Waiting for TTS processing to complete before sending done event...');
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
                 
-                ongoingStream.data.push({
-                    event: 'done',
-                    data: "Conversation complete"
-                });
+                // Check if stream still has clients before sending completion
+                if (socketManager.hasClients(dialogueId)) {
+                    console.log('✅ Sending conversation completion event');
+                    
+                    // Mark conversation as complete
+                    ongoingStream.status = 'completed';
+                    socketManager.sendToClients(dialogueId, {
+                        type: 'done',
+                        data: "Conversation complete"
+                    });
+                    
+                    ongoingStream.data.push({
+                        event: 'done',
+                        data: "Conversation complete"
+                    });
+                } else {
+                    console.log('⚠️ No clients remaining, skipping completion event');
+                }
                 
                 console.log('Streaming response completed');
                 

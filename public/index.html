@@ -388,9 +388,13 @@
                     const data = await response.json();
                     const voices = data.voices || [];
                     
-                    // Separate voices by engine
-                    availableVoices.chatterbox = voices.filter(v => v.engine === 'chatterbox');
-                    availableVoices.edge_tts = voices.filter(v => v.engine === 'Edge TTS' || v.engine === 'edge_tts');
+                    // Separate voices by engine (case-insensitive)
+                    availableVoices.chatterbox = voices.filter(v => 
+                        v.engine && (v.engine.toLowerCase() === 'chatterbox' || v.engine.toLowerCase() === 'chatterbox tts')
+                    );
+                    availableVoices.edge_tts = voices.filter(v => 
+                        v.engine && (v.engine.toLowerCase() === 'edge tts' || v.engine.toLowerCase() === 'edge_tts')
+                    );
                     
                     console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices and ${availableVoices.edge_tts.length} Edge TTS voices`);
                     

@@ -657,16 +657,29 @@ router.get('/voices', async (req, res) => {
     } catch (error) {
         console.warn('[TTS] Chatterbox service unavailable, returning fallback voices:', error.message);
         
-        // Fallback voices if service is down
+        // Fallback voices if service is down - comprehensive Edge TTS selection
         const fallbackVoices = {
             voices: [
-                { id: 'edge_female', name: 'Edge Female (Jenny) - High Quality', engine: 'Edge TTS' },
-                { id: 'edge_male', name: 'Edge Male (Guy) - High Quality', engine: 'Edge TTS' },
-                { id: 'edge_expressive', name: 'Edge Expressive (Aria) - Natural', engine: 'Edge TTS' },
-                { id: 'female_1', name: 'Chatterbox Female 1', engine: 'Chatterbox' },
-                { id: 'male_1', name: 'Chatterbox Male 1', engine: 'Chatterbox' },
-                { id: 'female_2', name: 'Female Voice 2 (eSpeak)', engine: 'eSpeak' },
-                { id: 'male_2', name: 'Male Voice 2 (eSpeak)', engine: 'eSpeak' }
+                // Edge TTS voices (most popular ones)
+                { id: 'en-US-AriaNeural', name: 'Edge Aria (US Female)', engine: 'Edge TTS', gender: 'female', language: 'en-US' },
+                { id: 'en-US-JennyNeural', name: 'Edge Jenny (US Female)', engine: 'Edge TTS', gender: 'female', language: 'en-US' },
+                { id: 'en-US-GuyNeural', name: 'Edge Guy (US Male)', engine: 'Edge TTS', gender: 'male', language: 'en-US' },
+                { id: 'en-US-DavisNeural', name: 'Edge Davis (US Male)', engine: 'Edge TTS', gender: 'male', language: 'en-US' },
+                { id: 'en-GB-SoniaNeural', name: 'Edge Sonia (UK Female)', engine: 'Edge TTS', gender: 'female', language: 'en-GB' },
+                { id: 'en-GB-RyanNeural', name: 'Edge Ryan (UK Male)', engine: 'Edge TTS', gender: 'male', language: 'en-GB' },
+                { id: 'en-AU-NatashaNeural', name: 'Edge Natasha (AU Female)', engine: 'Edge TTS', gender: 'female', language: 'en-AU' },
+                { id: 'en-AU-WilliamNeural', name: 'Edge William (AU Male)', engine: 'Edge TTS', gender: 'male', language: 'en-AU' },
+                { id: 'en-CA-ClaraNeural', name: 'Edge Clara (CA Female)', engine: 'Edge TTS', gender: 'female', language: 'en-CA' },
+                { id: 'en-CA-LiamNeural', name: 'Edge Liam (CA Male)', engine: 'Edge TTS', gender: 'male', language: 'en-CA' },
+                
+                // Chatterbox voices
+                { id: 'female_expressive', name: 'Chatterbox Female Expressive', engine: 'Chatterbox', gender: 'female' },
+                { id: 'male_1', name: 'Chatterbox Male 1', engine: 'Chatterbox', gender: 'male' },
+                { id: 'female_calm', name: 'Chatterbox Female Calm', engine: 'Chatterbox', gender: 'female' },
+                
+                // eSpeak fallback
+                { id: 'espeak_female', name: 'eSpeak Female (Fallback)', engine: 'eSpeak', gender: 'female' },
+                { id: 'espeak_male', name: 'eSpeak Male (Fallback)', engine: 'eSpeak', gender: 'male' }
             ]
         };
         
