@@ -2814,10 +2814,8 @@
             
             <div class="auth-section">
                 <button id="ai-drawer-toggle" class="ai-drawer-toggle" onclick="toggleAIDrawer()">
-                    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; fill: currentColor; margin-right: 6px;">
-                        <path d="M50,5 C27.909,5 10,22.909 10,45 L10,65 C10,87.091 27.909,105 50,105 C72.091,105 90,87.091 90,65 L90,45 C90,22.909 72.091,5 50,5 Z M50,15 C66.569,15 80,28.431 80,45 L80,65 C80,81.569 66.569,95 50,95 C33.431,95 20,81.569 20,65 L20,45 C20,28.431 33.431,15 50,15 Z M35,35 C30.029,35 26,39.029 26,44 C26,48.971 30.029,53 35,53 C39.971,53 44,48.971 44,44 C44,39.029 39.971,35 35,35 Z M65,35 C60.029,35 56,39.029 56,44 C56,48.971 60.029,53 65,53 C69.971,53 74,48.971 74,44 C74,39.029 69.971,35 65,35 Z M35,65 L35,75 L44,75 L44,65 L35,65 Z M56,65 L56,75 L65,75 L65,65 L56,65 Z"/>
-                    </svg>
-                    AI Assistant
+                    <img src="icons/alfred.gif" alt="ΛLFRED" style="width: 16px; height: 16px; margin-right: 6px;">
+                    ΛLFRED
                 </button>
                 <div id="user-info" class="hidden">
                     <span id="logged-in-display" class="logged-in-user"></span>
@@ -2841,7 +2839,8 @@
     <div id="ai-drawer" class="ai-drawer">
         <div class="ai-drawer-header">
             <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
-                <span>🤖</span> AI Assistant
+                <img src="icons/alfred.gif" alt="ΛLFRED" style="width: 20px; height: 20px;">
+                ΛLFRED
             </h3>
             
             <div class="ai-settings" style="margin-top: 15px;">
@@ -2867,7 +2866,7 @@
                     </select>
                 </div>
                 <div class="ai-setting" style="display: inline-block;">
-                    <label for="tts-voice-select">🎭 Voice Style</label>
+                    <label for="tts-voice-select">Voice Style</label>
                     <select id="tts-voice-select" onchange="updateVoiceStyle()">
                         <option value="default">Chatterbox Default</option>
                         <option value="expressive">Chatterbox Expressive</option>
@@ -2883,7 +2882,7 @@
             <!-- Chatterbox Advanced Voice Controls -->
             <div class="ai-settings" style="margin-top: 10px; padding: 12px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); font-weight: 600;">🎛️ Chatterbox Voice Controls</div>
+                    <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); font-weight: 600;">Chatterbox Voice Controls</div>
                     <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(255, 255, 255, 0.8); cursor: pointer;">
                         <input type="checkbox" id="tts-enabled" checked style="accent-color: #3b82f6;" onchange="toggleTTSEnabled()">
                         Speak Responses
@@ -2908,7 +2907,7 @@
             </div>
 
             <div id="applied-filters-display" class="applied-filters hidden" style="margin-top: 15px; background: rgba(59, 130, 246, 0.2); border: 2px solid rgba(59, 130, 246, 0.5); border-radius: 8px; padding: 12px; margin-bottom: 15px;">
-                <div style="margin-bottom: 8px; font-weight: bold; color: #1e40af; background: rgba(255, 255, 255, 0.8); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(30, 64, 175, 0.3);">🔍 AI Applied Filters:</div>
+                <div style="margin-bottom: 8px; font-weight: bold; color: #1e40af; background: rgba(255, 255, 255, 0.8); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(30, 64, 175, 0.3);">AI Applied Filters:</div>
                 <div id="filter-chips-container"></div>
                 <div id="filter-rationale" style="margin-top: 8px; font-size: 12px; color: #374151; opacity: 0.9;"></div>
             </div>
@@ -2917,7 +2916,6 @@
         <div class="ai-drawer-content">
             <div id="chat-conversation" class="chat-conversation">
                 <div id="chat-empty-state" class="chat-empty-state">
-                    <div class="emoji">💬</div>
                     <h3>Start a conversation</h3>
                     <p>Ask questions about your data and I'll help you find answers!</p>
                 </div>
@@ -8017,7 +8015,10 @@
 
                 console.log('[STT] Transcribed:', transcribedText);
 
-                // Put transcribed text in the input field
+                // Add transcribed text to the conversation window immediately
+                addToConversation('user', transcribedText);
+
+                // Also put transcribed text in the input field for editing if needed
                 const input = document.getElementById('ai-chat-input');
                 input.value = transcribedText;
                 input.style.height = 'auto';
