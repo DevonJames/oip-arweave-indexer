@@ -1290,10 +1290,16 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             const FormData = require('form-data');
             const formData = new FormData();
             formData.append('text', cleanText);
-            formData.append('gender', 'female');
-            formData.append('emotion', 'expressive');
-            formData.append('exaggeration', '0.5');
-            formData.append('cfg_weight', '0.7');
+            
+            // Use voice config if available, otherwise use defaults
+            const gender = voiceConfig?.chatterbox?.selectedVoice?.includes('male') ? 'male' : 'female';
+            const emotion = voiceConfig?.chatterbox?.selectedVoice?.includes('calm') ? 'calm' : 
+                           voiceConfig?.chatterbox?.selectedVoice?.includes('dramatic') ? 'dramatic' : 'expressive';
+            
+            formData.append('gender', gender);
+            formData.append('emotion', emotion);
+            formData.append('exaggeration', voiceConfig?.chatterbox?.exaggeration?.toString() || '0.5');
+            formData.append('cfg_weight', voiceConfig?.chatterbox?.cfg_weight?.toString() || '0.7');
             formData.append('voice_cloning', 'false');
             
             const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
@@ -1555,7 +1561,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                             ...formData.getHeaders()
                         },
                         responseType: 'arraybuffer',
-                        timeout: 15000 // Edge TTS is faster
+                        timeout: 25000 // Increased timeout - Edge TTS can be slow on first request
                     });
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
@@ -1572,8 +1578,21 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     const FormData = require('form-data');
                     const formData = new FormData();
                     formData.append('text', chunkToProcess);
-                    formData.append('gender', 'female'); // Could be mapped from voice selection
-                    formData.append('emotion', 'expressive');
+                    
+                    // Map voice selection to Chatterbox parameters
+                    const voiceMapping = {
+                        'female_expressive': { gender: 'female', emotion: 'expressive' },
+                        'female_calm': { gender: 'female', emotion: 'calm' },
+                        'female_dramatic': { gender: 'female', emotion: 'dramatic' },
+                        'male_expressive': { gender: 'male', emotion: 'expressive' },
+                        'male_calm': { gender: 'male', emotion: 'calm' },
+                        'male_dramatic': { gender: 'male', emotion: 'dramatic' },
+                        'default': { gender: 'female', emotion: 'expressive' }
+                    };
+                    
+                    const selectedVoice = voiceMapping[voiceConfig.chatterbox.selectedVoice] || voiceMapping.default;
+                    formData.append('gender', selectedVoice.gender);
+                    formData.append('emotion', selectedVoice.emotion);
                     formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
                     formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
                     
@@ -1729,7 +1748,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                             ...formData.getHeaders()
                         },
                         responseType: 'arraybuffer',
-                        timeout: 15000
+                        timeout: 30000 // Increased timeout for final chunk processing
                     });
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
@@ -1742,8 +1761,21 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                     const FormData = require('form-data');
                     const formData = new FormData();
                     formData.append('text', remainingText);
-                    formData.append('gender', 'female');
-                    formData.append('emotion', 'expressive');
+                    
+                    // Map voice selection to Chatterbox parameters (same as regular chunks)
+                    const voiceMapping = {
+                        'female_expressive': { gender: 'female', emotion: 'expressive' },
+                        'female_calm': { gender: 'female', emotion: 'calm' },
+                        'female_dramatic': { gender: 'female', emotion: 'dramatic' },
+                        'male_expressive': { gender: 'male', emotion: 'expressive' },
+                        'male_calm': { gender: 'male', emotion: 'calm' },
+                        'male_dramatic': { gender: 'male', emotion: 'dramatic' },
+                        'default': { gender: 'female', emotion: 'expressive' }
+                    };
+                    
+                    const selectedVoice = voiceMapping[voiceConfig.chatterbox.selectedVoice] || voiceMapping.default;
+                    formData.append('gender', selectedVoice.gender);
+                    formData.append('emotion', selectedVoice.emotion);
                     formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
                     formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
                     
