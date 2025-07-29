@@ -52,7 +52,7 @@ function initSocketServer(server) {
  * @param {Object} data - The data to send
  */
 function sendToClients(dialogueId, data) {
-    console.log(`Socket Manager checking for clients: dialogueId=${dialogueId}`);
+    // console.log(`Socket Manager checking for clients: dialogueId=${dialogueId}`);
     
     // CRITICAL FIX: Check if ongoingDialogues is defined
     if (typeof ongoingDialogues === 'undefined') {
@@ -65,7 +65,7 @@ function sendToClients(dialogueId, data) {
         const stream = ongoingDialogues.get(dialogueId);
         
         if (stream.clients && stream.clients.size > 0) {
-            console.log(`Found ${stream.clients.size} clients for dialogueId=${dialogueId}`);
+            // console.log(`Found ${stream.clients.size} clients for dialogueId=${dialogueId}`);
             
             stream.clients.forEach(client => {
                 if (!client.writableEnded) {
