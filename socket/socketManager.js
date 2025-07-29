@@ -326,12 +326,30 @@ const socketManager = new SocketManager();
 module.exports = {
   sendToClients,
   hasClients: (dialogueId) => {
-    // Use the legacy hasClients function which checks connections
+    // First check WebSocket connections
     if (connections.has(dialogueId) && connections.get(dialogueId).size > 0) {
+      console.log(`✅ WebSocket clients found for dialogueId: ${dialogueId}`);
       return true;
     }
+    
+    // Then check EventSource connections (SSE)
+    if (ongoingDialogues && ongoingDialogues.has(dialogueId)) {
+      const stream = ongoingDialogues.get(dialogueId);
+      if (stream && stream.clients && stream.clients.size > 0) {
+        console.log(`✅ EventSource clients found for dialogueId: ${dialogueId}, count: ${stream.clients.size}`);
+        return true;
+      }
+    }
+    
     // Also check the class instance as fallback
-    return socketManager.hasClients(dialogueId);
+    const classHasClients = socketManager.hasClients(dialogueId);
+    if (classHasClients) {
+      console.log(`✅ Class instance clients found for dialogueId: ${dialogueId}`);
+      return true;
+    }
+    
+    console.log(`❌ No clients found for dialogueId: ${dialogueId} in any connection system`);
+    return false;
   },
   socketManager  // Export the class instance too
 }; 
