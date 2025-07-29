@@ -109,6 +109,7 @@
                         <select id="voice-engine" onchange="switchEngine()">
                             <option value="chatterbox" selected>Chatterbox TTS (High Quality + Voice Cloning)</option>
                             <option value="edge_tts">Edge TTS (Fast + Many Voices)</option>
+                            <option value="elevenlabs">ElevenLabs (Premium + Ultra Fast)</option>
                         </select>
                     </div>
                     
@@ -175,6 +176,45 @@
                                 <input type="range" id="edge-volume" class="slider" min="-20" max="20" value="0" oninput="updateVolume(this.value)">
                                 <span>🔊</span>
                             </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ElevenLabs-specific controls -->
+                    <div id="elevenlabs-controls" style="display: none;">
+                        <div class="control-group">
+                            <label for="elevenlabs-stability">Stability: <span id="stability-value">50%</span></label>
+                            <div class="slider-container">
+                                <span>🎯</span>
+                                <input type="range" id="elevenlabs-stability" class="slider" min="0" max="100" value="50" oninput="updateStability(this.value)">
+                                <span>🏔️</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="elevenlabs-similarity">Similarity Boost: <span id="similarity-value">75%</span></label>
+                            <div class="slider-container">
+                                <span>🔀</span>
+                                <input type="range" id="elevenlabs-similarity" class="slider" min="0" max="100" value="75" oninput="updateSimilarity(this.value)">
+                                <span>🎭</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="elevenlabs-style">Style Intensity: <span id="style-value">0%</span></label>
+                            <div class="slider-container">
+                                <span>📖</span>
+                                <input type="range" id="elevenlabs-style" class="slider" min="0" max="100" value="0" oninput="updateStyle(this.value)">
+                                <span>🎨</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="elevenlabs-model">Model:</label>
+                            <select id="elevenlabs-model" onchange="updateModel(this.value)">
+                                <option value="eleven_turbo_v2" selected>Turbo v2 (Fastest)</option>
+                                <option value="eleven_monolingual_v1">Monolingual v1 (Quality)</option>
+                                <option value="eleven_multilingual_v2">Multilingual v2 (Multi-lang)</option>
+                            </select>
                         </div>
                     </div>
                     
@@ -302,13 +342,23 @@
                 speed: 1.0,              // Normal speed
                 pitch: 0,                // No pitch adjustment
                 volume: 0                // No volume adjustment
+            },
+            // ElevenLabs-specific settings
+            elevenlabs: {
+                selectedVoice: 'pNInz6obpgDQGcFmaJgB',  // Adam voice ID
+                model_id: 'eleven_turbo_v2',           // Fast turbo model
+                stability: 0.5,                        // Balanced stability
+                similarity_boost: 0.75,                // Good similarity
+                style: 0.0,                           // Neutral style
+                use_speaker_boost: true               // Enhanced clarity
             }
         };
         
         // Available voices for each engine (loaded dynamically)
         let availableVoices = {
             chatterbox: [],
-            edge_tts: []
+            edge_tts: [],
+            elevenlabs: []
         };
 
         // Voice configuration matrix: Gender + Emotion combinations
@@ -362,21 +412,30 @@
             if (selectedEngine === 'chatterbox') {
                 document.getElementById('chatterbox-controls').style.display = 'block';
                 document.getElementById('edge-controls').style.display = 'none';
+                document.getElementById('elevenlabs-controls').style.display = 'none';
                 document.getElementById('voice-cloning-section').style.display = 'block';
                 document.getElementById('engine-title').textContent = 'Chatterbox TTS (High Quality)';
                 document.getElementById('tts-enable-label').textContent = 'Enable Chatterbox TTS';
-            } else {
+            } else if (selectedEngine === 'edge_tts') {
                 document.getElementById('chatterbox-controls').style.display = 'none';
                 document.getElementById('edge-controls').style.display = 'block';
+                document.getElementById('elevenlabs-controls').style.display = 'none';
                 document.getElementById('voice-cloning-section').style.display = 'none';
                 document.getElementById('engine-title').textContent = 'Edge TTS (Fast Response)';
                 document.getElementById('tts-enable-label').textContent = 'Enable Edge TTS';
+            } else if (selectedEngine === 'elevenlabs') {
+                document.getElementById('chatterbox-controls').style.display = 'none';
+                document.getElementById('edge-controls').style.display = 'none';
+                document.getElementById('elevenlabs-controls').style.display = 'block';
+                document.getElementById('voice-cloning-section').style.display = 'none';
+                document.getElementById('engine-title').textContent = 'ElevenLabs (Premium)';
+                document.getElementById('tts-enable-label').textContent = 'Enable ElevenLabs TTS';
             }
             
             // Load voices for selected engine
             await populateVoiceDropdown(selectedEngine);
             updateVoicePreview();
-            updateStatus(`🔄 Switched to ${selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : 'Edge TTS'}`);
+            updateStatus(`🔄 Switched to ${selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : selectedEngine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs'}`);
         }
         
         // Load available voices from API
@@ -396,7 +455,21 @@
                         v.engine && (v.engine.toLowerCase() === 'edge tts' || v.engine.toLowerCase() === 'edge_tts')
                     );
                     
-                    console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices and ${availableVoices.edge_tts.length} Edge TTS voices`);
+                    // Add ElevenLabs voices (hardcoded popular ones)
+                    availableVoices.elevenlabs = [
+                        { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male, Deep)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Female, Sweet)', gender: 'female', engine: 'elevenlabs' },
+                        { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold (Male, Crisp)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'pMsXgVXv3BLzUgSXRplE', name: 'Freya (Female, Conversational)', gender: 'female', engine: 'elevenlabs' },
+                        { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel (Male, British)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'CYw3kZ02Hs0563khs1Fj', name: 'Gigi (Female, Childlike)', gender: 'female', engine: 'elevenlabs' },
+                        { id: 'bVMeCyTHy58xNoL34h3p', name: 'Jeremy (Male, American)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte (Female, Seductive)', gender: 'female', engine: 'elevenlabs' },
+                        { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George (Male, Raspy)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace (Female, Calm)', gender: 'female', engine: 'elevenlabs' }
+                    ];
+                    
+                    console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices, ${availableVoices.edge_tts.length} Edge TTS voices, and ${availableVoices.elevenlabs.length} ElevenLabs voices`);
                     
                     // Populate dropdown for default engine
                     await populateVoiceDropdown(voiceConfig.selectedEngine);
@@ -485,6 +558,12 @@
                     voiceSelect.value = defaultVoice.id;
                     voiceConfig.edge.selectedVoice = defaultVoice.id;
                 }
+            } else if (engine === 'elevenlabs') {
+                const defaultVoice = voices.find(v => v.id === 'pNInz6obpgDQGcFmaJgB') || voices[0];
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.id;
+                    voiceConfig.elevenlabs.selectedVoice = defaultVoice.id;
+                }
             }
             
             console.log(`🎵 Populated ${voices.length} voices for ${engine}`);
@@ -499,6 +578,8 @@
                 voiceConfig.chatterbox.selectedVoice = selectedVoice;
             } else if (engine === 'edge_tts') {
                 voiceConfig.edge.selectedVoice = selectedVoice;
+            } else if (engine === 'elevenlabs') {
+                voiceConfig.elevenlabs.selectedVoice = selectedVoice;
             }
             
             updateVoicePreview();
@@ -565,10 +646,35 @@
             updateVoicePreview();
         }
 
+        // ElevenLabs slider update functions
+        function updateStability(value) {
+            voiceConfig.elevenlabs.stability = value / 100;
+            document.getElementById('stability-value').textContent = value + '%';
+            updateVoicePreview();
+        }
+        
+        function updateSimilarity(value) {
+            voiceConfig.elevenlabs.similarity_boost = value / 100;
+            document.getElementById('similarity-value').textContent = value + '%';
+            updateVoicePreview();
+        }
+        
+        function updateStyle(value) {
+            voiceConfig.elevenlabs.style = value / 100;
+            document.getElementById('style-value').textContent = value + '%';
+            updateVoicePreview();
+        }
+        
+        function updateModel(value) {
+            voiceConfig.elevenlabs.model_id = value;
+            updateVoicePreview();
+        }
+
         // Toggle TTS on/off
         function toggleTTS() {
             voiceConfig.enabled = document.getElementById('tts-enabled').checked;
-            const engineName = voiceConfig.selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : 'Edge TTS';
+            const engineName = voiceConfig.selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : 
+                             voiceConfig.selectedEngine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs';
             updateStatus(voiceConfig.enabled ? `${engineName} Enabled` : 'TTS Disabled');
             updateVoicePreview();
         }
@@ -835,6 +941,21 @@
                 if (pitch !== 0) preview += `, ${pitch > 0 ? '+' : ''}${pitch}Hz pitch`;
                 if (volume !== 0) preview += `, ${volume > 0 ? '+' : ''}${volume}% volume`;
                 preview += '. Fast response neural voice perfect for real-time conversation. ⚡ Instant synthesis.';
+            } else if (engine === 'elevenlabs') {
+                const stability = Math.round(voiceConfig.elevenlabs.stability * 100);
+                const similarity = Math.round(voiceConfig.elevenlabs.similarity_boost * 100);
+                const style = Math.round(voiceConfig.elevenlabs.style * 100);
+                const selectedVoice = voiceConfig.elevenlabs.selectedVoice;
+                const model = voiceConfig.elevenlabs.model_id;
+                
+                // Get voice info from available voices
+                const voiceInfo = availableVoices.elevenlabs.find(v => v.id === selectedVoice);
+                const voiceName = voiceInfo ? voiceInfo.name : selectedVoice;
+                
+                preview = `Current: ${voiceName} using ${model}`;
+                preview += ` with ${stability}% stability, ${similarity}% similarity`;
+                if (style > 0) preview += `, ${style}% style`;
+                preview += '. Premium quality ultra-fast synthesis. 🚀 Professional grade voice.';
             }
             
             document.getElementById('voice-preview').textContent = preview;
@@ -856,6 +977,8 @@
                     await synthesizeWithChatterbox(text);
                 } else if (engine === 'edge_tts') {
                     await synthesizeWithEdge(text);
+                } else if (engine === 'elevenlabs') {
+                    await synthesizeWithElevenLabs(text);
                 } else {
                     throw new Error(`Unknown engine: ${engine}`);
                 }
@@ -926,6 +1049,60 @@
             }
         }
 
+        // Synthesize with ElevenLabs
+        async function synthesizeWithElevenLabs(text) {
+            try {
+                updateStatus('🚀 Synthesizing with ElevenLabs...');
+                
+                // Prepare JSON data for ElevenLabs API
+                const requestData = {
+                    text: text,
+                    voice_settings: {
+                        stability: voiceConfig.elevenlabs.stability,
+                        similarity_boost: voiceConfig.elevenlabs.similarity_boost,
+                        style: voiceConfig.elevenlabs.style,
+                        use_speaker_boost: voiceConfig.elevenlabs.use_speaker_boost
+                    },
+                    model_id: voiceConfig.elevenlabs.model_id
+                };
+                
+                const response = await fetch(`/api/voice/elevenlabs/${voiceConfig.elevenlabs.selectedVoice}/synthesize`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Stop any currently playing audio and play new audio
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                
+                currentAudio = new Audio(audioUrl);
+                currentAudio.play();
+                
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    updateStatus('🚀 ElevenLabs Ready');
+                };
+                
+                updateStatus('🔊 Playing ElevenLabs synthesis...');
+                
+            } catch (error) {
+                console.error('ElevenLabs synthesis failed:', error);
+                throw error;
+            }
+        }
+
         // Test current voice settings
         async function testChatterboxVoice() {
             if (!voiceConfig.enabled) {
@@ -942,9 +1119,13 @@
             } else if (engine === 'edge_tts') {
                 const speed = Math.round(voiceConfig.edge.speed * 100);
                 testText = `Hello! I'm your AI assistant using Edge TTS at ${speed} percent speed. This is perfect for fast, real-time conversation with natural neural voices.`;
+            } else if (engine === 'elevenlabs') {
+                const stability = Math.round(voiceConfig.elevenlabs.stability * 100);
+                const similarity = Math.round(voiceConfig.elevenlabs.similarity_boost * 100);
+                testText = `Hello! I'm your AI assistant powered by ElevenLabs premium TTS. This voice uses ${stability} percent stability and ${similarity} percent similarity for ultra-fast, professional quality synthesis.`;
             }
             
-            updateStatus(`🎵 Testing ${engine === 'chatterbox' ? 'Chatterbox' : 'Edge TTS'} voice...`);
+            updateStatus(`🎵 Testing ${engine === 'chatterbox' ? 'Chatterbox' : engine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs'} voice...`);
             
             try {
                 await synthesizeVoice(testText);
@@ -1172,6 +1353,14 @@
                         speed: voiceConfig.edge.speed,
                         pitch: voiceConfig.edge.pitch,
                         volume: voiceConfig.edge.volume
+                    },
+                    elevenlabs: {
+                        selectedVoice: voiceConfig.elevenlabs.selectedVoice,
+                        model_id: voiceConfig.elevenlabs.model_id,
+                        stability: voiceConfig.elevenlabs.stability,
+                        similarity_boost: voiceConfig.elevenlabs.similarity_boost,
+                        style: voiceConfig.elevenlabs.style,
+                        use_speaker_boost: voiceConfig.elevenlabs.use_speaker_boost
                     }
                 };
                 

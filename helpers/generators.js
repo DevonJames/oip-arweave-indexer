@@ -1419,6 +1419,55 @@ function stripEmojisForTTS(text) {
 }
 
 /**
+ * Generate TTS using ElevenLabs API
+ * @param {string} text - Text to synthesize
+ * @param {string} voiceId - ElevenLabs voice ID
+ * @param {Object} voiceSettings - Voice settings (stability, similarity_boost, etc.)
+ * @param {string} modelId - ElevenLabs model ID
+ * @returns {Promise<Buffer>} Audio buffer
+ */
+async function generateElevenLabsTTS(text, voiceId, voiceSettings = {}, modelId = 'eleven_turbo_v2') {
+    try {
+        const axios = require('axios');
+        
+        console.log(`🎤 Calling ElevenLabs API with voice: ${voiceId}, model: ${modelId}`);
+        
+        const response = await axios.post(
+            `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+            {
+                text: text,
+                model_id: modelId,
+                voice_settings: {
+                    stability: voiceSettings.stability || 0.5,
+                    similarity_boost: voiceSettings.similarity_boost || 0.75,
+                    style: voiceSettings.style || 0.0,
+                    use_speaker_boost: voiceSettings.use_speaker_boost || true
+                },
+                output_format: 'mp3_44100_128'
+            },
+            {
+                headers: {
+                    'xi-api-key': process.env.ELEVENLABS_API_KEY,
+                    'Content-Type': 'application/json'
+                },
+                responseType: 'arraybuffer',
+                timeout: 10000 // Fast timeout for ElevenLabs
+            }
+        );
+        
+        if (response.status === 200 && response.data) {
+            console.log(`🎤 ElevenLabs generated ${response.data.byteLength} bytes successfully`);
+            return response.data;
+        } else {
+            throw new Error(`ElevenLabs API returned status: ${response.status}`);
+        }
+    } catch (error) {
+        console.error(`ElevenLabs API error:`, error.message);
+        throw error;
+    }
+}
+
+/**
  * Stream text to speech using chunked approach for low latency
  * @param {string} text - Individual text chunk from streaming LLM
  * @param {Object} textAccumulator - Object to track accumulated text and state
@@ -1569,6 +1618,39 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                         audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
                     } else {
                         throw new Error(`Edge TTS returned status: ${ttsResponse.status}`);
+                    }
+                    
+                } else if (voiceConfig.engine === 'elevenlabs') {
+                    console.log(`🎤 Using ElevenLabs for chunk ${currentChunkIndex} with voice: ${voiceConfig.elevenlabs.selectedVoice}`);
+                    console.log(`🎤 Voice config for ElevenLabs:`, JSON.stringify(voiceConfig.elevenlabs, null, 2));
+                    
+                    // Call ElevenLabs API directly
+                    const requestData = {
+                        text: chunkToProcess,
+                        voice_settings: {
+                            stability: voiceConfig.elevenlabs.stability || 0.5,
+                            similarity_boost: voiceConfig.elevenlabs.similarity_boost || 0.75,
+                            style: voiceConfig.elevenlabs.style || 0.0,
+                            use_speaker_boost: voiceConfig.elevenlabs.use_speaker_boost || true
+                        },
+                        model_id: voiceConfig.elevenlabs.model_id || 'eleven_turbo_v2'
+                    };
+                    
+                    console.log(`🎤 Sending ElevenLabs request with parameters: voice_id=${voiceConfig.elevenlabs.selectedVoice}, model=${requestData.model_id}`);
+                    
+                    // Use your existing ElevenLabs helper if available, otherwise direct API call
+                    const elevenLabsResponse = await generateElevenLabsTTS(
+                        chunkToProcess,
+                        voiceConfig.elevenlabs.selectedVoice,
+                        requestData.voice_settings,
+                        requestData.model_id
+                    );
+                    
+                    if (elevenLabsResponse && elevenLabsResponse.length > 0) {
+                        console.log(`🎤 ElevenLabs generated ${elevenLabsResponse.length} bytes for chunk ${currentChunkIndex}`);
+                        audioBase64 = Buffer.from(elevenLabsResponse).toString('base64');
+                    } else {
+                        throw new Error('ElevenLabs returned empty response');
                     }
                     
                 } else {
@@ -1753,6 +1835,32 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                     
                     if (ttsResponse.status === 200 && ttsResponse.data) {
                         audioBase64 = Buffer.from(ttsResponse.data).toString('base64');
+                    }
+                } else if (voiceConfig.engine === 'elevenlabs') {
+                    console.log(`🎤 Using ElevenLabs for final chunk ${finalChunkIndex} with voice: ${voiceConfig.elevenlabs?.selectedVoice || 'unknown'}`);
+                    
+                    // Call ElevenLabs API for final chunk
+                    const requestData = {
+                        text: remainingText,
+                        voice_settings: {
+                            stability: voiceConfig.elevenlabs.stability || 0.5,
+                            similarity_boost: voiceConfig.elevenlabs.similarity_boost || 0.75,
+                            style: voiceConfig.elevenlabs.style || 0.0,
+                            use_speaker_boost: voiceConfig.elevenlabs.use_speaker_boost || true
+                        },
+                        model_id: voiceConfig.elevenlabs.model_id || 'eleven_turbo_v2'
+                    };
+                    
+                    const elevenLabsResponse = await generateElevenLabsTTS(
+                        remainingText,
+                        voiceConfig.elevenlabs.selectedVoice,
+                        requestData.voice_settings,
+                        requestData.model_id
+                    );
+                    
+                    if (elevenLabsResponse && elevenLabsResponse.length > 0) {
+                        console.log(`🎤 ElevenLabs generated ${elevenLabsResponse.length} bytes for final chunk ${finalChunkIndex}`);
+                        audioBase64 = Buffer.from(elevenLabsResponse).toString('base64');
                     }
                 } else {
                     // Use Chatterbox TTS (default)
