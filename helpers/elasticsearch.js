@@ -324,7 +324,7 @@ const ensureIndexExists = async () => {
         try {
             const existsResponse = await elasticClient.indices.exists({ index: 'templates' });
             templatesExists = existsResponse.body !== undefined ? existsResponse.body : existsResponse;
-            console.log('🔍 Templates index exists check:', templatesExists);
+            // console.log('🔍 Templates index exists check:', templatesExists);
         } catch (existsError) {
             console.log('❌ Error checking templates index existence:', existsError.message);
             templatesExists = false; // Assume it doesn't exist if we can't check
@@ -388,10 +388,10 @@ const ensureIndexExists = async () => {
                     console.error('❌ Error creating templates index:', error.message);
                     throw error;
                 }
-                console.log('✅ Templates index already exists (resource_already_exists_exception)');
+                // console.log('✅ Templates index already exists (resource_already_exists_exception)');
             }
         } else {
-            console.log('✅ Templates index already exists');
+            // console.log('✅ Templates index already exists');
         }
         const recordsExists = await elasticClient.indices.exists({ index: 'records' });
         if (!recordsExists.body) {
@@ -485,7 +485,7 @@ const ensureIndexExists = async () => {
 const ensureUserIndexExists = async () => {
     try {
         const indexExists = await elasticClient.indices.exists({ index: 'users' });
-        console.log(`Index exists check for 'users':`, indexExists.body);  // Log existence check result
+        console.log(`Index exists check for 'users':`, indexExists);  // Log existence check result
         
         if (!indexExists.body) {
             await elasticClient.indices.create({
@@ -557,15 +557,7 @@ const indexRecord = async (record) => {
             console.log(getFileInfo(), getLineNumber(), `Record indexed successfully: ${didTx}`, response.result);
         }
 
-        // if (response.result === 'created') {
-        //     console.log(`Record created successfully: ${didTx}`);
-        //     return;
-        // } else if (response.result === 'updated') {
-        //     console.log(getFileInfo(), getLineNumber, `Record updated successfully: ${didTx}`);
-        //     return;
-        // } else {
-        //     console.log(getFileInfo(), getLineNumber, `Unexpected response from Elasticsearch: ${JSON.stringify(response)}`);
-        // }
+
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), `Error indexing record ${record.oip.didTx}:`, error);
     }
@@ -591,14 +583,12 @@ const getTemplatesInDB = async () => {
         );
         const pendingTemplatesCount = templatesInDB.length - confirmedTemplates.length;
         if (pendingTemplatesCount > 0) {
-            console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingTemplatesCount} pending templates from max block calculation`);
         }
         const maxArweaveBlockInDB = confirmedTemplates.length > 0 
             ? Math.max(...confirmedTemplates.map(template => template.oip.inArweaveBlock)) || 0
             : 0;
         const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity);
         const finalMaxArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
-        console.log(getFileInfo(), getLineNumber(), 'qtyTemplatesInDB:', qtyTemplatesInDB, 'finalMaxArweaveBlock:', finalMaxArweaveBlock);
         return { qtyTemplatesInDB, finalMaxArweaveBlock, templatesInDB };
     } catch (error) {
         console.error('Error retrieving templates from database:', error);
@@ -2167,7 +2157,7 @@ const getCreatorsInDB = async () => {
             console.log(getFileInfo(), getLineNumber(),  'Error - No creators found in DB')
             return { qtyCreatorsInDB: 0, maxArweaveCreatorRegBlockInDB: 0, creators: [] };
         } else {
-            console.log(getFileInfo(), getLineNumber(),  'Creators found in DB:', creatorsInDB.length);
+            // console.log(getFileInfo(), getLineNumber(),  'Creators found in DB:', creatorsInDB.length);
             const qtyCreatorsInDB = creatorsInDB.length;
             
             // Filter out creators with "pending confirmation in Arweave" status when calculating max block height
@@ -2663,7 +2653,6 @@ async function keepDBUpToDate(remapTemplates) {
             qtyRecordsInDB: qtyCreatorsInDB,
             maxArweaveBlockInDB: maxArweaveCreatorRegBlockInDB
         };
-        console.log(getFileInfo(), getLineNumber(), 'Creators:', { maxArweaveCreatorRegBlockInDB, qtyCreatorsInDB });
         if (qtyCreatorsInDB === 0) {
             const hardCodedTxId = 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y';
             const block = 1463761
@@ -2702,7 +2691,6 @@ async function keepDBUpToDate(remapTemplates) {
                 console.error(getFileInfo(), getLineNumber(), `Error indexing creator: ${hardCodedTxId}`, error);
             }
         };
-        console.log(getFileInfo(), getLineNumber(), 'Creators:', { maxArweaveCreatorRegBlockInDB, qtyCreatorsInDB, creatorsInDB });
         // to do standardize these names a bit better
         const { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
         // console.log(getFileInfo(), getLineNumber(), 'Templates:', { finalMaxArweaveBlock, qtyTemplatesInDB });
@@ -2767,7 +2755,6 @@ async function searchArweaveForNewTransactions(foundInDB) {
 
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
-    console.log('Searching for new OIP data after block:', min, getFileInfo(), getLineNumber());
 
     let allTransactions = [];
     let hasNextPage = true;

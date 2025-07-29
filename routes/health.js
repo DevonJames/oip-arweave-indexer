@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 router.get('/', async (req, res) => {
-    console.log('GET /api/health');
+    // console.log('GET /api/health');
     try {
         console.log('Health check passed');
         // add more checks here (e.g., database connection status)

@@ -252,23 +252,35 @@ initializeIndices()
       // Periodically keep DB up to date
       if (args.keepDBUpToDate) {
           const wait = args._[0] ? parseInt(args._[0], 10) : 0; // Delay in seconds
-          const interval = args._[1] ? parseInt(args._[1], 10) : 120; // Interval in seconds
+          const interval = args._[1] ? parseInt(args._[1], 10) : 600; // Interval in seconds
 
           if (isNaN(wait) || isNaN(interval)) {
               console.error('Invalid arguments for --keepDBUpToDate. Provide delay and interval as numbers.');
               process.exit(1);
           }
-
-          console.log(`After a delay of ${wait} seconds, will check Arweave for new OIP data every ${interval} seconds`);
+          if (interval > 120) {
+            minutes = Math.floor(interval / 60);
+            if (wait > 0) {
+              console.log(`After a delay of ${wait} seconds, will check Arweave for new OIP data every ${minutes} minutes`);
+            } else {
+              console.log(`Will check Arweave for new OIP data every ${minutes} minutes`);
+            }
+          } else {
+            if (wait > 0) {
+              console.log(`After a delay of ${wait} seconds, will check Arweave for new OIP data every ${interval} seconds`);
+            } else {
+              console.log(`Will check Arweave for new OIP data every ${interval} seconds`);
+            }
+          }
 
           setTimeout(() => {
-              console.log("Starting first cycle...");
+              // console.log("Starting first cycle...");
               keepDBUpToDate(remapTemplates);
               setIsProcessing(true);
               setInterval(async () => {
                   if (!getIsProcessing()) {
                       try {
-                          console.log("Starting new cycle...");
+                          // console.log("Starting new cycle...");
                           setIsProcessing(true);
                           await keepDBUpToDate(remapTemplates);
                       } catch (error) {
@@ -279,7 +291,7 @@ initializeIndices()
                   } else {
                       console.log("Skipping new cycle because a previous process is still running.");
                   }
-                  console.log('Interval over, getIsProcessing:', getIsProcessing());
+                  // console.log('Interval over, getIsProcessing:', getIsProcessing());
               }, interval * 1000);
           }, wait * 1000);
       }
