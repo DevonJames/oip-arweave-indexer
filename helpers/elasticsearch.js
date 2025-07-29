@@ -2241,7 +2241,7 @@ const getRecordsInDB = async () => {
                 );
                 const pendingRecordsCount = records.length - confirmedRecords.length;
                 if (pendingRecordsCount > 0) {
-                    console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingRecordsCount} pending records from max block calculation`);
+                    // console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingRecordsCount} pending records from max block calculation`);
                 }
                 const maxArweaveBlockInDB = confirmedRecords.length > 0 
                     ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
@@ -2730,7 +2730,7 @@ async function keepDBUpToDate(remapTemplates) {
             }
         }
         else {
-            console.log('No new transactions found, waiting...', getFileInfo(), getLineNumber());
+            // console.log('No new transactions found, waiting...', getFileInfo(), getLineNumber());
         }
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error fetching new transactions:', {
@@ -2824,10 +2824,10 @@ async function searchArweaveForNewTransactions(foundInDB) {
             ? response.transactions.edges[response.transactions.edges.length - 1].cursor
             : null;
 
-        console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
+        // console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
     }
 
-    console.log('Total transactions fetched:', allTransactions.length, getFileInfo(), getLineNumber());
+    // console.log('Total transactions fetched:', allTransactions.length, getFileInfo(), getLineNumber());
     return allTransactions.reverse(); // Returning reversed transactions as per your original code
 }
 
