@@ -543,6 +543,10 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 }
             };
 
+            // Enhance RAG options for intelligent processing
+            ragOptions.include_filter_analysis = req.body.include_filter_analysis !== false;
+            ragOptions.searchParams = ragOptions.searchParams || {};
+            
             ragResponse = await ragService.query(inputText, ragOptions);
             responseText = ragResponse.answer;
         }
