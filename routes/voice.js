@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
+const { Readable } = require('stream');
 const ragService = require('../helpers/ragService');
 const fs = require('fs');
 const path = require('path');
@@ -165,9 +166,15 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
         // Forward to Whisper STT service
         const formData = new FormData();
-        formData.append('file', new Blob([req.file.buffer]), {
-            filename: req.file.originalname || 'recording.wav',
-            contentType: req.file.mimetype || 'audio/wav'
+        
+        // Create a readable stream from the buffer (Node.js compatible approach)
+        const bufferStream = new Readable();
+        bufferStream.push(req.file.buffer);
+        bufferStream.push(null);
+        
+        formData.append('file', bufferStream, {
+            filename: req.file.originalname || 'recording.webm',
+            contentType: req.file.mimetype || 'audio/webm'
         });
         
         if (language) {
@@ -420,9 +427,15 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         // Step 1: Transcribe audio if provided
         if (req.file) {
             const formData = new FormData();
-            formData.append('file', new Blob([req.file.buffer]), {
-                filename: req.file.originalname || 'recording.wav',
-                contentType: req.file.mimetype || 'audio/wav'
+            
+            // Create a readable stream from the buffer (Node.js compatible approach)
+            const bufferStream = new Readable();
+            bufferStream.push(req.file.buffer);
+            bufferStream.push(null);
+            
+            formData.append('file', bufferStream, {
+                filename: req.file.originalname || 'recording.webm',
+                contentType: req.file.mimetype || 'audio/webm'
             });
 
             const sttResponse = await safeAxiosCall(
