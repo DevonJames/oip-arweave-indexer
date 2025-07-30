@@ -2850,7 +2850,7 @@
                         <option value="llama3.2:3b">LLaMA 3.2 3B (Fast)</option>
                         <option value="mistral:latest">Mistral 7B (Balanced)</option>
                         <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
-                        <option value="tinyllama:latest">TinyLlama (Ultra Fast)</option>
+                        <option value="tinyllama:latest" selected>TinyLlama (Ultra Fast)</option>
                         <option value="grok-4">Grok-4 (Premium Cloud)</option>
                     </select>
                 </div>
@@ -2869,9 +2869,9 @@
                 <div class="ai-setting" style="display: inline-block;">
                     <label for="voice-engine">Voice Engine</label>
                     <select id="voice-engine" onchange="switchVoiceEngine()">
-                        <option value="chatterbox" selected>Chatterbox TTS (High Quality + Voice Cloning)</option>
+                        <option value="chatterbox">Chatterbox TTS (High Quality + Voice Cloning)</option>
                         <option value="edge_tts">Edge TTS (Fast + Many Voices)</option>
-                        <option value="elevenlabs">ElevenLabs (Premium + Ultra Fast)</option>
+                        <option value="elevenlabs" selected>ElevenLabs (Premium + Ultra Fast)</option>
                     </select>
                 </div>
             </div>
@@ -7103,7 +7103,7 @@
         // Voice Engine Configuration (based on working index.html)
         const voiceConfig = {
             enabled: true,
-            selectedEngine: 'chatterbox',
+            selectedEngine: 'elevenlabs',
             baseUrl: window.location.origin,
             // Chatterbox-specific settings
             chatterbox: {
@@ -7125,7 +7125,7 @@
             },
             // ElevenLabs-specific settings
             elevenlabs: {
-                selectedVoice: 'pNInz6obpgDQGcFmaJgB',  // Adam voice ID
+                selectedVoice: 'onwK4e9ZLuTAKqWW03F9',  // Daniel voice ID
                 model_id: 'eleven_turbo_v2',           // Fast turbo model
                 stability: 0.5,                        // Balanced stability
                 similarity_boost: 0.75,                // Good similarity
