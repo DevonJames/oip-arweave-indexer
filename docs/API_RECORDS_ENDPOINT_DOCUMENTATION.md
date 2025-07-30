@@ -29,11 +29,25 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Description:** Full-text search across record name, description, and tags
 - **Example:** `search=news politics`
 - **Behavior:** 
-  - Splits on spaces and commas
+  - Splits on spaces to separate search terms
   - Searches name, description, and tags fields
-  - Returns records matching ALL search terms (AND behavior)
+  - Default: Returns records matching ALL search terms (AND behavior)
+  - Can be modified with `searchMatchMode` parameter
   - Automatically sorts by match relevance
   - Adds `matchCount` field to records showing number of search terms matched
+
+#### `searchMatchMode`
+- **Type:** String
+- **Description:** Controls search matching behavior
+- **Values:** 
+  - `AND` (default) - Records must match ALL search terms
+  - `OR` - Records can match ANY search terms
+- **Example:** `search=fitness workout&searchMatchMode=OR`
+- **Behavior:**
+  - Works with the `search` parameter
+  - AND mode: More restrictive, fewer results, all terms must be present
+  - OR mode: More inclusive, more results, any term can match
+  - `matchCount` field shows how many terms matched (useful for OR mode ranking)
 
 ### 🏋️ **Exercise Filtering (Workouts)**
 
@@ -247,7 +261,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Type:** String
 - **Description:** Sort results by specified field and order
 - **Format:** `field:order` where order is `asc` or `desc`
-- **Available Fields:**
+  - **Available Fields:**
   - `inArweaveBlock` - Arweave block number
   - `indexedAt` - When record was indexed
   - `ver` - Record version
@@ -255,6 +269,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `creatorHandle` - Creator handle
   - `date` - Record creation date (from `data.basic.date`)
   - `score` - Match score (for search/tag queries)
+  - `matchCount` - Number of search terms matched (works with `search` parameter, especially useful for OR mode)
   - `tags` - Tag match score (only works with `tags` parameter)
   - `exerciseScore` - Exercise match score (only works with `exerciseNames` parameter)
   - `ingredientScore` - Ingredient match score (only works with `ingredientNames` parameter)
@@ -263,6 +278,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Examples:**
   - `sortBy=date:desc` - Newest first
   - `sortBy=inArweaveBlock:asc` - Oldest block first
+  - `sortBy=matchCount:desc` - Most search term matches first (requires `search` parameter)
   - `sortBy=tags:desc` - Best tag matches first (requires `tags` parameter)
   - `sortBy=exerciseScore:desc` - Best exercise matches first (requires `exerciseNames` parameter)
   - `sortBy=ingredientScore:desc` - Best ingredient matches first (requires `ingredientNames` parameter)
@@ -392,6 +408,16 @@ GET /api/records?limit=10&page=1
 GET /api/records?search=news&recordType=post&sortBy=date:desc
 ```
 
+### Search with AND Mode (Default)
+```
+GET /api/records?search=fitness workout&searchMatchMode=AND&limit=10
+```
+
+### Search with OR Mode
+```
+GET /api/records?search=fitness workout&searchMatchMode=OR&limit=10&sortBy=matchCount:desc
+```
+
 ### Tag Filtering (OR behavior)
 ```
 GET /api/records?tags=cooking,recipe,food&limit=20
@@ -474,7 +500,7 @@ GET /api/records?exactMatch={"data.basic.language":"en","oip.recordType":"post"}
 
 ### Complex Query with Multiple Filters
 ```
-GET /api/records?search=mediterranean&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3&summarizeRecipe=true
+GET /api/records?search=mediterranean healthy&searchMatchMode=OR&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3&summarizeRecipe=true
 ```
 
 ### Tag Summary for Analytics
@@ -642,14 +668,36 @@ When using `summarizeRecipe=true` with recipe records, the response includes nut
 5. **Use `includeSigs=false` and `includePubKeys=false`** for lighter responses
 6. **Use `hideNullValues=true`** to reduce response size
 7. **Tag filtering is more efficient than full-text search** for known categories
-8. **Exercise search requires resolution** - Use `resolveDepth=1` minimum for exercise filtering
-9. **Ingredient search requires resolution** - Use `resolveDepth=1` minimum for ingredient filtering
-10. **Equipment search is efficient** - No resolution required, searches existing exercise record data
-11. **Equipment OR mode is more flexible** - Use `equipmentMatchMode=OR` to find exercises with any of the specified equipment
-12. **Exercise type search is enum-aware** - Supports both codes (`warmup`) and display names (`Warm-Up`)
-13. **Recipe nutritional summaries require resolution** - Use `resolveDepth=1` minimum with `summarizeRecipe=true`
+8. **Search AND mode is more efficient than OR mode** - use AND mode for precise queries, OR mode for discovery
+9. **Exercise search requires resolution** - Use `resolveDepth=1` minimum for exercise filtering
+10. **Ingredient search requires resolution** - Use `resolveDepth=1` minimum for ingredient filtering
+11. **Equipment search is efficient** - No resolution required, searches existing exercise record data
+12. **Equipment OR mode is more flexible** - Use `equipmentMatchMode=OR` to find exercises with any of the specified equipment
+13. **Exercise type search is enum-aware** - Supports both codes (`warmup`) and display names (`Warm-Up`)
+14. **Recipe nutritional summaries require resolution** - Use `resolveDepth=1` minimum with `summarizeRecipe=true`
 
 ## Advanced Features
+
+### Search Match Modes and Scoring
+When using the `search` parameter, you can control matching behavior with `searchMatchMode`:
+
+#### AND Mode (Default)
+- **Behavior**: Records must contain ALL search terms
+- **Use Case**: Precise searches requiring all terms to be present
+- **Example**: `search=fitness workout&searchMatchMode=AND` - finds records containing both "fitness" AND "workout"
+- **Results**: Fewer, more targeted results
+
+#### OR Mode 
+- **Behavior**: Records can contain ANY search terms
+- **Use Case**: Broader searches to find related content
+- **Example**: `search=fitness workout&searchMatchMode=OR` - finds records containing "fitness" OR "workout" OR both
+- **Results**: More inclusive results, sorted by relevance
+
+#### Match Count Scoring
+All search results include a `matchCount` field showing how many search terms matched:
+- **AND Mode**: All results have the same matchCount (all terms matched)
+- **OR Mode**: Results with higher matchCount appear first (more terms matched = higher relevance)
+- **Sorting**: Use `sortBy=matchCount:desc` to prioritize records with more term matches
 
 ### Tag Match Scoring
 When using the `tags` parameter, records automatically receive a score based on how many of the specified tags they match. This score can be used for sorting with `sortBy=tags:desc`.
@@ -726,8 +774,8 @@ Exercise, ingredient, and equipment search functions handle various data structu
 The `resolveDepth` parameter controls how deeply the system follows references (drefs) to other records, providing rich, interconnected data. The `resolveNamesOnly` parameter provides a lightweight alternative that only resolves record names.
 
 ### Flexible Search Modes
-- **Full-text search** (`search`) - Searches across name, description, and tags
-- **Tag filtering** (`tags`) - Precise tag-based filtering with AND/OR modes
+- **Full-text search** (`search`) - Searches across name, description, and tags with AND/OR matching modes via `searchMatchMode`
+- **Tag filtering** (`tags`) - Precise tag-based filtering with AND/OR modes via `tagsMatchMode`
 - **Exercise filtering** (`exerciseNames`) - Search workouts by exercise content
 - **Ingredient filtering** (`ingredientNames`) - Search recipes by ingredient content
 - **Equipment filtering** (`equipmentRequired`) - Search exercises by equipment requirements with AND/OR modes

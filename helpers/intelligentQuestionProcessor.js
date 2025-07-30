@@ -235,6 +235,7 @@ class IntelligentQuestionProcessor {
         return {
             search: subject,
             recordType: recordType,
+            searchMatchMode: 'OR', // Use OR mode to get maximum results for AI analysis
             resolveDepth: options.resolveDepth || 2,
             limit: options.limit || 20,
             sortBy: options.sortBy || 'date:desc'

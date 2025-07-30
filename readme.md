@@ -340,7 +340,7 @@ Query Parameters:
 
 **Key Features:**
 - **Advanced Tag Filtering**: Support for both AND/OR tag matching modes
-- **Full-Text Search**: Search across names, descriptions, and tags
+- **Flexible Full-Text Search**: Search across names, descriptions, and tags with AND/OR matching modes
 - **Multi-Field Sorting**: Sort by relevance, date, block height, tag matches, and more
 - **Creator Filtering**: Filter by creator handle, name, or DID address
 - **Date Range Filtering**: Time-based record filtering
@@ -352,8 +352,11 @@ Query Parameters:
 # Search for cooking recipes with multiple tags (AND mode)
 GET /api/records?tags=greek,grilling&tagsMatchMode=AND&recordType=recipe&sortBy=tags:desc
 
-# Full-text search with date filtering
-GET /api/records?search=climate change&dateStart=2024-01-01&sortBy=date:desc
+# Full-text search with AND mode (default) - must match ALL terms
+GET /api/records?search=climate change&searchMatchMode=AND&dateStart=2024-01-01&sortBy=date:desc
+
+# Full-text search with OR mode - match ANY terms, sorted by relevance
+GET /api/records?search=fitness workout nutrition&searchMatchMode=OR&sortBy=matchCount:desc&limit=10
 
 # Get records by specific creator with audio content
 GET /api/records?creatorHandle=chef_alex&hasAudio=true&limit=20

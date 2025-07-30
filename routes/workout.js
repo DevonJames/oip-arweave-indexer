@@ -17,7 +17,8 @@ router.post('/resolve-exercises', authenticateToken, async (req, res) => {
     // Look up exercises in OIP index
     const queryParams = {
       recordType: 'exercise',
-      search: exerciseNames.join(','),
+      search: exerciseNames.join(' '),
+      searchMatchMode: 'OR', // Use OR mode to find exercises matching any of the names
       limit: 50
     };
 
