@@ -2851,6 +2851,7 @@
                         <option value="mistral:latest">Mistral 7B (Balanced)</option>
                         <option value="llama2:latest">LLaMA 2 7B (Quality)</option>
                         <option value="tinyllama:latest">TinyLlama (Ultra Fast)</option>
+                        <option value="grok-4">Grok-4 (Premium Cloud)</option>
                     </select>
                 </div>
                 <div class="ai-setting" style="display: inline-block; margin-right: 15px;">
@@ -2866,43 +2867,123 @@
                     </select>
                 </div>
                 <div class="ai-setting" style="display: inline-block;">
-                    <label for="tts-voice-select">Voice Style</label>
-                    <select id="tts-voice-select" onchange="updateVoiceStyle()">
-                        <option value="default">Chatterbox Default</option>
-                        <option value="expressive">Chatterbox Expressive</option>
-                        <option value="calm">Chatterbox Calm</option>
-                        <option value="dramatic">Chatterbox Dramatic</option>
-                        <option value="efficient">Chatterbox Efficient</option>
-                        <option value="edge_female">Edge Female (Fallback)</option>
-                        <option value="edge_male">Edge Male (Fallback)</option>
+                    <label for="voice-engine">Voice Engine</label>
+                    <select id="voice-engine" onchange="switchVoiceEngine()">
+                        <option value="chatterbox" selected>Chatterbox TTS (High Quality + Voice Cloning)</option>
+                        <option value="edge_tts">Edge TTS (Fast + Many Voices)</option>
+                        <option value="elevenlabs">ElevenLabs (Premium + Ultra Fast)</option>
                     </select>
                 </div>
             </div>
 
-            <!-- Chatterbox Advanced Voice Controls -->
+            <!-- Voice Selection -->
             <div class="ai-settings" style="margin-top: 10px; padding: 12px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); font-weight: 600;">Chatterbox Voice Controls</div>
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px; min-width: 200px;">
+                    <label for="voice-select" id="voice-select-label">Voice:</label>
+                    <select id="voice-select" onchange="updateVoiceSelection()">
+                        <option value="loading">Loading voices...</option>
+                    </select>
+                </div>
+                <div class="ai-setting" style="display: inline-block;">
                     <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(255, 255, 255, 0.8); cursor: pointer;">
                         <input type="checkbox" id="tts-enabled" checked style="accent-color: #3b82f6;" onchange="toggleTTSEnabled()">
-                        Speak Responses
+                        <span id="tts-enable-label">Enable Voice Synthesis</span>
                     </label>
                 </div>
+            </div>
+
+            <!-- Chatterbox-specific controls -->
+            <div id="chatterbox-controls" class="ai-settings" style="margin-top: 10px; padding: 12px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
+                <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); font-weight: 600; margin-bottom: 8px;">Chatterbox Voice Controls</div>
                 <div class="ai-setting" style="display: inline-block; margin-right: 15px; min-width: 140px;">
-                    <label for="emotion-slider" style="font-size: 12px;">Emotion Level</label>
+                    <label for="emotion-slider" style="font-size: 12px;">Emotion Level: <span id="emotion-value">50%</span></label>
                     <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>😐</span>
                         <input type="range" id="emotion-slider" min="0" max="100" value="50" 
-                               style="flex: 1; accent-color: #3b82f6;" oninput="updateEmotionDisplay(this.value)">
-                        <span id="emotion-value" style="font-size: 11px; min-width: 30px; color: rgba(255,255,255,0.8);">0.5</span>
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updateEmotion(this.value)">
+                        <span>🎭</span>
                     </div>
                 </div>
                 <div class="ai-setting" style="display: inline-block; min-width: 140px;">
-                    <label for="pacing-slider" style="font-size: 12px;">Speech Pacing</label>
+                    <label for="pacing-slider" style="font-size: 12px;">Speech Pacing: <span id="pacing-value">50%</span></label>
                     <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>🐌</span>
                         <input type="range" id="pacing-slider" min="30" max="70" value="50" 
-                               style="flex: 1; accent-color: #3b82f6;" oninput="updatePacingDisplay(this.value)">
-                        <span id="pacing-value" style="font-size: 11px; min-width: 30px; color: rgba(255,255,255,0.8);">0.5</span>
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updatePacing(this.value)">
+                        <span>🚀</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Edge TTS-specific controls -->
+            <div id="edge-controls" class="ai-settings" style="display: none; margin-top: 10px; padding: 12px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
+                <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); font-weight: 600; margin-bottom: 8px;">Edge TTS Controls</div>
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px; min-width: 140px;">
+                    <label for="edge-speed" style="font-size: 12px;">Speech Speed: <span id="speed-value">100%</span></label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>🐌</span>
+                        <input type="range" id="edge-speed" min="50" max="200" value="100" 
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updateSpeed(this.value)">
+                        <span>🚀</span>
+                    </div>
+                </div>
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px; min-width: 140px;">
+                    <label for="edge-pitch" style="font-size: 12px;">Pitch: <span id="pitch-value">0Hz</span></label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>🔽</span>
+                        <input type="range" id="edge-pitch" min="-10" max="10" value="0" 
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updatePitch(this.value)">
+                        <span>🔼</span>
+                    </div>
+                </div>
+                <div class="ai-setting" style="display: inline-block; min-width: 140px;">
+                    <label for="edge-volume" style="font-size: 12px;">Volume: <span id="volume-value">0%</span></label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>🔉</span>
+                        <input type="range" id="edge-volume" min="-20" max="20" value="0" 
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updateVolume(this.value)">
+                        <span>🔊</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ElevenLabs-specific controls -->
+            <div id="elevenlabs-controls" class="ai-settings" style="display: none; margin-top: 10px; padding: 12px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);">
+                <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); font-weight: 600; margin-bottom: 8px;">ElevenLabs Controls</div>
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px; min-width: 140px;">
+                    <label for="elevenlabs-stability" style="font-size: 12px;">Stability: <span id="stability-value">50%</span></label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>🎯</span>
+                        <input type="range" id="elevenlabs-stability" min="0" max="100" value="50" 
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updateStability(this.value)">
+                        <span>🏔️</span>
+                    </div>
+                </div>
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px; min-width: 140px;">
+                    <label for="elevenlabs-similarity" style="font-size: 12px;">Similarity Boost: <span id="similarity-value">75%</span></label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>🔀</span>
+                        <input type="range" id="elevenlabs-similarity" min="0" max="100" value="75" 
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updateSimilarity(this.value)">
+                        <span>🎭</span>
+                    </div>
+                </div>
+                <div class="ai-setting" style="display: inline-block; margin-right: 15px; min-width: 140px;">
+                    <label for="elevenlabs-style" style="font-size: 12px;">Style Intensity: <span id="style-value">0%</span></label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>📖</span>
+                        <input type="range" id="elevenlabs-style" min="0" max="100" value="0" 
+                               style="flex: 1; accent-color: #3b82f6;" oninput="updateStyle(this.value)">
+                        <span>🎨</span>
+                    </div>
+                </div>
+                <div class="ai-setting" style="display: inline-block; min-width: 140px;">
+                    <label for="elevenlabs-model" style="font-size: 12px;">Model:</label>
+                    <select id="elevenlabs-model" onchange="updateModel(this.value)">
+                        <option value="eleven_turbo_v2" selected>Turbo v2 (Fastest)</option>
+                        <option value="eleven_monolingual_v1">Monolingual v1 (Quality)</option>
+                        <option value="eleven_multilingual_v2">Multilingual v2 (Multi-lang)</option>
+                    </select>
                 </div>
             </div>
 
@@ -6997,7 +7078,8 @@
                 // Initialize view mode
                 document.getElementById('voice-view-as').value = currentViewMode;
                 
-                // Initialize STT features
+                // Initialize voice system
+                await loadVoiceSettings();
                 
                 updateAIStatus('Ready to answer questions!');
                 
@@ -7018,197 +7100,444 @@
         }
 
 
-        // Chatterbox TTS Configuration
-        let chatterboxConfig = {
-            voice: 'default',
-            exaggeration: 0.5,  // Emotion level (0.0-1.0+)
-            cfg_weight: 0.5,    // Pacing control (0.3-0.7)
-            engine: 'chatterbox',
-            enabled: true       // Whether TTS is enabled
+        // Voice Engine Configuration (based on working index.html)
+        const voiceConfig = {
+            enabled: true,
+            selectedEngine: 'chatterbox',
+            baseUrl: window.location.origin,
+            // Chatterbox-specific settings
+            chatterbox: {
+                selectedVoice: 'female_expressive',
+                exaggeration: 0.5,       // 50% emotion for balanced speech
+                cfg_weight: 0.5,         // Balanced pacing
+                voiceCloning: {
+                    enabled: false,
+                    audioFile: null,
+                    fileName: null
+                }
+            },
+            // Edge TTS-specific settings
+            edge: {
+                selectedVoice: 'en-US-AriaNeural',
+                speed: 1.0,              // Normal speed
+                pitch: 0,                // No pitch adjustment
+                volume: 0                // No volume adjustment
+            },
+            // ElevenLabs-specific settings
+            elevenlabs: {
+                selectedVoice: 'pNInz6obpgDQGcFmaJgB',  // Adam voice ID
+                model_id: 'eleven_turbo_v2',           // Fast turbo model
+                stability: 0.5,                        // Balanced stability
+                similarity_boost: 0.75,                // Good similarity
+                style: 0.0,                           // Neutral style
+                use_speaker_boost: true               // Enhanced clarity
+            }
+        };
+        
+        // Available voices for each engine (loaded dynamically)
+        let availableVoices = {
+            chatterbox: [],
+            edge_tts: [],
+            elevenlabs: []
         };
 
-        // Update Chatterbox voice style
-        function updateVoiceStyle() {
-            const voiceSelect = document.getElementById('tts-voice-select');
-            chatterboxConfig.voice = voiceSelect.value;
+        // Switch between voice engines
+        async function switchVoiceEngine() {
+            const selectedEngine = document.getElementById('voice-engine').value;
+            voiceConfig.selectedEngine = selectedEngine;
             
-            // Update emotion and pacing based on voice style
-            switch(chatterboxConfig.voice) {
-                case 'expressive':
-                    chatterboxConfig.exaggeration = 0.8;
-                    chatterboxConfig.cfg_weight = 0.3;
-                    break;
-                case 'calm':
-                    chatterboxConfig.exaggeration = 0.2;
-                    chatterboxConfig.cfg_weight = 0.6;
-                    break;
-                case 'dramatic':
-                    chatterboxConfig.exaggeration = 1.0;
-                    chatterboxConfig.cfg_weight = 0.2;
-                    break;
-                case 'efficient':
-                    chatterboxConfig.exaggeration = 0.3;
-                    chatterboxConfig.cfg_weight = 0.7;
-                    break;
-                default:
-                    chatterboxConfig.exaggeration = 0.5;
-                    chatterboxConfig.cfg_weight = 0.5;
+            console.log(`🔄 Switching to engine: ${selectedEngine}`);
+            
+            // Update UI visibility
+            if (selectedEngine === 'chatterbox') {
+                document.getElementById('chatterbox-controls').style.display = 'block';
+                document.getElementById('edge-controls').style.display = 'none';
+                document.getElementById('elevenlabs-controls').style.display = 'none';
+                document.getElementById('tts-enable-label').textContent = 'Enable Chatterbox TTS';
+            } else if (selectedEngine === 'edge_tts') {
+                document.getElementById('chatterbox-controls').style.display = 'none';
+                document.getElementById('edge-controls').style.display = 'block';
+                document.getElementById('elevenlabs-controls').style.display = 'none';
+                document.getElementById('tts-enable-label').textContent = 'Enable Edge TTS';
+            } else if (selectedEngine === 'elevenlabs') {
+                document.getElementById('chatterbox-controls').style.display = 'none';
+                document.getElementById('edge-controls').style.display = 'none';
+                document.getElementById('elevenlabs-controls').style.display = 'block';
+                document.getElementById('tts-enable-label').textContent = 'Enable ElevenLabs TTS';
             }
             
-            // Update sliders to reflect the preset
-            document.getElementById('emotion-slider').value = Math.round(chatterboxConfig.exaggeration * 100);
-            document.getElementById('pacing-slider').value = Math.round(chatterboxConfig.cfg_weight * 100);
-            updateEmotionDisplay(Math.round(chatterboxConfig.exaggeration * 100));
-            updatePacingDisplay(Math.round(chatterboxConfig.cfg_weight * 100));
+            // Load voices for selected engine
+            await populateVoiceDropdown(selectedEngine);
+            updateAIStatus(`🔄 Switched to ${selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : selectedEngine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs'}`);
+        }
+
+        // Load available voices from API
+        async function loadAvailableVoices() {
+            try {
+                // Load all voices from the single voices endpoint
+                const response = await fetch('/api/voice/voices');
+                if (response.ok) {
+                    const data = await response.json();
+                    const voices = data.voices || [];
+                    
+                    // Separate voices by engine (case-insensitive)
+                    availableVoices.chatterbox = voices.filter(v => 
+                        v.engine && (v.engine.toLowerCase() === 'chatterbox' || v.engine.toLowerCase() === 'chatterbox tts')
+                    );
+                    availableVoices.edge_tts = voices.filter(v => 
+                        v.engine && (v.engine.toLowerCase() === 'edge tts' || v.engine.toLowerCase() === 'edge_tts')
+                    );
+                    
+                    // Add ElevenLabs voices (hardcoded popular ones)
+                    availableVoices.elevenlabs = [
+                        { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male, Deep)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Female, Sweet)', gender: 'female', engine: 'elevenlabs' },
+                        { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold (Male, Crisp)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'pMsXgVXv3BLzUgSXRplE', name: 'Freya (Female, Conversational)', gender: 'female', engine: 'elevenlabs' },
+                        { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel (Male, British)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'CYw3kZ02Hs0563khs1Fj', name: 'Gigi (Female, Childlike)', gender: 'female', engine: 'elevenlabs' },
+                        { id: 'bVMeCyTHy58xNoL34h3p', name: 'Jeremy (Male, American)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte (Female, Seductive)', gender: 'female', engine: 'elevenlabs' },
+                        { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George (Male, Raspy)', gender: 'male', engine: 'elevenlabs' },
+                        { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace (Female, Calm)', gender: 'female', engine: 'elevenlabs' }
+                    ];
+                    
+                    console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices, ${availableVoices.edge_tts.length} Edge TTS voices, and ${availableVoices.elevenlabs.length} ElevenLabs voices`);
+                    
+                    // Populate dropdown for default engine
+                    await populateVoiceDropdown(voiceConfig.selectedEngine);
+                } else {
+                    console.error('Failed to load voices:', response.status, await response.text());
+                    updateAIStatus('⚠️ Failed to load voice options');
+                }
+                
+            } catch (error) {
+                console.error('Failed to load voices:', error);
+                updateAIStatus('⚠️ Failed to load voice options');
+            }
+        }
+        
+        // Populate voice dropdown based on selected engine
+        async function populateVoiceDropdown(engine) {
+            const voiceSelect = document.getElementById('voice-select');
+            voiceSelect.innerHTML = ''; // Clear existing options
             
-            console.log(`[Chatterbox] Voice style updated to ${chatterboxConfig.voice}:`, chatterboxConfig);
+            const voices = availableVoices[engine] || [];
+            
+            if (voices.length === 0) {
+                voiceSelect.innerHTML = '<option value="">No voices available</option>';
+                return;
+            }
+            
+            // Group voices by gender for better organization
+            const groupedVoices = {
+                female: voices.filter(v => v.gender === 'female'),
+                male: voices.filter(v => v.gender === 'male'),
+                other: voices.filter(v => !['female', 'male'].includes(v.gender))
+            };
+            
+            // Add female voices
+            if (groupedVoices.female.length > 0) {
+                const femaleGroup = document.createElement('optgroup');
+                femaleGroup.label = 'Female Voices';
+                groupedVoices.female.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    option.title = voice.description || '';
+                    femaleGroup.appendChild(option);
+                });
+                voiceSelect.appendChild(femaleGroup);
+            }
+            
+            // Add male voices
+            if (groupedVoices.male.length > 0) {
+                const maleGroup = document.createElement('optgroup');
+                maleGroup.label = 'Male Voices';
+                groupedVoices.male.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    option.title = voice.description || '';
+                    maleGroup.appendChild(option);
+                });
+                voiceSelect.appendChild(maleGroup);
+            }
+            
+            // Add other voices
+            if (groupedVoices.other.length > 0) {
+                const otherGroup = document.createElement('optgroup');
+                otherGroup.label = 'Other Voices';
+                groupedVoices.other.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name;
+                    option.title = voice.description || '';
+                    otherGroup.appendChild(option);
+                });
+                voiceSelect.appendChild(otherGroup);
+            }
+            
+            // Set default selection
+            if (engine === 'chatterbox') {
+                const defaultVoice = voices.find(v => v.id === 'female_expressive') || voices[0];
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.id;
+                    voiceConfig.chatterbox.selectedVoice = defaultVoice.id;
+                }
+            } else if (engine === 'edge_tts') {
+                const defaultVoice = voices.find(v => v.id === 'en-US-AriaNeural') || voices[0];
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.id;
+                    voiceConfig.edge.selectedVoice = defaultVoice.id;
+                }
+            } else if (engine === 'elevenlabs') {
+                const defaultVoice = voices.find(v => v.id === 'pNInz6obpgDQGcFmaJgB') || voices[0];
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.id;
+                    voiceConfig.elevenlabs.selectedVoice = defaultVoice.id;
+                }
+            }
+            
+            console.log(`🎵 Populated ${voices.length} voices for ${engine}`);
         }
 
-        // Update emotion level display
-        function updateEmotionDisplay(value) {
-            chatterboxConfig.exaggeration = value / 100;
-            document.getElementById('emotion-value').textContent = (value / 100).toFixed(1);
+        // Handle voice selection change
+        function updateVoiceSelection() {
+            const selectedVoice = document.getElementById('voice-select').value;
+            const engine = voiceConfig.selectedEngine;
+            
+            if (engine === 'chatterbox') {
+                voiceConfig.chatterbox.selectedVoice = selectedVoice;
+            } else if (engine === 'edge_tts') {
+                voiceConfig.edge.selectedVoice = selectedVoice;
+            } else if (engine === 'elevenlabs') {
+                voiceConfig.elevenlabs.selectedVoice = selectedVoice;
+            }
+            
+            console.log(`🎵 Selected voice: ${selectedVoice} for engine: ${engine}`);
         }
 
-        // Update pacing display
-        function updatePacingDisplay(value) {
-            chatterboxConfig.cfg_weight = value / 100;
-            document.getElementById('pacing-value').textContent = (value / 100).toFixed(1);
+        // Chatterbox controls
+        function updateEmotion(value) {
+            voiceConfig.chatterbox.exaggeration = value / 100;
+            document.getElementById('emotion-value').textContent = value + '%';
+        }
+
+        function updatePacing(value) {
+            voiceConfig.chatterbox.cfg_weight = value / 100;
+            document.getElementById('pacing-value').textContent = value + '%';
+        }
+
+        // Edge TTS controls
+        function updateSpeed(value) {
+            voiceConfig.edge.speed = value / 100;
+            document.getElementById('speed-value').textContent = value + '%';
+        }
+        
+        function updatePitch(value) {
+            voiceConfig.edge.pitch = parseInt(value);
+            document.getElementById('pitch-value').textContent = value + 'Hz';
+        }
+        
+        function updateVolume(value) {
+            voiceConfig.edge.volume = parseInt(value);
+            document.getElementById('volume-value').textContent = value + '%';
+        }
+
+        // ElevenLabs controls
+        function updateStability(value) {
+            voiceConfig.elevenlabs.stability = value / 100;
+            document.getElementById('stability-value').textContent = value + '%';
+        }
+        
+        function updateSimilarity(value) {
+            voiceConfig.elevenlabs.similarity_boost = value / 100;
+            document.getElementById('similarity-value').textContent = value + '%';
+        }
+        
+        function updateStyle(value) {
+            voiceConfig.elevenlabs.style = value / 100;
+            document.getElementById('style-value').textContent = value + '%';
+        }
+        
+        function updateModel(value) {
+            voiceConfig.elevenlabs.model_id = value;
         }
 
         // Toggle TTS enabled/disabled
         function toggleTTSEnabled() {
             const checkbox = document.getElementById('tts-enabled');
-            chatterboxConfig.enabled = checkbox.checked;
+            voiceConfig.enabled = checkbox.checked;
+            const engineName = voiceConfig.selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : 
+                             voiceConfig.selectedEngine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs';
+            updateAIStatus(voiceConfig.enabled ? `${engineName} Enabled` : 'TTS Disabled');
+        }
+
+        // Universal voice synthesis function (handles all engines)
+        async function synthesizeResponseWithChatterbox(text) {
+            if (!voiceConfig.enabled) {
+                console.log('Voice synthesis disabled, skipping');
+                return;
+            }
+
+            const engine = voiceConfig.selectedEngine;
             
-            console.log(`[Chatterbox] TTS ${chatterboxConfig.enabled ? 'enabled' : 'disabled'}`);
-            
-            // Update status if needed
-            if (!chatterboxConfig.enabled) {
-                updateAIStatus('Ready to answer questions! (TTS disabled)');
-            } else {
-                updateAIStatus('Ready to answer questions!');
+            try {
+                if (engine === 'chatterbox') {
+                    await synthesizeWithChatterbox(text);
+                } else if (engine === 'edge_tts') {
+                    await synthesizeWithEdge(text);
+                } else if (engine === 'elevenlabs') {
+                    await synthesizeWithElevenLabs(text);
+                } else {
+                    throw new Error(`Unknown engine: ${engine}`);
+                }
+            } catch (error) {
+                console.error(`Voice synthesis failed with ${engine}:`, error);
+                updateAIStatus(`❌ ${engine} synthesis failed`);
             }
         }
 
-        // Synthesize AI response with Chatterbox TTS
-        async function synthesizeResponseWithChatterbox(text) {
+        // Synthesize with Chatterbox TTS
+        async function synthesizeWithChatterbox(text) {
             try {
-                console.log(`[Chatterbox] Synthesizing AI response with voice=${chatterboxConfig.voice}, emotion=${chatterboxConfig.exaggeration}, pacing=${chatterboxConfig.cfg_weight}`);
                 updateAIStatus('🎭 Synthesizing with Chatterbox TTS...');
                 
-                const synthesisPayload = {
+                const formData = new FormData();
+                formData.append('text', text);
+                formData.append('voice_id', voiceConfig.chatterbox.selectedVoice);
+                formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                formData.append('engine', 'chatterbox');
+
+                const response = await fetch('/api/voice/synthesize', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const audioBlob = await response.blob();
+                await playAudio(audioBlob);
+                
+            } catch (error) {
+                console.error('Chatterbox synthesis failed:', error);
+                throw error;
+            }
+        }
+
+        // Synthesize with Edge TTS
+        async function synthesizeWithEdge(text) {
+            try {
+                updateAIStatus('⚡ Synthesizing with Edge TTS...');
+                
+                const formData = new FormData();
+                formData.append('text', text);
+                formData.append('voice_id', voiceConfig.edge.selectedVoice);
+                formData.append('speed', voiceConfig.edge.speed.toString());
+                formData.append('engine', 'edge_tts');
+                
+                // Add exaggeration and cfg_weight for compatibility (Edge will convert these to pitch/volume)
+                formData.append('exaggeration', (voiceConfig.edge.pitch / 10 + 0.5).toString());
+                formData.append('cfg_weight', (voiceConfig.edge.volume / 20 + 0.5).toString());
+
+                const response = await fetch('/api/voice/synthesize', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const audioBlob = await response.blob();
+                await playAudio(audioBlob);
+                
+            } catch (error) {
+                console.error('Edge TTS synthesis failed:', error);
+                throw error;
+            }
+        }
+
+        // Synthesize with ElevenLabs
+        async function synthesizeWithElevenLabs(text) {
+            try {
+                updateAIStatus('🚀 Synthesizing with ElevenLabs...');
+                
+                const requestData = {
                     text: text,
-                    voice_id: chatterboxConfig.voice,
-                    exaggeration: chatterboxConfig.exaggeration,
-                    cfg_weight: chatterboxConfig.cfg_weight,
-                    speed: 1.0
+                    voice_settings: {
+                        stability: voiceConfig.elevenlabs.stability,
+                        similarity_boost: voiceConfig.elevenlabs.similarity_boost,
+                        style: voiceConfig.elevenlabs.style,
+                        use_speaker_boost: voiceConfig.elevenlabs.use_speaker_boost
+                    },
+                    model_id: voiceConfig.elevenlabs.model_id
                 };
                 
-                // Use fallback engine if voice starts with 'edge_'
-                if (chatterboxConfig.voice.startsWith('edge_')) {
-                    synthesisPayload.voice_id = chatterboxConfig.voice;
-                    console.log(`[Chatterbox] Using Edge TTS fallback for voice: ${chatterboxConfig.voice}`);
-                }
-                
-                const response = await fetch('/api/voice/synthesize', {
+                const response = await fetch(`/api/voice/elevenlabs/${voiceConfig.elevenlabs.selectedVoice}/synthesize`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(synthesisPayload)
+                    body: JSON.stringify(requestData)
                 });
-                
+
                 if (!response.ok) {
-                    throw new Error(`TTS synthesis failed: ${response.status}`);
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                
+
                 const audioBlob = await response.blob();
-                
-                // Play the synthesized audio
-                const audioUrl = URL.createObjectURL(audioBlob);
-                const audio = new Audio(audioUrl);
-                
-                audio.onended = () => {
-                    URL.revokeObjectURL(audioUrl);
-                    updateAIStatus('Ready to answer questions!');
-                };
-                
-                audio.onerror = (error) => {
-                    console.error('[Chatterbox] Audio playback failed:', error);
-                    URL.revokeObjectURL(audioUrl);
-                    updateAIStatus('Ready to answer questions!');
-                };
-                
-                await audio.play();
-                console.log('[Chatterbox] Audio synthesis and playback successful');
+                await playAudio(audioBlob);
                 
             } catch (error) {
-                console.error('[Chatterbox] TTS synthesis failed:', error);
-                updateAIStatus('TTS synthesis failed - Ready for next question');
+                console.error('ElevenLabs synthesis failed:', error);
+                throw error;
             }
+        }
+
+        // Helper function to play audio
+        async function playAudio(audioBlob) {
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            
+            audio.onended = () => {
+                URL.revokeObjectURL(audioUrl);
+                updateAIStatus('Ready to answer questions!');
+            };
+            
+            audio.onerror = (error) => {
+                console.error('Audio playback failed:', error);
+                URL.revokeObjectURL(audioUrl);
+                updateAIStatus('Ready to answer questions!');
+            };
+            
+            await audio.play();
+            console.log('Audio synthesis and playback successful');
         }
 
         async function loadVoiceSettings() {
             try {
-                // Load available voices from backend (including Chatterbox)
-                const response = await fetch('/api/voice/voices');
-                const data = await response.json();
+                console.log('🎵 Initializing voice system...');
                 
-                if (data.voices) {
-                    voiceState.availableVoices = data.voices;
-                    
-                    // Update voice selector with real Chatterbox voices
-                    const voiceSelect = document.getElementById('tts-voice-select');
-                    
-                    // Clear existing options and add Chatterbox voices
-                    const chatterboxOptions = voiceSelect.querySelectorAll('option[value^="default"], option[value^="expressive"], option[value^="calm"], option[value^="dramatic"], option[value^="efficient"]');
-                    
-                    // Update Chatterbox options if service is available
-                    if (data.voices.some(v => v.engine === 'Chatterbox' || v.engine === 'chatterbox')) {
-                        console.log('[Chatterbox] Chatterbox TTS service is available');
-                        chatterboxConfig.engine = 'chatterbox';
-                    } else {
-                        console.warn('[Chatterbox] Chatterbox TTS not available, using fallback voices');
-                    }
-                    
-                    populateVoiceSelect();
-                }
+                // Load available voices
+                await loadAvailableVoices();
                 
-                // NOTE: Record types are now loaded by loadActualRecordTypes() in main app initialization
+                // Initialize voice controls
+                await switchVoiceEngine();
+                
+                console.log('🎵 Voice system initialized successfully');
                 
             } catch (error) {
-                console.warn('[Voice] Could not load voice settings:', error);
-                // Set default voices if API fails
-                voiceState.availableVoices = [
-                    { id: 'default', name: 'Chatterbox Default', engine: 'Chatterbox' },
-                    { id: 'edge_female', name: 'Edge Female (Fallback)', engine: 'Edge TTS' }
-                ];
-                populateVoiceSelect();
+                console.error('🎵 Failed to initialize voice system:', error);
+                updateAIStatus('⚠️ Voice system initialization failed');
             }
         }
 
-        function populateVoiceSelect() {
-            const select = document.getElementById('voice-style-select');
-            
-            // Keep existing options if populated (since we set them manually)
-            if (select.children.length > 0) {
-                // Just set the correct default value
-                select.value = voiceState.selectedVoice;
-                return;
-            }
-            
-            // Fallback: populate from API if no options exist
-            voiceState.availableVoices.forEach(voice => {
-                const option = document.createElement('option');
-                option.value = voice.id;
-                option.textContent = `${voice.name} (${voice.engine})`;
-                select.appendChild(option);
-            });
-            
-            // Set default voice to Edge if available
-            select.value = voiceState.selectedVoice;
-        }
+        // Legacy function removed - replaced by comprehensive voice engine system
 
         // DEPRECATED: loadVoiceRecordTypes() - now handled by loadActualRecordTypes() in main app init
         // async function loadVoiceRecordTypes() { ... }
@@ -7411,8 +7740,8 @@
                     isFollowUp: true
                 });
                 
-                // Synthesize AI response with Chatterbox TTS
-                if (chatterboxConfig.enabled && aiData.response_text) {
+                // Synthesize AI response with selected voice engine
+                if (voiceConfig.enabled && aiData.response_text) {
                     await synthesizeResponseWithChatterbox(aiData.response_text);
                 }
                 
@@ -7502,8 +7831,8 @@
                     isFollowUp: false
                 });
                 
-                // Synthesize AI response with Chatterbox TTS
-                if (chatterboxConfig.enabled && aiData.response_text) {
+                // Synthesize AI response with selected voice engine
+                if (voiceConfig.enabled && aiData.response_text) {
                     await synthesizeResponseWithChatterbox(aiData.response_text);
                 }
                 
@@ -8024,7 +8353,15 @@
                 input.style.height = 'auto';
                 input.style.height = Math.min(input.scrollHeight, 200) + 'px';
 
-                updateAIStatus('Speech transcribed! Click "Ask AI" or press Enter');
+                // Automatically process the transcribed text with AI (like working index.html)
+                updateAIStatus('Processing your question...');
+                
+                // Update selected model and voice from current settings
+                chatState.selectedModel = document.getElementById('ai-model-select').value;
+                chatState.selectedLanguage = document.getElementById('stt-language').value;
+                
+                // Automatically trigger AI processing
+                await processTextWithAI(transcribedText);
 
             } catch (error) {
                 console.error('Transcription error:', error);
