@@ -7870,6 +7870,9 @@
         function displayAISearchResults(searchResults, appliedFilters) {
             console.log(`[Chat AI] 🎯 Displaying ${searchResults.length} exact AI search results`);
             
+            // Switch to Browse tab to show the visual representation
+            showSearchInterface();
+            
             // Update global state to match AI results
             currentRecords = searchResults;
             currentPage = 1;
@@ -7927,6 +7930,9 @@
         }
 
         async function applyAIFilters(filters, sources = []) {
+            // Switch to Browse tab to show the visual representation
+            showSearchInterface();
+            
             // Update the enhanced unified filters state
             Object.assign(currentFilters, filters);
             
