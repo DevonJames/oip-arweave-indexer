@@ -93,12 +93,11 @@ class IntelligentQuestionProcessor {
             }
         }
 
-        // Extract subject and modifiers based on question patterns
-        const result = this.parseQuestionStructure(question, recordType);
-        
+        // Use the full question as the search term for better results
+        // The searchMatchMode=OR will handle finding relevant records
         return {
-            subject: result.subject,
-            modifiers: result.modifiers,
+            subject: question, // Use full question instead of parsed subject
+            modifiers: [], // Disable modifier detection for now
             recordType: recordType
         };
     }
@@ -238,7 +237,7 @@ class IntelligentQuestionProcessor {
             searchMatchMode: 'OR', // Use OR mode to get maximum results for AI analysis
             resolveDepth: options.resolveDepth || 2,
             limit: options.limit || 20,
-            sortBy: options.sortBy || 'date:desc'
+            sortBy: options.sortBy || 'matchCount:desc' // Use relevance sorting by default
         };
     }
 

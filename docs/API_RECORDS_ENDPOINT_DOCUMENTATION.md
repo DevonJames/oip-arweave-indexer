@@ -269,7 +269,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `creatorHandle` - Creator handle
   - `date` - Record creation date (from `data.basic.date`)
   - `score` - Match score (for search/tag queries)
-  - `matchCount` - Number of search terms matched (works with `search` parameter, especially useful for OR mode)
+  - `matchCount` - Number of search terms matched (only works with `search` parameter)
   - `tags` - Tag match score (only works with `tags` parameter)
   - `exerciseScore` - Exercise match score (only works with `exerciseNames` parameter)
   - `ingredientScore` - Ingredient match score (only works with `ingredientNames` parameter)
@@ -416,6 +416,12 @@ GET /api/records?search=fitness workout&searchMatchMode=AND&limit=10
 ### Search with OR Mode
 ```
 GET /api/records?search=fitness workout&searchMatchMode=OR&limit=10&sortBy=matchCount:desc
+```
+
+### Switch Back to Match Count Sorting
+```
+# After sorting by date, switch back to relevance sorting
+GET /api/records?search=fitness workout&searchMatchMode=OR&sortBy=matchCount:desc&limit=10
 ```
 
 ### Tag Filtering (OR behavior)

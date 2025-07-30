@@ -3164,9 +3164,11 @@
                         <div class="header-control-group">
                             <label for="voice-sort-by">Sort By</label>
                             <select id="voice-sort-by" onchange="applyVoiceFilters()">
+                                <option value="matchCount:desc" selected>Relevance (Highest)</option>
+                                <option value="matchCount:asc">Relevance (Lowest)</option>
                                 <option value="inArweaveBlock:desc">Block (Newest)</option>
                                 <option value="inArweaveBlock:asc">Block (Oldest)</option>
-                                <option value="date:desc" selected>Date (Newest)</option>
+                                <option value="date:desc">Date (Newest)</option>
                                 <option value="date:asc">Date (Oldest)</option>
                             </select>
                         </div>
@@ -3722,7 +3724,7 @@
             }
             
             // Clear other filters to get clean results for this record type
-            document.getElementById('voice-sort-by').value = 'inArweaveBlock:desc';
+            document.getElementById('voice-sort-by').value = 'matchCount:desc';
             document.getElementById('voice-date-start').value = '';
             document.getElementById('voice-date-end').value = '';
             document.getElementById('voice-did-tx').value = '';
@@ -9057,7 +9059,7 @@
             document.getElementById('voice-search-input').value = '';
             document.getElementById('voice-search-match-mode').value = 'AND';
             document.getElementById('voice-record-type-filter').value = '';
-            document.getElementById('voice-sort-by').value = 'date:desc';
+            document.getElementById('voice-sort-by').value = 'matchCount:desc';
             document.getElementById('voice-resolve-depth').value = '2';
             document.getElementById('voice-date-start').value = '';
             document.getElementById('voice-date-end').value = '';

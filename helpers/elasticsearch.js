@@ -1784,6 +1784,22 @@ async function getRecords(queryParams) {
                         console.log('Warning: sortBy=exerciseTypeScore specified but no exerciseType parameter provided - skipping exerciseTypeScore sort');
                     }
                 }
+
+                if (fieldToSortBy === 'matchCount') {
+                    // Only allow 'matchCount' sorting when search parameter is provided
+                    if (search != undefined) {
+                        recordsToSort.sort((a, b) => {
+                            if (order === 'asc') {
+                                return (a.matchCount || 0) - (b.matchCount || 0);
+                            } else {
+                                return (b.matchCount || 0) - (a.matchCount || 0);
+                            }
+                        });
+                        console.log('sorted by match count (' + order + ')');
+                    } else {
+                        console.log('Warning: sortBy=matchCount specified but no search parameter provided - skipping matchCount sort');
+                    }
+                }
             }
         };
 
