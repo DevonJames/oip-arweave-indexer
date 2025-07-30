@@ -7395,7 +7395,21 @@
                 }
             } catch (error) {
                 console.error(`Voice synthesis failed with ${engine}:`, error);
-                updateAIStatus(`❌ ${engine} synthesis failed`);
+                
+                // Try fallback to Chatterbox if the primary engine fails
+                if (engine !== 'chatterbox') {
+                    console.log(`[TTS] Falling back to Chatterbox TTS...`);
+                    updateAIStatus('🔄 Falling back to Chatterbox TTS...');
+                    try {
+                        await synthesizeWithChatterbox(text);
+                        return; // Successfully fell back
+                    } catch (fallbackError) {
+                        console.error('[TTS] Chatterbox fallback also failed:', fallbackError);
+                        updateAIStatus('❌ All TTS engines failed');
+                    }
+                } else {
+                    updateAIStatus(`❌ ${engine} synthesis failed`);
+                }
             }
         }
 

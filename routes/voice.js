@@ -919,4 +919,55 @@ router.get('/health', async (req, res) => {
     });
 });
 
+// ElevenLabs TTS endpoint for reference client
+router.post('/elevenlabs/:voiceId/synthesize', async (req, res) => {
+    try {
+        const { voiceId } = req.params;
+        const { text, voice_settings = {}, model_id = 'eleven_turbo_v2' } = req.body;
+        
+        if (!text) {
+            return res.status(400).json({ error: 'Text is required' });
+        }
+        
+        console.log(`[ElevenLabs] Synthesizing with voice ${voiceId}: "${text.substring(0, 50)}..."`);
+        
+        // Check if ElevenLabs API key is available
+        if (!process.env.ELEVENLABS_API_KEY) {
+            return res.status(503).json({ error: 'ElevenLabs API key not configured' });
+        }
+        
+        const response = await axios.post(
+            `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+            {
+                text: text,
+                model_id: model_id,
+                voice_settings: {
+                    stability: voice_settings.stability || 0.5,
+                    similarity_boost: voice_settings.similarity_boost || 0.75,
+                    style: voice_settings.style || 0.0,
+                    use_speaker_boost: voice_settings.use_speaker_boost || true
+                },
+                output_format: 'mp3_44100_128'
+            },
+            {
+                headers: {
+                    'xi-api-key': process.env.ELEVENLABS_API_KEY,
+                    'Content-Type': 'application/json'
+                },
+                responseType: 'arraybuffer',
+                timeout: 10000
+            }
+        );
+        
+        console.log(`[ElevenLabs] Generated ${response.data.byteLength} bytes successfully`);
+        
+        res.set('Content-Type', 'audio/mp3');
+        res.send(Buffer.from(response.data));
+        
+    } catch (error) {
+        console.error('[ElevenLabs] Synthesis failed:', error.message);
+        res.status(500).json({ error: 'ElevenLabs synthesis failed: ' + error.message });
+    }
+});
+
 module.exports = router; 
