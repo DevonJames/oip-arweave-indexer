@@ -3063,6 +3063,18 @@
                     </div>
                     
                     <div class="filter-group">
+                        <label for="voice-search-match-mode" title="Controls how search terms are matched">
+                            Search Mode
+                            <span style="opacity: 0.6; font-size: 0.8rem;">(?)</span>
+                        </label>
+                        <select id="voice-search-match-mode" onchange="applyVoiceFilters()" 
+                                title="AND = all terms required, OR = any term matches">
+                            <option value="AND">Match ALL terms</option>
+                            <option value="OR">Match ANY term</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
                         <label for="voice-resolve-depth" title="Higher values resolve more linked records. Set to 1+ to see recipe images.">
                             Resolve Depth
                             <span style="opacity: 0.6; font-size: 0.8rem;">(?)</span>
@@ -3950,6 +3962,10 @@
 
             if (currentFilters.search) {
                 params.append('search', currentFilters.search.trim());
+            }
+            
+            if (currentFilters.searchMatchMode) {
+                params.append('searchMatchMode', currentFilters.searchMatchMode);
             }
             
             if (currentFilters.recordType) {
@@ -7885,6 +7901,9 @@
             if (appliedFilters.search) {
                 document.getElementById('voice-search-input').value = appliedFilters.search;
             }
+            if (appliedFilters.searchMatchMode) {
+                document.getElementById('voice-search-match-mode').value = appliedFilters.searchMatchMode;
+            }
             if (appliedFilters.recordType) {
                 document.getElementById('voice-record-type-filter').value = appliedFilters.recordType;
             }
@@ -7939,6 +7958,9 @@
             // Update the UI elements for basic filters
             if (filters.search) {
                 document.getElementById('voice-search-input').value = filters.search;
+            }
+            if (filters.searchMatchMode) {
+                document.getElementById('voice-search-match-mode').value = filters.searchMatchMode;
             }
             if (filters.recordType) {
                 document.getElementById('voice-record-type-filter').value = filters.recordType;
@@ -8955,6 +8977,7 @@
             
             // Update the main currentFilters object to work with enhanced system
             currentFilters.search = document.getElementById('voice-search-input').value.trim();
+            currentFilters.searchMatchMode = document.getElementById('voice-search-match-mode').value;
             currentFilters.recordType = document.getElementById('voice-record-type-filter').value;
             currentFilters.sortBy = document.getElementById('voice-sort-by').value;
             currentFilters.resolveDepth = parseInt(document.getElementById('voice-resolve-depth').value) || 2;
@@ -9032,6 +9055,7 @@
 
         function clearVoiceFilters() {
             document.getElementById('voice-search-input').value = '';
+            document.getElementById('voice-search-match-mode').value = 'AND';
             document.getElementById('voice-record-type-filter').value = '';
             document.getElementById('voice-sort-by').value = 'date:desc';
             document.getElementById('voice-resolve-depth').value = '2';
@@ -9144,6 +9168,10 @@
 
             if (currentFilters.search) {
                 params.append('search', currentFilters.search.trim());
+            }
+            
+            if (currentFilters.searchMatchMode) {
+                params.append('searchMatchMode', currentFilters.searchMatchMode);
             }
             
             if (currentFilters.recordType) {

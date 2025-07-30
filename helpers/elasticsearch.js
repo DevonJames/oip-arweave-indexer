@@ -1119,6 +1119,7 @@ async function getRecords(queryParams) {
         limit,
         page,
         search,
+        searchMatchMode = 'AND', // New parameter: 'AND' or 'OR' (default: 'AND' for backward compatibility)
         inArweaveBlock,
         hasAudio,
         summarizeTags,
@@ -1535,11 +1536,12 @@ async function getRecords(queryParams) {
 
         // search records by search parameter
         if (search !== undefined) {
-            const searchTerms = search.toLowerCase().split(',').map(term => term.trim()).filter(Boolean); // Split only on commas, preserve multi-word terms
+            const searchTerms = search.toLowerCase().split(' ').map(term => term.trim()).filter(Boolean); // Split on spaces to separate search terms
             // console.log('searching for:', searchTerms, 'in records');
             records = records.filter(record => {
                 const basicData = record.data.basic;
-                return searchTerms.every(term => {
+                const matchFunction = searchMatchMode === 'OR' ? searchTerms.some : searchTerms.every;
+                return matchFunction.call(searchTerms, term => {
                     const titleMatches = basicData?.name?.toLowerCase().includes(term) || false;
                     const descriptionMatches = basicData?.description?.toLowerCase().includes(term) || false;
                     const tagsMatches = basicData?.tagItems?.some(tag => tag.toLowerCase().includes(term)) || false;
