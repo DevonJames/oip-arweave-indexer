@@ -7,6 +7,7 @@ const {
     getContextFields,
     recordTypesForRAG
 } = require('../config/recordTypesForRAG');
+const intelligentQuestionProcessor = require('./intelligentQuestionProcessor');
 
 class RAGService {
     constructor() {
@@ -785,7 +786,40 @@ class RAGService {
     async query(question, options = {}) {
         try {
             console.log(`[RAG] 🔍 Processing query: "${question}"`);
-            console.log(`[RAG] 📊 Using structured field extraction: ${options.useFieldExtraction !== false ? 'ENABLED' : 'DISABLED'}`);
+            const { include_filter_analysis = false, searchParams = {} } = options;
+            
+            // Check if we should use the Intelligent Question Processor
+            const shouldUseIQP = include_filter_analysis && 
+                (!searchParams.recordType && !searchParams.tags && !searchParams.creatorHandle);
+            
+            if (shouldUseIQP) {
+                console.log('[RAG] Using Intelligent Question Processor for enhanced analysis');
+                try {
+                    const iqpResult = await intelligentQuestionProcessor.processQuestion(question, {
+                        resolveDepth: searchParams.resolveDepth || 2,
+                        limit: searchParams.limit || 20
+                    });
+                    
+                    // Convert IQP result to RAG format for compatibility
+                    return {
+                        answer: iqpResult.answer,
+                        sources: this.formatSources(iqpResult.search_results),
+                        context_used: iqpResult.context_used,
+                        model: options.model || this.defaultModel,
+                        search_results_count: iqpResult.search_results_count,
+                        search_results: iqpResult.search_results,
+                        applied_filters: iqpResult.applied_filters,
+                        extracted_subject: iqpResult.extracted_subject,
+                        extracted_keywords: iqpResult.extracted_keywords,
+                        rationale: iqpResult.rationale
+                    };
+                } catch (iqpError) {
+                    console.warn('[RAG] Intelligent Question Processor failed, falling back to legacy method:', iqpError.message);
+                    // Fall through to legacy processing
+                }
+            }
+            
+            console.log(`[RAG] 📊 Using legacy RAG processing with field extraction: ${options.useFieldExtraction !== false ? 'ENABLED' : 'DISABLED'}`);
             
             // Step 1: Analyze question to determine relevant record types
             const relevantTypes = this.analyzeQuestionForRecordTypes(question);
@@ -813,16 +847,16 @@ class RAGService {
             // Step 5: Generate LLM response with context (enhanced with structured data)
             const response = await this.generateResponse(question, context, options.model, searchResults);
             
-                    return {
-            answer: response,
-            sources: this.extractSources(searchResults),
-            context_used: context.length > 0,
-            model: options.model || this.defaultModel,
-            search_results_count: searchResults.totalResults || 0,
-            search_results: searchResults.records, // Include actual records for frontend analysis
-            relevant_types: relevantTypes.map(rt => rt.type),
-            applied_filters: this.extractAppliedFilters(question, searchResults, relevantTypes)
-        };
+            return {
+                answer: response,
+                sources: this.extractSources(searchResults),
+                context_used: context.length > 0,
+                model: options.model || this.defaultModel,
+                search_results_count: searchResults.totalResults || 0,
+                search_results: searchResults.records, // Include actual records for frontend analysis
+                relevant_types: relevantTypes.map(rt => rt.type),
+                applied_filters: this.extractAppliedFilters(question, searchResults, relevantTypes)
+            };
             
         } catch (error) {
             console.error('[RAG] Error processing query:', error);
@@ -833,6 +867,26 @@ class RAGService {
                 error: error.message
             };
         }
+    }
+
+    /**
+     * Format sources for compatibility with different parts of the system
+     */
+    formatSources(records) {
+        if (!records || !Array.isArray(records)) return [];
+        
+        return records.slice(0, 5).map(record => {
+            const basic = record.data?.basic || {};
+            return {
+                type: 'record',
+                title: basic.name || 'Untitled Record',
+                creator: record.oip?.creator?.creatorHandle || 'Unknown',
+                didTx: record.oip?.didTx || '',
+                recordType: record.oip?.recordType || 'unknown',
+                preview: basic.description ? basic.description.substring(0, 100) + '...' : '',
+                record: record // Include full record for detailed analysis
+            };
+        });
     }
 
     /**
