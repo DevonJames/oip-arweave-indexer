@@ -231,7 +231,7 @@ class IntelligentQuestionProcessor {
      * Build initial search filters from extracted components
      */
     buildInitialFilters(subject, recordType, options = {}) {
-        return {
+        const filters = {
             search: subject,
             recordType: recordType,
             searchMatchMode: 'OR', // Use OR mode to get maximum results for AI analysis
@@ -239,6 +239,13 @@ class IntelligentQuestionProcessor {
             limit: options.limit || 20,
             sortBy: options.sortBy || 'matchCount:desc' // Use relevance sorting by default
         };
+
+        // Add recipe-specific parameters for nutritional and timing information
+        if (recordType === 'recipe') {
+            filters.summarizeRecipe = true;
+        }
+
+        return filters;
     }
 
     /**
@@ -397,6 +404,37 @@ class IntelligentQuestionProcessor {
                     }
                 }
                 
+                // Include comprehensive recipe data for recipe records
+                if (recordType === 'recipe') {
+                    // Include timing information
+                    content.prepTimeMinutes = specificData.prep_time_mins || specificData.prepTime || null;
+                    content.cookTimeMinutes = specificData.cook_time_mins || specificData.cookTime || null;
+                    content.totalTimeMinutes = specificData.total_time_mins || specificData.totalTime || null;
+                    
+                    // Include ingredients and instructions
+                    content.ingredients = specificData.ingredients || [];
+                    content.instructions = specificData.instructions || specificData.method || '';
+                    
+                    // Include nutritional information (from summarizeRecipe=true)
+                    if (record.data.summaryNutritionalInfo) {
+                        content.nutrition = record.data.summaryNutritionalInfo;
+                        console.log(`[IQP] Included nutritional info for recipe: ${content.title}`);
+                    }
+                    if (record.data.summaryNutritionalInfoPerServing) {
+                        content.nutritionPerServing = record.data.summaryNutritionalInfoPerServing;
+                    }
+                    
+                    // Include serving information
+                    content.servings = specificData.servings || specificData.serves || null;
+                    content.difficulty = specificData.difficulty || null;
+                    content.cuisine = specificData.cuisine || null;
+                    
+                    // Include full recipe data for comprehensive analysis
+                    content.recipeData = specificData;
+                    
+                    console.log(`[IQP] Enhanced recipe data for: ${content.title} (prep: ${content.prepTimeMinutes}min, cook: ${content.cookTimeMinutes}min)`);
+                }
+                
                 contentItems.push(content);
                 
             } catch (error) {
@@ -483,6 +521,29 @@ class IntelligentQuestionProcessor {
                 if (item.description) context += `Description: ${item.description}\n`;
                 if (item.fullText) context += `Full Content: ${item.fullText}\n`;
                 if (item.articleText) context += `Article: ${item.articleText}\n`;
+                
+                // Include recipe-specific information
+                if (item.type === 'recipe') {
+                    if (item.prepTimeMinutes) context += `Prep Time: ${item.prepTimeMinutes} minutes\n`;
+                    if (item.cookTimeMinutes) context += `Cook Time: ${item.cookTimeMinutes} minutes\n`;
+                    if (item.totalTimeMinutes) context += `Total Time: ${item.totalTimeMinutes} minutes\n`;
+                    if (item.servings) context += `Servings: ${item.servings}\n`;
+                    if (item.difficulty) context += `Difficulty: ${item.difficulty}\n`;
+                    if (item.cuisine) context += `Cuisine: ${item.cuisine}\n`;
+                    
+                    if (item.ingredients && item.ingredients.length > 0) {
+                        context += `Ingredients: ${JSON.stringify(item.ingredients)}\n`;
+                    }
+                    if (item.instructions) context += `Instructions: ${item.instructions}\n`;
+                    
+                    if (item.nutrition) {
+                        context += `Nutritional Info (Total): Calories: ${item.nutrition.calories || 'N/A'}, Protein: ${item.nutrition.proteinG || 'N/A'}g, Fat: ${item.nutrition.fatG || 'N/A'}g, Carbs: ${item.nutrition.carbohydratesG || 'N/A'}g\n`;
+                    }
+                    if (item.nutritionPerServing) {
+                        context += `Nutritional Info (Per Serving): Calories: ${item.nutritionPerServing.calories || 'N/A'}, Protein: ${item.nutritionPerServing.proteinG || 'N/A'}g, Fat: ${item.nutritionPerServing.fatG || 'N/A'}g, Carbs: ${item.nutritionPerServing.carbohydratesG || 'N/A'}g\n`;
+                    }
+                }
+                
                 context += `Type: ${item.type}\n`;
             });
 
