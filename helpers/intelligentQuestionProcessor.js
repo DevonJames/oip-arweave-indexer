@@ -486,14 +486,14 @@ class IntelligentQuestionProcessor {
                 context += `Type: ${item.type}\n`;
             });
 
-            const prompt = `Based on the following context from verified records, please answer the user's question accurately and concisely. Use only the information provided in the context.
+            const prompt = `You are answering a direct question using factual information. Provide a natural, conversational response without mentioning sources, context, or articles.
 
-Context:
+Information available:
 ${context}
 
 Question: ${question}
 
-Please provide a direct, factual answer based on the context above. If the context doesn't contain enough information to answer the question completely, state what information is available and what is missing.`;
+Answer the question directly and naturally, as if you're having a conversation. Do not use phrases like "according to the context," "the article states," "based on the information," or similar references. Just state the facts conversationally.`;
 
             console.log(`[IQP] Generating RAG response for question: "${question}"`);
             
