@@ -458,7 +458,22 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             return res.status(400).json({ error: 'No text to process' });
         }
 
-        // Step 2: Generate text response using RAG (search + LLM)
+        // Step 2: Check if this is a self-referential question about the AI
+        function isSelfReferentialQuestion(text) {
+            const lowerText = text.toLowerCase();
+            const selfReferentialPatterns = [
+                /\b(tell me about yourself|about yourself|who are you|what are you|introduce yourself|describe yourself)\b/,
+                /\b(your capabilities|what can you do|what do you do|your purpose|your role)\b/,
+                /\b(are you|you are|yourself|your name|your identity)\b/,
+                /\b(hello.*yourself|hi.*yourself|greet.*yourself)\b/,
+                /\b(how do you work|how were you made|how were you created)\b/,
+                /\b(what is your function|what is your job|what is your mission)\b/
+            ];
+            
+            return selfReferentialPatterns.some(pattern => pattern.test(lowerText));
+        }
+
+        // Step 3: Generate text response - use direct LLM for self-referential questions, RAG for others
         const {
             model = 'llama3.2:3b',
             voice_id = 'female_1',
@@ -469,23 +484,72 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             tag_filter = null
         } = req.body;
 
-        // Use RAG service to get context-aware response
-        const ragOptions = {
-            model,
-            searchParams: {
-                creatorHandle: creator_filter,
-                recordType: record_type_filter,
-                tags: tag_filter
+        let responseText;
+        let ragResponse = null;
+
+        if (isSelfReferentialQuestion(inputText)) {
+            console.log(`[Voice Chat] Self-referential question detected: "${inputText}" - bypassing RAG`);
+            
+            // Call LLM directly with system prompt for self-referential questions
+            const { generateStreamingResponse } = require('../helpers/generators');
+            
+            const conversationHistory = [
+                {
+                    role: "system",
+                    content: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help a high-profile content creator stay informed and productive by answering questions, retrieving information from stored records, summarizing documents, and generating media-ready content such as podcast scripts or segment outlines. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis. When asked about yourself, explain your role as an AI assistant that helps with information retrieval, document analysis, and content creation."
+                },
+                {
+                    role: "user",
+                    content: inputText
+                }
+            ];
+
+            try {
+                const llmResponse = await generateStreamingResponse(conversationHistory, 'voice-chat-' + Date.now(), { model });
+                responseText = llmResponse.response || "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and content creation.";
+                
+                // Create a mock ragResponse for compatibility
+                ragResponse = {
+                    answer: responseText,
+                    sources: [],
+                    context_used: false,
+                    search_results_count: 0,
+                    search_results: [],
+                    applied_filters: { bypass_reason: "Self-referential question detected" }
+                };
+                
+            } catch (llmError) {
+                console.error('[Voice Chat] Direct LLM call failed:', llmError);
+                responseText = "Hello! I'm ALFRED, your AI assistant. I'm designed to help you stay informed and productive by answering questions, retrieving information from stored records, and generating content. How can I assist you today?";
+                ragResponse = {
+                    answer: responseText,
+                    sources: [],
+                    context_used: false,
+                    search_results_count: 0,
+                    search_results: [],
+                    applied_filters: { bypass_reason: "Self-referential question - LLM fallback" }
+                };
             }
-        };
+        } else {
+            console.log(`[Voice Chat] Using RAG for question: "${inputText}"`);
+            
+            // Use RAG service to get context-aware response
+            const ragOptions = {
+                model,
+                searchParams: {
+                    creatorHandle: creator_filter,
+                    recordType: record_type_filter,
+                    tags: tag_filter
+                }
+            };
 
-        const ragResponse = await ragService.query(inputText, ragOptions);
-
-        if (!ragResponse.answer) {
-            return res.status(500).json({ error: 'No response generated' });
+            ragResponse = await ragService.query(inputText, ragOptions);
+            responseText = ragResponse.answer;
         }
 
-        const responseText = ragResponse.answer;
+        if (!responseText || !responseText.trim()) {
+            return res.status(500).json({ error: 'No response generated' });
+        }
 
         // Step 3: Convert response to speech if requested
         if (return_audio) {
