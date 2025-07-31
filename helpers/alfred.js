@@ -33,41 +33,60 @@ class ALFRED {
     }
 
     /**
-     * Use TinyLlama to comprehensively analyze a question and extract all needed information
+     * Use LLM to comprehensively analyze a question and extract all needed information
      * including follow-up detection, subject/modifier extraction, and categorization
      */
-    async analyzeQuestionWithLLM(question) {
+    async analyzeQuestionWithLLM(question, selectedModel = null) {
         try {
-            const prompt = `I want you to extract the primary entity being asked about (could be syntactic subject or object) and any modifiers (adjectives) to it, as well as the optional second entity (when there's a verb with two participants). Also answer whether it is a follow-up question and what category is should be in.
-If the question contains the word "recipe", classify the category as "recipe" but do NOT include the word "recipe" as part of primary_entity or second_entity. Ignore similar structural words like "exercise" or "podcast" when assigning entities.
-Return your response in the following JSON format:
+            const modelToUse = selectedModel || this.defaultModel;
+            
+            const prompt = `Analyze this question and extract the following information:
+
+1. Is this a follow-up question (referring to previous context)?
+2. What category does this belong to?
+3. What is the main thing being asked about (the primary entity - like "chicken", "Fort Knox", "workout")?
+4. What are the descriptive words/modifiers (like "grilled", "Mediterranean", "beginner")?
+5. Is there a second entity involved?
+
+CATEGORY RULES:
+- If question mentions "recipe", "cook", "food", "ingredient" → category = "recipe" 
+- If question mentions "exercise", "workout", "fitness" → category = "exercise"
+- If question mentions "podcast", "audio", "interview" → category = "podcast"  
+- Otherwise → category = "news"
+
+ENTITY RULES:
+- For recipes: primary_entity should be the food item (like "chicken", "pasta"), NOT the word "recipe"
+- Include descriptive modifiers like cooking methods, cuisines, difficulty levels
+- Exclude structural words like "recipe", "exercise", "podcast" from entities
+
+Return ONLY valid JSON in this exact format:
 {
-  "follow-up": boolean,
-  "category": "news" | "recipe" | "exercise" | "podcast",
-  "primary_entity": string,
-  "modifiers": array,
-  "second_entity": string
+  "follow-up": false,
+  "category": "recipe",
+  "primary_entity": "chicken", 
+  "modifiers": ["Mediterranean", "grilled"],
+  "second_entity": ""
 }
 
 Question: "${question}"`;
             
-            console.log(`[ALFRED] 🤖 Using TinyLlama to analyze question: "${question}"`);
+            console.log(`[ALFRED] 🤖 Using ${modelToUse} to analyze question: "${question}"`);
             
             const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
-                model: 'tinyllama',
+                model: modelToUse,
                 prompt: prompt,
                 stream: false,
                 options: {
                     temperature: 0.1, // Low temperature for consistent structured answers
                     top_p: 0.9,
-                    max_tokens: 100 // Enough for JSON response
+                    max_tokens: 150 // Enough for JSON response
                 }
             }, {
-                timeout: 8000 // Slightly longer timeout for more complex response
+                timeout: 10000 // Longer timeout for complex models
             });
 
             const rawResponse = response.data?.response?.trim() || '';
-            console.log(`[ALFRED] 🤖 TinyLlama raw response: "${rawResponse}"`);
+            console.log(`[ALFRED] 🤖 ${modelToUse} raw response: "${rawResponse}"`);
             
             // Try to parse JSON response
             let analysis;
@@ -77,24 +96,25 @@ Question: "${question}"`;
                 const jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
                 analysis = JSON.parse(jsonStr);
             } catch (parseError) {
-                console.warn(`[ALFRED] ⚠️ Failed to parse TinyLlama JSON response, using fallback`);
+                console.warn(`[ALFRED] ⚠️ Failed to parse ${modelToUse} JSON response, using fallback`);
                 throw new Error('JSON parse failed');
             }
             
-            // Validate and normalize the response
+            // Validate and normalize the response - handle both "modifier" and "modifiers" 
+            const modifiersArray = analysis.modifiers || analysis.modifier || [];
             const result = {
                 isFollowUp: Boolean(analysis['follow-up']),
                 category: analysis.category || 'news',
                 primaryEntity: String(analysis.primary_entity || question).trim(),
-                modifiers: Array.isArray(analysis.modifiers) ? analysis.modifiers.map(m => String(m).trim()) : [],
+                modifiers: Array.isArray(modifiersArray) ? modifiersArray.map(m => String(m).trim()) : [],
                 secondEntity: String(analysis.second_entity || '').trim()
             };
             
-            console.log(`[ALFRED] 🎯 TinyLlama analysis result:`, result);
+            console.log(`[ALFRED] 🎯 ${modelToUse} analysis result:`, result);
             return result;
             
         } catch (error) {
-            console.warn(`[ALFRED] ⚠️ TinyLlama question analysis failed, using fallback: ${error.message}`);
+            console.warn(`[ALFRED] ⚠️ LLM question analysis failed, using fallback: ${error.message}`);
             
             // Fallback to simple pattern-based approach
             return {
@@ -113,11 +133,11 @@ Question: "${question}"`;
      */
     async processQuestion(question, options = {}) {
         console.log(`[ALFRED] Processing question: "${question}"`);
-        const { existingContext = null } = options;
+        const { existingContext = null, selectedModel = null } = options;
         
         try {
-            // Step 0: Analyze question using TinyLlama for comprehensive understanding
-            const analysis = await this.analyzeQuestionWithLLM(question);
+            // Step 0: Analyze question using selected LLM for comprehensive understanding
+            const analysis = await this.analyzeQuestionWithLLM(question, selectedModel);
             const { isFollowUp, category, primaryEntity, modifiers, secondEntity } = analysis;
             
             // Check if this is a follow-up question with existing context
@@ -133,7 +153,8 @@ Question: "${question}"`;
             
             // Step 1: Use LLM analysis results
             const subject = primaryEntity;
-            const recordType = category;
+            // if the category is news, set recordType to post, otherwise is the category
+            const recordType = category === 'news' ? 'post' : category;
             console.log(`[ALFRED] LLM Analysis - Subject: "${subject}", Modifiers: [${modifiers.join(', ')}], RecordType: "${recordType}", SecondEntity: "${secondEntity}"`);
             
             // Step 2: Perform initial search
@@ -172,13 +193,35 @@ Question: "${question}"`;
                     shouldRefine = true;
                     console.log(`[ALFRED] Multiple results (${initialResults.records.length}) with modifiers, attempting tag refinement`);
                 }
+
+                // before refineSearchWithTags, we need to refineSearchWithCuisine
                 
                 if (shouldRefine) {
-                    const refinedResult = await this.refineSearchWithTags(question, subject, termsForRefinement, recordType, options);
+                    const refinedResult = await this.refineSearchWithCuisine(question, subject, termsForRefinement, recordType, options);
                     if (refinedResult) {
                         console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
-                        return refinedResult;
+                        // return refinedResult;
+                        
+                        if (refinedResult.records.length > 1) {
+                            
+                            const furtherRefinedResult1 = await this.refineSearchWithTags(question, subject, termsForRefinement, recordType, options);
+                            if (furtherRefinedResult1) {
+                                console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${furtherRefinedResult1.records.length} results`);
+                                shouldRefine = false;
+                                return furtherRefinedResult1;
+                            }
+                        } 
+                        if (refinedResult.records.length === 1) {
+                            console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
+                            shouldRefine = false;
+                            return refinedResult;
+                        }
                     }
+                        else {
+                                console.log(`[ALFRED] ❌ No further refinement possible`);
+                                return refinedResult;
+                            }
+                            
                 }
             }
             
@@ -504,6 +547,26 @@ Question: "${question}"`;
             return null;
         }
     }
+
+    async refineSearchWithCuisine(question, subject, modifiers, recordType, options = {}) {
+        try {
+            // check if any of the values in modifiers match a value in the cuisine field
+            const cuisineFilters = {
+                search: subject,
+                recordType: recordType,
+                cuisine: modifiers.join(','),
+                limit: 10
+            };
+            const cuisineResults = await getRecords(cuisineFilters);
+            if (cuisineResults.records && cuisineResults.records.length > 0) {
+                console.log(`[ALFRED] Found matching cuisines for refinement: [${cuisineResults.records.join(', ')}]`);
+            }
+        } catch (error) {
+            console.error(`[ALFRED] Cuisine refinement error:`, error);
+            return null;
+        }
+    }
+            
 
     /**
      * Find tags that match our modifiers
@@ -988,7 +1051,8 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                     const iqpResult = await this.processQuestion(question, {
                         resolveDepth: searchParams.resolveDepth || 2,
                         limit: searchParams.limit || 20,
-                        existingContext: options.existingContext || null
+                        existingContext: options.existingContext || null,
+                        selectedModel: options.model || null
                     });
                     
                     // Convert IQP result to RAG format for compatibility

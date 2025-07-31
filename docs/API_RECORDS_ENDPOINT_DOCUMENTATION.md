@@ -97,6 +97,37 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Example:** `ingredientNames=chicken,garlic&sortBy=ingredientScore:desc`
 - **Note:** Only works when `ingredientNames` parameter is provided
 
+### 🍽️ **Cuisine Filtering (Recipes)**
+
+#### `cuisine`
+- **Type:** String (comma-separated)
+- **Description:** Filter recipe records by their cuisine type
+- **Example:** `cuisine=Mediterranean,Italian,Greek`
+- **Behavior:** 
+  - Only works with `recordType=recipe`
+  - Default behavior: Returns recipes that match ANY of the specified cuisines (OR behavior)
+  - Searches the `data.recipe.cuisine` field for partial matches
+  - Uses case-insensitive matching
+  - Automatically sorts by cuisine match score (best matches first)
+  - Adds `cuisineScore` and `cuisineMatchedCount` fields to matching records
+
+#### `cuisineMatchMode`
+- **Type:** String
+- **Description:** Controls cuisine matching behavior
+- **Values:** 
+  - `OR` (default) - Recipes that match ANY of the specified cuisines
+  - `AND` - Recipes that match ALL of the specified cuisines (unusual for single cuisine field)
+- **Example:** `cuisine=Mediterranean,Italian&cuisineMatchMode=OR`
+
+#### `sortBy=cuisineScore`
+- **Type:** String
+- **Description:** Sort results by cuisine matching score
+- **Values:** 
+  - `cuisineScore:desc` (default) - Best matches first
+  - `cuisineScore:asc` - Worst matches first
+- **Example:** `cuisine=Mediterranean,Italian&sortBy=cuisineScore:desc`
+- **Note:** Only works when `cuisine` parameter is provided
+
 ### 🏋️ **Equipment Filtering (Exercises)**
 
 #### `equipmentRequired`
@@ -275,6 +306,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `ingredientScore` - Ingredient match score (only works with `ingredientNames` parameter)
   - `equipmentScore` - Equipment match score (only works with `equipmentRequired` parameter)
   - `exerciseTypeScore` - Exercise type match score (only works with `exerciseType` parameter)
+  - `cuisineScore` - Cuisine match score (only works with `cuisine` parameter)
 - **Examples:**
   - `sortBy=date:desc` - Newest first
   - `sortBy=inArweaveBlock:asc` - Oldest block first
@@ -284,6 +316,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `sortBy=ingredientScore:desc` - Best ingredient matches first (requires `ingredientNames` parameter)
   - `sortBy=equipmentScore:desc` - Best equipment matches first (requires `equipmentRequired` parameter)
   - `sortBy=exerciseTypeScore:desc` - Best exercise type matches first (requires `exerciseType` parameter)
+  - `sortBy=cuisineScore:desc` - Best cuisine matches first (requires `cuisine` parameter)
 
 ### 📄 **Pagination**
 
@@ -469,6 +502,21 @@ GET /api/records?recordType=recipe&ingredientNames=tomatoes,basil&sortBy=ingredi
 GET /api/records?recordType=recipe&summarizeRecipe=true&resolveDepth=2&limit=10
 ```
 
+### Cuisine Search in Recipes (OR behavior)
+```
+GET /api/records?recordType=recipe&cuisine=Mediterranean,Italian,Greek&limit=10
+```
+
+### Cuisine Search with AND Behavior
+```
+GET /api/records?recordType=recipe&cuisine=Mediterranean,healthy&cuisineMatchMode=AND&sortBy=cuisineScore:desc
+```
+
+### Cuisine Search with Custom Sorting
+```
+GET /api/records?recordType=recipe&cuisine=Asian,Italian&sortBy=cuisineScore:desc&limit=5
+```
+
 ### Equipment Search in Exercises (AND behavior)
 ```
 GET /api/records?recordType=exercise&equipmentRequired=dumbbells,barbell&limit=10
@@ -506,7 +554,7 @@ GET /api/records?exactMatch={"data.basic.language":"en","oip.recordType":"post"}
 
 ### Complex Query with Multiple Filters
 ```
-GET /api/records?search=mediterranean healthy&searchMatchMode=OR&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3&summarizeRecipe=true
+GET /api/records?search=mediterranean healthy&searchMatchMode=OR&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&cuisine=Mediterranean,Italian&cuisineMatchMode=OR&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3&summarizeRecipe=true
 ```
 
 ### Tag Summary for Analytics
@@ -628,6 +676,23 @@ When using the `exerciseType` parameter with exercise records, the response incl
 }
 ```
 
+### Cuisine Search Response Fields
+
+When using the `cuisine` parameter with recipe records, the response includes additional fields:
+
+```json
+{
+  "records": [
+    {
+      "data": { /* recipe data */ },
+      "oip": { /* metadata */ },
+      "cuisineScore": 1.0,
+      "cuisineMatchedCount": 2
+    }
+  ]
+}
+```
+
 ### Recipe Nutritional Summary Fields
 
 When using `summarizeRecipe=true` with recipe records, the response includes nutritional summary fields:
@@ -681,6 +746,8 @@ When using `summarizeRecipe=true` with recipe records, the response includes nut
 12. **Equipment OR mode is more flexible** - Use `equipmentMatchMode=OR` to find exercises with any of the specified equipment
 13. **Exercise type search is enum-aware** - Supports both codes (`warmup`) and display names (`Warm-Up`)
 14. **Recipe nutritional summaries require resolution** - Use `resolveDepth=1` minimum with `summarizeRecipe=true`
+15. **Cuisine search is efficient** - No resolution required, searches existing recipe record data directly
+16. **Cuisine OR mode is more flexible** - Use `cuisineMatchMode=OR` to find recipes with any of the specified cuisines
 
 ## Advanced Features
 
@@ -759,6 +826,22 @@ The scoring algorithm:
 **OR Mode (default):** Returns exercises that match ANY of the specified types
 **AND Mode:** Returns exercises that match ALL of the specified types (unusual for enum fields)
 
+### Cuisine Match Scoring
+When using the `cuisine` parameter with recipe records, records receive:
+- **cuisineScore**: Ratio of matched cuisine terms to requested cuisine terms (0-1 scale)
+- **cuisineMatchedCount**: Number of requested cuisine terms found in the recipe
+
+The scoring algorithm:
+1. Calculates the ratio of matched cuisine terms to requested cuisine terms
+2. Uses partial string matching for cuisine types (e.g., "Mediterranean" matches recipes with "Mediterranean-style")
+3. Performs case-insensitive matching
+4. Automatically sorts by best matches first
+5. Supports both AND and OR matching modes via `cuisineMatchMode`
+6. Searches the `data.recipe.cuisine` field directly
+
+**OR Mode (default):** Returns recipes that match ANY of the specified cuisines
+**AND Mode:** Returns recipes that match ALL of the specified cuisines (unusual for single cuisine field)
+
 ### Recipe Nutritional Summary
 When using `summarizeRecipe=true` with recipe records, the system:
 1. Resolves ingredient references to get nutritional data
@@ -786,6 +869,7 @@ The `resolveDepth` parameter controls how deeply the system follows references (
 - **Ingredient filtering** (`ingredientNames`) - Search recipes by ingredient content
 - **Equipment filtering** (`equipmentRequired`) - Search exercises by equipment requirements with AND/OR modes
 - **Exercise type filtering** (`exerciseType`) - Search exercises by type (warmup/main/cooldown) with enum code/name support
+- **Cuisine filtering** (`cuisine`) - Search recipes by cuisine type with OR/AND modes
 - **Exact field matching** (`exactMatch`) - Precise filtering by field values using JSON notation
 - **Combined approach** - Use multiple parameters for maximum precision
 
