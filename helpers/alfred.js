@@ -104,7 +104,7 @@ Question: "${question}"`;
             const modifiersArray = analysis.modifiers || analysis.modifier || [];
             const result = {
                 isFollowUp: Boolean(analysis['follow-up']),
-                category: analysis.category || 'news',
+                category: analysis.category || analysis.categoory || 'news',
                 primaryEntity: String(analysis.primary_entity || question).trim(),
                 modifiers: Array.isArray(modifiersArray) ? modifiersArray.map(m => String(m).trim()) : [],
                 secondEntity: String(analysis.second_entity || '').trim()
@@ -140,22 +140,22 @@ Question: "${question}"`;
             const analysis = await this.analyzeQuestionWithLLM(question, selectedModel);
             const { isFollowUp, category, primaryEntity, modifiers, secondEntity } = analysis;
             
-            // Check if this is a follow-up question with existing context
-            if (existingContext && existingContext.length === 1 && isFollowUp) {
-                console.log(`[ALFRED] 🔄 Detected follow-up question, using existing context instead of new search`);
-                return this.extractAndFormatContent(
-                    question, 
-                    existingContext, 
-                    { search: 'existing_context', recordType: existingContext[0].oip?.recordType || 'unknown' }, 
-                    modifiers
-                );
-            }
+            // // Check if this is a follow-up question with existing context
+            // if (existingContext && existingContext.length === 1 && isFollowUp) {
+            //     console.log(`[ALFRED] 🔄 Detected follow-up question, using existing context instead of new search`);
+            //     return this.extractAndFormatContent(
+            //         question, 
+            //         existingContext, 
+            //         { search: 'existing_context', recordType: existingContext[0].oip?.recordType || 'unknown' }, 
+            //         modifiers
+            //     );
+            // }
             
             // Step 1: Use LLM analysis results
             const subject = primaryEntity;
             // if the category is news, set recordType to post, otherwise is the category
             const recordType = category === 'news' ? 'post' : category;
-            console.log(`[ALFRED] LLM Analysis - Subject: "${subject}", Modifiers: [${modifiers.join(', ')}], RecordType: "${recordType}", SecondEntity: "${secondEntity}"`);
+            console.log(`[ALFRED] LLM Analysis - FollowUp: "${isFollowUp}", Subject: "${subject}", Modifiers: [${modifiers.join(', ')}], RecordType: "${recordType}", SecondEntity: "${secondEntity}"`);
             
             // Step 2: Perform initial search
             const initialFilters = this.buildInitialFilters(subject, recordType, options);
@@ -1038,7 +1038,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
      */
     async query(question, options = {}) {
         try {
-            console.log(`[RAG] 🔍 Processing query: "${question}"`);
+            console.log(`[ALFRED] 🔍 Processing query: "${question}"`);
             const { include_filter_analysis = false, searchParams = {} } = options;
             
             // Check if we should use the Intelligent Question Processor (IQP)
@@ -1046,7 +1046,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                 (!searchParams.recordType && !searchParams.tags && !searchParams.creatorHandle);
             
             if (shouldUseIQP) {
-                console.log('[RAG] Using Intelligent Question Processor for enhanced analysis');
+                console.log('[ALFRED] Using Intelligent Question Processor for enhanced analysis');
                 try {
                     const iqpResult = await this.processQuestion(question, {
                         resolveDepth: searchParams.resolveDepth || 2,
