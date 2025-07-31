@@ -559,7 +559,7 @@ Question: "${question}"`;
             };
             const cuisineResults = await getRecords(cuisineFilters);
             if (cuisineResults.records && cuisineResults.records.length > 0) {
-                console.log(`[ALFRED] Found matching cuisines for refinement: [${cuisineResults.records.join(', ')}]`);
+                console.log(`[ALFRED] Found matching cuisines for refinement: [${cuisineResults.records.map(record => record.data.basic.name).join(', ')}]`);
             }
         } catch (error) {
             console.error(`[ALFRED] Cuisine refinement error:`, error);
@@ -1054,6 +1054,8 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                         existingContext: options.existingContext || null,
                         selectedModel: options.model || null
                     });
+
+                    console.log(`[ALFRED] IQP Result: ${JSON.stringify(iqpResult)}`);
                     
                     // Convert IQP result to RAG format for compatibility
                     return {
