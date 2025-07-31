@@ -1137,6 +1137,8 @@ async function getRecords(queryParams) {
         equipmentMatchMode = 'AND', // New parameter for equipment match behavior (AND/OR)
         exerciseType, // New parameter for exercise type filtering
         exerciseTypeMatchMode = 'OR', // New parameter for exercise type match behavior (AND/OR, default OR)
+        cuisine, // New parameter for recipe cuisine filtering
+        cuisineMatchMode = 'OR', // New parameter for cuisine match behavior (AND/OR, default OR)
     } = queryParams;
 
     // console.log('get records using:', {queryParams});
@@ -1534,6 +1536,65 @@ async function getRecords(queryParams) {
             console.log('After filtering by exercise type, there are', records.length, 'exercise records');
         }
 
+        // Filter recipes by cuisine if cuisine parameter is provided
+        if (cuisine && recordType === 'recipe') {
+            console.log('Filtering recipes by cuisine:', cuisine, 'match mode:', cuisineMatchMode);
+            const cuisineArray = cuisine.split(',').map(cuisineType => cuisineType.trim().toLowerCase());
+            
+            // Filter records based on match mode (AND vs OR)
+            if (cuisineMatchMode.toUpperCase() === 'AND') {
+                // AND behavior: recipe must have ALL specified cuisines (unusual but supported)
+                records = records.filter(record => {
+                    if (!record.data.recipe || !record.data.recipe.cuisine) return false;
+                    
+                    const recipeCuisine = record.data.recipe.cuisine.toLowerCase();
+                    
+                    // For AND mode, check if the recipe cuisine contains all requested terms
+                    return cuisineArray.every(requestedCuisine => 
+                        recipeCuisine.includes(requestedCuisine)
+                    );
+                });
+                console.log('after filtering by cuisine (AND mode), there are', records.length, 'records');
+            } else {
+                // OR behavior: recipe must have ANY of the specified cuisines (default)
+                records = records.filter(record => {
+                    if (!record.data.recipe || !record.data.recipe.cuisine) return false;
+                    
+                    const recipeCuisine = record.data.recipe.cuisine.toLowerCase();
+                    
+                    // Check if ANY requested cuisine matches
+                    return cuisineArray.some(requestedCuisine => 
+                        recipeCuisine.includes(requestedCuisine)
+                    );
+                });
+                console.log('after filtering by cuisine (OR mode), there are', records.length, 'records');
+            }
+            
+            // Add cuisine match scores to all filtered records
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.recipe || !record.data.recipe.cuisine) return 0;
+                    
+                    const recipeCuisine = record.data.recipe.cuisine.toLowerCase();
+                    
+                    return cuisineArray.filter(requestedCuisine => 
+                        recipeCuisine.includes(requestedCuisine)
+                    ).length;
+                };
+
+                const matches = countMatches(record);
+                const score = (matches / cuisineArray.length).toFixed(3);
+                return { ...record, cuisineScore: score, cuisineMatchedCount: matches };
+            });
+            
+            // Sort by cuisine score if no other sorting is specified
+            if (!sortBy || sortBy.split(':')[0] !== 'cuisineScore') {
+                records.sort((a, b) => (b.cuisineScore || 0) - (a.cuisineScore || 0));
+            }
+            
+            console.log('After filtering by cuisine, there are', records.length, 'recipe records');
+        }
+
         // search records by search parameter
         if (search !== undefined) {
             const searchTerms = search.toLowerCase().split(' ').map(term => term.trim()).filter(Boolean); // Split on spaces to separate search terms
@@ -1782,6 +1843,22 @@ async function getRecords(queryParams) {
                         console.log('sorted by exercise type score (' + order + ')');
                     } else {
                         console.log('Warning: sortBy=exerciseTypeScore specified but no exerciseType parameter provided - skipping exerciseTypeScore sort');
+                    }
+                }
+
+                if (fieldToSortBy === 'cuisineScore') {
+                    // Only allow 'cuisineScore' sorting when cuisine parameter is provided
+                    if (cuisine != undefined) {
+                        recordsToSort.sort((a, b) => {
+                            if (order === 'asc') {
+                                return (a.cuisineScore || 0) - (b.cuisineScore || 0);
+                            } else {
+                                return (b.cuisineScore || 0) - (a.cuisineScore || 0);
+                            }
+                        });
+                        console.log('sorted by cuisine score (' + order + ')');
+                    } else {
+                        console.log('Warning: sortBy=cuisineScore specified but no cuisine parameter provided - skipping cuisineScore sort');
                     }
                 }
 
