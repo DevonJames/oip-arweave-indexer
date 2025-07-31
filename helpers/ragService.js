@@ -797,7 +797,8 @@ class RAGService {
                 try {
                     const iqpResult = await intelligentQuestionProcessor.processQuestion(question, {
                         resolveDepth: searchParams.resolveDepth || 2,
-                        limit: searchParams.limit || 20
+                        limit: searchParams.limit || 20,
+                        existingContext: options.existingContext || null
                     });
                     
                     // Convert IQP result to RAG format for compatibility
