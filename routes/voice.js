@@ -547,6 +547,12 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             ragOptions.include_filter_analysis = req.body.include_filter_analysis !== false;
             ragOptions.searchParams = ragOptions.searchParams || {};
             
+            // Pass existing search results for context-aware processing
+            if (req.body.existing_search_results && Array.isArray(req.body.existing_search_results)) {
+                ragOptions.existingContext = req.body.existing_search_results;
+                console.log(`[Voice Chat] Using existing context with ${ragOptions.existingContext.length} records`);
+            }
+            
             ragResponse = await ragService.query(inputText, ragOptions);
             responseText = ragResponse.answer;
         }

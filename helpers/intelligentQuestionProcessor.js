@@ -10,13 +10,87 @@ class IntelligentQuestionProcessor {
     }
 
     /**
+     * Detect if a question is a follow-up question about existing context
+     * rather than a new search query
+     */
+    isFollowUpQuestion(question) {
+        const lowerQuestion = question.toLowerCase().trim();
+        
+        // Pattern 1: Direct follow-up phrases (be specific to avoid false positives)
+        const followUpPatterns = [
+            /^(tell me more|give me more details|more info|more information|what else|anything else)/,
+            /^(how many calories|what about calories|calories|nutrition|nutritional info)/,
+            /^(how long|cook time|cooking time|prep time|preparation time)(?!\s+(to|does|for).*(make|cook|prepare|recipe))/,
+            /^(ingredients|what ingredients)(?!\s+(for|to|in).*(recipe|dish))/,
+            /^(servings|how many servings|serves how many)/,
+            /^(can you|could you|would you|will you).+(tell|give|show|explain)(?!\s+me.*(recipe|how to))/,
+            /^(what about|how about)(?!\s+(making|cooking|recipe))/,
+            /^(what's the|what is the)\s+(time|calories|nutrition|servings|difficulty)/
+        ];
+        
+        if (followUpPatterns.some(pattern => pattern.test(lowerQuestion))) {
+            console.log(`[IQP] 🎯 Follow-up detected by pattern: "${lowerQuestion}"`);
+            return true;
+        }
+        
+        // Pattern 2: Questions starting with pronouns (referring to existing context)
+        const pronounPatterns = [
+            /^(it|this|that|the recipe|the dish|the food)/,
+            /^(what does it|how does it|when does it|where does it)/,
+            /^(what is it|what's it|how is it|how's it)/
+        ];
+        
+        if (pronounPatterns.some(pattern => pattern.test(lowerQuestion))) {
+            console.log(`[IQP] 🎯 Follow-up detected by pronoun: "${lowerQuestion}"`);
+            return true;
+        }
+        
+        // Pattern 3: Questions with no meaningful subject (just attributes)
+        const words = this.extractMeaningfulWords(lowerQuestion);
+        const questionWords = ['what', 'how', 'when', 'where', 'why', 'which', 'who'];
+        const attributeWords = ['calories', 'time', 'ingredients', 'servings', 'nutrition', 'cook', 'prep', 'difficulty'];
+        
+        // If question is mostly question words + attribute words, it's likely a follow-up
+        const nonQuestionWords = words.filter(word => !questionWords.includes(word));
+        const isAttributeQuery = nonQuestionWords.length > 0 && 
+                                nonQuestionWords.every(word => attributeWords.includes(word));
+        
+        if (isAttributeQuery) {
+            console.log(`[IQP] 🎯 Follow-up detected by attribute query: "${lowerQuestion}"`);
+            return true;
+        }
+        
+        // Pattern 4: Very short questions (likely follow-ups)
+        if (words.length <= 2 && attributeWords.some(attr => words.includes(attr))) {
+            console.log(`[IQP] 🎯 Follow-up detected by short attribute question: "${lowerQuestion}"`);
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
      * Process a user question intelligently, extracting search terms, applying filters,
      * and refining results using tag analysis
      */
     async processQuestion(question, options = {}) {
         console.log(`[IQP] Processing question: "${question}"`);
+        const { existingContext = null } = options;
         
         try {
+            // Step 0: Check if this is a follow-up question with existing context
+            if (existingContext && existingContext.length === 1) {
+                const isFollowUp = this.isFollowUpQuestion(question);
+                if (isFollowUp) {
+                    console.log(`[IQP] 🔄 Detected follow-up question, using existing context instead of new search`);
+                    return this.extractAndFormatContent(
+                        question, 
+                        existingContext, 
+                        { search: 'existing_context', recordType: existingContext[0].oip?.recordType || 'unknown' }, 
+                        []
+                    );
+                }
+            }
             // Step 1: Extract subject and modifiers from the question
             const { subject, modifiers, recordType } = this.extractSubjectAndModifiers(question);
             console.log(`[IQP] Extracted - Subject: "${subject}", Modifiers: [${modifiers.join(', ')}], RecordType: "${recordType}"`);

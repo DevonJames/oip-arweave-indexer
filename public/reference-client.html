@@ -7644,7 +7644,7 @@
                 // Determine if this is a follow-up question or new subject
                 const isFollowUp = await detectFollowUpQuestion(text);
                 
-                if (isFollowUp && chatState.lastSearchResults.length > 0) {
+                if (isFollowUp && (chatState.lastSearchResults.length > 0 || (currentRecords && currentRecords.length === 1))) {
                     updateAIStatus('Processing follow-up with existing data...');
                     await processFollowUpQuestion(text);
                 } else {
@@ -7664,12 +7664,50 @@
         }
 
         async function detectFollowUpQuestion(text) {
-            // If no previous conversation, definitely not a follow-up
+            const lowerText = text.toLowerCase();
+            
+            // Special case: If we have exactly one record loaded, check for follow-up patterns
+            if (currentRecords && currentRecords.length === 1) {
+                console.log('[Chat] Single record context detected, analyzing for follow-up patterns');
+                
+                // Direct follow-up phrases
+                const singleRecordFollowUpPatterns = [
+                    /^(tell me more|give me more details|more info|more information|what else|anything else)/,
+                    /^(how many calories|what about calories|calories|nutrition|nutritional info)/,
+                    /^(how long|cook time|cooking time|prep time|preparation time)/,
+                    /^(ingredients|what ingredients|recipe|instructions|how to make)/,
+                    /^(servings|how many servings|serves how many)/,
+                    /^(can you|could you|would you|will you).+(tell|give|show|explain)/,
+                    /^(what about|how about|what's the|what is the)/,
+                    /^(it|this|that|the recipe|the dish|the food)/,
+                    /^(what does it|how does it|when does it|where does it)/,
+                    /^(what is it|what's it|how is it|how's it)/
+                ];
+                
+                if (singleRecordFollowUpPatterns.some(pattern => pattern.test(lowerText))) {
+                    console.log('[Chat] Follow-up pattern detected for single record context');
+                    return true;
+                }
+                
+                // Check for questions with just attributes (likely follow-ups)
+                const words = lowerText.split(/\s+/).filter(w => w.length > 2);
+                const questionWords = ['what', 'how', 'when', 'where', 'why', 'which', 'who'];
+                const attributeWords = ['calories', 'time', 'ingredients', 'servings', 'nutrition', 'cook', 'prep', 'difficulty'];
+                
+                const nonQuestionWords = words.filter(word => !questionWords.includes(word));
+                const isAttributeQuery = nonQuestionWords.length > 0 && 
+                                        nonQuestionWords.every(word => attributeWords.includes(word));
+                
+                if (isAttributeQuery) {
+                    console.log('[Chat] Attribute-only question detected for single record context');
+                    return true;
+                }
+            }
+            
+            // If no previous conversation, definitely not a follow-up (unless single record case above)
             if (chatState.conversation.length === 0 || !chatState.lastSearchSubject) {
                 return false;
             }
-
-            const lowerText = text.toLowerCase();
             
             // Obvious new subject indicators
             const newSubjectPatterns = [
@@ -7746,7 +7784,7 @@
                         include_filter_analysis: false, // Don't perform new search
                         is_follow_up: true,
                         conversation_context: chatState.conversation.slice(-4), // Last 4 messages for context
-                        existing_search_results: chatState.lastSearchResults
+                        existing_search_results: currentRecords && currentRecords.length === 1 ? currentRecords : chatState.lastSearchResults
                     }),
                     signal: controller.signal
                 });
