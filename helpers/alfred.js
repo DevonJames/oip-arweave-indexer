@@ -26,67 +26,85 @@ class ALFRED {
     preprocessTextForTTS(text) {
         // Replace number-dash-number patterns with "number to number" for better TTS
         // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
+        // Replace * and # symbols with spaces
+        text = text.replace(/\*/g, ' ');
+        text = text.replace(/#/g, ' ');
         return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
     }
 
     /**
-     * Detect if a question is a follow-up question about existing context
-     * rather than a new search query
+     * Use TinyLlama to comprehensively analyze a question and extract all needed information
+     * including follow-up detection, subject/modifier extraction, and categorization
      */
-    isFollowUpQuestion(question) {
-        const lowerQuestion = question.toLowerCase().trim();
-        
-        // Pattern 1: Direct follow-up phrases (be specific to avoid false positives)
-        const followUpPatterns = [
-            /^(tell me more|give me more details|more info|more information|what else|anything else)/,
-            /^(how many calories|what about calories|calories|nutrition|nutritional info)/,
-            /^(how long|cook time|cooking time|prep time|preparation time)(?!\s+(to|does|for).*(make|cook|prepare|recipe))/,
-            /^(ingredients|what ingredients)(?!\s+(for|to|in).*(recipe|dish))/,
-            /^(servings|how many servings|serves how many)/,
-            /^(can you|could you|would you|will you).+(tell|give|show|explain)(?!\s+me.*(recipe|how to))/,
-            /^(what about|how about)(?!\s+(making|cooking|recipe))/,
-            /^(what's the|what is the)\s+(time|calories|nutrition|servings|difficulty)/
-        ];
-        
-        if (followUpPatterns.some(pattern => pattern.test(lowerQuestion))) {
-            console.log(`[IQP] 🎯 Follow-up detected by pattern: "${lowerQuestion}"`);
-            return true;
+    async analyzeQuestionWithLLM(question) {
+        try {
+            const prompt = `I want you to extract the primary entity being asked about (could be syntactic subject or object) and any modifiers (adjectives) to it, as well as the optional second entity (when there's a verb with two participants). Also answer whether it is a follow-up question and what category is should be in.
+If the question contains the word "recipe", classify the category as "recipe" but do NOT include the word "recipe" as part of primary_entity or second_entity. Ignore similar structural words like "exercise" or "podcast" when assigning entities.
+Return your response in the following JSON format:
+{
+  "follow-up": boolean,
+  "category": "news" | "recipe" | "exercise" | "podcast",
+  "primary_entity": string,
+  "modifiers": array,
+  "second_entity": string
+}
+
+Question: "${question}"`;
+            
+            console.log(`[ALFRED] 🤖 Using TinyLlama to analyze question: "${question}"`);
+            
+            const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
+                model: 'tinyllama',
+                prompt: prompt,
+                stream: false,
+                options: {
+                    temperature: 0.1, // Low temperature for consistent structured answers
+                    top_p: 0.9,
+                    max_tokens: 100 // Enough for JSON response
+                }
+            }, {
+                timeout: 8000 // Slightly longer timeout for more complex response
+            });
+
+            const rawResponse = response.data?.response?.trim() || '';
+            console.log(`[ALFRED] 🤖 TinyLlama raw response: "${rawResponse}"`);
+            
+            // Try to parse JSON response
+            let analysis;
+            try {
+                // Extract JSON from response (in case there's extra text)
+                const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+                const jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
+                analysis = JSON.parse(jsonStr);
+            } catch (parseError) {
+                console.warn(`[ALFRED] ⚠️ Failed to parse TinyLlama JSON response, using fallback`);
+                throw new Error('JSON parse failed');
+            }
+            
+            // Validate and normalize the response
+            const result = {
+                isFollowUp: Boolean(analysis['follow-up']),
+                category: analysis.category || 'news',
+                primaryEntity: String(analysis.primary_entity || question).trim(),
+                modifiers: Array.isArray(analysis.modifiers) ? analysis.modifiers.map(m => String(m).trim()) : [],
+                secondEntity: String(analysis.second_entity || '').trim()
+            };
+            
+            console.log(`[ALFRED] 🎯 TinyLlama analysis result:`, result);
+            return result;
+            
+        } catch (error) {
+            console.warn(`[ALFRED] ⚠️ TinyLlama question analysis failed, using fallback: ${error.message}`);
+            
+            // Fallback to simple pattern-based approach
+            return {
+                isFollowUp: false,
+                category: question.toLowerCase().includes('recipe') ? 'recipe' : 'news',
+                primaryEntity: question,
+                modifiers: [],
+                secondEntity: ''
+            };
         }
-        
-        // Pattern 2: Questions starting with pronouns (referring to existing context)
-        const pronounPatterns = [
-            /^(it|this|that|the recipe|the dish|the food)/,
-            /^(what does it|how does it|when does it|where does it)/,
-            /^(what is it|what's it|how is it|how's it)/
-        ];
-        
-        if (pronounPatterns.some(pattern => pattern.test(lowerQuestion))) {
-            console.log(`[IQP] 🎯 Follow-up detected by pronoun: "${lowerQuestion}"`);
-            return true;
-        }
-        
-        // Pattern 3: Questions with no meaningful subject (just attributes)
-        const words = this.extractMeaningfulWords(lowerQuestion);
-        const questionWords = ['what', 'how', 'when', 'where', 'why', 'which', 'who'];
-        const attributeWords = ['calories', 'time', 'ingredients', 'servings', 'nutrition', 'cook', 'prep', 'difficulty'];
-        
-        // If question is mostly question words + attribute words, it's likely a follow-up
-        const nonQuestionWords = words.filter(word => !questionWords.includes(word));
-        const isAttributeQuery = nonQuestionWords.length > 0 && 
-                                nonQuestionWords.every(word => attributeWords.includes(word));
-        
-        if (isAttributeQuery) {
-            console.log(`[IQP] 🎯 Follow-up detected by attribute query: "${lowerQuestion}"`);
-            return true;
-        }
-        
-        // Pattern 4: Very short questions (likely follow-ups)
-        if (words.length <= 2 && attributeWords.some(attr => words.includes(attr))) {
-            console.log(`[IQP] 🎯 Follow-up detected by short attribute question: "${lowerQuestion}"`);
-            return true;
-        }
-        
-        return false;
     }
 
     /**
@@ -94,34 +112,36 @@ class ALFRED {
      * and refining results using tag analysis
      */
     async processQuestion(question, options = {}) {
-        console.log(`[IQP] Processing question: "${question}"`);
+        console.log(`[ALFRED] Processing question: "${question}"`);
         const { existingContext = null } = options;
         
         try {
-            // Step 0: Check if this is a follow-up question with existing context
-            if (existingContext && existingContext.length === 1) {
-                const isFollowUp = this.isFollowUpQuestion(question);
-                console.log(`[IQP] isFollowUp: ${isFollowUp}`);
-                if (isFollowUp) {
-                    console.log(`[IQP] 🔄 Detected follow-up question, using existing context instead of new search`);
-                    return this.extractAndFormatContent(
-                        question, 
-                        existingContext, 
-                        { search: 'existing_context', recordType: existingContext[0].oip?.recordType || 'unknown' }, 
-                        []
-                    );
-                }
+            // Step 0: Analyze question using TinyLlama for comprehensive understanding
+            const analysis = await this.analyzeQuestionWithLLM(question);
+            const { isFollowUp, category, primaryEntity, modifiers, secondEntity } = analysis;
+            
+            // Check if this is a follow-up question with existing context
+            if (existingContext && existingContext.length === 1 && isFollowUp) {
+                console.log(`[ALFRED] 🔄 Detected follow-up question, using existing context instead of new search`);
+                return this.extractAndFormatContent(
+                    question, 
+                    existingContext, 
+                    { search: 'existing_context', recordType: existingContext[0].oip?.recordType || 'unknown' }, 
+                    modifiers
+                );
             }
-            // Step 1: Extract subject and modifiers from the question
-            const { subject, modifiers, recordType } = this.extractSubjectAndModifiers(question);
-            console.log(`[IQP] Extracted - Subject: "${subject}", Modifiers: [${modifiers.join(', ')}], RecordType: "${recordType}"`);
+            
+            // Step 1: Use LLM analysis results
+            const subject = primaryEntity;
+            const recordType = category;
+            console.log(`[ALFRED] LLM Analysis - Subject: "${subject}", Modifiers: [${modifiers.join(', ')}], RecordType: "${recordType}", SecondEntity: "${secondEntity}"`);
             
             // Step 2: Perform initial search
             const initialFilters = this.buildInitialFilters(subject, recordType, options);
-            console.log(`[IQP] Initial search filters:`, initialFilters);
+            console.log(`[ALFRED] Initial search filters:`, initialFilters);
             
             const initialResults = await this.performSearch(initialFilters);
-            console.log(`[IQP] Initial search found ${initialResults.records?.length || 0} records`);
+            console.log(`[ALFRED] Initial search found ${initialResults.records?.length || 0} records`);
             
             if (!initialResults.records || initialResults.records.length === 0) {
                 return await this.formatEmptyResult(question, initialFilters, "No records found for initial search");
@@ -129,7 +149,7 @@ class ALFRED {
             
             if (initialResults.records.length === 1) {
                 // Perfect match - proceed directly to content extraction
-                console.log(`[IQP] Perfect match found, proceeding to content extraction`);
+                console.log(`[ALFRED] Perfect match found, proceeding to content extraction`);
                 return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers);
             }
             
@@ -141,30 +161,33 @@ class ALFRED {
                 if (recordType === 'recipe') {
                     // For recipes, always try refinement when multiple results exist
                     shouldRefine = true;
-                    // Use all meaningful words from the original question for tag matching
-                    termsForRefinement = this.extractMeaningfulWords(question);
-                    console.log(`[IQP] Multiple recipe results (${initialResults.records.length}), attempting tag refinement with question terms: [${termsForRefinement.join(', ')}]`);
+                    // Use modifiers and entities from LLM analysis for tag matching
+                    termsForRefinement = [...modifiers];
+                    if (secondEntity && secondEntity.length > 0) {
+                        termsForRefinement.push(secondEntity);
+                    }
+                    console.log(`[ALFRED] Multiple recipe results (${initialResults.records.length}), attempting tag refinement with LLM terms: [${termsForRefinement.join(', ')}]`);
                 } else if (modifiers.length > 0) {
                     // For non-recipes, only refine if we have explicit modifiers
                     shouldRefine = true;
-                    console.log(`[IQP] Multiple results (${initialResults.records.length}) with modifiers, attempting tag refinement`);
+                    console.log(`[ALFRED] Multiple results (${initialResults.records.length}) with modifiers, attempting tag refinement`);
                 }
                 
                 if (shouldRefine) {
                     const refinedResult = await this.refineSearchWithTags(question, subject, termsForRefinement, recordType, options);
                     if (refinedResult) {
-                        console.log(`[IQP] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
+                        console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
                         return refinedResult;
                     }
                 }
             }
             
             // Step 4: If refinement didn't work or no modifiers, use initial results
-            console.log(`[IQP] Using initial results (${initialResults.records.length} records)`);
+            console.log(`[ALFRED] Using initial results (${initialResults.records.length} records)`);
             return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers);
             
         } catch (error) {
-            console.error(`[IQP] Error processing question:`, error);
+            console.error(`[ALFRED] Error processing question:`, error);
             return this.formatErrorResult(question, error.message);
         }
     }
@@ -318,7 +341,7 @@ class ALFRED {
         // Return remaining modifiers that weren't used in the subject
         const remainingModifiers = foundModifiers.filter(mod => !subject.includes(mod));
         
-        console.log(`[IQP] Recipe parsing: "${cleanedQuestion}" -> subject: "${subject}", modifiers: [${remainingModifiers.join(', ')}]`);
+        console.log(`[ALFRED] Recipe parsing: "${cleanedQuestion}" -> subject: "${subject}", modifiers: [${remainingModifiers.join(', ')}]`);
         
         return { subject, modifiers: remainingModifiers };
     }
@@ -391,7 +414,7 @@ class ALFRED {
      */
     async performSearch(filters) {
         try {
-            console.log(`[IQP] Performing search with filters:`, filters);
+            console.log(`[ALFRED] Performing search with filters:`, filters);
             const results = await getRecords(filters);
             
             return {
@@ -400,7 +423,7 @@ class ALFRED {
                 message: results.message
             };
         } catch (error) {
-            console.error(`[IQP] Search error:`, error);
+            console.error(`[ALFRED] Search error:`, error);
             throw new Error(`Search failed: ${error.message}`);
         }
     }
@@ -424,11 +447,11 @@ class ALFRED {
                 tagSummaryFilters.searchMatchMode = 'AND';
             }
             
-            console.log(`[IQP] Getting tag summary for refinement:`, tagSummaryFilters);
+            console.log(`[ALFRED] Getting tag summary for refinement:`, tagSummaryFilters);
             const tagResults = await getRecords(tagSummaryFilters);
             
             if (!tagResults.tagSummary || tagResults.tagSummary.length === 0) {
-                console.log(`[IQP] No tag summary available for refinement`);
+                console.log(`[ALFRED] No tag summary available for refinement`);
                 return null;
             }
             
@@ -436,11 +459,11 @@ class ALFRED {
             const matchingTags = this.findMatchingTags(modifiers, tagResults.tagSummary);
             
             if (matchingTags.length === 0) {
-                console.log(`[IQP] No matching tags found for modifiers: [${modifiers.join(', ')}]`);
+                console.log(`[ALFRED] No matching tags found for modifiers: [${modifiers.join(', ')}]`);
                 return null;
             }
             
-            console.log(`[IQP] Found matching tags for refinement: [${matchingTags.join(', ')}]`);
+            console.log(`[ALFRED] Found matching tags for refinement: [${matchingTags.join(', ')}]`);
             
             // Perform refined search with tags
             const refinedFilters = {
@@ -477,7 +500,7 @@ class ALFRED {
             return null;
             
         } catch (error) {
-            console.error(`[IQP] Tag refinement error:`, error);
+            console.error(`[ALFRED] Tag refinement error:`, error);
             return null;
         }
     }
@@ -542,10 +565,10 @@ class ALFRED {
                             const fullText = await this.fetchFullTextContent(fullTextUrl, content.title);
                             if (fullText) {
                                 content.fullText = fullText.substring(0, 8000); // Limit to prevent overflow
-                                console.log(`[IQP] Retrieved ${fullText.length} characters of full text for: ${content.title}`);
+                                console.log(`[ALFRED] Retrieved ${fullText.length} characters of full text for: ${content.title}`);
                             }
                         } catch (error) {
-                            console.warn(`[IQP] Failed to fetch full text:`, error.message);
+                            console.warn(`[ALFRED] Failed to fetch full text:`, error.message);
                         }
                     }
                     
@@ -569,7 +592,7 @@ class ALFRED {
                     // Include nutritional information (from summarizeRecipe=true)
                     if (record.data.summaryNutritionalInfo) {
                         content.nutrition = record.data.summaryNutritionalInfo;
-                        console.log(`[IQP] Included nutritional info for recipe: ${content.title}`);
+                        console.log(`[ALFRED] Included nutritional info for recipe: ${content.title}`);
                     }
                     if (record.data.summaryNutritionalInfoPerServing) {
                         content.nutritionPerServing = record.data.summaryNutritionalInfoPerServing;
@@ -583,13 +606,13 @@ class ALFRED {
                     // Include full recipe data for comprehensive analysis
                     content.recipeData = specificData;
                     
-                    console.log(`[IQP] Enhanced recipe data for: ${content.title} (prep: ${content.prepTimeMinutes}min, cook: ${content.cookTimeMinutes}min)`);
+                    console.log(`[ALFRED] Enhanced recipe data for: ${content.title} (prep: ${content.prepTimeMinutes}min, cook: ${content.cookTimeMinutes}min)`);
                 }
                 
                 contentItems.push(content);
                 
             } catch (error) {
-                console.warn(`[IQP] Error processing record:`, error.message);
+                console.warn(`[ALFRED] Error processing record:`, error.message);
             }
         }
         
@@ -642,7 +665,7 @@ class ALFRED {
         if (!url) return null;
         
         try {
-            console.log(`[IQP] Fetching full text from: ${url}`);
+            console.log(`[ALFRED] Fetching full text from: ${url}`);
             const response = await axios.get(url, { 
                 timeout: 10000,
                 maxContentLength: 500000
@@ -650,11 +673,11 @@ class ALFRED {
             
             if (response.status === 200 && response.data) {
                 const content = typeof response.data === 'string' ? response.data : String(response.data);
-                console.log(`[IQP] Successfully fetched ${content.length} characters for: ${recordTitle}`);
+                console.log(`[ALFRED] Successfully fetched ${content.length} characters for: ${recordTitle}`);
                 return content;
             }
         } catch (error) {
-            console.warn(`[IQP] Failed to fetch full text from ${url}:`, error.message);
+            console.warn(`[ALFRED] Failed to fetch full text from ${url}:`, error.message);
         }
         
         return null;
@@ -713,7 +736,7 @@ Instructions:
 
 Be conversational and natural. Do not use phrases like "according to the context" or "the article states."`;
 
-            console.log(`[IQP] Generating RAG response for question: "${question}"`);
+            console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
             
             const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                 model: this.defaultModel,
@@ -730,7 +753,7 @@ Be conversational and natural. Do not use phrases like "according to the context
 
             const answer = response.data?.response?.trim() || "I couldn't generate a response based on the available information.";
             
-            console.log(`[IQP] Generated response (${answer.length} chars)`);
+            console.log(`[ALFRED] Generated response (${answer.length} chars)`);
             
             return {
                 answer: answer,
@@ -739,7 +762,7 @@ Be conversational and natural. Do not use phrases like "according to the context
             };
             
         } catch (error) {
-            console.error(`[IQP] RAG generation error:`, error.message);
+            console.error(`[ALFRED] RAG generation error:`, error.message);
             
             // Improved fallback response that tries to provide specific information
             let fallbackAnswer;
@@ -792,7 +815,7 @@ Question: ${question}
 
 Please provide a helpful, conversational answer starting with "I didn't find any specific records about that, but I can tell you that..." and then give useful information from your training data. Be natural and conversational.`;
 
-            console.log(`[IQP] No records found, generating fallback response for: "${question}"`);
+            console.log(`[ALFRED] No records found, generating fallback response for: "${question}"`);
             
             const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                 model: this.defaultModel,
@@ -821,7 +844,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
             };
             
         } catch (error) {
-            console.error(`[IQP] Fallback response generation error:`, error.message);
+            console.error(`[ALFRED] Fallback response generation error:`, error.message);
             
             // Final fallback if LLM fails
             return {
