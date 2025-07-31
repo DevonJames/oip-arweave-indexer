@@ -38,14 +38,29 @@ class IntelligentQuestionProcessor {
                 return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers);
             }
             
-            // Step 3: If many results and we have modifiers, use tag summarization for refinement
-            if (initialResults.records.length > 1 && modifiers.length > 0) {
-                console.log(`[IQP] Multiple results (${initialResults.records.length}) with modifiers, attempting tag refinement`);
+            // Step 3: Recipe-specific tag refinement or general refinement with modifiers
+            if (initialResults.records.length > 1) {
+                let shouldRefine = false;
+                let termsForRefinement = modifiers;
                 
-                const refinedResult = await this.refineSearchWithTags(question, subject, modifiers, recordType, options);
-                if (refinedResult) {
-                    console.log(`[IQP] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
-                    return refinedResult;
+                if (recordType === 'recipe') {
+                    // For recipes, always try refinement when multiple results exist
+                    shouldRefine = true;
+                    // Use all meaningful words from the original question for tag matching
+                    termsForRefinement = this.extractMeaningfulWords(question);
+                    console.log(`[IQP] Multiple recipe results (${initialResults.records.length}), attempting tag refinement with question terms: [${termsForRefinement.join(', ')}]`);
+                } else if (modifiers.length > 0) {
+                    // For non-recipes, only refine if we have explicit modifiers
+                    shouldRefine = true;
+                    console.log(`[IQP] Multiple results (${initialResults.records.length}) with modifiers, attempting tag refinement`);
+                }
+                
+                if (shouldRefine) {
+                    const refinedResult = await this.refineSearchWithTags(question, subject, termsForRefinement, recordType, options);
+                    if (refinedResult) {
+                        console.log(`[IQP] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
+                        return refinedResult;
+                    }
                 }
             }
             
@@ -93,13 +108,23 @@ class IntelligentQuestionProcessor {
             }
         }
 
-        // Use the full question as the search term for better results
-        // The searchMatchMode=OR will handle finding relevant records
-        return {
-            subject: question, // Use full question instead of parsed subject
-            modifiers: [], // Disable modifier detection for now
-            recordType: recordType
-        };
+        // For recipes, extract proper subject and modifiers for precise searching
+        // For posts, use full question to get broader context
+        if (recordType === 'recipe') {
+            const result = this.parseQuestionStructure(question, recordType);
+            return {
+                subject: result.subject,
+                modifiers: result.modifiers,
+                recordType: recordType
+            };
+        } else {
+            // For posts and other types, use full question for broader context
+            return {
+                subject: question,
+                modifiers: [],
+                recordType: recordType
+            };
+        }
     }
 
     /**
@@ -160,31 +185,47 @@ class IntelligentQuestionProcessor {
      * Parse recipe-specific questions for cooking methods and cuisines
      */
     parseRecipeQuestion(cleanedQuestion) {
-        const cookingMethods = ['grilled', 'baked', 'fried', 'roasted', 'steamed', 'boiled', 'sautéed', 'braised'];
-        const cuisines = ['greek', 'italian', 'mexican', 'indian', 'chinese', 'thai', 'mediterranean', 'french', 'spanish'];
-        const characteristics = ['spicy', 'healthy', 'quick', 'easy', 'traditional', 'crispy', 'tender', 'creamy'];
+        const cookingMethods = ['grilled', 'baked', 'fried', 'roasted', 'steamed', 'boiled', 'sautéed', 'braised', 'smoked', 'bbq', 'barbecue'];
+        const cuisines = ['greek', 'italian', 'mexican', 'indian', 'chinese', 'thai', 'mediterranean', 'french', 'spanish', 'asian'];
+        const characteristics = ['spicy', 'healthy', 'quick', 'easy', 'traditional', 'crispy', 'tender', 'creamy', 'slow', 'instant'];
         
         const words = this.extractMeaningfulWords(cleanedQuestion);
-        const modifiers = [];
+        const foundModifiers = [];
         
         // Find cooking methods, cuisines, and characteristics
         words.forEach(word => {
             if (cookingMethods.includes(word) || cuisines.includes(word) || characteristics.includes(word)) {
-                modifiers.push(word);
+                foundModifiers.push(word);
             }
         });
         
         // Find the main ingredient (usually a noun)
-        const commonIngredients = ['chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'pasta', 'rice', 'vegetables'];
-        let subject = commonIngredients.find(ingredient => words.includes(ingredient)) || 'recipe';
+        const commonIngredients = ['chicken', 'beef', 'pork', 'fish', 'salmon', 'shrimp', 'pasta', 'rice', 'vegetables', 'turkey', 'lamb', 'tofu', 'beans'];
+        const foundIngredient = commonIngredients.find(ingredient => words.includes(ingredient));
         
-        // If no common ingredient found, look for recipe-related words
-        if (subject === 'recipe') {
-            const nonModifierWords = words.filter(word => !modifiers.includes(word) && !['recipe', 'cook', 'cooking'].includes(word));
-            subject = nonModifierWords[0] || 'recipe';
+        let subject;
+        
+        if (foundIngredient && foundModifiers.length > 0) {
+            // Combine modifier + ingredient (e.g., "grilled chicken")
+            subject = `${foundModifiers[0]} ${foundIngredient}`;
+        } else if (foundIngredient) {
+            // Just the ingredient
+            subject = foundIngredient;
+        } else if (foundModifiers.length > 0) {
+            // Just the cooking method
+            subject = foundModifiers[0];
+        } else {
+            // Look for other potential recipe subjects
+            const nonStopWords = words.filter(word => !['recipe', 'cook', 'cooking', 'time', 'long', 'much', 'many'].includes(word));
+            subject = nonStopWords.length > 0 ? nonStopWords[0] : 'recipe';
         }
         
-        return { subject, modifiers };
+        // Return remaining modifiers that weren't used in the subject
+        const remainingModifiers = foundModifiers.filter(mod => !subject.includes(mod));
+        
+        console.log(`[IQP] Recipe parsing: "${cleanedQuestion}" -> subject: "${subject}", modifiers: [${remainingModifiers.join(', ')}]`);
+        
+        return { subject, modifiers: remainingModifiers };
     }
 
     /**
@@ -234,15 +275,17 @@ class IntelligentQuestionProcessor {
         const filters = {
             search: subject,
             recordType: recordType,
-            searchMatchMode: 'OR', // Use OR mode to get maximum results for AI analysis
             resolveDepth: options.resolveDepth || 2,
             limit: options.limit || 20,
             sortBy: options.sortBy || 'matchCount:desc' // Use relevance sorting by default
         };
 
-        // Add recipe-specific parameters for nutritional and timing information
+        // Recipe-specific settings for precise search
         if (recordType === 'recipe') {
-            filters.summarizeRecipe = true;
+            filters.searchMatchMode = 'AND'; // Use AND mode for precise recipe matching
+            filters.summarizeRecipe = true; // Get nutritional information
+        } else {
+            filters.searchMatchMode = 'OR'; // Use OR mode for broader post/news searches
         }
 
         return filters;
@@ -277,9 +320,14 @@ class IntelligentQuestionProcessor {
                 search: subject,
                 recordType: recordType,
                 summarizeTags: true,
-                tagCount: this.maxTagsToAnalyze,
+                tagCount: recordType === 'recipe' ? 10 : this.maxTagsToAnalyze, // Use 10 tags for recipes as specified
                 limit: this.maxRecordsForTagAnalysis
             };
+            
+            // Use the same searchMatchMode as the main search
+            if (recordType === 'recipe') {
+                tagSummaryFilters.searchMatchMode = 'AND';
+            }
             
             console.log(`[IQP] Getting tag summary for refinement:`, tagSummaryFilters);
             const tagResults = await getRecords(tagSummaryFilters);
@@ -307,8 +355,16 @@ class IntelligentQuestionProcessor {
                 tagsMatchMode: 'AND',
                 resolveDepth: options.resolveDepth || 2,
                 limit: options.limit || 10,
-                sortBy: 'tags:desc'
+                sortBy: 'matchCount:desc' // Use relevance sorting
             };
+            
+            // Apply recipe-specific settings
+            if (recordType === 'recipe') {
+                refinedFilters.searchMatchMode = 'AND';
+                refinedFilters.summarizeRecipe = true;
+            } else {
+                refinedFilters.searchMatchMode = 'OR';
+            }
             
             const refinedResults = await this.performSearch(refinedFilters);
             
