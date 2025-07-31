@@ -3,7 +3,7 @@ const multer = require('multer');
 const axios = require('axios');
 const FormData = require('form-data');
 const { Readable } = require('stream');
-const ragService = require('../helpers/ragService');
+const alfred = require('../helpers/alfred');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -64,14 +64,7 @@ const TEXT_GENERATOR_URL = process.env.TEXT_GENERATOR_URL || 'http://localhost:8
 // Embedded TTS using espeak (available in Alpine container)
 async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
     return new Promise((resolve, reject) => {
-        // Preprocess text for better TTS pronunciation
-        function preprocessTextForTTS(text) {
-            // Replace number-dash-number patterns with "number to number" for better TTS
-            // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
-            return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
-        }
-        
-        const processedText = preprocessTextForTTS(text);
+        const processedText = alfred.preprocessTextForTTS(text);
         const tempFile = path.join(os.tmpdir(), `tts_${Date.now()}.wav`);
         
         // Voice mapping
@@ -252,14 +245,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             return res.status(400).json({ error: 'Text is required' });
         }
 
-        // Preprocess text for better TTS pronunciation
-        function preprocessTextForTTS(text) {
-            // Replace number-dash-number patterns with "number to number" for better TTS
-            // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
-            return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
-        }
-        
-        const textToSynthesize = preprocessTextForTTS(text.trim());
+        const textToSynthesize = alfred.preprocessTextForTTS(text.trim());
         console.log(`[TTS] Synthesizing with Chatterbox: "${textToSynthesize.substring(0, 50)}..." (${textToSynthesize.length} chars) with voice ${voice_id}`);
         console.log(`[TTS] Using TTS service URL: ${TTS_SERVICE_URL}`);
 
@@ -568,7 +554,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 console.log(`[Voice Chat] Using existing context with ${ragOptions.existingContext.length} records`);
             }
             
-            ragResponse = await ragService.query(inputText, ragOptions);
+            ragResponse = await alfred.query(inputText, ragOptions);
             responseText = ragResponse.answer;
         }
 
@@ -588,16 +574,9 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 try {
                     console.log(`[Voice Chat] Attempting TTS with service at: ${TTS_SERVICE_URL}`);
                     
-                    // Preprocess text for better TTS pronunciation
-                    function preprocessTextForTTS(text) {
-                        // Replace number-dash-number patterns with "number to number" for better TTS
-                        // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
-                        return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
-                    }
-                    
                     // Limit text length for TTS
                     const maxTextLength = 1000;
-                    let processedText = preprocessTextForTTS(responseText);
+                    let processedText = alfred.preprocessTextForTTS(responseText);
                     const textForTTS = processedText.length > maxTextLength 
                         ? processedText.substring(0, maxTextLength) + '...'
                         : processedText;
@@ -678,7 +657,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     
                     // Use the same text preprocessing and truncation for eSpeak
                     const maxTextLength = 1000;
-                    let processedTextForEspeak = preprocessTextForTTS(responseText);
+                    let processedTextForEspeak = alfred.preprocessTextForTTS(responseText);
                     const textForEspeak = processedTextForEspeak.length > maxTextLength 
                         ? processedTextForEspeak.substring(0, maxTextLength) + '...'
                         : processedTextForEspeak;
@@ -877,7 +856,7 @@ router.post('/rag', async (req, res) => {
         };
 
         console.log(`[Voice RAG] Processing query: ${text}`);
-        const ragResponse = await ragService.query(text, ragOptions);
+        const ragResponse = await alfred.query(text, ragOptions);
 
         res.json({
             success: true,
@@ -963,14 +942,7 @@ router.post('/elevenlabs/:voiceId/synthesize', async (req, res) => {
             return res.status(400).json({ error: 'Text is required' });
         }
         
-        // Preprocess text for better TTS pronunciation
-        function preprocessTextForTTS(text) {
-            // Replace number-dash-number patterns with "number to number" for better TTS
-            // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
-            return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
-        }
-        
-        const processedText = preprocessTextForTTS(text);
+        const processedText = alfred.preprocessTextForTTS(text);
         console.log(`[ElevenLabs] Synthesizing with voice ${voiceId}: "${processedText.substring(0, 50)}..."`);
         
         // Check if ElevenLabs API key is available

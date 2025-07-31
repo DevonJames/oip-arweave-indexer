@@ -1,4 +1,4 @@
-const ragService = require('../helpers/ragService');
+const alfred = require('../helpers/alfred');
 
 async function testIranSearch() {
     console.log('🔍 Testing Iran Search Functionality');
@@ -7,7 +7,7 @@ async function testIranSearch() {
     try {
         // Test the RAG service directly
         console.log('\n=== Testing RAG Query for "Iran" ===');
-        const ragResult = await ragService.query('Iran', {
+        const ragResult = await alfred.query('Iran', {
             model: 'llama3.2:3b'
         });
         
@@ -81,8 +81,8 @@ async function testRecordTypeAnalysis() {
     
     try {
         // Create a temporary RAG service instance to test the analysis
-        const ragServiceInstance = new ragService.constructor();
-        const relevantTypes = ragServiceInstance.analyzeQuestionForRecordTypes('Iran');
+        const alfredInstance = alfred;
+        const relevantTypes = alfredInstance.analyzeQuestionForRecordTypes('Iran');
         
         console.log('✅ Record type analysis completed');
         console.log('Relevant types for "Iran":');
