@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const socketManager = require('../socket/socketManager');
-const ragService = require('../helpers/ragService'); // Add RAG service
+const alfred = require('../helpers/alfred'); // Add ALFRED service
 
 const router = express.Router();
 const mediaDirectory = path.join(__dirname, '../media');
@@ -23,7 +23,7 @@ router.post('/test-rag', async (req, res) => {
         
         console.log(`[API] Testing RAG with question: ${question}`);
         
-        const ragResponse = await ragService.query(question, {
+        const ragResponse = await alfred.query(question, {
             model: 'llama3.2:3b',
             searchParams: { limit: 3 }
         });

@@ -13,7 +13,7 @@ const {getCurrentBlockHeight} = require('../helpers/arweave');
 const { indexRecord, searchCreatorByAddress, getRecords } = require('../helpers/elasticsearch');
 const base64url = require('base64url');
 const { getWalletFilePath } = require('./utils');
-const ragService = require('./ragService');
+const alfred = require('./alfred');
 
 
 // Initialize Text-to-Speech client
@@ -2600,7 +2600,7 @@ async function convertDidTxRecordsToArticles(didTxInput) {
           
         default:
           // For other record types, try to extract full text URL using RAG service
-          const extractedUrl = ragService.extractFullTextUrl(record);
+                          const extractedUrl = alfred.extractFullTextUrl(record);
           if (extractedUrl) {
             contentUrl = extractedUrl;
             article.url = contentUrl;
@@ -2616,7 +2616,7 @@ async function convertDidTxRecordsToArticles(didTxInput) {
       if (contentUrl && !article.content) {
         console.log(`Fetching content from URL: ${contentUrl}`);
         try {
-          const fetchedContent = await ragService.fetchFullTextContent(contentUrl, article.title);
+                      const fetchedContent = await alfred.fetchFullTextContent(contentUrl, article.title);
           if (fetchedContent) {
             article.content = fetchedContent;
             console.log(`Successfully fetched ${fetchedContent.length} characters of content`);

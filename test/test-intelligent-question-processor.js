@@ -1,4 +1,4 @@
-const intelligentQuestionProcessor = require('../helpers/intelligentQuestionProcessor');
+const alfred = require('../helpers/alfred');
 
 async function testQuestionProcessor() {
     console.log('=== Testing Intelligent Question Processor ===\n');
@@ -40,7 +40,7 @@ async function testQuestionProcessor() {
         
         try {
             // Test the extraction method
-            const extracted = intelligentQuestionProcessor.extractSubjectAndModifiers(test.question);
+            const extracted = alfred.extractSubjectAndModifiers(test.question);
             
             console.log(`Extracted Subject: "${extracted.subject}"`);
             console.log(`Extracted Modifiers: [${extracted.modifiers.join(', ')}]`);
@@ -61,7 +61,7 @@ async function testQuestionProcessor() {
             
             // For the Fort Knox test, also show what the search filters would be
             if (test.name === "Fort Knox Audit Test") {
-                const filters = intelligentQuestionProcessor.buildInitialFilters(
+                const filters = alfred.buildInitialFilters(
                     extracted.subject, 
                     extracted.recordType, 
                     { resolveDepth: 2 }
@@ -84,7 +84,7 @@ async function testQuestionProcessor() {
 
     // Test full processing with a simple question (without hitting real Elasticsearch)
     console.log(`\n--- Testing buildInitialFilters ---`);
-    const filters = intelligentQuestionProcessor.buildInitialFilters(
+                const filters = alfred.buildInitialFilters(
         "fort knox", 
         "post", 
         { resolveDepth: 2, limit: 20 }
@@ -100,7 +100,7 @@ async function testQuestionProcessor() {
         { tag: "security", count: 3 }
     ];
     
-    const matchingTags = intelligentQuestionProcessor.findMatchingTags(
+            const matchingTags = alfred.findMatchingTags(
         ["gold", "audit"], 
         mockTagSummary
     );

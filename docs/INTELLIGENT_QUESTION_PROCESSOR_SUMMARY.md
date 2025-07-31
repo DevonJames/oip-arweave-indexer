@@ -52,7 +52,7 @@ I've created a comprehensive **Intelligent Question Processor (IQP)** that enhan
 ## 📁 Files Created/Modified
 
 ### New Files
-- **`helpers/intelligentQuestionProcessor.js`** - Main IQP implementation
+- **`helpers/alfred.js`** - Main ALFRED implementation (merged from intelligentQuestionProcessor.js and ragService.js)
 - **`test/test-intelligent-question-processor.js`** - Test suite
 - **`docs/INTELLIGENT_QUESTION_PROCESSOR_GUIDE.md`** - Comprehensive documentation
 
@@ -92,9 +92,9 @@ POST /api/voice/chat
 ### 3. Direct RAG Service Usage
 
 ```javascript
-const ragService = require('./helpers/ragService');
+const alfred = require('./helpers/alfred');
 
-const result = await ragService.query(
+const result = await alfred.query(
   "when is the last time the gold at fort knox was audited", 
   {
     include_filter_analysis: true,
