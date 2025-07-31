@@ -103,7 +103,7 @@ class IntelligentQuestionProcessor {
             console.log(`[IQP] Initial search found ${initialResults.records?.length || 0} records`);
             
             if (!initialResults.records || initialResults.records.length === 0) {
-                return this.formatEmptyResult(question, initialFilters, "No records found for initial search");
+                return await this.formatEmptyResult(question, initialFilters, "No records found for initial search");
             }
             
             if (initialResults.records.length === 1) {
@@ -643,9 +643,10 @@ class IntelligentQuestionProcessor {
      * Generate RAG response using LLM with structured context
      */
     async generateRAGResponse(question, contentItems, appliedFilters, modifiers) {
+        // Build context from content items
+        let context = '';
+        
         try {
-            // Build context from content items
-            let context = '';
             contentItems.forEach((item, index) => {
                 context += `\n--- Source ${index + 1}: ${item.title} ---\n`;
                 if (item.description) context += `Description: ${item.description}\n`;
@@ -677,14 +678,19 @@ class IntelligentQuestionProcessor {
                 context += `Type: ${item.type}\n`;
             });
 
-            const prompt = `You are answering a direct question using factual information. Provide a natural, conversational response without mentioning sources, context, or articles.
+            const prompt = `You are answering a direct question. You have some specific information available, but if it doesn't contain what's needed to answer the question, be honest about that and then provide a helpful answer from your general knowledge.
 
 Information available:
 ${context}
 
 Question: ${question}
 
-Answer the question directly and naturally, as if you're having a conversation. Do not use phrases like "according to the context," "the article states," "based on the information," or similar references. Just state the facts conversationally.`;
+Instructions:
+1. First, check if the information above contains what's needed to answer the question
+2. If YES: Answer directly using that information (don't mention "the information" or "context")
+3. If NO: Start with "I don't see that specific information in the records I found, but I can tell you that..." then provide a helpful answer from your general knowledge
+
+Be conversational and natural. Do not use phrases like "according to the context" or "the article states."`;
 
             console.log(`[IQP] Generating RAG response for question: "${question}"`);
             
@@ -714,33 +720,100 @@ Answer the question directly and naturally, as if you're having a conversation. 
         } catch (error) {
             console.error(`[IQP] RAG generation error:`, error.message);
             
-            // Fallback response
-            const fallbackAnswer = contentItems.length > 0 
-                ? `Based on the available records, I found ${contentItems.length} relevant sources about "${appliedFilters.search}". ${contentItems[0].description || contentItems[0].title}`
-                : "I couldn't find sufficient information to answer your question.";
+            // Improved fallback response that tries to provide specific information
+            let fallbackAnswer;
+            
+            if (contentItems.length === 0) {
+                fallbackAnswer = "I couldn't find sufficient information to answer your question, but feel free to ask me anyway - I might be able to help with general knowledge.";
+            } else {
+                // Try to extract relevant information from the context items
+                const item = contentItems[0];
+                const lowerQuestion = question.toLowerCase();
+                
+                if (item.type === 'recipe') {
+                    // Recipe-specific fallback answers
+                    if (lowerQuestion.includes('cook') && lowerQuestion.includes('time') && item.cookTimeMinutes) {
+                        fallbackAnswer = `This ${item.title} takes ${item.cookTimeMinutes} minutes to cook.`;
+                    } else if (lowerQuestion.includes('prep') && lowerQuestion.includes('time') && item.prepTimeMinutes) {
+                        fallbackAnswer = `The prep time for ${item.title} is ${item.prepTimeMinutes} minutes.`;
+                    } else if (lowerQuestion.includes('servings') && item.servings) {
+                        fallbackAnswer = `${item.title} serves ${item.servings} people.`;
+                    } else if (lowerQuestion.includes('calories') && item.nutrition?.calories) {
+                        fallbackAnswer = `${item.title} has ${item.nutrition.calories} calories total.`;
+                    } else if (lowerQuestion.includes('ingredients') && item.ingredients?.length > 0) {
+                        fallbackAnswer = `The main ingredients for ${item.title} include: ${item.ingredients.slice(0, 5).join(', ')}.`;
+                    } else {
+                        fallbackAnswer = `I found information about ${item.title}: ${item.description || 'A recipe from the database.'}`;
+                    }
+                } else {
+                    // General fallback for other record types
+                    fallbackAnswer = `I found information about ${item.title}: ${item.description || item.title}`;
+                }
+            }
                 
             return {
                 answer: fallbackAnswer,
                 model_used: 'fallback',
-                context_length: 0
+                context_length: context.length
             };
         }
     }
 
     /**
-     * Format empty result response
+     * Format empty result response with fallback from training data
      */
-    formatEmptyResult(question, appliedFilters, reason) {
-        return {
-            question: question,
-            answer: `I couldn't find any relevant information about "${appliedFilters.search}". ${reason}`,
-            sources: [],
-            search_results: [],
-            search_results_count: 0,
-            applied_filters: appliedFilters,
-            context_used: false,
-            rationale: reason
-        };
+    async formatEmptyResult(question, appliedFilters, reason) {
+        try {
+            // Generate a helpful response from training data
+            const fallbackPrompt = `I couldn't find any specific records about "${appliedFilters.search}" in the database, but I can still help answer your question using my general knowledge.
+
+Question: ${question}
+
+Please provide a helpful, conversational answer starting with "I didn't find any specific records about that, but I can tell you that..." and then give useful information from your training data. Be natural and conversational.`;
+
+            console.log(`[IQP] No records found, generating fallback response for: "${question}"`);
+            
+            const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
+                model: this.defaultModel,
+                prompt: fallbackPrompt,
+                stream: false,
+                options: {
+                    temperature: 0.5,
+                    top_p: 0.9,
+                    max_tokens: 512
+                }
+            }, {
+                timeout: 30000
+            });
+
+            const answer = response.data?.response?.trim() || `I didn't find any specific records about "${appliedFilters.search}", but feel free to ask me about it anyway - I might be able to help with general information.`;
+            
+            return {
+                question: question,
+                answer: answer,
+                sources: [],
+                search_results: [],
+                search_results_count: 0,
+                applied_filters: appliedFilters,
+                context_used: false,
+                rationale: `${reason} - Provided general knowledge fallback`
+            };
+            
+        } catch (error) {
+            console.error(`[IQP] Fallback response generation error:`, error.message);
+            
+            // Final fallback if LLM fails
+            return {
+                question: question,
+                answer: `I didn't find any specific records about "${appliedFilters.search}", but feel free to ask me about it anyway - I might be able to help with general information.`,
+                sources: [],
+                search_results: [],
+                search_results_count: 0,
+                applied_filters: appliedFilters,
+                context_used: false,
+                rationale: `${reason} - Used static fallback due to LLM error`
+            };
+        }
     }
 
     /**
