@@ -64,6 +64,14 @@ const TEXT_GENERATOR_URL = process.env.TEXT_GENERATOR_URL || 'http://localhost:8
 // Embedded TTS using espeak (available in Alpine container)
 async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
     return new Promise((resolve, reject) => {
+        // Preprocess text for better TTS pronunciation
+        function preprocessTextForTTS(text) {
+            // Replace number-dash-number patterns with "number to number" for better TTS
+            // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
+            return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
+        }
+        
+        const processedText = preprocessTextForTTS(text);
         const tempFile = path.join(os.tmpdir(), `tts_${Date.now()}.wav`);
         
         // Voice mapping
@@ -82,7 +90,7 @@ async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
             '-v', voice,
             '-s', espeakSpeed.toString(),
             '-w', tempFile,
-            text
+            processedText
         ];
         
         console.log(`[TTS] Synthesizing with espeak: voice=${voice}, speed=${espeakSpeed}`);
@@ -244,7 +252,14 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             return res.status(400).json({ error: 'Text is required' });
         }
 
-        const textToSynthesize = text.trim();
+        // Preprocess text for better TTS pronunciation
+        function preprocessTextForTTS(text) {
+            // Replace number-dash-number patterns with "number to number" for better TTS
+            // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
+            return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
+        }
+        
+        const textToSynthesize = preprocessTextForTTS(text.trim());
         console.log(`[TTS] Synthesizing with Chatterbox: "${textToSynthesize.substring(0, 50)}..." (${textToSynthesize.length} chars) with voice ${voice_id}`);
         console.log(`[TTS] Using TTS service URL: ${TTS_SERVICE_URL}`);
 
@@ -573,11 +588,19 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 try {
                     console.log(`[Voice Chat] Attempting TTS with service at: ${TTS_SERVICE_URL}`);
                     
+                    // Preprocess text for better TTS pronunciation
+                    function preprocessTextForTTS(text) {
+                        // Replace number-dash-number patterns with "number to number" for better TTS
+                        // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
+                        return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
+                    }
+                    
                     // Limit text length for TTS
                     const maxTextLength = 1000;
-                    const textForTTS = responseText.length > maxTextLength 
-                        ? responseText.substring(0, maxTextLength) + '...'
-                        : responseText;
+                    let processedText = preprocessTextForTTS(responseText);
+                    const textForTTS = processedText.length > maxTextLength 
+                        ? processedText.substring(0, maxTextLength) + '...'
+                        : processedText;
                         
                     if (responseText.length > maxTextLength) {
                         console.log(`[Voice Chat] Text truncated from ${responseText.length} to ${textForTTS.length} characters`);
@@ -653,11 +676,12 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         console.warn(`[Voice Chat] Chatterbox error code:`, chatterboxError.code);
                     }
                     
-                    // Use the same text truncation for eSpeak
+                    // Use the same text preprocessing and truncation for eSpeak
                     const maxTextLength = 1000;
-                    const textForEspeak = responseText.length > maxTextLength 
-                        ? responseText.substring(0, maxTextLength) + '...'
-                        : responseText;
+                    let processedTextForEspeak = preprocessTextForTTS(responseText);
+                    const textForEspeak = processedTextForEspeak.length > maxTextLength 
+                        ? processedTextForEspeak.substring(0, maxTextLength) + '...'
+                        : processedTextForEspeak;
                     
                     audioData = await synthesizeWithEspeak(textForEspeak, voice_id, 1.0);
                     engineUsed = 'espeak-fallback';
@@ -939,7 +963,15 @@ router.post('/elevenlabs/:voiceId/synthesize', async (req, res) => {
             return res.status(400).json({ error: 'Text is required' });
         }
         
-        console.log(`[ElevenLabs] Synthesizing with voice ${voiceId}: "${text.substring(0, 50)}..."`);
+        // Preprocess text for better TTS pronunciation
+        function preprocessTextForTTS(text) {
+            // Replace number-dash-number patterns with "number to number" for better TTS
+            // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
+            return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
+        }
+        
+        const processedText = preprocessTextForTTS(text);
+        console.log(`[ElevenLabs] Synthesizing with voice ${voiceId}: "${processedText.substring(0, 50)}..."`);
         
         // Check if ElevenLabs API key is available
         if (!process.env.ELEVENLABS_API_KEY) {
@@ -949,7 +981,7 @@ router.post('/elevenlabs/:voiceId/synthesize', async (req, res) => {
         const response = await axios.post(
             `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
             {
-                text: text,
+                text: processedText,
                 model_id: model_id,
                 voice_settings: {
                     stability: voice_settings.stability || 0.5,
