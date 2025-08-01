@@ -1096,7 +1096,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                         selectedModel: options.model || null
                     });
 
-                    console.log(`[ALFRED] IQP Result: ${JSON.stringify(iqpResult)}`);
+                    // console.log(`[ALFRED] IQP Result: ${JSON.stringify(iqpResult)}`);
                             // Step 4: Build context from search results
                     const context = await this.buildContext(iqpResult);
                     
