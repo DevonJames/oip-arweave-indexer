@@ -212,7 +212,8 @@ JSON Response:`;
                 if (shouldRefine) {
                     const refinedResult = await this.refineSearchWithCuisine(question, subject, termsForRefinement, recordType, options);
                     if (refinedResult) {
-                        console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
+                        console.log(`[ALFRED] Successfully refined with cuisine:`, refinedResult);
+                        // console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
                         // return refinedResult;
                         
                         if (refinedResult.records.length > 1) {
