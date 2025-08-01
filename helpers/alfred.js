@@ -40,35 +40,23 @@ class ALFRED {
         try {
             const modelToUse = selectedModel || this.defaultModel;
             
-            const prompt = `Analyze this question and extract the following information:
+            const prompt = `You are a JSON extraction tool. You MUST respond with ONLY valid JSON, no other text.
 
-1. Is this a follow-up question (referring to previous context)?
-2. What category does this belong to?
-3. What is the main thing being asked about (the primary entity - like "chicken", "Fort Knox", "workout")?
-4. What are the descriptive words/modifiers (like "grilled", "Mediterranean", "beginner")?
-5. Is there a second entity involved?
+Extract from this question:
+- follow-up: true/false (is this referring to previous context?)
+- category: "recipe" (if mentions recipe/cook/food), "exercise" (if mentions workout/fitness), "podcast" (if mentions audio/interview), or "news" (otherwise)  
+- primary_entity: main thing asked about (for recipes: the food item like "chicken", NOT "recipe")
+- modifiers: array of descriptive words (cooking methods, cuisines, difficulty)
+- second_entity: secondary entity if any, empty string if none
 
-CATEGORY RULES:
-- If question mentions "recipe", "cook", "food", "ingredient" → category = "recipe" 
-- If question mentions "exercise", "workout", "fitness" → category = "exercise"
-- If question mentions "podcast", "audio", "interview" → category = "podcast"  
-- Otherwise → category = "news"
+CRITICAL: Your response must be ONLY the JSON object. No explanation. No other text.
 
-ENTITY RULES:
-- For recipes: primary_entity should be the food item (like "chicken", "pasta"), NOT the word "recipe"
-- Include descriptive modifiers like cooking methods, cuisines, difficulty levels
-- Exclude structural words like "recipe", "exercise", "podcast" from entities
+JSON FORMAT:
+{"follow-up":false,"category":"recipe","primary_entity":"chicken","modifiers":["Mediterranean","grilled"],"second_entity":""}
 
-Return ONLY valid JSON in this exact format:
-{
-  "follow-up": false,
-  "category": "recipe",
-  "primary_entity": "chicken", 
-  "modifiers": ["Mediterranean", "grilled"],
-  "second_entity": ""
-}
+Question: "${question}"
 
-Question: "${question}"`;
+JSON Response:`;
             
             console.log(`[ALFRED] 🤖 Using ${modelToUse} to analyze question: "${question}"`);
             
@@ -77,9 +65,12 @@ Question: "${question}"`;
                 prompt: prompt,
                 stream: false,
                 options: {
-                    temperature: 0.1, // Low temperature for consistent structured answers
-                    top_p: 0.9,
-                    max_tokens: 150 // Enough for JSON response
+                    temperature: 0.0, // Zero temperature for maximum determinism
+                    top_p: 0.1, // Very focused sampling
+                    top_k: 1, // Only consider the most likely token
+                    repeat_penalty: 1.0,
+                    num_predict: 100, // Limit response length to force conciseness
+                    stop: ["\n\n", "Question:", "Explanation:", "Note:"] // Stop on explanatory text
                 }
             }, {
                 timeout: 10000 // Longer timeout for complex models
@@ -88,15 +79,37 @@ Question: "${question}"`;
             const rawResponse = response.data?.response?.trim() || '';
             console.log(`[ALFRED] 🤖 ${modelToUse} raw response: "${rawResponse}"`);
             
-            // Try to parse JSON response
+            // Try to parse JSON response with multiple strategies
             let analysis;
             try {
-                // Extract JSON from response (in case there's extra text)
-                const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-                const jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
-                analysis = JSON.parse(jsonStr);
+                // Strategy 1: Try direct parsing first
+                try {
+                    analysis = JSON.parse(rawResponse);
+                } catch (directParseError) {
+                    // Strategy 2: Extract JSON object from response
+                    let jsonMatch = rawResponse.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/);
+                    if (!jsonMatch) {
+                        // Strategy 3: Try to find JSON-like content and fix common issues
+                        let cleanedResponse = rawResponse
+                            .replace(/^[^{]*/, '') // Remove everything before first {
+                            .replace(/[^}]*$/, '') // Remove everything after last }
+                            .replace(/'/g, '"') // Replace single quotes with double quotes
+                            .replace(/(\w+):/g, '"$1":') // Add quotes around unquoted keys
+                            .replace(/,\s*}/g, '}') // Remove trailing commas
+                            .replace(/,\s*]/g, ']'); // Remove trailing commas in arrays
+                        
+                        if (cleanedResponse.includes('{') && cleanedResponse.includes('}')) {
+                            analysis = JSON.parse(cleanedResponse);
+                        } else {
+                            throw new Error('No JSON structure found');
+                        }
+                    } else {
+                        analysis = JSON.parse(jsonMatch[0]);
+                    }
+                }
             } catch (parseError) {
-                console.warn(`[ALFRED] ⚠️ Failed to parse ${modelToUse} JSON response, using fallback`);
+                console.warn(`[ALFRED] ⚠️ Failed to parse ${modelToUse} JSON response after all strategies: "${rawResponse}"`);
+                console.warn(`[ALFRED] Parse error:`, parseError.message);
                 throw new Error('JSON parse failed');
             }
             
@@ -560,13 +573,33 @@ Question: "${question}"`;
                 search: subject,
                 recordType: recordType,
                 cuisine: modifiers.join(','),
-                limit: 10
+                limit: 10,
+                resolveDepth: options.resolveDepth || 2,
+                sortBy: 'matchCount:desc'
             };
+            
+            // Add recipe-specific settings
+            if (recordType === 'recipe') {
+                cuisineFilters.searchMatchMode = 'AND';
+                cuisineFilters.summarizeRecipe = true;
+            }
+            
+            console.log(`[ALFRED] Searching with cuisine filters:`, cuisineFilters);
             const cuisineResults = await getRecords(cuisineFilters);
+            
             if (cuisineResults.records && cuisineResults.records.length > 0) {
-                console.log(`[ALFRED] Found matching cuisines for refinement: [${cuisineResults.records.map(record => record.data.basic.name).join(', ')}]`);
-                // return cuisineResults;
-                return this.extractAndFormatContent(question, cuisineResults, initialFilters, modifiers);
+                console.log(`[ALFRED] Found ${cuisineResults.records.length} matching cuisine results: [${cuisineResults.records.map(record => record.data?.basic?.name || 'Unnamed').join(', ')}]`);
+                
+                const rationale = `Found ${cuisineResults.records.length} records matching cuisine: ${modifiers.join(', ')}`;
+                return this.extractAndFormatContent(
+                    question, 
+                    cuisineResults.records, 
+                    { ...cuisineFilters, rationale }, 
+                    modifiers
+                );
+            } else {
+                console.log(`[ALFRED] No cuisine results found for: ${modifiers.join(', ')}`);
+                return null;
             }
         } catch (error) {
             console.error(`[ALFRED] Cuisine refinement error:`, error);
