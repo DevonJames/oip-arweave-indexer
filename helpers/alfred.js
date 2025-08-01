@@ -213,21 +213,21 @@ JSON Response:`;
                     const refinedResult = await this.refineSearchWithCuisine(question, subject, termsForRefinement, recordType, options);
                     if (refinedResult) {
                         console.log(`[ALFRED] Successfully refined with cuisine:`, refinedResult);
-                        // console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
+                        console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.search_results_count} results`);
                         // return refinedResult;
                         
-                        if (refinedResult.records.length > 1) {
+                        if (refinedResult.search_results_count > 1) {
                             
                             const furtherRefinedResult1 = await this.refineSearchWithTags(question, subject, termsForRefinement, recordType, options);
                             if (furtherRefinedResult1) {
-                                console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${furtherRefinedResult1.records.length} results`);
+                                console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${furtherRefinedResult1.search_results_count} results`);
                                 shouldRefine = false;
                                 // return this.extractAndFormatContent(question, furtherRefinedResult1, initialFilters, modifiers);
                                 return furtherRefinedResult1;
                             }
                         } 
-                        if (refinedResult.records.length === 1) {
-                            console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
+                        if (refinedResult.search_results_count === 1) {
+                            console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.search_results_count} results`);
                             shouldRefine = false;
                             // return this.extractAndFormatContent(question, refinedResult, initialFilters, modifiers);
                             return refinedResult;
