@@ -7826,6 +7826,23 @@
             }
         }
 
+        /**
+         * Check if any filters are currently active that would reduce the total record set
+         */
+        function hasActiveFilters() {
+            return !!(
+                currentFilters.search ||
+                currentFilters.recordType ||
+                currentFilters.dateStart ||
+                currentFilters.dateEnd ||
+                currentFilters.didTx ||
+                currentFilters.tags ||
+                currentFilters.tag ||
+                currentFilters.hasAudio ||
+                currentFilters.aiTags
+            );
+        }
+
         async function processNewQuestion(text) {
             console.log('[Chat] Processing new question with fresh search');
             
@@ -7837,19 +7854,43 @@
             }, 25000);
             
             try {
+                // Determine if we should pass existing context based on active filters
+                const filtersActive = hasActiveFilters();
+                const shouldPassFullContext = filtersActive && currentRecords && currentRecords.length > 0 && currentRecords.length < 1000;
+                const hasRecordTypeFilter = currentFilters.recordType && currentFilters.recordType.trim() !== '';
+                
+                console.log(`[Chat] Filters active: ${filtersActive}, Current records: ${currentRecords?.length || 0}, Record type: ${currentFilters.recordType || 'none'}`);
+                console.log(`[Chat] Passing full context: ${shouldPassFullContext}, Has record type filter: ${hasRecordTypeFilter}`);
+                
+                // Build request body
+                const requestBody = {
+                    text: text,
+                    model: chatState.selectedModel,
+                    return_audio: false,
+                    include_filter_analysis: true,
+                    is_follow_up: false
+                };
+                
+                // Pass existing context if filters are active and we have a reasonable number of records
+                if (shouldPassFullContext) {
+                    // Pass first 10 records as context to avoid overwhelming the API
+                    requestBody.existingContext = currentRecords.slice(0, 10);
+                    console.log(`[Chat] Passing ${requestBody.existingContext.length} filtered records as existing context`);
+                } else if (hasRecordTypeFilter) {
+                    // Even if we can't pass full records, pass the record type for domain context
+                    requestBody.searchParams = {
+                        recordType: currentFilters.recordType
+                    };
+                    console.log(`[Chat] Passing record type context: ${currentFilters.recordType}`);
+                }
+                
                 // Send to chat endpoint for new search
                 const response = await fetch('/api/voice/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        text: text,
-                        model: chatState.selectedModel,
-                        return_audio: false,
-                        include_filter_analysis: true,
-                        is_follow_up: false
-                    }),
+                    body: JSON.stringify(requestBody),
                     signal: controller.signal
                 });
                 

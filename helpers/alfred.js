@@ -13,6 +13,24 @@ class ALFRED {
         this.ollamaBaseUrl = process.env.OLLAMA_HOST || 'http://ollama:11434';
         this.defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
         this.maxRecordsForTagAnalysis = 50;
+        
+        // Cloud model configurations
+        this.xaiApiKey = process.env.XAI_API_KEY;
+        this.openaiApiKey = process.env.OPENAI_API_KEY;
+        
+        // Define which models are cloud-hosted vs self-hosted
+        this.cloudModels = {
+            // XAI Models (Grok)
+            'grok-beta': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
+            
+            // OpenAI Models
+            'gpt-4o': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' },
+            'gpt-4o-mini': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' },
+            'gpt-4-turbo': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' },
+            'gpt-4-turbo-preview': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' },
+            'gpt-4': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' },
+            'gpt-3.5-turbo': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' }
+        };
         this.maxTagsToAnalyze = 30;
         // RAG Service properties
         this.maxContextLength = 8000; // Increased for full text content
@@ -33,17 +51,115 @@ class ALFRED {
     }
 
     /**
+     * Check if a model is cloud-hosted or self-hosted
+     */
+    isCloudModel(modelName) {
+        return this.cloudModels.hasOwnProperty(modelName);
+    }
+
+    /**
+     * Call a cloud-hosted LLM API (Grok, GPT, etc.)
+     */
+    async callCloudModel(modelName, prompt, options = {}) {
+        const modelConfig = this.cloudModels[modelName];
+        if (!modelConfig) {
+            throw new Error(`Unknown cloud model: ${modelName}`);
+        }
+
+        let headers = {
+            'Content-Type': 'application/json'
+        };
+
+        let apiKey;
+        if (modelConfig.provider === 'xai') {
+            apiKey = this.xaiApiKey;
+            if (!apiKey) {
+                throw new Error('XAI_API_KEY environment variable is required for Grok models');
+            }
+        } else if (modelConfig.provider === 'openai') {
+            apiKey = this.openaiApiKey;
+            if (!apiKey) {
+                throw new Error('OPENAI_API_KEY environment variable is required for OpenAI models');
+            }
+        }
+
+        headers['Authorization'] = `Bearer ${apiKey}`;
+
+        // Default options for analysis vs generation
+        const defaultOptions = {
+            temperature: 0.2,
+            max_tokens: 150,
+            stop: ["\n\n", "Question:", "Explanation:", "Note:"]
+        };
+
+        const finalOptions = { ...defaultOptions, ...options };
+
+        const requestBody = {
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: finalOptions.temperature,
+            max_tokens: finalOptions.max_tokens,
+            stop: finalOptions.stop
+        };
+
+        console.log(`[ALFRED] 🌐 Calling ${modelConfig.provider} API for ${modelName}`);
+
+        const response = await axios.post(modelConfig.apiUrl, requestBody, {
+            headers: headers,
+            timeout: 30000
+        });
+
+        if (response.data?.choices?.[0]?.message?.content) {
+            return response.data.choices[0].message.content.trim();
+        } else {
+            throw new Error(`Invalid response format from ${modelConfig.provider} API`);
+        }
+    }
+
+    /**
      * Use LLM to comprehensively analyze a question and extract all needed information
      * including follow-up detection, subject/modifier extraction, and categorization
      */
-    async analyzeQuestionWithLLM(question, selectedModel = null) {
+    async analyzeQuestionWithLLM(question, selectedModel = null, context = null) {
         try {
             const modelToUse = selectedModel || this.defaultModel;
             
+            // Build context information for the prompt
+            let contextInfo = '';
+            if (context) {
+                if (context.existingContext && context.existingContext.length > 0) {
+                    // We have actual filtered records
+                    const recordTypes = [...new Set(context.existingContext.map(r => r.oip?.recordType).filter(Boolean))];
+                    const recordTitles = context.existingContext
+                        .slice(0, 3) // Show first 3 titles as examples
+                        .map(r => r.data?.basic?.name || r.data?.basic?.title || 'Untitled')
+                        .filter(Boolean);
+                    
+                    contextInfo = `\nCURRENT USER CONTEXT:
+The user is currently viewing ${context.existingContext.length} filtered records of type: ${recordTypes.join(', ')}
+Example records they're looking at: ${recordTitles.join(', ')}
+
+When determining if this is a follow-up question, consider: Does this question seem to be asking about these specific records or this record type?`;
+                    
+                } else if (context.searchParams?.recordType) {
+                    // We only have record type information
+                    contextInfo = `\nCURRENT USER CONTEXT:
+The user is currently filtering to view only "${context.searchParams.recordType}" records.
+
+When determining if this is a follow-up question, consider: Does this question seem to be asking about ${context.searchParams.recordType}s specifically?`;
+                }
+            }
+            
             const prompt = `You are a JSON extraction tool. You MUST respond with ONLY valid JSON, no other text.
+${contextInfo}
 
 Extract from this question:
-- follow-up: true/false (is this referring to previous context?)
+- follow-up: true/false (is this referring to previous context or the current filtered records?)
 - category: "recipe" (if mentions recipe/cook/food), "exercise" (if mentions workout/fitness), "podcast" (if mentions audio/interview), or "news" (otherwise)  
 - primary_entity: main thing asked about (for recipes: the food item like "chicken", NOT "recipe")
 - modifiers: array of descriptive words (cooking methods, cuisines, difficulty)
@@ -52,7 +168,7 @@ Extract from this question:
 CRITICAL: Your response must be ONLY the JSON object. No explanation. No other text.
 
 JSON FORMAT:
-{"follow-up":false,"category":"recipe","primary_entity":"chicken","modifiers":["Mediterranean","grilled"],"second_entity":""}
+{"follow-up":false,"category":"recipe","primary_entity":"name of recipe","modifiers":["cuiside","cooking-method"],"second_entity":""}
 
 Question: "${question}"
 
@@ -60,24 +176,34 @@ JSON Response:`;
             
             console.log(`[ALFRED] 🤖 Using ${modelToUse} to analyze question: "${question}"`);
             
-            const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
-                model: modelToUse,
-                prompt: prompt,
-                stream: false,
-                options: {
-                    temperature: 0.0, // Zero temperature for maximum determinism
-                    top_p: 0.1, // Very focused sampling
-                    top_k: 1, // Only consider the most likely token
-                    repeat_penalty: 1.0,
-                    num_predict: 100, // Limit response length to force conciseness
-                    stop: ["\n\n", "Question:", "Explanation:", "Note:"] // Stop on explanatory text
-                }
-            }, {
-                timeout: 10000 // Longer timeout for complex models
-            });
-
-            const rawResponse = response.data?.response?.trim() || '';
-            console.log(`[ALFRED] 🤖 ${modelToUse} raw response: "${rawResponse}"`);
+            let rawResponse;
+            
+            // Route to appropriate API based on model type
+            if (this.isCloudModel(modelToUse)) {
+                // Use cloud API
+                rawResponse = await this.callCloudModel(modelToUse, prompt);
+            } else {
+                // Use Ollama API
+                const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
+                    model: modelToUse,
+                    prompt: prompt,
+                    stream: false,
+                    options: {
+                        temperature: 0.2,
+                        top_p: 0.1,
+                        top_k: 1,
+                        repeat_penalty: 1.0,
+                        num_predict: 100,
+                        stop: ["\n\n", "Question:", "Explanation:", "Note:"]
+                    }
+                }, {
+                    timeout: 10000
+                });
+                
+                rawResponse = response.data?.response?.trim() || '';
+            }
+            
+            console.log(`[ALFRED] 🤖 raw response from ${modelToUse}: "${rawResponse}"`);
             
             // Try to parse JSON response with multiple strategies
             let analysis;
@@ -146,23 +272,41 @@ JSON Response:`;
      */
     async processQuestion(question, options = {}) {
         console.log(`[ALFRED] Processing question: "${question}"`);
-        const { existingContext = null, selectedModel = null } = options;
+        const { existingContext = null, selectedModel = null, searchParams = {} } = options;
         
         try {
             // Step 0: Analyze question using selected LLM for comprehensive understanding
-            const analysis = await this.analyzeQuestionWithLLM(question, selectedModel);
-            const { isFollowUp, category, primaryEntity, modifiers, secondEntity } = analysis;
+            // Pass context information to help with follow-up detection
+            const contextForAnalysis = {
+                existingContext: existingContext,
+                searchParams: searchParams
+            };
             
-            // // Check if this is a follow-up question with existing context
-            // if (existingContext && existingContext.length === 1 && isFollowUp) {
-            //     console.log(`[ALFRED] 🔄 Detected follow-up question, using existing context instead of new search`);
-            //     return this.extractAndFormatContent(
-            //         question, 
-            //         existingContext, 
-            //         { search: 'existing_context', recordType: existingContext[0].oip?.recordType || 'unknown' }, 
-            //         modifiers
-            //     );
-            // }
+            const analysis = await this.analyzeQuestionWithLLM(question, selectedModel, contextForAnalysis);
+            const { isFollowUp, category, primaryEntity, modifiers, secondEntity } = analysis;
+
+            console.log(`[ALFRED] LLM Question Analysis Result:`, analysis);
+            
+            // Check if this is a follow-up question with existing context
+            if (existingContext && existingContext.length > 0 && isFollowUp) {
+                console.log(`[ALFRED] 🔄 Detected follow-up question, using existing context (${existingContext.length} records) instead of new search`);
+                
+                // Determine record type from existing context or analysis
+                const contextRecordType = existingContext[0]?.oip?.recordType || 
+                                        existingContext[0]?.recordType || 
+                                        category || 'unknown';
+                
+                return this.extractAndFormatContent(
+                    question, 
+                    existingContext, 
+                    { 
+                        search: 'existing_context_followup', 
+                        recordType: contextRecordType,
+                        limit: existingContext.length 
+                    }, 
+                    modifiers
+                );
+            }
             
             // Step 1: Use LLM analysis results
             const subject = primaryEntity;
@@ -234,10 +378,7 @@ JSON Response:`;
                         }
                     }
                         else {
-                                console.log(`[ALFRED] ❌ No further refinement possible`);
-                                // return initialResults;
-                                // return this.extractAndFormatContent(question, refinedResult, initialFilters, modifiers);
-                                // return refinedResult;
+                                console.log(`[ALFRED] ❌ Not sure what this case means`);
 
                             }
                             
@@ -1087,13 +1228,14 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                 (!searchParams.recordType && !searchParams.tags && !searchParams.creatorHandle);
             
             if (shouldUseIQP) {
-                console.log('[ALFRED] Using Intelligent Question Processor for enhanced analysis');
+                console.log('[ALFRED] Using Intelligent Question Processor for enhanced analysis with model: ', options.model, 'and context: ', options.existingContext);
                 try {
                     const iqpResult = await this.processQuestion(question, {
                         resolveDepth: searchParams.resolveDepth || 2,
                         limit: searchParams.limit || 20,
                         existingContext: options.existingContext || null,
-                        selectedModel: options.model || null
+                        selectedModel: options.model || null,
+                        searchParams: options.searchParams || searchParams
                     });
 
                     // console.log(`[ALFRED] IQP Result: ${JSON.stringify(iqpResult)}`);
@@ -1607,23 +1749,38 @@ Please provide a helpful, conversational answer starting with "I didn't find any
         const prompt = this.buildPrompt(question, context);
         
         try {
-            const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
-                model: modelName,
-                prompt: prompt,
-                stream: false,
-                options: {
-                    temperature: 0.7,
-                    top_p: 0.9,
-                    max_tokens: 500
-                }
-            }, {
-                timeout: 30000 // 30 second timeout
-            });
+            let responseText;
             
-            return response.data.response?.trim() || "I couldn't generate a response.";
+            // Route to appropriate API based on model type
+            if (this.isCloudModel(modelName)) {
+                // Use cloud API for generation with longer response limit
+                responseText = await this.callCloudModel(modelName, prompt, {
+                    temperature: 0.7,
+                    max_tokens: 800,
+                    stop: null // Allow full responses for generation
+                });
+            } else {
+                // Use Ollama API
+                const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
+                    model: modelName,
+                    prompt: prompt,
+                    stream: false,
+                    options: {
+                        temperature: 0.7,
+                        top_p: 0.9,
+                        max_tokens: 500
+                    }
+                }, {
+                    timeout: 30000 // 30 second timeout
+                });
+                
+                responseText = response.data.response?.trim() || '';
+            }
+            
+            return responseText || "I couldn't generate a response.";
             
         } catch (error) {
-            console.error('[RAG] Error calling Ollama:', error);
+            console.error(`[RAG] Error calling ${this.isCloudModel(modelName) ? 'cloud API' : 'Ollama'}:`, error);
             
             if (context.length > 0) {
                 // If we have context but LLM failed, extract key information manually
