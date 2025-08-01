@@ -144,14 +144,27 @@ class ALFRED {
 The user is currently viewing ${context.existingContext.length} filtered records of type: ${recordTypes.join(', ')}
 Example records they're looking at: ${recordTitles.join(', ')}
 
-When determining if this is a follow-up question, consider: Does this question seem to be asking about these specific records or this record type?`;
+When determining if this is a follow-up question, look for these CLEAR INDICATORS:
+- Pronouns referring to people/things from the context: "they", "it", "this", "that", "he", "she"
+- Definite articles referring to previously mentioned items: "the money", "the case", "the recipe", "the person"
+- Questions that would make no sense without the previous context
+- References to actions or events from the loaded records
+
+Examples of follow-up questions: "How much did they steal?", "What happened to him?", "Is this recipe healthy?", "When did it happen?"
+Examples of NEW questions: "Tell me about tax fraud", "Find me a chicken recipe", "What's the latest news?"`;
                     
                 } else if (context.searchParams?.recordType) {
                     // We only have record type information
                     contextInfo = `\nCURRENT USER CONTEXT:
 The user is currently filtering to view only "${context.searchParams.recordType}" records.
 
-When determining if this is a follow-up question, consider: Does this question seem to be asking about ${context.searchParams.recordType}s specifically?`;
+When determining if this is a follow-up question, look for these CLEAR INDICATORS:
+- Pronouns referring to people/things: "they", "it", "this", "that", "he", "she"  
+- Definite articles: "the person", "the recipe", "the story", "the exercise"
+- Questions that assume context about ${context.searchParams.recordType}s
+- References that would make no sense without previous context
+
+Since the user is viewing ${context.searchParams.recordType}s, questions about general ${context.searchParams.recordType} topics are likely NEW questions, while questions using pronouns or "the" are likely follow-ups.`;
                 }
             }
             
@@ -159,7 +172,7 @@ When determining if this is a follow-up question, consider: Does this question s
 ${contextInfo}
 
 Extract from this question:
-- follow-up: true/false (is this referring to previous context or the current filtered records?)
+- follow-up: true/false (does this question use pronouns like "they/it/this" or phrases like "the money/the person" that refer to previously loaded content?)
 - category: "recipe" (if mentions recipe/cook/food), "exercise" (if mentions workout/fitness), "podcast" (if mentions audio/interview), or "news" (otherwise)  
 - primary_entity: main thing asked about (for recipes: the food item like "chicken", NOT "recipe")
 - modifiers: array of descriptive words (cooking methods, cuisines, difficulty)
