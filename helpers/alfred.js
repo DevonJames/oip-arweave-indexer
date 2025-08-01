@@ -1100,22 +1100,19 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                             // Step 4: Build context from search results
                     const context = await this.buildContext(iqpResult);
                     
-                    // Step 5: Generate LLM response with context (enhanced with structured data)
-                    const response = await this.generateResponse(question, context, options.model, iqpResult);
-                    return response;
                     // Convert IQP result to RAG format for compatibility
-                    // return {
-                    //     answer: iqpResult.answer,
-                    //     sources: this.formatSources(iqpResult.search_results),
-                    //     context_used: iqpResult.context_used,
-                    //     model: options.model || this.defaultModel,
-                    //     search_results_count: iqpResult.search_results_count,
-                    //     search_results: iqpResult.search_results,
-                    //     applied_filters: iqpResult.applied_filters,
-                    //     extracted_subject: iqpResult.extracted_subject,
-                    //     extracted_keywords: iqpResult.extracted_keywords,
-                    //     rationale: iqpResult.rationale
-                    // };
+                    return {
+                        answer: iqpResult.answer,
+                        sources: this.formatSources(iqpResult.search_results),
+                        context_used: iqpResult.context_used,
+                        model: options.model || this.defaultModel,
+                        search_results_count: iqpResult.search_results_count,
+                        search_results: iqpResult.search_results,
+                        applied_filters: iqpResult.applied_filters,
+                        extracted_subject: iqpResult.extracted_subject,
+                        extracted_keywords: iqpResult.extracted_keywords,
+                        rationale: iqpResult.rationale
+                    };
                 } catch (iqpError) {
                     console.warn('[RAG] Intelligent Question Processor failed, falling back to legacy method:', iqpError.message);
                     // Fall through to legacy processing
