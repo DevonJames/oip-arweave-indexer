@@ -552,6 +552,15 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             if (req.body.existing_search_results && Array.isArray(req.body.existing_search_results)) {
                 ragOptions.existingContext = req.body.existing_search_results;
                 console.log(`[Voice Chat] Using existing context with ${ragOptions.existingContext.length} records`);
+            } else if (req.body.existingContext && Array.isArray(req.body.existingContext)) {
+                ragOptions.existingContext = req.body.existingContext;
+                console.log(`[Voice Chat] Using existing context with ${ragOptions.existingContext.length} records`);
+            }
+            
+            // Pass searchParams for context-aware analysis (includes recordType for domain context)
+            if (req.body.searchParams && typeof req.body.searchParams === 'object') {
+                ragOptions.searchParams = { ...ragOptions.searchParams, ...req.body.searchParams };
+                console.log(`[Voice Chat] Using search params:`, ragOptions.searchParams);
             }
             
             ragResponse = await alfred.query(inputText, ragOptions);
