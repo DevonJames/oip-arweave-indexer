@@ -208,21 +208,23 @@ Question: "${question}"`;
                             if (furtherRefinedResult1) {
                                 console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${furtherRefinedResult1.records.length} results`);
                                 shouldRefine = false;
-                                return this.extractAndFormatContent(question, furtherRefinedResult1.records, initialFilters, modifiers);
-                                // return furtherRefinedResult1;
+                                // return this.extractAndFormatContent(question, furtherRefinedResult1, initialFilters, modifiers);
+                                return furtherRefinedResult1;
                             }
                         } 
                         if (refinedResult.records.length === 1) {
                             console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.records.length} results`);
                             shouldRefine = false;
-                            return this.extractAndFormatContent(question, refinedResult.records, initialFilters, modifiers);
-                            // return refinedResult;
+                            // return this.extractAndFormatContent(question, refinedResult, initialFilters, modifiers);
+                            return refinedResult;
                         }
                     }
                         else {
                                 console.log(`[ALFRED] ❌ No further refinement possible`);
-                                return this.extractAndFormatContent(question, refinedResult.records, initialFilters, modifiers);
+                                // return initialResults;
+                                // return this.extractAndFormatContent(question, refinedResult, initialFilters, modifiers);
                                 // return refinedResult;
+
                             }
                             
                 }
@@ -563,6 +565,8 @@ Question: "${question}"`;
             const cuisineResults = await getRecords(cuisineFilters);
             if (cuisineResults.records && cuisineResults.records.length > 0) {
                 console.log(`[ALFRED] Found matching cuisines for refinement: [${cuisineResults.records.map(record => record.data.basic.name).join(', ')}]`);
+                // return cuisineResults;
+                return this.extractAndFormatContent(question, cuisineResults, initialFilters, modifiers);
             }
         } catch (error) {
             console.error(`[ALFRED] Cuisine refinement error:`, error);
