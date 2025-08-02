@@ -151,10 +151,12 @@ When determining if this is a follow-up question, look for these CLEAR INDICATOR
 - References to actions or events from the loaded records
 - **CRITICAL**: Questions with NO CLEAR SUBJECT when there are only 1-3 records loaded (e.g., "What are the steps?", "How long does it take?", "What's involved?")
 
-${context.existingContext.length <= 3 ? '⚠️ SPECIAL CASE: Very few records loaded - questions without clear subjects are LIKELY follow-ups!' : ''}
+**CATEGORY MISMATCH RULE**: If your analysis determines this question belongs to a DIFFERENT category than the loaded records (e.g., asking about "news" when context contains "${recordTypes.join('/')}" records), it is likely NOT a follow-up even if it uses pronouns.
 
-Examples of follow-up questions: "How much did they steal?", "What happened to him?", "Is this recipe healthy?", "When did it happen?", "What are the steps?", "How long does it take?"
-Examples of NEW questions: "Tell me about tax fraud", "Find me a chicken recipe", "What's the latest news?", "Show me shoulder exercises"`;
+${context.existingContext.length <= 3 ? '⚠️ SPECIAL CASE: Very few records loaded - questions without clear subjects are LIKELY follow-ups, BUT only if categories match!' : ''}
+
+Examples of follow-up questions: "How much did they steal?" (news context), "What happened to him?" (news context), "Is this recipe healthy?" (recipe context), "When did it happen?" (matching category), "What are the steps?" (exercise context), "How long does it take?" (recipe context)
+Examples of NEW questions: "Tell me about tax fraud" (when context is recipes), "Find me a chicken recipe" (when context is news), "What's the latest news?" (when context is exercises), "Show me shoulder exercises" (when context is news)`;
                     
                 } else if (context.searchParams?.recordType) {
                     // We only have record type information
@@ -167,7 +169,9 @@ When determining if this is a follow-up question, look for these CLEAR INDICATOR
 - Questions that assume context about ${context.searchParams.recordType}s
 - References that would make no sense without previous context
 
-Since the user is viewing ${context.searchParams.recordType}s, questions about general ${context.searchParams.recordType} topics are likely NEW questions, while questions using pronouns or "the" are likely follow-ups.`;
+**CATEGORY MISMATCH RULE**: If your analysis determines this question belongs to a DIFFERENT category than "${context.searchParams.recordType}" (e.g., asking about "news" when user is viewing ${context.searchParams.recordType} records), it is likely NOT a follow-up even if it uses pronouns.
+
+Since the user is viewing ${context.searchParams.recordType}s, questions about general ${context.searchParams.recordType} topics are likely NEW questions, while questions using pronouns or "the" about ${context.searchParams.recordType}s are likely follow-ups.`;
                 }
             }
             
@@ -175,7 +179,7 @@ Since the user is viewing ${context.searchParams.recordType}s, questions about g
 ${contextInfo}
 
 Extract from this question:
-- follow-up: true/false (does this question use pronouns like "they/it/this" or phrases like "the money/the person" that refer to previously loaded content?)
+- follow-up: true/false (does this question use pronouns like "they/it/this" or phrases like "the money/the person" that refer to previously loaded content AND does the question category match the loaded records' categories?)
 - category: "recipe" (if mentions recipe/cook/food), "exercise" (if mentions workout/fitness), "podcast" (if mentions audio/interview), or "news" (otherwise)  
 - primary_entity: main thing asked about (for recipes: the food item like "chicken", NOT "recipe")
 - modifiers: array of descriptive words (cooking methods, cuisines, difficulty)
