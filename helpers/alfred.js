@@ -306,7 +306,7 @@ JSON Response:`;
             // Check if this is a follow-up question with existing context
             if (existingContext && existingContext.length > 0 && isFollowUp) {
                 console.log(`[ALFRED] 🔄 Detected follow-up question, using existing context (${existingContext.length} records) instead of new search`);
-                
+                console.log(`[ALFRED] 🔄 Existing context:`, existingContext);
                 // Determine record type from existing context or analysis
                 const contextRecordType = existingContext[0]?.recordType || 
                                         category || 'unknown';
