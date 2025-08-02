@@ -2882,6 +2882,32 @@
             font-style: italic;
         }
 
+        .post-article-summary.collapsed {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .keep-reading-btn {
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 4px 0;
+            margin-top: 8px;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .keep-reading-btn:hover {
+            color: #5a67d8;
+            text-decoration: underline;
+        }
+
         .post-article-meta {
             display: flex;
             justify-content: space-between;
@@ -4099,8 +4125,11 @@
             html += `<div class="post-article-header">`;
             html += `<h1 class="post-article-title">${escapeHtml(title)}</h1>`;
             
+            // Collapsible summary with "Keep Reading" button
             if (description) {
-                html += `<div class="post-article-summary">${escapeHtml(description)}</div>`;
+                const summaryId = `summary-${record.oip?.didTx?.replace(/[^a-zA-Z0-9]/g, '') || 'unknown'}`;
+                html += `<div class="post-article-summary collapsed" id="${summaryId}">${escapeHtml(description)}</div>`;
+                html += `<button class="keep-reading-btn" onclick="toggleSummary('${summaryId}', this)" id="${summaryId}-btn">Keep Reading</button>`;
             }
             
             html += `<div class="post-article-meta">
@@ -4131,45 +4160,47 @@
                 html += `</div>`;
             }
             
-            // Featured Audio Section
-            if (mediaContent.featuredAudio) {
-                const audio = mediaContent.featuredAudio;
-                html += `<div class="post-audio-section">
-                    <div class="post-audio-title">
-                        🎵 Featured Audio: ${escapeHtml(audio.title || 'Audio Narration')}
-                    </div>
-                    <div class="post-audio-controls">
-                        <button class="play-btn primary" 
-                                onclick="playAudioInMaster('${audio.url}', '${escapeHtml(audio.title || title)}', 'post', '${record.oip?.didTx || 'unknown'}')">
-                            ▶ Play Audio
-                        </button>
-                        <span class="audio-duration">${audio.duration || ''}</span>
-                    </div>
-                </div>`;
+            // Featured Audio Section - Enhanced with proper integration
+            if (mediaContent.featuredAudio || mediaContent.audioItems?.length > 0) {
+                const audio = mediaContent.featuredAudio || mediaContent.audioItems[0];
+                if (audio) {
+                    html += `<div class="post-audio-section">
+                        <div class="post-audio-title">
+                            🎵 Featured Audio: ${escapeHtml(audio.title || 'Audio Narration')}
+                        </div>
+                        <div class="post-audio-controls">
+                            <button class="play-btn primary" 
+                                    onclick="playAudioInMaster('${audio.url}', '${escapeHtml(audio.title || title)}', 'post', 'record-view')"
+                                    id="record-view-audio-btn">
+                                ▶ Play Audio
+                            </button>
+                            <span class="audio-duration">${audio.duration || ''}</span>
+                        </div>
+                    </div>`;
+                }
             }
             
-            // Article Content
-            html += `<div class="post-content">`;
+            // Article Content - Auto-load article text
+            html += `<div class="post-content" id="post-content-${record.oip?.didTx?.replace(/[^a-zA-Z0-9]/g, '') || 'unknown'}">`;
             
-            // Try to get article text content
+            // Try to get article text content and load it automatically
             let articleContent = '';
+            let shouldLoadArticle = false;
+            let articleUrl = '';
+            
             if (postData.articleText) {
                 if (typeof postData.articleText === 'string') {
                     articleContent = postData.articleText;
                 } else if (postData.articleText.data?.text?.webUrl) {
-                    // This is a dref to a text record - we'd need to fetch it
-                    html += `<div class="article-text-loader">
-                        <button class="article-btn" onclick="loadArticleTextInRecordView('${postData.articleText.data.text.webUrl}')">
-                            📄 Load Full Article Text
-                        </button>
-                    </div>`;
+                    // This is a dref to a text record - load it automatically
+                    articleUrl = postData.articleText.data.text.webUrl;
+                    shouldLoadArticle = true;
+                    html += `<div class="article-loading">📄 Loading full article text...</div>`;
                 } else if (postData.articleText.webUrl) {
-                    // Direct text URL
-                    html += `<div class="article-text-loader">
-                        <button class="article-btn" onclick="loadArticleTextInRecordView('${postData.articleText.webUrl}')">
-                            📄 Load Full Article Text
-                        </button>
-                    </div>`;
+                    // Direct text URL - load it automatically
+                    articleUrl = postData.articleText.webUrl;
+                    shouldLoadArticle = true;
+                    html += `<div class="article-loading">📄 Loading full article text...</div>`;
                 }
             }
             
@@ -4178,7 +4209,7 @@
                 const formattedContent = articleContent
                     .replace(/\n\n/g, '</p><p>')
                     .replace(/\n/g, '<br>');
-                html += `<p>${formattedContent}</p>`;
+                html += `<div class="article-text"><p>${formattedContent}</p></div>`;
             } else if (!postData.articleText) {
                 html += `<p><em>No article content available.</em></p>`;
             }
@@ -4197,6 +4228,12 @@
             html += `</div>`;
             
             document.getElementById('record-view-content').innerHTML = html;
+            
+            // Auto-load article text if needed
+            if (shouldLoadArticle && articleUrl) {
+                const contentId = `post-content-${record.oip?.didTx?.replace(/[^a-zA-Z0-9]/g, '') || 'unknown'}`;
+                loadArticleTextInRecordViewById(articleUrl, contentId);
+            }
         }
 
         function displayGenericRecord(record) {
@@ -4249,6 +4286,49 @@
                 const loader = document.querySelector('.article-text-loader');
                 if (loader) {
                     loader.innerHTML = `<div class="error" style="color: #dc3545; padding: 16px;">Failed to load article text</div>`;
+                }
+            }
+        }
+
+        async function loadArticleTextInRecordViewById(textUrl, contentId) {
+            try {
+                console.log('[RecordView] Auto-loading article text from:', textUrl);
+                
+                const response = await fetch(textUrl);
+                const text = await response.text();
+                
+                // Find the content div and replace loading message with the content
+                const contentDiv = document.getElementById(contentId);
+                if (contentDiv) {
+                    const loadingDiv = contentDiv.querySelector('.article-loading');
+                    if (loadingDiv) {
+                        const formattedContent = text
+                            .replace(/\n\n/g, '</p><p>')
+                            .replace(/\n/g, '<br>');
+                        loadingDiv.outerHTML = `<div class="article-text"><p>${formattedContent}</p></div>`;
+                    }
+                }
+            } catch (error) {
+                console.error('[RecordView] Error auto-loading article text:', error);
+                const contentDiv = document.getElementById(contentId);
+                if (contentDiv) {
+                    const loadingDiv = contentDiv.querySelector('.article-loading');
+                    if (loadingDiv) {
+                        loadingDiv.innerHTML = `<div class="error" style="color: #dc3545; padding: 16px;">Failed to load article text</div>`;
+                    }
+                }
+            }
+        }
+
+        function toggleSummary(summaryId, button) {
+            const summaryDiv = document.getElementById(summaryId);
+            if (summaryDiv) {
+                if (summaryDiv.classList.contains('collapsed')) {
+                    summaryDiv.classList.remove('collapsed');
+                    button.textContent = 'Show Less';
+                } else {
+                    summaryDiv.classList.add('collapsed');
+                    button.textContent = 'Keep Reading';
                 }
             }
         }
@@ -5136,20 +5216,8 @@
             const card = document.createElement('div');
             card.className = isListView ? 'record-card list-view' : 'record-card';
             
-            // Make the card clickable to open individual record view
+            // Store record data for clickable elements (removed whole-card click handler)
             const didTx = record.oip?.didTx;
-            if (didTx) {
-                card.style.cursor = 'pointer';
-                card.title = 'Click to view full record';
-                card.addEventListener('click', (e) => {
-                    // Don't navigate if user clicked on a button or interactive element
-                    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
-                        return;
-                    }
-                    e.preventDefault();
-                    showRecordView(didTx, record);
-                });
-            }
             
             const recordType = record.oip?.recordType || 'unknown';
             const basicData = record.data?.basic || {};
@@ -5162,7 +5230,7 @@
             if (isListView) {
                 // List view layout - horizontal layout with thumbnail on left
                 card.innerHTML = `
-                    ${renderMediaPreview(mediaContent, recordIndex)}
+                    ${renderMediaPreview(mediaContent, recordIndex, record)}
                     
                     <div class="record-content-area">
                         <div class="record-header">
@@ -5170,7 +5238,7 @@
                             <div class="record-date">${dateDisplay}</div>
                         </div>
                         
-                        ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+                        ${renderRecordTitleAndDescription(mediaContent, basicData, recordType, recordIndex, record)}
                         
                         <div class="list-meta-row">
                             <div class="list-controls">
@@ -5208,10 +5276,10 @@
                         <div class="record-date">${dateDisplay}</div>
                     </div>
                     
-                    ${renderMediaPreview(mediaContent, recordIndex)}
+                    ${renderMediaPreview(mediaContent, recordIndex, record)}
                     
                     <div class="record-content">
-                        ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+                        ${renderRecordTitleAndDescription(mediaContent, basicData, recordType, recordIndex, record)}
                         
                         ${renderMediaControls(mediaContent, record, recordIndex)}
                         ${renderArticleTextButton(mediaContent, recordIndex)}
@@ -5561,20 +5629,22 @@
         /**
          * Render media preview (featured image or video thumbnail)
          */
-        function renderMediaPreview(mediaContent, recordIndex) {
+        function renderMediaPreview(mediaContent, recordIndex, record = null) {
+            const didTx = record?.oip?.didTx;
+            const recordViewClick = didTx ? `onclick="showRecordView('${didTx}', currentRecords[${recordIndex}]); event.stopPropagation();"` : '';
+            const clickableStyle = didTx ? 'cursor: pointer;' : '';
             // Handle podcast records with specialized interface
             if (mediaContent.podcastData) {
                 const podcast = mediaContent.podcastData;
                 const showArtwork = mediaContent.featuredImage?.url || 'icons/noun-microphone-7907572.svg';
                 
                 return `
-                    <div class="media-preview podcast-preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="media-preview podcast-preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); ${clickableStyle}" ${recordViewClick} title="Click to view full record">
                         <div class="podcast-artwork" style="position: relative; height: 100%; display: flex; align-items: center; justify-content: center;">
                             <img src="${showArtwork}" 
                                  alt="${podcast.show}"
                                  class="preview-image"
                                  style="max-height: 80%; max-width: 80%; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);"
-                                 onclick="openImageModal('${showArtwork}', '${podcast.show}')"
                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                             <div class="podcast-icon" style="display: none; font-size: 48px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">🎙️</div>
                             
@@ -5590,11 +5660,11 @@
             else if (mediaContent.videoItems.length > 0) {
                 const video = mediaContent.videoItems[0];
                 return `
-                    <div class="media-preview video-preview">
-                        <video class="preview-video" poster="" onclick="playVideoFullscreen('${video.url}', '${video.title}')">
+                    <div class="media-preview video-preview" style="${clickableStyle}" ${recordViewClick} title="Click to view full record">
+                        <video class="preview-video" poster="" onclick="event.stopPropagation(); playVideoFullscreen('${video.url}', '${video.title}')">
                             <source src="${video.url}" type="${video.contentType || 'video/mp4'}">
                         </video>
-                        <div class="play-overlay" onclick="playVideoFullscreen('${video.url}', '${video.title}')">
+                        <div class="play-overlay" onclick="event.stopPropagation(); playVideoFullscreen('${video.url}', '${video.title}')">
                             <div class="play-button">▶️</div>
                         </div>
                         <div class="media-badge">📹 Video</div>
@@ -5602,18 +5672,18 @@
                 `;
             } else if (mediaContent.featuredImage) {
                 return `
-                    <div class="media-preview image-preview">
+                    <div class="media-preview image-preview" style="${clickableStyle}" ${recordViewClick} title="Click to view full record">
                         <img src="${mediaContent.featuredImage.url}" 
                              alt="${mediaContent.featuredImage.title}"
                              class="preview-image"
-                             onclick="openImageModal('${mediaContent.featuredImage.url}', '${mediaContent.featuredImage.title}')"
+                             onclick="event.stopPropagation(); openImageModal('${mediaContent.featuredImage.url}', '${mediaContent.featuredImage.title}')"
                              onerror="this.parentElement.innerHTML='<div class=\\"preview-placeholder\\">🖼️ Image</div>'">
                         <div class="media-badge">📷 Image</div>
                     </div>
                 `;
             } else if (mediaContent.audioItems.length > 0) {
                 return `
-                    <div class="media-preview audio-preview">
+                    <div class="media-preview audio-preview" style="${clickableStyle}" ${recordViewClick} title="Click to view full record">
                         <div class="audio-artwork">
                             <div class="audio-icon">🎵</div>
                             <div class="audio-visualizer">
@@ -5625,7 +5695,7 @@
                 `;
             } else if (mediaContent.unresolvedImageDref) {
                 return `
-                    <div class="media-preview placeholder-preview">
+                    <div class="media-preview placeholder-preview" style="${clickableStyle}" ${recordViewClick} title="Click to view full record">
                         <div class="preview-placeholder resolve-hint">
                             🖼️ Image<br>
                             <small style="font-size: 0.7rem; opacity: 0.8;">Increase Resolve Depth to see image</small>
@@ -5634,7 +5704,7 @@
                 `;
             } else {
                 return `
-                    <div class="media-preview placeholder-preview">
+                    <div class="media-preview placeholder-preview" style="${clickableStyle}" ${recordViewClick} title="Click to view full record">
                         <div class="preview-placeholder">📄 Text</div>
                     </div>
                 `;
@@ -5644,7 +5714,10 @@
         /**
          * Render record title and description with podcast-specific formatting
          */
-        function renderRecordTitleAndDescription(mediaContent, basicData, recordType) {
+        function renderRecordTitleAndDescription(mediaContent, basicData, recordType, recordIndex = null, record = null) {
+            const didTx = record?.oip?.didTx;
+            const recordViewClick = didTx ? `onclick="showRecordView('${didTx}', currentRecords[${recordIndex}]); event.stopPropagation();"` : '';
+            const clickableStyle = didTx ? 'cursor: pointer;' : '';
             if (mediaContent.podcastData) {
                 const podcast = mediaContent.podcastData;
                 return `
@@ -5652,17 +5725,17 @@
                         <div class="podcast-show" style="color: #667eea; font-weight: 600; font-size: 14px; margin-bottom: 5px;">
                             🎙️ ${podcast.show}
                         </div>
-                        <h3 class="record-title" style="margin-bottom: 8px;">${podcast.episodeTitle}</h3>
+                        <h3 class="record-title" style="margin-bottom: 8px; ${clickableStyle}" ${recordViewClick} title="Click to view full record">${podcast.episodeTitle}</h3>
                         <div class="podcast-date" style="color: #6c757d; font-size: 12px; margin-bottom: 10px;">
                             📅 ${podcast.date}
                         </div>
-                        ${podcast.episodeDescription ? `<p class="record-description">${truncateText(podcast.episodeDescription, 200)}</p>` : ''}
+                        ${podcast.episodeDescription ? `<p class="record-description" style="${clickableStyle}" ${recordViewClick} title="Click to view full record">${truncateText(podcast.episodeDescription, 200)}</p>` : ''}
                     </div>
                 `;
             } else {
                 return `
-                    <h3 class="record-title">${basicData.name || 'Unnamed Record'}</h3>
-                    ${basicData.description ? `<p class="record-description">${truncateText(basicData.description, 150)}</p>` : ''}
+                    <h3 class="record-title" style="${clickableStyle}" ${recordViewClick} title="Click to view full record">${basicData.name || 'Unnamed Record'}</h3>
+                    ${basicData.description ? `<p class="record-description" style="${clickableStyle}" ${recordViewClick} title="Click to view full record">${truncateText(basicData.description, 150)}</p>` : ''}
                 `;
             }
         }
