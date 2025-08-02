@@ -818,8 +818,10 @@ JSON Response:`;
         for (const record of records.slice(0, 5)) { // Limit to top 5 results
             try {
                 const basicData = record.data?.basic || {};
-                const recordType = record.oip?.recordType || 'unknown';
+                const recordType = record.recordType || record.oip?.recordType || 'unknown';
                 const specificData = record.data?.[recordType] || {};
+                
+                console.log(`[ALFRED] Processing record: ${basicData.name || 'Untitled'} (type: ${recordType}) - recordType source: ${record.recordType ? 'record.recordType' : record.oip?.recordType ? 'record.oip.recordType' : 'unknown'}`);
                 
                 let content = {
                     title: basicData.name || 'Untitled',
@@ -882,6 +884,9 @@ JSON Response:`;
                     // Include comprehensive exercise data for exercise records
                     const exerciseData = record.data.exercise || {};
                     
+                    console.log(`[ALFRED] 🏋️ Processing exercise record: ${content.title}, recordType: ${recordType}`);
+                    console.log(`[ALFRED] 🏋️ Exercise data keys:`, Object.keys(exerciseData));
+                    
                     // Include detailed exercise instructions
                     content.instructions = exerciseData.instructions || [];
                     content.muscleGroups = exerciseData.muscleGroups || [];
@@ -898,7 +903,7 @@ JSON Response:`;
                     // Include full exercise data for comprehensive analysis
                     content.exerciseData = exerciseData;
                     
-                    console.log(`[ALFRED] Enhanced exercise data for: ${content.title} (muscles: ${content.muscleGroups.join(', ')}, equipment: ${content.equipmentRequired.join(', ')})`);
+                    console.log(`[ALFRED] Enhanced exercise data for: ${content.title} (muscles: ${content.muscleGroups.join(', ')}, equipment: ${content.equipmentRequired.join(', ')}, instructions: ${content.instructions.length} steps)`);
                 }
                 
                 contentItems.push(content);
