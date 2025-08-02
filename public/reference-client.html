@@ -2930,16 +2930,17 @@
         }
 
         .post-featured-media {
-            margin: 32px 0;
-            text-align: center;
+            margin: 16px 0 20px 0;
         }
 
         .post-featured-image {
+            float: left;
             width: 100%;
-            max-width: 600px;
+            max-width: 400px;
             height: auto;
             border-radius: 12px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin: 0 24px 16px 0;
         }
 
         .post-featured-video {
@@ -2951,34 +2952,44 @@
         }
 
         .post-audio-section {
-            margin: 24px 0;
-            padding: 20px;
-            background: #f8fafc;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
+            margin: 12px 0 0 0;
+            padding: 12px 16px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            border: 1px solid #c7d2fe;
+            display: inline-block;
+            max-width: 100%;
         }
 
         .post-audio-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 12px;
+            color: #3730a3;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .post-audio-controls {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
+        }
+
+        .post-summary-with-audio {
+            margin-bottom: 20px;
         }
 
         .post-content {
             font-size: 1.125rem;
             line-height: 1.8;
             color: #374151;
-            margin-top: 32px;
+            margin-top: 16px;
+        }
+
+        .post-content-wrapper {
+            overflow: hidden; /* Clearfix for floating image */
         }
 
         .post-content p {
@@ -3041,6 +3052,17 @@
             
             .post-article-title {
                 font-size: 2rem;
+            }
+            
+            .post-featured-image {
+                float: none;
+                max-width: 100%;
+                margin: 0 0 16px 0;
+                display: block;
+            }
+            
+            .post-featured-media {
+                margin: 16px 0;
             }
             
             .record-view-header {
@@ -4125,6 +4147,28 @@
             html += `<div class="post-article-header">`;
             html += `<h1 class="post-article-title">${escapeHtml(title)}</h1>`;
             
+            html += `<div class="post-article-meta">
+                <div class="post-article-byline">By <strong>${escapeHtml(byline)}</strong></div>
+                <div class="post-article-date">${escapeHtml(date)}</div>
+            </div>`;
+            html += `</div>`;
+            
+            // Content wrapper with floating image and text wrap
+            html += `<div class="post-content-wrapper">`;
+            
+            // Featured Media Section - Image floated left
+            if (mediaContent.featuredImage) {
+                const img = mediaContent.featuredImage;
+                html += `<div class="post-featured-media">
+                    <img src="${img.url}" alt="${escapeHtml(img.alt || 'Featured Image')}" 
+                         class="post-featured-image" 
+                         onerror="this.style.display='none';">
+                </div>`;
+            }
+            
+            // Summary with attached audio section
+            html += `<div class="post-summary-with-audio">`;
+            
             // Collapsible summary with "Keep Reading" button
             if (description) {
                 const summaryId = `summary-${record.oip?.didTx?.replace(/[^a-zA-Z0-9]/g, '') || 'unknown'}`;
@@ -4132,41 +4176,13 @@
                 html += `<button class="keep-reading-btn" onclick="toggleSummary('${summaryId}', this)" id="${summaryId}-btn">Keep Reading</button>`;
             }
             
-            html += `<div class="post-article-meta">
-                <div class="post-article-byline">By <strong>${escapeHtml(byline)}</strong></div>
-                <div class="post-article-date">${escapeHtml(date)}</div>
-            </div>`;
-            html += `</div>`;
-            
-            // Featured Media Section
-            if (mediaContent.featuredImage || mediaContent.featuredVideo) {
-                html += `<div class="post-featured-media">`;
-                
-                if (mediaContent.featuredImage) {
-                    const img = mediaContent.featuredImage;
-                    html += `<img src="${img.url}" alt="${escapeHtml(img.alt || 'Featured Image')}" 
-                             class="post-featured-image" 
-                             onerror="this.style.display='none';">`;
-                }
-                
-                if (mediaContent.featuredVideo) {
-                    const video = mediaContent.featuredVideo;
-                    html += `<video src="${video.url}" controls class="post-featured-video" 
-                             poster="${video.thumbnail || ''}">
-                        Your browser does not support the video tag.
-                    </video>`;
-                }
-                
-                html += `</div>`;
-            }
-            
-            // Featured Audio Section - Enhanced with proper integration
+            // Featured Audio Section - Attached to summary
             if (mediaContent.featuredAudio || mediaContent.audioItems?.length > 0) {
                 const audio = mediaContent.featuredAudio || mediaContent.audioItems[0];
                 if (audio) {
                     html += `<div class="post-audio-section">
                         <div class="post-audio-title">
-                            🎵 Featured Audio: ${escapeHtml(audio.title || 'Audio Narration')}
+                            🎵 ${escapeHtml(audio.title || 'Audio Narration')}
                         </div>
                         <div class="post-audio-controls">
                             <button class="play-btn primary" 
@@ -4178,6 +4194,19 @@
                         </div>
                     </div>`;
                 }
+            }
+            
+            html += `</div>`; // End post-summary-with-audio
+            
+            // Featured Video Section (if present, below summary)
+            if (mediaContent.featuredVideo) {
+                const video = mediaContent.featuredVideo;
+                html += `<div style="clear: both; margin: 20px 0;">
+                    <video src="${video.url}" controls class="post-featured-video" 
+                           poster="${video.thumbnail || ''}">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>`;
             }
             
             // Article Content - Auto-load article text
@@ -4214,18 +4243,20 @@
                 html += `<p><em>No article content available.</em></p>`;
             }
             
-            html += `</div>`;
+            html += `</div>`; // End post-content
+            
+            html += `</div>`; // End post-content-wrapper
             
             // Tags Section
             if (tags && tags.length > 0) {
-                html += `<div class="post-tags">
+                html += `<div class="post-tags" style="clear: both;">
                     <div class="tags-container">
                         ${tags.map(tag => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join('')}
                     </div>
                 </div>`;
             }
             
-            html += `</div>`;
+            html += `</div>`; // End post-article-layout
             
             document.getElementById('record-view-content').innerHTML = html;
             
@@ -5676,7 +5707,6 @@
                         <img src="${mediaContent.featuredImage.url}" 
                              alt="${mediaContent.featuredImage.title}"
                              class="preview-image"
-                             onclick="event.stopPropagation(); openImageModal('${mediaContent.featuredImage.url}', '${mediaContent.featuredImage.title}')"
                              onerror="this.parentElement.innerHTML='<div class=\\"preview-placeholder\\">🖼️ Image</div>'">
                         <div class="media-badge">📷 Image</div>
                     </div>
@@ -9434,7 +9464,7 @@
                 if (isListView) {
                     // List view layout - horizontal layout with thumbnail on left
                     card.innerHTML = `
-                        ${renderMediaPreview(mediaContent, recordIndex)}
+                        ${renderMediaPreview(mediaContent, recordIndex, record)}
                         
                         <div class="record-content-area">
                             <div class="record-header">
@@ -9442,7 +9472,7 @@
                                 <div class="record-date">${dateDisplay}</div>
                             </div>
                             
-                            ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+                            ${renderRecordTitleAndDescription(mediaContent, basicData, recordType, recordIndex, record)}
                             
                             <div class="list-meta-row">
                                 <div class="list-controls">
@@ -9480,10 +9510,10 @@
                             <div class="record-date">${dateDisplay}</div>
                         </div>
                         
-                        ${renderMediaPreview(mediaContent, recordIndex)}
+                        ${renderMediaPreview(mediaContent, recordIndex, record)}
                         
                         <div class="record-content">
-                            ${renderRecordTitleAndDescription(mediaContent, basicData, recordType)}
+                            ${renderRecordTitleAndDescription(mediaContent, basicData, recordType, recordIndex, record)}
                             
                             ${renderMediaControls(mediaContent, record, recordIndex)}
                             ${renderArticleTextButton(mediaContent, recordIndex)}
