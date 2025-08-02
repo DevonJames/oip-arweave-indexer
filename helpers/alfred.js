@@ -303,9 +303,24 @@ JSON Response:`;
             };
             
             const analysis = await this.analyzeQuestionWithLLM(question, selectedModel, contextForAnalysis);
-            const { isFollowUp, category, primaryEntity, modifiers, secondEntity } = analysis;
+            let { isFollowUp, category, primaryEntity, modifiers, secondEntity } = analysis;
 
             console.log(`[ALFRED] LLM Question Analysis Result:`, analysis);
+            
+            // Post-process: Check for category mismatch to prevent false follow-ups
+            if (isFollowUp && existingContext && existingContext.length > 0) {
+                const contextRecordTypes = [...new Set(existingContext.map(r => r.recordType).filter(Boolean))];
+                const questionCategory = category === 'news' ? 'post' : category;
+                
+                console.log(`[ALFRED] 🔍 Category mismatch check: Question="${questionCategory}", Context types=[${contextRecordTypes.join(', ')}]`);
+                
+                if (contextRecordTypes.length > 0 && !contextRecordTypes.includes(questionCategory)) {
+                    console.log(`[ALFRED] 🚨 Category mismatch detected! Question category: "${questionCategory}", Context types: [${contextRecordTypes.join(', ')}] - overriding follow-up to false`);
+                    isFollowUp = false;
+                } else if (contextRecordTypes.includes('unknown')) {
+                    console.log(`[ALFRED] ⚠️ Warning: Some context records have unknown type - this may cause issues`);
+                }
+            }
             
             // Check if this is a follow-up question with existing context
             if (existingContext && existingContext.length > 0 && isFollowUp) {
