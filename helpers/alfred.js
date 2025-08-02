@@ -134,7 +134,7 @@ class ALFRED {
             if (context) {
                 if (context.existingContext && context.existingContext.length > 0) {
                     // We have actual filtered records
-                    const recordTypes = [...new Set(context.existingContext.map(r => r.oip?.recordType).filter(Boolean))];
+                    const recordTypes = [...new Set(context.existingContext.map(r => r.recordType).filter(Boolean))];
                     const recordTitles = context.existingContext
                         .slice(0, 3) // Show first 3 titles as examples
                         .map(r => r.data?.basic?.name || r.data?.basic?.title || 'Untitled')
@@ -305,8 +305,7 @@ JSON Response:`;
                 console.log(`[ALFRED] 🔄 Detected follow-up question, using existing context (${existingContext.length} records) instead of new search`);
                 
                 // Determine record type from existing context or analysis
-                const contextRecordType = existingContext[0]?.oip?.recordType || 
-                                        existingContext[0]?.recordType || 
+                const contextRecordType = existingContext[0]?.recordType || 
                                         category || 'unknown';
                 
                 return this.extractAndFormatContent(
