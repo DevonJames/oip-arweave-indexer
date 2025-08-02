@@ -551,18 +551,26 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             // Pass existing search results for context-aware processing
             // Strip out unnecessary metadata and keep only essential data
             if (req.body.existing_search_results && Array.isArray(req.body.existing_search_results)) {
-                ragOptions.existingContext = req.body.existing_search_results.map(record => ({
-                    data: record.data,
-                    recordType: record.oip?.recordType || 'unknown',
-                    matchCount: record.matchCount || 0
-                }));
+                ragOptions.existingContext = req.body.existing_search_results.map(record => {
+                    const recordType = record.oip?.recordType || record.recordType || 'unknown';
+                    console.log(`[Voice Chat] Stripping record: ${record.data?.basic?.name || 'Untitled'} - recordType: ${recordType} (from ${record.oip ? 'oip' : 'existing recordType'})`);
+                    return {
+                        data: record.data,
+                        recordType: recordType,
+                        matchCount: record.matchCount || 0
+                    };
+                });
                 console.log(`[Voice Chat] Using existing context with ${ragOptions.existingContext.length} records (stripped metadata)`);
             } else if (req.body.existingContext && Array.isArray(req.body.existingContext)) {
-                ragOptions.existingContext = req.body.existingContext.map(record => ({
-                    data: record.data,
-                    recordType: record.oip?.recordType || 'unknown',
-                    matchCount: record.matchCount || 0
-                }));
+                ragOptions.existingContext = req.body.existingContext.map(record => {
+                    const recordType = record.oip?.recordType || record.recordType || 'unknown';
+                    console.log(`[Voice Chat] Stripping existing context record: ${record.data?.basic?.name || 'Untitled'} - recordType: ${recordType} (from ${record.oip ? 'oip' : 'existing recordType'})`);
+                    return {
+                        data: record.data,
+                        recordType: recordType,
+                        matchCount: record.matchCount || 0
+                    };
+                });
                 console.log(`[Voice Chat] Using existing context with ${ragOptions.existingContext.length} records (stripped metadata)`);
             }
             
