@@ -527,6 +527,7 @@
             margin-bottom: 10px;
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -2791,6 +2792,241 @@
                 padding: 15px;
             }
         }
+
+        /* Record View Interface Styles */
+        .record-view-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .back-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .back-btn:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+
+        .record-view-meta {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .record-type-badge {
+            background: #f0f4ff;
+            color: #3730a3;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .record-did-badge {
+            background: #f3f4f6;
+            color: #6b7280;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        .record-view-content {
+            background: white;
+            border-radius: 12px;
+            padding: 0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Post Article Layout Styles */
+        .post-article-layout {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        .post-article-header {
+            margin-bottom: 32px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 24px;
+        }
+
+        .post-article-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: #1f2937;
+            margin-bottom: 16px;
+        }
+
+        .post-article-summary {
+            font-size: 1.125rem;
+            line-height: 1.6;
+            color: #6b7280;
+            margin-bottom: 24px;
+            font-style: italic;
+        }
+
+        .post-article-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .post-article-byline {
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .post-article-byline strong {
+            color: #1f2937;
+        }
+
+        .post-article-date {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .post-featured-media {
+            margin: 32px 0;
+            text-align: center;
+        }
+
+        .post-featured-image {
+            width: 100%;
+            max-width: 600px;
+            height: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .post-featured-video {
+            width: 100%;
+            max-width: 600px;
+            height: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .post-audio-section {
+            margin: 24px 0;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .post-audio-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .post-audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .post-content {
+            font-size: 1.125rem;
+            line-height: 1.8;
+            color: #374151;
+            margin-top: 32px;
+        }
+
+        .post-content p {
+            margin-bottom: 20px;
+        }
+
+        .post-content h1, .post-content h2, .post-content h3,
+        .post-content h4, .post-content h5, .post-content h6 {
+            margin: 32px 0 16px 0;
+            color: #1f2937;
+        }
+
+        .post-content h1 { font-size: 2rem; }
+        .post-content h2 { font-size: 1.75rem; }
+        .post-content h3 { font-size: 1.5rem; }
+
+        .post-content blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 16px;
+            margin: 24px 0;
+            font-style: italic;
+            color: #6b7280;
+        }
+
+        .post-content ul, .post-content ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        .post-content li {
+            margin-bottom: 8px;
+        }
+
+        .post-tags {
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .post-tags .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .post-tags .tag-chip {
+            background: #e0e7ff;
+            color: #3730a3;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* Responsive adjustments for record view */
+        @media (max-width: 768px) {
+            .post-article-layout {
+                padding: 20px;
+            }
+            
+            .post-article-title {
+                font-size: 2rem;
+            }
+            
+            .record-view-header {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+            
+            .record-view-meta {
+                align-self: flex-end;
+            }
+        }
     </style>
 </head>
 <body>
@@ -3307,6 +3543,23 @@
                 <div id="publish-success" class="success-message hidden"></div>
             </div>
         </div>
+
+        <!-- Individual Record View Interface -->
+        <div id="record-view-interface" class="container hidden">
+            <div class="record-view-header">
+                <button onclick="goBackToBrowse()" class="back-btn">
+                    ← Back to Browse
+                </button>
+                <div class="record-view-meta">
+                    <span id="record-view-type" class="record-type-badge"></span>
+                    <span id="record-view-did" class="record-did-badge"></span>
+                </div>
+            </div>
+            
+            <div id="record-view-content" class="record-view-content">
+                <!-- Record content will be dynamically loaded here -->
+            </div>
+        </div>
     </div>
 
     <!-- Authentication Modal -->
@@ -3423,8 +3676,11 @@
             // Force hide the old browse tab and ensure it stays hidden
             forcehideBrowseTab();
             
-            // Show welcome interface by default
-            showWelcomeInterface();
+            // Initialize URL routing
+            initializeRouting();
+            
+            // Don't show welcome interface by default anymore - let routing handle it
+            // showWelcomeInterface();
             
             console.log('[App] Initialized with enhanced dynamic template system');
             
@@ -3615,6 +3871,7 @@
             
             document.getElementById('welcome-interface').classList.remove('hidden');
             document.getElementById('search-interface').classList.add('hidden');
+            document.getElementById('record-view-interface').classList.add('hidden');
             document.getElementById('publish-tab').classList.add('hidden');
             
             // Hide header search when not on browse tab
@@ -3627,6 +3884,7 @@
             
             document.getElementById('welcome-interface').classList.add('hidden');
             document.getElementById('search-interface').classList.remove('hidden');
+            document.getElementById('record-view-interface').classList.add('hidden');
             document.getElementById('publish-tab').classList.add('hidden');
             
             // Show header search when on browse tab
@@ -3655,16 +3913,344 @@
             initializeVoiceFeatures();
         }
 
+        // URL Routing Functions
+        function initializeRouting() {
+            // Handle browser back/forward buttons
+            window.addEventListener('popstate', (event) => {
+                console.log('[Routing] Handling popstate:', event.state);
+                handleUrlChange();
+            });
+            
+            // Handle initial page load
+            handleUrlChange();
+        }
+
+        function handleUrlChange() {
+            const hash = window.location.hash.substr(1); // Remove the #
+            console.log('[Routing] Handling URL change:', hash);
+            
+            if (hash.startsWith('browse/record=')) {
+                // Individual record view
+                const truncatedDidTx = hash.replace('browse/record=', '');
+                // We need to reconstruct the full DID since we only have the truncated version
+                // For now, we'll try to find it from current records or load it
+                handleRecordNavigation(truncatedDidTx);
+            } else if (hash === 'browse' || hash === '') {
+                // Browse/search interface
+                showSearchInterface();
+            } else {
+                // Default to browse interface
+                showSearchInterface();
+            }
+        }
+
+        async function handleRecordNavigation(truncatedDidTx) {
+            console.log('[Routing] Handling record navigation for:', truncatedDidTx);
+            
+            // First try to find the record in current records
+            const foundRecord = currentRecords.find(record => {
+                const didTx = record.oip?.didTx || '';
+                const recordTruncated = didTx.replace('did:arweave:', '').substring(0, 7);
+                return recordTruncated === truncatedDidTx;
+            });
+            
+            if (foundRecord) {
+                console.log('[Routing] Found record in current records');
+                showRecordView(foundRecord.oip.didTx, foundRecord);
+            } else {
+                // Try to search for records that match this truncated DID
+                console.log('[Routing] Searching for record with truncated DID:', truncatedDidTx);
+                try {
+                    const response = await fetch(`/api/records?limit=50&resolveDepth=3`);
+                    const data = await response.json();
+                    
+                    if (data.records) {
+                        const matchingRecord = data.records.find(record => {
+                            const didTx = record.oip?.didTx || '';
+                            const recordTruncated = didTx.replace('did:arweave:', '').substring(0, 7);
+                            return recordTruncated === truncatedDidTx;
+                        });
+                        
+                        if (matchingRecord) {
+                            console.log('[Routing] Found matching record via search');
+                            showRecordView(matchingRecord.oip.didTx, matchingRecord);
+                        } else {
+                            console.log('[Routing] No matching record found, redirecting to browse');
+                            showSearchInterface();
+                        }
+                    } else {
+                        console.log('[Routing] No records found, redirecting to browse');
+                        showSearchInterface();
+                    }
+                } catch (error) {
+                    console.error('[Routing] Error searching for record:', error);
+                    showSearchInterface();
+                }
+            }
+        }
+
         function showPublishTab() {
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.nav-tab')[1].classList.add('active');
             
             document.getElementById('welcome-interface').classList.add('hidden');
             document.getElementById('search-interface').classList.add('hidden');
+            document.getElementById('record-view-interface').classList.add('hidden');
             document.getElementById('publish-tab').classList.remove('hidden');
             
             // Hide header search when not on browse tab
             hideHeaderSearch();
+        }
+
+        // Record View Navigation Functions
+        function showRecordView(didTx, record = null) {
+            console.log('[RecordView] Showing record view for:', didTx);
+            
+            // Update URL
+            const truncatedDidTx = didTx.replace('did:arweave:', '').substring(0, 7);
+            window.history.pushState({ view: 'record', didTx: didTx }, '', `#browse/record=${truncatedDidTx}`);
+            
+            // Hide all interfaces and nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById('welcome-interface').classList.add('hidden');
+            document.getElementById('search-interface').classList.add('hidden');
+            document.getElementById('record-view-interface').classList.remove('hidden');
+            document.getElementById('publish-tab').classList.add('hidden');
+            
+            // Hide header search
+            hideHeaderSearch();
+            
+            // Load record if not provided
+            if (record) {
+                displayRecordView(record);
+            } else {
+                loadRecordForView(didTx);
+            }
+        }
+
+        function goBackToBrowse() {
+            console.log('[RecordView] Going back to browse');
+            
+            // Update URL
+            window.history.pushState({ view: 'browse' }, '', '#browse');
+            
+            // Show search interface
+            showSearchInterface();
+        }
+
+        async function loadRecordForView(didTx) {
+            try {
+                console.log('[RecordView] Loading record:', didTx);
+                document.getElementById('record-view-content').innerHTML = '<div class="loading" style="text-align: center; padding: 40px;">Loading record...</div>';
+                
+                const response = await fetch(`/api/records?didTx=${encodeURIComponent(didTx)}&resolveDepth=3&limit=1`);
+                const data = await response.json();
+                
+                if (data.records && data.records.length > 0) {
+                    displayRecordView(data.records[0]);
+                } else {
+                    document.getElementById('record-view-content').innerHTML = '<div class="error" style="text-align: center; padding: 40px; color: #dc3545;">Record not found</div>';
+                }
+            } catch (error) {
+                console.error('[RecordView] Error loading record:', error);
+                document.getElementById('record-view-content').innerHTML = '<div class="error" style="text-align: center; padding: 40px; color: #dc3545;">Error loading record</div>';
+            }
+        }
+
+        function displayRecordView(record) {
+            console.log('[RecordView] Displaying record:', record);
+            
+            const recordType = record.oip?.recordType || 'unknown';
+            const didTx = record.oip?.didTx || 'Unknown';
+            const truncatedDidTx = didTx.replace('did:arweave:', '').substring(0, 7);
+            
+            // Update header meta
+            document.getElementById('record-view-type').textContent = recordType;
+            document.getElementById('record-view-did').textContent = `...${truncatedDidTx}`;
+            
+            // Render content based on record type
+            if (recordType === 'post') {
+                displayPostRecord(record);
+            } else {
+                // For now, show a generic view for other record types
+                displayGenericRecord(record);
+            }
+        }
+
+        function displayPostRecord(record) {
+            console.log('[RecordView] Displaying post record:', record);
+            
+            const basicData = record.data?.basic || {};
+            const postData = record.data?.post || {};
+            
+            // Extract title, description, and other basic info
+            const title = basicData.name || postData.title || 'Untitled Post';
+            const description = basicData.description || postData.summary || '';
+            const date = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
+            const byline = postData.bylineWriter || 'Unknown Author';
+            const tags = basicData.tagItems || [];
+            
+            // Extract media content
+            const mediaContent = extractMediaContent(record);
+            
+            let html = `<div class="post-article-layout">`;
+            
+            // Article Header
+            html += `<div class="post-article-header">`;
+            html += `<h1 class="post-article-title">${escapeHtml(title)}</h1>`;
+            
+            if (description) {
+                html += `<div class="post-article-summary">${escapeHtml(description)}</div>`;
+            }
+            
+            html += `<div class="post-article-meta">
+                <div class="post-article-byline">By <strong>${escapeHtml(byline)}</strong></div>
+                <div class="post-article-date">${escapeHtml(date)}</div>
+            </div>`;
+            html += `</div>`;
+            
+            // Featured Media Section
+            if (mediaContent.featuredImage || mediaContent.featuredVideo) {
+                html += `<div class="post-featured-media">`;
+                
+                if (mediaContent.featuredImage) {
+                    const img = mediaContent.featuredImage;
+                    html += `<img src="${img.url}" alt="${escapeHtml(img.alt || 'Featured Image')}" 
+                             class="post-featured-image" 
+                             onerror="this.style.display='none';">`;
+                }
+                
+                if (mediaContent.featuredVideo) {
+                    const video = mediaContent.featuredVideo;
+                    html += `<video src="${video.url}" controls class="post-featured-video" 
+                             poster="${video.thumbnail || ''}">
+                        Your browser does not support the video tag.
+                    </video>`;
+                }
+                
+                html += `</div>`;
+            }
+            
+            // Featured Audio Section
+            if (mediaContent.featuredAudio) {
+                const audio = mediaContent.featuredAudio;
+                html += `<div class="post-audio-section">
+                    <div class="post-audio-title">
+                        🎵 Featured Audio: ${escapeHtml(audio.title || 'Audio Narration')}
+                    </div>
+                    <div class="post-audio-controls">
+                        <button class="play-btn primary" 
+                                onclick="playAudioInMaster('${audio.url}', '${escapeHtml(audio.title || title)}', 'post', '${record.oip?.didTx || 'unknown'}')">
+                            ▶ Play Audio
+                        </button>
+                        <span class="audio-duration">${audio.duration || ''}</span>
+                    </div>
+                </div>`;
+            }
+            
+            // Article Content
+            html += `<div class="post-content">`;
+            
+            // Try to get article text content
+            let articleContent = '';
+            if (postData.articleText) {
+                if (typeof postData.articleText === 'string') {
+                    articleContent = postData.articleText;
+                } else if (postData.articleText.data?.text?.webUrl) {
+                    // This is a dref to a text record - we'd need to fetch it
+                    html += `<div class="article-text-loader">
+                        <button class="article-btn" onclick="loadArticleTextInRecordView('${postData.articleText.data.text.webUrl}')">
+                            📄 Load Full Article Text
+                        </button>
+                    </div>`;
+                } else if (postData.articleText.webUrl) {
+                    // Direct text URL
+                    html += `<div class="article-text-loader">
+                        <button class="article-btn" onclick="loadArticleTextInRecordView('${postData.articleText.webUrl}')">
+                            📄 Load Full Article Text
+                        </button>
+                    </div>`;
+                }
+            }
+            
+            if (articleContent) {
+                // Convert plain text to HTML with basic formatting
+                const formattedContent = articleContent
+                    .replace(/\n\n/g, '</p><p>')
+                    .replace(/\n/g, '<br>');
+                html += `<p>${formattedContent}</p>`;
+            } else if (!postData.articleText) {
+                html += `<p><em>No article content available.</em></p>`;
+            }
+            
+            html += `</div>`;
+            
+            // Tags Section
+            if (tags && tags.length > 0) {
+                html += `<div class="post-tags">
+                    <div class="tags-container">
+                        ${tags.map(tag => `<span class="tag-chip">${escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                </div>`;
+            }
+            
+            html += `</div>`;
+            
+            document.getElementById('record-view-content').innerHTML = html;
+        }
+
+        function displayGenericRecord(record) {
+            console.log('[RecordView] Displaying generic record:', record);
+            
+            const recordType = record.oip?.recordType || 'unknown';
+            const basicData = record.data?.basic || {};
+            const title = basicData.name || 'Untitled Record';
+            const description = basicData.description || '';
+            const date = basicData.dateReadable || formatDate(basicData.date) || 'Unknown Date';
+            
+            let html = `<div class="post-article-layout">
+                <div class="post-article-header">
+                    <h1 class="post-article-title">${escapeHtml(title)}</h1>
+                    ${description ? `<div class="post-article-summary">${escapeHtml(description)}</div>` : ''}
+                    <div class="post-article-meta">
+                        <div class="post-article-byline">Record Type: <strong>${escapeHtml(recordType)}</strong></div>
+                        <div class="post-article-date">${escapeHtml(date)}</div>
+                    </div>
+                </div>
+                
+                <div class="post-content">
+                    <p><em>Detailed view for ${recordType} records is not yet implemented. This is the generic record view.</em></p>
+                    
+                    <h3>Record Data Structure:</h3>
+                    <pre style="background: #f8f9fa; padding: 20px; border-radius: 8px; overflow-x: auto; font-size: 14px;">${escapeHtml(JSON.stringify(record, null, 2))}</pre>
+                </div>
+            </div>`;
+            
+            document.getElementById('record-view-content').innerHTML = html;
+        }
+
+        async function loadArticleTextInRecordView(textUrl) {
+            try {
+                console.log('[RecordView] Loading article text from:', textUrl);
+                
+                const response = await fetch(textUrl);
+                const text = await response.text();
+                
+                // Find the loader div and replace it with the content
+                const loader = document.querySelector('.article-text-loader');
+                if (loader) {
+                    const formattedContent = text
+                        .replace(/\n\n/g, '</p><p>')
+                        .replace(/\n/g, '<br>');
+                    loader.innerHTML = `<div class="loaded-article-text"><p>${formattedContent}</p></div>`;
+                }
+            } catch (error) {
+                console.error('[RecordView] Error loading article text:', error);
+                const loader = document.querySelector('.article-text-loader');
+                if (loader) {
+                    loader.innerHTML = `<div class="error" style="color: #dc3545; padding: 16px;">Failed to load article text</div>`;
+                }
+            }
         }
 
         // AI Drawer Functions
@@ -4549,6 +5135,21 @@
         function createRecordCard(record, recordIndex, isListView = false) {
             const card = document.createElement('div');
             card.className = isListView ? 'record-card list-view' : 'record-card';
+            
+            // Make the card clickable to open individual record view
+            const didTx = record.oip?.didTx;
+            if (didTx) {
+                card.style.cursor = 'pointer';
+                card.title = 'Click to view full record';
+                card.addEventListener('click', (e) => {
+                    // Don't navigate if user clicked on a button or interactive element
+                    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                        return;
+                    }
+                    e.preventDefault();
+                    showRecordView(didTx, record);
+                });
+            }
             
             const recordType = record.oip?.recordType || 'unknown';
             const basicData = record.data?.basic || {};
@@ -5697,19 +6298,21 @@
                         }
                     });
                     
-                    // Load default templates from config
-                    defaultTemplates = {
-                        basic: "did:arweave:-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk",
-                        creatorRegistration: "did:arweave:BKVvTSXmmJni-L82irZfPFXWWJLBcdvbxS34jP1FTG8",
-                        associatedUrlOnWeb: "did:arweave:_RJtiNMr1Ls9NG3G9-6rvbI5Sn0ccSnRTnrQCZi3ABE",
-                        text: "did:arweave:of_eh0kGy65uYD0xsTh7Qe6JVTfJ2oFoA7xp4H7t7YI",
-                        image: "did:arweave:AkZnE1VckJJlRamgNJuIGE7KrYwDcCciWOMrMh68V4o",
-                        audio: "did:arweave:9MrI8kJvBJ-u7uvgngMZ-gMo5RREDwey8G7mJEUOpdo",
-                        video: "did:arweave:G73WplyxpNDOgDSFO6CP3O6hZXq8kNJXxkCqx3sgd1s",
-                        post: "did:arweave:op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
-                        recipe: "did:arweave:46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
-                        workout: "did:arweave:T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE"
-                    };
+                    // Load default templates from config/templates.config.js
+                    const defaultTemplates = require('../config/templates.config.js');
+
+                    // defaultTemplates = {
+                    //     basic: "did:arweave:-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk",
+                    //     creatorRegistration: "did:arweave:BKVvTSXmmJni-L82irZfPFXWWJLBcdvbxS34jP1FTG8",
+                    //     associatedUrlOnWeb: "did:arweave:_RJtiNMr1Ls9NG3G9-6rvbI5Sn0ccSnRTnrQCZi3ABE",
+                    //     text: "did:arweave:of_eh0kGy65uYD0xsTh7Qe6JVTfJ2oFoA7xp4H7t7YI",
+                    //     image: "did:arweave:AkZnE1VckJJlRamgNJuIGE7KrYwDcCciWOMrMh68V4o",
+                    //     audio: "did:arweave:9MrI8kJvBJ-u7uvgngMZ-gMo5RREDwey8G7mJEUOpdo",
+                    //     video: "did:arweave:G73WplyxpNDOgDSFO6CP3O6hZXq8kNJXxkCqx3sgd1s",
+                    //     post: "did:arweave:op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
+                    //     recipe: "did:arweave:46Ui_ifw5LnrRmf_o2zWwikNxgXsXk3sswPtbcJCzlc",
+                    //     workout: "did:arweave:T_16JOpyRKt0dmuZikHPpDcIhwh4DR1ZspHU4BKa-qE"
+                    // };
                     
                     console.log(`[Templates] Loaded ${Object.keys(allTemplates).length / 2} templates`);
                     console.log(`[Templates] Field mappings for:`, Object.keys(templateFieldMap));
