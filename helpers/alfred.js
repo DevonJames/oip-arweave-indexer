@@ -149,9 +149,12 @@ When determining if this is a follow-up question, look for these CLEAR INDICATOR
 - Definite articles referring to previously mentioned items: "the money", "the case", "the recipe", "the person"
 - Questions that would make no sense without the previous context
 - References to actions or events from the loaded records
+- **CRITICAL**: Questions with NO CLEAR SUBJECT when there are only 1-3 records loaded (e.g., "What are the steps?", "How long does it take?", "What's involved?")
 
-Examples of follow-up questions: "How much did they steal?", "What happened to him?", "Is this recipe healthy?", "When did it happen?"
-Examples of NEW questions: "Tell me about tax fraud", "Find me a chicken recipe", "What's the latest news?"`;
+${context.existingContext.length <= 3 ? '⚠️ SPECIAL CASE: Very few records loaded - questions without clear subjects are LIKELY follow-ups!' : ''}
+
+Examples of follow-up questions: "How much did they steal?", "What happened to him?", "Is this recipe healthy?", "When did it happen?", "What are the steps?", "How long does it take?"
+Examples of NEW questions: "Tell me about tax fraud", "Find me a chicken recipe", "What's the latest news?", "Show me shoulder exercises"`;
                     
                 } else if (context.searchParams?.recordType) {
                     // We only have record type information
@@ -617,6 +620,9 @@ JSON Response:`;
         if (recordType === 'recipe') {
             filters.searchMatchMode = 'AND'; // Use AND mode for precise recipe matching
             filters.summarizeRecipe = true; // Get nutritional information
+        } else if (recordType === 'exercise') {
+            filters.searchMatchMode = 'AND'; // Use AND mode for precise exercise matching
+            // No additional flags needed for exercises - they have full data by default
         } else {
             filters.searchMatchMode = 'OR'; // Use OR mode for broader post/news searches
         }
@@ -691,10 +697,12 @@ JSON Response:`;
                 sortBy: 'matchCount:desc' // Use relevance sorting
             };
             
-            // Apply recipe-specific settings
+            // Apply record type-specific settings
             if (recordType === 'recipe') {
                 refinedFilters.searchMatchMode = 'AND';
                 refinedFilters.summarizeRecipe = true;
+            } else if (recordType === 'exercise') {
+                refinedFilters.searchMatchMode = 'AND';
             } else {
                 refinedFilters.searchMatchMode = 'OR';
             }
@@ -732,10 +740,12 @@ JSON Response:`;
                 sortBy: 'matchCount:desc'
             };
             
-            // Add recipe-specific settings
+            // Add record type-specific settings
             if (recordType === 'recipe') {
                 cuisineFilters.searchMatchMode = 'AND';
                 cuisineFilters.summarizeRecipe = true;
+            } else if (recordType === 'exercise') {
+                cuisineFilters.searchMatchMode = 'AND';
             }
             
             console.log(`[ALFRED] Searching with cuisine filters:`, cuisineFilters);
@@ -864,6 +874,27 @@ JSON Response:`;
                     content.recipeData = specificData;
                     
                     console.log(`[ALFRED] Enhanced recipe data for: ${content.title} (prep: ${content.prepTimeMinutes}min, cook: ${content.cookTimeMinutes}min)`);
+                } else if (recordType === 'exercise') {
+                    // Include comprehensive exercise data for exercise records
+                    const exerciseData = record.data.exercise || {};
+                    
+                    // Include detailed exercise instructions
+                    content.instructions = exerciseData.instructions || [];
+                    content.muscleGroups = exerciseData.muscleGroups || [];
+                    content.difficulty = exerciseData.difficulty || null;
+                    content.category = exerciseData.category || null;
+                    content.equipmentRequired = exerciseData.equipmentRequired || [];
+                    content.isBodyweight = exerciseData.isBodyweight || false;
+                    content.exerciseType = exerciseData.exercise_type || null;
+                    content.measurementType = exerciseData.measurement_type || null;
+                    content.estimatedDurationMinutes = exerciseData.est_duration_minutes || null;
+                    content.recommendedSets = exerciseData.recommended_sets || null;
+                    content.recommendedReps = exerciseData.recommended_reps || null;
+                    
+                    // Include full exercise data for comprehensive analysis
+                    content.exerciseData = exerciseData;
+                    
+                    console.log(`[ALFRED] Enhanced exercise data for: ${content.title} (muscles: ${content.muscleGroups.join(', ')}, equipment: ${content.equipmentRequired.join(', ')})`);
                 }
                 
                 contentItems.push(content);
@@ -973,6 +1004,33 @@ JSON Response:`;
                     }
                     if (item.nutritionPerServing) {
                         context += `Nutritional Info (Per Serving): Calories: ${item.nutritionPerServing.calories || 'N/A'}, Protein: ${item.nutritionPerServing.proteinG || 'N/A'}g, Fat: ${item.nutritionPerServing.fatG || 'N/A'}g, Carbs: ${item.nutritionPerServing.carbohydratesG || 'N/A'}g\n`;
+                    }
+                }
+                
+                // Include exercise-specific information
+                if (item.type === 'exercise') {
+                    if (item.difficulty) context += `Difficulty: ${item.difficulty}\n`;
+                    if (item.category) context += `Category: ${item.category}\n`;
+                    if (item.muscleGroups && item.muscleGroups.length > 0) {
+                        context += `Target Muscles: ${item.muscleGroups.join(', ')}\n`;
+                    }
+                    if (item.equipmentRequired && item.equipmentRequired.length > 0) {
+                        context += `Equipment Required: ${item.equipmentRequired.join(', ')}\n`;
+                    }
+                    if (item.isBodyweight !== null) {
+                        context += `Bodyweight Exercise: ${item.isBodyweight ? 'Yes' : 'No'}\n`;
+                    }
+                    if (item.exerciseType) context += `Exercise Type: ${item.exerciseType}\n`;
+                    if (item.measurementType) context += `Measurement Type: ${item.measurementType}\n`;
+                    if (item.estimatedDurationMinutes) context += `Estimated Duration: ${item.estimatedDurationMinutes} minutes\n`;
+                    if (item.recommendedSets) context += `Recommended Sets: ${item.recommendedSets}\n`;
+                    if (item.recommendedReps) context += `Recommended Reps: ${item.recommendedReps}\n`;
+                    
+                    if (item.instructions && item.instructions.length > 0) {
+                        context += `Instructions:\n`;
+                        item.instructions.forEach((step, stepIndex) => {
+                            context += `${stepIndex + 1}. ${step}\n`;
+                        });
                     }
                 }
                 
