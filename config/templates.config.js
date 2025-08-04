@@ -1,11 +1,10 @@
 // /config/templates.config.js
 
 module.exports = {
-    // Define default templates to use if no specific template is requested
     defaultTemplates: {
         basic: "-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk",
         creatorRegistration: "BKVvTSXmmJni-L82irZfPFXWWJLBcdvbxS34jP1FTG8", 
-        associatedUrlOnWeb: "eVTn36AY0JdLI_jzj9FivxrxtvlkVQIPI5ma-1x0E2c",
+        associatedURLOnWeb: "eVTn36AY0JdLI_jzj9FivxrxtvlkVQIPI5ma-1x0E2c",
         text: "of_eh0kGy65uYD0xsTh7Qe6JVTfJ2oFoA7xp4H7t7YI",
         image: "AkZnE1VckJJlRamgNJuIGE7KrYwDcCciWOMrMh68V4o",
         audio: "9MrI8kJvBJ-u7uvgngMZ-gMo5RREDwey8G7mJEUOpdo",

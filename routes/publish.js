@@ -3,7 +3,7 @@ const router = express.Router();
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateToken, getTemplateTxidByName } = require('../helpers/utils'); // Import the authentication middleware
 const { TurboFactory, ArDriveUploadDriver } = require('@ardrive/turbo-sdk');
 const { 
   encryptContent,
@@ -12,7 +12,7 @@ const {
 } = require('../helpers/lit-protocol');
 const fs = require('fs').promises;
 const path = require('path');
-const { getRecords } = require('../helpers/elasticsearch');
+const { getRecords, searchTemplateByTxId } = require('../helpers/elasticsearch');
 const { publishNewRecord} = require('../helpers/templateHelper');
 const arweaveWallet = require('../helpers/arweave-wallet');
 const paymentManager = require('../helpers/payment-manager');
@@ -407,59 +407,17 @@ router.get('/newWorkout/schema', (req, res) => {
     }
 });
 
-// Add post schema endpoint
-router.get('/newPost/schema', (req, res) => {
+// Add dynamic post schema endpoint
+router.get('/newPost/schema', async (req, res) => {
     try {
-        const postSchema = {
-            "description": "Complete JSON schema for publishing a new post via POST /api/publish/newPost",
-            "example": {
-                "basic": {
-                    "name": "Breaking: New Discovery in AI Research",
-                    "language": "en",
-                    "date": Math.floor(Date.now() / 1000),
-                    "description": "Scientists announce breakthrough in neural network efficiency",
-                    "webUrl": "https://example.com/article",
-                    "nsfw": false,
-                    "tagItems": ["AI", "research", "technology", "science"]
-                },
-                "post": {
-                    "webUrl": "https://example.com/full-article",
-                    "bylineWriter": "Dr. Jane Smith",
-                    "bylineWritersTitle": "Senior AI Researcher",
-                    "bylineWritersLocation": "Stanford University",
-                    "articleText": "In a groundbreaking study published today, researchers have developed a new neural network architecture that...",
-                    "featuredImage": "did:arweave:abc123...",
-                    "imageItems": ["did:arweave:img1...", "did:arweave:img2..."],
-                    "imageCaptionItems": ["Figure 1: Neural network diagram", "Figure 2: Performance comparison"],
-                    "videoItems": ["did:arweave:vid1..."],
-                    "audioItems": ["did:arweave:aud1..."],
-                    "audioCaptionItems": ["Interview with lead researcher"],
-                    "replyTo": "did:arweave:original-post..."
-                },
-                "blockchain": "arweave"
-            },
-            "field_descriptions": {
-                "basic.*": "Same structure as recipe basic fields",
-                "post.webUrl": "URL to full article or source",
-                "post.bylineWriter": "Author name",
-                "post.bylineWritersTitle": "Author title/position",
-                "post.bylineWritersLocation": "Author location/organization",
-                "post.articleText": "Main article content",
-                "post.featuredImage": "DID reference to main image",
-                "post.imageItems": "Array of DID references to images",
-                "post.imageCaptionItems": "Array of image captions (parallel to imageItems)",
-                "post.videoItems": "Array of DID references to videos",
-                "post.audioItems": "Array of DID references to audio files",
-                "post.audioCaptionItems": "Array of audio captions",
-                "post.replyTo": "DID reference to post being replied to (for comments/replies)",
-                "blockchain": "Target blockchain ('arweave' or 'turbo')"
-            }
-        };
-
+        const postSchema = await generateDynamicSchema('post', 'POST /api/publish/newPost', 'post record');
         res.status(200).json(postSchema);
     } catch (error) {
-        console.error('Error generating post schema:', error);
-        res.status(500).json({ error: 'Failed to generate post schema' });
+        console.error('Error generating dynamic post schema:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate dynamic post schema',
+            details: error.message 
+        });
     }
 });
 
@@ -482,7 +440,12 @@ router.get('/schemas', (req, res) => {
                 "post": {
                     "endpoint": "POST /api/publish/newPost",
                     "schema_url": "GET /api/publish/newPost/schema", 
-                    "description": "Publish article/blog post records"
+                    "description": "Publish article/blog post records (dynamically generated schema)"
+                },
+                "text": {
+                    "endpoint": "POST /api/publish/newText",
+                    "schema_url": "GET /api/publish/newText/schema",
+                    "description": "Publish text document records (dynamically generated schema)"
                 },
                 "nutritionalInfo": {
                     "endpoint": "POST /api/publish/newNutritionalInfo",
@@ -491,15 +454,13 @@ router.get('/schemas', (req, res) => {
                 },
                 "video": {
                     "endpoint": "POST /api/publish/newVideo",
-                    "description": "Publish video records with YouTube support"
+                    "schema_url": "GET /api/publish/newVideo/schema",
+                    "description": "Publish video records with YouTube support (dynamically generated schema)"
                 },
                 "image": {
                     "endpoint": "POST /api/publish/newImage",
-                    "description": "Publish image records"
-                },
-                "media": {
-                    "endpoint": "POST /api/publish/newMedia",
-                    "description": "General media publishing endpoint"
+                    "schema_url": "GET /api/publish/newImage/schema",
+                    "description": "Publish image records (dynamically generated schema)"
                 }
             },
             "common_parameters": {
@@ -1482,76 +1443,76 @@ router.post('/newImage', authenticateToken, async (req, res) => {
     }
 });
 
-// Add a new general media publishing endpoint
-router.post('/newMedia', authenticateToken, async (req, res) => {
-    try {
-        const {
-            mediaFile, // Base64 encoded file
-            mediaUrl, // Direct URL to media
-            youtubeUrl, // YouTube URL (for videos)
-            contentType, // MIME type
-            basicMetadata, // Title, description, etc.
-            blockchain = 'arweave', // Default to arweave
-            publishTo = { arweave: true, bittorrent: true } // Media publishing options
-        } = req.body;
+// // Add a new general media publishing endpoint
+// router.post('/newMedia', authenticateToken, async (req, res) => {
+//     try {
+//         const {
+//             mediaFile, // Base64 encoded file
+//             mediaUrl, // Direct URL to media
+//             youtubeUrl, // YouTube URL (for videos)
+//             contentType, // MIME type
+//             basicMetadata, // Title, description, etc.
+//             blockchain = 'arweave', // Default to arweave
+//             publishTo = { arweave: true, bittorrent: true } // Media publishing options
+//         } = req.body;
 
-        let mediaConfig = {
-            publishTo: publishTo,
-            blockchain: blockchain,
-            contentType: contentType
-        };
+//         let mediaConfig = {
+//             publishTo: publishTo,
+//             blockchain: blockchain,
+//             contentType: contentType
+//         };
 
-        // Determine media source
-        if (youtubeUrl) {
-            mediaConfig.source = 'youtube';
-            mediaConfig.data = youtubeUrl;
-            mediaConfig.contentType = 'video/mp4';
-        } else if (mediaUrl) {
-            mediaConfig.source = 'url';
-            mediaConfig.data = mediaUrl;
-        } else if (mediaFile) {
-            mediaConfig.source = 'base64';
-            mediaConfig.data = mediaFile;
-        } else {
-            return res.status(400).json({ error: 'No media source provided' });
-        }
+//         // Determine media source
+//         if (youtubeUrl) {
+//             mediaConfig.source = 'youtube';
+//             mediaConfig.data = youtubeUrl;
+//             mediaConfig.contentType = 'video/mp4';
+//         } else if (mediaUrl) {
+//             mediaConfig.source = 'url';
+//             mediaConfig.data = mediaUrl;
+//         } else if (mediaFile) {
+//             mediaConfig.source = 'base64';
+//             mediaConfig.data = mediaFile;
+//         } else {
+//             return res.status(400).json({ error: 'No media source provided' });
+//         }
 
-        // Process the media
-        const mediaDIDs = await mediaManager.processMedia(mediaConfig);
+//         // Process the media
+//         const mediaDIDs = await mediaManager.processMedia(mediaConfig);
 
-        // Create record with media DIDs
-        const record = {
-            basic: {
-                ...basicMetadata,
-                createdAt: new Date().toISOString(),
-            },
-            media: {
-                storageNetworks: mediaDIDs.storageNetworks,
-                originalUrl: youtubeUrl || mediaUrl,
-                contentType: contentType
-            }
-        };
+//         // Create record with media DIDs
+//         const record = {
+//             basic: {
+//                 ...basicMetadata,
+//                 createdAt: new Date().toISOString(),
+//             },
+//             media: {
+//                 storageNetworks: mediaDIDs.storageNetworks,
+//                 originalUrl: youtubeUrl || mediaUrl,
+//                 contentType: contentType
+//             }
+//         };
 
-        const newRecord = await publishNewRecord(record, 'media', false, false, false, null, blockchain);
+//         const newRecord = await publishNewRecord(record, 'media', false, false, false, null, blockchain);
         
-        res.json({
-            status: 'success',
-            blockchain: blockchain,
-            transactionId: newRecord.transactionId,
-            data: {
-                contentId: newRecord.didTx,
-                mediaDIDs: mediaDIDs
-            }
-        });
+//         res.json({
+//             status: 'success',
+//             blockchain: blockchain,
+//             transactionId: newRecord.transactionId,
+//             data: {
+//                 contentId: newRecord.didTx,
+//                 mediaDIDs: mediaDIDs
+//             }
+//         });
 
-    } catch (error) {
-        console.error('Error publishing media:', error);
-        res.status(500).json({
-            error: 'Failed to publish media',
-            details: error.message
-        });
-    }
-});
+//     } catch (error) {
+//         console.error('Error publishing media:', error);
+//         res.status(500).json({
+//             error: 'Failed to publish media',
+//             details: error.message
+//         });
+//     }
+// });
 
 // Add template publishing endpoint
 router.post('/newTemplate', authenticateToken, async (req, res) => {
@@ -1743,6 +1704,333 @@ router.get('/newNutritionalInfo/schema', (req, res) => {
     } catch (error) {
         console.error('Error generating nutritional info schema:', error);
         res.status(500).json({ error: 'Failed to generate nutritional info schema' });
+    }
+});
+
+// Helper functions for dynamic schema generation
+function generateExampleDataByType(fieldType, fieldName, enumValues = null) {
+    switch (fieldType) {
+        case 'string':
+            // Template-specific naming
+            if (fieldName === 'name') {
+                // Context-aware naming based on likely template type
+                return 'Sample Content';
+            }
+            if (fieldName === 'description') return 'A sample description demonstrating the template structure';
+            if (fieldName === 'language') return 'en';
+            if (fieldName === 'webUrl') return 'https://example.com/content';
+            
+            // Image-specific fields
+            if (fieldName === 'imageUrl') return 'https://example.com/image.jpg';
+            if (fieldName === 'contentType') return 'image/jpeg';
+            if (fieldName === 'altText') return 'Sample image description';
+            if (fieldName === 'caption') return 'Sample image caption';
+            
+            // Video-specific fields
+            if (fieldName === 'videoUrl') return 'https://example.com/video.mp4';
+            if (fieldName === 'youtubeUrl') return 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+            if (fieldName === 'duration') return '00:03:45';
+            if (fieldName === 'resolution') return '1920x1080';
+            
+            // Post-specific fields
+            if (fieldName === 'articleText') return 'This is sample article content demonstrating the post template structure...';
+            if (fieldName === 'bylineWriter') return 'Sample Author';
+            if (fieldName === 'bylineWritersTitle') return 'Content Creator';
+            if (fieldName === 'bylineWritersLocation') return 'Sample Location';
+            
+            // Text-specific fields
+            if (fieldName === 'textContent') return 'Sample text content for the document...';
+            if (fieldName === 'textFormat') return 'markdown';
+            
+            return `Sample ${fieldName}`;
+        
+        case 'long':
+        case 'uint64':
+            if (fieldName === 'date') return Math.floor(Date.now() / 1000);
+            if (fieldName === 'fileSize') return 1024000; // 1MB
+            if (fieldName === 'width') return 1920;
+            if (fieldName === 'height') return 1080;
+            if (fieldName === 'duration') return 225; // 3:45 in seconds
+            if (fieldName === 'views') return 1000;
+            return 12345;
+        
+        case 'enum':
+            if (enumValues && enumValues.length > 0) {
+                // Handle both array of strings and array of objects with 'name' property
+                if (typeof enumValues[0] === 'string') {
+                    return enumValues[0];
+                } else if (enumValues[0].name) {
+                    return enumValues[0].name;
+                } else if (enumValues[0].code) {
+                    return enumValues[0].code;
+                }
+            }
+            // Field-specific enum defaults
+            if (fieldName === 'quality') return 'HD';
+            if (fieldName === 'format') return 'MP4';
+            if (fieldName === 'category') return 'general';
+            return 'option1';
+        
+        case 'bool':
+            if (fieldName === 'nsfw') return false;
+            if (fieldName === 'isPublic') return true;
+            if (fieldName === 'featured') return false;
+            return false;
+        
+        case 'float':
+            if (fieldName === 'aspectRatio') return 1.777; // 16:9
+            if (fieldName === 'rating') return 4.5;
+            return 0.0;
+        
+        case 'dref':
+            if (fieldName === 'featuredImage') return 'did:arweave:img123...';
+            if (fieldName === 'thumbnail') return 'did:arweave:thumb123...';
+            if (fieldName === 'author') return 'did:arweave:author123...';
+            if (fieldName === 'replyTo') return 'did:arweave:parent123...';
+            return 'did:arweave:abc123...';
+        
+        case 'repeated string':
+            if (fieldName === 'tagItems') return ['sample', 'content', 'demo'];
+            if (fieldName === 'keywords') return ['keyword1', 'keyword2', 'keyword3'];
+            if (fieldName === 'categories') return ['category1', 'category2'];
+            return [`${fieldName}1`, `${fieldName}2`];
+        
+        case 'repeated dref':
+            if (fieldName === 'imageItems') return ['did:arweave:img1...', 'did:arweave:img2...'];
+            if (fieldName === 'videoItems') return ['did:arweave:vid1...', 'did:arweave:vid2...'];
+            if (fieldName === 'relatedContent') return ['did:arweave:related1...', 'did:arweave:related2...'];
+            return ['did:arweave:ref1...', 'did:arweave:ref2...'];
+        
+        default:
+            return `Sample ${fieldName}`;
+    }
+}
+
+function generateFieldDescription(fieldType, fieldName, enumValues = null) {
+    const baseDescriptions = {
+        'name': 'Title or name of the content',
+        'description': 'Brief description of the content',
+        'date': 'Unix timestamp (default: current time)',
+        'language': 'Language code (default: "en")',
+        'nsfw': 'Boolean for adult content (default: false)',
+        'webUrl': 'Optional source URL',
+        'tagItems': 'Array of tags for categorization'
+    };
+
+    // Field-specific descriptions
+    const specificDescriptions = {
+        // Image fields
+        'imageUrl': 'URL to the image file',
+        'contentType': 'MIME type of the image (e.g., image/jpeg, image/png)',
+        'altText': 'Alternative text description for accessibility',
+        'caption': 'Caption or title for the image',
+        'width': 'Image width in pixels',
+        'height': 'Image height in pixels',
+        'fileSize': 'File size in bytes',
+        
+        // Video fields
+        'videoUrl': 'URL to the video file',
+        'youtubeUrl': 'YouTube video URL',
+        'duration': 'Video duration in seconds or HH:MM:SS format',
+        'resolution': 'Video resolution (e.g., 1920x1080)',
+        'quality': 'Video quality setting',
+        'format': 'Video file format',
+        'thumbnail': 'DID reference to video thumbnail image',
+        'views': 'Number of views',
+        
+        // Post fields
+        'articleText': 'Main article content (required)',
+        'bylineWriter': 'Author name',
+        'bylineWritersTitle': 'Author title/position',
+        'bylineWritersLocation': 'Author location/organization',
+        'featuredImage': 'DID reference to main featured image',
+        'imageItems': 'Array of DID references to additional images',
+        'imageCaptionItems': 'Array of captions for images (parallel to imageItems)',
+        'videoItems': 'Array of DID references to videos',
+        'audioItems': 'Array of DID references to audio files',
+        'audioCaptionItems': 'Array of captions for audio items',
+        'replyTo': 'DID reference to post being replied to (for comments/replies)',
+        
+        // Text fields
+        'textContent': 'Main text content of the document',
+        'textFormat': 'Text format type (e.g., markdown, plain, html)',
+        
+        // General fields
+        'author': 'DID reference to the content author',
+        'category': 'Content category classification',
+        'keywords': 'Array of keywords for search optimization',
+        'isPublic': 'Boolean indicating if content is publicly visible',
+        'featured': 'Boolean indicating if content should be featured',
+        'rating': 'Content rating (0-5 scale)',
+        'aspectRatio': 'Aspect ratio of media content'
+    };
+
+    if (baseDescriptions[fieldName]) {
+        return baseDescriptions[fieldName];
+    }
+
+    if (specificDescriptions[fieldName]) {
+        return specificDescriptions[fieldName];
+    }
+
+    switch (fieldType) {
+        case 'string':
+            return `Text field for ${fieldName}`;
+        case 'long':
+        case 'uint64':
+            return `Numeric field for ${fieldName}`;
+        case 'enum':
+            const options = enumValues ? (
+                enumValues.length > 0 && typeof enumValues[0] === 'object' ? 
+                enumValues.map(v => v.name || v.code).join(', ') :
+                enumValues.join(', ')
+            ) : 'predefined options';
+            return `Enum field for ${fieldName} (options: ${options})`;
+        case 'bool':
+            return `Boolean field for ${fieldName}`;
+        case 'float':
+            return `Floating point number for ${fieldName}`;
+        case 'dref':
+            return `DID reference to another record for ${fieldName}`;
+        case 'repeated string':
+            return `Array of strings for ${fieldName}`;
+        case 'repeated dref':
+            return `Array of DID references for ${fieldName}`;
+        default:
+            return `Field for ${fieldName}`;
+    }
+}
+
+function processTemplateFields(template) {
+    const fields = JSON.parse(template.data.fields);
+    const fieldsInTemplate = {};
+    
+    // Build fieldsInTemplate object (similar to routes/templates.js processing)
+    Object.keys(fields).reduce((acc, key) => {
+        if (key.startsWith('index_')) {
+            const fieldName = key.replace('index_', '');
+            acc[fieldName] = {
+                type: fields[fieldName],
+                index: fields[key]
+            };
+            
+            // Handle enum fields - look for enumValues
+            if (fields[fieldName] === 'enum') {
+                const enumValuesKey = `${fieldName}Values`;
+                if (fields[enumValuesKey]) {
+                    acc[fieldName].enumValues = fields[enumValuesKey];
+                } else if (template.data[enumValuesKey]) {
+                    acc[fieldName].enumValues = template.data[enumValuesKey];
+                }
+            }
+        }
+        return acc;
+    }, fieldsInTemplate);
+    
+    return fieldsInTemplate;
+}
+
+// Generic function to generate dynamic schema for any template type
+async function generateDynamicSchema(templateName, endpointPath, templateDescription) {
+    // Get the template dynamically
+    const templateTxid = getTemplateTxidByName(templateName);
+    if (!templateTxid) {
+        throw new Error(`${templateName} template not found in configuration`);
+    }
+
+    const template = await searchTemplateByTxId(templateTxid);
+    if (!template) {
+        throw new Error(`${templateName} template not found in database`);
+    }
+
+    // Process template fields dynamically
+    const fieldsInTemplate = processTemplateFields(template);
+    
+    // Create field sections dynamically
+    const basicFields = {};
+    const templateSpecificFields = {};
+    const fieldDescriptions = {};
+    
+    // Separate fields by their likely section based on common patterns
+    Object.keys(fieldsInTemplate).forEach(fieldName => {
+        const fieldInfo = fieldsInTemplate[fieldName];
+        const exampleValue = generateExampleDataByType(fieldInfo.type, fieldName, fieldInfo.enumValues);
+        const description = generateFieldDescription(fieldInfo.type, fieldName, fieldInfo.enumValues);
+        
+        // Common basic fields
+        if (['name', 'description', 'date', 'language', 'nsfw', 'webUrl', 'tagItems'].includes(fieldName)) {
+            basicFields[fieldName] = exampleValue;
+            fieldDescriptions[`basic.${fieldName}`] = description;
+        } else {
+            // Other fields belong to the template-specific section
+            templateSpecificFields[fieldName] = exampleValue;
+            fieldDescriptions[`${templateName}.${fieldName}`] = description;
+        }
+    });
+
+    // Build the dynamic schema
+    const dynamicSchema = {
+        "description": `Complete JSON schema for publishing a new ${templateDescription} via ${endpointPath} (dynamically generated)`,
+        "template_info": {
+            "template_name": templateName,
+            "template_txid": templateTxid,
+            "fields_count": Object.keys(fieldsInTemplate).length
+        },
+        "example": {
+            "basic": basicFields,
+            [templateName]: templateSpecificFields,
+            "blockchain": "arweave"
+        },
+        "field_descriptions": {
+            ...fieldDescriptions,
+            "blockchain": "Target blockchain ('arweave' or 'turbo')"
+        },
+        "template_fields_info": fieldsInTemplate,
+        "note": "This schema was generated dynamically from the blockchain template. Field sections may vary based on the actual template structure."
+    };
+
+    return dynamicSchema;
+}
+
+// Add dynamic text schema endpoint
+router.get('/newText/schema', async (req, res) => {
+    try {
+        const textSchema = await generateDynamicSchema('text', 'POST /api/publish/newText', 'text document');
+        res.status(200).json(textSchema);
+    } catch (error) {
+        console.error('Error generating dynamic text schema:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate dynamic text schema',
+            details: error.message 
+        });
+    }
+});
+
+// Add dynamic image schema endpoint
+router.get('/newImage/schema', async (req, res) => {
+    try {
+        const imageSchema = await generateDynamicSchema('image', 'POST /api/publish/newImage', 'image record');
+        res.status(200).json(imageSchema);
+    } catch (error) {
+        console.error('Error generating dynamic image schema:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate dynamic image schema',
+            details: error.message 
+        });
+    }
+});
+
+// Add dynamic video schema endpoint
+router.get('/newVideo/schema', async (req, res) => {
+    try {
+        const videoSchema = await generateDynamicSchema('video', 'POST /api/publish/newVideo', 'video record');
+        res.status(200).json(videoSchema);
+    } catch (error) {
+        console.error('Error generating dynamic video schema:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate dynamic video schema',
+            details: error.message 
+        });
     }
 });
 
