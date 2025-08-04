@@ -1951,15 +1951,80 @@ async function generateDynamicSchema(templateName, endpointPath, templateDescrip
     const templateSpecificFields = {};
     const fieldDescriptions = {};
     
-    // Separate fields by their likely section based on common patterns
+    // Always include essential basic fields for developer guidance
+    // Create context-aware examples based on template type
+    const getContextualExample = (fieldName) => {
+        const examples = {
+            'name': {
+                'post': 'Breaking: New Discovery in AI Research',
+                'image': 'Beautiful Sunset Photography',
+                'video': 'Tutorial: Getting Started with OIP',
+                'text': 'Sample Text Document',
+                'default': 'Sample Content'
+            },
+            'description': {
+                'post': 'Scientists announce breakthrough in neural network efficiency',
+                'image': 'A stunning photograph captured during golden hour',
+                'video': 'Learn the basics of publishing content on the OIP network',
+                'text': 'A sample text document demonstrating the text template structure',
+                'default': 'A sample description demonstrating the template structure'
+            },
+            'tagItems': {
+                'post': ['AI', 'research', 'technology', 'science'],
+                'image': ['photography', 'sunset', 'nature', 'beautiful'],
+                'video': ['tutorial', 'education', 'beginner', 'guide'],
+                'text': ['document', 'text', 'sample', 'demo'],
+                'default': ['sample', 'content', 'demo']
+            }
+        };
+        
+        return examples[fieldName][templateName] || examples[fieldName]['default'];
+    };
+
+    const essentialBasicFields = {
+        'name': {
+            type: 'string',
+            example: getContextualExample('name'),
+            description: 'Title or name of the content'
+        },
+        'description': {
+            type: 'string', 
+            example: getContextualExample('description'),
+            description: 'Brief description of the content'
+        },
+        'date': {
+            type: 'long',
+            example: Math.floor(Date.now() / 1000),
+            description: 'Unix timestamp (default: current time)'
+        },
+        'language': {
+            type: 'string',
+            example: 'en',
+            description: 'Language code (default: "en")'
+        },
+        'tagItems': {
+            type: 'repeated string',
+            example: getContextualExample('tagItems'),
+            description: 'Array of tags for categorization'
+        }
+    };
+
+    // Add essential basic fields first
+    Object.keys(essentialBasicFields).forEach(fieldName => {
+        const fieldInfo = essentialBasicFields[fieldName];
+        basicFields[fieldName] = fieldInfo.example;
+        fieldDescriptions[`basic.${fieldName}`] = fieldInfo.description;
+    });
+    
+    // Process template-defined fields
     Object.keys(fieldsInTemplate).forEach(fieldName => {
         const fieldInfo = fieldsInTemplate[fieldName];
         const exampleValue = generateExampleDataByType(fieldInfo.type, fieldName, fieldInfo.enumValues);
         const description = generateFieldDescription(fieldInfo.type, fieldName, fieldInfo.enumValues);
         
-        // Common basic fields
+        // Common basic fields (override essentials if defined in template, or add additional ones)
         if (['name', 'description', 'date', 'language', 'nsfw', 'webUrl', 'tagItems'].includes(fieldName)) {
-            basicFields[fieldName] = exampleValue;
+            basicFields[fieldName] = exampleValue; // This will override essentials with template-specific examples
             fieldDescriptions[`basic.${fieldName}`] = description;
         } else {
             // Other fields belong to the template-specific section
