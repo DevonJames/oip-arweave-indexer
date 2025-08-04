@@ -53,6 +53,9 @@ RUN pip3 install --no-cache-dir \
     omegaconf \
     tqdm
 
+# Install Chatterbox TTS (Resemble AI) - REAL Chatterbox
+RUN pip3 install --no-cache-dir chatterbox-tts
+
 # Copy service files
 COPY . .
 

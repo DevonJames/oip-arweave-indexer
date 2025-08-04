@@ -19,6 +19,21 @@ from pathlib import Path
 import uvicorn
 import time
 import threading
+
+# Try to import Chatterbox TTS (Resemble AI) - REAL Chatterbox
+try:
+    from chatterbox.tts import ChatterboxTTS
+    import soundfile as sf
+    CHATTERBOX_AVAILABLE = True
+    logger.info("Chatterbox TTS (Resemble AI) imported successfully")
+except ImportError as e:
+    CHATTERBOX_AVAILABLE = False
+    logger.warning(f"Chatterbox TTS not available: {e}")
+except Exception as e:
+    CHATTERBOX_AVAILABLE = False
+    logger.error(f"Error importing Chatterbox TTS: {e}")
+
+# Import pyttsx3 as fallback only
 import pyttsx3
 
 # Import additional dependencies for GPU TTS
@@ -46,8 +61,15 @@ app.add_middleware(
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "chatterbox"
+    gender: str = "female"
+    emotion: str = "neutral"
+    exaggeration: float = 0.5
+    cfg_weight: float = 0.5
+    voice_id: str = "default"  # Keep for backward compatibility
+    voice: str = "chatterbox"  # Also keep voice for compatibility
     engine: str = "auto"
+    speed: float = 1.0
+    language: str = "en"
 
 class TTSResponse(BaseModel):
     audio_file: str
@@ -88,63 +110,60 @@ class GPUTTSService:
         self._initialize_chatterbox()
     
     def _initialize_chatterbox(self):
-        """Initialize Chatterbox (pyttsx3) TTS engine - PRIMARY TTS ENGINE"""
-        try:
-            logger.info("🚀 Initializing Chatterbox TTS (pyttsx3) as PRIMARY engine...")
-            
-            with self.engine_lock:
-                # Initialize with debug disabled for stability
-                self.chatterbox_engine = pyttsx3.init(debug=False)
-                
-                if not self.chatterbox_engine:
-                    logger.error("❌ Failed to initialize pyttsx3 engine")
-                    return
-                
-                # Get available voices with better error handling
-                try:
-                    voices = self.chatterbox_engine.getProperty('voices')
-                    logger.info(f"🎵 Chatterbox found {len(voices) if voices else 0} system voices")
-                except Exception as voice_error:
-                    logger.warning(f"⚠️ Could not get voices: {voice_error}")
-                    voices = None
-                
-                # Enhanced voice configuration matching working implementation
-                self.chatterbox_voices = {
-                    "default": {"rate": 200, "volume": 0.9, "voice_id": 0},
-                    "female_1": {"rate": 180, "volume": 0.9, "voice_id": 0},
-                    "male_1": {"rate": 200, "volume": 0.9, "voice_id": 1},
-                    "expressive": {"rate": 220, "volume": 1.0, "voice_id": 0},
-                    "calm": {"rate": 160, "volume": 0.8, "voice_id": 0},
-                    "chatterbox": {"rate": 200, "volume": 0.9, "voice_id": 0}  # Map chatterbox request
-                }
-                
-                # Map available system voices if found
-                if voices:
-                    for i, voice in enumerate(voices):
-                        voice_name = voice.name.lower() if hasattr(voice, 'name') else f"voice_{i}"
-                        logger.info(f"   Voice {i}: {voice.id} - {voice_name}")
-                        
-                        # Update voice IDs based on detected voices
-                        if 'female' in voice_name and i < len(voices):
-                            self.chatterbox_voices['female_1']['voice_id'] = i
-                        elif 'male' in voice_name and i < len(voices):
-                            self.chatterbox_voices['male_1']['voice_id'] = i
-                
-                # Test engine functionality with minimal settings
-                try:
-                    self.chatterbox_engine.setProperty('rate', 200)
-                    self.chatterbox_engine.setProperty('volume', 0.9)
-                    logger.info("✅ Chatterbox engine properties set successfully")
-                except Exception as prop_error:
-                    logger.warning(f"⚠️ Could not set engine properties: {prop_error}")
-                
-                logger.info("✅ Chatterbox TTS (PRIMARY) engine initialized successfully")
-                logger.info(f"   Available voice configs: {list(self.chatterbox_voices.keys())}")
-                
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize Chatterbox engine: {e}")
-            logger.error("   Will use fallback engines (Silero -> Edge TTS -> etc.)")
+        """Initialize Chatterbox TTS (Resemble AI) - REAL Chatterbox TTS ENGINE"""
+        if not CHATTERBOX_AVAILABLE:
+            logger.warning("Chatterbox TTS package not available - using fallback engines")
             self.chatterbox_engine = None
+            self.chatterbox_voices = {}
+            return
+            
+        try:
+            logger.info("🚀 Initializing REAL Chatterbox TTS (Resemble AI) as PRIMARY engine...")
+            
+            # Use GPU device if available
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            logger.info(f"Loading Chatterbox TTS on device: {device}")
+            
+            # Store reference to prevent garbage collection
+            self.chatterbox_engine = ChatterboxTTS.from_pretrained(device=device)
+            
+            # Wait for model to fully load (PerthNet loading happens after initialization)
+            logger.info("Waiting for Chatterbox model to fully load...")
+            time.sleep(2)  # Give time for PerthNet to load
+            
+            # Test that model is actually ready and store reference
+            try:
+                # Try a small test synthesis to ensure model is ready
+                test_audio = self.chatterbox_engine.generate(text="test", exaggeration=0.5, cfg_weight=0.5)
+                logger.info("✅ Chatterbox model test synthesis successful")
+                # Explicitly store model reference to ensure it persists
+                self._chatterbox_model = self.chatterbox_engine
+                logger.info(f"Model reference stored: {self.chatterbox_engine is not None}, {self._chatterbox_model is not None}")
+            except Exception as e:
+                logger.warning(f"Chatterbox model test failed: {e}")
+                self.chatterbox_engine = None
+                self._chatterbox_model = None
+                return
+            
+            # Proper Chatterbox voice configurations (matching working implementation)
+            self.chatterbox_voices = {
+                "default": {"exaggeration": 0.5, "cfg_weight": 0.3},
+                "female_1": {"exaggeration": 0.7, "cfg_weight": 0.4}, 
+                "male_1": {"exaggeration": 0.4, "cfg_weight": 0.3},
+                "expressive": {"exaggeration": 0.9, "cfg_weight": 0.5},
+                "calm": {"exaggeration": 0.2, "cfg_weight": 0.2},
+                "chatterbox": {"exaggeration": 0.5, "cfg_weight": 0.3}
+            }
+            
+            logger.info("✅ Chatterbox TTS (Resemble AI) fully initialized successfully")
+            logger.info(f"   Available voice configs: {list(self.chatterbox_voices.keys())}")
+            logger.info(f"   Model refs: {self.chatterbox_engine is not None}, {self._chatterbox_model is not None}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Chatterbox TTS: {str(e)}")
+            self.chatterbox_engine = None
+            self._chatterbox_model = None
+            self.chatterbox_voices = {}
     
     def _initialize_silero(self):
         """Initialize Silero TTS model as PRIMARY GPU-accelerated engine"""
@@ -188,81 +207,65 @@ class GPUTTSService:
             self.silero_model = None
             self.silero_apply_tts = None
 
-    async def synthesize_with_chatterbox(self, text: str, voice: str) -> Optional[str]:
-        """Synthesize speech using Chatterbox (pyttsx3) - PRIMARY TTS ENGINE"""
-        if not self.chatterbox_engine:
-            logger.warning("Chatterbox engine not initialized - falling back to Silero")
+    async def synthesize_with_chatterbox(self, text: str, voice: str, gender: str = "female", emotion: str = "neutral", exaggeration: float = 0.5, cfg_weight: float = 0.5) -> Optional[str]:
+        """Synthesize speech using REAL Chatterbox TTS (Resemble AI) - PRIMARY TTS ENGINE"""
+        if not self.chatterbox_engine or not CHATTERBOX_AVAILABLE:
+            logger.warning("Chatterbox TTS engine not available - falling back to Silero")
             return None
             
         try:
-            with self.engine_lock:
-                # Get voice configuration (matches working implementation pattern)
-                config = self.chatterbox_voices.get(voice, self.chatterbox_voices["default"])
-                
-                logger.info(f"🎵 Chatterbox synthesizing - voice: {voice}, rate: {config['rate']}")
-                
-                # Configure voice properties (improved error handling)
+            # Get voice configuration (matches working implementation)
+            config = self.chatterbox_voices.get(voice, self.chatterbox_voices.get("default", {"exaggeration": 0.5, "cfg_weight": 0.3}))
+            
+            # Use config values or passed parameters
+            final_exaggeration = config.get("exaggeration", exaggeration)
+            final_cfg_weight = config.get("cfg_weight", cfg_weight)
+            
+            logger.info(f"🎵 REAL Chatterbox synthesizing: voice={voice}, exaggeration={final_exaggeration}, cfg_weight={final_cfg_weight}")
+            
+            # Generate audio using the real Chatterbox TTS API
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
                 try:
-                    voices = self.chatterbox_engine.getProperty('voices')
-                    if voices and len(voices) > config["voice_id"]:
-                        self.chatterbox_engine.setProperty('voice', voices[config["voice_id"]].id)
+                    # Use the real Chatterbox model to generate audio
+                    audio = self.chatterbox_engine.generate(
+                        text=text,
+                        exaggeration=final_exaggeration,
+                        cfg_weight=final_cfg_weight
+                    )
+                    
+                    # Save audio using soundfile (matching working implementation)
+                    if hasattr(self.chatterbox_engine, 'sr'):
+                        sample_rate = self.chatterbox_engine.sr
                     else:
-                        logger.warning(f"Voice {config['voice_id']} not available, using default")
-                except Exception as voice_error:
-                    logger.warning(f"Could not set voice: {voice_error}")
-                
-                # Apply speed and volume (matching working implementation)
-                try:
-                    self.chatterbox_engine.setProperty('rate', config["rate"])
-                    self.chatterbox_engine.setProperty('volume', config["volume"])
-                except Exception as prop_error:
-                    logger.warning(f"Could not set engine properties: {prop_error}")
-                
-                # Generate audio to temporary file with improved timeout handling
-                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                    # Use async approach with shorter timeout (15s instead of 30s)
-                    synthesis_done = threading.Event()
-                    synthesis_error = None
+                        sample_rate = 16000  # Default sample rate
                     
-                    def synthesize_thread():
-                        nonlocal synthesis_error
-                        try:
-                            # Save to file
-                            self.chatterbox_engine.save_to_file(text, tmp_file.name)
-                            self.chatterbox_engine.runAndWait()
-                            synthesis_done.set()
-                        except Exception as e:
-                            synthesis_error = e
-                            synthesis_done.set()
+                    # Convert audio to numpy array if needed
+                    if hasattr(audio, 'numpy'):
+                        audio_np = audio.numpy()
+                    elif hasattr(audio, 'cpu'):
+                        audio_np = audio.cpu().numpy()
+                    else:
+                        audio_np = audio
                     
-                    thread = threading.Thread(target=synthesize_thread)
-                    thread.daemon = True
-                    thread.start()
+                    # Save using soundfile
+                    sf.write(tmp_file.name, audio_np, sample_rate)
                     
-                    # Wait for synthesis with reduced timeout (15s matches backend fixes)
-                    if not synthesis_done.wait(timeout=15):
-                        logger.warning("⚠️ Chatterbox synthesis timeout (15s) - falling back to Silero")
-                        # Clean up
-                        if os.path.exists(tmp_file.name):
-                            os.unlink(tmp_file.name)
-                        return None
-                    
-                    if synthesis_error:
-                        logger.warning(f"⚠️ Chatterbox synthesis error: {synthesis_error} - falling back to Silero")
-                        if os.path.exists(tmp_file.name):
-                            os.unlink(tmp_file.name)
-                        return None
-                    
-                    # Check if file was created successfully (improved validation)
-                    if os.path.exists(tmp_file.name) and os.path.getsize(tmp_file.name) > 44:  # More than WAV header
+                    # Verify file was created
+                    if os.path.exists(tmp_file.name) and os.path.getsize(tmp_file.name) > 44:
                         file_size = os.path.getsize(tmp_file.name)
-                        logger.info(f"✅ Chatterbox synthesis successful: {file_size} bytes")
+                        logger.info(f"✅ REAL Chatterbox synthesis successful: {file_size} bytes")
                         return tmp_file.name
                     else:
-                        logger.warning("⚠️ Chatterbox produced no audio (Docker audio system unavailable) - falling back to Silero")
+                        logger.warning("⚠️ Chatterbox produced no audio - falling back to Silero")
                         if os.path.exists(tmp_file.name):
                             os.unlink(tmp_file.name)
                         return None
+                        
+                except Exception as synthesis_error:
+                    logger.warning(f"⚠️ Chatterbox synthesis error: {synthesis_error} - falling back to Silero")
+                    if os.path.exists(tmp_file.name):
+                        os.unlink(tmp_file.name)
+                    return None
                         
         except Exception as e:
             logger.warning(f"⚠️ Chatterbox TTS error: {e} - falling back to Silero")
@@ -618,7 +621,16 @@ async def synthesize_speech(request: TTSRequest):
         for engine in engines_to_try:
             try:
                 if engine == "chatterbox":
-                    audio_file = await tts_service.synthesize_with_chatterbox(text, request.voice)
+                    # Pass Chatterbox-specific parameters
+                    voice_to_use = request.voice_id if hasattr(request, 'voice_id') and request.voice_id != "default" else request.voice
+                    audio_file = await tts_service.synthesize_with_chatterbox(
+                        text=text, 
+                        voice=voice_to_use,
+                        gender=request.gender,
+                        emotion=request.emotion,
+                        exaggeration=request.exaggeration,
+                        cfg_weight=request.cfg_weight
+                    )
                     if audio_file:
                         engine_used = "chatterbox"
                         break

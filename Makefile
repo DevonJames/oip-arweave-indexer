@@ -193,7 +193,40 @@ check-network:
 		docker network create oiparweave_oip-network; \
 	fi
 
-up: validate-profile check-env check-network ## Start services with specified profile + ngrok
+# Check GPU requirements for GPU profiles
+check-gpu:
+	@if [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "gpu" ] || [ "$(PROFILE)" = "oip-gpu-only" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
+		echo "$(BLUE)🔍 Checking GPU requirements for profile: $(PROFILE)$(NC)"; \
+		if ! command -v nvidia-smi >/dev/null 2>&1; then \
+			echo "$(RED)❌ NVIDIA drivers not found$(NC)"; \
+			echo "$(YELLOW)📋 GPU Profile Requirements:$(NC)"; \
+			echo "  1. Install NVIDIA drivers: sudo apt install nvidia-driver-535"; \
+			echo "  2. Install nvidia-docker2: sudo apt install nvidia-docker2"; \
+			echo "  3. Restart Docker: sudo systemctl restart docker"; \
+			echo "  4. Test GPU access: docker run --rm --gpus all nvidia/cuda:11.7.1-runtime-ubuntu20.04 nvidia-smi"; \
+			echo "$(BLUE)💡 Alternative: Use 'make $(subst -gpu,,$(PROFILE))' for CPU-only version$(NC)"; \
+			exit 1; \
+		fi; \
+		if ! nvidia-smi >/dev/null 2>&1; then \
+			echo "$(RED)❌ NVIDIA drivers not working$(NC)"; \
+			echo "$(YELLOW)Try: sudo systemctl restart nvidia-persistenced && sudo modprobe nvidia$(NC)"; \
+			exit 1; \
+		fi; \
+		if ! docker run --rm --gpus all nvidia/cuda:11.7.1-runtime-ubuntu20.04 nvidia-smi >/dev/null 2>&1; then \
+			echo "$(RED)❌ Docker GPU access failed$(NC)"; \
+			echo "$(YELLOW)Missing nvidia-docker2. Install with:$(NC)"; \
+			echo "  distribution=\$$(. /etc/os-release;echo \$$ID\$$VERSION_ID)"; \
+			echo "  curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -"; \
+			echo "  curl -s -L https://nvidia.github.io/nvidia-docker/\$$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list"; \
+			echo "  sudo apt-get update && sudo apt-get install -y nvidia-docker2"; \
+			echo "  sudo systemctl restart docker"; \
+			exit 1; \
+		fi; \
+		echo "$(GREEN)✅ GPU access verified$(NC)"; \
+		echo "$(BLUE)🎮 GPU Info: $$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1)$(NC)"; \
+	fi
+
+up: validate-profile check-env check-network check-gpu ## Start services with specified profile + ngrok
 	@echo "$(BLUE)Starting OIP Arweave with profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Deploying with Chatterbox TTS as primary voice engine...$(NC)"; \
@@ -205,7 +238,7 @@ up: validate-profile check-env check-network ## Start services with specified pr
 	@make start-ngrok
 	@make status
 
-build: validate-profile check-env check-network ## Build and start services with specified profile + ngrok
+build: validate-profile check-env check-network check-gpu ## Build and start services with specified profile + ngrok
 	@echo "$(BLUE)Building and starting OIP Arweave with profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Building with Chatterbox TTS integration...$(NC)"; \
@@ -217,7 +250,7 @@ build: validate-profile check-env check-network ## Build and start services with
 	@make start-ngrok
 	@make status
 
-rebuild: validate-profile check-env check-network ## Rebuild and start services with --no-cache and specified profile + ngrok
+rebuild: validate-profile check-env check-network check-gpu ## Rebuild and start services with --no-cache and specified profile + ngrok
 	@echo "$(BLUE)Rebuilding OIP Arweave with --no-cache and profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Rebuilding with Chatterbox TTS from scratch...$(NC)"; \
