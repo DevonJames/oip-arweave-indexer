@@ -453,7 +453,7 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI) in TTS 
 			echo "$(BLUE)📥 Installing Chatterbox package...$(NC)"; \
 			PIP_CMD="pip3"; \
 			docker exec $$CONTAINER_NAME which pip3 >/dev/null 2>&1 || PIP_CMD="pip"; \
-			docker exec $$CONTAINER_NAME $$PIP_CMD install --no-cache-dir chatterbox-tts==0.1.1 soundfile || echo "$(YELLOW)⚠️ Package installation had issues, trying anyway...$(NC)"; \
+			docker exec $$CONTAINER_NAME $$PIP_CMD install --no-cache-dir chatterbox-tts==0.1.2 soundfile || echo "$(YELLOW)⚠️ Package installation had issues, trying anyway...$(NC)"; \
 		fi; \
 		docker exec $$CONTAINER_NAME $$PYTHON_CMD -c "print('🚀 Initializing Chatterbox TTS...'); from chatterbox.tts import ChatterboxTTS; import torch; device='cuda' if torch.cuda.is_available() else 'cpu'; print(f'🖥️  Using device: {device}'); model = ChatterboxTTS.from_pretrained(device=device); print('✅ Chatterbox TTS (Resemble AI) ready! High-quality neural voice available.'); print('🎉 Voice assistant will now use Chatterbox instead of robotic fallback!')" || \
 		echo "$(YELLOW)⚠️  Chatterbox installation failed - will use fallback engines (Edge TTS, gTTS, eSpeak)$(NC)"; \
