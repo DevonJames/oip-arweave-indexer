@@ -392,6 +392,9 @@ rebuild-oip-gpu-only: ## Quick rebuild: GPU OIP service only + ngrok
 
 rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + Chatterbox TTS + install models + ngrok
 	@make rebuild PROFILE=standard-gpu
+	@echo "$(YELLOW)⏳ Waiting for GPU services to be ready...$(NC)"
+	@timeout 60 bash -c 'until docker ps | grep -E "ollama-gpu.*Up|oip-arweave-indexer-ollama-gpu.*Up" | grep -q Up; do echo "Waiting for Ollama GPU service..."; sleep 2; done' || echo "$(YELLOW)⚠️ Ollama GPU service didn't start in time, trying anyway...$(NC)"
+	@timeout 60 bash -c 'until docker ps | grep -E "tts-service-gpu.*Up|oip-arweave-indexer-tts-service-gpu.*Up" | grep -q Up; do echo "Waiting for TTS GPU service..."; sleep 2; done' || echo "$(YELLOW)⚠️ TTS GPU service didn't start in time, trying anyway...$(NC)"
 	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
 	@make install-models
 	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
