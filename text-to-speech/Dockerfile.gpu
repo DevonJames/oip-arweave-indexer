@@ -33,7 +33,7 @@ RUN pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 
-# Install core packages without complex ML dependencies
+# Install core packages (matching working standard profile)
 RUN pip3 install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn==0.24.0 \
@@ -43,22 +43,18 @@ RUN pip3 install --no-cache-dir \
     python-multipart==0.0.6 \
     httpx==0.25.2 \
     pydantic==2.5.0 \
-    numpy==1.24.4 \
+    soundfile==0.12.1 \
+    numpy \
     scipy \
-    librosa \
-    soundfile
+    librosa
 
 # Install additional dependencies for Silero TTS (accessed via torch.hub)
 RUN pip3 install --no-cache-dir \
     omegaconf \
     tqdm
 
-# Install Chatterbox TTS (Resemble AI) - REAL Chatterbox
-# Try multiple installation strategies to handle dependency conflicts
-RUN echo "Attempting Chatterbox TTS installation..." && \
-    (pip3 install --no-cache-dir --no-deps chatterbox-tts && echo "Installed chatterbox-tts without deps") || \
-    (pip3 install --no-cache-dir chatterbox-tts --force-reinstall && echo "Force reinstalled chatterbox-tts") || \
-    (echo "Chatterbox installation failed - will use fallback TTS engines")
+# Install Chatterbox TTS (matching working standard profile approach)
+RUN pip3 install --no-cache-dir chatterbox-tts || echo "Chatterbox TTS installation failed - will fallback to other engines"
 
 # Copy service files
 COPY . .
