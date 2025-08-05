@@ -407,21 +407,21 @@ services:
   #   profiles:
   #     - standard
 
-  # Ngrok for GPU deployments - DISABLED: Using Makefile ngrok with custom domain instead
-  # ngrok-gpu:
-  #   image: ngrok/ngrok:latest
-  #   command: http --domain=api.oip.onl oip-gpu:3005
-  #   environment:
-  #     - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
-  #   depends_on:
-  #     - oip-gpu
-  #   ports:
-  #     - "4040:4040"
-  #   networks:
-  #     - oip-network
-  #   restart: unless-stopped
-  #   profiles:
-  #     - standard-gpu
+  # Ngrok for GPU deployments - Fixed for RTX 4090 server deployments
+  ngrok-gpu:
+    image: ngrok/ngrok:latest
+    command: http --domain=api.oip.onl oip-gpu:3005
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+    depends_on:
+      - oip-gpu
+    ports:
+      - "4041:4040"  # Use different host port to avoid conflicts
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - standard-gpu
 
 networks:
   oip-network:
