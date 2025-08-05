@@ -9,9 +9,9 @@ import torch
 import torchaudio
 from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Form, File, UploadFile  
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 import numpy as np
 import subprocess
@@ -611,124 +611,171 @@ class GPUTTSService:
 tts_service = GPUTTSService()
 
 @app.post("/synthesize")
-async def synthesize_speech(request: TTSRequest):
-    """Synthesize speech from text"""
+async def synthesize_speech(
+    text: str = Form(...),
+    gender: str = Form("female"),
+    emotion: str = Form("neutral"), 
+    exaggeration: float = Form(0.5),
+    cfg_weight: float = Form(0.5),
+    voice_id: str = Form("default"),  # For backward compatibility
+    speed: float = Form(1.0),
+    engine: str = Form("auto"),
+    voice_cloning: bool = Form(False),
+    audio_prompt: UploadFile = File(None)
+):
+    """Synthesize text to speech using the best available engine with optional voice cloning - Form Data API matching standard service."""
+    
+    # Debug logging to see what parameters we're actually receiving
+    logger.info(f"[GPU TTS Service] Received Form request:")
+    logger.info(f"  text: {text[:50]}...")
+    logger.info(f"  gender: {gender} (type: {type(gender)})")
+    logger.info(f"  emotion: {emotion} (type: {type(emotion)})")
+    logger.info(f"  exaggeration: {exaggeration} (type: {type(exaggeration)})")
+    logger.info(f"  cfg_weight: {cfg_weight} (type: {type(cfg_weight)})")
+    logger.info(f"  voice_cloning: {voice_cloning} (type: {type(voice_cloning)})")
+    logger.info(f"  audio_prompt: {audio_prompt.filename if audio_prompt else 'None'}")
+    
     start_time = time.time()
     
     try:
         # Validate input
-        if not request.text or not request.text.strip():
+        if not text or not text.strip():
             raise HTTPException(status_code=400, detail="Text cannot be empty")
         
-        text = request.text.strip()
+        text = text.strip()
         if len(text) > 5000:
             logger.warning(f"Text too long ({len(text)} chars), truncating to 5000")
             text = text[:5000] + "..."
         
-        logger.info(f"Synthesizing: '{text[:100]}...' with voice '{request.voice}' using engine '{request.engine}'")
+        logger.info(f"GPU TTS Synthesizing: '{text[:100]}...' with voice '{voice_id}' using engine '{engine}'")
         
-        # Try synthesis with requested or fallback engines
+        last_error = None
+        audio_prompt_path = None
+        
+        # Handle voice cloning file upload
+        if voice_cloning and audio_prompt:
+            try:
+                # Save uploaded audio file temporarily
+                import tempfile
+                temp_dir = tempfile.gettempdir()
+                audio_prompt_path = os.path.join(temp_dir, f"voice_prompt_{int(time.time())}.wav")
+                
+                # Read and save the audio file
+                audio_content = await audio_prompt.read()
+                with open(audio_prompt_path, "wb") as f:
+                    f.write(audio_content)
+                    
+                logger.info(f"Voice cloning audio saved to: {audio_prompt_path}")
+                
+            except Exception as e:
+                logger.error(f"Failed to save audio prompt: {e}")
+                raise HTTPException(status_code=400, detail=f"Failed to process audio file: {str(e)}")
+        
+        # Try engines in priority order (Chatterbox first, then GPU optimized fallbacks)
         engines_to_try = []
         
-        if request.engine == "chatterbox" or request.engine == "auto":
+        if engine == "chatterbox" or engine == "auto":
             engines_to_try.append("chatterbox")
         
-        # Add fallbacks
-        if request.engine == "auto":
-            engines_to_try.extend(["edge_tts", "gtts", "espeak"])
+        # Add GPU-optimized fallback order
+        if engine == "auto":
+            engines_to_try.extend(["silero", "edge_tts", "gtts", "espeak"])
         
-        audio_file = None
-        engine_used = None
-        
-        for engine in engines_to_try:
+        # Try each engine until one succeeds
+        for engine_name in engines_to_try:
             try:
-                if engine == "chatterbox":
-                    # Pass Chatterbox-specific parameters
-                    voice_to_use = request.voice_id if hasattr(request, 'voice_id') and request.voice_id != "default" else request.voice
-                    audio_file = await tts_service.synthesize_with_chatterbox(
-                        text=text, 
-                        voice=voice_to_use,
-                        gender=request.gender,
-                        emotion=request.emotion,
-                        exaggeration=request.exaggeration,
-                        cfg_weight=request.cfg_weight
-                    )
-                    if audio_file:
-                        engine_used = "chatterbox"
-                        break
-                elif engine == "edge_tts":
-                    audio_file = await tts_service.synthesize_with_edge_tts(text, request.voice)
-                    if audio_file:
-                        engine_used = "edge_tts"
-                        break
-                elif engine == "gtts":
+                logger.info(f"Attempting GPU synthesis with {engine_name}")
+                
+                if engine_name == "chatterbox":
+                    if tts_service.chatterbox_engine and tts_service.chatterbox_engine is not None:
+                        audio_file = await tts_service.synthesize_with_chatterbox(
+                            text=text,
+                            voice=voice_id,
+                            gender=gender,
+                            emotion=emotion,
+                            exaggeration=exaggeration,
+                            cfg_weight=cfg_weight,
+                            audio_prompt_path=audio_prompt_path
+                        )
+                    else:
+                        logger.warning("Chatterbox engine not available")
+                        continue
+                elif engine_name == "silero":
+                    if tts_service.silero_model is not None:
+                        audio_file = await tts_service.synthesize_with_silero(text, voice_id)
+                    else:
+                        logger.warning("Silero model not available")
+                        continue
+                elif engine_name == "edge_tts":
+                    audio_file = await tts_service.synthesize_with_edge_tts(text, voice_id)
+                elif engine_name == "gtts":
                     audio_file = await tts_service.synthesize_with_gtts(text)
-                    if audio_file:
-                        engine_used = "gtts"
-                        break
-                elif engine == "espeak":
-                    audio_file = await tts_service.synthesize_with_espeak(text, request.voice)
-                    if audio_file:
-                        engine_used = "espeak"
-                        break
-            except Exception as engine_error:
-                logger.warning(f"Engine {engine} failed: {engine_error}")
-                continue
-        
-        if not audio_file:
-            # Generate silence as ultimate fallback
-            logger.warning("All engines failed, generating silence")
-            audio_file = await tts_service.generate_silence(len(text))
-            engine_used = "silence"
-        
-        if not audio_file or not os.path.exists(audio_file):
-            raise HTTPException(status_code=500, detail="Speech synthesis failed - no audio generated")
-        
-        # Read audio file and return as streaming response
-        try:
-            def iter_audio():
-                try:
-                    with open(audio_file, 'rb') as f:
-                        while True:
-                            chunk = f.read(8192)
-                            if not chunk:
-                                break
-                            yield chunk
-                finally:
-                    # Clean up temp file
-                    if os.path.exists(audio_file):
+                elif engine_name == "espeak":
+                    audio_file = await tts_service.synthesize_with_espeak(text, voice_id)
+                else:
+                    continue
+                
+                if audio_file and os.path.exists(audio_file):
+                    logger.info(f"Successfully synthesized with {engine_name}")
+                    
+                    # Clean up temporary file
+                    if audio_prompt_path and os.path.exists(audio_prompt_path):
                         try:
-                            os.unlink(audio_file)
+                            os.unlink(audio_prompt_path)
                         except:
                             pass
-            
-            file_size = os.path.getsize(audio_file)
-            process_time = time.time() - start_time
-            
-            logger.info(f"Synthesis successful: {engine_used}, {file_size} bytes, {process_time:.2f}s")
-            
-            headers = {
-                "X-Engine-Used": engine_used,
-                "X-Voice-Used": request.voice,
-                "X-Process-Time": f"{process_time:.2f}s",
-                "Content-Length": str(file_size)
-            }
-            
-            return StreamingResponse(
-                iter_audio(),
-                media_type="audio/wav",
-                headers=headers
-            )
-            
-        except Exception as file_error:
-            logger.error(f"Error reading audio file: {file_error}")
-            raise HTTPException(status_code=500, detail="Error reading generated audio")
+                    
+                    # Read and return the audio file
+                    with open(audio_file, 'rb') as f:
+                        audio_data = f.read()
+                    
+                    # Clean up audio file
+                    try:
+                        os.unlink(audio_file)
+                    except:
+                        pass
+                    
+                    return Response(
+                        content=audio_data,
+                        media_type="audio/wav",
+                        headers={
+                            "X-Engine-Used": engine_name,
+                            "X-Voice-ID": voice_id if not voice_cloning else "voice_clone",
+                            "X-Voice-Cloning": "true" if voice_cloning else "false"
+                        }
+                    )
+                    
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"GPU Engine {engine_name} failed: {str(e)}")
+                continue
+        
+        # Clean up temporary file on failure
+        if audio_prompt_path and os.path.exists(audio_prompt_path):
+            try:
+                os.unlink(audio_prompt_path)
+            except:
+                pass
+        
+        # If all engines failed, return error
+        raise HTTPException(
+            status_code=500, 
+            detail=f"All TTS engines failed. Last error: {last_error}"
+        )
         
     except HTTPException:
+        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        logger.error(f"Synthesis error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {str(e)}")
+        logger.error(f"Unexpected error in synthesis: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    finally:
+        # Always clean up temporary files
+        if audio_prompt_path and os.path.exists(audio_prompt_path):
+            try:
+                os.unlink(audio_prompt_path)
+            except:
+                pass
 
 @app.post("/synthesize_json", response_model=TTSResponse)
 async def synthesize_speech_json(request: TTSRequest):
