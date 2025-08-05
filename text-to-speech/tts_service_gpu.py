@@ -506,9 +506,9 @@ class GPUTTSService:
         engines_to_try = []
         
         if engine == "auto":
-            # Default fallback order: Chatterbox -> Silero -> Edge -> others
+            # Default fallback order: Chatterbox FIRST (as requested) -> Silero -> Edge -> others
             engines_to_try = [
-                ("chatterbox", self.synthesize_with_chatterbox),  # Primary engine
+                ("chatterbox", self.synthesize_with_chatterbox),  # PRIMARY ENGINE - MUST WORK
                 ("silero", self.synthesize_with_silero),          # First fallback (GPU)
                 ("edge_tts", self.synthesize_with_edge_tts),
                 ("gtts", self.synthesize_with_gtts),
