@@ -63,7 +63,19 @@ install_model() {
     echo -e "${BLUE}📥 Installing $display_name ($size)...${NC}"
     
     # Get the right ollama container (could be ollama or ollama-gpu)
-    local ollama_container=$(docker-compose ps -q ollama 2>/dev/null || docker-compose ps -q ollama-gpu 2>/dev/null)
+    local ollama_container=$(docker-compose ps -q ollama-gpu 2>/dev/null || docker-compose ps -q ollama 2>/dev/null)
+    
+    # Fallback: try to find container by name pattern if docker-compose doesn't work
+    if [ -z "$ollama_container" ]; then
+        ollama_container=$(docker ps --format "{{.Names}}" | grep -E "(ollama-gpu|ollama)" | head -1)
+    fi
+    
+    if [ -z "$ollama_container" ]; then
+        echo -e "${RED}❌ Could not find ollama container${NC}"
+        return 1
+    fi
+    
+    echo -e "${BLUE}🔧 Using container: $ollama_container${NC}"
     
     if docker exec "$ollama_container" ollama pull "$model_name"; then
         echo -e "${GREEN}✅ Successfully installed $display_name${NC}"
