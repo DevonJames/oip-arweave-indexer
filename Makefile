@@ -447,7 +447,7 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI) in TTS 
 		echo "$(BLUE)🔧 Using container: $$CONTAINER_NAME$(NC)"; \
 		PYTHON_CMD="python3"; \
 		docker exec $$CONTAINER_NAME which python3 >/dev/null 2>&1 || PYTHON_CMD="python"; \
-		if docker exec $$CONTAINER_NAME $$PYTHON_CMD -c "import chatterbox; print('✅ Chatterbox already installed')" 2>/dev/null; then \
+		if docker exec $$CONTAINER_NAME $$PYTHON_CMD -c "from chatterbox.tts import ChatterboxTTS; print('✅ Chatterbox already installed')" 2>/dev/null; then \
 			echo "$(GREEN)📋 Chatterbox TTS already available, skipping installation$(NC)"; \
 		else \
 			echo "$(BLUE)📥 Installing Chatterbox package...$(NC)"; \

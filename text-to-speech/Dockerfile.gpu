@@ -44,7 +44,7 @@ RUN pip3 install --no-cache-dir \
     httpx==0.25.2 \
     pydantic==2.5.0 \
     soundfile==0.12.1 \
-    numpy \
+    numpy==1.26.0 \
     scipy \
     librosa
 
