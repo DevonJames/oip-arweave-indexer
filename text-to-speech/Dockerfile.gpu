@@ -44,7 +44,7 @@ RUN pip3 install --no-cache-dir \
     httpx==0.25.2 \
     pydantic==2.5.0 \
     soundfile==0.12.1 \
-    numpy==1.26.0 \
+    numpy==1.24.4 \
     scipy \
     librosa
 
@@ -55,7 +55,7 @@ RUN pip3 install --no-cache-dir \
 
 # Install Chatterbox TTS during build (like working standard profile) 
 # This prevents pip dependency conflicts from post-deployment installation
-RUN pip3 install --no-cache-dir chatterbox-tts==0.1.1 || echo "Chatterbox TTS installation failed - will fallback to other engines"
+RUN pip3 install --no-cache-dir chatterbox-tts==0.1.2 || echo "Chatterbox TTS installation failed - will fallback to other engines"
 
 # Copy service files
 COPY . .
