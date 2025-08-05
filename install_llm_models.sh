@@ -100,29 +100,32 @@ install_model "mistral" "Mistral 7B" "4.1 GB"
 install_model "llama2" "LLaMA 2 7B" "3.8 GB"
 
 # 4. LLaMA 3.2 3B - Fast, efficient modern model (user requested)
-echo -e "${BLUE}📥 Installing LLaMA 3.2 3B (2.0 GB)...${NC}"
-# Get the right ollama container (could be ollama or ollama-gpu)
-ollama_container=$(docker-compose ps -q ollama 2>/dev/null || docker-compose ps -q ollama-gpu 2>/dev/null)
-
-if docker exec "$ollama_container" ollama pull llama3.2:3b; then
-    echo -e "${GREEN}✅ Successfully installed LLaMA 3.2 3B${NC}"
-else
+install_model "llama3.2:3b" "LLaMA 3.2 3B" "2.0 GB" || {
     echo -e "${YELLOW}⚠️  LLaMA 3.2 3B not available, trying alternative...${NC}"
-    # Try the instruct variant
-    if docker exec "$ollama_container" ollama pull llama3.2:3b-instruct-q4_0; then
-        echo -e "${GREEN}✅ Successfully installed LLaMA 3.2 3B Instruct${NC}"
-    else
+    install_model "llama3.2:3b-instruct-q4_0" "LLaMA 3.2 3B Instruct" "2.0 GB" || {
         echo -e "${RED}❌ LLaMA 3.2 variants not available${NC}"
-    fi
-fi
+    }
+}
 echo ""
 
 # Verify installations
 echo -e "${BLUE}🔍 Verifying installed models...${NC}"
 echo ""
 
-# Get the right ollama container (could be ollama or ollama-gpu)
-ollama_container=$(docker-compose ps -q ollama 2>/dev/null || docker-compose ps -q ollama-gpu 2>/dev/null)
+# Get the right ollama container with robust detection
+ollama_container=$(docker-compose ps -q ollama-gpu 2>/dev/null || docker-compose ps -q ollama 2>/dev/null)
+
+# Fallback: try to find container by name pattern if docker-compose doesn't work
+if [ -z "$ollama_container" ]; then
+    ollama_container=$(docker ps --format "{{.Names}}" | grep -E "(ollama-gpu|ollama)" | head -1)
+fi
+
+if [ -z "$ollama_container" ]; then
+    echo -e "${RED}❌ Could not find ollama container for verification${NC}"
+    exit 1
+fi
+
+echo -e "${BLUE}🔧 Using container for verification: $ollama_container${NC}"
 
 if docker exec "$ollama_container" ollama list; then
     echo ""
