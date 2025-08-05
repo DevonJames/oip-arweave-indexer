@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.7.1-runtime-ubuntu20.04
+FROM nvidia/cuda:11.8-runtime-ubuntu22.04
 
 # Set timezone to avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -44,7 +44,7 @@ RUN pip3 install --no-cache-dir \
     httpx==0.25.2 \
     pydantic==2.5.0 \
     soundfile==0.12.1 \
-    numpy==1.24.4 \
+    numpy>=1.24.0 \
     scipy \
     librosa
 
