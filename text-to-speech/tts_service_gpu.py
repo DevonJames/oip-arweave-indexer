@@ -170,14 +170,36 @@ class GPUTTSService:
         try:
             logger.info("🚀 Loading Silero Neural TTS model...")
             
-            # Download and load the Silero model from torch hub
-            model, symbols, sample_rate, example_text, apply_tts = torch.hub.load(
-                repo_or_dir='snakers4/silero-models',
-                model='silero_tts',
-                language='en',
-                speaker='v3_en',
-                trust_repo=True
-            )
+            # Download and load the Silero model from torch hub (handle variable returns)
+            try:
+                # Try the new API format first
+                result = torch.hub.load(
+                    repo_or_dir='snakers4/silero-models',
+                    model='silero_tts',
+                    language='en',
+                    speaker='v3_en',
+                    trust_repo=True
+                )
+                
+                # Handle different return formats
+                if len(result) == 5:
+                    model, symbols, sample_rate, example_text, apply_tts = result
+                elif len(result) == 2:
+                    model, apply_tts = result
+                    sample_rate = 48000  # Default sample rate
+                    symbols = None
+                    example_text = "This is a test"
+                else:
+                    # Fallback - assume first element is model
+                    model = result[0] if isinstance(result, (list, tuple)) else result
+                    apply_tts = None
+                    sample_rate = 48000
+                    symbols = None
+                    example_text = "This is a test"
+                    
+            except Exception as e:
+                logger.error(f"Failed to load Silero model: {e}")
+                raise e
             
             # Move model to GPU if available
             self.silero_model = model.to(self.device)
@@ -804,16 +826,26 @@ async def health_check():
     elif tts_service.silero_model is not None:
         primary_engine = "silero"
     
+    # Build engines array for voice.js compatibility
+    engines_array = [
+        {"name": "chatterbox", "available": tts_service.chatterbox_engine is not None, "primary": True},
+        {"name": "silero", "available": tts_service.silero_model is not None, "primary": False},
+        {"name": "edge_tts", "available": True, "primary": False},
+        {"name": "gtts", "available": True, "primary": False},
+        {"name": "espeak", "available": True, "primary": False}
+    ]
+    
     return {
         "status": "healthy",
         "device": str(tts_service.device),
         "primary_engine": primary_engine,
-        "engines": {
-            "chatterbox": tts_service.chatterbox_engine is not None,  # PRIMARY
-            "silero": tts_service.silero_model is not None,           # First fallback (GPU)
-            "edge_tts": True,  # Always available if network works
-            "gtts": True,      # Always available if network works  
-            "espeak": True     # Usually available in most containers
+        "engines": engines_array,  # Array format for voice.js compatibility
+        "engines_dict": {  # Keep object format for backward compatibility
+            "chatterbox": tts_service.chatterbox_engine is not None,
+            "silero": tts_service.silero_model is not None,
+            "edge_tts": True,
+            "gtts": True,
+            "espeak": True
         },
         "gpu_info": gpu_info,
         "available_voices": len(tts_service.chatterbox_voices) if tts_service.chatterbox_engine else len(tts_service.silero_speakers),
