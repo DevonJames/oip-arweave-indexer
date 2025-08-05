@@ -433,7 +433,7 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI) in TTS 
 	@echo "$(BLUE)🎭 Installing Chatterbox TTS from Resemble AI...$(NC)"
 	@CONTAINER_FOUND=false; \
 	for i in {1..10}; do \
-		if docker ps | grep -E "tts-service.*Up|oip-arweave-indexer-tts-service.*Up" | grep -q Up; then \
+		if docker ps | grep -E "tts-service.*(Up|Running)|tts-service-gpu.*(Up|Running)|oip-arweave-indexer-tts-service.*(Up|Running)|oip-arweave-indexer-tts-service-gpu.*(Up|Running)"; then \
 			CONTAINER_FOUND=true; \
 			break; \
 		fi; \
@@ -443,10 +443,19 @@ install-chatterbox: ## Install/update Chatterbox TTS model (Resemble AI) in TTS 
 	if [ "$$CONTAINER_FOUND" = "true" ]; then \
 		echo "$(YELLOW)📦 Installing Chatterbox in TTS service container (where voice synthesis happens)...$(NC)"; \
 		echo "$(BLUE)⏳ This may take a few moments to download and initialize the model...$(NC)"; \
-		CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep tts-service | head -1); \
+		CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep -E "tts-service" | head -1); \
 		echo "$(BLUE)🔧 Using container: $$CONTAINER_NAME$(NC)"; \
-		docker exec $$CONTAINER_NAME bash -c "python -c \"import chatterbox; print('Chatterbox already available')\" 2>/dev/null || (echo '📥 Installing Chatterbox package...' && pip install --no-cache-dir chatterbox-tts soundfile)" && \
-		docker exec $$CONTAINER_NAME python -c "print('🚀 Initializing Chatterbox TTS...'); from chatterbox.tts import ChatterboxTTS; import torch; device='cuda' if torch.cuda.is_available() else 'cpu'; print(f'🖥️  Using device: {device}'); model = ChatterboxTTS.from_pretrained(device=device); print('✅ Chatterbox TTS (Resemble AI) ready! High-quality neural voice available.'); print('🎉 Voice assistant will now use Chatterbox instead of robotic fallback!')" || \
+		PYTHON_CMD="python3"; \
+		docker exec $$CONTAINER_NAME which python3 >/dev/null 2>&1 || PYTHON_CMD="python"; \
+		if docker exec $$CONTAINER_NAME $$PYTHON_CMD -c "import chatterbox; print('✅ Chatterbox already installed')" 2>/dev/null; then \
+			echo "$(GREEN)📋 Chatterbox TTS already available, skipping installation$(NC)"; \
+		else \
+			echo "$(BLUE)📥 Installing Chatterbox package...$(NC)"; \
+			PIP_CMD="pip3"; \
+			docker exec $$CONTAINER_NAME which pip3 >/dev/null 2>&1 || PIP_CMD="pip"; \
+			docker exec $$CONTAINER_NAME $$PIP_CMD install --no-cache-dir chatterbox-tts soundfile --force-reinstall || echo "$(YELLOW)⚠️ Package installation had issues, trying anyway...$(NC)"; \
+		fi; \
+		docker exec $$CONTAINER_NAME $$PYTHON_CMD -c "print('🚀 Initializing Chatterbox TTS...'); from chatterbox.tts import ChatterboxTTS; import torch; device='cuda' if torch.cuda.is_available() else 'cpu'; print(f'🖥️  Using device: {device}'); model = ChatterboxTTS.from_pretrained(device=device); print('✅ Chatterbox TTS (Resemble AI) ready! High-quality neural voice available.'); print('🎉 Voice assistant will now use Chatterbox instead of robotic fallback!')" || \
 		echo "$(YELLOW)⚠️  Chatterbox installation failed - will use fallback engines (Edge TTS, gTTS, eSpeak)$(NC)"; \
 	else \
 		echo "$(RED)❌ TTS service container not running$(NC)"; \
