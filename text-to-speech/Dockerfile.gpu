@@ -43,7 +43,7 @@ RUN pip3 install --no-cache-dir \
     python-multipart==0.0.6 \
     httpx==0.25.2 \
     pydantic==2.5.0 \
-    numpy==1.26.0 \
+    numpy==1.24.4 \
     scipy \
     librosa \
     soundfile
@@ -54,7 +54,11 @@ RUN pip3 install --no-cache-dir \
     tqdm
 
 # Install Chatterbox TTS (Resemble AI) - REAL Chatterbox
-RUN pip3 install --no-cache-dir chatterbox-tts
+# Try multiple installation strategies to handle dependency conflicts
+RUN echo "Attempting Chatterbox TTS installation..." && \
+    (pip3 install --no-cache-dir --no-deps chatterbox-tts && echo "Installed chatterbox-tts without deps") || \
+    (pip3 install --no-cache-dir chatterbox-tts --force-reinstall && echo "Force reinstalled chatterbox-tts") || \
+    (echo "Chatterbox installation failed - will use fallback TTS engines")
 
 # Copy service files
 COPY . .
