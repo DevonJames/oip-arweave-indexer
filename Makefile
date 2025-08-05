@@ -390,7 +390,7 @@ rebuild-gpu: ## Quick rebuild: GPU-optimized deployment with Chatterbox TTS + ng
 rebuild-oip-gpu-only: ## Quick rebuild: GPU OIP service only + ngrok
 	@make rebuild PROFILE=oip-gpu-only
 
-rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + Chatterbox TTS + install models + ngrok
+rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + install models + ngrok (Chatterbox installed during Docker build)
 	@make rebuild PROFILE=standard-gpu
 	@echo "$(YELLOW)⏳ Waiting for GPU services to be ready...$(NC)"
 	@timeout 60 bash -c 'until docker ps | grep -q -E "ollama-gpu.*(Up|Running)"; do echo "Waiting for Ollama GPU service..."; sleep 2; done' || echo "$(YELLOW)⚠️ Ollama GPU service didn't start in time, trying anyway...$(NC)"
@@ -399,8 +399,7 @@ rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + C
 	@timeout 60 bash -c 'until curl -s http://localhost:11434/api/tags >/dev/null; do echo "Waiting for Ollama API..."; sleep 3; done' || echo "$(YELLOW)⚠️ Ollama API didn't respond in time, trying anyway...$(NC)"
 	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
 	@make install-models
-	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
-	@make install-chatterbox
+	@echo "$(GREEN)🎭 Chatterbox TTS installed during Docker build - GPU profile ready!$(NC)"
 
 rebuild-chatterbox: ## Quick rebuild: Standard deployment with Chatterbox TTS focus (CPU) + ngrok
 	@make rebuild PROFILE=chatterbox
