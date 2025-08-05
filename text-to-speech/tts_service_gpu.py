@@ -20,6 +20,10 @@ import uvicorn
 import time
 import threading
 
+# Configure logging FIRST
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Try to import Chatterbox TTS (Resemble AI) - REAL Chatterbox
 try:
     from chatterbox.tts import ChatterboxTTS
@@ -43,10 +47,6 @@ try:
 except ImportError:
     SCIPY_AVAILABLE = False
     logger.warning("scipy not available - some audio formats may not work")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI(title="GPU TTS Service", version="1.0.0")
 
