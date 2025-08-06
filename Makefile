@@ -43,7 +43,7 @@ help: ## Show this help message
 	@echo "$(YELLOW)ngrok Integration (Simplified v3 Command):$(NC)"
 	@echo "  🌐 API available at: $(GREEN)https://api.oip.onl$(NC)"
 	@echo "  🔧 Setup: Add NGROK_AUTH_TOKEN=your_token to .env file"
-	@echo "  ⚡ Simple command: $(GREEN)ngrok http --url=api.oip.onl 3005$(NC)"
+	@echo "  ⚡ Simple command: $(GREEN)ngrok http --domain=api.oip.onl 3005$(NC)"
 	@echo "  💰 Requires: Paid ngrok plan for custom domain api.oip.onl"
 	@echo "  🧪 Test setup: $(GREEN)make ngrok-test$(NC)"
 
@@ -96,7 +96,7 @@ check-ngrok:
 			echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
 			echo ""; \
 			echo "$(BLUE)Then simply run: make start-ngrok$(NC)"; \
-			echo "$(BLUE)Or manually: ngrok http --url=api.oip.onl 3005$(NC)"; \
+			echo "$(BLUE)Or manually: ngrok http --domain=api.oip.onl 3005$(NC)"; \
 			exit 1; \
 		fi; \
 	else \
@@ -130,8 +130,8 @@ start-ngrok: check-ngrok
 			$$NGROK_CMD config add-authtoken "$$NGROK_AUTH_TOKEN" > /dev/null 2>&1 || true; \
 		fi; \
 	fi; \
-	echo "$(YELLOW)🚀 Starting: $$NGROK_CMD http --url=api.oip.onl 3005$(NC)"; \
-	($$NGROK_CMD http --url=api.oip.onl 3005 > /tmp/ngrok.log 2>&1 &); \
+	echo "$(YELLOW)🚀 Starting: $$NGROK_CMD http --domain=api.oip.onl 3005$(NC)"; \
+	($$NGROK_CMD http --domain=api.oip.onl 3005 > /tmp/ngrok.log 2>&1 &); \
 	sleep 5; \
 	if pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
 		echo "$(GREEN)🔗 ngrok: ✅ Process running$(NC)"; \
@@ -226,7 +226,7 @@ check-gpu:
 		echo "$(BLUE)🎮 GPU Info: $$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1)$(NC)"; \
 	fi
 
-up: validate-profile check-env check-network check-gpu ## Start services with specified profile + ngrok
+up: validate-profile check-env check-gpu ## Start services with specified profile + ngrok
 	@echo "$(BLUE)Starting OIP Arweave with profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Deploying with Chatterbox TTS as primary voice engine...$(NC)"; \
@@ -238,7 +238,19 @@ up: validate-profile check-env check-network check-gpu ## Start services with sp
 	@make start-ngrok
 	@make status
 
-build: validate-profile check-env check-network check-gpu ## Build and start services with specified profile + ngrok
+up-no-makefile-ngrok: validate-profile check-env check-gpu ## Start services with specified profile (ngrok via Docker Compose)
+	@echo "$(BLUE)Starting OIP Arweave with profile: $(PROFILE)$(NC)"
+	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
+		echo "$(YELLOW)🎭 Deploying with Chatterbox TTS as primary voice engine...$(NC)"; \
+	fi
+	docker-compose --profile $(PROFILE) up -d
+	@echo "$(GREEN)Services started successfully$(NC)"
+	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
+	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	@echo "$(BLUE)ngrok tunnel will be managed by Docker Compose using NGROK_DOMAIN from .env$(NC)"
+	@make status
+
+build: validate-profile check-env check-gpu ## Build and start services with specified profile + ngrok
 	@echo "$(BLUE)Building and starting OIP Arweave with profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Building with Chatterbox TTS integration...$(NC)"; \
@@ -250,7 +262,7 @@ build: validate-profile check-env check-network check-gpu ## Build and start ser
 	@make start-ngrok
 	@make status
 
-rebuild: validate-profile check-env check-network check-gpu ## Rebuild and start services with --no-cache and specified profile + ngrok
+rebuild: validate-profile check-env check-gpu ## Rebuild and start services with --no-cache and specified profile + ngrok
 	@echo "$(BLUE)Rebuilding OIP Arweave with --no-cache and profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Rebuilding with Chatterbox TTS from scratch...$(NC)"; \
@@ -320,8 +332,8 @@ clean-orphans: ## Remove orphaned containers (like old ngrok containers)
 	@echo "$(GREEN)✅ Orphaned containers removed$(NC)"
 
 # Quick deployment targets for common scenarios
-minimal: ## Quick deploy: Core services only (elasticsearch, kibana, oip - no canvas) + ngrok
-	@make up PROFILE=minimal
+minimal: ## Quick deploy: Core services only (elasticsearch, kibana, oip - no canvas) + Docker Compose ngrok
+	@make up-no-makefile-ngrok PROFILE=minimal
 
 minimal-with-scrape: ## Quick deploy: Core services + scraping (elasticsearch, kibana, oip + canvas) + ngrok
 	@make up PROFILE=minimal-with-scrape
@@ -550,7 +562,7 @@ ngrok-debug: ## Debug ngrok setup (simple v3 command)
 		echo "  ❌ .env file not found"; \
 	fi
 	@echo "$(YELLOW)Simple command test:$(NC)"
-	@echo "  📋 Full command: $(GREEN)ngrok http --url=api.oip.onl 3005$(NC)"
+	@echo "  📋 Full command: $(GREEN)ngrok http --domain=api.oip.onl 3005$(NC)"
 	@echo "  🎯 This requires your paid plan with custom domain access"
 	@echo "  💡 No config files needed with ngrok v3!"
 
