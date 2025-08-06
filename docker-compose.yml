@@ -448,7 +448,7 @@ services:
     depends_on:
       - oip-gpu
     ports:
-      - "4041:4040"  # Use different host port to avoid conflicts
+      - "4042:4040"  # Use port 4042 to avoid conflicts with other ngrok instances
     networks:
       - oip-network
     restart: unless-stopped
