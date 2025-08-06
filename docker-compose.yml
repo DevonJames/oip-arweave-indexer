@@ -406,6 +406,38 @@ services:
   #   restart: unless-stopped
   #   profiles:
   #     - standard
+  
+  # Ngrok for public access
+  ngrok:
+    image: ngrok/ngrok
+    command: http --domain=${NGROK_DOMAIN} oip:3005
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+    depends_on:
+      - oip
+    ports:
+      - "4040:4040"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - standard
+
+  # Ngrok for minimal profile
+  ngrok-minimal:
+    image: ngrok/ngrok
+    command: http --domain=${NGROK_DOMAIN} oip-minimal:3005
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
+    depends_on:
+      - oip-minimal
+    ports:
+      - "4040:4040"
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - minimal
 
   # Ngrok for GPU deployments - Fixed for RTX 4090 server deployments
   ngrok-gpu:
