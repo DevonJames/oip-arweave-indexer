@@ -480,7 +480,15 @@ router.get('/schemas', (req, res) => {
 });
 
 
-
+router.get('/newBasic/schema', async (req, res) => { 
+    try {
+        const basicSchema = await generateDynamicSchema('basic', 'POST /api/publish/newBasic', 'basic record');
+        res.status(200).json(basicSchema);
+    } catch (error) {
+        console.error('Error generating basic schema:', error);
+        res.status(500).json({ error: 'Failed to generate basic schema' });
+    }
+});
 
 // Function to create new nutritional info records for missing ingredients
 async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave') {
@@ -1981,6 +1989,74 @@ async function generateDynamicSchema(templateName, endpointPath, templateDescrip
         return examples[fieldName][templateName] || examples[fieldName]['default'];
     };
 
+    const allBasicFields = {
+        'name': {
+            type: 'string',
+            example: getContextualExample('name'),
+            description: 'Title or name of the content'
+        },
+        'description': {
+            type: 'string',
+            example: getContextualExample('description'),
+            description: 'Brief description of the content'
+        },
+        'date': {
+            type: 'long',
+            example: Math.floor(Date.now() / 1000),
+            description: 'Unix timestamp (default: current time)'
+        },
+        'language': {
+            type: 'string',
+            example: 'en',
+            description: 'Language code (default: "en")'
+        },
+        'avatar': {
+            type: 'dref',
+            example: 'did:arweave:avatar123...',
+            description: 'DID reference to the avatar image'
+        },
+        'license': {
+            type: 'dref',
+            example: 'did:arweave:license123...',
+            description: 'DID reference to License'
+        },
+        'nsfw': {
+            type: 'bool',
+            example: false,
+            description: 'Boolean for adult content (default: false)'
+        },
+        'creatorItems': {
+            type: 'repeated dref',
+            example: ['did:arweave:creator123...', 'did:arweave:creator456...'],
+            description: 'Array of DID references to the creators of the content'
+        },
+        'tagItems': {
+            type: 'repeated string',
+            example: getContextualExample('tagItems'),
+            description: 'Array of tags for categorization'
+        },
+        'noteItems': {
+            type: 'repeated string',
+            example: ['note1', 'note2', 'note3'],
+            description: 'Array of notes for the content'
+        },
+        'urlItems': {
+            type: 'repeated dref',
+            example: ['did:arweave:url123...', 'did:arweave:url456...'],
+            description: 'Array of DID references to the URLs for the content'
+        },
+        'citations': {
+            type: 'repeated dref',
+            example: ['did:arweave:citation123...', 'did:arweave:citation456...'],
+            description: 'Array of DID references to the citations for the content'
+        },
+        'webUrl': {
+            type: 'string',
+            example: 'https://example.com',
+            description: 'Optional source URL'
+        }
+    }
+
     const essentialBasicFields = {
         'name': {
             type: 'string',
@@ -2009,9 +2085,10 @@ async function generateDynamicSchema(templateName, endpointPath, templateDescrip
         }
     };
 
-    // Add essential basic fields first
-    Object.keys(essentialBasicFields).forEach(fieldName => {
-        const fieldInfo = essentialBasicFields[fieldName];
+    // Add basic fields first - use allBasicFields for 'basic' template, essentialBasicFields for others
+    const fieldsToUse = templateName === 'basic' ? allBasicFields : essentialBasicFields;
+    Object.keys(fieldsToUse).forEach(fieldName => {
+        const fieldInfo = fieldsToUse[fieldName];
         basicFields[fieldName] = fieldInfo.example;
         fieldDescriptions[`basic.${fieldName}`] = fieldInfo.description;
     });
