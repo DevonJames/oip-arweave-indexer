@@ -580,6 +580,14 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 console.log(`[Voice Chat] Using search params:`, ragOptions.searchParams);
             }
             
+            // If a pinned DID is supplied by the client, bypass search and answer about that record
+            if (req.body.pinnedDidTx && typeof req.body.pinnedDidTx === 'string') {
+                console.log(`[Voice Chat] Pinned DID provided by client: ${req.body.pinnedDidTx}`);
+                ragOptions.pinnedDidTx = req.body.pinnedDidTx;
+                // Disable filter analysis to skip interpretation/search in single-record mode
+                ragOptions.include_filter_analysis = false;
+            }
+
             ragResponse = await alfred.query(inputText, ragOptions);
             responseText = ragResponse.answer;
         }
