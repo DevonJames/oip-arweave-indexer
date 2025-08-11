@@ -10,6 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 const semver = require('semver');
 const { gql, request } = require('graphql-request');
 const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber, resolveRecords } = require('./utils');
+const recordTypeIndexConfig = require('../config/recordTypesToIndex');
 // const { sign } = require('crypto');
 // const { get } = require('http');
 const path = require('path');
@@ -528,6 +529,12 @@ async function indexDocument(index, id, body) {
 const indexRecord = async (record) => {
     console.log(getFileInfo(), getLineNumber(), 'indexing this record:', record);
     try {
+        // Enforce record type indexing policy as a safety net
+        const typeForIndex = record?.oip?.recordType;
+        if (typeForIndex && !shouldIndexRecordType(typeForIndex)) {
+            console.log(getFileInfo(), getLineNumber(), `Skipping indexing for recordType '${typeForIndex}' per configuration.`);
+            return;
+        }
         const didTx = record.oip.didTx;
         const existingRecord = await elasticClient.exists({
             index: 'records',
@@ -3252,6 +3259,11 @@ async function processNewRecord(transaction, remapTemplates = []) {
     } else {
         // handle new records
         console.log(getFileInfo(), getLineNumber());
+        // Apply record type indexing policy early (deleteMessage bypassed above)
+        if (recordType && !shouldIndexRecordType(recordType)) {
+            console.log(getFileInfo(), getLineNumber(), `Skipping processing for recordType '${recordType}' per configuration.`);
+            return { records: newRecords, recordsToDelete };
+        }
         // Filter for minimum OIP version (0.8.0 or above)
         const version = transaction.ver;
         const versionParts = version.split('.').map(Number);
@@ -3314,6 +3326,34 @@ async function processNewRecord(transaction, remapTemplates = []) {
         }
     }
 }
+}
+
+function shouldIndexRecordType(recordType) {
+    try {
+        const mode = (recordTypeIndexConfig.mode || 'all').toLowerCase();
+        const typeNorm = String(recordType).trim();
+
+        // Always index delete messages regardless of config
+        if (typeNorm === 'deleteMessage') return true;
+
+        if (mode === 'all') return true;
+
+        if (mode === 'blacklist') {
+            const blocked = new Set((recordTypeIndexConfig.blacklist || []).map(t => String(t).trim()));
+            return !blocked.has(typeNorm);
+        }
+
+        if (mode === 'whitelist') {
+            const allowed = new Set((recordTypeIndexConfig.whitelist || []).map(t => String(t).trim()));
+            return allowed.has(typeNorm);
+        }
+
+        // Fallback to safe default: index all
+        return true;
+    } catch (err) {
+        console.error(getFileInfo(), getLineNumber(), 'Error evaluating record type index policy:', err);
+        return true; // fail-open to avoid accidental data loss
+    }
 }
 
 // Middleware to verify if a user is an admin
