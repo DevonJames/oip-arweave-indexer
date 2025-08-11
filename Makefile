@@ -130,7 +130,7 @@ start-ngrok: check-ngrok
 			$$NGROK_CMD config add-authtoken "$$NGROK_AUTH_TOKEN" > /dev/null 2>&1 || true; \
 		fi; \
 	fi; \
-	echo "$(YELLOW)🚀 Starting: $$NGROK_CMD http --domain=api.oip.onl 3005$(NC)"; \
+	echo "$(YELLOW)🚀 Starting: $$NGROK_CMD http --domain=oip.fitnessally.io 3005$(NC)"; \
 	($$NGROK_CMD http --domain=api.oip.onl 3005 > /tmp/ngrok.log 2>&1 &); \
 	sleep 5; \
 	if pgrep -f "ngrok http.*api.oip.onl" > /dev/null 2>&1; then \
