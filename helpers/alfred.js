@@ -295,6 +295,22 @@ JSON Response:`;
         const { existingContext = null, selectedModel = null, searchParams = {} } = options;
         
         try {
+            // Shortcut: if caller explicitly wants to force using the provided context, skip analysis/search
+            if (options.forceExistingContext && existingContext && Array.isArray(existingContext) && existingContext.length > 0) {
+                const inferredType = existingContext[0]?.recordType || 'unknown';
+                return this.extractAndFormatContent(
+                    question,
+                    existingContext,
+                    {
+                        search: 'existing_context_forced',
+                        recordType: inferredType,
+                        limit: existingContext.length,
+                        rationale: 'Used forced existing context'
+                    },
+                    []
+                );
+            }
+
             // Step 0: Analyze question using selected LLM for comprehensive understanding
             // Pass context information to help with follow-up detection
             const contextForAnalysis = {
@@ -1317,6 +1333,25 @@ Please provide a helpful, conversational answer starting with "I didn't find any
             console.log(`[ALFRED] 🔍 Processing query: "${question}"`);
             const { include_filter_analysis = false, searchParams = {} } = options;
             
+            // New single-record mode: if a pinnedDidTx is provided, bypass search and answer about that record
+            if (options.pinnedDidTx && typeof options.pinnedDidTx === 'string') {
+                console.log(`[ALFRED] 📌 Pinned DID detected, answering about a single record: ${options.pinnedDidTx}`);
+                const singleResult = await this.answerQuestionAboutRecord(options.pinnedDidTx, question, options);
+                // Conform to legacy return shape
+                return {
+                    answer: singleResult.answer,
+                    sources: this.formatSources(singleResult.search_results),
+                    context_used: singleResult.context_used,
+                    model: options.model || this.defaultModel,
+                    search_results_count: singleResult.search_results_count,
+                    search_results: singleResult.search_results,
+                    applied_filters: singleResult.applied_filters,
+                    extracted_subject: singleResult.extracted_subject,
+                    extracted_keywords: singleResult.extracted_keywords,
+                    rationale: singleResult.rationale
+                };
+            }
+
             // Check if we should use the Intelligent Question Processor (IQP)
             const shouldUseIQP = include_filter_analysis && 
                 (!searchParams.recordType && !searchParams.tags && !searchParams.creatorHandle);
@@ -2103,6 +2138,51 @@ ANSWER:`;
                 extractedModifiers: modifiers
             }
         };
+    }
+
+    /**
+     * Answer a question about a specific record identified by didTx.
+     * Fetches the record with resolveDepth=2 and builds rich context (incl. recipe nutrition summaries) before calling the LLM.
+     */
+    async answerQuestionAboutRecord(didTx, question, options = {}) {
+        try {
+            // Fetch the specific record with required depth and summaries
+            const fetchParams = {
+                didTx,
+                resolveDepth: 2,
+                summarizeRecipe: true,
+                includeSigs: false,
+                includePubKeys: false,
+                limit: 1
+            };
+
+            console.log(`[ALFRED] 📥 Loading single record for DID: ${didTx} with`, fetchParams);
+            const single = await getRecords(fetchParams);
+            const records = (single && Array.isArray(single.records)) ? single.records.slice(0, 1) : [];
+
+            if (records.length === 0) {
+                return this.formatEmptyResult(
+                    question,
+                    { search: didTx, recordType: 'unknown', resolveDepth: 2 },
+                    'Pinned record not found'
+                );
+            }
+
+            // Applied filters metadata
+            const appliedFilters = {
+                search: didTx,
+                recordType: records[0].oip?.recordType || 'unknown',
+                resolveDepth: 2,
+                summarizeRecipe: true,
+                rationale: 'Answered about pinned record (single-record mode)'
+            };
+
+            // Build rich content and generate response (reuses type-specific context + nutrition)
+            return this.extractAndFormatContent(question, records, appliedFilters, []);
+        } catch (error) {
+            console.error('[ALFRED] Error in answerQuestionAboutRecord:', error);
+            return this.formatErrorResult(question, error.message);
+        }
     }
 }
 

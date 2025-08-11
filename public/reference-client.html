@@ -3310,6 +3310,11 @@
                         <span>Ask AI</span>
                     </button>
                 </div>
+                <div style="margin-top: 8px; font-size: 12px; opacity: 0.9; display: flex; gap: 8px; align-items: center;">
+                    <label for="alfred-pinned-did" style="min-width: 120px;">Pinned Record DID:</label>
+                    <input id="alfred-pinned-did" type="text" placeholder="did:arweave:... (optional)" style="flex:1; padding:6px; border-radius:4px; border:1px solid #888;" onchange="onPinnedDidChange(this.value)" />
+                    <button class="btn-small" onclick="clearPinnedDid()">Clear</button>
+                </div>
             </div>
         </div>
     </div>
@@ -8489,7 +8494,8 @@
                         include_filter_analysis: false, // Don't perform new search
                         is_follow_up: true,
                         conversation_context: chatState.conversation.slice(-4), // Last 4 messages for context
-                        existing_search_results: currentRecords && currentRecords.length === 1 ? currentRecords : chatState.lastSearchResults
+                        existing_search_results: currentRecords && currentRecords.length === 1 ? currentRecords : chatState.lastSearchResults,
+                        pinnedDidTx: (window.__alfredPinnedDid || '').trim() || undefined
                     }),
                     signal: controller.signal
                 });
@@ -8576,6 +8582,13 @@
                     is_follow_up: false
                 };
                 
+                // If a pinned DID is set, force single-record mode server-side
+                if ((window.__alfredPinnedDid || '').trim()) {
+                    requestBody.pinnedDidTx = window.__alfredPinnedDid.trim();
+                    // In single-record mode, there is no need to pass existingContext/searchParams
+                    requestBody.include_filter_analysis = false;
+                }
+
                 // Pass existing context if filters are active and we have a reasonable number of records
                 if (shouldPassFullContext) {
                     // Pass first 10 records as context to avoid overwhelming the API
@@ -8665,6 +8678,32 @@
                 
                 throw fetchError;
             }
+        }
+
+        // Manage pinned DID state from the new input
+        function onPinnedDidChange(value) {
+            const val = (value || '').trim();
+            if (!val) {
+                window.__alfredPinnedDid = '';
+                return;
+            }
+            if (!val.startsWith('did:arweave:')) {
+                alert('Please enter a valid DID that starts with did:arweave:');
+                return;
+            }
+            window.__alfredPinnedDid = val;
+            // Also reflect to the main filters DID input so the browse view loads that record
+            const didInput = document.getElementById('voice-did-tx');
+            if (didInput) {
+                didInput.value = val;
+                validateAndApplyDidTx();
+            }
+        }
+
+        function clearPinnedDid() {
+            window.__alfredPinnedDid = '';
+            const pinned = document.getElementById('alfred-pinned-did');
+            if (pinned) pinned.value = '';
         }
 
 
