@@ -323,19 +323,21 @@ status: ## Show service status + ngrok status
 		DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
 	fi; \
 	if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
-	if pgrep -f "ngrok http.*$$DOMAIN" > /dev/null 2>&1; then \
-		echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
-		echo "$(GREEN)🌐 API: https://$$DOMAIN$(NC)"; \
-		if command -v curl >/dev/null 2>&1; then \
-			echo "$(BLUE)Checking tunnel connectivity...$(NC)"; \
-			if curl -s --max-time 3 http://localhost:4040/api/tunnels | grep -q "$$DOMAIN"; then \
-				echo "$(GREEN)✅ Tunnel verified: https://$$DOMAIN$(NC)"; \
-			else \
-				echo "$(YELLOW)⚠️  Tunnel may not be fully ready$(NC)"; \
-			fi; \
+	if command -v curl >/dev/null 2>&1 && curl -s --max-time 3 http://localhost:4040/api/tunnels >/dev/null; then \
+		if curl -s --max-time 3 http://localhost:4040/api/tunnels | grep -q "$$DOMAIN"; then \
+			echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
+			echo "$(GREEN)🌐 API: https://$$DOMAIN$(NC)"; \
+			echo "$(GREEN)✅ Tunnel verified: https://$$DOMAIN$(NC)"; \
+		else \
+			echo "$(YELLOW)⚠️  ngrok API reachable on :4040 but domain not reported yet$(NC)"; \
+			curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | "  \(.public_url) -> \(.config.addr)"' 2>/dev/null || true; \
 		fi; \
 	else \
-		echo "$(RED)❌ ngrok: Not running$(NC)"; \
+		if docker ps --format '{{.Names}}' | grep -q 'ngrok'; then \
+			echo "$(YELLOW)⚠️  ngrok container running but API not reachable on 4040$(NC)"; \
+		else \
+			echo "$(RED)❌ ngrok: Not running$(NC)"; \
+		fi; \
 	fi
 	@echo ""
 	@echo "$(BLUE)Networks:$(NC)"
@@ -529,16 +531,18 @@ ngrok-status: ## Check ngrok tunnel status
 		DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
 	fi; \
 	if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
-	if pgrep -f "ngrok http.*$$DOMAIN" > /dev/null 2>&1; then \
+	if command -v curl >/dev/null 2>&1 && curl -s --max-time 3 http://localhost:4040/api/tunnels >/dev/null; then \
 		echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
 		echo "$(GREEN)🌐 API: https://$$DOMAIN$(NC)"; \
-		if command -v curl >/dev/null 2>&1; then \
-			echo "$(BLUE)Active tunnels:$(NC)"; \
-			curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | "  \(.public_url) -> \(.config.addr)"' 2>/dev/null || echo "  Check http://localhost:4040 for tunnel details"; \
-		fi; \
+		echo "$(BLUE)Active tunnels:$(NC)"; \
+		curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | "  \(.public_url) -> \(.config.addr)"' 2>/dev/null || echo "  Check http://localhost:4040 for tunnel details"; \
 	else \
-		echo "$(RED)❌ ngrok: Not running$(NC)"; \
-		echo "$(YELLOW)Start with: make start-ngrok$(NC)"; \
+		if docker ps --format '{{.Names}}' | grep -q 'ngrok'; then \
+			echo "$(YELLOW)⚠️  ngrok container running but API not reachable on 4040$(NC)"; \
+		else \
+			echo "$(RED)❌ ngrok: Not running$(NC)"; \
+			echo "$(YELLOW)Start with: make start-ngrok$(NC)"; \
+		fi; \
 	fi
 
 ngrok-start: start-ngrok ## Start ngrok tunnel only
