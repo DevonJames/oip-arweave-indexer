@@ -1,4 +1,5 @@
-const backendURL = 'https://api.oip.onl';
+// Use env-driven API base injected by /config.js; fallback to same-origin
+const backendURL = (typeof window !== 'undefined' && window.API_BASE_URL) ? window.API_BASE_URL : '';
 
 // Function to save JWT token to local storage
 function saveJwtToken(token) {

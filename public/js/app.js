@@ -1172,7 +1172,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Send the request directly to the converse endpoint
-        fetch('https://api.oip.onl/api/generate/converse', {
+        const base = (typeof window !== 'undefined' && window.API_BASE_URL) ? window.API_BASE_URL : '';
+        fetch(`${base}/api/generate/converse`, {
             method: 'POST',
             body: formData
         }).then(response => {
@@ -1182,7 +1183,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Create EventSource from the response
             // We don't need to open a new connection, the response IS the SSE stream
-            eventSource = new EventSource('https://api.oip.onl/api/generate/converse');
+            eventSource = new EventSource(`${base}/api/generate/converse`);
             
             let aiResponse = '';
             let audioQueue = [];

@@ -63,8 +63,8 @@ console.log('authenticateToken:', authenticateToken);
 
 require('dotenv').config();
 
-// const backendURL = 'http://localhost:3005';
-const backendURL = 'https://api.oip.onl';
+// Prefer PUBLIC_API_BASE_URL; fallback to local server if not set
+const backendURL = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005';
 
 // Add this line near the top of your file, after your imports
 // const ongoingScrapes = new Map();

@@ -1,4 +1,5 @@
-const backendURL = 'https://api.oip.onl'; // Define the backend URL
+// Use env-driven API base injected by /config.js; fallback to same-origin
+const backendURL = (typeof window !== 'undefined' && window.API_BASE_URL) ? window.API_BASE_URL : '';
 let token; 
 // Ensure admin is authenticated when the page loads
 document.addEventListener('DOMContentLoaded', () => {
