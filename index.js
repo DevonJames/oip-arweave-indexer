@@ -131,6 +131,15 @@ app.use((req, res, next) => {
     next();
 });
 
+// Public runtime config for static clients (e.g., reference-client.html)
+// Exposes window.API_BASE_URL derived from env var PUBLIC_API_BASE_URL
+app.get('/config.js', (req, res) => {
+  const apiBase = process.env.PUBLIC_API_BASE_URL || '';
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  const safeApiBase = String(apiBase).replace(/'/g, "\\'");
+  res.send(`window.API_BASE_URL = '${safeApiBase}';`);
+});
+
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 

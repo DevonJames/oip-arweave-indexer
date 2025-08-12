@@ -15,7 +15,8 @@ function initSocketServer(server) {
     const wss = new WebSocket.Server({ server });
     
     wss.on('connection', (ws, req) => {
-        const url = new URL(req.url, 'https://api.oip.onl/api/open-stream');
+        const base = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005';
+        const url = new URL(req.url, `${base}/api/open-stream`);
         const id = url.searchParams.get('id');
         
         console.log(`Socket connection opened successfully`);

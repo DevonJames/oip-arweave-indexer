@@ -1524,7 +1524,7 @@ async function generatePodcastFromArticles(articles, selectedHosts, targetLength
         "tagItems": episodeTagsArray || [],
       },
       "audio": {
-            "webUrl": `https://api.oip.onl/api/media?id=${podcastFile}`,
+            "webUrl": `${process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005'}/api/media?id=${podcastFile}`,
             "contentType" : "audio/mp3"
       },
       // "post": {
