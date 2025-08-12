@@ -1077,7 +1077,21 @@ JSON Response:`;
                 context += `Type: ${item.type}\n`;
             });
 
-            const prompt = `You are answering a direct question. You have some specific information available, but if it doesn't contain what's needed to answer the question, be honest about that and then provide a helpful answer from your general knowledge.
+            // Tailor guidance for single-record and record-type-specific questions
+            const isSingleRecord = Boolean(appliedFilters && appliedFilters.singleRecordMode);
+            const dominantType = contentItems.length > 0 ? contentItems[0].type : null;
+            let extraDirectives = '';
+
+            if (isSingleRecord) {
+                extraDirectives += `\nYou are answering about a single specific record only. Do not describe that you "found a record"—answer the user's question directly using this record's details.`;
+                if (dominantType === 'recipe') {
+                    extraDirectives += `\nFor recipe questions (e.g., "how do I make this"), return clear, numbered cooking steps. If steps are present in the data (instructions or method), enumerate them; otherwise infer reasonable steps from the ingredients and any timing fields. Include prep time, cook time, total time, and servings if available. Keep it actionable and concise.`;
+                } else if (dominantType === 'exercise') {
+                    extraDirectives += `\nFor exercise questions, provide step-by-step instructions and key cues (muscle groups, sets/reps, equipment).`;
+                }
+            }
+
+            const prompt = `You are answering a direct question. You have some specific information available, but if it doesn't contain what's needed to answer the question, be honest about that and then provide a helpful answer from your general knowledge.${extraDirectives}
 
 Information available:
 ${context}
@@ -2174,7 +2188,8 @@ ANSWER:`;
                 recordType: records[0].oip?.recordType || 'unknown',
                 resolveDepth: 2,
                 summarizeRecipe: true,
-                rationale: 'Answered about pinned record (single-record mode)'
+                rationale: 'Answered about pinned record (single-record mode)',
+                singleRecordMode: true
             };
 
             // Build rich content and generate response (reuses type-specific context + nutrition)
