@@ -1132,8 +1132,37 @@ Be conversational and natural. Do not use phrases like "according to the context
             
         } catch (error) {
             console.error(`[ALFRED] RAG generation error:`, error.message);
-            
-            // Improved fallback response that tries to provide specific information
+
+            // Attempt cloud fallback if available
+            try {
+                const cloudCandidates = [];
+                if (this.openaiApiKey) cloudCandidates.push('gpt-4o-mini');
+                if (this.xaiApiKey) cloudCandidates.push('grok-beta');
+
+                for (const modelName of cloudCandidates) {
+                    try {
+                        console.log(`[ALFRED] 🌐 Falling back to cloud model: ${modelName}`);
+                        const cloudText = await this.callCloudModel(modelName, prompt, {
+                            temperature: 0.4,
+                            max_tokens: 700,
+                            stop: null
+                        });
+                        if (cloudText && cloudText.trim()) {
+                            return {
+                                answer: cloudText.trim(),
+                                model_used: modelName,
+                                context_length: context.length
+                            };
+                        }
+                    } catch (cloudErr) {
+                        console.warn(`[ALFRED] Cloud fallback with ${modelName} failed:`, cloudErr.message);
+                    }
+                }
+            } catch (cloudSetupErr) {
+                console.warn('[ALFRED] Cloud fallback setup error:', cloudSetupErr.message);
+            }
+
+            // Improved local fallback that tries to provide specific information
             let fallbackAnswer;
             
             if (contentItems.length === 0) {
@@ -1145,7 +1174,27 @@ Be conversational and natural. Do not use phrases like "according to the context
                 
                 if (item.type === 'recipe') {
                     // Recipe-specific fallback answers
-                    if (lowerQuestion.includes('cook') && lowerQuestion.includes('time') && item.cookTimeMinutes) {
+                    if ((lowerQuestion.includes('make') || lowerQuestion.includes('how do i') || lowerQuestion.includes('instructions') || lowerQuestion.includes('method') || lowerQuestion.includes('steps')) && item.instructions) {
+                        // Normalize instructions to a numbered list
+                        let steps = [];
+                        if (Array.isArray(item.instructions)) {
+                            steps = item.instructions;
+                        } else if (typeof item.instructions === 'string') {
+                            steps = item.instructions
+                                .split(/\n+|\r+|[\.;]\s+/)
+                                .map(s => s.trim())
+                                .filter(Boolean);
+                        }
+                        const limited = steps.slice(0, 12); // keep it concise
+                        const numbered = limited.map((s, i) => `${i + 1}. ${s}`).join('\n');
+                        const timeBits = [
+                            item.prepTimeMinutes ? `Prep: ${item.prepTimeMinutes} min` : null,
+                            item.cookTimeMinutes ? `Cook: ${item.cookTimeMinutes} min` : null,
+                            item.totalTimeMinutes ? `Total: ${item.totalTimeMinutes} min` : null,
+                            item.servings ? `Servings: ${item.servings}` : null
+                        ].filter(Boolean).join(' • ');
+                        fallbackAnswer = `${timeBits ? timeBits + '\n' : ''}Steps to make ${item.title}:${numbered ? '\n' + numbered : ''}`.trim();
+                    } else if (lowerQuestion.includes('cook') && lowerQuestion.includes('time') && item.cookTimeMinutes) {
                         fallbackAnswer = `This ${item.title} takes ${item.cookTimeMinutes} minutes to cook.`;
                     } else if (lowerQuestion.includes('prep') && lowerQuestion.includes('time') && item.prepTimeMinutes) {
                         fallbackAnswer = `The prep time for ${item.title} is ${item.prepTimeMinutes} minutes.`;
