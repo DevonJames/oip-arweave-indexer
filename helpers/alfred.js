@@ -63,6 +63,44 @@ class ALFRED {
 
         // Convert numeric ranges to "to" for hyphen, en dash, or em dash
         text = text.replace(/(\d+)\s*[\-–—]\s*(\d+)/g, '$1 to $2');
+
+        // Speak common decimal quantities as fractions (recipe-friendly)
+        const replaceDecimalFractions = (s) => {
+            // integer + decimal (e.g., 1.5 -> 1 and one half)
+            s = s.replace(/\b(\d+)\.(?:50|5)\b/g, '$1 and one half');
+            s = s.replace(/\b(\d+)\.(?:25|24|26)\b/g, '$1 and one quarter');
+            s = s.replace(/\b(\d+)\.(?:75|74|76)\b/g, '$1 and three quarters');
+            s = s.replace(/\b(\d+)\.(?:33|34)\b/g, '$1 and one third');
+            s = s.replace(/\b(\d+)\.(?:66|67)\b/g, '$1 and two thirds');
+            s = s.replace(/\b(\d+)\.(?:20)\b/g, '$1 and one fifth');
+            s = s.replace(/\b(\d+)\.(?:40)\b/g, '$1 and two fifths');
+            s = s.replace(/\b(\d+)\.(?:60)\b/g, '$1 and three fifths');
+            s = s.replace(/\b(\d+)\.(?:80)\b/g, '$1 and four fifths');
+            s = s.replace(/\b(\d+)\.(?:12|125)\b/g, '$1 and one eighth');
+            s = s.replace(/\b(\d+)\.(?:37|375)\b/g, '$1 and three eighths');
+            s = s.replace(/\b(\d+)\.(?:62|625)\b/g, '$1 and five eighths');
+            s = s.replace(/\b(\d+)\.(?:16|17)\b/g, '$1 and one sixth');
+            s = s.replace(/\b(\d+)\.(?:83|84)\b/g, '$1 and five sixths');
+
+            // pure decimals (e.g., 0.5 -> one half)
+            s = s.replace(/\b0\.(?:50|5)\b/g, 'one half');
+            s = s.replace(/\b0\.(?:25|24|26)\b/g, 'one quarter');
+            s = s.replace(/\b0\.(?:75|74|76)\b/g, 'three quarters');
+            s = s.replace(/\b0\.(?:33|34)\b/g, 'one third');
+            s = s.replace(/\b0\.(?:66|67)\b/g, 'two thirds');
+            s = s.replace(/\b0\.(?:20)\b/g, 'one fifth');
+            s = s.replace(/\b0\.(?:40)\b/g, 'two fifths');
+            s = s.replace(/\b0\.(?:60)\b/g, 'three fifths');
+            s = s.replace(/\b0\.(?:80)\b/g, 'four fifths');
+            s = s.replace(/\b0\.(?:12|125)\b/g, 'one eighth');
+            s = s.replace(/\b0\.(?:37|375)\b/g, 'three eighths');
+            s = s.replace(/\b0\.(?:62|625)\b/g, 'five eighths');
+            s = s.replace(/\b0\.(?:16|17)\b/g, 'one sixth');
+            s = s.replace(/\b0\.(?:83|84)\b/g, 'five sixths');
+
+            return s;
+        };
+        text = replaceDecimalFractions(text);
         return text;
     }
 
