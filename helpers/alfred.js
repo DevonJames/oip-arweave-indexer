@@ -42,12 +42,28 @@ class ALFRED {
      * Preprocess text for better TTS pronunciation
      */
     preprocessTextForTTS(text) {
-        // Replace number-dash-number patterns with "number to number" for better TTS
-        // Examples: "3-5" becomes "3 to 5", "8-10" becomes "8 to 10"
         // Replace * and # symbols with spaces
         text = text.replace(/\*/g, ' ');
         text = text.replace(/#/g, ' ');
-        return text.replace(/(\d+)-(\d+)/g, '$1 to $2');
+
+        // Expand common recipe abbreviations for clearer speech
+        // 1 or 1.0 uses singular; anything else uses plural
+        const expandUnit = (numStr, unit) => {
+            const n = parseFloat(numStr);
+            const isSingular = Math.abs(n - 1) < 1e-9;
+            if (unit.toLowerCase() === 'tbsp') return `${numStr} ${isSingular ? 'tablespoon' : 'tablespoons'}`;
+            if (unit.toLowerCase() === 'tsp') return `${numStr} ${isSingular ? 'teaspoon' : 'teaspoons'}`;
+            return `${numStr} ${unit}`;
+        };
+        // With preceding number
+        text = text.replace(/(\d+(?:\.\d+)?)\s*(tbsp|tsp)\b/gi, (_, n, u) => expandUnit(n, u));
+        // Without preceding number, default plural
+        text = text.replace(/\btbsp\b/gi, 'tablespoons');
+        text = text.replace(/\btsp\b/gi, 'teaspoons');
+
+        // Convert numeric ranges to "to" for hyphen, en dash, or em dash
+        text = text.replace(/(\d+)\s*[\-–—]\s*(\d+)/g, '$1 to $2');
+        return text;
     }
 
     /**
@@ -1085,7 +1101,7 @@ JSON Response:`;
             if (isSingleRecord) {
                 extraDirectives += `\nYou are answering about a single specific record only. Do not describe that you "found a record"—answer the user's question directly using this record's details.`;
                 if (dominantType === 'recipe') {
-                    extraDirectives += `\nFor recipe questions (e.g., "how do I make this"), return clear, numbered cooking steps. If steps are present in the data (instructions or method), enumerate them; otherwise infer reasonable steps from the ingredients and any timing fields. Include prep time, cook time, total time, and servings if available. Keep it actionable and concise.`;
+                    extraDirectives += `\nFor recipe questions (e.g., "how do I make this"), return clear, numbered cooking steps. If steps are present in the data (instructions or method), enumerate them; otherwise infer reasonable steps from the ingredients and any timing fields. Include prep time, cook time, total time, and servings if available. Keep it actionable and concise.\nAlso normalize text for clarity: expand tbsp→tablespoon(s), tsp→teaspoon(s), and read numeric ranges like 2–4 as "2 to 4".`;
                 } else if (dominantType === 'exercise') {
                     extraDirectives += `\nFor exercise questions, provide step-by-step instructions and key cues (muscle groups, sets/reps, equipment).`;
                 }
