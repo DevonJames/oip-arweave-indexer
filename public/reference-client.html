@@ -4082,6 +4082,18 @@
             } else {
                 loadRecordForView(didTx);
             }
+
+            // If ALFRED drawer is open, set pinned record DID to this record
+            try {
+                const drawer = document.getElementById('ai-drawer');
+                if (drawer && drawer.classList.contains('open')) {
+                    window.__alfredPinnedDid = didTx;
+                    const pinnedInput = document.getElementById('alfred-pinned-did');
+                    if (pinnedInput) pinnedInput.value = didTx;
+                }
+            } catch (e) {
+                console.warn('[RecordView] Unable to set pinned DID for ALFRED:', e);
+            }
         }
 
         function goBackToBrowse() {
