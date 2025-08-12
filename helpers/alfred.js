@@ -923,8 +923,44 @@ JSON Response:`;
                     content.difficulty = specificData.difficulty || null;
                     content.cuisine = specificData.cuisine || null;
                     
-                    // Include full recipe data for comprehensive analysis
+                    // Include full recipe data and build precise measured ingredients list when parallel arrays exist
                     content.recipeData = specificData;
+
+                    try {
+                        const amounts = specificData.ingredient_amount || [];
+                        const units = specificData.ingredient_unit || [];
+                        const names = specificData.ingredient || [];
+                        const comments = specificData.ingredient_comment || [];
+                        const measured = [];
+                        const toName = (ing) => {
+                            if (!ing) return '';
+                            if (typeof ing === 'string') return ing;
+                            return ing?.data?.basic?.name || '';
+                        };
+                        const normalizeUnit = (num, unit) => {
+                            const n = typeof num === 'number' ? num : parseFloat(num);
+                            const singular = Math.abs(n - 1) < 1e-9;
+                            const u = (unit || '').toLowerCase();
+                            if (u === 'tbsp' || u === 'tablespoon') return singular ? 'tablespoon' : 'tablespoons';
+                            if (u === 'tsp' || u === 'teaspoon') return singular ? 'teaspoon' : 'teaspoons';
+                            if (u === 'unit') return '';
+                            return unit || '';
+                        };
+                        for (let i = 0; i < Math.max(amounts.length, units.length, names.length); i++) {
+                            const amt = amounts[i];
+                            const unit = normalizeUnit(amt, units[i]);
+                            const name = toName(names[i]);
+                            const cmt = comments[i] || '';
+                            const amtStr = (amt !== undefined && amt !== null) ? String(amt) : '';
+                            const parts = [amtStr, unit, name, cmt].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+                            if (parts) measured.push(parts);
+                        }
+                        if (measured.length > 0) {
+                            content.ingredients = measured;
+                        }
+                    } catch (e) {
+                        console.warn('[ALFRED] Failed to build measured ingredient list:', e.message);
+                    }
                     
                     console.log(`[ALFRED] Enhanced recipe data for: ${content.title} (prep: ${content.prepTimeMinutes}min, cook: ${content.cookTimeMinutes}min)`);
                 } else if (recordType === 'exercise') {
@@ -1051,7 +1087,8 @@ JSON Response:`;
                     if (item.cuisine) context += `Cuisine: ${item.cuisine}\n`;
                     
                     if (item.ingredients && item.ingredients.length > 0) {
-                        context += `Ingredients: ${JSON.stringify(item.ingredients)}\n`;
+                        const ingText = Array.isArray(item.ingredients) ? item.ingredients.join(' | ') : String(item.ingredients);
+                        context += `Ingredients (measured): ${ingText}\n`;
                     }
                     if (item.instructions) context += `Instructions: ${item.instructions}\n`;
                     
