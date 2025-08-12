@@ -66,21 +66,21 @@ class ALFRED {
 
         // Speak common decimal quantities as fractions (recipe-friendly)
         const replaceDecimalFractions = (s) => {
-            // integer + decimal (e.g., 1.5 -> 1 and one half)
-            s = s.replace(/\b(\d+)\.(?:50|5)\b/g, '$1 and one half');
-            s = s.replace(/\b(\d+)\.(?:25|24|26)\b/g, '$1 and one quarter');
-            s = s.replace(/\b(\d+)\.(?:75|74|76)\b/g, '$1 and three quarters');
-            s = s.replace(/\b(\d+)\.(?:33|34)\b/g, '$1 and one third');
-            s = s.replace(/\b(\d+)\.(?:66|67)\b/g, '$1 and two thirds');
-            s = s.replace(/\b(\d+)\.(?:20)\b/g, '$1 and one fifth');
-            s = s.replace(/\b(\d+)\.(?:40)\b/g, '$1 and two fifths');
-            s = s.replace(/\b(\d+)\.(?:60)\b/g, '$1 and three fifths');
-            s = s.replace(/\b(\d+)\.(?:80)\b/g, '$1 and four fifths');
-            s = s.replace(/\b(\d+)\.(?:12|125)\b/g, '$1 and one eighth');
-            s = s.replace(/\b(\d+)\.(?:37|375)\b/g, '$1 and three eighths');
-            s = s.replace(/\b(\d+)\.(?:62|625)\b/g, '$1 and five eighths');
-            s = s.replace(/\b(\d+)\.(?:16|17)\b/g, '$1 and one sixth');
-            s = s.replace(/\b(\d+)\.(?:83|84)\b/g, '$1 and five sixths');
+            // integer + decimal (e.g., 1.5 -> 1 and one half). Exclude 0.x
+            s = s.replace(/\b([1-9]\d*)\.(?:50|5)\b/g, '$1 and one half');
+            s = s.replace(/\b([1-9]\d*)\.(?:25|24|26)\b/g, '$1 and one quarter');
+            s = s.replace(/\b([1-9]\d*)\.(?:75|74|76)\b/g, '$1 and three quarters');
+            s = s.replace(/\b([1-9]\d*)\.(?:33|34)\b/g, '$1 and one third');
+            s = s.replace(/\b([1-9]\d*)\.(?:66|67)\b/g, '$1 and two thirds');
+            s = s.replace(/\b([1-9]\d*)\.(?:20)\b/g, '$1 and one fifth');
+            s = s.replace(/\b([1-9]\d*)\.(?:40)\b/g, '$1 and two fifths');
+            s = s.replace(/\b([1-9]\d*)\.(?:60)\b/g, '$1 and three fifths');
+            s = s.replace(/\b([1-9]\d*)\.(?:80)\b/g, '$1 and four fifths');
+            s = s.replace(/\b([1-9]\d*)\.(?:12|125)\b/g, '$1 and one eighth');
+            s = s.replace(/\b([1-9]\d*)\.(?:37|375)\b/g, '$1 and three eighths');
+            s = s.replace(/\b([1-9]\d*)\.(?:62|625)\b/g, '$1 and five eighths');
+            s = s.replace(/\b([1-9]\d*)\.(?:16|17)\b/g, '$1 and one sixth');
+            s = s.replace(/\b([1-9]\d*)\.(?:83|84)\b/g, '$1 and five sixths');
 
             // pure decimals (e.g., 0.5 -> one half)
             s = s.replace(/\b0\.(?:50|5)\b/g, 'one half');
