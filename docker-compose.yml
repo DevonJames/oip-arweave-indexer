@@ -203,10 +203,11 @@ services:
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
       - STT_SERVICE_URL=http://stt-service-gpu:8003
       - TTS_SERVICE_URL=http://tts-service-gpu:5002
-      - TEXT_GENERATOR_URL=http://text-generator-gpu:8081
+      - OLLAMA_HOST=http://ollama-gpu:11434
+      - DEFAULT_LLM_MODEL=llama3.2:3b
     depends_on:
       - elasticsearch
-      - text-generator-gpu
+      - ollama-gpu
       - tts-service-gpu
       - stt-service-gpu
     networks:
