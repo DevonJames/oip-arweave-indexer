@@ -317,26 +317,26 @@ status: ## Show service status + ngrok status
 	@echo "$(BLUE)Service Status:$(NC)"
 	@docker-compose ps || echo "No services running"
 	@echo ""
-    @echo "$(BLUE)ngrok Status:$(NC)"
-    @DOMAIN=""; \
-    if [ -f .env ]; then \
-        DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
-    fi; \
-    if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
-    if pgrep -f "ngrok http.*$$DOMAIN" > /dev/null 2>&1; then \
-        echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
-        echo "$(GREEN)🌐 API: https://$$DOMAIN$(NC)"; \
-        if command -v curl >/dev/null 2>&1; then \
-            echo "$(BLUE)Checking tunnel connectivity...$(NC)"; \
-            if curl -s --max-time 3 http://localhost:4040/api/tunnels | grep -q "$$DOMAIN"; then \
-                echo "$(GREEN)✅ Tunnel verified: https://$$DOMAIN$(NC)"; \
-            else \
-                echo "$(YELLOW)⚠️  Tunnel may not be fully ready$(NC)"; \
-            fi; \
-        fi; \
-    else \
-        echo "$(RED)❌ ngrok: Not running$(NC)"; \
-    fi
+	@echo "$(BLUE)ngrok Status:$(NC)"
+	@DOMAIN=""; \
+	if [ -f .env ]; then \
+		DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
+	fi; \
+	if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
+	if pgrep -f "ngrok http.*$$DOMAIN" > /dev/null 2>&1; then \
+		echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
+		echo "$(GREEN)🌐 API: https://$$DOMAIN$(NC)"; \
+		if command -v curl >/dev/null 2>&1; then \
+			echo "$(BLUE)Checking tunnel connectivity...$(NC)"; \
+			if curl -s --max-time 3 http://localhost:4040/api/tunnels | grep -q "$$DOMAIN"; then \
+				echo "$(GREEN)✅ Tunnel verified: https://$$DOMAIN$(NC)"; \
+			else \
+				echo "$(YELLOW)⚠️  Tunnel may not be fully ready$(NC)"; \
+			fi; \
+		fi; \
+	else \
+		echo "$(RED)❌ ngrok: Not running$(NC)"; \
+	fi
 	@echo ""
 	@echo "$(BLUE)Networks:$(NC)"
 	@docker network ls | grep oip || echo "No OIP networks found"
@@ -524,22 +524,22 @@ test-chatterbox: ## Test Chatterbox TTS functionality
 # ngrok Management
 ngrok-status: ## Check ngrok tunnel status
 	@echo "$(BLUE)ngrok Tunnel Status:$(NC)"
-    @DOMAIN=""; \
-    if [ -f .env ]; then \
-        DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
-    fi; \
-    if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
-    if pgrep -f "ngrok http.*$$DOMAIN" > /dev/null 2>&1; then \
-        echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
-        echo "$(GREEN)🌐 API: https://$$DOMAIN$(NC)"; \
-        if command -v curl >/dev/null 2>&1; then \
-            echo "$(BLUE)Active tunnels:$(NC)"; \
-            curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | "  \(.public_url) -> \(.config.addr)"' 2>/dev/null || echo "  Check http://localhost:4040 for tunnel details"; \
-        fi; \
-    else \
-        echo "$(RED)❌ ngrok: Not running$(NC)"; \
-        echo "$(YELLOW)Start with: make start-ngrok$(NC)"; \
-    fi
+	@DOMAIN=""; \
+	if [ -f .env ]; then \
+		DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
+	fi; \
+	if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
+	if pgrep -f "ngrok http.*$$DOMAIN" > /dev/null 2>&1; then \
+		echo "$(GREEN)🔗 ngrok: ✅ Running$(NC)"; \
+		echo "$(GREEN)🌐 API: https://$$DOMAIN$(NC)"; \
+		if command -v curl >/dev/null 2>&1; then \
+			echo "$(BLUE)Active tunnels:$(NC)"; \
+			curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | "  \(.public_url) -> \(.config.addr)"' 2>/dev/null || echo "  Check http://localhost:4040 for tunnel details"; \
+		fi; \
+	else \
+		echo "$(RED)❌ ngrok: Not running$(NC)"; \
+		echo "$(YELLOW)Start with: make start-ngrok$(NC)"; \
+	fi
 
 ngrok-start: start-ngrok ## Start ngrok tunnel only
 
@@ -589,13 +589,13 @@ ngrok-debug: ## Debug ngrok setup (simple v3 command)
 	else \
 		echo "  ❌ .env file not found"; \
 	fi
-    @echo "$(YELLOW)Simple command test:$(NC)"
-    @DOMAIN=""; \
-    if [ -f .env ]; then \
-        DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
-    fi; \
-    if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
-    echo "  📋 Full command: $(GREEN)ngrok http --domain=$$DOMAIN 3005$(NC)";
+	@echo "$(YELLOW)Simple command test:$(NC)"
+	@DOMAIN=""; \
+	if [ -f .env ]; then \
+		DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
+	fi; \
+	if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
+	echo "  📋 Full command: $(GREEN)ngrok http --domain=$$DOMAIN 3005$(NC)";
 	@echo "  🎯 This requires your paid plan with custom domain access"
 	@echo "  💡 No config files needed with ngrok v3!"
 
@@ -622,7 +622,7 @@ ngrok-test: ## Test ngrok configuration and environment setup
 		echo "  🔍 Try: find / -name ngrok -type f 2>/dev/null | head -5"; \
 		exit 1; \
 	fi
-    @echo "$(YELLOW)Checking config file:$(NC)"
+	@echo "$(YELLOW)Checking config file:$(NC)"
 	@if [ -f ngrok/ngrok.yml ]; then \
 		echo "  ✅ Found ngrok/ngrok.yml"; \
 		if grep -q "authtoken_from_env.*true" ngrok/ngrok.yml; then \
@@ -636,7 +636,7 @@ ngrok-test: ## Test ngrok configuration and environment setup
 		echo "  ❌ No ngrok config file found"; \
 		exit 1; \
 	fi
-    @echo "$(YELLOW)Checking .env file:$(NC)"
+	@echo "$(YELLOW)Checking .env file:$(NC)"
 	@if [ -f .env ]; then \
 		if grep -q "NGROK_AUTH_TOKEN=" .env; then \
 			if grep -q "NGROK_AUTH_TOKEN=$$" .env; then \
@@ -653,8 +653,8 @@ ngrok-test: ## Test ngrok configuration and environment setup
 		echo "  ❌ .env file not found"; \
 		exit 1; \
 	fi
-    @echo "$(GREEN)✅ ngrok configuration looks good!$(NC)"
-    @echo "$(BLUE)You can now run: make start-ngrok$(NC)"
+	@echo "$(GREEN)✅ ngrok configuration looks good!$(NC)"
+	@echo "$(BLUE)You can now run: make start-ngrok$(NC)"
 
 # Development helpers
 dev-build: ## Development: Build without cache
