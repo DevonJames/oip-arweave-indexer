@@ -824,13 +824,26 @@ router.get('/voices', async (req, res) => {
             })
             .filter(Boolean);
 
-        // Ensure at least a couple of Edge voices exist so the client dropdown isn't empty
-        const hasEdge = voices.some(v => String(v.engine).toLowerCase().includes('edge'));
+        // Ensure a useful selection of Edge voices (especially UK male) is present
+        const ensureEdgeVoice = (id, name, gender, language = 'en-GB') => {
+            const exists = voices.some(v => v.id === id);
+            if (!exists) {
+                voices.push({ id, name, engine: 'Edge TTS', gender, language });
+            }
+        };
+
+        const hasEdge = voices.some(v => String(v.engine || '').toLowerCase().includes('edge'));
         if (!hasEdge) {
-            voices.push(
-                { id: 'en-GB-RyanNeural',  name: 'Edge Ryan (UK Male)',   engine: 'Edge TTS', gender: 'male',   language: 'en-GB' },
-                { id: 'en-GB-SoniaNeural', name: 'Edge Sonia (UK Female)', engine: 'Edge TTS', gender: 'female', language: 'en-GB' }
-            );
+            ensureEdgeVoice('en-GB-RyanNeural',   'Edge Ryan (UK Male)',     'male');
+            ensureEdgeVoice('en-GB-ThomasNeural', 'Edge Thomas (UK Male)',   'male');
+            ensureEdgeVoice('en-GB-GeorgeNeural', 'Edge George (UK Male)',   'male');
+            ensureEdgeVoice('en-GB-SoniaNeural',  'Edge Sonia (UK Female)',  'female');
+            ensureEdgeVoice('en-GB-LibbyNeural',  'Edge Libby (UK Female)',  'female');
+        } else {
+            // Even if some Edge voices exist, make sure the popular UK male options are present
+            ensureEdgeVoice('en-GB-RyanNeural',   'Edge Ryan (UK Male)',     'male');
+            ensureEdgeVoice('en-GB-ThomasNeural', 'Edge Thomas (UK Male)',   'male');
+            ensureEdgeVoice('en-GB-GeorgeNeural', 'Edge George (UK Male)',   'male');
         }
 
         console.log(`[TTS] Returning ${voices.length} normalized voices`);
