@@ -578,6 +578,18 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             // Enhance RAG options for intelligent processing
             ragOptions.include_filter_analysis = req.body.include_filter_analysis !== false;
             ragOptions.searchParams = ragOptions.searchParams || {};
+
+            // Conversation history (array or JSON string) for context grounding
+            try {
+                let convo = req.body.conversationHistory;
+                if (typeof convo === 'string') {
+                    try { convo = JSON.parse(convo); } catch (_) { convo = []; }
+                }
+                if (Array.isArray(convo) && convo.length > 0) {
+                    ragOptions.conversationHistory = convo;
+                    console.log(`[Voice Chat] Using conversation history with ${convo.length} messages`);
+                }
+            } catch (_) { /* ignore */ }
             
             // Pass existing search results for context-aware processing
             // Strip out unnecessary metadata and keep only essential data
@@ -959,6 +971,18 @@ router.post('/rag', async (req, res) => {
                 limit: max_results
             }
         };
+
+        // Optional conversation history for better continuity
+        try {
+            let convo = req.body.conversationHistory;
+            if (typeof convo === 'string') {
+                try { convo = JSON.parse(convo); } catch (_) { convo = []; }
+            }
+            if (Array.isArray(convo) && convo.length > 0) {
+                ragOptions.conversationHistory = convo;
+                console.log(`[Voice RAG] Received conversation history with ${convo.length} messages`);
+            }
+        } catch (_) { /* ignore */ }
 
         console.log(`[Voice RAG] Processing query: ${text}`);
         const ragResponse = await alfred.query(text, ragOptions);
