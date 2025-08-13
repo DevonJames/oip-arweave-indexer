@@ -1,5 +1,6 @@
-const { getRecords, getTemplatesInDB, getCreatorsInDB } = require('./elasticsearch');
+const { getRecords, getTemplatesInDB, getCreatorsInDB, searchTemplateByTxId } = require('./elasticsearch');
 const axios = require('axios');
+const { getTemplateTxidByName } = require('./utils');
 const { 
     getEnabledRecordTypes, 
     getRecordTypesByPriority, 
@@ -36,6 +37,37 @@ class ALFRED {
         this.maxContextLength = 8000; // Increased for full text content
         this.maxResults = 5; // Max search results to include
         this.fullTextCache = new Map(); // Cache for fetched full text content
+    }
+
+    /**
+     * Retrieve processed template fields for a given record type using the
+     * dynamic schema lookup (fieldsInTemplate). Falls back gracefully.
+     */
+    async getTemplateFieldsForRecordType(recordType) {
+        try {
+            const tx = getTemplateTxidByName(recordType);
+            if (!tx) return null;
+            const template = await searchTemplateByTxId(tx);
+            if (!template || !template.data) return null;
+            if (template.data.fieldsInTemplate) return template.data.fieldsInTemplate;
+            if (template.data.fields) {
+                // Parse raw JSON string if necessary and construct minimal map
+                try {
+                    const raw = typeof template.data.fields === 'string' ? JSON.parse(template.data.fields) : template.data.fields;
+                    const map = {};
+                    Object.keys(raw || {}).forEach(k => {
+                        if (k.startsWith('index_')) {
+                            const fieldName = k.replace('index_', '');
+                            map[fieldName] = { type: raw[fieldName] || 'string', index: raw[k] };
+                        }
+                    });
+                    if (Object.keys(map).length) return map;
+                } catch (_) { /* ignore parse error */ }
+            }
+        } catch (e) {
+            console.warn('[ALFRED] Template fields lookup failed:', e.message);
+        }
+        return null;
     }
 
     /**
@@ -229,8 +261,23 @@ Since the user is viewing ${context.searchParams.recordType}s, questions about g
                 }
             }
             
+            // Add recent conversation history (last 6 turns max) if provided to improve follow-up detection
+            let convoInfo = '';
+            try {
+                const hist = Array.isArray(context?.conversationHistory) ? context.conversationHistory : [];
+                if (hist.length > 0) {
+                    const recent = hist.slice(-6).map(m => {
+                        const role = (m.role || 'user').toUpperCase();
+                        const content = (m.content || '').toString().replace(/\s+/g, ' ').trim().substring(0, 220);
+                        return `${role}: ${content}`;
+                    }).join('\n');
+                    convoInfo = `\nRECENT CONVERSATION (from newest to oldest):\n${recent}`;
+                }
+            } catch (_) { /* ignore history issues */ }
+
             const prompt = `You are a JSON extraction tool. You MUST respond with ONLY valid JSON, no other text.
 ${contextInfo}
+${convoInfo}
 
 Extract from this question:
 - follow-up: true/false (does this question use pronouns like "they/it/this" or phrases like "the money/the person" that refer to previously loaded content AND does the question category match the loaded records' categories?)
@@ -361,7 +408,8 @@ JSON Response:`;
                         limit: existingContext.length,
                         rationale: 'Used forced existing context'
                     },
-                    []
+                    [],
+                    options
                 );
             }
 
@@ -369,7 +417,8 @@ JSON Response:`;
             // Pass context information to help with follow-up detection
             const contextForAnalysis = {
                 existingContext: existingContext,
-                searchParams: searchParams
+                searchParams: searchParams,
+                conversationHistory: options.conversationHistory || null
             };
             
             const analysis = await this.analyzeQuestionWithLLM(question, selectedModel, contextForAnalysis);
@@ -408,7 +457,8 @@ JSON Response:`;
                         recordType: contextRecordType,
                         limit: existingContext.length 
                     }, 
-                    modifiers
+                    modifiers,
+                    options
                 );
             }
             
@@ -432,7 +482,7 @@ JSON Response:`;
             if (initialResults.records.length === 1) {
                 // Perfect match - proceed directly to content extraction
                 console.log(`[ALFRED] Perfect match found, proceeding to content extraction`);
-                return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers);
+                return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers, options);
             }
             
             // Step 3: Recipe-specific tag refinement or general refinement with modifiers
@@ -470,14 +520,14 @@ JSON Response:`;
                             if (furtherRefinedResult1) {
                                 console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${furtherRefinedResult1.search_results_count} results`);
                                 shouldRefine = false;
-                                // return this.extractAndFormatContent(question, furtherRefinedResult1, initialFilters, modifiers);
+                                // return this.extractAndFormatContent(question, furtherRefinedResult1, initialFilters, modifiers, options);
                                 return furtherRefinedResult1;
                             }
                         } 
                         if (refinedResult.search_results_count === 1) {
                             console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.search_results_count} results`);
                             shouldRefine = false;
-                            // return this.extractAndFormatContent(question, refinedResult, initialFilters, modifiers);
+                            // return this.extractAndFormatContent(question, refinedResult, initialFilters, modifiers, options);
                             return refinedResult;
                         }
                     }
@@ -491,7 +541,7 @@ JSON Response:`;
             
             // Step 4: If refinement didn't work or no modifiers, use initial results
             console.log(`[ALFRED] Using initial results (${initialResults.records.length} records)`);
-            return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers);
+            return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers, options);
             
         } catch (error) {
             console.error(`[ALFRED] Error processing question:`, error);
@@ -805,7 +855,8 @@ JSON Response:`;
                     question, 
                     refinedResults.records, 
                     { ...refinedFilters, rationale }, 
-                    modifiers
+                    modifiers,
+                    options
                 );
             }
             
@@ -848,7 +899,8 @@ JSON Response:`;
                     question, 
                     cuisineResults.records, 
                     { ...cuisineFilters, rationale }, 
-                    modifiers
+                    modifiers,
+                    options
                 );
             } else {
                 console.log(`[ALFRED] No cuisine results found for: ${modifiers.join(', ')}`);
@@ -897,7 +949,7 @@ JSON Response:`;
     /**
      * Extract content from records and format for RAG consumption
      */
-    async extractAndFormatContent(question, records, appliedFilters, modifiers = []) {
+    async extractAndFormatContent(question, records, appliedFilters, modifiers = [], options = {}) {
         const contentItems = [];
         
         for (const record of records.slice(0, 5)) { // Limit to top 5 results
@@ -1080,7 +1132,7 @@ JSON Response:`;
         }
         
         // Generate response using RAG
-        const ragResponse = await this.generateRAGResponse(question, contentItems, appliedFilters, modifiers);
+        const ragResponse = await this.generateRAGResponse(question, contentItems, appliedFilters, modifiers, options);
         
         return {
             question: question,
@@ -1149,7 +1201,7 @@ JSON Response:`;
     /**
      * Generate RAG response using LLM with structured context
      */
-    async generateRAGResponse(question, contentItems, appliedFilters, modifiers) {
+    async generateRAGResponse(question, contentItems, appliedFilters, modifiers, options = {}) {
         // Build context from content items
         let context = '';
         
@@ -1255,10 +1307,26 @@ JSON Response:`;
                 }
             }
 
+            // Compose recent conversation history for additional grounding
+            let convoSection = '';
+            try {
+                const history = Array.isArray(options.conversationHistory) ? options.conversationHistory : [];
+                if (history.length > 0) {
+                    const recent = history.slice(-8).map(m => {
+                        const role = (m.role || 'user').toUpperCase();
+                        const content = (m.content || '').toString().replace(/\s+/g, ' ').trim().substring(0, 300);
+                        return `${role}: ${content}`;
+                    }).join('\n');
+                    convoSection = `\nConversation so far:\n${recent}\n`;
+                }
+            } catch (_) { /* ignore */ }
+
             const prompt = `You are answering a direct question. You have some specific information available, but if it doesn't contain what's needed to answer the question, be honest about that and then provide a helpful answer from your general knowledge.${extraDirectives}
 
 Information available:
 ${context}
+
+${convoSection}
 
 Question: ${question}
 
@@ -1643,7 +1711,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
             const context = await this.buildContext(searchResults);
             
             // Step 5: Generate LLM response with context (enhanced with structured data)
-            const response = await this.generateResponse(question, context, options.model, searchResults);
+            const response = await this.generateResponse(question, context, options.model, searchResults, options);
             
             return {
                 answer: response,
@@ -1873,6 +1941,18 @@ Please provide a helpful, conversational answer starting with "I didn't find any
         
         // Get configured context fields for this record type
         const contextFields = getContextFields(recordType);
+
+        // Add dynamic template field names (helps LLM understand available fields)
+        try {
+            const tmplFields = await this.getTemplateFieldsForRecordType(recordType);
+            if (tmplFields) {
+                const names = Object.keys(tmplFields).filter(n => !n.startsWith('index_') && !n.endsWith('Values'));
+                if (names.length) {
+                    const list = names.slice(0, 20).join(', ');
+                    parts.push(`TEMPLATE FIELDS (${recordType}): ${list}${names.length > 20 ? ', ...' : ''}`);
+                }
+            }
+        } catch (_) { /* non-fatal */ }
         
         // Always include basic information with clear formatting
         if (basic.name) {
@@ -2158,9 +2238,9 @@ Please provide a helpful, conversational answer starting with "I didn't find any
     /**
      * Generate response using Ollama with context
      */
-    async generateResponse(question, context, model = null, searchResults = null) {
+    async generateResponse(question, context, model = null, searchResults = null, options = {}) {
         const modelName = model || this.defaultModel;
-        const prompt = this.buildPrompt(question, context);
+        const prompt = this.buildPrompt(question, context, options.conversationHistory || null);
         
         try {
             let responseText;
@@ -2208,7 +2288,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
     /**
      * Build the prompt template for the LLM
      */
-    buildPrompt(question, context) {
+    buildPrompt(question, context, conversationHistory = null) {
         if (context.length === 0) {
             return `You are an AI assistant for an OIP (Open Index Protocol) system. A user is asking about their data, but no relevant information was found in the knowledge base.
 
@@ -2219,10 +2299,25 @@ Please respond helpfully, acknowledging that you don't have specific information
 Response:`;
         }
 
+        let convoBlock = '';
+        try {
+            const hist = Array.isArray(conversationHistory) ? conversationHistory : [];
+            if (hist.length > 0) {
+                const recent = hist.slice(-8).map(m => {
+                    const role = (m.role || 'user').toUpperCase();
+                    const content = (m.content || '').toString().replace(/\s+/g, ' ').trim().substring(0, 300);
+                    return `${role}: ${content}`;
+                }).join('\n');
+                convoBlock = `\nCONVERSATION HISTORY:\n${recent}\n`;
+            }
+        } catch (_) { /* ignore */ }
+
         return `You are an AI assistant analyzing content from a knowledge base to answer a specific question.
 
 RELEVANT CONTENT FROM KNOWLEDGE BASE:
 ${context}
+
+${convoBlock}
 
 USER'S QUESTION: ${question}
 
@@ -2464,7 +2559,7 @@ ANSWER:`;
             };
 
             // Build rich content and generate response (reuses type-specific context + nutrition)
-            return this.extractAndFormatContent(question, records, appliedFilters, []);
+            return this.extractAndFormatContent(question, records, appliedFilters, [], options);
         } catch (error) {
             console.error('[ALFRED] Error in answerQuestionAboutRecord:', error);
             return this.formatErrorResult(question, error.message);
