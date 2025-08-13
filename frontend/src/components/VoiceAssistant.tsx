@@ -86,8 +86,8 @@ export default function VoiceAssistant() {
   // Voice Activity Detection configuration
   const VAD_CONFIG = {
     silenceThreshold: 0.01,
-    silenceTimeoutMs: 2000,
-    minRecordingMs: 1500,
+    silenceTimeoutMs: 500,
+    minRecordingMs: 1000,
     volumeThreshold: 0.12,
   };
 

@@ -774,9 +774,36 @@ router.get('/voices', async (req, res) => {
                 timeout: 10000
             }
         );
-        
-        console.log('[TTS] Returning Chatterbox voices from TTS service');
-        res.json(response.data);
+        // Normalize output so the client can reliably filter by engine
+        const raw = response.data;
+        const inputVoices = Array.isArray(raw?.voices)
+            ? raw.voices
+            : (Array.isArray(raw) ? raw : []);
+
+        const voices = inputVoices
+            .map(v => {
+                const id = v.id || v.ShortName || v.shortName || v.VoiceId || v.voice_id;
+                const name = v.name || v.LocalName || v.FriendlyName || v.DisplayName || v.shortName || id;
+                // Heuristic: Edge payloads often use ShortName/Locale; Chatterbox typically returns simple ids
+                const engine = v.engine || v.Engine || ((v.ShortName || v.shortName || v.Locale) ? 'Edge TTS' : 'Chatterbox');
+                const gender = v.gender || v.Gender || '';
+                const language = v.language || v.Locale || v.lang || '';
+                if (!id || !name) return null;
+                return { id, name, engine, gender, language };
+            })
+            .filter(Boolean);
+
+        // Ensure at least a couple of Edge voices exist so the client dropdown isn't empty
+        const hasEdge = voices.some(v => String(v.engine).toLowerCase().includes('edge'));
+        if (!hasEdge) {
+            voices.push(
+                { id: 'en-GB-RyanNeural',  name: 'Edge Ryan (UK Male)',   engine: 'Edge TTS', gender: 'male',   language: 'en-GB' },
+                { id: 'en-GB-SoniaNeural', name: 'Edge Sonia (UK Female)', engine: 'Edge TTS', gender: 'female', language: 'en-GB' }
+            );
+        }
+
+        console.log(`[TTS] Returning ${voices.length} normalized voices`);
+        res.json({ voices });
         
     } catch (error) {
         console.warn('[TTS] Chatterbox service unavailable, returning fallback voices:', error.message);
