@@ -326,26 +326,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         };
         
         // Handle voice cloning if enabled and audio file is provided
-        if (voice_cloning === 'true' && audioFile) {
-            console.log(`[TTS] Voice cloning enabled with audio file: ${audioFile.originalname} (${audioFile.size} bytes)`);
-            formData.append('voice_cloning', 'true'); // FastAPI will convert string 'true' to boolean
-            // Create a proper stream from the buffer for the TTS service
-            const { Readable } = require('stream');
-            const audioStream = new Readable();
-            audioStream.push(audioFile.buffer);
-            audioStream.push(null); // End the stream
-            
-            formData.append('audio_prompt', audioStream, {
-                filename: audioFile.originalname,
-                contentType: audioFile.mimetype,
-                knownLength: audioFile.size
-            });
-        } else {
-            formData.append('voice_cloning', 'false'); // TTS service expects string 'false'
-            if (voice_cloning === 'true') {
-                console.log(`[TTS] Voice cloning requested but no audio file provided`);
-            }
-        }
+        // (Voice cloning is handled inside buildFormData.)
         
         console.log(`[TTS] Sending FormData with text length: ${finalText.length} chars, voice_cloning: ${voice_cloning}`);
 
