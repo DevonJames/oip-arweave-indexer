@@ -317,7 +317,10 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             fd.append('exaggeration', chatterboxParams.exaggeration.toString());
             fd.append('cfg_weight', chatterboxParams.cfg_weight.toString());
             fd.append('speed', String(effectiveSpeed));
-            if (language) fd.append('language', String(language));
+            // Derive locale from voice if available (Edge voices: en-GB-*, en-US-*)
+            const derivedLocale = (voiceTry && typeof voiceTry === 'string') ? voiceTry.split('-').slice(0,2).join('-') : null;
+            const langToSend = derivedLocale || language;
+            if (langToSend) fd.append('language', String(langToSend));
             if (voice_cloning === 'true' && audioFile) {
                 fd.append('voice_cloning', 'true');
             } else {
@@ -334,11 +337,14 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         // Attempt synthesis with retries for Edge voices if needed
         const voiceAttempts = [];
         if (engine === 'edge_tts') {
-            // Try requested voice, then UK female, then US male, then US female
+            // Try requested voice; if male UK desired (Ryan), try another UK male first, then male US, then female US
             voiceAttempts.push(voice_id);
-            if (voice_id !== 'en-GB-SoniaNeural') voiceAttempts.push('en-GB-SoniaNeural');
-            if (voice_id !== 'en-US-GuyNeural') voiceAttempts.push('en-US-GuyNeural');
-            if (voice_id !== 'en-US-JennyNeural') voiceAttempts.push('en-US-JennyNeural');
+            if (voice_id === 'en-GB-RyanNeural') {
+                voiceAttempts.push('en-GB-GeorgeNeural'); // alternate UK male
+            }
+            if (!voiceAttempts.includes('en-GB-SoniaNeural')) voiceAttempts.push('en-GB-SoniaNeural');
+            if (!voiceAttempts.includes('en-US-GuyNeural')) voiceAttempts.push('en-US-GuyNeural');
+            if (!voiceAttempts.includes('en-US-JennyNeural')) voiceAttempts.push('en-US-JennyNeural');
         } else {
             // Non-edge: single attempt
             voiceAttempts.push(voice_id);
