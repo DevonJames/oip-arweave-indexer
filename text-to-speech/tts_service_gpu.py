@@ -347,23 +347,31 @@ class GPUTTSService:
             return None
 
     async def synthesize_with_edge_tts(self, text: str, voice: str) -> Optional[str]:
-        """Synthesize speech using Edge TTS"""
+        """Synthesize speech using Edge TTS. Honors full Edge voice IDs when provided
+        (e.g., en-GB-RyanNeural). Falls back to a small mapping when a short
+        internal voice name is supplied.
+        """
         try:
             import edge_tts
             
-            voice_map = {
-                'chatterbox': 'en-US-JennyNeural',
-                'female_1': 'en-US-JennyNeural',
-                'female_2': 'en-US-AriaNeural', 
-                'male_1': 'en-US-GuyNeural',
-                'male_2': 'en-US-DavisNeural',
-                'expressive': 'en-US-AriaNeural',
-                'calm': 'en-US-SaraNeural',
-                'cheerful': 'en-US-JennyNeural',
-                'sad': 'en-US-AriaNeural'
-            }
-            
-            edge_voice = voice_map.get(voice, 'en-US-JennyNeural')
+            # If caller passes a full Edge voice id, use it directly.
+            # Example patterns: en-GB-RyanNeural, en-GB-SoniaNeural, en-US-GuyNeural
+            if isinstance(voice, str) and voice.startswith('en-') and voice.endswith('Neural') and '-' in voice:
+                edge_voice = voice
+            else:
+                # Backward-compatible mapping from internal names → Edge voices
+                voice_map = {
+                    'chatterbox': 'en-US-JennyNeural',
+                    'female_1': 'en-US-JennyNeural',
+                    'female_2': 'en-US-AriaNeural', 
+                    'male_1': 'en-US-GuyNeural',
+                    'male_2': 'en-US-DavisNeural',
+                    'expressive': 'en-US-AriaNeural',
+                    'calm': 'en-US-SaraNeural',
+                    'cheerful': 'en-US-JennyNeural',
+                    'sad': 'en-US-AriaNeural'
+                }
+                edge_voice = voice_map.get(voice, 'en-US-JennyNeural')
             
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
                 logger.info(f"Synthesizing with Edge TTS: voice {edge_voice}")
