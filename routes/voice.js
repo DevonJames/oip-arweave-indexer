@@ -309,7 +309,8 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         const buildFormData = (engineTry, voiceTry) => {
             const fd = new FormData();
             fd.append('text', finalText);
-            if (engineTry) fd.append('engine', String(engineTry));
+            // Some TTS backends work best when engine is omitted (auto)
+            if (engineTry && engineTry !== 'edge_tts') fd.append('engine', String(engineTry));
             if (voiceTry) fd.append('voice_id', String(voiceTry));
             fd.append('gender', chatterboxParams.gender);
             fd.append('emotion', chatterboxParams.emotion);
