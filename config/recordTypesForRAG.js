@@ -40,6 +40,22 @@ const recordTypesForRAG = {
         description: 'Exercise routines, workouts, and fitness content',
         contextFields: ['name', 'description', 'muscleGroups', 'equipment', 'difficulty', 'duration']
     },
+
+    // Workout records - structured collections of exercises with timing and metadata
+    workout: {
+        enabled: true,
+        priority: 8,
+        description: 'Complete workout plans composed of multiple exercises (warmup, main, cooldown) with duration and calories',
+        contextFields: [
+            // Core workout summary
+            'total_duration_minutes', 'totalDurationMinutes', 'duration_minutes', 'duration',
+            'estimated_calories_burned', 'calories',
+            'includesWarmup', 'includesMain', 'includesCooldown',
+            // Composition and guidance
+            'exercise', 'exercise_amount', 'exercise_unit',
+            'instructions', 'notes'
+        ]
+    },
     
     // General posts - blog posts, articles, general content
     post: {
