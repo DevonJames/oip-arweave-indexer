@@ -1025,6 +1025,51 @@ JSON Response:`;
                     content.exerciseData = exerciseData;
                     
                     console.log(`[ALFRED] Enhanced exercise data for: ${content.title} (muscles: ${content.muscleGroups.join(', ')}, equipment: ${content.equipmentRequired.join(', ')}, instructions: ${content.instructions.length} steps)`);
+                } else if (recordType === 'workout') {
+                    // Include comprehensive workout data including aggregated info from resolved exercises (resolveDepth=2)
+                    const workoutData = record.data.workout || {};
+
+                    content.totalDurationMinutes = workoutData.total_duration_minutes || workoutData.totalDurationMinutes || null;
+                    content.estimatedCaloriesBurned = workoutData.estimated_calories_burned || workoutData.calories || null;
+                    content.includesWarmup = Boolean(workoutData.includesWarmup);
+                    content.includesMain = Boolean(workoutData.includesMain);
+                    content.includesCooldown = Boolean(workoutData.includesCooldown);
+                    content.instructions = workoutData.instructions || '';
+                    content.notes = workoutData.notes || '';
+
+                    // Extract and normalize exercises
+                    const exercises = Array.isArray(workoutData.exercise) ? workoutData.exercise : [];
+                    const aggregatedEquipment = new Set();
+                    const aggregatedMuscles = new Set();
+
+                    content.exercises = exercises.map((ex, idx) => {
+                        const exBasic = ex?.data?.basic || {};
+                        const exData = ex?.data?.exercise || {};
+                        const name = exBasic.name || `Exercise ${idx + 1}`;
+                        const equipment = Array.isArray(exData.equipmentRequired) ? exData.equipmentRequired : [];
+                        const muscles = Array.isArray(exData.muscleGroups) ? exData.muscleGroups : [];
+                        equipment.forEach(item => aggregatedEquipment.add(String(item)));
+                        muscles.forEach(m => aggregatedMuscles.add(String(m)));
+                        return {
+                            name,
+                            difficulty: exData.difficulty || null,
+                            category: exData.category || null,
+                            exerciseType: exData.exercise_type || null,
+                            measurementType: exData.measurement_type || null,
+                            estimatedDurationMinutes: exData.est_duration_minutes || null,
+                            targetDurationSeconds: exData.target_duration_seconds || null,
+                            recommendedSets: exData.recommended_sets || null,
+                            recommendedReps: exData.recommended_reps || null,
+                            equipmentRequired: equipment,
+                            muscleGroups: muscles,
+                            instructions: Array.isArray(exData.instructions) ? exData.instructions : []
+                        };
+                    });
+
+                    content.workoutEquipment = Array.from(aggregatedEquipment);
+                    content.workoutMuscleGroups = Array.from(aggregatedMuscles);
+
+                    console.log(`[ALFRED] 🧰 Workout context built for ${content.title} (duration: ${content.totalDurationMinutes || 'n/a'} min, calories: ${content.estimatedCaloriesBurned || 'n/a'}) with ${content.exercises.length} exercises, equipment: ${content.workoutEquipment.join(', ')}`);
                 }
                 
                 contentItems.push(content);
@@ -1163,6 +1208,34 @@ JSON Response:`;
                             context += `${stepIndex + 1}. ${step}\n`;
                         });
                     }
+                }
+                
+                // Include workout-specific information and aggregate view
+                if (item.type === 'workout') {
+                    if (item.totalDurationMinutes) context += `Total Duration: ${item.totalDurationMinutes} minutes\n`;
+                    if (item.estimatedCaloriesBurned) context += `Estimated Calories Burned: ${item.estimatedCaloriesBurned}\n`;
+                    context += `Includes Warmup: ${item.includesWarmup ? 'Yes' : 'No'} | Main: ${item.includesMain ? 'Yes' : 'No'} | Cooldown: ${item.includesCooldown ? 'Yes' : 'No'}\n`;
+                    if (item.workoutMuscleGroups && item.workoutMuscleGroups.length > 0) {
+                        context += `Muscle Groups (aggregate): ${item.workoutMuscleGroups.join(', ')}\n`;
+                    }
+                    if (item.workoutEquipment && item.workoutEquipment.length > 0) {
+                        context += `Equipment Needed (aggregate): ${item.workoutEquipment.join(', ')}\n`;
+                    }
+                    if (Array.isArray(item.exercises) && item.exercises.length > 0) {
+                        context += `\nExercises:\n`;
+                        item.exercises.forEach((ex, idx) => {
+                            const pieces = [];
+                            pieces.push(`${idx + 1}. ${ex.name}`);
+                            if (ex.recommendedSets) pieces.push(`Sets: ${ex.recommendedSets}`);
+                            if (ex.recommendedReps) pieces.push(`Reps: ${ex.recommendedReps}`);
+                            if (ex.estimatedDurationMinutes) pieces.push(`Est. ${ex.estimatedDurationMinutes} min`);
+                            if (ex.equipmentRequired?.length) pieces.push(`Eq: ${ex.equipmentRequired.join('/')}`);
+                            if (ex.muscleGroups?.length) pieces.push(`Muscles: ${ex.muscleGroups.join(', ')}`);
+                            context += pieces.join(' | ') + `\n`;
+                        });
+                    }
+                    if (item.instructions) context += `\nWorkout Instructions: ${item.instructions}\n`;
+                    if (item.notes) context += `Notes: ${item.notes}\n`;
                 }
                 
                 context += `Type: ${item.type}\n`;
@@ -1514,7 +1587,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                 console.log('[ALFRED] Using Intelligent Question Processor for enhanced analysis with model: ', options.model, 'and context: ', options.existingContext);
                 try {
                     const iqpResult = await this.processQuestion(question, {
-                        resolveDepth: searchParams.resolveDepth || 2,
+                        resolveDepth: 2,
                         limit: searchParams.limit || 20,
                         existingContext: options.existingContext || null,
                         selectedModel: options.model || null,
@@ -1857,6 +1930,42 @@ Please provide a helpful, conversational answer starting with "I didn't find any
         
         // Add record type specific fields
         this.addRecordTypeSpecificContext(parts, record, recordType, contextFields);
+
+        // For workouts, add concise roll-up from resolved exercises even in legacy context path
+        if (recordType === 'workout') {
+            try {
+                const w = record.data?.workout || {};
+                if (w.total_duration_minutes) parts.push(`TOTAL DURATION: ${w.total_duration_minutes} minutes`);
+                if (w.estimated_calories_burned) parts.push(`ESTIMATED CALORIES: ${w.estimated_calories_burned}`);
+                const exercises = Array.isArray(w.exercise) ? w.exercise : [];
+                const eq = new Set();
+                const mg = new Set();
+                exercises.forEach(ex => {
+                    const e = ex?.data?.exercise || {};
+                    (Array.isArray(e.equipmentRequired) ? e.equipmentRequired : []).forEach(x => eq.add(String(x)));
+                    (Array.isArray(e.muscleGroups) ? e.muscleGroups : []).forEach(x => mg.add(String(x)));
+                });
+                const eqArr = Array.from(eq);
+                const mgArr = Array.from(mg);
+                if (eqArr.length) parts.push(`EQUIPMENT (AGGREGATE): ${eqArr.join(', ')}`);
+                if (mgArr.length) parts.push(`MUSCLES (AGGREGATE): ${mgArr.join(', ')}`);
+                if (exercises.length) {
+                    const list = exercises.slice(0, 9).map((ex, i) => {
+                        const b = ex?.data?.basic || {};
+                        const e = ex?.data?.exercise || {};
+                        const bits = [];
+                        bits.push(`${i + 1}. ${b.name || 'Exercise'}`);
+                        if (e.recommended_sets) bits.push(`Sets: ${e.recommended_sets}`);
+                        if (e.recommended_reps) bits.push(`Reps: ${e.recommended_reps}`);
+                        if (e.est_duration_minutes) bits.push(`${e.est_duration_minutes} min`);
+                        return bits.join(' ');
+                    }).join(' | ');
+                    parts.push(`PLAN: ${list}`);
+                }
+            } catch (e) {
+                console.warn('[ALFRED] Workout roll-up failed:', e.message);
+            }
+        }
         
         if (basic.webUrl || basic.url) {
             parts.push(`URL: ${basic.webUrl || basic.url}`);
@@ -1987,6 +2096,28 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                 }
                 if (basic.duration && contextFields.includes('duration')) {
                     parts.push(`Duration: ${basic.duration}`);
+                }
+                break;
+
+            case 'workout':
+                // Prefer precise duration over description-based heuristics
+                const w = record.data?.workout || {};
+                if (w.total_duration_minutes && contextFields.includes('total_duration_minutes')) {
+                    parts.push(`Total Duration: ${w.total_duration_minutes} minutes`);
+                }
+                if (w.estimated_calories_burned && contextFields.includes('estimated_calories_burned')) {
+                    parts.push(`Estimated Calories Burned: ${w.estimated_calories_burned}`);
+                }
+                const flags = [];
+                if (w.includesWarmup) flags.push('Warmup');
+                if (w.includesMain) flags.push('Main');
+                if (w.includesCooldown) flags.push('Cooldown');
+                if (flags.length) parts.push(`Sections: ${flags.join(', ')}`);
+                if (w.instructions && contextFields.includes('instructions')) {
+                    parts.push(`Instructions: ${String(w.instructions).substring(0, 240)}${String(w.instructions).length > 240 ? '...' : ''}`);
+                }
+                if (w.notes && contextFields.includes('notes')) {
+                    parts.push(`Notes: ${String(w.notes).substring(0, 180)}${String(w.notes).length > 180 ? '...' : ''}`);
                 }
                 break;
                 
