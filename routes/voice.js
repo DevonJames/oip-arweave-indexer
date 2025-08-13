@@ -304,18 +304,26 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
 
         console.log(`[TTS] Using synthesis params:`, { engine, ...chatterboxParams });
 
-        // Create FormData for TTS service (required for compatibility with voice cloning)
-        const formData = new FormData();
-        formData.append('text', finalText);
-        // Engine and explicit voice selection (used by edge_tts and others)
-        if (engine) formData.append('engine', String(engine));
-        if (voice_id) formData.append('voice_id', String(voice_id));
-        formData.append('gender', chatterboxParams.gender);
-        formData.append('emotion', chatterboxParams.emotion);  
-        formData.append('exaggeration', chatterboxParams.exaggeration.toString());
-        formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
-        if (speed) formData.append('speed', String(speed));
-        if (language) formData.append('language', String(language));
+        // Utility to build a fresh FormData for each attempt
+        const effectiveSpeed = (typeof speed === 'number' ? speed : parseFloat(speed)) || 1.0;
+        const buildFormData = (engineTry, voiceTry) => {
+            const fd = new FormData();
+            fd.append('text', finalText);
+            if (engineTry) fd.append('engine', String(engineTry));
+            if (voiceTry) fd.append('voice_id', String(voiceTry));
+            fd.append('gender', chatterboxParams.gender);
+            fd.append('emotion', chatterboxParams.emotion);
+            fd.append('exaggeration', chatterboxParams.exaggeration.toString());
+            fd.append('cfg_weight', chatterboxParams.cfg_weight.toString());
+            fd.append('speed', String(effectiveSpeed));
+            if (language) fd.append('language', String(language));
+            if (voice_cloning === 'true' && audioFile) {
+                fd.append('voice_cloning', 'true');
+            } else {
+                fd.append('voice_cloning', 'false');
+            }
+            return fd;
+        };
         
         // Handle voice cloning if enabled and audio file is provided
         if (voice_cloning === 'true' && audioFile) {
@@ -341,18 +349,45 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         
         console.log(`[TTS] Sending FormData with text length: ${finalText.length} chars, voice_cloning: ${voice_cloning}`);
 
-        const ttsResponse = await safeAxiosCall(
-            `${TTS_SERVICE_URL}/synthesize`,
-            {
-                method: 'POST',
-                data: formData,
-                headers: {
-                    ...formData.getHeaders(),
-                },
-                responseType: 'arraybuffer'
-            },
-            'Chatterbox TTS'
-        );
+        // Attempt synthesis with retries for Edge voices if needed
+        const voiceAttempts = [];
+        if (engine === 'edge_tts') {
+            // Try requested voice, then UK female, then US male, then US female
+            voiceAttempts.push(voice_id);
+            if (voice_id !== 'en-GB-SoniaNeural') voiceAttempts.push('en-GB-SoniaNeural');
+            if (voice_id !== 'en-US-GuyNeural') voiceAttempts.push('en-US-GuyNeural');
+            if (voice_id !== 'en-US-JennyNeural') voiceAttempts.push('en-US-JennyNeural');
+        } else {
+            // Non-edge: single attempt
+            voiceAttempts.push(voice_id);
+        }
+
+        let ttsResponse;
+        let lastError;
+        for (const voiceTry of voiceAttempts) {
+            try {
+                const fd = buildFormData(engine, voiceTry);
+                ttsResponse = await safeAxiosCall(
+                    `${TTS_SERVICE_URL}/synthesize`,
+                    {
+                        method: 'POST',
+                        data: fd,
+                        headers: { ...fd.getHeaders() },
+                        responseType: 'arraybuffer'
+                    },
+                    'Chatterbox TTS'
+                );
+                // Success
+                break;
+            } catch (err) {
+                lastError = err;
+                const msg = err?.response?.data ? err.response.data.toString() : err.message;
+                console.warn(`[TTS] Attempt with voice ${voiceTry} failed:`, msg);
+            }
+        }
+        if (!ttsResponse) {
+            throw lastError || new Error('All TTS attempts failed');
+        }
         
         // Log successful response
         console.log(`[TTS] Successfully synthesized ${ttsResponse.data.length} bytes`);
