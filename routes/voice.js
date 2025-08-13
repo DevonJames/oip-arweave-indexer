@@ -230,6 +230,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             voice_id = 'female_1', 
             speed = 1.0, 
             language = 'en',
+            engine = 'auto',
             // New Chatterbox parameters
             gender,
             emotion,
@@ -246,7 +247,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         }
 
         const textToSynthesize = alfred.preprocessTextForTTS(text.trim());
-        console.log(`[TTS] Synthesizing with Chatterbox: "${textToSynthesize.substring(0, 50)}..." (${textToSynthesize.length} chars) with voice ${voice_id}`);
+        console.log(`[TTS] Synthesizing request: "${textToSynthesize.substring(0, 50)}..." (${textToSynthesize.length} chars) with voice ${voice_id} using engine ${engine}`);
         console.log(`[TTS] Using TTS service URL: ${TTS_SERVICE_URL}`);
 
         // Limit text length to prevent TTS service overload
@@ -301,15 +302,20 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
         }
 
-        console.log(`[TTS] Using Chatterbox params:`, chatterboxParams);
+        console.log(`[TTS] Using synthesis params:`, { engine, ...chatterboxParams });
 
         // Create FormData for TTS service (required for compatibility with voice cloning)
         const formData = new FormData();
         formData.append('text', finalText);
+        // Engine and explicit voice selection (used by edge_tts and others)
+        if (engine) formData.append('engine', String(engine));
+        if (voice_id) formData.append('voice_id', String(voice_id));
         formData.append('gender', chatterboxParams.gender);
         formData.append('emotion', chatterboxParams.emotion);  
         formData.append('exaggeration', chatterboxParams.exaggeration.toString());
         formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
+        if (speed) formData.append('speed', String(speed));
+        if (language) formData.append('language', String(language));
         
         // Handle voice cloning if enabled and audio file is provided
         if (voice_cloning === 'true' && audioFile) {
@@ -362,10 +368,12 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         console.log(`[TTS] Audio data type: ${typeof ttsResponse.data}, length: ${ttsResponse.data.length}`);
 
         // Set appropriate headers
+        const engineUsed = (ttsResponse.headers && (ttsResponse.headers['x-engine-used'] || ttsResponse.headers['X-Engine-Used'])) || engine || 'unknown';
+        const voiceUsed = (ttsResponse.headers && (ttsResponse.headers['x-voice-id'] || ttsResponse.headers['X-Voice-Id'])) || voice_id || 'unknown';
         res.set({
             'Content-Type': 'audio/wav',
-            'X-Engine-Used': 'chatterbox',
-            'X-Voice-ID': voice_id,
+            'X-Engine-Used': engineUsed,
+            'X-Voice-ID': voiceUsed,
             'X-Gender': chatterboxParams.gender,
             'X-Emotion': chatterboxParams.emotion,
             'X-Voice-Cloning': voice_cloning === 'true' ? 'enabled' : 'disabled',
