@@ -1264,6 +1264,35 @@ JSON Response:`;
      * Generate RAG response using LLM with structured context
      */
     async generateRAGResponse(question, contentItems, appliedFilters, modifiers, options = {}) {
+        // Stepwise early-return: if the user requested step-by-step and we can extract steps,
+        // return only the first/next step without calling the LLM
+        try {
+            if (options.stepwise && options.stepwise.enabled) {
+                // Prefer items that are likely to have steps
+                const stepsSource = contentItems.find(ci => (ci.type === 'recipe' && ci.instructions) || (ci.type === 'exercise' && ci.instructions) || (ci.type === 'workout' && Array.isArray(ci.exercises))) || contentItems[0];
+                const steps = this.extractStepsFromContentItem(stepsSource);
+                if (steps && steps.length > 0) {
+                    let index = 0;
+                    if (options.stepwise.action === 'next') {
+                        const hist = Array.isArray(options.conversationHistory) ? options.conversationHistory : [];
+                        for (let i = hist.length - 1; i >= 0; i--) {
+                            const msg = hist[i];
+                            if (msg && msg.role === 'assistant') {
+                                const m = String(msg.content || '').match(/Step\s+(\d+)\s+of\s+(\d+)/i);
+                                if (m) { index = parseInt(m[1], 10); break; }
+                            }
+                        }
+                    }
+                    index = Math.max(0, Math.min(index, steps.length - 1));
+                    const stepNum = index + 1;
+                    const reply = `Step ${stepNum} of ${steps.length}: ${steps[index]}\nSay "next" when you want me to proceed.`;
+                    return { answer: reply, model_used: this.defaultModel, context_length: 0 };
+                }
+            }
+        } catch (e) {
+            console.warn('[ALFRED] Stepwise handling error:', e.message);
+        }
+
         // Build context from content items
         let context = '';
         
