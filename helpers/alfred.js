@@ -40,6 +40,65 @@ class ALFRED {
     }
 
     /**
+     * Detect if the user requested step-by-step guidance.
+     */
+    detectStepwiseIntent(question, conversationHistory = []) {
+        const q = String(question || '').toLowerCase();
+        const starts = [
+            'one step at a time', 'step by step', 'walk me through', 'guide me step by step',
+            'take me through it', 'go through it step by step'
+        ];
+        const firsts = [
+            "what's the first step", 'what is the first step', 'give me the first step', 'start with the first step'
+        ];
+        const nexts = ['next step', 'next', 'continue', 'proceed', "what's next", 'keep going', 'go on'];
+
+        const contains = (arr) => arr.some(p => q.includes(p));
+        if (contains(starts)) return { enabled: true, action: 'start' };
+        if (contains(firsts)) return { enabled: true, action: 'first' };
+        if (contains(nexts)) return { enabled: true, action: 'next' };
+        return { enabled: false };
+    }
+
+    /**
+     * Convert a content item into a list of steps where possible.
+     */
+    extractStepsFromContentItem(item) {
+        if (!item) return [];
+        const steps = [];
+        if (item.type === 'recipe') {
+            if (Array.isArray(item.instructions)) {
+                item.instructions.forEach(s => { const t = String(s || '').trim(); if (t) steps.push(t); });
+            } else if (typeof item.instructions === 'string') {
+                const parts = item.instructions.split(/\n+|\r+|[.;]\s+/).map(s => s.trim()).filter(Boolean);
+                parts.forEach(p => steps.push(p));
+            }
+        } else if (item.type === 'exercise') {
+            if (Array.isArray(item.instructions) && item.instructions.length) {
+                item.instructions.forEach(s => { const t = String(s || '').trim(); if (t) steps.push(t); });
+            } else if (item.description) {
+                const t = String(item.description || '').trim();
+                if (t) steps.push(t);
+            }
+        } else if (item.type === 'workout') {
+            if (Array.isArray(item.exercises) && item.exercises.length) {
+                item.exercises.forEach((ex, idx) => {
+                    const bits = [];
+                    bits.push(ex.name || `Exercise ${idx + 1}`);
+                    if (ex.recommendedSets) bits.push(`Sets: ${ex.recommendedSets}`);
+                    if (ex.recommendedReps) bits.push(`Reps: ${ex.recommendedReps}`);
+                    if (ex.estimatedDurationMinutes) bits.push(`Est. ${ex.estimatedDurationMinutes} min`);
+                    if (ex.equipmentRequired?.length) bits.push(`Eq: ${ex.equipmentRequired.join('/')}`);
+                    if (ex.muscleGroups?.length) bits.push(`Muscles: ${ex.muscleGroups.join(', ')}`);
+                    const line = bits.join(' | ').trim();
+                    if (line) steps.push(line);
+                });
+            }
+        }
+        return steps;
+    }
+
+    /**
      * Retrieve processed template fields for a given record type using the
      * dynamic schema lookup (fieldsInTemplate). Falls back gracefully.
      */
@@ -394,6 +453,9 @@ JSON Response:`;
     async processQuestion(question, options = {}) {
         console.log(`[ALFRED] Processing question: "${question}"`);
         const { existingContext = null, selectedModel = null, searchParams = {} } = options;
+        // Detect stepwise intent up front so it also applies to forced-context flows
+        const stepIntent = this.detectStepwiseIntent(question, options.conversationHistory || []);
+        const optionsWithStep = { ...options, stepwise: stepIntent };
         
         try {
             // Shortcut: if caller explicitly wants to force using the provided context, skip analysis/search
@@ -409,7 +471,7 @@ JSON Response:`;
                         rationale: 'Used forced existing context'
                     },
                     [],
-                    options
+                    optionsWithStep
                 );
             }
 
@@ -458,7 +520,7 @@ JSON Response:`;
                         limit: existingContext.length 
                     }, 
                     modifiers,
-                    options
+                    optionsWithStep
                 );
             }
             
@@ -482,7 +544,7 @@ JSON Response:`;
             if (initialResults.records.length === 1) {
                 // Perfect match - proceed directly to content extraction
                 console.log(`[ALFRED] Perfect match found, proceeding to content extraction`);
-                return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers, options);
+                return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers, optionsWithStep);
             }
             
             // Step 3: Recipe-specific tag refinement or general refinement with modifiers
@@ -541,7 +603,7 @@ JSON Response:`;
             
             // Step 4: If refinement didn't work or no modifiers, use initial results
             console.log(`[ALFRED] Using initial results (${initialResults.records.length} records)`);
-            return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers, options);
+            return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers, optionsWithStep);
             
         } catch (error) {
             console.error(`[ALFRED] Error processing question:`, error);
