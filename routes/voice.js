@@ -696,51 +696,29 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     const chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
                     console.log(`[Voice Chat] Using Chatterbox params:`, chatterboxParams);
                     
-                    // Try Edge TTS with British male voices (no cloning)
-                    const candidates = [];
-                    const requestedEdge = (typeof voice_id === 'string' && voice_id.startsWith('en-')) ? voice_id : null;
-                    if (voice_id === 'male_british' || !requestedEdge) {
-                        candidates.push('en-GB-RyanNeural', 'en-GB-GeorgeNeural', 'en-GB-ThomasNeural');
-                    } else {
-                        candidates.push(requestedEdge);
+                    // Minimal, stable request: let the TTS service choose best engine (auto)
+                    const formData = new FormData();
+                    formData.append('text', textForTTS);
+                    if (req.body.engine) {
+                        formData.append('engine', String(req.body.engine));
                     }
+                    if (voice_id) {
+                        formData.append('voice_id', String(voice_id));
+                    }
+                    formData.append('voice_cloning', 'false');
 
-                    let ttsResponse = null;
-                    for (const candidateVoice of candidates) {
-                        const formData = new FormData();
-                        formData.append('text', textForTTS);
-                        // Force Edge TTS engine explicitly
-                        formData.append('engine', 'edge_tts');
-                        formData.append('voice_id', candidateVoice);
-                        formData.append('language', 'en-GB');
-                        formData.append('gender', 'male');
-                        formData.append('emotion', chatterboxParams.emotion);
-                        formData.append('exaggeration', chatterboxParams.exaggeration.toString());
-                        formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
-                        formData.append('voice_cloning', 'false');
-                        formData.append('seed', '42');
-
-                        console.log(`[Voice Chat] Sending FormData with text length: ${textForTTS.length} chars (Edge voice: ${candidateVoice})`);
-                        try {
-                            ttsResponse = await safeAxiosCall(
-                                `${TTS_SERVICE_URL}/synthesize`,
-                                {
-                                    method: 'POST',
-                                    data: formData,
-                                    headers: {
-                                        ...formData.getHeaders(),
-                                    },
-                                    responseType: 'arraybuffer'
-                                }
-                            );
-                            if (ttsResponse && ttsResponse.data) break;
-                        } catch (candidateErr) {
-                            console.warn(`[Voice Chat] Edge TTS with voice ${candidateVoice} failed: ${candidateErr.message}`);
+                    console.log(`[Voice Chat] Sending FormData (minimal) with text length: ${textForTTS.length} chars`);
+                    const ttsResponse = await safeAxiosCall(
+                        `${TTS_SERVICE_URL}/synthesize`,
+                        {
+                            method: 'POST',
+                            data: formData,
+                            headers: {
+                                ...formData.getHeaders(),
+                            },
+                            responseType: 'arraybuffer'
                         }
-                    }
-                    if (!ttsResponse) {
-                        throw new Error('All Edge TTS attempts failed');
-                    }
+                    );
                     
                     audioData = Buffer.from(ttsResponse.data);
                     console.log(`[Voice Chat] Successfully synthesized with Chatterbox: ${audioData.length} bytes`);

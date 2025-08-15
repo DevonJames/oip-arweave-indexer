@@ -348,22 +348,18 @@ class GPUTTSService:
 
     async def synthesize_with_edge_tts(self, text: str, voice: str) -> Optional[str]:
         """Synthesize speech using Edge TTS. Honors full Edge voice IDs when provided
-        (e.g., en-GB-RyanNeural). Falls back to a small mapping when a short
-        internal voice name is supplied.
-        """
+        and retries with sensible fallbacks to avoid hard 500s."""
         try:
             import edge_tts
-            
-            # If caller passes a full Edge voice id, use it directly.
-            # Example patterns: en-GB-RyanNeural, en-GB-SoniaNeural, en-US-GuyNeural
+
+            # Resolve requested voice to an Edge voice id
             if isinstance(voice, str) and voice.startswith('en-') and voice.endswith('Neural') and '-' in voice:
-                edge_voice = voice
+                primary_voice = voice
             else:
-                # Backward-compatible mapping from internal names → Edge voices
                 voice_map = {
                     'chatterbox': 'en-US-JennyNeural',
                     'female_1': 'en-US-JennyNeural',
-                    'female_2': 'en-US-AriaNeural', 
+                    'female_2': 'en-US-AriaNeural',
                     'male_1': 'en-US-GuyNeural',
                     'male_2': 'en-US-DavisNeural',
                     'expressive': 'en-US-AriaNeural',
@@ -371,33 +367,62 @@ class GPUTTSService:
                     'cheerful': 'en-US-JennyNeural',
                     'sad': 'en-US-AriaNeural'
                 }
-                edge_voice = voice_map.get(voice, 'en-US-JennyNeural')
-            
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                logger.info(f"Synthesizing with Edge TTS: voice {edge_voice}")
-                communicate = edge_tts.Communicate(text, edge_voice)
-                
-                # Add timeout for Edge TTS
-                try:
-                    await asyncio.wait_for(communicate.save(tmp_file.name), timeout=30.0)
-                except asyncio.TimeoutError:
-                    logger.error("Edge TTS timeout")
-                    if os.path.exists(tmp_file.name):
-                        os.unlink(tmp_file.name)
-                    return None
-                
-                if os.path.exists(tmp_file.name) and os.path.getsize(tmp_file.name) > 0:
-                    logger.info(f"Edge TTS successful: {os.path.getsize(tmp_file.name)} bytes")
-                    return tmp_file.name
-                else:
-                    logger.warning("Edge TTS produced no audio")
-                    return None
-                
+                primary_voice = voice_map.get(voice, 'en-US-JennyNeural')
+
+            # Build fallback list (prefer UK male, then US male)
+            candidates: List[str] = [primary_voice]
+            if primary_voice.startswith('en-GB-'):
+                for alt in ['en-GB-GeorgeNeural', 'en-GB-RyanNeural', 'en-US-GuyNeural']:
+                    if alt not in candidates:
+                        candidates.append(alt)
+            else:
+                for alt in ['en-US-GuyNeural']:
+                    if alt not in candidates:
+                        candidates.append(alt)
+
+            # Try each candidate voice
+            last_error: Optional[str] = None
+            for edge_voice in candidates:
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                    logger.info(f"Synthesizing with Edge TTS: voice {edge_voice}")
+                    try:
+                        communicate = edge_tts.Communicate(text, edge_voice)
+                        await asyncio.wait_for(communicate.save(tmp_file.name), timeout=30.0)
+                    except asyncio.TimeoutError:
+                        last_error = "timeout"
+                        logger.error("Edge TTS timeout")
+                        if os.path.exists(tmp_file.name):
+                            os.unlink(tmp_file.name)
+                        continue
+                    except Exception as e:
+                        import traceback
+                        last_error = str(e)
+                        logger.error(f"Edge TTS error with voice {edge_voice}: {e}")
+                        logger.error(f"Traceback: {traceback.format_exc()}")
+                        if os.path.exists(tmp_file.name):
+                            try:
+                                if os.path.getsize(tmp_file.name) == 0:
+                                    os.unlink(tmp_file.name)
+                            except Exception:
+                                pass
+                        continue
+
+                    if os.path.exists(tmp_file.name) and os.path.getsize(tmp_file.name) > 0:
+                        logger.info(f"Edge TTS successful: {os.path.getsize(tmp_file.name)} bytes")
+                        return tmp_file.name
+                    else:
+                        logger.warning("Edge TTS produced no audio")
+                        try:
+                            os.unlink(tmp_file.name)
+                        except Exception:
+                            pass
+                        continue
+
+            logger.warning(f"All Edge TTS attempts failed. Last error: {last_error}")
+            return None
+
         except ImportError:
             logger.warning("Edge TTS not available (missing edge-tts package)")
-            return None
-        except Exception as e:
-            logger.error(f"Edge TTS error: {e}")
             return None
 
     async def synthesize_with_gtts(self, text: str) -> Optional[str]:
