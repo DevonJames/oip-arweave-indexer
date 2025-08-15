@@ -43,6 +43,7 @@ COPY routes ./routes
 COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
+COPY voices ./voices
 
 # Copy the .env file
 COPY .env .env
