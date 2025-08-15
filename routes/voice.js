@@ -9,8 +9,6 @@ const path = require('path');
 const { spawn } = require('child_process');
 const os = require('os');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
 
 
 // Configure axios with better connection management
