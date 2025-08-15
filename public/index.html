@@ -442,7 +442,7 @@
         async function loadAvailableVoices() {
             try {
                 // Load all voices from the single voices endpoint
-                const response = await fetch('/api/voice/voices');
+                const response = await fetch('/api/alfred/voices');
                 if (response.ok) {
                     const data = await response.json();
                     const voices = data.voices || [];
@@ -589,7 +589,7 @@
         // Check voice service status
         async function checkVoiceStatus() {
             try {
-                const response = await fetch('/api/voice/health');
+                const response = await fetch('/api/alfred/health');
                 const data = await response.json();
                 
                 const engines = data.engines || [];
@@ -1015,7 +1015,7 @@
                 formData.append('exaggeration', (voiceConfig.edge.pitch / 10 + 0.5).toString()); // Convert pitch to exaggeration range
                 formData.append('cfg_weight', (voiceConfig.edge.volume / 20 + 0.5).toString());  // Convert volume to cfg_weight range
                 
-                const response = await fetch('/api/voice/synthesize', {
+                const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
                     body: formData
                 });
@@ -1066,7 +1066,7 @@
                     model_id: voiceConfig.elevenlabs.model_id
                 };
                 
-                const response = await fetch(`/api/voice/elevenlabs/${voiceConfig.elevenlabs.selectedVoice}/synthesize`, {
+                const response = await fetch(`/api/alfred/elevenlabs/${voiceConfig.elevenlabs.selectedVoice}/synthesize`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1173,7 +1173,7 @@
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 120000);
                 
-                const response = await fetch('/api/voice/synthesize', {
+                const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
                     headers: headers,
                     body: requestBody,

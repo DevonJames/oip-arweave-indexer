@@ -30,6 +30,7 @@ const socket = require('./socket');
 const litRoutes = require('./routes/lit');
 const jfkRoutes = require('./routes/jfk');
 const voiceRoutes = require('./routes/voice');
+const alfredRoutes = require('./routes/alfred');
 
 dotenv.config();
 
@@ -168,6 +169,9 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/workout', workoutRoutes);
 app.use('/api/lit', litRoutes);
 app.use('/api/jfk', jfkRoutes);
+// Mount new canonical route
+app.use('/api/alfred', alfredRoutes);
+// Backward-compatible alias
 app.use('/api/voice', voiceRoutes);
 
 // Make io available to routes

@@ -7918,7 +7918,7 @@
         async function loadAvailableVoices() {
             try {
                 // Load all voices from the single voices endpoint
-                const response = await fetch('/api/voice/voices');
+                const response = await fetch('/api/alfred/voices');
                 if (response.ok) {
                     const data = await response.json();
                     const voices = data.voices || [];
@@ -8168,7 +8168,7 @@
                 formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
                 formData.append('engine', 'chatterbox');
 
-                const response = await fetch('/api/voice/synthesize', {
+                const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
                     body: formData
                 });
@@ -8201,7 +8201,7 @@
                 formData.append('exaggeration', (voiceConfig.edge.pitch / 10 + 0.5).toString());
                 formData.append('cfg_weight', (voiceConfig.edge.volume / 20 + 0.5).toString());
 
-                const response = await fetch('/api/voice/synthesize', {
+                const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
                     body: formData
                 });
@@ -8235,7 +8235,7 @@
                     model_id: voiceConfig.elevenlabs.model_id
                 };
                 
-                const response = await fetch(`/api/voice/elevenlabs/${voiceConfig.elevenlabs.selectedVoice}/synthesize`, {
+                const response = await fetch(`/api/alfred/elevenlabs/${voiceConfig.elevenlabs.selectedVoice}/synthesize`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -8497,7 +8497,7 @@
             
             try {
                 // Send the question with context and existing search results
-                const response = await fetch('/api/voice/chat', {
+                const response = await fetch('/api/alfred/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -8618,7 +8618,7 @@
                 }
                 
                 // Send to chat endpoint for new search
-                const response = await fetch('/api/voice/chat', {
+                const response = await fetch('/api/alfred/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -9207,7 +9207,7 @@
                     formData.append('language', language);
                 }
 
-                const response = await fetch('/api/voice/transcribe', {
+                const response = await fetch('/api/alfred/transcribe', {
                     method: 'POST',
                     body: formData,
                 });
