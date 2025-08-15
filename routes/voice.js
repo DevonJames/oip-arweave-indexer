@@ -699,6 +699,13 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     // Create FormData for TTS service (required for compatibility with voice cloning)
                     const formData = new FormData();
                     formData.append('text', textForTTS);
+                    // Force Edge TTS with a British male voice when requested
+                    const desiredVoice = (voice_id === 'male_british')
+                        ? 'en-GB-RyanNeural'
+                        : (typeof voice_id === 'string' && voice_id.startsWith('en-') ? voice_id : 'en-GB-RyanNeural');
+                    formData.append('engine', 'edge_tts');
+                    formData.append('voice_id', desiredVoice);
+                    formData.append('language', 'en-GB');
                     // formData.append('gender', chatterboxParams.gender);
                     formData.append('gender', 'male');
                     formData.append('emotion', chatterboxParams.emotion);
