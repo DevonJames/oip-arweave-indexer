@@ -282,7 +282,8 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
                 'edge_expressive': { gender: 'female', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
                 'female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
                 'male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
-                'default': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }
+                'default': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                'male_british': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }
             };
             
             return voiceMatrix[voice_id] || voiceMatrix['default'];
@@ -318,9 +319,11 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             fd.append('exaggeration', chatterboxParams.exaggeration.toString());
             fd.append('cfg_weight', chatterboxParams.cfg_weight.toString());
             fd.append('speed', String(effectiveSpeed));
+            fd.append('voice_cloning', 'true');
             // Derive locale from voice if available (Edge voices: en-GB-*, en-US-*)
             const derivedLocale = (voiceTry && typeof voiceTry === 'string') ? voiceTry.split('-').slice(0,2).join('-') : null;
-            const langToSend = derivedLocale || language;
+            // const langToSend = derivedLocale || language;
+            const langToSend = 'en-GB';
             if (langToSend) fd.append('language', String(langToSend));
             if (voice_cloning === 'true' && audioFile) {
                 fd.append('voice_cloning', 'true');
