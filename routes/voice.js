@@ -532,7 +532,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             const conversationHistory = [
                 {
                     role: "system",
-                    content: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions, retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis. When asked about yourself, explain your role as an AI assistant that helps with information retrieval and explanation."
+                    content: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis. When asked about yourself, explain your role as an AI assistant that helps with information retrieval and explanation."
                 },
                 {
                     role: "user",
@@ -556,7 +556,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 
             } catch (llmError) {
                 console.error('[Voice Chat] Direct LLM call failed:', llmError);
-                responseText = "Hello! I'm ALFRED, your AI assistant. I'm designed to help you stay informed and productive by answering questions, retrieving information from stored records, and generating content. How can I assist you today?";
+                responseText = "Hello! I'm ALFRED, your AI assistant. I'm designed to help you stay informed and productive by answering questions, and retrieving information from stored records. How can I assist you today?";
                 ragResponse = {
                     answer: responseText,
                     sources: [],
@@ -646,7 +646,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         // Step 3: Convert response to speech if requested
         if (return_audio) {
             try {
-                console.log(`[Voice Chat] Synthesizing response audio with Chatterbox voice ${voice_id}`);
+                console.log(`[Voice Chat] Synthesizing response audio with voice: ${voice_id} and engine: ${req.body.engine}`);
                 
                 // Use Chatterbox TTS service first
                 let audioData;

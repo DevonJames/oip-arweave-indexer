@@ -15,17 +15,19 @@ This guide explains how to integrate Alfred, the OIP RAG system, into another ap
   - Elasticsearch connected and loaded with templates/records
   - LLM service configured (Ollama via `OLLAMA_HOST`, or cloud keys via `OPENAI_API_KEY`/`XAI_API_KEY`)
 - The following server endpoints available from this repository:
-  - `POST /api/voice/chat` (primary, supports text, optional audio output)
-  - `POST /api/voice/rag` (text-only RAG convenience, optional)
-  - `POST /api/voice/transcribe` (optional STT)
-  - `POST /api/voice/synthesize` (optional TTS)
-  - `GET  /api/voice/voices` (optional voice list for TTS UI)
+  - `POST /api/alfred/chat` (primary, supports text, optional audio output)
+  - `POST /api/alfred/rag` (text-only RAG convenience, optional)
+  - `POST /api/alfred/transcribe` (optional STT)
+  - `POST /api/alfred/synthesize` (optional TTS)
+  - `GET  /api/alfred/voices` (optional voice list for TTS UI)
+  
+  Note: `/api/voice/*` remains as a backward-compatible alias to `/api/alfred/*`.
 
 ## API Overview
 
 ### 1) Chat (text, optional audio)
 
-POST `/api/voice/chat`
+POST `/api/alfred/chat`
 
 Body (JSON):
 
@@ -53,7 +55,7 @@ Body (JSON):
 Notes:
 - Provide `pinnedDidTx` for single‑record mode. The server will bypass search and answer about that record using `resolveDepth=2` and its resolved sub‑records.
 - Always pass `conversationHistory` (last N messages) to improve follow‑up understanding (e.g., “how do I do that one?”). Shape: `{ role: 'user'|'assistant', content: string }`.
-- Set `return_audio: true` to get base64 WAV audio in the response using the server’s TTS. Supply `voice_id` (get available voices via `/api/voice/voices`). If not set, text-only is returned.
+- Set `return_audio: true` to get base64 WAV audio in the response using the server’s TTS. Supply `voice_id` (get available voices via `/api/alfred/voices`). If not set, text-only is returned.
 - If you already know filters, pass `searchParams`. If a record is pinned, set `include_filter_analysis` to false (the server already forces this when `pinnedDidTx` is provided).
 
 Response (JSON):
@@ -77,15 +79,15 @@ Response (JSON):
 
 ### 2) Text-only RAG (simple)
 
-POST `/api/voice/rag`
+POST `/api/alfred/rag`
 
 Same core behavior as `/chat` but no TTS handling. Use this if your app handles TTS/STT itself.
 
 ### 3) Optional STT and TTS
 
-- STT: `POST /api/voice/transcribe` with a file form field named `file` (webm/mp3/wav/ogg). Returns `{ text, language, duration }`.
-- TTS: `POST /api/voice/synthesize` with `{ text, voice_id, speed, gender, emotion, exaggeration, cfg_weight }` (Chatterbox service). Returns WAV audio bytes.
-- Voices: `GET /api/voice/voices` → list of normalized voices you can show in a UI. Use one of these voice IDs as `voice_id` in `/chat` or `/synthesize`.
+- STT: `POST /api/alfred/transcribe` with a file form field named `file` (webm/mp3/wav/ogg). Returns `{ text, language, duration }`.
+- TTS: `POST /api/alfred/synthesize` with `{ text, voice_id, speed, gender, emotion, exaggeration, cfg_weight }` (Chatterbox service). Returns WAV audio bytes.
+- Voices: `GET /api/alfred/voices` → list of normalized voices you can show in a UI. Use one of these voice IDs as `voice_id` in `/chat` or `/synthesize`.
 
 ## Integration Patterns
 
@@ -94,7 +96,7 @@ Same core behavior as `/chat` but no TTS handling. Use this if your app handles 
 Use single‑record mode. Alfred loads the record with `resolveDepth=2`, then builds rich, type‑specific context (e.g., workout exercises, recipe nutrition, etc.).
 
 ```bash
-curl -X POST http://localhost:3000/api/voice/chat \
+curl -X POST http://localhost:3000/api/alfred/chat \
   -H 'Content-Type: application/json' \
   -d '{
     "text": "What is the second exercise?",
@@ -112,7 +114,7 @@ If you need audio back, add `"return_audio": true, "voice_id": "en-GB-RyanNeural
 ### B) General search + answer (no didTx)
 
 ```bash
-curl -X POST http://localhost:3000/api/voice/chat \
+curl -X POST http://localhost:3000/api/alfred/chat \
   -H 'Content-Type: application/json' \
   -d '{
     "text": "Show me a grilled chicken recipe",
@@ -127,14 +129,14 @@ curl -X POST http://localhost:3000/api/voice/chat \
 1) Transcribe microphone audio:
 
 ```bash
-curl -X POST http://localhost:3000/api/voice/transcribe \
+curl -X POST http://localhost:3000/api/alfred/transcribe \
   -F "file=@/path/to/audio.webm"
 ```
 
 2) Send recognized text to Alfred (no audio return):
 
 ```bash
-curl -X POST http://localhost:3000/api/voice/chat \
+curl -X POST http://localhost:3000/api/alfred/chat \
   -H 'Content-Type: application/json' \
   -d '{
     "text": "how do i do the roll lat foam rolling?",
@@ -147,7 +149,7 @@ curl -X POST http://localhost:3000/api/voice/chat \
 3) Synthesize TTS in your app (optional) using the returned text and your own engine—or call the server TTS:
 
 ```bash
-curl -X POST http://localhost:3000/api/voice/synthesize \
+curl -X POST http://localhost:3000/api/alfred/synthesize \
   -H 'Content-Type: application/json' \
   -d '{ "text": "<answer from step 2>", "voice_id": "female_expressive", "speed": 1.0 }' \
   --output reply.wav
@@ -189,7 +191,7 @@ async function askAlfredText({ baseUrl, text, didTx, history }) {
     include_filter_analysis: !didTx,
     conversationHistory: history || []
   };
-  const res = await fetch(`${baseUrl}/api/voice/chat`, {
+  const res = await fetch(`${baseUrl}/api/alfred/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -211,7 +213,7 @@ async function askAlfredVoice({ baseUrl, text, didTx, history, voiceId = 'female
     return_audio: true,
     voice_id: voiceId
   };
-  const res = await fetch(`${baseUrl}/api/voice/chat`, {
+  const res = await fetch(`${baseUrl}/api/alfred/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -237,8 +239,8 @@ async function askAlfredVoice({ baseUrl, text, didTx, history, voiceId = 'female
 - Backend is up with Elasticsearch and LLM configured (Ollama or cloud keys)
 - Your app knows the `didTx` for single‑record answers (optional but recommended)
 - Always pass `conversationHistory` (last 4–8 messages)
-- For audio replies, fetch available `voice_id`s from `/api/voice/voices`
-- Use `/api/voice/chat` for both text and voice flows; or `/api/voice/rag` for text‑only
+- For audio replies, fetch available `voice_id`s from `/api/alfred/voices`
+- Use `/api/alfred/chat` for both text and voice flows; or `/api/alfred/rag` for text‑only
 
 With these steps, your application can ask Alfred natural questions—by text or voice—and receive detailed, accurate answers grounded in the specific OIP record (and its resolved sub‑records) identified by the provided `didTx`.
 
@@ -311,7 +313,7 @@ Result: The recorder auto‑stops shortly after the user stops speaking.
 - Example:
 
 ```http
-POST /api/voice/transcribe
+POST /api/alfred/transcribe
 Content-Type: multipart/form-data
 
 audio=@recording.webm;type=audio/webm
@@ -330,11 +332,11 @@ language=en
 }
 ```
 
-The client immediately displays the text, places it in the chat input, and sends it to `/api/voice/chat` (see Chat section above).
+The client immediately displays the text, places it in the chat input, and sends it to `/api/alfred/chat` (see Chat section above).
 
 ### Chat call (reference client usage)
 
-- For both typed and transcribed text, the client calls `/api/voice/chat` with JSON.
+- For both typed and transcribed text, the client calls `/api/alfred/chat` with JSON.
 - In the reference client, `return_audio` is set to `false` and TTS is done in a separate call (see below). You can also set `return_audio: true` and skip the separate TTS step.
 - Follow‑ups (when one record is loaded) send:
 
@@ -372,11 +374,11 @@ The reference client synthesizes speech after it gets the AI answer, using the s
 
 #### Chatterbox engine
 
-- Endpoint: `POST /api/voice/synthesize`
+- Endpoint: `POST /api/alfred/synthesize`
 - Request: `multipart/form-data`
 - Fields:
   - `text`: answer string
-  - `voice_id`: one of the Chatterbox voice IDs (see `/api/voice/voices`)
+  - `voice_id`: one of the Chatterbox voice IDs (see `/api/alfred/voices`)
   - `engine`: `chatterbox`
   - `exaggeration`: float 0–1 (emotion)
   - `cfg_weight`: float 0–1 (pacing)
@@ -389,13 +391,13 @@ fd.append('voice_id', selectedVoiceId);
 fd.append('exaggeration', String(emotion));
 fd.append('cfg_weight', String(pacing));
 fd.append('engine', 'chatterbox');
-const res = await fetch('/api/voice/synthesize', { method: 'POST', body: fd });
+const res = await fetch('/api/alfred/synthesize', { method: 'POST', body: fd });
 const audioBlob = await res.blob();
 ```
 
 #### Edge TTS engine
 
-- Endpoint: `POST /api/voice/synthesize`
+- Endpoint: `POST /api/alfred/synthesize`
 - Request: `multipart/form-data`
 - Fields:
   - `text`
@@ -418,7 +420,7 @@ fd.append('cfg_weight', String(voiceConfig.edge.volume / 20 + 0.5));
 
 #### ElevenLabs engine
 
-- Endpoint: `POST /api/voice/elevenlabs/:voiceId/synthesize`
+- Endpoint: `POST /api/alfred/elevenlabs/:voiceId/synthesize`
 - Request: JSON
 
 ```json
@@ -438,7 +440,7 @@ fd.append('cfg_weight', String(voiceConfig.edge.volume / 20 + 0.5));
 
 ### Voice list
 
-- `GET /api/voice/voices` returns a normalized list combining engines. Example item:
+- `GET /api/alfred/voices` returns a normalized list combining engines. Example item:
 
 ```json
 { "id": "en-GB-RyanNeural", "name": "Edge Ryan (UK Male)", "engine": "Edge TTS", "gender": "male", "language": "en-GB" }
@@ -456,7 +458,7 @@ const audio = new Audio(audioUrl);
 await audio.play();
 ```
 
-Alternatively, when using `/api/voice/chat` with `return_audio: true`, the server responds with base64 WAV in `audio_data`; you can create a data URL and play it.
+Alternatively, when using `/api/alfred/chat` with `return_audio: true`, the server responds with base64 WAV in `audio_data`; you can create a data URL and play it.
 
 ### Error/timeout handling
 
@@ -468,8 +470,8 @@ Alternatively, when using `/api/voice/chat` with `return_audio: true`, the serve
 
 1. User clicks mic; `MediaRecorder` starts with `audio/webm;codecs=opus`.
 2. VAD monitors RMS; after silence ≥ 2s (and recording ≥ 1.5s), `MediaRecorder.stop()` fires.
-3. Blob `audio/webm` is posted as `audio` to `/api/voice/transcribe` → JSON `{ text, language, duration }`.
-4. The transcribed text is added to the conversation and sent to `/api/voice/chat` (with `pinnedDidTx` if provided, and conversation context/history).
+3. Blob `audio/webm` is posted as `audio` to `/api/alfred/transcribe` → JSON `{ text, language, duration }`.
+4. The transcribed text is added to the conversation and sent to `/api/alfred/chat` (with `pinnedDidTx` if provided, and conversation context/history).
 5. The answer text is then synthesized via the selected TTS engine (Chatterbox/Edge/ElevenLabs) and played.
 
 This mirrors the behavior in `public/reference-client.html` so your app will match the demo UX exactly.
