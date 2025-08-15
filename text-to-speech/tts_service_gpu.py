@@ -365,14 +365,18 @@ class GPUTTSService:
                     'expressive': 'en-US-AriaNeural',
                     'calm': 'en-US-SaraNeural',
                     'cheerful': 'en-US-JennyNeural',
-                    'sad': 'en-US-AriaNeural'
+                    'sad': 'en-US-AriaNeural',
+                    # UK male aliases
+                    'male_british': 'en-GB-RyanNeural',
+                    'male_uk': 'en-GB-RyanNeural',
+                    'british_male': 'en-GB-RyanNeural'
                 }
                 primary_voice = voice_map.get(voice, 'en-US-JennyNeural')
 
             # Build fallback list (prefer UK male, then US male)
             candidates: List[str] = [primary_voice]
-            if primary_voice.startswith('en-GB-'):
-                for alt in ['en-GB-GeorgeNeural', 'en-GB-RyanNeural', 'en-US-GuyNeural']:
+            if primary_voice.startswith('en-GB-') or primary_voice in ['en-GB-RyanNeural', 'en-GB-GeorgeNeural', 'en-GB-ThomasNeural']:
+                for alt in ['en-GB-RyanNeural', 'en-GB-GeorgeNeural', 'en-GB-ThomasNeural', 'en-US-GuyNeural']:
                     if alt not in candidates:
                         candidates.append(alt)
             else:
