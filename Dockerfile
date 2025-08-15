@@ -89,8 +89,9 @@ COPY public ./public
 COPY frontend ./frontend
 COPY middleware ./middleware
 COPY socket ./socket
-COPY services ./services
+# COPY services ./services
 COPY utils ./utils
+COPY voices ./voices
 COPY *.js ./
 COPY *.json ./
 COPY *.md ./

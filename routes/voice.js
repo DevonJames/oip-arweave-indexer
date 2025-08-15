@@ -701,14 +701,28 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     formData.append('emotion', chatterboxParams.emotion);
                     formData.append('exaggeration', chatterboxParams.exaggeration.toString());
                     formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
-                    formData.append('voice_cloning', 'true'); // Voice cloning typically not used in real-time chat
                     
-                    // Point to your reference file (put it anywhere you like; this example assumes ../voices/)
-                    const voicePath = path.resolve(__dirname, '..', 'voices', 'british-male-voice-sample.mp3');
-                    formData.append('voice_file', fs.createReadStream(voicePath), {
-                    filename: 'voice-sample.mp3',
-                    contentType: 'audio/mpeg'
-                    });
+                    // Attempt voice cloning if sample file is available
+                    const defaultVoicePath = path.resolve(__dirname, '..', 'voices', 'british-male-voice-sample.mp3');
+                    const configuredVoicePath = process.env.CHATTERBOX_VOICE_SAMPLE_PATH;
+                    const voicePath = configuredVoicePath ? path.resolve(configuredVoicePath) : defaultVoicePath;
+                    let cloningEnabled = false;
+                    try {
+                        if (fs.existsSync(voicePath)) {
+                            formData.append('voice_cloning', 'true');
+                            formData.append('voice_file', fs.createReadStream(voicePath), {
+                                filename: path.basename(voicePath),
+                                contentType: 'audio/mpeg'
+                            });
+                            cloningEnabled = true;
+                        } else {
+                            console.warn(`[Voice Chat] Voice sample not found at ${voicePath} - disabling voice cloning for this request`);
+                            formData.append('voice_cloning', 'false');
+                        }
+                    } catch (vcErr) {
+                        console.warn(`[Voice Chat] Voice cloning setup error: ${vcErr.message} - proceeding without cloning`);
+                        formData.append('voice_cloning', 'false');
+                    }
 
                     // Optional but recommended for consistent timbre across calls
                     formData.append('seed', '42');
