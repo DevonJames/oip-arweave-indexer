@@ -709,7 +709,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     for (const candidateVoice of candidates) {
                         const formData = new FormData();
                         formData.append('text', textForTTS);
-                        formData.append('engine', 'edge_tts');
+                        // IMPORTANT: TTS GPU service expects engine='edge' (not 'edge_tts') to prioritize Edge
+                        formData.append('engine', 'edge');
                         formData.append('voice_id', candidateVoice);
                         formData.append('language', 'en-GB');
                         formData.append('gender', 'male');
