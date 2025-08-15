@@ -9,6 +9,9 @@ const path = require('path');
 const { spawn } = require('child_process');
 const os = require('os');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+
 
 // Configure axios with better connection management
 const axiosConfig = {
@@ -695,12 +698,23 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     // Create FormData for TTS service (required for compatibility with voice cloning)
                     const formData = new FormData();
                     formData.append('text', textForTTS);
-                    formData.append('gender', chatterboxParams.gender);
+                    // formData.append('gender', chatterboxParams.gender);
+                    formData.append('gender', 'male');
                     formData.append('emotion', chatterboxParams.emotion);
                     formData.append('exaggeration', chatterboxParams.exaggeration.toString());
                     formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
-                    formData.append('voice_cloning', 'false'); // Voice cloning typically not used in real-time chat
+                    formData.append('voice_cloning', 'true'); // Voice cloning typically not used in real-time chat
                     
+                    // Point to your reference file (put it anywhere you like; this example assumes ../voices/)
+                    const voicePath = path.resolve(__dirname, '..', 'voices', 'british-male-voice-sample.mp3');
+                    formData.append('voice_file', fs.createReadStream(voicePath), {
+                    filename: 'voice-sample.mp3',
+                    contentType: 'audio/mpeg'
+                    });
+
+                    // Optional but recommended for consistent timbre across calls
+                    formData.append('seed', '42');
+
                     console.log(`[Voice Chat] Sending FormData with text length: ${textForTTS.length} chars`);
                     
                     const ttsResponse = await safeAxiosCall(
