@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 const { getTemplatesInDB } = require('../helpers/elasticsearch');
 const { publishNewTemplate, indexTemplate } = require('../helpers/templateHelper');
+const templatesConfig = require('../config/templates.config');
 
 
 router.get('/', async (req, res) => {
@@ -15,6 +16,17 @@ router.get('/', async (req, res) => {
         let finalMaxArweaveBlock = currentTemplatesInDB.finalMaxArweaveBlock;
 
         const { sortBy, creatorHandle, creatorDidAddress, didTx, templateName } = req.query;
+
+        // New query params
+        const parseBooleanQuery = (value) => {
+            if (typeof value === 'boolean') return value;
+            if (typeof value !== 'string') return false;
+            const normalized = value.toLowerCase();
+            return ['1', 'true', 'yes', 'on'].includes(normalized);
+        };
+
+        const selectedOnly = parseBooleanQuery(req.query.selectedOnly);
+        const typeScriptTypes = parseBooleanQuery(req.query.typeScriptTypes);
 
         // Filter by creatorHandle
         // if (creatorHandle) {
@@ -38,6 +50,27 @@ router.get('/', async (req, res) => {
         if (templateName) {
             templates = templates.filter(template => template.data.template.toLowerCase().includes(templateName.toLowerCase()));
             console.log('after filtering by templateName, there are', templates.length, 'templates');
+        }
+
+        // Filter to only templates explicitly selected in templates.config.js when requested
+        if (selectedOnly) {
+            try {
+                const defaultTemplates = (templatesConfig && templatesConfig.defaultTemplates) ? templatesConfig.defaultTemplates : {};
+                const selectedTxIds = new Set(Object.values(defaultTemplates || {})); // raw txids from config
+                templates = templates.filter(template => {
+                    const txId = template?.data?.TxId;
+                    const didTx = template?.oip?.didTx; // format: did:arweave:<txid>
+                    if (txId && selectedTxIds.has(txId)) return true;
+                    if (didTx && typeof didTx === 'string' && didTx.startsWith('did:arweave:')) {
+                        const plain = didTx.replace('did:arweave:', '');
+                        if (selectedTxIds.has(plain)) return true;
+                    }
+                    return false;
+                });
+                console.log('after selectedOnly filtering, there are', templates.length, 'templates');
+            } catch (err) {
+                console.error('Error applying selectedOnly filter:', err);
+            }
         }
 
         // Sort by inArweaveBlock
@@ -112,6 +145,74 @@ router.get('/', async (req, res) => {
             // Keep fields property - needed by translateJSONtoOIPData function
             // delete template.data.fields;  // REMOVED: This was breaking nutritional info processing
         });
+        // If the caller requests TypeScript types, generate and return them instead of the standard payload
+        if (typeScriptTypes) {
+            const typeMap = (fieldInfo) => {
+                const fieldType = (fieldInfo && typeof fieldInfo.type === 'string') ? fieldInfo.type.toLowerCase() : '';
+                switch (fieldType) {
+                    case 'string':
+                        return 'string';
+                    case 'long':
+                    case 'uint64':
+                    case 'float':
+                    case 'number':
+                        return 'number';
+                    case 'bool':
+                    case 'boolean':
+                        return 'boolean';
+                    case 'enum':
+                        return 'string';
+                    case 'dref':
+                        return 'string';
+                    case 'repeated string':
+                        return 'string[]';
+                    case 'repeated dref':
+                        return 'string[]';
+                    default:
+                        return 'unknown';
+                }
+            };
+
+            const toPascalCase = (name) => {
+                if (!name || typeof name !== 'string') return 'Unknown';
+                return name
+                    .replace(/[-_\s]+/g, ' ')
+                    .split(' ')
+                    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                    .join('')
+                    .replace(/[^A-Za-z0-9]/g, '');
+            };
+
+            const lines = [];
+            lines.push('// Auto-generated TypeScript types from OIP Arweave templates');
+            lines.push(`// Generated on ${new Date().toISOString()}`);
+            lines.push('');
+
+            // Build a stable list by unique template name, prefer the first occurrence
+            const seenNames = new Set();
+            for (const template of templates) {
+                const templateNameRaw = (template?.data?.template) || (template?.data?.recordType) || 'unknown';
+                const interfaceName = toPascalCase(templateNameRaw);
+                if (seenNames.has(interfaceName)) continue;
+                seenNames.add(interfaceName);
+
+                const fieldsInTemplate = template?.data?.fieldsInTemplate || {};
+                lines.push(`export interface ${interfaceName} {`);
+
+                const fieldEntries = Object.entries(fieldsInTemplate);
+                for (const [fieldName, info] of fieldEntries) {
+                    const tsType = typeMap(info);
+                    lines.push(`  ${fieldName}: ${tsType};`);
+                }
+                lines.push('}');
+                lines.push('');
+            }
+
+            const generated = lines.join('\n');
+            // Return as JSON containing the TypeScript source text
+            return res.status(200).json({ typeScript: generated });
+        }
+
         let searchResults = templates.length;
         res.status(200).json({ message: "Templates retreived successfully", latestArweaveBlockInDB: finalMaxArweaveBlock, totalTemplates: qtyTemplatesInDB, searchResults, templates });
         // res.status(200).json(templates);
