@@ -1,57 +1,57 @@
 // Auto-generated TypeScript types from OIP Arweave templates
-// Generated on 2025-08-16T04:35:08.951Z
+// Generated on 2025-08-16T19:57:12.189Z
 
-export interface Recipe {
+export interface RecipeTemplate {
   prep_time_mins: number;
   cook_time_mins: number;
   total_time_mins: number;
   servings: number;
   ingredient_amount: number[];
   ingredient_unit: string[];
-  ingredient: string[];
+  ingredient: (string)[];
   ingredient_comment: string;
   instructions: string;
-  course: string;
+  course: "brk" | "lnc" | "dnr" | "snk" | "wrk" | "bkt" | "aft" | "ntm" | "pre" | "pst";
   cuisine: string;
   notes: string;
   author: string;
-  authorDRef: string;
+  authorDRef: string | CreatorRegistrationTemplate;
 }
 
-export interface Podcast {
+export interface PodcastTemplate {
   show: string;
   episodeNum: number;
   seasonNum: number;
   duration: number;
-  hosts: string[];
-  guests: string[];
+  hosts: (string)[];
+  guests: (string)[];
   explicit: boolean;
   transcript: string;
   chapters: string;
-  episodeArtwork: string[];
-  podcastArtwork: string;
+  episodeArtwork: (string | ImageTemplate)[];
+  podcastArtwork: string | ImageTemplate;
   license: string;
   copyright: string;
   sponsors: string[];
   rssFeedUrl: string;
 }
 
-export interface Post {
+export interface PostTemplate {
   webUrl: string;
   bylineWriter: string;
   bylineWritersTitle: string;
   bylineWritersLocation: string;
-  articleText: string;
-  featuredImage: string;
-  imageItems: string[];
+  articleText: string | TextTemplate;
+  featuredImage: string | ImageTemplate;
+  imageItems: (string | ImageTemplate)[];
   imageCaptionItems: string[];
-  videoItems: string[];
-  audioItems: string[];
+  videoItems: (string | VideoTemplate)[];
+  audioItems: (string | AudioTemplate)[];
   audioCaptionItems: string[];
-  replyTo: string;
+  replyTo: string | PostTemplate;
 }
 
-export interface Video {
+export interface VideoTemplate {
   webUrl: string;
   arweaveAddress: string;
   ipfsAddress: string;
@@ -62,11 +62,11 @@ export interface Video {
   height: number;
   duration: number;
   contentType: string;
-  thumbnails: string[];
-  creator: string;
+  thumbnails: (string | ImageTemplate)[];
+  creator: CreatorReference;
 }
 
-export interface Audio {
+export interface AudioTemplate {
   webUrl: string;
   arweaveAddress: string;
   ipfsAddress: string;
@@ -75,11 +75,11 @@ export interface Audio {
   size: number;
   duration: number;
   contentType: string;
-  thumbnails: string[];
-  creator: string;
+  thumbnails: (string | ImageTemplate)[];
+  creator: CreatorReference;
 }
 
-export interface Image {
+export interface ImageTemplate {
   webUrl: string;
   arweaveAddress: string;
   ipfsAddress: string;
@@ -89,10 +89,10 @@ export interface Image {
   size: number;
   width: number;
   height: number;
-  creator: string;
+  creator: CreatorReference;
 }
 
-export interface CreatorRegistration {
+export interface CreatorRegistrationTemplate {
   address: string;
   publicKey: string;
   handle: string;
@@ -103,7 +103,7 @@ export interface CreatorRegistration {
   tiktok: string;
 }
 
-export interface Text {
+export interface TextTemplate {
   webUrl: string;
   arweaveAddress: string;
   ipfsAddress: string;
@@ -113,23 +113,23 @@ export interface Text {
   contentType: string;
 }
 
-export interface Basic {
+export interface BasicTemplate {
   name: string;
   description: string;
   date: number;
-  language: string;
-  avatar: string;
+  language: "aa" | "ab" | "ae" | "af" | "ak" | "am" | "an" | "ar" | "as" | "av" | "ay" | "az" | "ba" | "be" | "bg" | "bh" | "bi" | "bm" | "bn" | "bo" | "br" | "bs" | "ca" | "ce" | "ch" | "co" | "cr" | "cs" | "cu" | "cv" | "cy" | "da" | "de" | "dv" | "dz" | "ee" | "el" | "en" | "eo" | "es" | "et" | "eu" | "fa" | "ff" | "fi" | "fj" | "fo" | "fr" | "fy" | "ga" | "gd" | "gl" | "gn" | "gu" | "gv" | "ha" | "he" | "hi" | "ho" | "hr" | "ht" | "hu" | "hy" | "hz" | "ia" | "id" | "ie" | "ig" | "ii" | "ik" | "io" | "is" | "it" | "iu" | "ja" | "jv" | "ka" | "kg" | "ki" | "kj" | "kk" | "kl" | "km" | "kn" | "ko" | "kr" | "ks" | "ku" | "kv" | "kw" | "ky" | "la" | "lb" | "lg" | "li" | "ln" | "lo" | "lt" | "lu" | "lv" | "mg" | "mh" | "mi" | "mk" | "ml" | "mn" | "mr" | "ms" | "mt" | "my" | "na" | "nb" | "nd" | "ne" | "ng" | "nl" | "nn" | "no" | "nr" | "nv" | "ny" | "oc" | "oj" | "om" | "or" | "os" | "pa" | "pi" | "pl" | "ps" | "pt" | "qu" | "rm" | "rn" | "ro" | "ru" | "rw" | "sa" | "sc" | "sd" | "se" | "sg" | "si" | "sk" | "sl" | "sm" | "sn" | "so" | "sq" | "sr" | "ss" | "st" | "su" | "sv" | "sw" | "ta" | "te" | "tg" | "th" | "ti" | "tk" | "tl" | "tn" | "to" | "tr" | "ts" | "tt" | "tw" | "ty" | "ug" | "uk" | "ur" | "uz" | "ve" | "vi" | "vo" | "wa" | "wo" | "xh" | "yi" | "yo" | "za" | "zh" | "zu";
+  avatar: string | ImageTemplate;
   license: string;
   nsfw: boolean;
-  creatorItems: string[];
+  creatorItems: (string)[];
   tagItems: string[];
   noteItems: string[];
-  urlItems: string[];
-  citations: string[];
+  urlItems: (string)[];
+  citations: (string)[];
   webUrl: string;
 }
 
-export interface NutritionalInfo {
+export interface NutritionalInfoTemplate {
   standardAmount: number;
   standardUnit: string;
   calories: number;
@@ -154,26 +154,26 @@ export interface NutritionalInfo {
   organic: boolean;
 }
 
-export interface Exercise {
+export interface ExerciseTemplate {
   instructions: string[];
   muscleGroups: string[];
-  difficulty: string;
-  category: string;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  category: "strength" | "cardio" | "flexibility";
   imageUrl: string;
   videoUrl: string;
   gitUrl: string;
   equipmentRequired: string[];
   alternativeEquipment: string[];
   isBodyweight: boolean;
-  exercise_type: string;
-  measurement_type: string;
-  est_duration_minutes: unknown;
-  target_duration_seconds: unknown;
-  recommended_sets: unknown;
-  recommended_reps: unknown;
+  exercise_type: "warmup" | "main" | "cooldown";
+  measurement_type: "reps" | "timed" | "hold" | "maxdur";
+  est_duration_minutes: number;
+  target_duration_seconds: number;
+  recommended_sets: number;
+  recommended_reps: number;
 }
 
-export interface Workout {
+export interface WorkoutTemplate {
   total_duration_minutes: number;
   estimated_calories_burned: number;
   includesWarmup: boolean;
@@ -182,18 +182,18 @@ export interface Workout {
   nonStandardWorkout: boolean;
   exercise_amount: number[];
   exercise_unit: string[];
-  exercise: string[];
+  exercise: (string | ExerciseTemplate)[];
   exercise_comment: string[];
   instructions: string;
   goalTags: string[];
   author: string;
-  authorDRef: string;
+  authorDRef: string | CreatorRegistrationTemplate;
   notes: string;
 }
 
-export interface PodcastShow {
-  hosts: string[];
-  producers: string[];
+export interface PodcastShowTemplate {
+  hosts: (string)[];
+  producers: (string)[];
   network: string;
   rssFeedUrl: string;
   defaultLicense: string;
@@ -203,7 +203,7 @@ export interface PodcastShow {
   category: string;
 }
 
-export interface AFourthTestTemplate {
+export interface AFourthTestTemplateTemplate {
   someField: string[];
   anotherField: string[];
 }
