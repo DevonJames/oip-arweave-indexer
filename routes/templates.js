@@ -156,12 +156,14 @@ router.get('/', async (req, res) => {
                     case 'uint64':
                     case 'float':
                     case 'number':
+                    case 'integer':
                         return 'number';
                     case 'bool':
                     case 'boolean':
                         return 'boolean';
                     case 'enum':
-                        return 'string';
+                        // handled specially below (type alias)
+                        return 'enum';
                     case 'dref':
                         return 'string';
                     case 'repeated string':
@@ -188,6 +190,52 @@ router.get('/', async (req, res) => {
             lines.push(`// Generated on ${new Date().toISOString()}`);
             lines.push('');
 
+            // Collect enum type aliases across all templates first
+            const enumAliases = new Map(); // aliasName -> { template: string, field: string, values: array, isCodeName: boolean }
+
+            for (const template of templates) {
+                const templateNameRaw = (template?.data?.template) || (template?.data?.recordType) || 'unknown';
+                const fieldsInTemplate = template?.data?.fieldsInTemplate || {};
+                for (const [fieldName, info] of Object.entries(fieldsInTemplate)) {
+                    if (!info || typeof info !== 'object') continue;
+                    const t = (info.type || '').toLowerCase();
+                    if (t !== 'enum') continue;
+
+                    const values = info.enumValues || [];
+                    const isCodeNameObjects = Array.isArray(values) && values.length > 0 && typeof values[0] === 'object' && (values[0].code !== undefined);
+                    const aliasBase = toPascalCase(fieldName);
+                    const aliasName = isCodeNameObjects ? `${aliasBase}Code` : aliasBase;
+
+                    if (!enumAliases.has(aliasName)) {
+                        enumAliases.set(aliasName, {
+                            template: String(templateNameRaw).toLowerCase(),
+                            field: fieldName,
+                            values,
+                            isCodeName: isCodeNameObjects
+                        });
+                    }
+                }
+            }
+
+            // Emit enum aliases
+            for (const [aliasName, def] of enumAliases.entries()) {
+                lines.push(`// Enum from "${def.template}.${def.field}" template field`);
+                lines.push(`export type ${aliasName} =`);
+                if (def.isCodeName) {
+                    for (const v of def.values) {
+                        const code = String(v.code);
+                        const name = (v.name !== undefined && v.name !== null) ? String(v.name) : '';
+                        lines.push(`  | "${code}"${name ? ` // ${name}` : ''}`);
+                    }
+                } else if (Array.isArray(def.values)) {
+                    for (const v of def.values) {
+                        lines.push(`  | "${String(v)}"`);
+                    }
+                }
+                lines.push(';');
+                lines.push('');
+            }
+
             // Build a stable list by unique template name, prefer the first occurrence
             const seenNames = new Set();
             for (const template of templates) {
@@ -201,7 +249,17 @@ router.get('/', async (req, res) => {
 
                 const fieldEntries = Object.entries(fieldsInTemplate);
                 for (const [fieldName, info] of fieldEntries) {
-                    const tsType = typeMap(info);
+                    const mapped = typeMap(info);
+                    let tsType;
+                    if (mapped === 'enum') {
+                        const values = info.enumValues || [];
+                        const isCodeNameObjects = Array.isArray(values) && values.length > 0 && typeof values[0] === 'object' && (values[0].code !== undefined);
+                        const aliasBase = toPascalCase(fieldName);
+                        const aliasName = isCodeNameObjects ? `${aliasBase}Code` : aliasBase;
+                        tsType = aliasName;
+                    } else {
+                        tsType = mapped;
+                    }
                     lines.push(`  ${fieldName}: ${tsType};`);
                 }
                 lines.push('}');
