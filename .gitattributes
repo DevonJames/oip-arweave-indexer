@@ -1,0 +1,5 @@
+# Enforce LF endings for shell scripts to avoid shebang/CRLF issues on Windows
+*.sh text eol=lf
+Dockerfile text eol=lf
+Dockerfile-* text eol=lf
+

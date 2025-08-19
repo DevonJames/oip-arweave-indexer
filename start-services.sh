@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Wait for Elasticsearch to be ready
 ./wait-for-it.sh elasticsearch:9200 --timeout=90 --strict
