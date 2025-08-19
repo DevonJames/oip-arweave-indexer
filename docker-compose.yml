@@ -460,10 +460,6 @@ services:
     profiles:
       - standard-gpu
 
-networks:
-  oip-network:
-    driver: bridge
-
   # GUN Relay Service for private/temporary storage
   gun-relay:
     image: node:18-alpine
@@ -487,6 +483,10 @@ networks:
       - standard
       - standard-gpu
       - standard-monolithic
+
+networks:
+  oip-network:
+    driver: bridge
 
 volumes:
   esdata:
