@@ -535,16 +535,23 @@ const indexRecord = async (record) => {
             console.log(getFileInfo(), getLineNumber(), `Skipping indexing for recordType '${typeForIndex}' per configuration.`);
             return;
         }
-        const didTx = record.oip.didTx;
+        
+        // Use unified DID field as primary identifier, fallback to didTx for backward compatibility
+        const recordId = record.oip.did || record.oip.didTx;
+        if (!recordId) {
+            throw new Error('Record must have either oip.did or oip.didTx field');
+        }
+        
         const existingRecord = await elasticClient.exists({
             index: 'records',
-            id: didTx
+            id: recordId
         });
+        
         if (existingRecord.body) {
-            // Update existing unconfirmed record with new confirmed data
+            // Update existing record
             const response = await elasticClient.update({
                 index: 'records',
-                id: didTx,
+                id: recordId,
                 body: {
                     doc: {
                         ...record,
@@ -553,20 +560,20 @@ const indexRecord = async (record) => {
                 },
                 refresh: 'wait_for'
             });
-            console.log(getFileInfo(), getLineNumber(),`Record updated successfully: ${didTx}`, response.result);    
+            console.log(getFileInfo(), getLineNumber(),`Record updated successfully: ${recordId}`, response.result);    
         } else {
+            // Create new record
             const response = await elasticClient.index({
                 index: 'records',
-                id: didTx, // Use didTx as the ID
+                id: recordId, // Use unified DID as the ID
                 body: record,
                 refresh: 'wait_for' // Wait for indexing to be complete before returning
             });
-            console.log(getFileInfo(), getLineNumber(), `Record indexed successfully: ${didTx}`, response.result);
+            console.log(getFileInfo(), getLineNumber(), `Record indexed successfully: ${recordId} (storage: ${record.oip?.storage || 'unknown'})`, response.result);
         }
 
-
     } catch (error) {
-        console.error(getFileInfo(), getLineNumber(), `Error indexing record ${record.oip.didTx}:`, error);
+        console.error(getFileInfo(), getLineNumber(), `Error indexing record ${record.oip?.did || record.oip?.didTx}:`, error);
     }
 };
 
@@ -1119,6 +1126,9 @@ async function getRecords(queryParams) {
         url,
         didTx,
         didTxRef,
+        did,           // NEW: unified DID parameter
+        source,        // NEW: 'all', 'arweave', 'gun'
+        storage,       // ALIAS: maps to oip.storage
         tags,
         tagsMatchMode = 'OR', // New parameter: 'AND' or 'OR' (default: 'OR' for backward compatibility)
         sortBy = 'inArweaveBlock:desc',
@@ -1148,6 +1158,9 @@ async function getRecords(queryParams) {
         cuisineMatchMode = 'OR', // New parameter for cuisine match behavior (AND/OR, default OR)
     } = queryParams;
 
+    // Normalize DID parameter for backward compatibility
+    const normalizedDid = did || didTx;
+    
     // console.log('get records using:', {queryParams});
     try {
         const result = await getRecordsInDB();
@@ -1157,6 +1170,16 @@ async function getRecords(queryParams) {
         let maxArweaveBlockInDB = result.finalMaxRecordArweaveBlock;
 
         // Perform filtering based on query parameters
+
+        // NEW: Filter by storage type
+        if (source && source !== 'all') {
+            records = records.filter(record => record.oip?.storage === source);
+            console.log(`after filtering by source=${source}, there are`, records.length, 'records');
+        }
+        if (storage && storage !== 'all') {
+            records = records.filter(record => record.oip?.storage === storage);
+            console.log(`after filtering by storage=${storage}, there are`, records.length, 'records');
+        }
 
         // console.log('before filtering, there are', qtyRecordsInDB, 'records');
 
@@ -1237,9 +1260,12 @@ async function getRecords(queryParams) {
         //     records = records.filter(record => record.oip.didTx === didTx);
         // }
 
-        if (didTx != undefined) {
-            records = records.filter(record => record.oip.didTx === didTx);
-            // console.log('after filtering by didTx, there are', records.length, 'records');
+        // Update DID filtering to use normalized field and support both did and didTx
+        if (normalizedDid != undefined) {
+            records = records.filter(record => 
+                record.oip?.did === normalizedDid || record.oip?.didTx === normalizedDid
+            );
+            console.log(`after filtering by DID=${normalizedDid}, there are`, records.length, 'records');
         }
 
         if (template != undefined) {

@@ -138,7 +138,8 @@ const signMessage = async (data) => {
 };
 
 const isValidDid = (did) => {
-    return /^did:arweave:[a-zA-Z0-9_-]{43}$/.test(did);
+    // Support multiple DID formats: arweave, irys, ipfs, arfleet, bittorrent, gun
+    return /^did:(arweave|irys|ipfs|arfleet|bittorrent|gun):[a-zA-Z0-9_\-\.]+$/.test(did);
 };
 
 const isValidTxId = (txid) => {
@@ -157,6 +158,24 @@ const didToTxid = (did) => {
         throw new Error('Invalid DID format');
     }
     return did.split(':')[2];
+};
+
+// GUN-specific DID utilities
+const didToGunSoul = (did) => {
+    if (!did.startsWith('did:gun:')) {
+        throw new Error('Invalid GUN DID format');
+    }
+    return did.split(':')[2];
+};
+
+const gunSoulToDid = (soul) => {
+    return `did:gun:${soul}`;
+};
+
+// Normalize DID parameter for backward compatibility
+const normalizeDidParam = (didParam) => {
+    // Accept both didTx and did for backward compatibility
+    return didParam; // didTx values are already valid DIDs
 };
 
 const loadRemapTemplates = async () => {
@@ -303,6 +322,9 @@ module.exports = {
     signMessage,
     txidToDid,
     didToTxid,
+    didToGunSoul,
+    gunSoulToDid,
+    normalizeDidParam,
     resolveRecords,
     validateTemplateFields,
     getTemplateTxidByName,

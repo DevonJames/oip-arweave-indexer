@@ -44,8 +44,19 @@ async function getRecordByDidTx(didTx) {
 router.get('/', async (req, res) => {
     try {
         const queryParams = { ...req.query };
+        
+        // Normalize DID parameter (backward compatibility)
+        if (queryParams.didTx && !queryParams.did) {
+            queryParams.did = queryParams.didTx;
+        }
+        
+        // Add storage filtering if source parameter provided
+        if (queryParams.source && queryParams.source !== 'all') {
+            queryParams.storage = queryParams.source; // maps to oip.storage field
+        }
+        
         const records = await getRecords(queryParams);
-        console.log('records.js 15, records', records);
+        console.log('records.js enhanced with GUN support, records:', records);
         res.status(200).json(
             records
         );
@@ -72,18 +83,49 @@ router.post('/newRecord', authenticateToken, async (req, res) => {
         console.log('POST /api/records/newRecord', req.body)
         const record = req.body;
         const blockchain = req.body.blockchain || req.query.blockchain || 'arweave'; // Accept blockchain from body or query
+        const storage = req.body.storage || req.query.storage || blockchain; // Support storage parameter
         let recordType = req.query.recordType;
         const publishFiles = req.query.publishFiles === 'true';
         const addMediaToArweave = req.query.addMediaToArweave !== 'false'; // Default to true
         const addMediaToIPFS = req.query.addMediaToIPFS === 'true';
         const addMediaToArFleet = req.query.addMediaToArFleet === 'true'; // Default to false
         const youtubeUrl = req.query.youtubeUrl || null;
-        const newRecord = await publishNewRecord(record, recordType, publishFiles, addMediaToArweave, addMediaToIPFS, youtubeUrl, blockchain, addMediaToArFleet);
-        const transactionId = newRecord.transactionId;
-        const recordToIndex = newRecord.recordToIndex;
-        // const dataForSignature = newRecord.dataForSignature;
-        // const creatorSig = newRecord.creatorSig;
-        res.status(200).json({ transactionId, recordToIndex, blockchain });
+        
+        // GUN-specific options
+        const gunOptions = {
+            storage: storage,
+            localId: req.query.localId || req.body.localId,
+            accessControl: req.body.accessControl || req.query.accessControl
+        };
+        
+        const newRecord = await publishNewRecord(
+            record, 
+            recordType, 
+            publishFiles, 
+            addMediaToArweave, 
+            addMediaToIPFS, 
+            youtubeUrl, 
+            blockchain, 
+            addMediaToArFleet,
+            gunOptions
+        );
+        
+        const responseData = {
+            recordToIndex: newRecord.recordToIndex,
+            storage: storage
+        };
+        
+        // Use appropriate ID field based on storage type
+        if (storage === 'gun') {
+            responseData.did = newRecord.did;
+            responseData.soul = newRecord.soul;
+            responseData.encrypted = newRecord.encrypted;
+        } else {
+            responseData.transactionId = newRecord.transactionId;
+            responseData.blockchain = blockchain;
+        }
+        
+        res.status(200).json(responseData);
     } catch (error) {
         console.error('Error publishing record:', error);
         res.status(500).json({ error: 'Failed to publish record' });

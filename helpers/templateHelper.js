@@ -278,8 +278,15 @@ async function createAndSeedTorrent(videoFile) {
 }
 
 // note: need to have new creator records derive their address and public key before publishing the registration record
-async function publishNewRecord(record, recordType, publishFiles = false, addMediaToArweave = true, addMediaToIPFS = false, youtubeUrl = null, blockchain = 'arweave', addMediaToArFleet = false) {
-    console.log('Publishing new record:', { recordType, blockchain, publishFiles, addMediaToArweave, addMediaToIPFS, addMediaToArFleet })
+async function publishNewRecord(record, recordType, publishFiles = false, addMediaToArweave = true, addMediaToIPFS = false, youtubeUrl = null, blockchain = 'arweave', addMediaToArFleet = false, options = {}) {
+    console.log('Publishing new record:', { recordType, blockchain, publishFiles, addMediaToArweave, addMediaToIPFS, addMediaToArFleet, storage: options.storage })
+    
+    // Check for GUN storage early
+    const storage = options.storage || blockchain;
+    if (storage === 'gun') {
+        return await publishToGun(record, recordType, options);
+    }
+    
     try {
         let didTxRefs = [];
         let subRecords = [];
@@ -739,6 +746,76 @@ async function publishNewTemplate(template, blockchain = 'arweave') {
 
     } catch (error) {
         console.error('Error publishing template:', error);
+        throw error;
+    }
+}
+
+// GUN publishing function for records
+async function publishToGun(record, recordType, options = {}) {
+    try {
+        console.log('Publishing record to GUN:', { recordType, options });
+        
+        // Get publisher info (reuse existing logic)
+        const fs = require('fs');
+        const { createHash } = require('crypto');
+        const base64url = require('base64url');
+        const { signMessage, getWalletFilePath } = require('./utils');
+        const { indexRecord } = require('./elasticsearch');
+        
+        const jwk = JSON.parse(fs.readFileSync(getWalletFilePath()));
+        const myPublicKey = jwk.n;
+        const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
+        
+        // Create signature envelope (no blockchain tags needed for GUN)
+        const dataForSignature = JSON.stringify(record);
+        const creatorSig = await signMessage(dataForSignature);
+        
+        // Build record for GUN (expanded format, not compressed like Arweave)
+        const gunRecordData = {
+            data: record,
+            oip: {
+                did: null, // Will be set after soul generation
+                storage: 'gun',
+                recordType: recordType,
+                indexedAt: new Date().toISOString(),
+                ver: '0.8.0',
+                signature: creatorSig,
+                creator: {
+                    didAddress: `did:arweave:${myAddress}`,
+                    publicKey: myPublicKey
+                }
+            }
+        };
+        
+        // Publish to GUN using publisher manager
+        const publishResult = await publisherManager.publish(gunRecordData, {
+            storage: 'gun',
+            publisherPubKey: myPublicKey,
+            localId: options.localId,
+            accessControl: options.accessControl,
+            writerKeys: options.writerKeys
+        });
+        
+        // Update with final DID
+        gunRecordData.oip.did = publishResult.did;
+        gunRecordData.oip.didTx = publishResult.did; // For backward compatibility
+        
+        // Index to Elasticsearch (reuse existing function!)
+        await indexRecord(gunRecordData);
+        console.log('GUN record indexed to Elasticsearch:', publishResult.did);
+        
+        return {
+            transactionId: publishResult.id, // Use soul as transaction ID for GUN
+            did: publishResult.did,
+            storage: 'gun',
+            provider: 'gun',
+            soul: publishResult.soul,
+            encrypted: publishResult.encrypted,
+            recordToIndex: gunRecordData
+        };
+        
+    } catch (error) {
+        console.error('Error publishing to GUN:', error);
         throw error;
     }
 }
@@ -1552,6 +1629,7 @@ module.exports = {
     resolveRecords,
     publishNewRecord,
     publishNewTemplate,
+    publishToGun,
     indexTemplate,
     publishVideoFiles,
     publishArticleText,
