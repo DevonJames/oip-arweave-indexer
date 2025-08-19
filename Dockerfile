@@ -74,7 +74,7 @@ RUN mv node_modules ../
 
 # Copy wait-for-it.sh script and make it executable
 COPY wait-for-it.sh wait-for-it.sh
-RUN chmod +x wait-for-it.sh
+RUN sed -i 's/\r$//' wait-for-it.sh && chmod +x wait-for-it.sh
 
 # Copy specific application directories and config
 COPY config ./config
@@ -127,7 +127,7 @@ EXPOSE 5555
 
 # Copy and set up the startup script
 COPY start-services.sh ./start-services.sh
-RUN chmod +x start-services.sh
+RUN sed -i 's/\r$//' start-services.sh && chmod +x start-services.sh
 
 # Command to run all services (API + Next.js frontend)
 CMD ["./start-services.sh"]
