@@ -3355,6 +3355,16 @@
                     </div>
                     
                     <div class="filter-group">
+                        <label for="voice-storage-filter">Storage Type</label>
+                        <select id="voice-storage-filter" onchange="applyVoiceFilters()">
+                            <option value="all">All Sources</option>
+                            <option value="arweave">Arweave (Permanent)</option>
+                            <option value="gun">GUN (Private/Drafts)</option>
+                            <option value="irys">Irys (Permanent)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
                         <label for="voice-search-match-mode" title="Controls how search terms are matched">
                             Search Mode
                             <span style="opacity: 0.6; font-size: 0.8rem;">(?)</span>
@@ -3575,20 +3585,35 @@
             <div id="record-section" class="section hidden">
                 <h2>Publish Record</h2>
                 
-                <!-- Record Type Selection -->
-                <div class="form-group">
-                    <label for="publish-record-type">Record Type:</label>
-                    <select id="publish-record-type" onchange="loadPublishInterface()">
-                        <option value="">Select Record Type</option>
-                        <option value="post">Post / Article</option>
-                        <option value="video">Video</option>
-                        <option value="audio">Audio / Podcast</option>
-                        <option value="image">Image</option>
-                        <option value="recipe">Recipe</option>
-                        <option value="workout">Workout</option>
-                        <option value="text">Text Document</option>
-                    </select>
-                </div>
+                                    <!-- Record Type Selection -->
+                    <div class="form-group">
+                        <label for="publish-record-type">Record Type:</label>
+                        <select id="publish-record-type" onchange="loadPublishInterface()">
+                            <option value="">Select Record Type</option>
+                            <option value="post">Post / Article</option>
+                            <option value="video">Video</option>
+                            <option value="audio">Audio / Podcast</option>
+                            <option value="image">Image</option>
+                            <option value="recipe">Recipe</option>
+                            <option value="workout">Workout</option>
+                            <option value="text">Text Document</option>
+                        </select>
+                    </div>
+
+                    <!-- Storage Type Selection -->
+                    <div class="form-group">
+                        <label for="publish-storage-type">Storage Type:</label>
+                        <select id="publish-storage-type">
+                            <option value="arweave">Arweave (Permanent & Public)</option>
+                            <option value="gun">GUN (Private Draft)</option>
+                            <option value="irys">Irys (Permanent & Fast)</option>
+                        </select>
+                        <small>
+                            <strong>Arweave:</strong> Permanent, public, immutable storage<br>
+                            <strong>GUN:</strong> Private drafts, editable, encrypted<br>
+                            <strong>Irys:</strong> Permanent, fast confirmation
+                        </small>
+                    </div>
 
                 <!-- Dynamic Publishing Interface -->
                 <div id="publish-interface" class="dynamic-fields">
@@ -6839,6 +6864,10 @@
             switch (recordType) {
                 case 'post':
                     interfaceContainer.innerHTML = createPostInterface();
+                    // Initialize storage type handler after interface is created
+                    setTimeout(() => {
+                        initializeStorageTypeHandler();
+                    }, 100);
                     break;
                 case 'video':
                     interfaceContainer.innerHTML = createVideoInterface();
@@ -6956,6 +6985,24 @@
                             <label>
                                 <input type="checkbox" id="post-nsfw"> NSFW Content
                             </label>
+                        </div>
+
+                        <!-- GUN-specific options -->
+                        <div id="gun-options" class="form-group" style="display: none; background: #f0f4ff; padding: 15px; border-radius: 8px; border: 1px solid #c7d2fe;">
+                            <h4 style="margin: 0 0 10px 0; color: #3730a3;">🔒 GUN Private Storage Options</h4>
+                            
+                            <div class="form-group">
+                                <label for="gun-local-id">Local ID (optional):</label>
+                                <input type="text" id="gun-local-id" placeholder="draft-001, my-recipe, etc.">
+                                <small>Provide a custom identifier for this record. If empty, a content hash will be used.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="gun-private"> Private Record (Encrypted)
+                                </label>
+                                <small>Check to encrypt this record. Only you will be able to read it.</small>
+                            </div>
                         </div>
                     </div>
 
@@ -9819,6 +9866,7 @@
             currentFilters.search = document.getElementById('voice-search-input').value.trim();
             currentFilters.searchMatchMode = document.getElementById('voice-search-match-mode').value;
             currentFilters.recordType = document.getElementById('voice-record-type-filter').value;
+            currentFilters.source = document.getElementById('voice-storage-filter').value; // NEW: Storage type filter
             currentFilters.sortBy = document.getElementById('voice-sort-by').value;
             currentFilters.resolveDepth = parseInt(document.getElementById('voice-resolve-depth').value) || 2;
             currentFilters.dateStart = document.getElementById('voice-date-start').value;
@@ -9897,6 +9945,7 @@
             document.getElementById('voice-search-input').value = '';
             document.getElementById('voice-search-match-mode').value = 'AND';
             document.getElementById('voice-record-type-filter').value = '';
+            document.getElementById('voice-storage-filter').value = 'all'; // NEW: Reset storage filter
             document.getElementById('voice-sort-by').value = 'matchCount:desc';
             document.getElementById('voice-resolve-depth').value = '2';
             document.getElementById('voice-date-start').value = '';
@@ -11140,19 +11189,50 @@
                     return;
                 }
 
-                const response = await fetch('/api/publish/newPost', {
+                // Get storage type and GUN-specific options
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
+                const isPrivate = document.getElementById('gun-private')?.checked || false;
+
+                // Build request body with storage options
+                const requestBody = { ...postData };
+                if (storageType === 'gun') {
+                    requestBody.storage = 'gun';
+                    if (localId) {
+                        requestBody.localId = localId;
+                    }
+                    if (isPrivate) {
+                        requestBody.accessControl = { private: true };
+                    }
+                } else {
+                    requestBody.blockchain = storageType;
+                }
+
+                // Determine endpoint based on storage type
+                const endpoint = storageType === 'gun' ? '/api/records/newRecord' : '/api/publish/newPost';
+                const queryParams = storageType === 'gun' ? '?recordType=post' : '';
+
+                const response = await fetch(`${endpoint}${queryParams}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${authToken}`
                     },
-                    body: JSON.stringify(postData)
+                    body: JSON.stringify(requestBody)
                 });
 
                 const result = await response.json();
                 
                 if (response.ok) {
-                    showMessage('publish-success', `Post published successfully! Transaction ID: ${result.transactionId}`, 'success');
+                    // Handle different response formats for different storage types
+                    let successMessage;
+                    if (storageType === 'gun') {
+                        successMessage = `Post saved to GUN! DID: ${result.did}${result.encrypted ? ' (Encrypted)' : ''}`;
+                    } else {
+                        successMessage = `Post published successfully! Transaction ID: ${result.transactionId}`;
+                    }
+                    showMessage('publish-success', successMessage, 'success');
+                    
                     // Clear form
                     document.getElementById('publish-record-type').value = '';
                     loadPublishInterface();
@@ -11383,6 +11463,29 @@
                 }
             } catch (error) {
                 showMessage('publish-status', 'Exercise resolution error: ' + error.message, 'error');
+            }
+        }
+
+        // Initialize storage type handler for GUN options
+        function initializeStorageTypeHandler() {
+            const storageSelect = document.getElementById('publish-storage-type');
+            const gunOptions = document.getElementById('gun-options');
+            
+            if (storageSelect && gunOptions) {
+                // Add event listener for storage type changes
+                storageSelect.addEventListener('change', function() {
+                    const selectedStorage = this.value;
+                    
+                    if (selectedStorage === 'gun') {
+                        gunOptions.style.display = 'block';
+                    } else {
+                        gunOptions.style.display = 'none';
+                    }
+                });
+                
+                // Initialize visibility based on current selection
+                const currentStorage = storageSelect.value;
+                gunOptions.style.display = currentStorage === 'gun' ? 'block' : 'none';
             }
         }
 
