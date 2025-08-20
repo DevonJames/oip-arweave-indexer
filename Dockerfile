@@ -1,45 +1,40 @@
-FROM node:18-alpine3.20
+FROM node:18-bullseye-slim
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
-# Fix Alpine mirrors and install necessary packages for all services including Chromium dependencies
-RUN echo "https://mirror.math.princeton.edu/pub/alpinelinux/v3.20/main" > /etc/apk/repositories && \
-    echo "https://mirror.math.princeton.edu/pub/alpinelinux/v3.20/community" >> /etc/apk/repositories && \
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/main" >> /etc/apk/repositories && \
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories && \
-    apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium cmake ffmpeg poppler-utils \
-    openssl-dev \
-    openssl-libs-static \
-    libssl3 \
-    libcrypto3 \
-    libc6-compat \
-    linux-headers \
+# Use Debian base instead of Alpine to avoid repository issues
+# Install necessary packages for all services including Chromium dependencies
+RUN apt-get update && apt-get install -y \
+    bash \
+    make \
+    g++ \
+    python3 \
+    python3-dev \
+    python3-pip \
+    curl \
+    chromium \
+    cmake \
+    ffmpeg \
+    poppler-utils \
+    libssl-dev \
+    libc6-dev \
     git \
-    pkgconfig \
+    pkg-config \
     espeak \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
     ca-certificates \
-    ttf-freefont \
-    font-noto \
-    eudev-dev \
+    fonts-liberation \
+    fonts-noto \
     xvfb \
-    dbus
-
-# Add dependencies for node-canvas (required for image processing)
-RUN apk add --no-cache \
-    build-base \
-    cairo-dev \
-    pango-dev \
-    jpeg-dev \
-    giflib-dev \
-    librsvg-dev \
-    pixman-dev \
-    freetype-dev \
-    fontconfig-dev \
-    pkgconfig
+    dbus \
+    build-essential \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    libpixman-1-dev \
+    libfontconfig1-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 #     # Install Puppeteer
 # RUN npm install puppeteer-extra puppeteer-extra-plugin-stealth
@@ -53,11 +48,11 @@ ENV CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usag
 # Install Python packages for LLaMA2 and Coqui TTS
 # RUN pip3 install torch transformers flask TTS
 
-# Set environment variables to help CMake find OpenSSL - Updated for Alpine Linux
+# Set environment variables to help CMake find OpenSSL - Updated for Debian
 ENV OPENSSL_ROOT_DIR=/usr
 ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
-ENV OPENSSL_CRYPTO_LIBRARY=/usr/lib/libcrypto.so.3
-ENV OPENSSL_SSL_LIBRARY=/usr/lib/libssl.so.3
+ENV OPENSSL_CRYPTO_LIBRARY=/usr/lib/x86_64-linux-gnu/libcrypto.so
+ENV OPENSSL_SSL_LIBRARY=/usr/lib/x86_64-linux-gnu/libssl.so
 ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig
 
 # Install app dependencies with better native module handling
