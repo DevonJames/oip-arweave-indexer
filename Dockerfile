@@ -1,40 +1,41 @@
-FROM node:18-bullseye-slim
+FROM node:18-alpine3.20
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
-# Use Debian base instead of Alpine to avoid repository issues
 # Install necessary packages for all services including Chromium dependencies
-RUN apt-get update && apt-get install -y \
-    bash \
-    make \
-    g++ \
-    python3 \
-    python3-dev \
-    python3-pip \
-    curl \
-    chromium \
-    cmake \
-    ffmpeg \
-    poppler-utils \
-    libssl-dev \
-    libc6-dev \
+RUN apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium cmake ffmpeg poppler-utils \
+    openssl-dev \
+    openssl-libs-static \
+    libssl3 \
+    libcrypto3 \
+    libc6-compat \
+    linux-headers \
     git \
-    pkg-config \
+    pkgconfig \
     espeak \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
     ca-certificates \
-    fonts-liberation \
-    fonts-noto \
+    ttf-freefont \
+    font-noto \
+    eudev-dev \
     xvfb \
-    dbus \
-    build-essential \
-    libcairo2-dev \
-    libpango1.0-dev \
-    libjpeg-dev \
-    libgif-dev \
-    librsvg2-dev \
-    libpixman-1-dev \
-    libfontconfig1-dev \
-    && rm -rf /var/lib/apt/lists/*
+    dbus
+
+# Add dependencies for node-canvas (required for image processing)
+RUN apk add --no-cache \
+    build-base \
+    cairo-dev \
+    pango-dev \
+    jpeg-dev \
+    giflib-dev \
+    librsvg-dev \
+    pixman-dev \
+    freetype-dev \
+    fontconfig-dev \
+    pkgconfig
 
 #     # Install Puppeteer
 # RUN npm install puppeteer-extra puppeteer-extra-plugin-stealth
@@ -48,11 +49,11 @@ ENV CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usag
 # Install Python packages for LLaMA2 and Coqui TTS
 # RUN pip3 install torch transformers flask TTS
 
-# Set environment variables to help CMake find OpenSSL - Updated for Debian
+# Set environment variables to help CMake find OpenSSL - Updated for Alpine Linux
 ENV OPENSSL_ROOT_DIR=/usr
 ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
-ENV OPENSSL_CRYPTO_LIBRARY=/usr/lib/x86_64-linux-gnu/libcrypto.so
-ENV OPENSSL_SSL_LIBRARY=/usr/lib/x86_64-linux-gnu/libssl.so
+ENV OPENSSL_CRYPTO_LIBRARY=/usr/lib/libcrypto.so.3
+ENV OPENSSL_SSL_LIBRARY=/usr/lib/libssl.so.3
 ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig
 
 # Install app dependencies with better native module handling
