@@ -1,23 +1,26 @@
-FROM node:20.11.1-alpine
+FROM node:20-bullseye-slim
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
-# Fix Alpine mirrors and install necessary packages for all services
-RUN echo "https://mirror.math.princeton.edu/pub/alpinelinux/v3.20/main" > /etc/apk/repositories && \
-    echo "https://mirror.math.princeton.edu/pub/alpinelinux/v3.20/community" >> /etc/apk/repositories && \
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/main" >> /etc/apk/repositories && \
-    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories && \
-    apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium
-
-# Add dependencies for node-canvas
-RUN apk add --no-cache \
-    build-base \
-    cairo-dev \
-    pango-dev \
-    jpeg-dev \
-    giflib-dev \
-    librsvg \
-    pkgconfig
+# Use Debian base instead of Alpine to avoid repository issues
+# Install necessary packages for all services
+RUN apt-get update && apt-get install -y \
+    bash \
+    make \
+    g++ \
+    python3 \
+    python3-dev \
+    python3-pip \
+    curl \
+    chromium \
+    build-essential \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Puppeteer
 RUN npm install puppeteer-extra puppeteer-extra-plugin-stealth
