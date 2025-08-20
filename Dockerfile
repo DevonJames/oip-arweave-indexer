@@ -2,8 +2,12 @@ FROM node:18-alpine3.20
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
-# Install necessary packages for all services including Chromium dependencies
-RUN apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium cmake ffmpeg poppler-utils \
+# Fix Alpine mirrors and install necessary packages for all services including Chromium dependencies
+RUN echo "https://mirror.math.princeton.edu/pub/alpinelinux/v3.20/main" > /etc/apk/repositories && \
+    echo "https://mirror.math.princeton.edu/pub/alpinelinux/v3.20/community" >> /etc/apk/repositories && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/main" >> /etc/apk/repositories && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories && \
+    apk update && apk add --no-cache bash make g++ python3 python3-dev py3-pip curl chromium cmake ffmpeg poppler-utils \
     openssl-dev \
     openssl-libs-static \
     libssl3 \
