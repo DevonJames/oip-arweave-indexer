@@ -464,14 +464,12 @@ services:
   gun-relay:
     image: node:18-alpine
     working_dir: /app
-    command: >
-      sh -c "npm init -y >/dev/null 2>&1 || true && 
-      npm i gun && 
-      node -e 'const Gun = require(\"gun\"); require(\"gun/sea\"); const http = require(\"http\"); const server = http.createServer(); const gun = Gun({ web: server, radisk: true, file: \"data\" }); server.listen(8765, () => console.log(\"GUN relay running on :8765\"));'"
+    command: sh -c "npm init -y >/dev/null 2>&1 && npm i gun && node gun-relay-server.js"
     ports:
       - "8765:8765"
     volumes:
       - gundata:/app/data
+      - ./gun-relay-server.js:/app/gun-relay-server.js:ro
     networks:
       - oip-network
     restart: unless-stopped
