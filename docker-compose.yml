@@ -467,7 +467,7 @@ services:
     command: >
       sh -c "npm init -y >/dev/null 2>&1 || true && 
       npm i gun && 
-      node -e 'const Gun = require(\"gun\"); require(\"gun/sea\"); const http = require(\"http\"); const server = http.createServer(); Gun({ web: server, radisk: true, file: \"data\" }); server.listen(8765, () => console.log(\"GUN relay running on :8765\"));'"
+      node -e 'const Gun = require(\"gun\"); require(\"gun/sea\"); const http = require(\"http\"); const server = http.createServer(); const gun = Gun({ web: server, radisk: true, file: \"data\" }); server.listen(8765, () => console.log(\"GUN relay running on :8765\"));'"
     ports:
       - "8765:8765"
     volumes:
@@ -476,6 +476,8 @@ services:
       - oip-network
     restart: unless-stopped
     profiles:
+      - minimal
+      - minimal-with-scrape
       - standard
       - standard-gpu
       - standard-monolithic
