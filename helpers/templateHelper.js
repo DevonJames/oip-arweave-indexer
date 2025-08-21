@@ -775,7 +775,6 @@ async function publishToGun(record, recordType, options = {}) {
             data: record,
             oip: {
                 did: null, // Will be set after soul generation
-                storage: 'gun',
                 recordType: recordType,
                 indexedAt: new Date().toISOString(),
                 ver: '0.8.0',
