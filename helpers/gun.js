@@ -98,7 +98,7 @@ class GunHelper {
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     reject(new Error('GUN storage timeout after 30 seconds'));
-                }, 30000);
+                }, 60000);
 
                 this.gun.get(soul).put(gunRecord, (ack) => {
                     clearTimeout(timeout);
