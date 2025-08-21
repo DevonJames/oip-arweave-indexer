@@ -15,11 +15,13 @@ try {
     // Create HTTP server
     const server = http.createServer();
     
-    // Initialize GUN with the server
+    // Initialize GUN with the server in relay mode
     const gun = Gun({
         web: server,
         radisk: true,
-        file: 'data'
+        file: 'data',
+        multicast: false, // Disable multicast for HTTP relay mode
+        localStorage: false
     });
     
     // Start server
