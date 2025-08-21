@@ -16,7 +16,8 @@ class GunHelper {
         this.gun = Gun({
             peers: peers,
             localStorage: false,
-            radisk: false // Use relay for persistence
+            radisk: false, // Client doesn't need radisk, relay handles persistence
+            axe: false // Disable AXE for simpler connection
         });
         
         this.encryptionEnabled = process.env.GUN_ENABLE_ENCRYPTION === 'true';
