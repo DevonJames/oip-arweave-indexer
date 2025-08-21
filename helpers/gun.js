@@ -94,11 +94,11 @@ class GunHelper {
                 gunRecord.meta.encryptionMethod = 'gun-sea';
             }
 
-            // Store in GUN with timeout
+            // Store in GUN with timeout (increased for peer handshake)
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
-                    reject(new Error('GUN storage timeout after 10 seconds'));
-                }, 10000);
+                    reject(new Error('GUN storage timeout after 30 seconds'));
+                }, 30000);
 
                 this.gun.get(soul).put(gunRecord, (ack) => {
                     clearTimeout(timeout);
