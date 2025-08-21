@@ -13,15 +13,7 @@ const url = require('url');
 console.log('Starting GUN HTTP API server...');
 
 try {
-    // Initialize GUN database (local instance, no peers)
-    const gun = Gun({
-        radisk: true,
-        file: 'data',
-        localStorage: false,
-        multicast: false
-    });
-    
-    // Create HTTP API server
+    // Create HTTP API server first
     const server = http.createServer(async (req, res) => {
         // Set CORS headers
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -103,6 +95,15 @@ try {
         }
     });
     
+    // Initialize GUN database after server is created
+    const gun = Gun({
+        web: server,
+        radisk: true,
+        file: 'data',
+        localStorage: false,
+        multicast: false
+    });
+    
     server.listen(8765, '0.0.0.0', () => {
         console.log('✅ GUN HTTP API server running on 0.0.0.0:8765');
         console.log('💾 Local GUN database with persistent storage');
@@ -118,6 +119,17 @@ try {
                 }
             });
         }, 1000);
+    });
+    
+    // Keep the process alive
+    process.on('uncaughtException', (error) => {
+        console.error('❌ Uncaught exception:', error);
+        // Don't exit - keep the server running
+    });
+    
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('❌ Unhandled rejection at:', promise, 'reason:', reason);
+        // Don't exit - keep the server running
     });
     
     // Handle graceful shutdown
