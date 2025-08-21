@@ -93,9 +93,15 @@ class GunHelper {
                 gunRecord.meta.encryptionMethod = 'gun-sea';
             }
 
-            // Store in GUN
+            // Store in GUN with timeout
             return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('GUN storage timeout after 10 seconds'));
+                }, 10000);
+
                 this.gun.get(soul).put(gunRecord, (ack) => {
+                    clearTimeout(timeout);
+                    
                     if (ack.err) {
                         console.error('GUN put error:', ack.err);
                         reject(new Error(`GUN storage failed: ${ack.err}`));
@@ -108,6 +114,9 @@ class GunHelper {
                         });
                     }
                 });
+                
+                // Also log that we're attempting the put operation
+                console.log('Attempting to store record in GUN with soul:', soul);
             });
         } catch (error) {
             console.error('Error in putRecord:', error);
