@@ -1171,13 +1171,29 @@ async function getRecords(queryParams) {
 
         // Perform filtering based on query parameters
 
-        // NEW: Filter by storage type
+        // NEW: Filter by storage type (detect from DID prefix)
         if (source && source !== 'all') {
-            records = records.filter(record => record.oip?.storage === source);
+            records = records.filter(record => {
+                const did = record.oip?.did || record.oip?.didTx;
+                if (!did) return false;
+                
+                if (source === 'gun') return did.startsWith('did:gun:');
+                if (source === 'arweave') return did.startsWith('did:arweave:');
+                if (source === 'irys') return did.startsWith('did:irys:');
+                return true;
+            });
             console.log(`after filtering by source=${source}, there are`, records.length, 'records');
         }
         if (storage && storage !== 'all') {
-            records = records.filter(record => record.oip?.storage === storage);
+            records = records.filter(record => {
+                const did = record.oip?.did || record.oip?.didTx;
+                if (!did) return false;
+                
+                if (storage === 'gun') return did.startsWith('did:gun:');
+                if (storage === 'arweave') return did.startsWith('did:arweave:');
+                if (storage === 'irys') return did.startsWith('did:irys:');
+                return true;
+            });
             console.log(`after filtering by storage=${storage}, there are`, records.length, 'records');
         }
 

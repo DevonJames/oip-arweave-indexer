@@ -23,31 +23,37 @@ class GunHelper {
     }
 
     /**
-     * Generate deterministic soul for record
+     * Generate deterministic soul for record (shortened format)
      * @param {string} publisherPubKey - Publisher's public key
      * @param {string|null} localId - Optional local identifier
      * @param {Object|null} recordData - Record data for content hash fallback
-     * @returns {string} - Deterministic soul string
+     * @returns {string} - Deterministic soul string (much shorter)
      */
     computeSoul(publisherPubKey, localId = null, recordData = null) {
+        // Create a shorter hash of the public key (first 12 chars)
+        const pubKeyHash = crypto.createHash('sha256')
+            .update(publisherPubKey)
+            .digest('hex')
+            .slice(0, 12);
+            
         if (localId) {
-            // User-provided local ID (e.g., "draft-001", "my-recipe")
-            return `oip:records:${publisherPubKey}:${localId}`;
+            // User-provided local ID: pubKeyHash:localId
+            return `${pubKeyHash}:${localId}`;
         }
         
         // Fallback: content hash for deterministic soul generation
         if (recordData) {
             const canonicalString = JSON.stringify(recordData, Object.keys(recordData).sort());
-            const hash = crypto.createHash('sha256')
+            const contentHash = crypto.createHash('sha256')
                 .update(canonicalString)
                 .digest('hex')
-                .slice(0, 12);
-            return `oip:records:${publisherPubKey}:h:${hash}`;
+                .slice(0, 8); // Short content hash
+            return `${pubKeyHash}:h:${contentHash}`;
         }
         
         // Last resort: timestamp-based (not deterministic, but unique)
-        const timestamp = Date.now();
-        return `oip:records:${publisherPubKey}:t:${timestamp}`;
+        const timestamp = Date.now().toString(36); // Base36 for shorter format
+        return `${pubKeyHash}:t:${timestamp}`;
     }
 
     /**
@@ -77,14 +83,21 @@ class GunHelper {
             if (options.encrypt) {
                 console.log('🔒 Encrypting GUN record for private storage');
                 
-                // Simple encryption using crypto module for now
-                const cipher = crypto.createCipher('aes-256-cbc', 'gun-encryption-key');
+                // Modern encryption using crypto module
+                const algorithm = 'aes-256-gcm';
+                const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
+                const iv = crypto.randomBytes(16);
+                const cipher = crypto.createCipheriv(algorithm, key, iv);
+                
                 let encrypted = cipher.update(JSON.stringify(gunRecord.data), 'utf8', 'hex');
                 encrypted += cipher.final('hex');
                 
-                gunRecord.data = encrypted;
+                gunRecord.data = {
+                    encrypted: encrypted,
+                    iv: iv.toString('hex')
+                };
                 gunRecord.meta.encrypted = true;
-                gunRecord.meta.encryptionMethod = 'aes-256-cbc';
+                gunRecord.meta.encryptionMethod = algorithm;
             }
 
             console.log('📡 Sending HTTP PUT request to GUN API...');
@@ -146,11 +159,14 @@ class GunHelper {
                 let data = response.data.data;
                 
                 // Handle encrypted data
-                if (data.meta && data.meta.encrypted && data.meta.encryptionMethod === 'aes-256-cbc') {
+                if (data.meta && data.meta.encrypted && data.meta.encryptionMethod === 'aes-256-gcm') {
                     console.log('🔓 Decrypting GUN record');
                     
-                    const decipher = crypto.createDecipher('aes-256-cbc', 'gun-encryption-key');
-                    let decrypted = decipher.update(data.data, 'hex', 'utf8');
+                    const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
+                    const iv = Buffer.from(data.data.iv, 'hex');
+                    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+                    
+                    let decrypted = decipher.update(data.data.encrypted, 'hex', 'utf8');
                     decrypted += decipher.final('utf8');
                     
                     data.data = JSON.parse(decrypted);
