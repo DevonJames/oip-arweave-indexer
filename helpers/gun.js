@@ -16,17 +16,39 @@ class GunHelper {
         this.gun = Gun({
             peers: peers,
             localStorage: false,
-            radisk: false, // Client doesn't need radisk, relay handles persistence
-            axe: false // Disable AXE for simpler connection
+            radisk: false,        // Client doesn't need radisk, relay handles persistence
+            multicast: false,     // CRITICAL: Disable multicast on client too
+            axe: false,          // Disable AXE for simpler connection
+            super: false,        // Disable super peer mode
+            rtc: false           // Disable WebRTC for server environment
         });
         
         this.encryptionEnabled = process.env.GUN_ENABLE_ENCRYPTION === 'true';
         this.defaultPrivacy = process.env.GUN_DEFAULT_PRIVACY === 'true';
+        this.isConnected = false;
+        
+        // Wait for peer connection to establish
+        this.waitForConnection();
         
         console.log('GUN Helper initialized:', {
             peers: peers.length,
             encryptionEnabled: this.encryptionEnabled,
-            defaultPrivacy: this.defaultPrivacy
+            defaultPrivacy: this.defaultPrivacy,
+            multicast: false
+        });
+    }
+
+    /**
+     * Wait for GUN peer connection to establish
+     */
+    async waitForConnection() {
+        return new Promise((resolve) => {
+            // Give GUN time to establish peer connections
+            setTimeout(() => {
+                this.isConnected = true;
+                console.log('🔗 GUN peer connection established');
+                resolve();
+            }, 2000); // 2 second wait for peer handshake
         });
     }
 
@@ -71,6 +93,12 @@ class GunHelper {
      */
     async putRecord(recordData, soul, options = {}) {
         try {
+            // Wait for connection to be established first
+            if (!this.isConnected) {
+                console.log('⏳ Waiting for GUN peer connection...');
+                await this.waitForConnection();
+            }
+
             const gunRecord = {
                 data: recordData.data,
                 oip: recordData.oip,
@@ -94,33 +122,41 @@ class GunHelper {
                 gunRecord.meta.encryptionMethod = 'gun-sea';
             }
 
-            // Store in GUN with timeout (increased for peer handshake)
+            console.log('Attempting to store record in GUN with soul:', soul.substring(0, 50) + '...');
+            
+            // Store in GUN with extended timeout and better error handling
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
-                    reject(new Error('GUN storage timeout after 30 seconds'));
+                    console.error('❌ GUN .put() callback never fired - peer connection issue');
+                    reject(new Error('GUN storage timeout after 60 seconds - peer connection failed'));
                 }, 60000);
 
-                this.gun.get(soul).put(gunRecord, (ack) => {
+                try {
+                    this.gun.get(soul).put(gunRecord, (ack) => {
+                        clearTimeout(timeout);
+                        
+                        console.log('📡 GUN .put() callback fired with ack:', ack);
+                        
+                        if (ack.err) {
+                            console.error('❌ GUN put error:', ack.err);
+                            reject(new Error(`GUN storage failed: ${ack.err}`));
+                        } else {
+                            console.log('✅ GUN record stored successfully');
+                            resolve({ 
+                                soul, 
+                                did: `did:gun:${soul}`,
+                                encrypted: gunRecord.meta.encrypted
+                            });
+                        }
+                    });
+                } catch (putError) {
                     clearTimeout(timeout);
-                    
-                    if (ack.err) {
-                        console.error('GUN put error:', ack.err);
-                        reject(new Error(`GUN storage failed: ${ack.err}`));
-                    } else {
-                        console.log('GUN record stored successfully:', soul);
-                        resolve({ 
-                            soul, 
-                            did: `did:gun:${soul}`,
-                            encrypted: gunRecord.meta.encrypted
-                        });
-                    }
-                });
-                
-                // Also log that we're attempting the put operation
-                console.log('Attempting to store record in GUN with soul:', soul);
+                    console.error('❌ Error calling GUN .put():', putError);
+                    reject(putError);
+                }
             });
         } catch (error) {
-            console.error('Error in putRecord:', error);
+            console.error('❌ Error in putRecord:', error);
             throw error;
         }
     }
