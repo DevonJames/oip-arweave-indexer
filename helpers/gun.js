@@ -1,54 +1,24 @@
 /**
  * GUN Integration Helper
- * Provides GUN database functionality for OIP records
+ * Provides GUN database functionality for OIP records via HTTP API
  */
 
-const Gun = require('gun');
-require('gun/sea');
 const crypto = require('crypto');
+const axios = require('axios');
 
 class GunHelper {
     constructor() {
-        // Initialize GUN with relay peers
-        const peers = (process.env.GUN_PEERS || 'http://gun-relay:8765').split(',');
-        console.log('Initializing GUN with peers:', peers);
-        
-        this.gun = Gun({
-            peers: peers,
-            localStorage: false,
-            radisk: false,        // Client doesn't need radisk, relay handles persistence
-            multicast: false,     // CRITICAL: Disable multicast on client too
-            axe: false,          // Disable AXE for simpler connection
-            super: false,        // Disable super peer mode
-            rtc: false           // Disable WebRTC for server environment
-        });
+        // Use HTTP API instead of GUN peer protocol
+        const gunApiUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
+        this.apiUrl = gunApiUrl.split(',')[0]; // Use first peer as API endpoint
         
         this.encryptionEnabled = process.env.GUN_ENABLE_ENCRYPTION === 'true';
         this.defaultPrivacy = process.env.GUN_DEFAULT_PRIVACY === 'true';
-        this.isConnected = false;
         
-        // Wait for peer connection to establish
-        this.waitForConnection();
-        
-        console.log('GUN Helper initialized:', {
-            peers: peers.length,
+        console.log('GUN Helper initialized with HTTP API:', {
+            apiUrl: this.apiUrl,
             encryptionEnabled: this.encryptionEnabled,
-            defaultPrivacy: this.defaultPrivacy,
-            multicast: false
-        });
-    }
-
-    /**
-     * Wait for GUN peer connection to establish
-     */
-    async waitForConnection() {
-        return new Promise((resolve) => {
-            // Give GUN time to establish peer connections
-            setTimeout(() => {
-                this.isConnected = true;
-                console.log('🔗 GUN peer connection established');
-                resolve();
-            }, 2000); // 2 second wait for peer handshake
+            defaultPrivacy: this.defaultPrivacy
         });
     }
 
@@ -93,12 +63,6 @@ class GunHelper {
      */
     async putRecord(recordData, soul, options = {}) {
         try {
-            // Wait for connection to be established first
-            if (!this.isConnected) {
-                console.log('⏳ Waiting for GUN peer connection...');
-                await this.waitForConnection();
-            }
-
             const gunRecord = {
                 data: recordData.data,
                 oip: recordData.oip,
@@ -109,55 +73,53 @@ class GunHelper {
                 }
             };
 
-            // Handle encryption for private records
-            if (options.encrypt && options.readerPubKeys && options.writerKeys) {
-                console.log('Encrypting GUN record for private storage');
+            // Handle encryption for private records (simplified for HTTP API)
+            if (options.encrypt) {
+                console.log('🔒 Encrypting GUN record for private storage');
                 
-                // Use GUN SEA to encrypt the data payload
-                const secret = await Gun.SEA.secret(options.readerPubKeys[0], options.writerKeys);
-                const encryptedData = await Gun.SEA.encrypt(JSON.stringify(gunRecord.data), secret);
+                // Simple encryption using crypto module for now
+                const cipher = crypto.createCipher('aes-256-cbc', 'gun-encryption-key');
+                let encrypted = cipher.update(JSON.stringify(gunRecord.data), 'utf8', 'hex');
+                encrypted += cipher.final('hex');
                 
-                gunRecord.data = encryptedData;
+                gunRecord.data = encrypted;
                 gunRecord.meta.encrypted = true;
-                gunRecord.meta.encryptionMethod = 'gun-sea';
+                gunRecord.meta.encryptionMethod = 'aes-256-cbc';
             }
 
-            console.log('Attempting to store record in GUN with soul:', soul.substring(0, 50) + '...');
+            console.log('📡 Sending HTTP PUT request to GUN API...');
             
-            // Store in GUN with extended timeout and better error handling
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    console.error('❌ GUN .put() callback never fired - peer connection issue');
-                    reject(new Error('GUN storage timeout after 60 seconds - peer connection failed'));
-                }, 60000);
-
-                try {
-                    this.gun.get(soul).put(gunRecord, (ack) => {
-                        clearTimeout(timeout);
-                        
-                        console.log('📡 GUN .put() callback fired with ack:', ack);
-                        
-                        if (ack.err) {
-                            console.error('❌ GUN put error:', ack.err);
-                            reject(new Error(`GUN storage failed: ${ack.err}`));
-                        } else {
-                            console.log('✅ GUN record stored successfully');
-                            resolve({ 
-                                soul, 
-                                did: `did:gun:${soul}`,
-                                encrypted: gunRecord.meta.encrypted
-                            });
-                        }
-                    });
-                } catch (putError) {
-                    clearTimeout(timeout);
-                    console.error('❌ Error calling GUN .put():', putError);
-                    reject(putError);
+            // Use HTTP API instead of GUN peer protocol
+            const response = await axios.post(`${this.apiUrl}/put`, {
+                soul: soul,
+                data: gunRecord
+            }, {
+                timeout: 10000, // 10 second HTTP timeout
+                headers: {
+                    'Content-Type': 'application/json'
                 }
             });
+
+            if (response.data.success) {
+                console.log('✅ GUN record stored successfully via HTTP API');
+                return { 
+                    soul, 
+                    did: `did:gun:${soul}`,
+                    encrypted: gunRecord.meta.encrypted
+                };
+            } else {
+                throw new Error(`GUN API error: ${response.data.error}`);
+            }
+
         } catch (error) {
-            console.error('❌ Error in putRecord:', error);
-            throw error;
+            if (error.code === 'ECONNREFUSED') {
+                throw new Error('GUN relay not accessible - check if gun-relay service is running');
+            } else if (error.code === 'ETIMEDOUT') {
+                throw new Error('GUN relay timeout - service may be overloaded');
+            } else {
+                console.error('❌ Error in putRecord:', error.message);
+                throw error;
+            }
         }
     }
 
@@ -170,39 +132,43 @@ class GunHelper {
      */
     async getRecord(soul, options = {}) {
         try {
-            return new Promise((resolve, reject) => {
-                // Set a timeout for the GUN query
-                const timeout = setTimeout(() => {
-                    resolve(null); // Return null if timeout
-                }, 5000);
-
-                this.gun.get(soul).once(async (data) => {
-                    clearTimeout(timeout);
-                    
-                    if (!data) {
-                        resolve(null);
-                        return;
-                    }
-
-                    try {
-                        // Handle encrypted data
-                        if (data.meta && data.meta.encrypted && options.decryptKeys) {
-                            console.log('Decrypting GUN record');
-                            const secret = await Gun.SEA.secret(options.decryptKeys.readerPubKey, options.decryptKeys.writerKeys);
-                            const decryptedData = await Gun.SEA.decrypt(data.data, secret);
-                            data.data = JSON.parse(decryptedData);
-                            data.meta.encrypted = false; // Mark as decrypted for processing
-                        }
-
-                        resolve(data);
-                    } catch (decryptError) {
-                        console.error('Error decrypting GUN record:', decryptError);
-                        reject(decryptError);
-                    }
-                });
+            console.log('📡 Sending HTTP GET request to GUN API...');
+            
+            const response = await axios.get(`${this.apiUrl}/get`, {
+                params: { soul },
+                timeout: 5000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
+
+            if (response.data.success) {
+                let data = response.data.data;
+                
+                // Handle encrypted data
+                if (data.meta && data.meta.encrypted && data.meta.encryptionMethod === 'aes-256-cbc') {
+                    console.log('🔓 Decrypting GUN record');
+                    
+                    const decipher = crypto.createDecipher('aes-256-cbc', 'gun-encryption-key');
+                    let decrypted = decipher.update(data.data, 'hex', 'utf8');
+                    decrypted += decipher.final('utf8');
+                    
+                    data.data = JSON.parse(decrypted);
+                    data.meta.encrypted = false;
+                }
+
+                console.log('✅ GUN record retrieved successfully via HTTP API');
+                return data;
+            } else {
+                return null; // Record not found
+            }
+
         } catch (error) {
-            console.error('Error in getRecord:', error);
+            if (error.response && error.response.status === 404) {
+                return null; // Record not found
+            }
+            
+            console.error('❌ Error in getRecord:', error.message);
             throw error;
         }
     }
