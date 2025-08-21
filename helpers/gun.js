@@ -10,7 +10,7 @@ const crypto = require('crypto');
 class GunHelper {
     constructor() {
         // Initialize GUN with relay peers
-        const peers = (process.env.GUN_PEERS || 'http://gun-relay:8765/gun').split(',');
+        const peers = (process.env.GUN_PEERS || 'http://gun-relay:8765').split(',');
         console.log('Initializing GUN with peers:', peers);
         
         this.gun = Gun({

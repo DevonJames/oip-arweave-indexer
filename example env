@@ -65,6 +65,6 @@ WHISPER_COMPUTE_TYPE=int8
 # Options: int8, int16, float16, float32 (int8 is fastest)
 
 # GUN Configuration (for private/temporary storage)
-GUN_PEERS=http://gun-relay:8765/gun
+GUN_PEERS=http://gun-relay:8765
 GUN_ENABLE_ENCRYPTION=true
 GUN_DEFAULT_PRIVACY=false
