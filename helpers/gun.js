@@ -261,30 +261,179 @@ class GunHelper {
     }
 
     /**
+     * Store media manifest in GUN
+     * @param {string} mediaId - Content-addressable media ID
+     * @param {Object} manifest - Media manifest data
+     * @returns {Promise<Object>} - Result with soul and DID
+     */
+    async storeMediaManifest(mediaId, manifest) {
+        try {
+            const soul = `media:${mediaId}`;
+            
+            console.log('📡 Storing media manifest in GUN...');
+            
+            const response = await axios.post(`${this.apiUrl}/put`, {
+                soul: soul,
+                data: manifest
+            }, {
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.data.success) {
+                console.log('✅ Media manifest stored successfully in GUN');
+                return { 
+                    soul, 
+                    did: `did:gun:${soul}`,
+                    mediaId
+                };
+            } else {
+                throw new Error(`GUN API error: ${response.data.error}`);
+            }
+
+        } catch (error) {
+            console.error('❌ Error storing media manifest:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Get media manifest from GUN
+     * @param {string} mediaId - Content-addressable media ID
+     * @returns {Promise<Object|null>} - Media manifest or null if not found
+     */
+    async getMediaManifest(mediaId) {
+        try {
+            const soul = `media:${mediaId}`;
+            
+            console.log('📡 Retrieving media manifest from GUN...');
+            
+            const response = await axios.get(`${this.apiUrl}/get`, {
+                params: { soul },
+                timeout: 5000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.data.success) {
+                console.log('✅ Media manifest retrieved successfully from GUN');
+                return response.data.data;
+            } else {
+                return null; // Manifest not found
+            }
+
+        } catch (error) {
+            if (error.response && error.response.status === 404) {
+                return null; // Manifest not found
+            }
+            
+            console.error('❌ Error retrieving media manifest:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Store peer information in GUN
+     * @param {string} peerId - Unique peer identifier
+     * @param {Object} peerInfo - Peer information
+     * @returns {Promise<Object>} - Result with soul and DID
+     */
+    async registerPeer(peerId, peerInfo) {
+        try {
+            const soul = `peer:${peerId}`;
+            
+            const peerData = {
+                ...peerInfo,
+                lastSeen: Date.now(),
+                registered: Date.now()
+            };
+            
+            console.log('📡 Registering peer in GUN...');
+            
+            const response = await axios.post(`${this.apiUrl}/put`, {
+                soul: soul,
+                data: peerData
+            }, {
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.data.success) {
+                console.log('✅ Peer registered successfully in GUN');
+                return { 
+                    soul, 
+                    did: `did:gun:${soul}`,
+                    peerId
+                };
+            } else {
+                throw new Error(`GUN API error: ${response.data.error}`);
+            }
+
+        } catch (error) {
+            console.error('❌ Error registering peer:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Get peer information from GUN
+     * @param {string} peerId - Unique peer identifier
+     * @returns {Promise<Object|null>} - Peer information or null if not found
+     */
+    async getPeer(peerId) {
+        try {
+            const soul = `peer:${peerId}`;
+            
+            const response = await axios.get(`${this.apiUrl}/get`, {
+                params: { soul },
+                timeout: 5000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.data.success) {
+                return response.data.data;
+            } else {
+                return null; // Peer not found
+            }
+
+        } catch (error) {
+            if (error.response && error.response.status === 404) {
+                return null; // Peer not found
+            }
+            
+            console.error('❌ Error retrieving peer:', error.message);
+            throw error;
+        }
+    }
+
+    /**
      * Check if GUN relay is accessible
      * @returns {Promise<boolean>} - Connection status
      */
     async checkConnection() {
         try {
-            // Test basic GUN functionality
+            // Test basic GUN functionality via HTTP API
             const testSoul = `test:connection:${Date.now()}`;
             const testData = { test: true, timestamp: Date.now() };
             
-            const result = await new Promise((resolve) => {
-                const timeout = setTimeout(() => resolve(false), 3000);
-                
-                this.gun.get(testSoul).put(testData, (ack) => {
-                    clearTimeout(timeout);
-                    resolve(!ack.err);
-                });
+            const response = await axios.post(`${this.apiUrl}/put`, {
+                soul: testSoul,
+                data: testData
+            }, {
+                timeout: 3000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
             
-            if (result) {
-                // Clean up test data
-                this.gun.get(testSoul).put(null);
-            }
-            
-            return result;
+            return response.data.success;
         } catch (error) {
             console.error('GUN connection check failed:', error);
             return false;

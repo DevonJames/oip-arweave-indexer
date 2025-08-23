@@ -31,6 +31,7 @@ const litRoutes = require('./routes/lit');
 const jfkRoutes = require('./routes/jfk');
 const voiceRoutes = require('./routes/voice');
 const alfredRoutes = require('./routes/alfred');
+const mediaRoutes = require('./routes/media');
 
 dotenv.config();
 
@@ -173,6 +174,8 @@ app.use('/api/jfk', jfkRoutes);
 app.use('/api/alfred', alfredRoutes);
 // Backward-compatible alias
 app.use('/api/voice', voiceRoutes);
+
+app.use('/api/media', mediaRoutes);
 
 // Make io available to routes
 app.set('io', io);

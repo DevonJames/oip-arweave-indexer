@@ -6,10 +6,29 @@ const execAsync = promisify(exec);
 const publisherManager = require('./publisher-manager');
 const { create } = require('ipfs-http-client');
 const axios = require('axios');
+const MediaCoordinator = require('../services/mediaCoordinator');
 
 class MediaManager {
     constructor() {
-        this.supportedNetworks = ['arweave', 'irys', 'ipfs', 'bittorrent', 'arfleet'];
+        this.supportedNetworks = ['arweave', 'irys', 'ipfs', 'bittorrent', 'arfleet', 'gun'];
+        this.mediaCoordinator = new MediaCoordinator();
+        this.coordinatorInitialized = false;
+        
+        // Initialize MediaCoordinator
+        this.initializeCoordinator();
+    }
+
+    async initializeCoordinator() {
+        try {
+            this.coordinatorInitialized = await this.mediaCoordinator.initialize();
+            if (this.coordinatorInitialized) {
+                console.log('MediaCoordinator initialized in MediaManager');
+            } else {
+                console.warn('MediaCoordinator failed to initialize in MediaManager');
+            }
+        } catch (error) {
+            console.error('Error initializing MediaCoordinator:', error);
+        }
     }
 
     /**
@@ -311,6 +330,43 @@ class MediaManager {
             }
         }
 
+        // Publish to GUN (P2P Media Distribution)
+        if (publishTo.gun) {
+            console.log('Publishing to GUN...');
+            try {
+                if (!this.coordinatorInitialized) {
+                    throw new Error('MediaCoordinator not initialized');
+                }
+
+                const uploadOptions = {
+                    replicate: true,
+                    priority: 7 // Higher priority for media manager uploads
+                };
+
+                const mediaInfo = await this.mediaCoordinator.uploadMedia(
+                    mediaBuffer, 
+                    `media_${Date.now()}`, 
+                    contentType,
+                    uploadOptions
+                );
+                
+                results.gun = {
+                    id: mediaInfo.mediaId,
+                    blockchain: 'gun',
+                    provider: 'gun-p2p',
+                    url: `/media/${mediaInfo.mediaId}/download`,
+                    infoHash: mediaInfo.infoHash,
+                    magnetURI: mediaInfo.magnetURI,
+                    fileSize: mediaInfo.fileSize,
+                    replicationQueued: mediaInfo.replicationQueued,
+                    networkPeers: mediaInfo.coordinator?.networkPeers || 0
+                };
+            } catch (error) {
+                console.error('Error publishing to GUN:', error);
+                results.gun = { error: error.message };
+            }
+        }
+
         return results;
     }
 
@@ -429,6 +485,11 @@ class MediaManager {
                     break;
                 case 'bittorrent':
                     mediaAddresses.bittorrentAddress = result.magnetURI;
+                    break;
+                case 'gun':
+                    mediaAddresses.gunAddress = result.url;
+                    mediaAddresses.gunMediaId = result.id;
+                    mediaAddresses.gunMagnetURI = result.magnetURI;
                     break;
             }
         });
