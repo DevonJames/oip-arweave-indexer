@@ -671,7 +671,8 @@ node test/test-publisher.js --publish-irys
 Comprehensive documentation is available:
 
 - **Media Publishing System**: `docs/MEDIA_PUBLISHING.md` - Complete guide to the multi-network media system
-- **API Documentation**: Available in endpoint comments and test files
+- **GUN Media Distribution API**: `docs/API_MEDIA_ENDPOINTS_DOCUMENTATION.md` - Complete API documentation for P2P media storage and distribution
+- **API Records Endpoint**: `docs/API_RECORDS_ENDPOINT_DOCUMENTATION.md` - Detailed records API documentation
 - **Configuration Guide**: See environment variables section above
 - **Troubleshooting**: Common issues and solutions below
 
