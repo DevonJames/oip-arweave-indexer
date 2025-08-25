@@ -156,6 +156,11 @@ echo ""
 echo "🔌 Test 7: Backend Connectivity"
 echo "------------------------------"
 
+# Load backend config from .env if available
+if [ -f ".env" ]; then
+    export $(grep -E "^(BACKEND_HOST|BACKEND_PORT)=" .env | xargs) 2>/dev/null || true
+fi
+
 BACKEND_HOST=${BACKEND_HOST:-"192.168.1.100"}
 BACKEND_PORT=${BACKEND_PORT:-3000}
 BACKEND_URL="http://${BACKEND_HOST}:${BACKEND_PORT}"

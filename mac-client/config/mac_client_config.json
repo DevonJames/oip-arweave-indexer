@@ -1,0 +1,43 @@
+{
+  "client": {
+    "services": {
+      "stt": {
+        "enabled": true,
+        "port": 8013,
+        "model": "large-v3-turbo",
+        "device": "mps",
+        "quantization": "int4"
+      },
+      "smart_turn": {
+        "enabled": true,
+        "port": 8014,
+        "model_path": "models/smart_turn/"
+      },
+      "vad": {
+        "enabled": true,
+        "threshold": 0.5,
+        "min_speech_ms": 200,
+        "min_silence_ms": 300
+      }
+    },
+    "backend": {
+      "host": "100.124.42.82",
+      "port": 3000,
+      "protocol": "http",
+      "endpoints": {
+        "health": "/api/voice/health",
+        "chat": "/api/voice/chat",
+        "rag": "/api/alfred/query"
+      }
+    },
+    "audio": {
+      "sample_rate": 16000,
+      "channels": 1,
+      "format": "wav"
+    },
+    "logging": {
+      "level": "INFO",
+      "file": "logs/mac_client.log"
+    }
+  }
+}

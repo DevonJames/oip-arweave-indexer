@@ -76,11 +76,25 @@ This will:
 - Set up configuration files
 
 ### 2. Configure Backend Connection
-Edit `.env` file:
+**Option A: Use the configuration utility (Recommended):**
 ```bash
-# Update with your backend PC's IP address
-BACKEND_HOST=192.168.1.100
+cd ..  # Go to main project directory
+./configure_backend.sh  # Interactive configuration (updates both main and mac-client .env)
+```
+
+**Option B: Manual configuration:**
+Edit the Mac client's `.env` file:
+```bash
+# Copy from example if .env doesn't exist
+cp example.env .env
+
+# Edit .env file
+vim .env
+
+# Update these values:
+BACKEND_HOST=YOUR_PC_IP_ADDRESS
 BACKEND_PORT=3000
+BACKEND_PROTOCOL=http
 ```
 
 ### 3. Download Models (Optional)
@@ -124,6 +138,13 @@ Press `Ctrl+C` in the terminal running `start_mac_client.sh`
 
 ## 🔧 Configuration
 
+### Environment Configuration: `.env`
+Copy from `example.env` and update with your backend settings:
+```bash
+cp example.env .env
+vim .env  # Update BACKEND_HOST, BACKEND_PORT, etc.
+```
+
 ### Main Configuration: `config/mac_client_config.json`
 ```json
 {
@@ -148,7 +169,7 @@ Press `Ctrl+C` in the terminal running `start_mac_client.sh`
       }
     },
     "backend": {
-      "host": "192.168.1.100",
+      "host": "100.124.42.82",
       "port": 3000,
       "protocol": "http"
     }

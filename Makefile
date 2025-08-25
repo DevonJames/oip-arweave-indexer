@@ -29,8 +29,10 @@ help: ## Show this help message
 	@echo "  $(GREEN)standard-gpu$(NC)         - Complete stack: all services + GPU acceleration + Chatterbox TTS"
 	@echo "  $(GREEN)chatterbox$(NC)           - Standard with Chatterbox TTS focus (CPU optimized)"
 	@echo "  $(GREEN)chatterbox-gpu$(NC)       - Chatterbox TTS with GPU acceleration (RTX 4090 optimized)"
+	@echo "  $(GREEN)backend-only$(NC)         - Distributed: Backend services only for Mac/iOS clients"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
+	@echo "  make backend-only              # Deploy backend for Mac/iOS clients + ngrok"
 	@echo "  make chatterbox-gpu            # Deploy Chatterbox TTS with GPU acceleration + ngrok"
 	@echo "  make rebuild-standard          # Build complete stack with Chatterbox TTS + ngrok"
 	@echo "  make ngrok-debug               # Debug ngrok setup (simple v3 command)"
@@ -155,8 +157,8 @@ stop-ngrok:
 # Validate profile
 validate-profile:
 	@case "$(PROFILE)" in \
-		minimal|minimal-with-scrape|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu|chatterbox|chatterbox-gpu) ;; \
-		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-monolithic, gpu, oip-gpu-only, standard-gpu, chatterbox, or chatterbox-gpu$(NC)"; exit 1 ;; \
+		minimal|minimal-with-scrape|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu|chatterbox|chatterbox-gpu|backend-only) ;; \
+		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-monolithic, gpu, oip-gpu-only, standard-gpu, chatterbox, chatterbox-gpu, or backend-only$(NC)"; exit 1 ;; \
 	esac
 
 # Check if .env file exists
@@ -377,6 +379,11 @@ chatterbox-gpu: ## Quick deploy: Chatterbox TTS with GPU acceleration (RTX 4090 
 	@echo "$(YELLOW)🎭 Installing GPU-optimized Chatterbox TTS model...$(NC)"
 	@make install-chatterbox
 
+backend-only: ## Quick deploy: Backend services only for distributed Mac/iOS client architecture + ngrok
+	@echo "$(BLUE)🍎 Deploying backend-only services for Mac/iOS clients...$(NC)"
+	@echo "$(YELLOW)📱 This profile expects STT/VAD/Smart Turn to run on Mac/iOS clients$(NC)"
+	@./deploy-backend-only.sh
+
 # Quick rebuild targets for common scenarios
 rebuild-minimal: ## Quick rebuild: Core services only (elasticsearch, kibana, oip - no canvas) + ngrok
 	@make rebuild PROFILE=minimal
@@ -425,6 +432,11 @@ rebuild-chatterbox: ## Quick rebuild: Standard deployment with Chatterbox TTS fo
 rebuild-chatterbox-gpu: ## Quick rebuild: Chatterbox TTS with GPU acceleration (RTX 4090 optimized) + ngrok
 	@make rebuild PROFILE=chatterbox-gpu
 	@echo "$(YELLOW)🎭 Installing GPU-optimized Chatterbox TTS model...$(NC)"
+
+rebuild-backend-only: ## Quick rebuild: Backend services only for distributed Mac/iOS client architecture + ngrok
+	@echo "$(BLUE)🍎 Rebuilding backend-only services for Mac/iOS clients...$(NC)"
+	@echo "$(YELLOW)📱 This profile expects STT/VAD/Smart Turn to run on Mac/iOS clients$(NC)"
+	@./deploy-backend-only.sh
 
 rebuild-tts: ## Rebuild only the TTS service (no cache) - fast fix for TTS issues
 	@echo "$(BLUE)🔧 Rebuilding TTS service only...$(NC)"

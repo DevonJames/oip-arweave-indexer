@@ -112,7 +112,41 @@ mkdir -p config
 
 # Create configuration file
 echo "⚙️ Creating configuration..."
-cat > config/mac_client_config.json << 'EOF'
+
+# Check if .env file exists, if not copy from example
+if [ ! -f ".env" ]; then
+    if [ -f "example.env" ]; then
+        echo "📋 Creating .env from example.env..."
+        cp example.env .env
+        echo "⚠️  Please edit .env file to set your backend IP address!"
+    else
+        echo "❌ No .env or example.env found, creating default..."
+    fi
+fi
+
+# Load configuration from local .env file
+BACKEND_HOST_DEFAULT="192.168.1.100"
+BACKEND_PORT_DEFAULT="3000" 
+BACKEND_PROTOCOL_DEFAULT="http"
+
+# Load from local .env if it exists
+if [ -f ".env" ]; then
+    echo "✅ Loading configuration from .env file..."
+    # Source the .env file to get backend settings
+    export $(grep -E "^(BACKEND_HOST|BACKEND_PORT|BACKEND_PROTOCOL)=" .env | xargs) 2>/dev/null || true
+fi
+
+# Use environment variables or defaults
+BACKEND_HOST_CONFIG="${BACKEND_HOST:-$BACKEND_HOST_DEFAULT}"
+BACKEND_PORT_CONFIG="${BACKEND_PORT:-$BACKEND_PORT_DEFAULT}"
+BACKEND_PROTOCOL_CONFIG="${BACKEND_PROTOCOL:-$BACKEND_PROTOCOL_DEFAULT}"
+
+echo "🔧 Backend configuration:"
+echo "   Host: $BACKEND_HOST_CONFIG"
+echo "   Port: $BACKEND_PORT_CONFIG"
+echo "   Protocol: $BACKEND_PROTOCOL_CONFIG"
+
+cat > config/mac_client_config.json << EOF
 {
   "client": {
     "services": {
@@ -136,9 +170,9 @@ cat > config/mac_client_config.json << 'EOF'
       }
     },
     "backend": {
-      "host": "192.168.1.100",
-      "port": 3000,
-      "protocol": "http",
+      "host": "$BACKEND_HOST_CONFIG",
+      "port": $BACKEND_PORT_CONFIG,
+      "protocol": "$BACKEND_PROTOCOL_CONFIG",
       "endpoints": {
         "health": "/api/voice/health",
         "chat": "/api/voice/chat",
@@ -158,38 +192,32 @@ cat > config/mac_client_config.json << 'EOF'
 }
 EOF
 
-# Create environment file
-echo "📝 Creating environment configuration..."
-cat > .env << 'EOF'
-# Mac Client Configuration
-CLIENT_MODE=true
-STT_PORT=8013
-SMART_TURN_PORT=8014
-
-# Apple Silicon Optimization
-MLX_DEVICE=mps
-WHISPER_MODEL=large-v3-turbo
-MLX_QUANTIZATION=int4
-
-# VAD Configuration
-VAD_ENABLED=true
-VAD_THRESHOLD=0.5
-VAD_MIN_SPEECH_MS=200
-VAD_MIN_SILENCE_MS=300
-
-# Backend Configuration (UPDATE THESE!)
-BACKEND_HOST=192.168.1.100
-BACKEND_PORT=3000
-BACKEND_PROTOCOL=http
-
-# Model Storage
-MODEL_STORAGE_PATH=./models
-CACHE_ENABLED=true
-
-# Logging
-LOG_LEVEL=INFO
-LOG_FILE=logs/mac_client.log
-EOF
+# Update .env file with detected configuration if needed
+if [ -f ".env" ]; then
+    echo "📝 Updating .env with detected configuration..."
+    
+    # Update backend configuration in existing .env file
+    if grep -q "^BACKEND_HOST=" .env; then
+        sed -i.bak "s/^BACKEND_HOST=.*/BACKEND_HOST=$BACKEND_HOST_CONFIG/" .env
+    else
+        echo "BACKEND_HOST=$BACKEND_HOST_CONFIG" >> .env
+    fi
+    
+    if grep -q "^BACKEND_PORT=" .env; then
+        sed -i.bak "s/^BACKEND_PORT=.*/BACKEND_PORT=$BACKEND_PORT_CONFIG/" .env
+    else
+        echo "BACKEND_PORT=$BACKEND_PORT_CONFIG" >> .env
+    fi
+    
+    if grep -q "^BACKEND_PROTOCOL=" .env; then
+        sed -i.bak "s/^BACKEND_PROTOCOL=.*/BACKEND_PROTOCOL=$BACKEND_PROTOCOL_CONFIG/" .env
+    else
+        echo "BACKEND_PROTOCOL=$BACKEND_PROTOCOL_CONFIG" >> .env
+    fi
+    
+    # Clean up backup file
+    rm -f .env.bak
+fi
 
 # Install Node.js dependencies for client communication
 echo "📦 Installing Node.js dependencies..."

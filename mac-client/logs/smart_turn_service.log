@@ -1,0 +1,36 @@
+/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/pydantic/_internal/_fields.py:149: UserWarning: Field "model_version" has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac_smart_turn_service.py:277: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+INFO:     Started server process [9392]
+INFO:     Waiting for application startup.
+INFO:     ASGI 'lifespan' protocol appears unsupported.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8014 (Press CTRL+C to quit)
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 426, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 84, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/fastapi/applications.py", line 1106, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/starlette/applications.py", line 121, in __call__
+    self.middleware_stack = self.build_middleware_stack()
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/fastapi/applications.py", line 1015, in build_middleware_stack
+    app = cls(app=app, **options)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: CORSMiddleware.__init__() got an unexpected keyword argument 'methods'
+INFO:     127.0.0.1:52612 - "GET /health HTTP/1.1" 500 Internal Server Error
+INFO:     Shutting down
+INFO:     Finished server process [9392]

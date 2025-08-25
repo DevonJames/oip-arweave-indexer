@@ -1,0 +1,11 @@
+Collecting mlx
+  Downloading mlx-0.28.0-cp311-cp311-macosx_15_0_arm64.whl.metadata (5.7 kB)
+Collecting mlx-metal==0.28.0 (from mlx)
+  Downloading mlx_metal-0.28.0-py3-none-macosx_15_0_arm64.whl.metadata (5.1 kB)
+Downloading mlx-0.28.0-cp311-cp311-macosx_15_0_arm64.whl (540 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 540.3/540.3 kB 3.2 MB/s  0:00:00
+Downloading mlx_metal-0.28.0-py3-none-macosx_15_0_arm64.whl (33.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 33.2/33.2 MB 8.0 MB/s  0:00:04
+Installing collected packages: mlx-metal, mlx
+
+Successfully installed mlx-0.28.0 mlx-metal-0.28.0
