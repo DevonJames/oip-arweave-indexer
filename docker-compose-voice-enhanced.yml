@@ -1,0 +1,238 @@
+version: '3.8'
+
+services:
+  # New: Smart Turn Detection Service
+  smart-turn:
+    build: ./smart-turn-service
+    ports:
+      - "8010:8000"
+    volumes:
+      - ./models/smart_turn:/app/models
+    environment:
+      - MODEL_PATH=/app/models
+      - LOG_LEVEL=INFO
+      - HOST=0.0.0.0
+      - PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - voice-network
+
+  # Enhanced: STT Service with VAD and Whisper Large v3 Turbo
+  speech-to-text:
+    build:
+      context: ./speech-to-text
+      dockerfile: Dockerfile.enhanced
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - VAD_ENABLED=true
+      - WHISPER_MODEL=large-v3-turbo
+      - SMART_TURN_ENABLED=true
+      - SMART_TURN_URL=http://smart-turn:8000
+      - MODEL_STORAGE_PATH=/app/models
+      - WHISPER_DEVICE=cpu
+      - WHISPER_COMPUTE_TYPE=int8_float16
+      - VAD_THRESHOLD=0.5
+      - VAD_MIN_SPEECH_MS=200
+      - VAD_MIN_SILENCE_MS=300
+    depends_on:
+      smart-turn:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - voice-network
+
+  # Enhanced: Kokoro TTS Service with fallback engines
+  text-to-speech:
+    build: ./kokoro-tts-service
+    ports:
+      - "5002:8000"
+    volumes:
+      - ./models:/app/models
+      - ./voices:/app/voices
+    environment:
+      - TTS_PRIMARY_ENGINE=kokoro
+      - TTS_FALLBACK_ENGINES=coqui,piper,espeak
+      - MODEL_STORAGE_PATH=/app/models
+      - CACHE_ENABLED=true
+      - DEFAULT_VOICE=en_female_01
+      - SAMPLE_RATE=22050
+      - AUDIO_FORMAT=wav
+      - OFFLINE_MODE=true
+      - DISABLE_GTTS=false      # Will be true for full offline mode
+      - ENABLE_CHATTERBOX=true
+      - ENABLE_ESPEAK=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - voice-network
+
+  # Optional: Apple Silicon MLX STT Service (development profile)
+  speech-to-text-mlx:
+    build: 
+      context: ./speech-to-text-mlx
+      dockerfile: Dockerfile
+    ports:
+      - "8013:8000"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - WHISPER_BACKEND=mlx
+      - MLX_DEVICE=mps
+      - MLX_QUANTIZATION=int4
+      - MLX_MODEL_PATH=/app/models/whisper-mlx/
+      - MODEL_STORAGE_PATH=/app/models
+    profiles:
+      - apple-silicon
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - voice-network
+
+  # Existing services (preserved)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.5.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - voice-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - voice-network
+
+  # Main application with enhanced voice pipeline
+  main-app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Smart Turn settings
+      - SMART_TURN_ENABLED=true
+      - SMART_TURN_URL=http://smart-turn:8000
+      - SMART_TURN_MIN_PROB=0.55
+      
+      # VAD settings (enabled in Week 2)
+      - VAD_ENABLED=true
+      - VAD_THRESHOLD=0.5
+      - VAD_MIN_SPEECH_MS=200
+      - VAD_MIN_SILENCE_MS=300
+      
+      # STT settings (upgraded in Week 2)
+      - STT_SERVICE_URL=http://speech-to-text:8000
+      - WHISPER_MODEL=large-v3-turbo
+      - WHISPER_DEVICE=cpu
+      
+      # TTS settings (upgraded to Kokoro in Week 3)
+      - TTS_SERVICE_URL=http://text-to-speech:8000
+      - TTS_PRIMARY_ENGINE=kokoro
+      
+      # Existing settings
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+      - OLLAMA_HOST=http://ollama:11434
+      - DEFAULT_LLM_MODEL=llama3.2:3b
+      
+      # Offline mode settings
+      - OFFLINE_MODE=true
+      - ENABLE_PERFORMANCE_MONITORING=true
+      - HEALTH_CHECK_INTERVAL_SECONDS=30
+      - MAX_SERVICE_ERRORS_BEFORE_FALLBACK=3
+    
+    depends_on:
+      smart-turn:
+        condition: service_healthy
+      speech-to-text:
+        condition: service_healthy
+      text-to-speech:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    
+    volumes:
+      - ./models:/app/models
+      - ./test_data:/app/test_data
+      - .:/app
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    restart: unless-stopped
+    networks:
+      - voice-network
+
+# Networks
+networks:
+  voice-network:
+    driver: bridge
+
+# Volumes
+volumes:
+  elasticsearch_data:
+    driver: local
+  ollama_data:
+    driver: local
+  models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./models

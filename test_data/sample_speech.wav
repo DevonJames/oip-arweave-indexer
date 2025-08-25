@@ -1,0 +1,3 @@
+# This is a placeholder for test audio files
+# In a real implementation, this would be a WAV file with sample speech
+# For testing, the Smart Turn service will handle this gracefully

@@ -61,6 +61,67 @@ const upload = multer({
 const STT_SERVICE_URL = process.env.STT_SERVICE_URL || 'http://localhost:8003';
 const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5002';
 const TEXT_GENERATOR_URL = process.env.TEXT_GENERATOR_URL || 'http://localhost:8002';
+const SMART_TURN_URL = process.env.SMART_TURN_URL || 'http://localhost:8010';
+
+// Enhanced voice pipeline settings
+const SMART_TURN_ENABLED = process.env.SMART_TURN_ENABLED === 'true';
+const SMART_TURN_MIN_PROB = parseFloat(process.env.SMART_TURN_MIN_PROB || '0.55');
+const VAD_ENABLED = process.env.VAD_ENABLED === 'true';
+const ENHANCED_PIPELINE_ENABLED = SMART_TURN_ENABLED || VAD_ENABLED;
+
+// Smart Turn endpoint prediction
+async function predictSmartTurn(audioData, transcript = null) {
+    if (!SMART_TURN_ENABLED) {
+        return null;
+    }
+    
+    try {
+        console.log(`[Smart Turn] Predicting endpoint for ${audioData.length} bytes of audio`);
+        
+        const formData = new FormData();
+        
+        // Create a readable stream from the audio buffer
+        const bufferStream = new Readable();
+        bufferStream.push(audioData);
+        bufferStream.push(null);
+        
+        formData.append('audio_file', bufferStream, {
+            filename: 'audio.wav',
+            contentType: 'audio/wav'
+        });
+        
+        if (transcript) {
+            formData.append('transcript', transcript);
+        }
+        
+        const response = await safeAxiosCall(
+            `${SMART_TURN_URL}/predict_endpoint`,
+            {
+                method: 'POST',
+                data: formData,
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+                timeout: 10000  // 10 second timeout for Smart Turn
+            },
+            'Smart Turn'
+        );
+        
+        const result = response.data;
+        console.log(`[Smart Turn] Prediction: ${result.prediction} (prob: ${result.probability.toFixed(3)}, time: ${result.processing_time_ms.toFixed(1)}ms)`);
+        
+        return {
+            prediction: result.prediction,
+            probability: result.probability,
+            processing_time_ms: result.processing_time_ms,
+            is_complete: result.prediction === 1 && result.probability >= SMART_TURN_MIN_PROB
+        };
+        
+    } catch (error) {
+        console.warn(`[Smart Turn] Prediction failed, falling back to timeout-based detection: ${error.message}`);
+        return null;
+    }
+}
 
 // Embedded TTS using espeak (available in Alpine container)
 async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
@@ -358,17 +419,43 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         let lastError;
         for (const voiceTry of voiceAttempts) {
             try {
-                const fd = buildFormData(engine, voiceTry);
-                ttsResponse = await safeAxiosCall(
+                // Use new Kokoro TTS service JSON API
+                const ttsRequest = {
+                    text: finalText,
+                    voice: voiceTry,
+                    language: language,
+                    speed: parseFloat(speed) || 1.0,
+                    engine: engine === 'auto' ? undefined : engine
+                };
+                
+                const kokoroResponse = await safeAxiosCall(
                     `${TTS_SERVICE_URL}/synthesize`,
                     {
                         method: 'POST',
-                        data: fd,
-                        headers: { ...fd.getHeaders() },
-                        responseType: 'arraybuffer'
+                        data: ttsRequest,
+                        headers: { 'Content-Type': 'application/json' },
+                        timeout: 30000
                     },
-                    'Chatterbox TTS'
+                    'Kokoro TTS'
                 );
+                
+                // Convert base64 audio to buffer
+                if (kokoroResponse.data && kokoroResponse.data.audio_data) {
+                    const audioBuffer = Buffer.from(kokoroResponse.data.audio_data, 'base64');
+                    ttsResponse = {
+                        data: audioBuffer,
+                        headers: {
+                            'content-type': 'audio/wav',
+                            'x-engine-used': kokoroResponse.data.engine,
+                            'x-processing-time': kokoroResponse.data.processing_time_ms,
+                            'x-audio-duration': kokoroResponse.data.audio_duration_ms,
+                            'x-voice-used': kokoroResponse.data.voice,
+                            'x-cached': kokoroResponse.data.cached
+                        }
+                    };
+                } else {
+                    throw new Error('Invalid response from Kokoro TTS service');
+                }
                 // Success
                 break;
             } catch (err) {
@@ -484,6 +571,19 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             );
 
             inputText = sttResponse.data.text;
+            
+            // Enhanced: Smart Turn endpoint prediction (if enabled)
+            let smartTurnResult = null;
+            if (ENHANCED_PIPELINE_ENABLED) {
+                try {
+                    smartTurnResult = await predictSmartTurn(req.file.buffer, inputText);
+                    if (smartTurnResult) {
+                        console.log(`[Voice Chat] Smart Turn result: complete=${smartTurnResult.is_complete}, prob=${smartTurnResult.probability.toFixed(3)}`);
+                    }
+                } catch (error) {
+                    console.warn(`[Voice Chat] Smart Turn prediction failed: ${error.message}`);
+                }
+            }
         } else if (req.body.text) {
             inputText = req.body.text;
         } else {
@@ -696,45 +796,48 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     const chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
                     console.log(`[Voice Chat] Using Chatterbox params:`, chatterboxParams);
                     
-                    // Minimal, stable request: let the TTS service choose best engine (auto)
-                    const formData = new FormData();
-                    formData.append('text', textForTTS);
-                    if (req.body.engine) {
-                        formData.append('engine', String(req.body.engine));
-                    }
-                    if (voice_id) {
-                        formData.append('voice_id', String(voice_id));
-                    }
-                    formData.append('voice_cloning', 'false');
+                    // Use new Kokoro TTS service JSON API
+                    const ttsRequest = {
+                        text: textForTTS,
+                        voice: voice_id || 'en_female_01',
+                        language: 'en',
+                        speed: 1.0,
+                        engine: req.body.engine || 'kokoro'  // Use primary Kokoro engine
+                    };
 
-                    console.log(`[Voice Chat] Sending FormData (minimal) with text length: ${textForTTS.length} chars`);
-                    const ttsResponse = await safeAxiosCall(
+                    console.log(`[Voice Chat] Sending Kokoro TTS request with text length: ${textForTTS.length} chars`);
+                    const kokoroResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
                             method: 'POST',
-                            data: formData,
-                            headers: {
-                                ...formData.getHeaders(),
-                            },
-                            responseType: 'arraybuffer'
-                        }
+                            data: ttsRequest,
+                            headers: { 'Content-Type': 'application/json' },
+                            timeout: 30000
+                        },
+                        'Kokoro TTS'
                     );
                     
-                    audioData = Buffer.from(ttsResponse.data);
-                    console.log(`[Voice Chat] Successfully synthesized with Chatterbox: ${audioData.length} bytes`);
+                    if (kokoroResponse.data && kokoroResponse.data.audio_data) {
+                        audioData = Buffer.from(kokoroResponse.data.audio_data, 'base64');
+                        engineUsed = kokoroResponse.data.engine;
+                        console.log(`[Voice Chat] Successfully synthesized with ${engineUsed}: ${audioData.length} bytes`);
+                        console.log(`[Voice Chat] Processing time: ${kokoroResponse.data.processing_time_ms}ms, cached: ${kokoroResponse.data.cached}`);
+                    } else {
+                        throw new Error('Invalid response from Kokoro TTS service');
+                    }
                     
                     // Check for empty audio
                     if (!audioData || audioData.length === 0) {
-                        throw new Error('Chatterbox returned empty audio data');
+                        throw new Error('Kokoro TTS returned empty audio data');
                     }
                     
-                } catch (chatterboxError) {
-                    console.warn(`[Voice Chat] Chatterbox failed, falling back to eSpeak:`, chatterboxError.message);
-                    if (chatterboxError.response) {
-                        console.warn(`[Voice Chat] Chatterbox response status:`, chatterboxError.response.status);
+                } catch (kokoroError) {
+                    console.warn(`[Voice Chat] Kokoro TTS failed, falling back to eSpeak:`, kokoroError.message);
+                    if (kokoroError.response) {
+                        console.warn(`[Voice Chat] Kokoro TTS response status:`, kokoroError.response.status);
                     }
-                    if (chatterboxError.code) {
-                        console.warn(`[Voice Chat] Chatterbox error code:`, chatterboxError.code);
+                    if (kokoroError.code) {
+                        console.warn(`[Voice Chat] Kokoro TTS error code:`, kokoroError.code);
                     }
                     
                     // Use the same text preprocessing and truncation for eSpeak
@@ -748,8 +851,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     engineUsed = 'espeak-fallback';
                 }
 
-                // Return combined response with RAG metadata  
-                res.json({
+                // Return combined response with RAG metadata and enhanced pipeline info
+                const response = {
                     success: true,
                     input_text: inputText,
                     response_text: responseText,
@@ -763,13 +866,36 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     search_results_count: ragResponse.search_results_count,
                     search_results: ragResponse.search_results, // Include actual search results for debugging
                     applied_filters: ragResponse.applied_filters || {}
-                });
+                };
+                
+                // Enhanced: Include Smart Turn metadata if available
+                if (ENHANCED_PIPELINE_ENABLED && smartTurnResult) {
+                    response.smart_turn = {
+                        endpoint_complete: smartTurnResult.is_complete,
+                        endpoint_confidence: smartTurnResult.probability,
+                        processing_time_ms: smartTurnResult.processing_time_ms
+                    };
+                }
+                
+                // Enhanced: Include pipeline metadata
+                if (ENHANCED_PIPELINE_ENABLED) {
+                    response.enhanced_pipeline = {
+                        smart_turn_enabled: SMART_TURN_ENABLED,
+                        vad_enabled: VAD_ENABLED,
+                        features_used: {
+                            smart_turn: smartTurnResult !== null,
+                            vad: false  // Will be true when VAD is implemented
+                        }
+                    };
+                }
+                
+                res.json(response);
 
             } catch (ttsError) {
                 console.warn('All TTS methods failed, returning text only:', ttsError.message);
                 
                 // Return text response even if TTS fails
-                res.json({
+                const response = {
                     success: true,
                     input_text: inputText,
                     response_text: responseText,
@@ -781,11 +907,34 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     search_results_count: ragResponse.search_results_count,
                     search_results: ragResponse.search_results, // Include actual search results for debugging
                     applied_filters: ragResponse.applied_filters || {}
-                });
+                };
+                
+                // Enhanced: Include Smart Turn metadata if available
+                if (ENHANCED_PIPELINE_ENABLED && smartTurnResult) {
+                    response.smart_turn = {
+                        endpoint_complete: smartTurnResult.is_complete,
+                        endpoint_confidence: smartTurnResult.probability,
+                        processing_time_ms: smartTurnResult.processing_time_ms
+                    };
+                }
+                
+                // Enhanced: Include pipeline metadata
+                if (ENHANCED_PIPELINE_ENABLED) {
+                    response.enhanced_pipeline = {
+                        smart_turn_enabled: SMART_TURN_ENABLED,
+                        vad_enabled: VAD_ENABLED,
+                        features_used: {
+                            smart_turn: smartTurnResult !== null,
+                            vad: false  // Will be true when VAD is implemented
+                        }
+                    };
+                }
+                
+                res.json(response);
             }
         } else {
             // Text-only response with RAG metadata
-            res.json({
+            const response = {
                 success: true,
                 input_text: inputText,
                 response_text: responseText,
@@ -796,7 +945,30 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 search_results_count: ragResponse.search_results_count,
                 search_results: ragResponse.search_results, // Include actual search results for debugging
                 applied_filters: ragResponse.applied_filters || {}
-            });
+            };
+            
+            // Enhanced: Include Smart Turn metadata if available
+            if (ENHANCED_PIPELINE_ENABLED && smartTurnResult) {
+                response.smart_turn = {
+                    endpoint_complete: smartTurnResult.is_complete,
+                    endpoint_confidence: smartTurnResult.probability,
+                    processing_time_ms: smartTurnResult.processing_time_ms
+                };
+            }
+            
+            // Enhanced: Include pipeline metadata
+            if (ENHANCED_PIPELINE_ENABLED) {
+                response.enhanced_pipeline = {
+                    smart_turn_enabled: SMART_TURN_ENABLED,
+                    vad_enabled: VAD_ENABLED,
+                    features_used: {
+                        smart_turn: smartTurnResult !== null,
+                        vad: false  // Will be true when VAD is implemented
+                    }
+                };
+            }
+            
+            res.json(response);
         }
 
     } catch (error) {
@@ -1020,12 +1192,22 @@ router.post('/rag', async (req, res) => {
 router.get('/health', async (req, res) => {
     const services = {
         stt: { url: STT_SERVICE_URL, status: 'unknown' },
-        tts: { url: TTS_SERVICE_URL, status: 'unknown', engine: 'chatterbox' },
+        tts: { url: TTS_SERVICE_URL, status: 'unknown', engine: 'kokoro' },
         text_generator: { url: TEXT_GENERATOR_URL, status: 'unknown' }
     };
+    
+    // Enhanced: Add Smart Turn service if enabled
+    if (SMART_TURN_ENABLED) {
+        services.smart_turn = { url: SMART_TURN_URL, status: 'unknown', enabled: true };
+    }
 
     // Check external services
-    const healthChecks = ['stt', 'tts', 'text_generator'].map(async (serviceName) => {
+    const serviceNames = ['stt', 'tts', 'text_generator'];
+    if (SMART_TURN_ENABLED) {
+        serviceNames.push('smart_turn');
+    }
+    
+    const healthChecks = serviceNames.map(async (serviceName) => {
         try {
             const response = await safeAxiosCall(
                 `${services[serviceName].url}/health`,
@@ -1057,13 +1239,38 @@ router.get('/health', async (req, res) => {
          (services.tts.details.engines && 
           services.tts.details.engines.some(engine => engine.name === 'chatterbox' && engine.available)));
 
-    res.json({
+    const healthResponse = {
         status: allHealthy ? 'healthy' : 'degraded',
         services,
         tts_status: ttsStatus,
         chatterbox_available: chatterboxAvailable,
         timestamp: new Date().toISOString()
-    });
+    };
+    
+    // Enhanced: Add pipeline information
+    if (ENHANCED_PIPELINE_ENABLED) {
+        healthResponse.enhanced_pipeline = {
+            enabled: true,
+            features: {
+                smart_turn: {
+                    enabled: SMART_TURN_ENABLED,
+                    healthy: SMART_TURN_ENABLED ? services.smart_turn?.status === 'healthy' : null,
+                    url: SMART_TURN_ENABLED ? SMART_TURN_URL : null
+                },
+                vad: {
+                    enabled: VAD_ENABLED,
+                    healthy: VAD_ENABLED ? true : null  // Will be updated when VAD is implemented
+                }
+            }
+        };
+    } else {
+        healthResponse.enhanced_pipeline = {
+            enabled: false,
+            message: "Enhanced pipeline features are disabled"
+        };
+    }
+    
+    res.json(healthResponse);
 });
 
 // ElevenLabs TTS endpoint for reference client
