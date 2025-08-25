@@ -1,0 +1,19 @@
+# Apple Silicon MLX Whisper Service Requirements
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+pydantic==2.5.0
+httpx==0.25.2
+requests>=2.31.0
+
+# MLX Framework for Apple Silicon
+mlx>=0.5.0
+mlx-whisper>=0.1.0
+
+# Audio processing
+numpy>=1.24.0
+librosa>=0.10.1
+soundfile>=0.12.1
+
+# Logging
+logging-config>=1.0.3
