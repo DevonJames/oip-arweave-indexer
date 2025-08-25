@@ -158,6 +158,30 @@ if command -v node > /dev/null 2>&1; then
     else
         echo "⚠️ Kokoro TTS test script not found"
     fi
+    
+    # Week 4: Enhanced Voice Pipeline Integration Testing
+    if [ -f "test_enhanced_voice_pipeline.js" ]; then
+        echo "Testing Enhanced Voice Pipeline Integration..."
+        MAIN_APP_URL=http://localhost:3000 \
+        STT_SERVICE_URL=http://localhost:8003 \
+        TTS_SERVICE_URL=http://localhost:5002 \
+        SMART_TURN_URL=http://localhost:8010 \
+        node test_enhanced_voice_pipeline.js
+    else
+        echo "⚠️ Enhanced Voice Pipeline test script not found"
+    fi
+    
+    # Week 4: Configuration Validation
+    if [ -f "validate_enhanced_config.js" ]; then
+        echo "Validating Enhanced Pipeline Configuration..."
+        MAIN_APP_URL=http://localhost:3000 \
+        STT_SERVICE_URL=http://localhost:8003 \
+        TTS_SERVICE_URL=http://localhost:5002 \
+        SMART_TURN_URL=http://localhost:8010 \
+        node validate_enhanced_config.js
+    else
+        echo "⚠️ Configuration validation script not found"
+    fi
 else
     echo "⚠️ Node.js not found, skipping service tests"
 fi
