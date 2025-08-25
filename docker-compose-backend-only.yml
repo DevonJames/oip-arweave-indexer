@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  # Main application (backend only - no client-side services)
+  main-app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - models:/app/models
+    environment:
+      # Backend-only configuration
+      - DISTRIBUTED_MODE=true
+      - CLIENT_SERVICES_EXTERNAL=true
+      
+      # Elasticsearch configuration
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_INDEX=oip-records
+      
+      # Ollama configuration
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.1:8b
+      
+      # Enhanced TTS configuration (Kokoro + fallbacks)
+      - TTS_SERVICE_URL=http://kokoro-tts:8012
+      - TTS_PRIMARY_ENGINE=kokoro
+      - TTS_FALLBACK_ENGINES=coqui,piper,espeak
+      - CACHE_ENABLED=true
+      - DEFAULT_VOICE=default
+      - SAMPLE_RATE=22050
+      - AUDIO_FORMAT=wav
+      - OFFLINE_MODE=false
+      - DISABLE_GTTS=false
+      - ENABLE_CHATTERBOX=true
+      - ENABLE_ESPEAK=true
+      
+      # External client service URLs (Mac client)
+      - STT_SERVICE_URL=http://mac-client:8013
+      - SMART_TURN_URL=http://mac-client:8014
+      - STT_ENABLED=false  # Handled by external Mac client
+      - SMART_TURN_ENABLED=false  # Handled by external Mac client
+      - VAD_ENABLED=false  # Handled by external Mac client
+      
+      # Pipeline configuration
+      - ENHANCED_PIPELINE_ENABLED=true
+      - PIPELINE_VERSION=2.0-distributed
+      
+    depends_on:
+      - elasticsearch
+      - ollama
+      - kokoro-tts
+    networks:
+      - voice-network
+
+  # Elasticsearch for document storage and search
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - voice-network
+
+  # Ollama for LLM processing
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - voice-network
+
+  # Kokoro TTS Service (primary TTS engine with fallbacks)
+  kokoro-tts:
+    build: ./kokoro-tts-service
+    ports:
+      - "8012:8012"
+    volumes:
+      - models:/app/models
+      - ./logs:/app/logs
+    environment:
+      # Kokoro TTS configuration
+      - TTS_PRIMARY_ENGINE=kokoro
+      - TTS_FALLBACK_ENGINES=coqui,piper,espeak
+      - MODEL_PATH=/app/models/kokoro
+      - CACHE_ENABLED=true
+      - DEFAULT_VOICE=default
+      - SAMPLE_RATE=22050
+      - AUDIO_FORMAT=wav
+      - OFFLINE_MODE=false
+      
+      # Fallback engine configuration
+      - COQUI_MODEL=tts_models/en/ljspeech/tacotron2-DDC
+      - PIPER_MODEL=en_US-lessac-medium
+      - ESPEAK_VOICE=en
+      - DISABLE_GTTS=false
+      - ENABLE_CHATTERBOX=true
+      - ENABLE_ESPEAK=true
+      
+      # Performance settings
+      - MAX_TEXT_LENGTH=1000
+      - CONCURRENT_REQUESTS=4
+      - REQUEST_TIMEOUT=30
+      - ENABLE_STREAMING=false
+      
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - voice-network
+
+volumes:
+  elasticsearch_data:
+  ollama_data:
+  models:
+
+networks:
+  voice-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
