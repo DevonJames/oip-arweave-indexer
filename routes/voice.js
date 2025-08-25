@@ -544,6 +544,15 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
  * Complete voice chat: STT → LLM → TTS pipeline
  */
 router.post('/chat', upload.single('audio'), async (req, res) => {
+    const startTime = Date.now();
+    const processingMetrics = {
+        stt_time_ms: 0,
+        smart_turn_time_ms: 0,
+        rag_time_ms: 0,
+        tts_time_ms: 0,
+        total_time_ms: 0
+    };
+    
     try {
         let inputText = '';
         
@@ -561,6 +570,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 contentType: req.file.mimetype || 'audio/webm'
             });
 
+            const sttStartTime = Date.now();
             const sttResponse = await safeAxiosCall(
                 `${STT_SERVICE_URL}/transcribe_file`,
                 {
@@ -569,16 +579,21 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     headers: { 'Content-Type': 'multipart/form-data' },
                 }
             );
+            processingMetrics.stt_time_ms = Date.now() - sttStartTime;
 
             inputText = sttResponse.data.text;
+            console.log(`[Voice Chat] STT transcription (${processingMetrics.stt_time_ms}ms): "${inputText}"`);
             
             // Enhanced: Smart Turn endpoint prediction (if enabled)
             let smartTurnResult = null;
             if (ENHANCED_PIPELINE_ENABLED) {
                 try {
+                    const smartTurnStartTime = Date.now();
                     smartTurnResult = await predictSmartTurn(req.file.buffer, inputText);
+                    processingMetrics.smart_turn_time_ms = Date.now() - smartTurnStartTime;
+                    
                     if (smartTurnResult) {
-                        console.log(`[Voice Chat] Smart Turn result: complete=${smartTurnResult.is_complete}, prob=${smartTurnResult.probability.toFixed(3)}`);
+                        console.log(`[Voice Chat] Smart Turn result (${processingMetrics.smart_turn_time_ms}ms): complete=${smartTurnResult.is_complete}, prob=${smartTurnResult.probability.toFixed(3)}`);
                     }
                 } catch (error) {
                     console.warn(`[Voice Chat] Smart Turn prediction failed: ${error.message}`);
@@ -735,8 +750,12 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 ragOptions.include_filter_analysis = false;
             }
 
+            const ragStartTime = Date.now();
             ragResponse = await alfred.query(inputText, ragOptions);
+            processingMetrics.rag_time_ms = Date.now() - ragStartTime;
+            
             responseText = ragResponse.answer;
+            console.log(`[Voice Chat] RAG processing (${processingMetrics.rag_time_ms}ms): Generated ${responseText.length} chars`);
         }
 
         if (!responseText || !responseText.trim()) {
@@ -805,6 +824,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         engine: req.body.engine || 'kokoro'  // Use primary Kokoro engine
                     };
 
+                    const ttsStartTime = Date.now();
                     console.log(`[Voice Chat] Sending Kokoro TTS request with text length: ${textForTTS.length} chars`);
                     const kokoroResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
@@ -816,12 +836,13 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         },
                         'Kokoro TTS'
                     );
+                    processingMetrics.tts_time_ms = Date.now() - ttsStartTime;
                     
                     if (kokoroResponse.data && kokoroResponse.data.audio_data) {
                         audioData = Buffer.from(kokoroResponse.data.audio_data, 'base64');
                         engineUsed = kokoroResponse.data.engine;
-                        console.log(`[Voice Chat] Successfully synthesized with ${engineUsed}: ${audioData.length} bytes`);
-                        console.log(`[Voice Chat] Processing time: ${kokoroResponse.data.processing_time_ms}ms, cached: ${kokoroResponse.data.cached}`);
+                        console.log(`[Voice Chat] Successfully synthesized with ${engineUsed} (${processingMetrics.tts_time_ms}ms): ${audioData.length} bytes`);
+                        console.log(`[Voice Chat] TTS processing time: ${kokoroResponse.data.processing_time_ms}ms, cached: ${kokoroResponse.data.cached}`);
                     } else {
                         throw new Error('Invalid response from Kokoro TTS service');
                     }
@@ -851,6 +872,9 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     engineUsed = 'espeak-fallback';
                 }
 
+                // Calculate total processing time
+                processingMetrics.total_time_ms = Date.now() - startTime;
+                
                 // Return combined response with RAG metadata and enhanced pipeline info
                 const response = {
                     success: true,
@@ -865,7 +889,11 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     context_used: ragResponse.context_used,
                     search_results_count: ragResponse.search_results_count,
                     search_results: ragResponse.search_results, // Include actual search results for debugging
-                    applied_filters: ragResponse.applied_filters || {}
+                    applied_filters: ragResponse.applied_filters || {},
+                    // Enhanced Week 4: Comprehensive processing metrics
+                    processing_metrics: processingMetrics,
+                    pipeline_version: "2.0",
+                    timestamp: new Date().toISOString()
                 };
                 
                 // Enhanced: Include Smart Turn metadata if available
@@ -894,6 +922,9 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             } catch (ttsError) {
                 console.warn('All TTS methods failed, returning text only:', ttsError.message);
                 
+                // Calculate total processing time
+                processingMetrics.total_time_ms = Date.now() - startTime;
+                
                 // Return text response even if TTS fails
                 const response = {
                     success: true,
@@ -906,7 +937,11 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     context_used: ragResponse.context_used,
                     search_results_count: ragResponse.search_results_count,
                     search_results: ragResponse.search_results, // Include actual search results for debugging
-                    applied_filters: ragResponse.applied_filters || {}
+                    applied_filters: ragResponse.applied_filters || {},
+                    // Enhanced Week 4: Comprehensive processing metrics
+                    processing_metrics: processingMetrics,
+                    pipeline_version: "2.0",
+                    timestamp: new Date().toISOString()
                 };
                 
                 // Enhanced: Include Smart Turn metadata if available
@@ -933,6 +968,9 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 res.json(response);
             }
         } else {
+            // Calculate total processing time
+            processingMetrics.total_time_ms = Date.now() - startTime;
+            
             // Text-only response with RAG metadata
             const response = {
                 success: true,
@@ -944,7 +982,11 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 context_used: ragResponse.context_used,
                 search_results_count: ragResponse.search_results_count,
                 search_results: ragResponse.search_results, // Include actual search results for debugging
-                applied_filters: ragResponse.applied_filters || {}
+                applied_filters: ragResponse.applied_filters || {},
+                // Enhanced Week 4: Comprehensive processing metrics
+                processing_metrics: processingMetrics,
+                pipeline_version: "2.0",
+                timestamp: new Date().toISOString()
             };
             
             // Enhanced: Include Smart Turn metadata if available
