@@ -1383,13 +1383,15 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             formData.append('cfg_weight', voiceConfig?.chatterbox?.cfg_weight?.toString() || '0.7');
             formData.append('voice_cloning', 'false');
             
-            const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
-                headers: {
-                    ...formData.getHeaders()
-                },
-                responseType: 'arraybuffer',
-                timeout: 30000
-            });
+                                // Use environment variable for TTS service URL (supports remote backend)
+                    const ttsServiceUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
+                    const ttsResponse = await axios.post(`${ttsServiceUrl}/synthesize`, formData, {
+                        headers: {
+                            ...formData.getHeaders()
+                        },
+                        responseType: 'arraybuffer',
+                        timeout: 30000
+                    });
             
             if (ttsResponse.status === 200 && ttsResponse.data) {
                 console.log(`🎤 Local TTS generated ${ttsResponse.data.byteLength} bytes of audio`);
@@ -1686,7 +1688,9 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     
                     console.log(`🎤 Sending Edge TTS request with parameters: voice_id=${voiceConfig.edge.selectedVoice}, engine=edge_tts`);
                     
-                    const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                    // Use environment variable for TTS service URL (supports remote backend)
+                    const ttsServiceUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
+                    const ttsResponse = await axios.post(`${ttsServiceUrl}/synthesize`, formData, {
                         headers: {
                             ...formData.getHeaders()
                         },
@@ -1976,7 +1980,9 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                         formData.append('voice_cloning', 'false');
                     }
                     
-                    const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                    // Use environment variable for TTS service URL (supports remote backend)
+                    const ttsServiceUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
+                    const ttsResponse = await axios.post(`${ttsServiceUrl}/synthesize`, formData, {
                         headers: {
                             ...formData.getHeaders()
                         },

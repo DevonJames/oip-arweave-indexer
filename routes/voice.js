@@ -1180,6 +1180,507 @@ router.get('/models', async (req, res) => {
 });
 
 /**
+ * POST /api/voice/converse
+ * Streaming voice conversation with ALFRED RAG integration
+ * Similar to /generate/converse but uses ALFRED's RAG system
+ */
+router.post('/converse', upload.single('audio'), async (req, res) => {
+    const startTime = Date.now();
+    console.log('Voice converse request received');
+    
+    try {
+        let inputText = '';
+        const processingMetrics = {
+            stt_time_ms: 0,
+            smart_turn_time_ms: 0,
+            rag_time_ms: 0,
+            total_time_ms: 0
+        };
+        
+        // Step 1: Handle audio transcription if provided
+        if (req.file) {
+            const formData = new FormData();
+            
+            // Create a readable stream from the buffer (Node.js compatible approach)
+            const bufferStream = new Readable();
+            bufferStream.push(req.file.buffer);
+            bufferStream.push(null);
+            
+            formData.append('file', bufferStream, {
+                filename: req.file.originalname || 'recording.webm',
+                contentType: req.file.mimetype || 'audio/webm'
+            });
+
+            const sttStartTime = Date.now();
+            const sttResponse = await safeAxiosCall(
+                `${STT_SERVICE_URL}/transcribe_file`,
+                {
+                    method: 'POST',
+                    data: formData,
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                }
+            );
+            processingMetrics.stt_time_ms = Date.now() - sttStartTime;
+
+            inputText = sttResponse.data.text;
+            console.log(`[Voice Converse] STT transcription (${processingMetrics.stt_time_ms}ms): "${inputText}"`);
+            
+            // Enhanced: Smart Turn endpoint prediction (if enabled)
+            let smartTurnResult = null;
+            if (ENHANCED_PIPELINE_ENABLED) {
+                try {
+                    const smartTurnStartTime = Date.now();
+                    smartTurnResult = await predictSmartTurn(req.file.buffer, inputText);
+                    processingMetrics.smart_turn_time_ms = Date.now() - smartTurnStartTime;
+                    
+                    if (smartTurnResult) {
+                        console.log(`[Voice Converse] Smart Turn result (${processingMetrics.smart_turn_time_ms}ms): complete=${smartTurnResult.is_complete}, prob=${smartTurnResult.probability.toFixed(3)}`);
+                    }
+                } catch (error) {
+                    console.warn(`[Voice Converse] Smart Turn prediction failed: ${error.message}`);
+                }
+            }
+        } else if (req.body.userInput) {
+            inputText = req.body.userInput;
+        } else if (req.body.text) {
+            inputText = req.body.text;
+        } else {
+            return res.status(400).json({ error: 'Either audio file or text is required' });
+        }
+
+        if (!inputText.trim()) {
+            return res.status(400).json({ error: 'No text to process' });
+        }
+
+        // Generate a unique dialogue ID
+        const dialogueId = req.body.dialogueId || `voice-dialogue-${Date.now()}-${Math.random().toString(36).substring(2, 12)}`;
+        console.log(`[Voice Converse] Using dialogueId: ${dialogueId}`);
+        
+        // Get conversation history if provided
+        let conversationHistory = [];
+        if (req.body.conversationHistory) {
+            try {
+                const parsedHistory = JSON.parse(req.body.conversationHistory);
+                
+                // Debug the actual structure
+                console.log('Raw conversation history structure:', 
+                    JSON.stringify(parsedHistory, null, 2).substring(0, 300));
+                
+                // Ensure it's an array with the right format
+                if (Array.isArray(parsedHistory)) {
+                    conversationHistory = parsedHistory.map(msg => ({
+                        role: msg.role || 'user',
+                        content: msg.content || msg.text || ''
+                    }));
+                } else if (typeof parsedHistory === 'object') {
+                    // If it's not an array but an object, try to convert it
+                    conversationHistory = [{
+                        role: parsedHistory.role || 'user',
+                        content: parsedHistory.content || parsedHistory.text || ''
+                    }];
+                }
+                
+                console.log('Formatted conversation history:', 
+                    JSON.stringify(conversationHistory, null, 2).substring(0, 300));
+            } catch (error) {
+                console.error('Error parsing conversation history:', error);
+                // Continue with empty history rather than failing
+            }
+        }
+
+        // Import required modules for streaming
+        const { generateStreamingResponse, streamChunkedTextToSpeech, flushRemainingText } = require('../helpers/generators');
+        const { ongoingDialogues } = require('../helpers/sharedState');
+        const socketManager = require('../socket/socketManager');
+
+        // Initialize ongoingStream if it doesn't exist
+        if (!ongoingDialogues.has(dialogueId)) {
+            ongoingDialogues.set(dialogueId, {
+                clients: new Set(),
+                data: []
+            });
+        }
+        
+        const ongoingStream = ongoingDialogues.get(dialogueId);
+        
+        // Add the current user input to conversation history
+        if (inputText) {
+            conversationHistory.push({
+                role: 'user',
+                content: inputText
+            });
+        }
+        
+        // Parse voice configuration from frontend
+        let voiceSettings = {
+            engine: 'edge_tts', // Use remote backend TTS
+            enabled: true,
+            edge: {
+                selectedVoice: 'en-GB-RyanNeural',
+                speed: 1.0,
+                pitch: 0,
+                volume: 0
+            }
+        };
+        
+        if (req.body.voiceConfig) {
+            try {
+                const parsedVoiceConfig = JSON.parse(req.body.voiceConfig);
+                voiceSettings = { ...voiceSettings, ...parsedVoiceConfig };
+                console.log('🎵 Parsed voice configuration:', voiceSettings.engine, 'engine selected');
+            } catch (error) {
+                console.error('Error parsing voice configuration:', error);
+                // Continue with defaults
+            }
+        }
+        
+        // Return success immediately, client will connect to SSE stream
+        res.json({
+            success: true,
+            dialogueId: dialogueId
+        });
+        
+        // Start background processing with ALFRED RAG integration
+        (async () => {
+            try {
+                // Add the user message to the data
+                ongoingStream.data.push({
+                    event: 'textChunk',
+                    data: {
+                        role: 'user',
+                        text: inputText
+                    }
+                });
+                
+                // Broadcast to all clients
+                socketManager.sendToClients(dialogueId, {
+                    type: 'textChunk',
+                    role: 'user',
+                    text: inputText
+                });
+                
+                // Step 2: Check if this is a self-referential question about the AI
+                function isSelfReferentialQuestion(text) {
+                    const lowerText = text.toLowerCase();
+                    const selfReferentialPatterns = [
+                        /\b(tell me about yourself|about yourself|who are you|what are you|introduce yourself|describe yourself)\b/,
+                        /\b(your capabilities|what can you do|what do you do|your purpose|your role)\b/,
+                        /\b(are you|you are|yourself|your name|your identity)\b/,
+                        /\b(hello.*yourself|hi.*yourself|greet.*yourself)\b/,
+                        /\b(how do you work|how were you made|how were you created)\b/,
+                        /\b(what is your function|what is your job|what is your mission)\b/
+                    ];
+                    
+                    return selfReferentialPatterns.some(pattern => pattern.test(lowerText));
+                }
+
+                // Step 3: Generate streaming response using ALFRED RAG system
+                const {
+                    model = 'grok-2',
+                    voice_id = 'en-GB-RyanNeural',
+                    speed = 1.0,
+                    creator_filter = null,
+                    record_type_filter = null,
+                    tag_filter = null
+                } = req.body;
+
+                let responseText = '';
+                const textAccumulator = {}; // Initialize text accumulator for chunking
+
+                const handleTextChunk = async (textChunk) => {
+                    responseText += textChunk;
+                    
+                    // Send text chunk to client for real-time display
+                    socketManager.sendToClients(dialogueId, {
+                        type: 'textChunk',
+                        role: 'assistant',
+                        text: textChunk
+                    });
+                    
+                    ongoingStream.data.push({
+                        event: 'textChunk',
+                        data: {
+                            role: 'assistant',
+                            text: textChunk
+                        }
+                    });
+                    
+                    // NEW: Use chunked streaming TTS for immediate audio generation
+                    try {
+                        await streamChunkedTextToSpeech(
+                            textChunk,
+                            textAccumulator,
+                            voiceSettings, // Pass the actual voice configuration
+                            (audioChunk, chunkIndex, chunkText, isFinal = false) => {
+                                console.log(`🎤 Streaming audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
+                                
+                                // Send audio chunk to client immediately
+                                socketManager.sendToClients(dialogueId, {
+                                    type: 'audioChunk',
+                                    audio: audioChunk,
+                                    chunkIndex: chunkIndex,
+                                    text: chunkText,
+                                    isFinal: isFinal
+                                });
+                                
+                                ongoingStream.data.push({
+                                    event: 'audioChunk',
+                                    data: {
+                                        audio: audioChunk,
+                                        chunkIndex: chunkIndex,
+                                        text: chunkText,
+                                        isFinal: isFinal
+                                    }
+                                });
+                            },
+                            String(dialogueId)
+                        );
+                    } catch (ttsError) {
+                        console.error('Error in chunked TTS:', ttsError.message);
+                    }
+                };
+
+                if (isSelfReferentialQuestion(inputText)) {
+                    console.log(`[Voice Converse] Self-referential question detected: "${inputText}" - using direct LLM`);
+                    
+                    // Use direct LLM with system prompt for self-referential questions
+                    const systemPrompt = "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis. When asked about yourself, explain your role as an AI assistant that helps with information retrieval and explanation.";
+                    
+                    try {
+                        // Generate streaming response using the generalized function
+                        const streamResult = await generateStreamingResponse(
+                            conversationHistory,  // Pass the conversation history array
+                            String(dialogueId),   // Ensure dialogueId is a string
+                            {
+                                temperature: 0.7,
+                                model: model,
+                                systemPrompt: systemPrompt
+                            },
+                            handleTextChunk      // Pass the properly defined text chunk handler
+                        );
+                        
+                    } catch (error) {
+                        console.error('Error in direct LLM response:', error);
+                        
+                        // Send a default response if the generator fails
+                        const defaultResponse = "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and content creation.";
+                        
+                        socketManager.sendToClients(dialogueId, {
+                            type: 'textChunk',
+                            role: 'assistant',
+                            text: defaultResponse
+                        });
+                        
+                        ongoingStream.data.push({
+                            event: 'textChunk',
+                            data: {
+                                role: 'assistant',
+                                text: defaultResponse
+                            }
+                        });
+                    }
+                } else {
+                    console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
+                    
+                    // Use ALFRED RAG system for contextual queries
+                    const ragOptions = {
+                        model,
+                        searchParams: {
+                            creatorHandle: creator_filter,
+                            recordType: record_type_filter,
+                            tags: tag_filter
+                        }
+                    };
+
+                    // Enhance RAG options for intelligent processing
+                    ragOptions.include_filter_analysis = req.body.include_filter_analysis !== false;
+                    ragOptions.searchParams = ragOptions.searchParams || {};
+
+                    // Conversation history for context grounding
+                    if (conversationHistory.length > 1) { // More than just the current message
+                        ragOptions.conversationHistory = conversationHistory.slice(0, -1); // Exclude current message
+                        console.log(`[Voice Converse] Using conversation history with ${ragOptions.conversationHistory.length} messages`);
+                    }
+                    
+                    // Pass existing search results for context-aware processing
+                    if (req.body.existing_search_results && Array.isArray(req.body.existing_search_results)) {
+                        ragOptions.existingContext = req.body.existing_search_results.map(record => {
+                            const recordType = record.oip?.recordType || record.recordType || 'unknown';
+                            return {
+                                data: record.data,
+                                recordType: recordType,
+                                matchCount: record.matchCount || 0
+                            };
+                        });
+                        console.log(`[Voice Converse] Using existing context with ${ragOptions.existingContext.length} records`);
+                    }
+                    
+                    // If a pinned DID is supplied by the client, bypass search and answer about that record
+                    if (req.body.pinnedDidTx && typeof req.body.pinnedDidTx === 'string') {
+                        console.log(`[Voice Converse] Pinned DID provided by client: ${req.body.pinnedDidTx}`);
+                        ragOptions.pinnedDidTx = req.body.pinnedDidTx;
+                        ragOptions.include_filter_analysis = false;
+                    }
+
+                    try {
+                        const ragStartTime = Date.now();
+                        
+                        // ALFRED RAG query with streaming support
+                        // We'll need to modify this to support streaming, but for now use the existing method
+                        const ragResponse = await alfred.query(inputText, ragOptions);
+                        processingMetrics.rag_time_ms = Date.now() - ragStartTime;
+                        
+                        const alfredResponseText = ragResponse.answer;
+                        console.log(`[Voice Converse] RAG processing (${processingMetrics.rag_time_ms}ms): Generated ${alfredResponseText.length} chars`);
+                        
+                        // For now, send the complete RAG response as chunks to simulate streaming
+                        // TODO: Implement true streaming RAG responses in future versions
+                        const words = alfredResponseText.split(' ');
+                        const chunkSize = 3; // Send 3 words at a time
+                        
+                        for (let i = 0; i < words.length; i += chunkSize) {
+                            const chunk = words.slice(i, i + chunkSize).join(' ');
+                            if (i + chunkSize < words.length) {
+                                await handleTextChunk(chunk + ' ');
+                            } else {
+                                await handleTextChunk(chunk);
+                            }
+                            
+                            // Small delay to simulate streaming
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                        }
+                        
+                        // Store RAG metadata for response
+                        ongoingStream.ragMetadata = {
+                            sources: ragResponse.sources,
+                            context_used: ragResponse.context_used,
+                            search_results_count: ragResponse.search_results_count,
+                            search_results: ragResponse.search_results,
+                            applied_filters: ragResponse.applied_filters || {}
+                        };
+                        
+                    } catch (ragError) {
+                        console.error('Error in ALFRED RAG processing:', ragError);
+                        
+                        // Fallback to direct LLM if RAG fails
+                        const fallbackResponse = "I encountered an issue accessing my knowledge base. Let me try to help you with a general response.";
+                        await handleTextChunk(fallbackResponse);
+                    }
+                }
+                
+                // NEW: Flush any remaining text in the accumulator
+                try {
+                    await flushRemainingText(
+                        textAccumulator,
+                        voiceSettings, // Pass the actual voice configuration
+                        (audioChunk, chunkIndex, chunkText, isFinal = true) => {
+                            console.log(`🎤 Flushing final audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
+                            
+                            // Send final audio chunk to client
+                            socketManager.sendToClients(dialogueId, {
+                                type: 'audioChunk',
+                                audio: audioChunk,
+                                chunkIndex: chunkIndex,
+                                text: chunkText,
+                                isFinal: true
+                            });
+                            
+                            ongoingStream.data.push({
+                                event: 'audioChunk',
+                                data: {
+                                    audio: audioChunk,
+                                    chunkIndex: chunkIndex,
+                                    text: chunkText,
+                                    isFinal: true
+                                }
+                            });
+                        },
+                        String(dialogueId)
+                    );
+                } catch (flushError) {
+                    console.error('Error flushing remaining text:', flushError.message);
+                }
+                
+                // Calculate total processing time
+                processingMetrics.total_time_ms = Date.now() - startTime;
+                
+                // Wait for TTS processing to complete before sending completion event
+                console.log('🎤 Waiting for TTS processing to complete before sending done event...');
+                await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds for TTS completion
+                
+                // Check if stream still has clients before sending completion
+                if (socketManager.hasClients(dialogueId)) {
+                    console.log('✅ Sending voice conversation completion event');
+                    
+                    // Mark conversation as complete with enhanced metadata
+                    ongoingStream.status = 'completed';
+                    const completionData = {
+                        type: 'done',
+                        data: "Voice conversation complete",
+                        processing_metrics: processingMetrics,
+                        pipeline_version: "2.0-voice-streaming",
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    // Include RAG metadata if available
+                    if (ongoingStream.ragMetadata) {
+                        completionData.rag_metadata = ongoingStream.ragMetadata;
+                    }
+                    
+                    // Include Smart Turn metadata if available
+                    if (ENHANCED_PIPELINE_ENABLED && smartTurnResult) {
+                        completionData.smart_turn = {
+                            endpoint_complete: smartTurnResult.is_complete,
+                            endpoint_confidence: smartTurnResult.probability,
+                            processing_time_ms: smartTurnResult.processing_time_ms
+                        };
+                    }
+                    
+                    socketManager.sendToClients(dialogueId, completionData);
+                    ongoingStream.data.push({
+                        event: 'done',
+                        data: completionData
+                    });
+                } else {
+                    console.log('⚠️ No clients remaining, skipping completion event');
+                }
+                
+                console.log('Voice streaming response completed');
+                
+            } catch (error) {
+                console.error('Error in voice streaming process:', error);
+                ongoingStream.status = 'error';
+                
+                socketManager.sendToClients(dialogueId, {
+                    type: 'error',
+                    data: {
+                        message: error.message
+                    }
+                });
+                
+                ongoingStream.data.push({
+                    event: 'error',
+                    data: {
+                        message: error.message
+                    }
+                });
+            }
+        })();
+        
+    } catch (error) {
+        console.error('Error in voice converse endpoint:', error);
+        
+        // If we haven't sent a response yet, send an error
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+});
+
+/**
  * POST /api/voice/rag
  * Direct RAG query without TTS (for testing and text-only use)
  */
