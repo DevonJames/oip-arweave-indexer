@@ -313,11 +313,25 @@
             <h3>Settings</h3>
             <div class="setting-group">
                 <label class="setting-label">VAD Sensitivity</label>
-                <input type="range" class="setting-input" id="vadThreshold" min="0.1" max="0.9" step="0.1" value="0.5">
+                <input type="range" class="setting-input" id="vadThreshold" min="0.1" max="0.9" step="0.1" value="0.3">
             </div>
             <div class="setting-group">
                 <label class="setting-label">Smart Turn Confidence</label>
-                <input type="range" class="setting-input" id="smartTurnThreshold" min="0.3" max="0.8" step="0.05" value="0.55">
+                <input type="range" class="setting-input" id="smartTurnThreshold" min="0.2" max="0.8" step="0.05" value="0.35">
+            </div>
+            <div class="setting-group">
+                <label class="setting-label">Language</label>
+                <select id="language" class="setting-input">
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="it">Italian</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="zh">Chinese</option>
+                </select>
             </div>
             <div class="setting-group">
                 <label class="setting-label">Auto-play Responses</label>
@@ -346,9 +360,10 @@
 
         // Settings
         let settings = {
-            vadThreshold: 0.5,
-            smartTurnThreshold: 0.55,
-            autoPlayTTS: true
+            vadThreshold: 0.3,           // Lower VAD threshold for better sensitivity
+            smartTurnThreshold: 0.35,    // Lower Smart Turn threshold for better endpoint detection
+            autoPlayTTS: true,
+            language: 'en'               // Default language
         };
 
         // DOM elements
@@ -380,10 +395,29 @@
                     }
                 });
                 
-                // Setup MediaRecorder
+                // Setup MediaRecorder - find the best supported format for real-time processing
+                const preferredFormats = [
+                    'audio/webm;codecs=pcm',      // PCM in WebM container (best for processing)
+                    'audio/ogg;codecs=opus',      // Opus in OGG container
+                    'audio/webm;codecs=opus',     // Opus in WebM container (fallback)
+                    'audio/mp4',                  // MP4 container
+                    'audio/mpeg'                  // MPEG format
+                ];
+                
+                let mimeType = 'audio/webm;codecs=opus'; // Default fallback
+                for (const format of preferredFormats) {
+                    if (MediaRecorder.isTypeSupported(format)) {
+                        mimeType = format;
+                        break;
+                    }
+                }
+                
                 mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm;codecs=opus'
+                    mimeType: mimeType,
+                    audioBitsPerSecond: 16000 // Lower bitrate for faster processing
                 });
+                
+                debug(`Using audio format: ${mimeType}`);
                 
                 mediaRecorder.ondataavailable = event => {
                     audioChunks.push(event.data);
@@ -482,7 +516,9 @@
             
             // In continuous mode, we'll process audio in chunks and use Smart Turn to detect endpoints
             if (continuousMode) {
-                setTimeout(checkForEndpoint, 3000); // Start checking after 3 seconds to allow more speech
+                // Reset audio chunks when starting continuous mode
+                audioChunks = [];
+                setTimeout(checkForEndpoint, 1000); // Start checking after 1 second for better responsiveness
             }
         }
 
@@ -492,11 +528,22 @@
             try {
                 // Get current audio data
                 if (audioChunks.length === 0) {
+                    debug('No audio chunks available, waiting...');
                     setTimeout(checkForEndpoint, 1000); // Check less frequently when no audio
                     return;
                 }
                 
+                debug(`Checking endpoint with ${audioChunks.length} audio chunks`);
+                
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                
+                // Skip processing if audio is too short (likely just noise/fan)
+                if (audioBlob.size < 8192) { // Less than ~8KB is probably just noise
+                    debug(`Audio blob too small (${audioBlob.size} bytes), skipping - likely fan noise`);
+                    audioChunks = [];
+                    setTimeout(checkForEndpoint, 500);
+                    return;
+                }
                 const formData = new FormData();
                 formData.append('audio_file', audioBlob, 'recording.webm');
                 
@@ -513,6 +560,7 @@
                 if (sttResponse.ok) {
                     const sttData = await sttResponse.json();
                     const transcript = sttData.text;
+                    debug(`STT result: "${transcript}"`);
                     
                     if (transcript && transcript.trim().length > 0) {
                         // Check Smart Turn for endpoint detection
@@ -527,7 +575,7 @@
                         
                         if (smartTurnResponse.ok) {
                             const smartTurnData = await smartTurnResponse.json();
-                            debug(`Smart Turn: ${smartTurnData.prediction} (${smartTurnData.probability.toFixed(3)})`);
+                            debug(`Smart Turn: ${smartTurnData.prediction} (${smartTurnData.probability.toFixed(3)}) - threshold: ${settings.smartTurnThreshold}`);
                             
                             // If Smart Turn detects endpoint with high confidence, process the audio
                             if (smartTurnData.prediction === 1 && smartTurnData.probability >= settings.smartTurnThreshold) {
@@ -537,16 +585,31 @@
                                 return;
                             } else {
                                 vadStatus.textContent = `Listening... (confidence: ${smartTurnData.probability.toFixed(2)})`;
+                                // Clear processed audio chunks to prevent reprocessing the same audio
+                                debug(`Clearing ${audioChunks.length} audio chunks to prevent reprocessing`);
+                                audioChunks = [];
                             }
+                        } else {
+                            debug(`Smart Turn request failed: ${smartTurnResponse.status}`);
                         }
+                    } else {
+                        debug('No transcript from STT, continuing...');
+                        // Clear audio chunks when no transcript to prevent accumulation
+                        audioChunks = [];
                     }
+                } else {
+                    debug(`STT request failed: ${sttResponse.status}`);
+                    // Clear audio chunks when STT fails to prevent accumulation
+                    audioChunks = [];
                 }
                 
                 // Continue listening if no endpoint detected
-                setTimeout(checkForEndpoint, 500); // Check every 0.5 seconds for better responsiveness
+                setTimeout(checkForEndpoint, 300); // Check every 0.3 seconds for better responsiveness
                 
             } catch (error) {
                 debug(`Endpoint check error: ${error.message}`);
+                // Clear audio chunks on error to prevent accumulation
+                audioChunks = [];
                 setTimeout(checkForEndpoint, 1000);
             }
         }
@@ -617,6 +680,7 @@
                 const formData = new FormData();
                 formData.append('file', audioBlob, 'recording.webm');
                 formData.append('use_vad', 'true');
+                formData.append('language', settings.language);
 
                 const sttResponse = await fetch('http://127.0.0.1:8013/transcribe_file', {
                     method: 'POST',
@@ -676,7 +740,7 @@
                 debug('Sending to backend for RAG processing');
 
                 // First, initiate streaming conversation
-                const initResponse = await fetch('/api/backend/converse', {
+                const initResponse = await fetch('/api/backend/generate/converse', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -701,7 +765,7 @@
                 let fullResponse = '';
                 let assistantMessageElement = null;
 
-                const eventSource = new EventSource(`/api/backend/open-stream?streamId=${dialogueId}`);
+                const eventSource = new EventSource(`/api/backend/generate/open-stream?id=${dialogueId}`);
                 
                 eventSource.onopen = function() {
                     debug('Real-time streaming connection opened');
@@ -715,14 +779,12 @@
                         
                         // Create or update assistant message in real-time
                         if (!assistantMessageElement) {
-                            assistantMessageElement = addMessage('assistant', data.text);
+                            assistantMessageElement = addMessage('assistant', fullResponse);
                         } else {
-                            // Update existing message with accumulated text
-                            const contentElement = assistantMessageElement.querySelector('.content');
-                            contentElement.textContent = fullResponse;
+                            updateMessage(assistantMessageElement, fullResponse);
                         }
                         
-                        debug(`Live text chunk: "${data.text}"`);
+                        debug(`Live text chunk: "${data.text}" (total: ${fullResponse.length} chars)`);
                     }
                 });
 
@@ -795,11 +857,23 @@
             
             messageDiv.innerHTML = `
                 <div class="message-meta">${prefix} - ${timestamp}</div>
-                <div>${text}</div>
+                <div class="message-content">${text}</div>
             `;
             
             conversation.appendChild(messageDiv);
             conversation.scrollTop = conversation.scrollHeight;
+            
+            return messageDiv; // Return the element so we can update it later
+        }
+
+        function updateMessage(messageElement, newText) {
+            if (messageElement) {
+                const contentElement = messageElement.querySelector('.message-content');
+                if (contentElement) {
+                    contentElement.textContent = newText;
+                    conversation.scrollTop = conversation.scrollHeight;
+                }
+            }
         }
 
         async function playAudio(audioUrl) {
@@ -903,12 +977,14 @@
             document.getElementById('vadThreshold').value = settings.vadThreshold;
             document.getElementById('smartTurnThreshold').value = settings.smartTurnThreshold;
             document.getElementById('autoPlayTTS').checked = settings.autoPlayTTS;
+            document.getElementById('language').value = settings.language;
         }
 
         function saveSettings() {
             settings.vadThreshold = parseFloat(document.getElementById('vadThreshold').value);
             settings.smartTurnThreshold = parseFloat(document.getElementById('smartTurnThreshold').value);
             settings.autoPlayTTS = document.getElementById('autoPlayTTS').checked;
+            settings.language = document.getElementById('language').value;
             
             localStorage.setItem('alfred-voice-settings', JSON.stringify(settings));
             debug('Settings saved');

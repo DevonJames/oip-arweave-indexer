@@ -18,6 +18,8 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import soundfile as sf
+from pydub import AudioSegment
+import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -231,40 +233,48 @@ class MacSmartTurnService:
             raise HTTPException(status_code=503, detail="Smart Turn model not loaded")
         
         try:
-            # Load audio
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-                tmp_file.write(audio_data)
-                tmp_file_path = tmp_file.name
-            
+            # Load audio directly from bytes - no file I/O for real-time performance
             try:
-                # Read audio
-                audio, sample_rate = sf.read(tmp_file_path)
-                if audio.ndim > 1:
-                    audio = audio.mean(axis=1)  # Convert to mono
+                # Try to load as WebM/OGG using pydub first (most common from browser)
+                audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
                 
-                # Resample to 16kHz if needed
-                if sample_rate != 16000:
-                    import librosa
-                    audio = librosa.resample(audio, orig_sr=sample_rate, target_sr=16000)
-                    sample_rate = 16000
+                # Convert to numpy array
+                audio = np.array(audio_segment.get_array_of_samples(), dtype=np.float32)
+                if audio_segment.channels == 2:
+                    audio = audio.reshape((-1, 2)).mean(axis=1)  # Convert stereo to mono
                 
-                # Predict endpoint
-                result = self.model.predict_endpoint(audio, transcript, sample_rate)
+                # Normalize to [-1, 1] range
+                audio = audio / (2**15)  # 16-bit audio normalization
+                sample_rate = audio_segment.frame_rate
                 
-                processing_time = (time.time() - start_time) * 1000
-                
-                return SmartTurnResponse(
-                    prediction=result['prediction'],
-                    probability=result['probability'],
-                    processing_time_ms=processing_time,
-                    model_version="smart-turn-v2-mac",
-                    platform="Apple Silicon"
-                )
-                
-            finally:
-                # Clean up
-                if os.path.exists(tmp_file_path):
-                    os.unlink(tmp_file_path)
+            except Exception as e:
+                logger.warning(f"pydub failed ({e}), trying soundfile...")
+                # Fallback: try soundfile (for WAV/standard formats)
+                try:
+                    audio, sample_rate = sf.read(io.BytesIO(audio_data))
+                    if audio.ndim > 1:
+                        audio = audio.mean(axis=1)  # Convert to mono
+                except Exception as e2:
+                    raise HTTPException(status_code=400, detail=f"Unsupported audio format. pydub: {e}, soundfile: {e2}")
+            
+            # Resample to 16kHz if needed (for consistent processing)
+            if sample_rate != 16000:
+                import librosa
+                audio = librosa.resample(audio, orig_sr=sample_rate, target_sr=16000)
+                sample_rate = 16000
+            
+            # Predict endpoint
+            result = self.model.predict_endpoint(audio, transcript, sample_rate)
+            
+            processing_time = (time.time() - start_time) * 1000
+            
+            return SmartTurnResponse(
+                prediction=result['prediction'],
+                probability=result['probability'],
+                processing_time_ms=processing_time,
+                model_version="smart-turn-v2-mac",
+                platform="Apple Silicon"
+            )
                     
         except Exception as e:
             processing_time = (time.time() - start_time) * 1000

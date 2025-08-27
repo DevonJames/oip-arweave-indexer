@@ -63,6 +63,60 @@ app.post('/process-voice', async (req, res) => {
     }
 });
 
+// Proxy endpoint for backend /generate routes
+app.post('/api/backend/generate/:endpoint', async (req, res) => {
+    try {
+        const { endpoint } = req.params;
+        const backendUrl = `${coordinator.backendUrl}/generate/${endpoint}`;
+        
+        console.log(`🔗 Proxying request to: ${backendUrl}`);
+        console.log(`📦 Request body:`, JSON.stringify(req.body, null, 2));
+        
+        // Use axios instead of fetch for better error handling and timeout support
+        const axios = require('axios');
+        
+        const response = await axios.post(backendUrl, req.body, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            timeout: 30000,
+            validateStatus: function (status) {
+                return status < 500; // Accept any response that's not a server error
+            }
+        });
+        
+        console.log(`✅ Backend response status: ${response.status}`);
+        
+        if (response.status >= 400) {
+            console.log(`❌ Backend error: ${response.status} - ${response.data}`);
+        }
+        
+        res.status(response.status).json(response.data);
+        
+    } catch (error) {
+        console.error('Backend proxy error:', error);
+        
+        if (error.code === 'ECONNREFUSED') {
+            res.status(503).json({
+                error: 'Backend service unavailable',
+                message: 'Cannot connect to backend server',
+                details: error.message
+            });
+        } else if (error.code === 'ETIMEDOUT') {
+            res.status(504).json({
+                error: 'Backend timeout',
+                message: 'Backend server is taking too long to respond',
+                details: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Backend proxy failed',
+                message: error.message
+            });
+        }
+    }
+});
+
 // Proxy endpoint for backend communication (to avoid CORS issues)
 app.post('/api/backend/:endpoint', async (req, res) => {
     try {
@@ -117,6 +171,85 @@ app.post('/api/backend/:endpoint', async (req, res) => {
                 error: 'Backend communication failed',
                 message: error.message,
                 code: error.code
+            });
+        }
+    }
+});
+
+// Proxy endpoint for backend streaming (GET requests)
+app.get('/api/backend/generate/:endpoint', async (req, res) => {
+    try {
+        const { endpoint } = req.params;
+        const backendUrl = `${coordinator.backendUrl}/generate/${endpoint}`;
+        const queryString = new URLSearchParams(req.query).toString();
+        const fullUrl = queryString ? `${backendUrl}?${queryString}` : backendUrl;
+        
+        console.log(`🔗 Proxying GET request to: ${fullUrl}`);
+        
+        // For streaming endpoints, we need to proxy the stream
+        if (endpoint === 'open-stream') {
+            // Set SSE headers
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            
+            // Use axios to get the stream
+            const axios = require('axios');
+            
+            const response = await axios.get(fullUrl, {
+                responseType: 'stream',
+                timeout: 0 // No timeout for streaming
+            });
+            
+            console.log(`✅ Backend streaming response status: ${response.status}`);
+            
+            // Pipe the stream to the client
+            response.data.pipe(res);
+            
+            // Handle stream errors
+            response.data.on('error', (error) => {
+                console.error('Backend stream error:', error);
+                res.end();
+            });
+            
+            // Handle client disconnect
+            req.on('close', () => {
+                console.log('Client disconnected from stream');
+                response.data.destroy();
+            });
+            
+        } else {
+            // Regular GET request
+            const axios = require('axios');
+            
+            const response = await axios.get(fullUrl, {
+                timeout: 30000
+            });
+            
+            console.log(`✅ Backend GET response status: ${response.status}`);
+            res.status(response.status).json(response.data);
+        }
+        
+    } catch (error) {
+        console.error('Backend GET proxy error:', error);
+        
+        if (error.code === 'ECONNREFUSED') {
+            res.status(503).json({
+                error: 'Backend service unavailable',
+                message: 'Cannot connect to backend server',
+                details: error.message
+            });
+        } else if (error.code === 'ETIMEDOUT') {
+            res.status(504).json({
+                error: 'Backend timeout',
+                message: 'Backend server is taking too long to respond',
+                details: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Backend GET proxy failed',
+                message: error.message
             });
         }
     }
