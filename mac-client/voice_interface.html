@@ -491,7 +491,10 @@
                 return;
             }
             
+            // CRITICAL: Always clear audio chunks when starting to listen
             audioChunks = [];
+            debug(`Cleared audio chunks in startListening(), starting fresh`);
+            
             mediaRecorder.start(100); // Collect data every 100ms for responsiveness
             isListening = true;
             
@@ -512,12 +515,17 @@
         }
 
         function startContinuousListening() {
+            // CRITICAL: Clear audio chunks BEFORE starting to listen
+            audioChunks = [];
+            debug(`Cleared audio chunks before starting continuous listening`);
+            
             startListening();
             
             // In continuous mode, we'll process audio in chunks and use Smart Turn to detect endpoints
             if (continuousMode) {
-                // Reset audio chunks when starting continuous mode
+                // Double-check audio chunks are cleared
                 audioChunks = [];
+                debug(`Double-cleared audio chunks for continuous mode`);
                 setTimeout(checkForEndpoint, 1000); // Start checking after 1 second for better responsiveness
             }
         }
@@ -616,6 +624,7 @@
 
         function stopListening() {
             if (mediaRecorder && mediaRecorder.state === 'recording') {
+                debug(`Stopping MediaRecorder, current chunks: ${audioChunks.length}`);
                 mediaRecorder.stop();
                 isListening = false;
                 
@@ -627,6 +636,8 @@
                 
                 stopVADVisualization();
                 debug('Stopped listening, processing audio');
+            } else {
+                debug(`MediaRecorder state: ${mediaRecorder ? mediaRecorder.state : 'null'}`);
             }
         }
 
@@ -740,7 +751,7 @@
                 debug('Sending to backend for RAG processing');
 
                 // First, initiate streaming conversation
-                const initResponse = await fetch('/api/backend/generate/converse', {
+                const initResponse = await fetch('/api/backend/voice/converse', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -831,6 +842,9 @@
                 
                 // In continuous mode, start listening again after a brief pause
                 if (continuousMode && !isSpeaking) {
+                    // CRITICAL: Clear audio chunks before restarting continuous mode
+                    audioChunks = [];
+                    debug(`Cleared audio chunks before restarting continuous mode`);
                     setTimeout(() => startContinuousListening(), 2000);
                 }
             }

@@ -117,6 +117,60 @@ app.post('/api/backend/generate/:endpoint', async (req, res) => {
     }
 });
 
+// Proxy endpoint for backend /voice routes
+app.post('/api/backend/voice/:endpoint', async (req, res) => {
+    try {
+        const { endpoint } = req.params;
+        const backendUrl = `${coordinator.backendUrl}/voice/${endpoint}`;
+        
+        console.log(`🔗 Proxying request to: ${backendUrl}`);
+        console.log(`📦 Request body:`, JSON.stringify(req.body, null, 2));
+        
+        // Use axios instead of fetch for better error handling and timeout support
+        const axios = require('axios');
+        
+        const response = await axios.post(backendUrl, req.body, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            timeout: 30000,
+            validateStatus: function (status) {
+                return status < 500; // Accept any response that's not a server error
+            }
+        });
+        
+        console.log(`✅ Backend response status: ${response.status}`);
+        
+        if (response.status >= 400) {
+            console.log(`❌ Backend error: ${response.status} - ${response.data}`);
+        }
+        
+        res.status(response.status).json(response.data);
+        
+    } catch (error) {
+        console.error('Backend proxy error:', error);
+        
+        if (error.code === 'ECONNREFUSED') {
+            res.status(503).json({
+                error: 'Backend service unavailable',
+                message: 'Cannot connect to backend server',
+                details: error.message
+            });
+        } else if (error.code === 'ETIMEDOUT') {
+            res.status(504).json({
+                error: 'Backend timeout',
+                message: 'Backend server is taking too long to respond',
+                details: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Backend proxy failed',
+                message: error.message
+            });
+        }
+    }
+});
+
 // Proxy endpoint for backend communication (to avoid CORS issues)
 app.post('/api/backend/:endpoint', async (req, res) => {
     try {
