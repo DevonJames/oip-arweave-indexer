@@ -1140,66 +1140,144 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
             throw new Error('Invalid dialogueId parameter: must be a string');
         }
         
-        console.log(`Generating streaming response with grok`);
+        const model = options.model || 'llama3.2:3b';
+        console.log(`Generating streaming response with model: ${model}`);
         console.log(`Conversation history length: ${conversationHistory.length}`);
         
-        // Format messages for xAI API
-        let messages = Array.isArray(conversationHistory) ? 
-            conversationHistory.map(msg => ({
-                role: msg.role,
-                content: msg.content
-            })) : 
-            [{ role: "user", content: "Hello, how can I help you today?" }];
+        // Import ALFRED for model routing
+        const ALFRED = require('./alfred');
+        const alfred = new ALFRED();
+        
+        // Check if this is a cloud model or Ollama model
+        const isCloud = alfred.isCloudModel(model);
+        console.log(`Model ${model} is ${isCloud ? 'cloud' : 'local Ollama'} model`);
+        
+        let response;
+        if (isCloud) {
+            // Format messages for cloud API
+            let messages = Array.isArray(conversationHistory) ? 
+                conversationHistory.map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                })) : 
+                [{ role: "user", content: "Hello, how can I help you today?" }];
+                
+            // Add system prompt if provided, or use a default one
+            const systemPrompt = options.systemPrompt || "You are a helpful AI assistant. IMPORTANT: Do not use emojis, asterisks, or other special symbols in your responses as they interfere with text-to-speech synthesis. Keep your responses conversational and natural.";
             
-        // Add system prompt if provided, or use a default one
-        const systemPrompt = options.systemPrompt || "You are a helpful AI assistant. IMPORTANT: Do not use emojis, asterisks, or other special symbols in your responses as they interfere with text-to-speech synthesis. Keep your responses conversational and natural.";
-        
-        // Prepend system message to conversation
-        messages.unshift({
-            role: "system",
-            content: systemPrompt
-        });
-        
-        console.log(`Added system prompt, total messages: ${messages.length}`);
-        
-        // Make API request to xAI with streaming enabled
-        const response = await axios({
-            method: 'post',
-            url: 'https://api.x.ai/v1/chat/completions',
-            headers: {
-                'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            data: {
-                model: options.model || 'grok-4',
-                messages: messages,
-                stream: true,
-                temperature: options.temperature || 0.7
-            },
-            responseType: 'stream'
-        });
+            // Prepend system message to conversation
+            messages.unshift({
+                role: "system",
+                content: systemPrompt
+            });
+            
+            console.log(`Added system prompt, total messages: ${messages.length}`);
+            
+            // Use cloud API (xAI, OpenAI, etc.)
+            const modelConfig = alfred.cloudModels[model];
+            response = await axios({
+                method: 'post',
+                url: modelConfig.apiUrl,
+                headers: {
+                    'Authorization': `Bearer ${modelConfig.provider === 'xai' ? process.env.XAI_API_KEY : process.env.OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                data: {
+                    model: model,
+                    messages: messages,
+                    stream: true,
+                    temperature: options.temperature || 0.7
+                },
+                responseType: 'stream'
+            });
+        } else {
+            // Use Ollama for local models (llama3.2:3b, mistral, etc.)
+            console.log(`Using Ollama for model: ${model}`);
+            
+            // Build a simple prompt from conversation history for Ollama
+            let prompt = '';
+            if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+                prompt = conversationHistory.map(msg => {
+                    if (msg.role === 'user') return `Human: ${msg.content}`;
+                    if (msg.role === 'assistant') return `Assistant: ${msg.content}`;
+                    return msg.content;
+                }).join('\n') + '\nAssistant:';
+            } else {
+                prompt = 'Human: Hello, how can I help you today?\nAssistant:';
+            }
+            
+            response = await axios({
+                method: 'post',
+                url: `${alfred.ollamaBaseUrl}/api/generate`,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                data: {
+                    model: model,
+                    prompt: prompt,
+                    stream: true,
+                    options: {
+                        temperature: options.temperature || 0.7,
+                        num_predict: 500
+                    }
+                },
+                responseType: 'stream'
+            });
+        }
         
         // Track full response for logging
         let fullResponse = '';
         
-        // Process the streaming response
+        // Process the streaming response differently for cloud vs Ollama
         response.data.on('data', (chunk) => {
             const chunkStr = chunk.toString().trim();
             if (!chunkStr) return;
             
-            // Handle SSE format
-            const lines = chunkStr.split('\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.substring(6);
-                    if (data === '[DONE]') continue;
-                    
-                    try {
-                        // Skip empty data lines
-                        if (!data.trim()) return;
+            if (isCloud) {
+                // Handle cloud API SSE format (OpenAI/xAI)
+                const lines = chunkStr.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.substring(6);
+                        if (data === '[DONE]') continue;
                         
-                        const parsed = JSON.parse(data);
-                        const content = parsed.choices?.[0]?.delta?.content || '';
+                        try {
+                            // Skip empty data lines
+                            if (!data.trim()) return;
+                            
+                            const parsed = JSON.parse(data);
+                            const content = parsed.choices?.[0]?.delta?.content || '';
+                            
+                            if (content) {
+                                // Add to full response
+                                fullResponse += content;
+                                
+                                // Use the callback if provided
+                                if (typeof onTextChunk === 'function') {
+                                onTextChunk(content);
+                            } else {
+                                // Send to client through socket
+                                socketManager.sendToClients(dialogueId, {
+                                    role: 'assistant',
+                                    text: content
+                                });
+                            }
+                        } catch (e) {
+                            // Only log JSON parsing errors if the data isn't empty
+                            if (data.trim()) {
+                                console.error('Error parsing cloud stream data:', e);
+                                console.error('Problematic data chunk:', data.substring(0, 100));
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Handle Ollama streaming format
+                try {
+                    const lines = chunkStr.split('\n').filter(line => line.trim());
+                    for (const line of lines) {
+                        const parsed = JSON.parse(line);
+                        const content = parsed.response || '';
                         
                         if (content) {
                             // Add to full response
@@ -1216,13 +1294,16 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
                                 });
                             }
                         }
-                    } catch (e) {
-                        // Only log JSON parsing errors if the data isn't empty
-                        if (data.trim()) {
-                            console.error('Error parsing stream data:', e);
-                            console.error('Problematic data chunk:', data.substring(0, 100));
+                        
+                        // Check if done
+                        if (parsed.done === true) {
+                            console.log('Ollama stream completed');
+                            break;
                         }
                     }
+                } catch (e) {
+                    console.error('Error parsing Ollama stream data:', e);
+                    console.error('Problematic data chunk:', chunkStr.substring(0, 100));
                 }
             }
         });

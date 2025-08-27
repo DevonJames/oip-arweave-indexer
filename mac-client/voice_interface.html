@@ -543,7 +543,7 @@
                 }
                 
                 // Continue listening if no endpoint detected
-                setTimeout(checkForEndpoint, 1000);
+                setTimeout(checkForEndpoint, 500); // Check every 0.5 seconds for better responsiveness
                 
             } catch (error) {
                 debug(`Endpoint check error: ${error.message}`);
@@ -682,7 +682,10 @@
                     },
                     body: JSON.stringify({
                         text: transcript,
-                        include_tts: settings.autoPlayTTS
+                        model: "llama3.2:3b",
+                        return_audio: settings.autoPlayTTS,
+                        include_filter_analysis: true,
+                        conversationHistory: getConversationHistory()
                     })
                 });
 
@@ -895,6 +898,26 @@
                 debug('Settings updated');
             }
         });
+
+        // Get conversation history for ALFRED context
+        function getConversationHistory() {
+            const messages = document.querySelectorAll('.message');
+            const history = [];
+            
+            messages.forEach(msg => {
+                const sender = msg.querySelector('.sender')?.textContent?.toLowerCase();
+                const content = msg.querySelector('.message-content')?.textContent;
+                
+                if (sender === 'you' && content) {
+                    history.push({ role: 'user', content: content });
+                } else if (sender === 'alfred' && content) {
+                    history.push({ role: 'assistant', content: content });
+                }
+            });
+            
+            // Return last 6 messages to keep context manageable
+            return history.slice(-6);
+        }
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
