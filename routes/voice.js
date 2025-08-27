@@ -1410,7 +1410,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         await streamChunkedTextToSpeech(
                             textChunk,
                             textAccumulator,
-                            voiceSettings, // Pass the actual voice configuration
+                            voiceConfig, // Use voiceConfig instead of voiceSettings
                             (audioChunk, chunkIndex, chunkText, isFinal = false) => {
                                 console.log(`🎤 Streaming audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
                                 
@@ -1572,7 +1572,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 try {
                     await flushRemainingText(
                         textAccumulator,
-                        voiceSettings, // Pass the actual voice configuration
+                        voiceConfig, // Use voiceConfig instead of voiceSettings
                         (audioChunk, chunkIndex, chunkText, isFinal = true) => {
                             console.log(`🎤 Flushing final audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
                             
