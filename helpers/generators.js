@@ -1254,13 +1254,14 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
                                 
                                 // Use the callback if provided
                                 if (typeof onTextChunk === 'function') {
-                                onTextChunk(content);
-                            } else {
-                                // Send to client through socket
-                                socketManager.sendToClients(dialogueId, {
-                                    role: 'assistant',
-                                    text: content
-                                });
+                                    onTextChunk(content);
+                                } else {
+                                    // Send to client through socket
+                                    socketManager.sendToClients(dialogueId, {
+                                        role: 'assistant',
+                                        text: content
+                                    });
+                                }
                             }
                         } catch (e) {
                             // Only log JSON parsing errors if the data isn't empty
