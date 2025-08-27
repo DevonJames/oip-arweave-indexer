@@ -675,41 +675,86 @@
                 status.textContent = 'Sending to ALFRED...';
                 debug('Sending to backend for RAG processing');
 
-                const backendResponse = await fetch('/api/backend/chat', {
+                // First, initiate streaming conversation
+                const initResponse = await fetch('/api/backend/converse', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        text: transcript,
+                        userInput: transcript,
                         model: "llama3.2:3b",
-                        return_audio: settings.autoPlayTTS,
-                        include_filter_analysis: true,
-                        is_follow_up: false,
-                        conversation_context: getConversationHistory()
+                        conversationHistory: getConversationHistory(),
+                        systemPrompt: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
                     })
                 });
 
-                if (!backendResponse.ok) {
-                    throw new Error(`Backend failed: ${backendResponse.status}`);
+                if (!initResponse.ok) {
+                    throw new Error(`Backend failed: ${initResponse.status}`);
                 }
 
-                const backendData = await backendResponse.json();
-                const response = backendData.response || backendData.answer;
-                addMessage('assistant', response);
-                debug(`Backend response: "${response.substring(0, 50)}..."`);
+                const initData = await initResponse.json();
+                const dialogueId = initData.dialogueId;
+                debug(`Started streaming conversation: ${dialogueId}`);
 
-                // Step 4: Play TTS audio if available and enabled
-                if (settings.autoPlayTTS && backendData.audio_url) {
-                    status.textContent = 'Playing response...';
-                    isSpeaking = true;
-                    voiceButton.classList.remove('processing');
-                    voiceButton.classList.add('speaking');
-                    voiceButton.textContent = '🔊';
+                // Step 4: Connect to real-time streaming response
+                let fullResponse = '';
+                let assistantMessageElement = null;
+
+                const eventSource = new EventSource(`/api/backend/open-stream?streamId=${dialogueId}`);
+                
+                eventSource.onopen = function() {
+                    debug('Real-time streaming connection opened');
+                    status.textContent = 'Receiving live response...';
+                };
+
+                eventSource.addEventListener('textChunk', function(event) {
+                    const data = JSON.parse(event.data);
+                    if (data.role === 'assistant' && data.text) {
+                        fullResponse += data.text;
+                        
+                        // Create or update assistant message in real-time
+                        if (!assistantMessageElement) {
+                            assistantMessageElement = addMessage('assistant', data.text);
+                        } else {
+                            // Update existing message with accumulated text
+                            const contentElement = assistantMessageElement.querySelector('.content');
+                            contentElement.textContent = fullResponse;
+                        }
+                        
+                        debug(`Live text chunk: "${data.text}"`);
+                    }
+                });
+
+                eventSource.addEventListener('audioChunk', function(event) {
+                    const data = JSON.parse(event.data);
+                    if (settings.autoPlayTTS && data.audio_data) {
+                        // Play audio chunk immediately for real-time speech
+                        debug('Received live audio chunk');
+                        playAudioChunk(data.audio_data);
+                    }
+                });
+
+                eventSource.addEventListener('complete', function(event) {
+                    debug('Real-time streaming complete');
+                    eventSource.close();
+                    status.textContent = 'Live response complete';
                     
-                    await playAudio(backendData.audio_url);
-                    isSpeaking = false;
-                }
+                    // Update conversation history with final response
+                    if (fullResponse) {
+                        addToConversationHistory('assistant', fullResponse);
+                    }
+                });
+
+                eventSource.onerror = function(event) {
+                    console.error('Real-time streaming error:', event);
+                    eventSource.close();
+                    if (!fullResponse) {
+                        // Fallback if streaming failed
+                        addMessage('assistant', 'I apologize, but I encountered an error while generating a response. Please try again.');
+                    }
+                    status.textContent = 'Ready';
+                };
 
                 status.textContent = continuousMode ? 'Listening continuously...' : 'Ready! Click to start talking';
                 debug('Audio processing completed successfully');
@@ -918,6 +963,36 @@
             
             // Return last 6 messages to keep context manageable
             return history.slice(-6);
+        }
+
+        // Add to conversation history (for streaming updates)
+        function addToConversationHistory(role, content) {
+            // This is handled by the streaming UI updates
+            debug(`Added to conversation: ${role} - ${content.substring(0, 50)}...`);
+        }
+
+        // Play audio chunk for real-time streaming audio
+        function playAudioChunk(audioData) {
+            if (!audioData) return;
+            
+            try {
+                const audioBlob = new Blob([Uint8Array.from(atob(audioData), c => c.charCodeAt(0))], {
+                    type: 'audio/wav'
+                });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                audio.play().catch(error => {
+                    console.error('Audio chunk playback failed:', error);
+                });
+                
+                // Clean up URL after playback
+                audio.addEventListener('ended', () => {
+                    URL.revokeObjectURL(audioUrl);
+                });
+            } catch (error) {
+                console.error('Error playing audio chunk:', error);
+            }
         }
 
         // Keyboard shortcuts

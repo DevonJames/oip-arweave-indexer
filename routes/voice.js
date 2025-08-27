@@ -656,8 +656,23 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             ];
 
             try {
-                const llmResponse = await generateStreamingResponse(conversationHistory, 'voice-chat-' + Date.now(), { model });
-                responseText = llmResponse.response || "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and content creation.";
+                // Generate streaming response using the generalized function
+                let fullResponse = '';
+                const dialogueId = 'voice-chat-' + Date.now();
+
+                await generateStreamingResponse(
+                    model,
+                    conversationHistory,
+                    {
+                        systemPrompt: systemPrompt,
+                        dialogueId: dialogueId
+                    },
+                    (chunk) => {
+                        fullResponse += chunk;
+                    }
+                );
+
+                responseText = fullResponse || "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and content creation.";
                 
                 // Create a mock ragResponse for compatibility
                 ragResponse = {
@@ -816,14 +831,15 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     console.log(`[Voice Chat] Using Chatterbox params:`, chatterboxParams);
                     
                     // Use Edge TTS instead of Kokoro for better reliability
-                    // Build FormData for TTS request (matching voice_old.js)
-                    const formData = new FormData();
-                    formData.append('text', textForTTS);
-                    formData.append('engine', req.body.engine || 'edge_tts');
-                    formData.append('voice_id', voice_id || 'en-GB-RyanNeural');
-                    formData.append('speed', '1.0');
-                    formData.append('language', 'en-GB');
-                    formData.append('voice_cloning', 'false');
+                    // Build TTS request (matching expected format)
+                    const ttsRequest = {
+                        text: textForTTS,
+                        engine: req.body.engine || 'edge_tts',
+                        voice_id: voice_id || 'en-GB-RyanNeural',
+                        speed: 1.0,
+                        language: 'en-GB',
+                        voice_cloning: false
+                    };
 
                     const ttsStartTime = Date.now();
                     console.log(`[Voice Chat] Sending Edge TTS request with text length: ${textForTTS.length} chars`);
@@ -831,20 +847,19 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
                             method: 'POST',
-                            data: formData,
-                            headers: {
-                                ...formData.getHeaders(),
-                            },
-                            responseType: 'arraybuffer'
+                            data: ttsRequest,
+                            headers: { 'Content-Type': 'application/json' },
+                            timeout: 30000
                         },
                         'Edge TTS'
                     );
                     processingMetrics.tts_time_ms = Date.now() - ttsStartTime;
                     
-                    if (ttsResponse.data && ttsResponse.data.length > 0) {
-                        audioData = Buffer.from(ttsResponse.data);
-                        engineUsed = 'edge_tts';
+                    if (ttsResponse.data && ttsResponse.data.audio_data) {
+                        audioData = Buffer.from(ttsResponse.data.audio_data, 'base64');
+                        engineUsed = ttsResponse.data.engine || 'edge_tts';
                         console.log(`[Voice Chat] Successfully synthesized with ${engineUsed} (${processingMetrics.tts_time_ms}ms): ${audioData.length} bytes`);
+                        console.log(`[Voice Chat] TTS processing time: ${ttsResponse.data.processing_time_ms || 'N/A'}ms, cached: ${ttsResponse.data.cached || false}`);
                     } else {
                         throw new Error('Edge TTS returned no audio data');
                     }
@@ -882,11 +897,14 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     success: true,
                     input_text: inputText,
                     response_text: responseText,
+                    response: responseText,  // Mac client expects this field
+                    answer: responseText,    // Fallback field that Mac client checks
                     model_used: model,
                     voice_id,
                     has_audio: true,
                     engine_used: engineUsed,
                     audio_data: audioData.toString('base64'), // Include audio as base64
+                    audio_url: `/api/voice/audio/${Date.now()}.wav`, // Mac client expects this for audio
                     sources: ragResponse.sources,
                     context_used: ragResponse.context_used,
                     search_results_count: ragResponse.search_results_count,
@@ -932,6 +950,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     success: true,
                     input_text: inputText,
                     response_text: responseText,
+                    response: responseText,  // Mac client expects this field
+                    answer: responseText,    // Fallback field that Mac client checks
                     model_used: model,
                     has_audio: false,
                     tts_error: 'Speech synthesis failed',
