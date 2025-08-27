@@ -1193,17 +1193,21 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
             // Use Ollama for local models (llama3.2:3b, mistral, etc.)
             console.log(`Using Ollama for model: ${model}`);
             
-            // Build a simple prompt from conversation history for Ollama
-            let prompt = '';
+            // Build a prompt with system prompt for Ollama
+            const systemPrompt = options.systemPrompt || "You are a helpful AI assistant. IMPORTANT: Do not use emojis, asterisks, or other special symbols in your responses as they interfere with text-to-speech synthesis. Keep your responses conversational and natural.";
+            
+            let prompt = `System: ${systemPrompt}\n\n`;
             if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
-                prompt = conversationHistory.map(msg => {
+                prompt += conversationHistory.map(msg => {
                     if (msg.role === 'user') return `Human: ${msg.content}`;
                     if (msg.role === 'assistant') return `Assistant: ${msg.content}`;
                     return msg.content;
                 }).join('\n') + '\nAssistant:';
             } else {
-                prompt = 'Human: Hello, how can I help you today?\nAssistant:';
+                prompt += 'Human: Hello, how can I help you today?\nAssistant:';
             }
+            
+            console.log(`Using system prompt: ${systemPrompt.substring(0, 100)}...`);
             
             response = await axios({
                 method: 'post',

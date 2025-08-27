@@ -1260,7 +1260,13 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
         let conversationHistory = [];
         if (req.body.conversationHistory) {
             try {
-                const parsedHistory = JSON.parse(req.body.conversationHistory);
+                // Handle both string and object cases
+                let parsedHistory;
+                if (typeof req.body.conversationHistory === 'string') {
+                    parsedHistory = JSON.parse(req.body.conversationHistory);
+                } else {
+                    parsedHistory = req.body.conversationHistory;
+                }
                 
                 // Debug the actual structure
                 console.log('Raw conversation history structure:', 
@@ -1377,7 +1383,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 // Step 3: Generate streaming response using ALFRED RAG system
                 const {
                     model = 'grok-2',
-                    voice_id = 'en-GB-RyanNeural',
+                    voice_id = 'onwK4e9ZLuTAKqWW03F9', // Daniel - Male British voice
                     speed = 1.0,
                     creator_filter = null,
                     record_type_filter = null,
@@ -1386,6 +1392,20 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
 
                 let responseText = '';
                 const textAccumulator = {}; // Initialize text accumulator for chunking
+                
+                // Configure voice settings for TTS
+                const voiceConfig = {
+                    engine: 'elevenlabs', // Use ElevenLabs for reliable audio
+                    elevenlabs: {
+                        selectedVoice: voice_id, // Use selectedVoice to match TTS function expectations
+                        speed: speed,
+                        stability: 0.5,
+                        similarity_boost: 0.75,
+                        model_id: 'eleven_turbo_v2',
+                        style: 0.0,
+                        use_speaker_boost: true
+                    }
+                };
 
                 const handleTextChunk = async (textChunk) => {
                     responseText += textChunk;
