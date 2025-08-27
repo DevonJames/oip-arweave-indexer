@@ -638,6 +638,9 @@
                 debug('Stopped listening, processing audio');
             } else {
                 debug(`MediaRecorder state: ${mediaRecorder ? mediaRecorder.state : 'null'}`);
+                // AGGRESSIVE FIX: Clear audio chunks even if MediaRecorder isn't recording
+                audioChunks = [];
+                debug(`Cleared audio chunks in stopListening() fallback`);
             }
         }
 
@@ -845,7 +848,19 @@
                     // CRITICAL: Clear audio chunks before restarting continuous mode
                     audioChunks = [];
                     debug(`Cleared audio chunks before restarting continuous mode`);
-                    setTimeout(() => startContinuousListening(), 2000);
+                    
+                    // AGGRESSIVE FIX: Stop MediaRecorder completely and restart fresh
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        debug(`Force stopping MediaRecorder before restart`);
+                        mediaRecorder.stop();
+                    }
+                    
+                    setTimeout(() => {
+                        // Double-clear before restart
+                        audioChunks = [];
+                        debug(`Double-cleared audio chunks before timeout restart`);
+                        startContinuousListening();
+                    }, 2000);
                 }
             }
         }

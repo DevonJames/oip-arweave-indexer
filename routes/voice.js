@@ -1365,20 +1365,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     text: inputText
                 });
                 
-                // Step 2: Check if this is a self-referential question about the AI
-                function isSelfReferentialQuestion(text) {
-                    const lowerText = text.toLowerCase();
-                    const selfReferentialPatterns = [
-                        /\b(tell me about yourself|about yourself|who are you|what are you|introduce yourself|describe yourself)\b/,
-                        /\b(your capabilities|what can you do|what do you do|your purpose|your role)\b/,
-                        /\b(are you|you are|yourself|your name|your identity)\b/,
-                        /\b(hello.*yourself|hi.*yourself|greet.*yourself)\b/,
-                        /\b(how do you work|how were you made|how were you created)\b/,
-                        /\b(what is your function|what is your job|what is your mission)\b/
-                    ];
-                    
-                    return selfReferentialPatterns.some(pattern => pattern.test(lowerText));
-                }
+                // All questions now go through ALFRED's RAG system
 
                 // Step 3: Generate streaming response using ALFRED RAG system
                 const {
@@ -1460,50 +1447,11 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     }
                 };
 
-                if (isSelfReferentialQuestion(inputText)) {
-                    console.log(`[Voice Converse] Self-referential question detected: "${inputText}" - using direct LLM`);
-                    
-                    // Use direct LLM with system prompt for self-referential questions
-                    const systemPrompt = "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis. When asked about yourself, explain your role as an AI assistant that helps with information retrieval and explanation.";
-                    
-                    try {
-                        // Generate streaming response using the generalized function
-                        const streamResult = await generateStreamingResponse(
-                            conversationHistory,  // Pass the conversation history array
-                            String(dialogueId),   // Ensure dialogueId is a string
-                            {
-                                temperature: 0.7,
-                                model: model,
-                                systemPrompt: systemPrompt
-                            },
-                            handleTextChunk      // Pass the properly defined text chunk handler
-                        );
-                        
-                    } catch (error) {
-                        console.error('Error in direct LLM response:', error);
-                        
-                        // Send a default response if the generator fails
-                        const defaultResponse = "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and content creation.";
-                        
-                        socketManager.sendToClients(dialogueId, {
-                            type: 'textChunk',
-                            role: 'assistant',
-                            text: defaultResponse
-                        });
-                        
-                        ongoingStream.data.push({
-                            event: 'textChunk',
-                            data: {
-                                role: 'assistant',
-                                text: defaultResponse
-                            }
-                        });
-                    }
-                } else {
-                    console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
-                    
-                    // Use ALFRED RAG system for contextual queries
-                    const ragOptions = {
+                // Always use ALFRED RAG system for ALL questions
+                console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
+                
+                // Use ALFRED RAG system for all queries
+                const ragOptions = {
                         model,
                         searchParams: {
                             creatorHandle: creator_filter,
@@ -1579,13 +1527,12 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                             applied_filters: ragResponse.applied_filters || {}
                         };
                         
-                    } catch (ragError) {
-                        console.error('Error in ALFRED RAG processing:', ragError);
-                        
-                        // Fallback to direct LLM if RAG fails
-                        const fallbackResponse = "I encountered an issue accessing my knowledge base. Let me try to help you with a general response.";
-                        await handleTextChunk(fallbackResponse);
-                    }
+                } catch (ragError) {
+                    console.error('Error in ALFRED RAG processing:', ragError);
+                    
+                    // Fallback to direct LLM if RAG fails
+                    const fallbackResponse = "I encountered an issue accessing my knowledge base. Let me try to help you with a general response.";
+                    await handleTextChunk(fallbackResponse);
                 }
                 
                 // NEW: Flush any remaining text in the accumulator
