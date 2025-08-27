@@ -1145,8 +1145,7 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
         console.log(`Conversation history length: ${conversationHistory.length}`);
         
         // Import ALFRED for model routing
-        const ALFRED = require('./alfred');
-        const alfred = new ALFRED();
+        const alfred = require('./alfred');
         
         // Check if this is a cloud model or Ollama model
         const isCloud = alfred.isCloudModel(model);
