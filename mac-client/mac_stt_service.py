@@ -13,6 +13,7 @@ import logging
 import asyncio
 import time
 import json
+from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any, List, Tuple
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
@@ -41,7 +42,32 @@ WHISPER_MODEL = STT_CONFIG.get('model', 'large-v3-turbo')
 MLX_QUANTIZATION = STT_CONFIG.get('quantization', 'int4')
 MODEL_STORAGE_PATH = os.getenv('MODEL_STORAGE_PATH', './models')
 
-app = FastAPI(title="Apple Silicon MLX STT Service", version="1.0.0")
+# Global service instance
+mlx_service = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI startup and shutdown."""
+    global mlx_service
+    
+    # Startup
+    logger.info("🚀 Starting Apple Silicon MLX STT Service...")
+    logger.info(f"Configuration: Model={WHISPER_MODEL}, Device={MLX_DEVICE}, VAD={VAD_CONFIG.get('enabled', True)}")
+    
+    try:
+        mlx_service = MLXWhisperService()
+        await mlx_service.load_models()
+        logger.info("✅ Apple Silicon MLX STT Service started successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to start MLX STT Service: {e}")
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("👋 Shutting down Apple Silicon MLX STT Service...")
+
+app = FastAPI(title="Apple Silicon MLX STT Service", version="1.0.0", lifespan=lifespan)
 
 # CORS middleware
 app.add_middleware(
@@ -225,12 +251,12 @@ class MLXWhisperService:
             # Try to load MLX Whisper
             try:
                 import mlx.core as mx
-                from mlx_whisper import load_model, transcribe
+                from mlx_whisper.load_models import load_model
+                from mlx_whisper import transcribe
                 
                 self.model = load_model(
                     WHISPER_MODEL,
-                    path=os.path.join(MODEL_STORAGE_PATH, "whisper-mlx"),
-                    dtype=getattr(mx, 'float16', 'float16')
+                    dtype=getattr(mx, 'float16', mx.float16)
                 )
                 self.transcribe_func = transcribe
                 logger.info("✅ MLX Whisper model loaded successfully")
@@ -310,10 +336,44 @@ class MLXWhisperService:
             raise HTTPException(status_code=503, detail="MLX models not loaded")
         
         try:
-            # Save audio to temporary file
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+            # Save audio to temporary file and convert to proper WAV format
+            logger.info(f"Received audio data: {len(audio_data)} bytes, first 20 bytes: {audio_data[:20]}")
+            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_file:
                 tmp_file.write(audio_data)
-                tmp_file_path = tmp_file.name
+                raw_file_path = tmp_file.name
+            
+            # Convert to proper WAV format using ffmpeg directly
+            tmp_file_path = raw_file_path.replace('.webm', '.wav')
+            try:
+                import subprocess
+                # Use ffmpeg directly to convert WebM to 16kHz mono WAV
+                result = subprocess.run([
+                    'ffmpeg', '-i', raw_file_path, 
+                    '-ar', '16000',  # Sample rate
+                    '-ac', '1',      # Mono
+                    '-y',            # Overwrite output
+                    tmp_file_path
+                ], capture_output=True, text=True, timeout=10)
+                
+                if result.returncode == 0:
+                    logger.info(f"Successfully converted WebM to WAV using ffmpeg: {tmp_file_path}")
+                else:
+                    raise Exception(f"ffmpeg failed: {result.stderr}")
+                    
+            except Exception as e:
+                logger.error(f"ffmpeg conversion failed: {e}")
+                # Fallback to pydub without sample_rate/channels manipulation
+                try:
+                    from pydub import AudioSegment
+                    # Just convert format without changing audio properties
+                    audio_segment = AudioSegment.from_file(raw_file_path, format="webm")
+                    audio_segment.export(tmp_file_path, format="wav")
+                    logger.info(f"Fallback pydub conversion successful: {tmp_file_path}")
+                except Exception as fallback_error:
+                    logger.error(f"Fallback pydub conversion also failed: {fallback_error}")
+                    # Last resort: rename webm file to wav and hope MLX can handle it
+                    os.rename(raw_file_path, tmp_file_path)
+                    logger.info(f"Using raw file as WAV (last resort): {tmp_file_path}")
             
             vad_used = False
             vad_speech_ratio = None
@@ -348,11 +408,11 @@ class MLXWhisperService:
                 # Transcribe with MLX Whisper
                 result = self.transcribe_func(
                     tmp_file_path,
-                    model=self.model if self.model != "mock-mlx-model" else None,
+                    path_or_hf_repo=WHISPER_MODEL,  # Use the configured model
                     language=language if language != "auto" else None,
-                    task=task,
                     temperature=0.0,
-                    condition_on_previous_text=True
+                    condition_on_previous_text=True,
+                    verbose=False
                 )
                 
                 # Process segments
@@ -406,25 +466,22 @@ class MLXWhisperService:
             logger.error(f"MLX transcription failed after {processing_time:.1f}ms: {e}")
             raise HTTPException(status_code=500, detail=f"MLX transcription error: {str(e)}")
 
-# Global service instance
-mlx_service = MLXWhisperService()
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize MLX service on startup."""
-    logger.info("🚀 Starting Apple Silicon MLX STT Service...")
-    logger.info(f"Configuration: Model={WHISPER_MODEL}, Device={MLX_DEVICE}, VAD={VAD_CONFIG.get('enabled', True)}")
-    
-    try:
-        await mlx_service.load_models()
-        logger.info("✅ Apple Silicon MLX STT Service started successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to start MLX STT Service: {e}")
-        raise
+# Service instance is initialized in lifespan context manager
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    global mlx_service
+    
+    if mlx_service is None:
+        return {
+            "status": "unhealthy",
+            "error": "Service not initialized",
+            "model": WHISPER_MODEL,
+            "device": MLX_DEVICE,
+            "version": "1.0.0"
+        }
+    
     vad_status = "disabled"
     if VAD_CONFIG.get('enabled', True):
         if mlx_service.vad_processor and mlx_service.vad_processor.loaded:
@@ -459,6 +516,11 @@ async def transcribe_file(
     use_vad: bool = Form(True)
 ):
     """Transcribe uploaded audio file using MLX optimization."""
+    global mlx_service
+    
+    if mlx_service is None:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+    
     try:
         audio_content = await file.read()
         

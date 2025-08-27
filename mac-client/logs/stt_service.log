@@ -2,14 +2,14 @@
 
 You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
   warnings.warn(
-/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac_stt_service.py:412: DeprecationWarning: 
+/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac_stt_service.py:432: DeprecationWarning: 
         on_event is deprecated, use lifespan event handlers instead.
 
         Read more about it in the
         [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
         
   @app.on_event("startup")
-INFO:     Started server process [9341]
+INFO:     Started server process [33264]
 INFO:     Waiting for application startup.
 INFO:__main__:🚀 Starting Apple Silicon MLX STT Service...
 INFO:__main__:Configuration: Model=large-v3-turbo, Device=mps, VAD=True
@@ -24,8 +24,13 @@ INFO:__main__:✅ MLX STT service initialized successfully
 INFO:__main__:✅ Apple Silicon MLX STT Service started successfully
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8013 (Press CTRL+C to quit)
-INFO:     127.0.0.1:52608 - "GET /health HTTP/1.1" 200 OK
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [9341]
+ERROR:    Traceback (most recent call last):
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/starlette/routing.py", line 686, in lifespan
+    await receive()
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/uvicorn/lifespan/on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.12_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/queues.py", line 158, in get
+    await getter
+asyncio.exceptions.CancelledError
+

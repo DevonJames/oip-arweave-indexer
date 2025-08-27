@@ -38,8 +38,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    methods=["*"],
-    headers=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 class SmartTurnRequest(BaseModel):

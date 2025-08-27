@@ -16,13 +16,14 @@ class MacClientCoordinator {
         const configPath = path.join(__dirname, 'config', 'mac_client_config.json');
         this.config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         
-        // Service URLs
-        this.sttUrl = `http://localhost:${this.config.client.services.stt.port}`;
-        this.smartTurnUrl = `http://localhost:${this.config.client.services.smart_turn.port}`;
+        // Service URLs (use IPv4 explicitly to avoid IPv6 issues)
+        this.sttUrl = `http://127.0.0.1:${this.config.client.services.stt.port}`;
+        this.smartTurnUrl = `http://127.0.0.1:${this.config.client.services.smart_turn.port}`;
         
         // Backend configuration
         const backendConfig = this.config.client.backend;
-        this.backendUrl = `${backendConfig.protocol}://${backendConfig.host}:${backendConfig.port}`;
+        const port = backendConfig.port === 443 || backendConfig.port === 80 ? '' : `:${backendConfig.port}`;
+        this.backendUrl = `${backendConfig.protocol}://${backendConfig.host}${port}/api`;
         
         console.log('🍎 Mac Client Coordinator initialized');
         console.log(`STT Service: ${this.sttUrl}`);
@@ -67,18 +68,49 @@ class MacClientCoordinator {
             };
         }
         
-        // Check backend connectivity
+        // Check backend connectivity with a simple HEAD request to avoid processing
         try {
-            const backendResponse = await axios.get(`${this.backendUrl}/api/voice/health`, { timeout: 5000 });
+            // Use HEAD request to check if the ALFRED endpoint exists without triggering processing
+            const backendResponse = await axios.head(`${this.backendUrl}/alfred/chat`, 
+                { 
+                    timeout: 5000,
+                    validateStatus: function (status) {
+                        // Accept 200, 404, 405 (Method Not Allowed) as "healthy" - server is responding
+                        return status < 500;
+                    }
+                }
+            );
             results.services.backend = {
                 status: 'healthy',
-                details: backendResponse.data
+                details: { 
+                    status: backendResponse.status,
+                    message: 'Backend server is responding'
+                }
             };
         } catch (error) {
-            results.services.backend = {
-                status: 'unhealthy',
-                error: error.message
-            };
+            // If HEAD fails, try a simple GET to the base API path
+            try {
+                const fallbackResponse = await axios.get(`${this.backendUrl}`, 
+                    { 
+                        timeout: 3000,
+                        validateStatus: function (status) {
+                            return status < 500;
+                        }
+                    }
+                );
+                results.services.backend = {
+                    status: 'healthy',
+                    details: { 
+                        status: fallbackResponse.status,
+                        message: 'Backend server is responding (fallback)'
+                    }
+                };
+            } catch (fallbackError) {
+                results.services.backend = {
+                    status: 'unhealthy',
+                    error: `Primary: ${error.message}, Fallback: ${fallbackError.message}`
+                };
+            }
         }
         
         return results;
@@ -348,6 +380,9 @@ class MacClientCoordinator {
         setInterval(monitor, intervalMs);
     }
 }
+
+// Export for use as module
+module.exports = MacClientCoordinator;
 
 // CLI interface
 if (require.main === module) {

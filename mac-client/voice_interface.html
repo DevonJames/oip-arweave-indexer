@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALFRED - Mac Voice Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #fff, #f0f0f0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.8;
+            margin-bottom: 40px;
+        }
+
+        .voice-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            font-size: 2em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .voice-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .voice-button.listening {
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+            animation: pulse 2s infinite;
+        }
+
+        .voice-button.speaking {
+            background: linear-gradient(45deg, #FF9800, #F57C00);
+            animation: pulse 1s infinite;
+        }
+
+        .voice-button.processing {
+            background: linear-gradient(45deg, #9C27B0, #7B1FA2);
+            animation: spin 1s linear infinite;
+        }
+
+        .voice-button.disabled {
+            background: linear-gradient(45deg, #757575, #616161);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); }
+            50% { transform: scale(1.05); box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4); }
+            100% { transform: scale(1); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status {
+            margin: 20px 0;
+            font-size: 1.1em;
+            min-height: 25px;
+        }
+
+        .vad-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .vad-bar {
+            width: 200px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .vad-level {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #FF9800, #F44336);
+            width: 0%;
+            transition: width 0.1s ease;
+        }
+
+        .conversation {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .user-message {
+            background: rgba(52, 152, 219, 0.3);
+            text-align: right;
+        }
+
+        .assistant-message {
+            background: rgba(46, 204, 113, 0.3);
+            text-align: left;
+        }
+
+        .system-message {
+            background: rgba(149, 165, 166, 0.3);
+            text-align: center;
+            font-style: italic;
+        }
+
+        .message-meta {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .control-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .control-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .control-button.active {
+            background: rgba(76, 175, 80, 0.6);
+        }
+
+        .health-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            max-width: 300px;
+        }
+
+        .health-healthy {
+            background: rgba(46, 204, 113, 0.9);
+        }
+
+        .health-degraded {
+            background: rgba(255, 193, 7, 0.9);
+        }
+
+        .health-unhealthy {
+            background: rgba(231, 76, 60, 0.9);
+        }
+
+        .settings-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+            display: none;
+        }
+
+        .setting-group {
+            margin: 15px 0;
+        }
+
+        .setting-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .setting-input {
+            width: 100%;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .setting-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .debug-info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            max-width: 400px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="health-status" id="healthStatus">
+        Checking services...
+    </div>
+
+    <div class="container">
+        <h1>🍎 ALFRED</h1>
+        <p class="subtitle">Mac Voice Interface</p>
+        
+        <button class="voice-button" id="voiceButton">
+            🎤
+        </button>
+        
+        <div class="status" id="status">Ready! Click to start talking</div>
+        
+        <div class="vad-indicator" id="vadIndicator" style="display: none;">
+            <span>🔊</span>
+            <div class="vad-bar">
+                <div class="vad-level" id="vadLevel"></div>
+            </div>
+            <span id="vadStatus">Listening...</span>
+        </div>
+        
+        <div class="conversation" id="conversation" style="display: none;">
+            <!-- Messages will appear here -->
+        </div>
+        
+        <div class="controls">
+            <button class="control-button" id="continuousBtn" onclick="toggleContinuousMode()">Continuous Mode</button>
+            <button class="control-button" onclick="clearConversation()">Clear</button>
+            <button class="control-button" onclick="checkHealth()">Health Check</button>
+            <button class="control-button" onclick="toggleSettings()">Settings</button>
+            <button class="control-button" onclick="toggleDebug()">Debug</button>
+        </div>
+
+        <div class="settings-panel" id="settingsPanel">
+            <h3>Settings</h3>
+            <div class="setting-group">
+                <label class="setting-label">VAD Sensitivity</label>
+                <input type="range" class="setting-input" id="vadThreshold" min="0.1" max="0.9" step="0.1" value="0.5">
+            </div>
+            <div class="setting-group">
+                <label class="setting-label">Smart Turn Confidence</label>
+                <input type="range" class="setting-input" id="smartTurnThreshold" min="0.3" max="0.8" step="0.05" value="0.55">
+            </div>
+            <div class="setting-group">
+                <label class="setting-label">Auto-play Responses</label>
+                <input type="checkbox" id="autoPlayTTS" checked>
+            </div>
+        </div>
+    </div>
+
+    <div class="debug-info" id="debugInfo">
+        Debug information will appear here...
+    </div>
+
+    <script>
+        // State management
+        let mediaRecorder;
+        let audioChunks = [];
+        let isListening = false;
+        let isProcessing = false;
+        let isSpeaking = false;
+        let continuousMode = false;
+        let vadAnalyzer;
+        let audioContext;
+        let analyserNode;
+        let dataArray;
+        let animationId;
+
+        // Settings
+        let settings = {
+            vadThreshold: 0.5,
+            smartTurnThreshold: 0.55,
+            autoPlayTTS: true
+        };
+
+        // DOM elements
+        const voiceButton = document.getElementById('voiceButton');
+        const status = document.getElementById('status');
+        const conversation = document.getElementById('conversation');
+        const healthStatus = document.getElementById('healthStatus');
+        const vadIndicator = document.getElementById('vadIndicator');
+        const vadLevel = document.getElementById('vadLevel');
+        const vadStatus = document.getElementById('vadStatus');
+        const continuousBtn = document.getElementById('continuousBtn');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const debugInfo = document.getElementById('debugInfo');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkHealth();
+            setupAudio();
+            loadSettings();
+        });
+
+        async function setupAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                // Setup MediaRecorder
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = processAudio;
+                
+                // Setup Web Audio API for VAD visualization
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyserNode = audioContext.createAnalyser();
+                analyserNode.fftSize = 256;
+                source.connect(analyserNode);
+                
+                dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+                
+                status.textContent = 'Ready! Click to start talking';
+                debug('Audio setup complete');
+            } catch (error) {
+                status.textContent = 'Microphone access denied. Please allow microphone access.';
+                console.error('Audio setup error:', error);
+                debug(`Audio setup error: ${error.message}`);
+            }
+        }
+
+        voiceButton.addEventListener('click', handleVoiceButtonClick);
+
+        function handleVoiceButtonClick() {
+            if (isProcessing || isSpeaking) return;
+            
+            if (continuousMode) {
+                toggleContinuousListening();
+            } else {
+                if (!isListening) {
+                    startListening();
+                } else {
+                    stopListening();
+                }
+            }
+        }
+
+        function toggleContinuousMode() {
+            continuousMode = !continuousMode;
+            continuousBtn.classList.toggle('active', continuousMode);
+            
+            if (continuousMode) {
+                continuousBtn.textContent = 'Stop Continuous';
+                status.textContent = 'Continuous mode enabled - Click to start listening';
+                debug('Continuous mode enabled');
+            } else {
+                continuousBtn.textContent = 'Continuous Mode';
+                if (isListening) {
+                    stopListening();
+                }
+                status.textContent = 'Continuous mode disabled';
+                debug('Continuous mode disabled');
+            }
+        }
+
+        function toggleContinuousListening() {
+            if (isListening) {
+                stopListening();
+            } else {
+                startContinuousListening();
+            }
+        }
+
+        function startListening() {
+            if (!mediaRecorder) {
+                status.textContent = 'Microphone not available';
+                return;
+            }
+            
+            audioChunks = [];
+            mediaRecorder.start(100); // Collect data every 100ms for responsiveness
+            isListening = true;
+            
+            voiceButton.classList.add('listening');
+            voiceButton.textContent = '🔵';
+            vadIndicator.style.display = 'flex';
+            
+            if (continuousMode) {
+                status.textContent = 'Listening continuously... Smart Turn will detect endpoints';
+                vadStatus.textContent = 'Continuous listening...';
+            } else {
+                status.textContent = 'Recording... Click to stop';
+                vadStatus.textContent = 'Recording...';
+            }
+            
+            startVADVisualization();
+            debug('Started listening');
+        }
+
+        function startContinuousListening() {
+            startListening();
+            
+            // In continuous mode, we'll process audio in chunks and use Smart Turn to detect endpoints
+            if (continuousMode) {
+                setTimeout(checkForEndpoint, 3000); // Start checking after 3 seconds to allow more speech
+            }
+        }
+
+        async function checkForEndpoint() {
+            if (!isListening || !continuousMode) return;
+            
+            try {
+                // Get current audio data
+                if (audioChunks.length === 0) {
+                    setTimeout(checkForEndpoint, 1000); // Check less frequently when no audio
+                    return;
+                }
+                
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('audio_file', audioBlob, 'recording.webm');
+                
+                // Quick STT to get transcript for Smart Turn
+                const sttFormData = new FormData();
+                sttFormData.append('file', audioBlob, 'recording.webm');
+                sttFormData.append('use_vad', 'true');
+                
+                const sttResponse = await fetch('http://127.0.0.1:8013/transcribe_file', {
+                    method: 'POST',
+                    body: sttFormData
+                });
+                
+                if (sttResponse.ok) {
+                    const sttData = await sttResponse.json();
+                    const transcript = sttData.text;
+                    
+                    if (transcript && transcript.trim().length > 0) {
+                        // Check Smart Turn for endpoint detection
+                        const smartTurnFormData = new FormData();
+                        smartTurnFormData.append('audio_file', audioBlob, 'recording.webm');
+                        smartTurnFormData.append('transcript', transcript);
+                        
+                        const smartTurnResponse = await fetch('http://127.0.0.1:8014/predict_endpoint', {
+                            method: 'POST',
+                            body: smartTurnFormData
+                        });
+                        
+                        if (smartTurnResponse.ok) {
+                            const smartTurnData = await smartTurnResponse.json();
+                            debug(`Smart Turn: ${smartTurnData.prediction} (${smartTurnData.probability.toFixed(3)})`);
+                            
+                            // If Smart Turn detects endpoint with high confidence, process the audio
+                            if (smartTurnData.prediction === 1 && smartTurnData.probability >= settings.smartTurnThreshold) {
+                                vadStatus.textContent = 'Endpoint detected!';
+                                debug('Endpoint detected by Smart Turn, processing audio');
+                                stopListening();
+                                return;
+                            } else {
+                                vadStatus.textContent = `Listening... (confidence: ${smartTurnData.probability.toFixed(2)})`;
+                            }
+                        }
+                    }
+                }
+                
+                // Continue listening if no endpoint detected
+                setTimeout(checkForEndpoint, 1000);
+                
+            } catch (error) {
+                debug(`Endpoint check error: ${error.message}`);
+                setTimeout(checkForEndpoint, 1000);
+            }
+        }
+
+        function stopListening() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                isListening = false;
+                
+                voiceButton.classList.remove('listening');
+                voiceButton.classList.add('processing');
+                voiceButton.textContent = '⏳';
+                status.textContent = 'Processing audio...';
+                vadStatus.textContent = 'Processing...';
+                
+                stopVADVisualization();
+                debug('Stopped listening, processing audio');
+            }
+        }
+
+        function startVADVisualization() {
+            if (!analyserNode) return;
+            
+            const updateVAD = () => {
+                if (!isListening) return;
+                
+                analyserNode.getByteFrequencyData(dataArray);
+                
+                // Calculate RMS (root mean square) for volume level
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i] * dataArray[i];
+                }
+                const rms = Math.sqrt(sum / dataArray.length);
+                const normalizedLevel = Math.min(rms / 128, 1);
+                
+                vadLevel.style.width = `${normalizedLevel * 100}%`;
+                
+                animationId = requestAnimationFrame(updateVAD);
+            };
+            
+            updateVAD();
+        }
+
+        function stopVADVisualization() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            vadLevel.style.width = '0%';
+            vadIndicator.style.display = 'none';
+        }
+
+        async function processAudio() {
+            try {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                
+                if (audioBlob.size === 0) {
+                    status.textContent = 'No audio detected. Try again.';
+                    resetButton();
+                    return;
+                }
+
+                // Step 1: Speech-to-Text with VAD
+                status.textContent = 'Converting speech to text...';
+                debug('Starting STT processing');
+                
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.webm');
+                formData.append('use_vad', 'true');
+
+                const sttResponse = await fetch('http://127.0.0.1:8013/transcribe_file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!sttResponse.ok) {
+                    throw new Error(`STT failed: ${sttResponse.status}`);
+                }
+
+                const sttData = await sttResponse.json();
+                const transcript = sttData.text;
+                
+                debug(`STT result: "${transcript}"`);
+                
+                if (!transcript || transcript.trim().length === 0) {
+                    status.textContent = 'No speech detected. Try again.';
+                    resetButton();
+                    
+                    if (continuousMode) {
+                        setTimeout(() => startContinuousListening(), 1000);
+                    }
+                    return;
+                }
+
+                addMessage('user', transcript);
+                
+                // Step 2: Smart Turn endpoint detection (if not already processed in continuous mode)
+                if (!continuousMode) {
+                    status.textContent = 'Checking if complete...';
+                    debug('Running Smart Turn endpoint detection');
+                    
+                    const smartTurnFormData = new FormData();
+                    smartTurnFormData.append('audio_file', audioBlob, 'recording.webm');
+                    smartTurnFormData.append('transcript', transcript);
+                    
+                    const smartTurnResponse = await fetch('http://127.0.0.1:8014/predict_endpoint', {
+                        method: 'POST',
+                        body: smartTurnFormData
+                    });
+                    
+                    if (smartTurnResponse.ok) {
+                        const smartTurnData = await smartTurnResponse.json();
+                        debug(`Smart Turn: ${smartTurnData.prediction} (${smartTurnData.probability.toFixed(3)})`);
+                        
+                        if (smartTurnData.prediction === 0 || smartTurnData.probability < settings.smartTurnThreshold) {
+                            addMessage('system', `Incomplete utterance detected (confidence: ${smartTurnData.probability.toFixed(2)}). Continue speaking or click to process anyway.`);
+                            status.textContent = 'Continue speaking or click to send...';
+                            resetButton();
+                            return;
+                        }
+                    }
+                }
+
+                // Step 3: Send to backend for RAG processing
+                status.textContent = 'Sending to ALFRED...';
+                debug('Sending to backend for RAG processing');
+
+                const backendResponse = await fetch('/api/backend/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: transcript,
+                        include_tts: settings.autoPlayTTS
+                    })
+                });
+
+                if (!backendResponse.ok) {
+                    throw new Error(`Backend failed: ${backendResponse.status}`);
+                }
+
+                const backendData = await backendResponse.json();
+                const response = backendData.response || backendData.answer;
+                addMessage('assistant', response);
+                debug(`Backend response: "${response.substring(0, 50)}..."`);
+
+                // Step 4: Play TTS audio if available and enabled
+                if (settings.autoPlayTTS && backendData.audio_url) {
+                    status.textContent = 'Playing response...';
+                    isSpeaking = true;
+                    voiceButton.classList.remove('processing');
+                    voiceButton.classList.add('speaking');
+                    voiceButton.textContent = '🔊';
+                    
+                    await playAudio(backendData.audio_url);
+                    isSpeaking = false;
+                }
+
+                status.textContent = continuousMode ? 'Listening continuously...' : 'Ready! Click to start talking';
+                debug('Audio processing completed successfully');
+                
+            } catch (error) {
+                console.error('Processing error:', error);
+                status.textContent = `Error: ${error.message}`;
+                addMessage('system', `Error: ${error.message}`);
+                debug(`Processing error: ${error.message}`);
+            } finally {
+                resetButton();
+                
+                // In continuous mode, start listening again after a brief pause
+                if (continuousMode && !isSpeaking) {
+                    setTimeout(() => startContinuousListening(), 2000);
+                }
+            }
+        }
+
+        function resetButton() {
+            isProcessing = false;
+            isListening = false;
+            voiceButton.classList.remove('listening', 'processing', 'speaking');
+            voiceButton.textContent = '🎤';
+            
+            if (continuousMode && !isSpeaking) {
+                voiceButton.textContent = '🔄';
+            }
+        }
+
+        function addMessage(type, text) {
+            conversation.style.display = 'block';
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'user' ? 'You' : type === 'assistant' ? 'ALFRED' : 'System';
+            
+            messageDiv.innerHTML = `
+                <div class="message-meta">${prefix} - ${timestamp}</div>
+                <div>${text}</div>
+            `;
+            
+            conversation.appendChild(messageDiv);
+            conversation.scrollTop = conversation.scrollHeight;
+        }
+
+        async function playAudio(audioUrl) {
+            try {
+                const audio = new Audio(audioUrl);
+                return new Promise((resolve, reject) => {
+                    audio.onended = () => {
+                        debug('Audio playback completed');
+                        resolve();
+                    };
+                    audio.onerror = (error) => {
+                        debug(`Audio playback error: ${error}`);
+                        reject(error);
+                    };
+                    audio.play();
+                });
+            } catch (error) {
+                debug(`Audio playback error: ${error.message}`);
+                console.error('Audio playback error:', error);
+            }
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                
+                const sttHealthy = data.services?.stt?.status === 'healthy';
+                const smartTurnHealthy = data.services?.smart_turn?.status === 'healthy';
+                const backendHealthy = data.services?.backend?.status === 'healthy';
+                
+                const healthyCount = [sttHealthy, smartTurnHealthy, backendHealthy].filter(Boolean).length;
+                const totalServices = 3;
+                
+                let statusClass, statusText;
+                if (healthyCount === totalServices) {
+                    statusClass = 'health-healthy';
+                    statusText = '✅ All Services Ready';
+                } else if (healthyCount > 0) {
+                    statusClass = 'health-degraded';
+                    statusText = `⚠️ ${healthyCount}/${totalServices} Services Ready`;
+                } else {
+                    statusClass = 'health-unhealthy';
+                    statusText = '❌ Services Unavailable';
+                }
+                
+                healthStatus.className = `health-status ${statusClass}`;
+                healthStatus.innerHTML = `
+                    <div>${statusText}</div>
+                    <div style="font-size: 0.8em; margin-top: 5px;">
+                        STT: ${sttHealthy ? '✅' : '❌'} | 
+                        Smart Turn: ${smartTurnHealthy ? '✅' : '❌'} | 
+                        Backend: ${backendHealthy ? '✅' : '❌'}
+                    </div>
+                `;
+                
+                if (healthyCount < totalServices) {
+                    debug(`Health issues: STT=${sttHealthy}, SmartTurn=${smartTurnHealthy}, Backend=${backendHealthy}`);
+                }
+                
+                // Disable voice button if critical services are down
+                if (!sttHealthy || !smartTurnHealthy) {
+                    voiceButton.classList.add('disabled');
+                    voiceButton.style.pointerEvents = 'none';
+                } else {
+                    voiceButton.classList.remove('disabled');
+                    voiceButton.style.pointerEvents = 'auto';
+                }
+                
+            } catch (error) {
+                healthStatus.className = 'health-status health-unhealthy';
+                healthStatus.textContent = '❌ Connection Error';
+                debug(`Health check error: ${error.message}`);
+                console.error('Health check error:', error);
+            }
+        }
+
+        function clearConversation() {
+            conversation.innerHTML = '';
+            conversation.style.display = 'none';
+            debug('Conversation cleared');
+        }
+
+        function toggleSettings() {
+            const isVisible = settingsPanel.style.display === 'block';
+            settingsPanel.style.display = isVisible ? 'none' : 'block';
+            
+            if (!isVisible) {
+                loadSettings();
+            } else {
+                saveSettings();
+            }
+        }
+
+        function loadSettings() {
+            const saved = localStorage.getItem('alfred-voice-settings');
+            if (saved) {
+                settings = { ...settings, ...JSON.parse(saved) };
+            }
+            
+            document.getElementById('vadThreshold').value = settings.vadThreshold;
+            document.getElementById('smartTurnThreshold').value = settings.smartTurnThreshold;
+            document.getElementById('autoPlayTTS').checked = settings.autoPlayTTS;
+        }
+
+        function saveSettings() {
+            settings.vadThreshold = parseFloat(document.getElementById('vadThreshold').value);
+            settings.smartTurnThreshold = parseFloat(document.getElementById('smartTurnThreshold').value);
+            settings.autoPlayTTS = document.getElementById('autoPlayTTS').checked;
+            
+            localStorage.setItem('alfred-voice-settings', JSON.stringify(settings));
+            debug('Settings saved');
+        }
+
+        function toggleDebug() {
+            const isVisible = debugInfo.style.display === 'block';
+            debugInfo.style.display = isVisible ? 'none' : 'block';
+        }
+
+        function debug(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const debugMessage = `[${timestamp}] ${message}\n`;
+            
+            debugInfo.textContent = debugMessage + debugInfo.textContent;
+            
+            // Keep only last 20 lines
+            const lines = debugInfo.textContent.split('\n');
+            if (lines.length > 20) {
+                debugInfo.textContent = lines.slice(0, 20).join('\n');
+            }
+            
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        // Auto health check every 30 seconds
+        setInterval(checkHealth, 30000);
+
+        // Auto-save settings when changed
+        document.addEventListener('change', function(e) {
+            if (e.target.closest('#settingsPanel')) {
+                saveSettings();
+                debug('Settings updated');
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space' && !e.target.matches('input, textarea')) {
+                e.preventDefault();
+                handleVoiceButtonClick();
+            }
+            
+            if (e.key === 'Escape' && isListening) {
+                stopListening();
+            }
+            
+            if (e.key === 'c' && e.ctrlKey) {
+                clearConversation();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -9,28 +9,27 @@ You may be able to resolve this warning by setting `model_config['protected_name
         [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
         
   @app.on_event("startup")
-INFO:     Started server process [9392]
+INFO:     Started server process [10663]
 INFO:     Waiting for application startup.
-INFO:     ASGI 'lifespan' protocol appears unsupported.
+INFO:__main__:🚀 Starting Mac Smart Turn Service...
+INFO:__main__:Loading Smart Turn model for Apple Silicon...
+INFO:__main__:✅ Smart Turn model loaded successfully
+INFO:__main__:✅ Mac Smart Turn Service started successfully
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8014 (Press CTRL+C to quit)
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/uvicorn/protocols/http/httptools_impl.py", line 426, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 84, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/fastapi/applications.py", line 1106, in __call__
-    await super().__call__(scope, receive, send)
-  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/starlette/applications.py", line 121, in __call__
-    self.middleware_stack = self.build_middleware_stack()
-                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/fastapi/applications.py", line 1015, in build_middleware_stack
-    app = cls(app=app, **options)
-          ^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: CORSMiddleware.__init__() got an unexpected keyword argument 'methods'
-INFO:     127.0.0.1:52612 - "GET /health HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:56970 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57018 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57026 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57037 - "GET /health HTTP/1.1" 200 OK
 INFO:     Shutting down
-INFO:     Finished server process [9392]
+INFO:     Finished server process [10663]
+ERROR:    Traceback (most recent call last):
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/starlette/routing.py", line 686, in lifespan
+    await receive()
+  File "/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/mac-client-env/lib/python3.11/site-packages/uvicorn/lifespan/on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.11/3.11.12_1/Frameworks/Python.framework/Versions/3.11/lib/python3.11/asyncio/queues.py", line 158, in get
+    await getter
+asyncio.exceptions.CancelledError
+

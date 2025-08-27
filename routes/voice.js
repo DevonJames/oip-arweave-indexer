@@ -815,18 +815,18 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     const chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
                     console.log(`[Voice Chat] Using Chatterbox params:`, chatterboxParams);
                     
-                    // Use new Kokoro TTS service JSON API
+                    // Use Edge TTS instead of Kokoro for better reliability
                     const ttsRequest = {
                         text: textForTTS,
                         voice: voice_id || 'en_female_01',
                         language: 'en',
                         speed: 1.0,
-                        engine: req.body.engine || 'kokoro'  // Use primary Kokoro engine
+                        engine: req.body.engine || 'edge_tts'  // Use Edge TTS as primary engine
                     };
 
                     const ttsStartTime = Date.now();
-                    console.log(`[Voice Chat] Sending Kokoro TTS request with text length: ${textForTTS.length} chars`);
-                    const kokoroResponse = await safeAxiosCall(
+                    console.log(`[Voice Chat] Sending Edge TTS request with text length: ${textForTTS.length} chars`);
+                    const ttsResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
                             method: 'POST',
@@ -834,31 +834,31 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                             headers: { 'Content-Type': 'application/json' },
                             timeout: 30000
                         },
-                        'Kokoro TTS'
+                        'Edge TTS'
                     );
                     processingMetrics.tts_time_ms = Date.now() - ttsStartTime;
                     
-                    if (kokoroResponse.data && kokoroResponse.data.audio_data) {
-                        audioData = Buffer.from(kokoroResponse.data.audio_data, 'base64');
-                        engineUsed = kokoroResponse.data.engine;
+                    if (ttsResponse.data && ttsResponse.data.audio_data) {
+                        audioData = Buffer.from(ttsResponse.data.audio_data, 'base64');
+                        engineUsed = ttsResponse.data.engine || 'edge_tts';
                         console.log(`[Voice Chat] Successfully synthesized with ${engineUsed} (${processingMetrics.tts_time_ms}ms): ${audioData.length} bytes`);
-                        console.log(`[Voice Chat] TTS processing time: ${kokoroResponse.data.processing_time_ms}ms, cached: ${kokoroResponse.data.cached}`);
+                        console.log(`[Voice Chat] TTS processing time: ${ttsResponse.data.processing_time_ms || 'N/A'}ms, cached: ${ttsResponse.data.cached || false}`);
                     } else {
-                        throw new Error('Invalid response from Kokoro TTS service');
+                        throw new Error('Invalid response from TTS service');
                     }
                     
                     // Check for empty audio
                     if (!audioData || audioData.length === 0) {
-                        throw new Error('Kokoro TTS returned empty audio data');
+                        throw new Error('TTS service returned empty audio data');
                     }
                     
-                } catch (kokoroError) {
-                    console.warn(`[Voice Chat] Kokoro TTS failed, falling back to eSpeak:`, kokoroError.message);
-                    if (kokoroError.response) {
-                        console.warn(`[Voice Chat] Kokoro TTS response status:`, kokoroError.response.status);
+                } catch (ttsError) {
+                    console.warn(`[Voice Chat] Edge TTS failed, falling back to eSpeak:`, ttsError.message);
+                    if (ttsError.response) {
+                        console.warn(`[Voice Chat] TTS response status:`, ttsError.response.status);
                     }
-                    if (kokoroError.code) {
-                        console.warn(`[Voice Chat] Kokoro TTS error code:`, kokoroError.code);
+                    if (ttsError.code) {
+                        console.warn(`[Voice Chat] TTS error code:`, ttsError.code);
                     }
                     
                     // Use the same text preprocessing and truncation for eSpeak
