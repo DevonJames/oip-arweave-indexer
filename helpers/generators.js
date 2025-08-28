@@ -1889,47 +1889,53 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     }
                     
                     // DON'T send via socket manager - onAudioChunk already handles client sending
+                } else {
+                    throw new Error('No audio generated from main TTS service');
                 }
                 
             } catch (ttsError) {
                 console.error(`Error calling ${voiceConfig.engine} TTS service for chunk:`, ttsError.message);
                 
-                // Try ElevenLabs fallback for this chunk
-                try {
-                    console.log('🎤 Trying ElevenLabs fallback for chunk');
-                    const elevenLabsResponse = await axios.post(
-                        `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
-                        {
-                            text: chunkToProcess,
-                            model_id: 'eleven_turbo_v2',
-                            voice_settings: {
-                                stability: 0.5,
-                                similarity_boost: 0.75
+                // Only try fallback if main TTS completely failed (no audioBase64)
+                if (!audioBase64) {
+                    try {
+                        console.log('🎤 Trying ElevenLabs fallback for chunk');
+                        const elevenLabsResponse = await axios.post(
+                            `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
+                            {
+                                text: chunkToProcess,
+                                model_id: 'eleven_turbo_v2',
+                                voice_settings: {
+                                    stability: 0.5,
+                                    similarity_boost: 0.75
+                                },
+                                output_format: 'mp3_44100_128'
                             },
-                            output_format: 'mp3_44100_128'
-                        },
-                        {
-                            headers: {
-                                'xi-api-key': process.env.ELEVENLABS_API_KEY,
-                                'Content-Type': 'application/json'
-                            },
-                            responseType: 'arraybuffer'
+                            {
+                                headers: {
+                                    'xi-api-key': process.env.ELEVENLABS_API_KEY,
+                                    'Content-Type': 'application/json'
+                                },
+                                responseType: 'arraybuffer'
+                            }
+                        );
+                        
+                        if (elevenLabsResponse.status === 200 && elevenLabsResponse.data) {
+                            console.log(`🎤 ElevenLabs fallback generated ${elevenLabsResponse.data.byteLength} bytes`);
+                            
+                            const audioBase64Fallback = Buffer.from(elevenLabsResponse.data).toString('base64');
+                            
+                            if (onAudioChunk && typeof onAudioChunk === 'function') {
+                                await onAudioChunk(audioBase64Fallback, currentChunkIndex, chunkToProcess);
+                            }
+                            
+                            // DON'T send via socket manager - onAudioChunk already handles client sending
                         }
-                    );
-                    
-                    if (elevenLabsResponse.status === 200 && elevenLabsResponse.data) {
-                        console.log(`🎤 ElevenLabs fallback generated ${elevenLabsResponse.data.byteLength} bytes`);
-                        
-                        const audioBase64 = Buffer.from(elevenLabsResponse.data).toString('base64');
-                        
-                        if (onAudioChunk && typeof onAudioChunk === 'function') {
-                            await onAudioChunk(audioBase64, currentChunkIndex, chunkToProcess);
-                        }
-                        
-                        // DON'T send via socket manager - onAudioChunk already handles client sending
+                    } catch (fallbackError) {
+                        console.error('ElevenLabs fallback also failed:', fallbackError.message);
                     }
-                } catch (fallbackError) {
-                    console.error('ElevenLabs fallback also failed:', fallbackError.message);
+                } else {
+                    console.log('🎤 Main TTS succeeded despite error, skipping fallback');
                 }
             }
         }

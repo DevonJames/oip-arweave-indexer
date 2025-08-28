@@ -404,6 +404,20 @@ class MLXWhisperService:
                         vad_used = True
                         
                         logger.info(f"VAD processing: {len(speech_segments)} segments, {vad_speech_ratio:.2%} speech")
+                    else:
+                        # NO SPEECH DETECTED - Return empty result without running Whisper
+                        logger.info(f"VAD detected NO SPEECH ({vad_speech_ratio:.2%}% speech) - skipping Whisper to prevent hallucination")
+                        processing_time = time.time() - start_time
+                        
+                        return MLXTranscriptionResponse(
+                            text="",
+                            language="en",
+                            segments=[],
+                            processing_time=processing_time,
+                            vad_used=True,
+                            vad_speech_segments=0,
+                            vad_speech_ratio=vad_speech_ratio
+                        )
                 
                 # Transcribe with MLX Whisper
                 result = self.transcribe_func(
