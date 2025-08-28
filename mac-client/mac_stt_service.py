@@ -338,6 +338,24 @@ class MLXWhisperService:
         try:
             # Save audio to temporary file and convert to proper WAV format
             logger.info(f"Received audio data: {len(audio_data)} bytes, first 20 bytes: {audio_data[:20]}")
+            
+            # Check if audio data looks like valid WebM (should start with EBML header)
+            if not audio_data.startswith(b'\x1a\x45\xdf\xa3'):
+                logger.warning(f"Audio data does not appear to be valid WebM (missing EBML header)")
+                logger.warning(f"Data starts with: {audio_data[:50].hex()}")
+                # Return empty result for corrupted audio
+                processing_time = time.time() - start_time
+                return MLXTranscriptionResponse(
+                    text="",
+                    language="en", 
+                    segments=[],
+                    duration=0.0,
+                    processing_time=processing_time,
+                    vad_used=False,
+                    vad_speech_segments=0,
+                    vad_speech_ratio=0.0
+                )
+            
             with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_file:
                 tmp_file.write(audio_data)
                 raw_file_path = tmp_file.name
@@ -413,6 +431,7 @@ class MLXWhisperService:
                             text="",
                             language="en",
                             segments=[],
+                            duration=0.0,  # Add missing duration field
                             processing_time=processing_time,
                             vad_used=True,
                             vad_speech_segments=0,
