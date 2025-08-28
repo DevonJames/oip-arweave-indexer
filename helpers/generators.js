@@ -1605,44 +1605,133 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
         // Add new clean text to buffer  
         textAccumulator.buffer += cleanText;
         
-        // Define chunking parameters
-        const MIN_CHUNK_LENGTH = 75;   // Minimum characters before considering TTS
-        const MAX_CHUNK_LENGTH = 150;  // Maximum characters to prevent very long chunks
+        // HYBRID CHUNKING STRATEGY: Small chunks first, then larger batches
+        // Initialize chunk counter if needed
+        if (!textAccumulator.chunkCounter) {
+            textAccumulator.chunkCounter = 0;
+        }
+        
+        // Determine chunking strategy based on chunk number
+        const isEarlyChunk = textAccumulator.chunkCounter < 3; // First 3 chunks are small for immediate response
+        
+        // Define adaptive chunking parameters
+        let MIN_CHUNK_LENGTH, MAX_CHUNK_LENGTH, MAX_WAIT_TIME;
+        
+        if (isEarlyChunk) {
+            // Early chunks: Small and fast for immediate audio feedback (3-4 seconds of speech)
+            MIN_CHUNK_LENGTH = 60;   // Smaller minimum for quick response
+            MAX_CHUNK_LENGTH = 120;  // Shorter chunks for immediate feedback
+            MAX_WAIT_TIME = 1500;    // Faster timeout for responsiveness
+        } else {
+            // Later chunks: Larger batches for smooth flow (8-12 seconds of speech)
+            MIN_CHUNK_LENGTH = 200;  // Wait for more text to accumulate
+            MAX_CHUNK_LENGTH = 400;  // Larger chunks for smoother playback
+            MAX_WAIT_TIME = 3000;    // Allow more time to build complete sentences
+        }
+        
         const SENTENCE_ENDINGS = /[.!?]+[\s]*$/; // Sentence ending patterns
         const PHRASE_ENDINGS = /[,;:]+[\s]*$/;   // Phrase ending patterns
-        const MAX_WAIT_TIME = 2000;    // Max time to wait before forcing TTS (2 seconds)
+        const PARAGRAPH_BREAKS = /\n\s*\n/;      // Paragraph breaks for larger chunks
         
         let shouldProcessChunk = false;
         let chunkToProcess = '';
         
         // Check if we should process a chunk
         const timeSinceLastSent = Date.now() - textAccumulator.lastSentTime;
+        const bufferLength = textAccumulator.buffer.length;
         
-        if (textAccumulator.buffer.length >= MIN_CHUNK_LENGTH) {
-            // Look for sentence endings first (best breaking points)
-            if (SENTENCE_ENDINGS.test(textAccumulator.buffer)) {
-                shouldProcessChunk = true;
-                chunkToProcess = textAccumulator.buffer.trim();
-                console.log(`🎤 Chunking at sentence end: "${chunkToProcess.substring(0, 50)}..."`);
-            }
-            // If buffer is getting long, look for phrase endings
-            else if (textAccumulator.buffer.length >= 100 && PHRASE_ENDINGS.test(textAccumulator.buffer)) {
-                shouldProcessChunk = true;
-                chunkToProcess = textAccumulator.buffer.trim();
-                console.log(`🎤 Chunking at phrase end: "${chunkToProcess.substring(0, 50)}..."`);
-            }
-            // Force chunking if buffer is too long or too much time has passed
-            else if (textAccumulator.buffer.length >= MAX_CHUNK_LENGTH || timeSinceLastSent >= MAX_WAIT_TIME) {
-                // Try to break at a space to avoid cutting words
-                let breakPoint = textAccumulator.buffer.lastIndexOf(' ', MAX_CHUNK_LENGTH);
-                if (breakPoint === -1 || breakPoint < MIN_CHUNK_LENGTH) {
-                    breakPoint = Math.min(textAccumulator.buffer.length, MAX_CHUNK_LENGTH);
+        console.log(`🎤 Chunking strategy: ${isEarlyChunk ? 'EARLY' : 'BATCH'} (chunk #${textAccumulator.chunkCounter + 1}, buffer: ${bufferLength} chars)`);
+        
+        if (bufferLength >= MIN_CHUNK_LENGTH) {
+            if (isEarlyChunk) {
+                // EARLY CHUNKS: Prioritize speed - break at first good opportunity
+                if (SENTENCE_ENDINGS.test(textAccumulator.buffer)) {
+                    shouldProcessChunk = true;
+                    chunkToProcess = textAccumulator.buffer.trim();
+                    console.log(`🎤 Early chunking at sentence end: "${chunkToProcess.substring(0, 50)}..."`);
+                }
+                else if (bufferLength >= 90 && PHRASE_ENDINGS.test(textAccumulator.buffer)) {
+                    shouldProcessChunk = true;
+                    chunkToProcess = textAccumulator.buffer.trim();
+                    console.log(`🎤 Early chunking at phrase end: "${chunkToProcess.substring(0, 50)}..."`);
+                }
+                else if (bufferLength >= MAX_CHUNK_LENGTH || timeSinceLastSent >= MAX_WAIT_TIME) {
+                    // Force early chunk if needed
+                    let breakPoint = textAccumulator.buffer.lastIndexOf(' ', MAX_CHUNK_LENGTH);
+                    if (breakPoint === -1 || breakPoint < MIN_CHUNK_LENGTH) {
+                        breakPoint = Math.min(bufferLength, MAX_CHUNK_LENGTH);
+                    }
+                    
+                    chunkToProcess = textAccumulator.buffer.substring(0, breakPoint).trim();
+                    textAccumulator.buffer = textAccumulator.buffer.substring(breakPoint).trim();
+                    shouldProcessChunk = true;
+                    console.log(`🎤 Early force chunking: "${chunkToProcess.substring(0, 50)}..."`);
+                }
+            } else {
+                // LATER CHUNKS: Prioritize smooth flow - wait for complete thoughts
+                
+                // Look for paragraph breaks first (ideal for long responses)
+                if (PARAGRAPH_BREAKS.test(textAccumulator.buffer)) {
+                    const paragraphEnd = textAccumulator.buffer.search(PARAGRAPH_BREAKS);
+                    if (paragraphEnd > MIN_CHUNK_LENGTH) {
+                        chunkToProcess = textAccumulator.buffer.substring(0, paragraphEnd).trim();
+                        textAccumulator.buffer = textAccumulator.buffer.substring(paragraphEnd).replace(/^\s*\n\s*/, '');
+                        shouldProcessChunk = true;
+                        console.log(`🎤 Batch chunking at paragraph break: "${chunkToProcess.substring(0, 50)}..."`);
+                    }
                 }
                 
-                chunkToProcess = textAccumulator.buffer.substring(0, breakPoint).trim();
-                textAccumulator.buffer = textAccumulator.buffer.substring(breakPoint).trim();
-                shouldProcessChunk = true;
-                console.log(`🎤 Force chunking at length/time: "${chunkToProcess.substring(0, 50)}..."`);
+                // Look for multiple sentences (ideal batch size)
+                if (!shouldProcessChunk) {
+                    const sentences = textAccumulator.buffer.match(/[^.!?]*[.!?]+/g);
+                    if (sentences && sentences.length >= 2) {
+                        // Take 2-3 sentences for smooth flow
+                        const sentenceCount = Math.min(3, sentences.length);
+                        const sentenceBatch = sentences.slice(0, sentenceCount).join(' ').trim();
+                        
+                        if (sentenceBatch.length >= MIN_CHUNK_LENGTH && sentenceBatch.length <= MAX_CHUNK_LENGTH) {
+                            chunkToProcess = sentenceBatch;
+                            textAccumulator.buffer = textAccumulator.buffer.substring(sentenceBatch.length).trim();
+                            shouldProcessChunk = true;
+                            console.log(`🎤 Batch chunking ${sentenceCount} sentences: "${chunkToProcess.substring(0, 50)}..."`);
+                        }
+                    }
+                }
+                
+                // Single sentence if it's complete and long enough
+                if (!shouldProcessChunk && SENTENCE_ENDINGS.test(textAccumulator.buffer) && bufferLength >= MIN_CHUNK_LENGTH) {
+                    shouldProcessChunk = true;
+                    chunkToProcess = textAccumulator.buffer.trim();
+                    console.log(`🎤 Batch chunking single sentence: "${chunkToProcess.substring(0, 50)}..."`);
+                }
+                
+                // Force chunking if buffer gets too large or timeout
+                if (!shouldProcessChunk && (bufferLength >= MAX_CHUNK_LENGTH || timeSinceLastSent >= MAX_WAIT_TIME)) {
+                    // Try to break at sentence boundary within limit
+                    let breakPoint = -1;
+                    const sentencePattern = /[.!?]+\s+/g;
+                    let match;
+                    while ((match = sentencePattern.exec(textAccumulator.buffer)) !== null) {
+                        if (match.index + match[0].length <= MAX_CHUNK_LENGTH && match.index + match[0].length >= MIN_CHUNK_LENGTH) {
+                            breakPoint = match.index + match[0].length;
+                        } else if (match.index + match[0].length > MAX_CHUNK_LENGTH) {
+                            break;
+                        }
+                    }
+                    
+                    // Fall back to space break if no sentence boundary found
+                    if (breakPoint === -1) {
+                        breakPoint = textAccumulator.buffer.lastIndexOf(' ', MAX_CHUNK_LENGTH);
+                        if (breakPoint === -1 || breakPoint < MIN_CHUNK_LENGTH) {
+                            breakPoint = Math.min(bufferLength, MAX_CHUNK_LENGTH);
+                        }
+                    }
+                    
+                    chunkToProcess = textAccumulator.buffer.substring(0, breakPoint).trim();
+                    textAccumulator.buffer = textAccumulator.buffer.substring(breakPoint).trim();
+                    shouldProcessChunk = true;
+                    console.log(`🎤 Batch force chunking (${chunkToProcess.length} chars): "${chunkToProcess.substring(0, 50)}..."`);
+                }
             }
         }
         
