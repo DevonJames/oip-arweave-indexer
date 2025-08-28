@@ -804,10 +804,11 @@
 
                 eventSource.addEventListener('audioChunk', function(event) {
                     const data = JSON.parse(event.data);
-                    if (settings.autoPlayTTS && data.audio_data) {
+                    debug(`Audio chunk received: autoPlayTTS=${settings.autoPlayTTS}, hasAudio=${!!data.audio}, audioLength=${data.audio ? data.audio.length : 0}`);
+                    if (settings.autoPlayTTS && data.audio) {
                         // Play audio chunk immediately for real-time speech
-                        debug('Received live audio chunk');
-                        playAudioChunk(data.audio_data);
+                        debug('Playing live audio chunk');
+                        playAudioChunk(data.audio);
                     }
                 });
 
@@ -1078,7 +1079,12 @@
 
         // Play audio chunk for real-time streaming audio
         function playAudioChunk(audioData) {
-            if (!audioData) return;
+            if (!audioData) {
+                debug('No audio data provided to playAudioChunk');
+                return;
+            }
+            
+            debug(`Playing audio chunk: ${audioData.length} chars of base64 data`);
             
             try {
                 const audioBlob = new Blob([Uint8Array.from(atob(audioData), c => c.charCodeAt(0))], {
@@ -1087,15 +1093,27 @@
                 const audioUrl = URL.createObjectURL(audioBlob);
                 const audio = new Audio(audioUrl);
                 
-                audio.play().catch(error => {
+                debug(`Created audio blob: ${audioBlob.size} bytes, URL: ${audioUrl}`);
+                
+                audio.play().then(() => {
+                    debug('Audio chunk started playing successfully');
+                }).catch(error => {
+                    debug(`Audio chunk playback failed: ${error.message}`);
                     console.error('Audio chunk playback failed:', error);
                 });
                 
                 // Clean up URL after playback
                 audio.addEventListener('ended', () => {
+                    debug('Audio chunk playback completed');
                     URL.revokeObjectURL(audioUrl);
                 });
+                
+                audio.addEventListener('error', (error) => {
+                    debug(`Audio chunk error: ${error.message}`);
+                    console.error('Audio chunk error:', error);
+                });
             } catch (error) {
+                debug(`Error in playAudioChunk: ${error.message}`);
                 console.error('Error playing audio chunk:', error);
             }
         }
