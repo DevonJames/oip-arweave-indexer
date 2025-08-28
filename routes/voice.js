@@ -1339,15 +1339,18 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
         const { ongoingDialogues } = require('../helpers/sharedState');
         const socketManager = require('../socket/socketManager');
 
-        // Initialize ongoingStream if it doesn't exist
-        if (!ongoingDialogues.has(dialogueId)) {
-            ongoingDialogues.set(dialogueId, {
-                clients: new Set(),
-                data: []
-            });
-        }
+        // Initialize or reset ongoingStream for each new request
+        // This ensures clean state for each conversation turn
+        ongoingDialogues.set(dialogueId, {
+            id: dialogueId,
+            status: 'processing',
+            clients: new Set(),
+            data: [],
+            startTime: Date.now()
+        });
         
         const ongoingStream = ongoingDialogues.get(dialogueId);
+        console.log(`🔄 Initialized fresh stream state for dialogueId: ${dialogueId}`);
         
         // Add the current user input to conversation history
         if (inputText) {
@@ -1654,7 +1657,9 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     console.log('⚠️ No clients remaining, skipping completion event');
                 }
                 
-                console.log('Voice streaming response completed');
+                // Mark the stream as completed
+                ongoingStream.status = 'completed';
+                console.log(`✅ Voice streaming response completed for dialogueId: ${dialogueId}`);
                 
             } catch (error) {
                 console.error('Error in voice streaming process:', error);
@@ -1686,6 +1691,124 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 error: error.message
             });
         }
+    }
+});
+
+/**
+ * GET /api/voice/open-stream
+ * Server-sent events endpoint for voice streaming responses
+ */
+router.get('/open-stream', (req, res) => {
+    const dialogueId = req.query.dialogueId;
+    
+    if (!dialogueId) {
+        return res.status(400).json({ error: 'dialogueId is required' });
+    }
+    
+    console.log(`Voice open-stream connection for dialogueId: ${dialogueId}`);
+    
+    try {
+        // Set headers for SSE
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Important for nginx proxying
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+        
+        // Send initial ping to establish connection
+        res.write(`event: ping\n`);
+        res.write(`data: ${JSON.stringify({ timestamp: Date.now() })}\n\n`);
+        
+        const { ongoingDialogues } = require('../helpers/sharedState');
+        const socketManager = require('../socket/socketManager');
+        
+        // Get or create the dialogue stream
+        if (!ongoingDialogues.has(dialogueId)) {
+            console.log(`🆕 Creating new stream for dialogueId: ${dialogueId}`);
+            ongoingDialogues.set(dialogueId, {
+                id: dialogueId,
+                status: 'waiting',
+                clients: new Set(),
+                data: [],
+                startTime: Date.now()
+            });
+        } else {
+            console.log(`♻️ Using existing stream for dialogueId: ${dialogueId}`);
+        }
+        
+        const stream = ongoingDialogues.get(dialogueId);
+        
+        // Ensure clients is a Set (defensive programming)
+        if (!stream.clients || typeof stream.clients.add !== 'function') {
+            console.log(`🔧 Fixing clients Set for dialogueId: ${dialogueId}`);
+            stream.clients = new Set();
+        }
+        
+        // Add this client to the stream
+        stream.clients.add(res);
+        console.log(`Voice stream client added. Total clients: ${stream.clients.size}`);
+        
+        // Send any buffered data to the new client
+        if (stream.data && stream.data.length > 0) {
+            console.log(`Sending ${stream.data.length} buffered messages to new voice client`);
+            for (const message of stream.data) {
+                if (message.event && message.data) {
+                    res.write(`event: ${message.event}\n`);
+                    res.write(`data: ${JSON.stringify(message.data)}\n\n`);
+                }
+            }
+        }
+        
+        // Setup periodic pings to keep the connection alive
+        const pingInterval = setInterval(() => {
+            if (!res.destroyed && res.writable) {
+                try {
+                    res.write(`event: ping\n`);
+                    res.write(`data: ${JSON.stringify({ timestamp: Date.now() })}\n\n`);
+                } catch (error) {
+                    console.log(`Ping failed for dialogueId: ${dialogueId}, clearing interval`);
+                    clearInterval(pingInterval);
+                }
+            } else {
+                console.log(`Connection closed for dialogueId: ${dialogueId}, clearing interval`);
+                clearInterval(pingInterval);
+            }
+        }, 30000);
+        
+        // Handle client disconnect
+        req.on('close', () => {
+            console.log(`Voice client disconnected from dialogueId: ${dialogueId}`);
+            clearInterval(pingInterval);
+            
+            if (ongoingDialogues.has(dialogueId)) {
+                const stream = ongoingDialogues.get(dialogueId);
+                stream.clients.delete(res);
+                
+                console.log(`Voice stream client removed. Remaining clients: ${stream.clients.size}`);
+                
+                // Clean up if no more clients
+                if (stream.clients.size === 0) {
+                    console.log(`No more voice clients for dialogueId: ${dialogueId}. Cleaning up.`);
+                    ongoingDialogues.delete(dialogueId);
+                }
+            }
+        });
+        
+        req.on('error', (error) => {
+            console.error(`Voice stream error for dialogueId: ${dialogueId}:`, error);
+            clearInterval(pingInterval);
+            if (ongoingDialogues.has(dialogueId)) {
+                const stream = ongoingDialogues.get(dialogueId);
+                stream.clients.delete(res);
+            }
+        });
+        
+    } catch (error) {
+        console.error("Error in voice open-stream handler:", error);
+        res.status(500).write(`event: error\n`);
+        res.write(`data: ${JSON.stringify({ message: "Server error: " + error.message })}\n\n`);
+        res.end();
     }
 });
 
