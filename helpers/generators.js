@@ -1888,15 +1888,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                         await onAudioChunk(audioBase64, currentChunkIndex, chunkToProcess);
                     }
                     
-                    // Also send via socket manager
-                    if (dialogueId) {
-                        socketManager.sendToClients(dialogueId, {
-                            type: 'audioChunk',
-                            audio: audioBase64,
-                            chunkIndex: currentChunkIndex,
-                            text: chunkToProcess
-                        });
-                    }
+                    // DON'T send via socket manager - onAudioChunk already handles client sending
                 }
                 
             } catch (ttsError) {
@@ -1934,14 +1926,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                             await onAudioChunk(audioBase64, currentChunkIndex, chunkToProcess);
                         }
                         
-                        if (dialogueId) {
-                            socketManager.sendToClients(dialogueId, {
-                                type: 'audioChunk',  
-                                audio: audioBase64,
-                                chunkIndex: currentChunkIndex,
-                                text: chunkToProcess
-                            });
-                        }
+                        // DON'T send via socket manager - onAudioChunk already handles client sending
                     }
                 } catch (fallbackError) {
                     console.error('ElevenLabs fallback also failed:', fallbackError.message);
@@ -2095,16 +2080,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                         await onAudioChunk(audioBase64, finalChunkIndex, remainingText, true);
                     }
                     
-                    if (dialogueId) {
-                        const socketManager = require('../socket/socketManager');
-                        socketManager.sendToClients(dialogueId, {
-                            type: 'audioChunk',
-                            audio: audioBase64,
-                            chunkIndex: finalChunkIndex,
-                            text: remainingText,
-                            isFinal: true
-                        });
-                    }
+                    // DON'T send via socket manager - onAudioChunk already handles client sending
                 }
             } catch (error) {
                 console.error('Error processing final text chunk:', error);
