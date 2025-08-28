@@ -309,6 +309,71 @@ app.get('/api/backend/generate/:endpoint', async (req, res) => {
     }
 });
 
+// Proxy endpoint for voice streaming (GET requests)
+app.get('/api/backend/voice/:endpoint', async (req, res) => {
+    try {
+        const { endpoint } = req.params;
+        const backendUrl = `${coordinator.backendUrl}/voice/${endpoint}`;
+        const queryString = new URLSearchParams(req.query).toString();
+        const fullUrl = queryString ? `${backendUrl}?${queryString}` : backendUrl;
+        
+        console.log(`🔗 Proxying voice GET request to: ${fullUrl}`);
+        
+        // For streaming endpoints, we need to proxy the stream
+        if (endpoint === 'open-stream') {
+            // Set SSE headers
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.setHeader('X-Accel-Buffering', 'no');
+            
+            // Use axios to get the stream
+            const axios = require('axios');
+            
+            const response = await axios.get(fullUrl, {
+                responseType: 'stream',
+                timeout: 0 // No timeout for streaming
+            });
+            
+            console.log(`✅ Backend voice streaming response status: ${response.status}`);
+            
+            // Pipe the stream directly to the client
+            response.data.pipe(res);
+            
+            // Handle stream errors
+            response.data.on('error', (error) => {
+                console.error('🚨 Voice streaming error:', error);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: 'Voice streaming failed' });
+                }
+            });
+            
+            // Handle client disconnect
+            req.on('close', () => {
+                console.log('🔌 Voice stream client disconnected');
+                response.data.destroy();
+            });
+            
+        } else {
+            // For non-streaming GET requests, handle normally
+            const axios = require('axios');
+            const response = await axios.get(fullUrl);
+            
+            console.log(`✅ Backend voice response status: ${response.status}`);
+            res.status(response.status).json(response.data);
+        }
+        
+    } catch (error) {
+        console.error('🚨 Voice GET proxy error:', error.message);
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                error: 'Voice proxy failed',
+                details: error.message
+            });
+        }
+    }
+});
+
 // Start server
 app.listen(PORT, '127.0.0.1', () => {
     console.log('🍎 Mac Voice Interface Server Started');

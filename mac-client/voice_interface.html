@@ -777,7 +777,7 @@
                 let fullResponse = '';
                 let assistantMessageElement = null;
 
-                const eventSource = new EventSource(`/api/backend/generate/open-stream?id=${dialogueId}`);
+                const eventSource = new EventSource(`/api/backend/voice/open-stream?dialogueId=${dialogueId}`);
                 
                 eventSource.onopen = function() {
                     debug('Real-time streaming connection opened');
