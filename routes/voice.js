@@ -1461,7 +1461,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                             (audioChunk, chunkIndex, chunkText, isFinal = false) => {
                                 console.log(`🎤 Streaming audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
                                 
-                                // Send audio chunk to client immediately
+                                // Send audio chunk to client immediately (live only, don't buffer)
                                 socketManager.sendToClients(dialogueId, {
                                     type: 'audioChunk',
                                     audio: audioChunk,
@@ -1470,15 +1470,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                                     isFinal: isFinal
                                 });
                                 
-                                ongoingStream.data.push({
-                                    event: 'audioChunk',
-                                    data: {
-                                        audio: audioChunk,
-                                        chunkIndex: chunkIndex,
-                                        text: chunkText,
-                                        isFinal: isFinal
-                                    }
-                                });
+                                // DON'T buffer audio chunks - they should only play once in real-time
+                                // ongoingStream.data.push() removed to prevent duplicate audio playback
                             },
                             String(dialogueId)
                         );
@@ -1599,7 +1592,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         (audioChunk, chunkIndex, chunkText, isFinal = true) => {
                             console.log(`🎤 Flushing final audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
                             
-                            // Send final audio chunk to client
+                            // Send final audio chunk to client (live only, don't buffer)
                             socketManager.sendToClients(dialogueId, {
                                 type: 'audioChunk',
                                 audio: audioChunk,
@@ -1608,15 +1601,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                                 isFinal: true
                             });
                             
-                            ongoingStream.data.push({
-                                event: 'audioChunk',
-                                data: {
-                                    audio: audioChunk,
-                                    chunkIndex: chunkIndex,
-                                    text: chunkText,
-                                    isFinal: true
-                                }
-                            });
+                            // DON'T buffer final audio chunks - they should only play once in real-time
+                            // ongoingStream.data.push() removed to prevent duplicate audio playback
                         },
                         String(dialogueId)
                     );
