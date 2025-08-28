@@ -534,61 +534,21 @@
             if (!isListening || !continuousMode) return;
             
             try {
-                // Create a temporary snapshot of current recording for endpoint detection
-                // This avoids using partial MediaRecorder chunks which are corrupted
-                if (!mediaRecorder || mediaRecorder.state !== 'recording') {
-                    debug('MediaRecorder not recording, waiting...');
+                // Get current audio data (use a copy to avoid disturbing main recording)
+                if (audioChunks.length === 0) {
+                    debug('No audio chunks available, waiting...');
                     setTimeout(checkForEndpoint, 1000);
                     return;
                 }
                 
-                debug('Creating temporary recording snapshot for endpoint detection');
+                debug(`Checking endpoint with ${audioChunks.length} audio chunks`);
                 
-                // Create a temporary recorder for a short audio sample
-                const tempStream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { 
-                        channelCount: 1, 
-                        sampleRate: 16000 
-                    } 
-                });
-                
-                const tempRecorder = new MediaRecorder(tempStream, {
-                    mimeType: mediaRecorder.mimeType,
-                    audioBitsPerSecond: 16000
-                });
-                
-                const tempChunks = [];
-                
-                tempRecorder.ondataavailable = event => {
-                    tempChunks.push(event.data);
-                };
-                
-                // Record a short sample (500ms) for endpoint detection
-                tempRecorder.start();
-                
-                await new Promise(resolve => {
-                    setTimeout(() => {
-                        tempRecorder.stop();
-                        tempStream.getTracks().forEach(track => track.stop());
-                        resolve();
-                    }, 500); // 500ms sample
-                });
-                
-                // Wait for the data to be available
-                await new Promise(resolve => {
-                    tempRecorder.onstop = resolve;
-                });
-                
-                if (tempChunks.length === 0) {
-                    debug('No temp audio chunks available, waiting...');
-                    setTimeout(checkForEndpoint, 1000);
-                    return;
-                }
-                
-                const audioBlob = new Blob(tempChunks, { type: 'audio/webm' });
+                // Create a copy of current chunks for analysis (don't disturb main recording)
+                const audioChunksCopy = [...audioChunks];
+                const audioBlob = new Blob(audioChunksCopy, { type: 'audio/webm' });
                 
                 // Skip processing if audio is too short (likely just noise/fan)
-                if (audioBlob.size < 8192) { // Less than ~8KB is probably just noise
+                if (audioBlob.size < 16384) { // Increased threshold to 16KB for better detection
                     debug(`Audio blob too small (${audioBlob.size} bytes), skipping - likely fan noise`);
                     setTimeout(checkForEndpoint, 500);
                     return;
@@ -634,9 +594,8 @@
                                 return;
                             } else {
                                 vadStatus.textContent = `Listening... (confidence: ${smartTurnData.probability.toFixed(2)})`;
-                                // Clear processed audio chunks to prevent reprocessing the same audio
-                                debug(`Clearing ${audioChunks.length} audio chunks to prevent reprocessing`);
-                                audioChunks = [];
+                                // Don't clear audio chunks here - they're needed for the main recording
+                                debug(`Endpoint detected, keeping ${audioChunks.length} audio chunks for main recording`);
                             }
                         } else {
                             debug(`Smart Turn request failed: ${smartTurnResponse.status}`);
@@ -653,8 +612,7 @@
                 
             } catch (error) {
                 debug(`Endpoint check error: ${error.message}`);
-                // Clear audio chunks on error to prevent accumulation
-                audioChunks = [];
+                // Don't clear audio chunks on error - they're needed for the main recording
                 setTimeout(checkForEndpoint, 1000);
             }
         }
