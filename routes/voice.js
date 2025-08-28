@@ -180,6 +180,105 @@ async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
     });
 }
 
+// Shared function to detect self-referential questions about the AI
+function isSelfReferentialQuestion(text) {
+    const lowerText = text.toLowerCase();
+    const selfReferentialPatterns = [
+        /\b(tell me about yourself|about yourself|who are you|what are you|introduce yourself|describe yourself)\b/,
+        /\b(your capabilities|what can you do|what do you do|your purpose|your role)\b/,
+        /\b(are you|you are|yourself|your name|your identity)\b/,
+        /\b(hello.*yourself|hi.*yourself|greet.*yourself)\b/,
+        /\b(how do you work|how were you made|how were you created)\b/,
+        /\b(what is your function|what is your job|what is your mission)\b/
+    ];
+    
+    return selfReferentialPatterns.some(pattern => pattern.test(lowerText));
+}
+
+// Shared function to handle self-referential questions with direct LLM
+async function handleSelfReferentialQuestion(inputText, model, conversationHistory, handleTextChunk) {
+    console.log(`Self-referential question detected: "${inputText}" - bypassing RAG`);
+    
+    // Call LLM directly with system prompt for self-referential questions
+    const { generateStreamingResponse } = require('../helpers/generators');
+    
+    const systemPrompt = "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis. When asked about yourself, explain your role as an AI assistant that helps with information retrieval and explanation.";
+    
+    const conversationWithSystem = [
+        {
+            role: "system",
+            content: systemPrompt
+        },
+        ...conversationHistory
+    ];
+
+    try {
+        // Generate streaming response using the generalized function
+        let fullResponse = '';
+        const dialogueId = 'voice-self-ref-' + Date.now();
+
+        if (handleTextChunk) {
+            // Streaming mode (for /converse endpoint)
+            await generateStreamingResponse(
+                conversationWithSystem,
+                String(dialogueId),
+                {
+                    temperature: 0.7,
+                    model: model,
+                    systemPrompt: systemPrompt
+                },
+                (chunk) => {
+                    fullResponse += chunk;
+                    handleTextChunk(chunk);
+                }
+            );
+        } else {
+            // Non-streaming mode (for /chat endpoint)
+            await generateStreamingResponse(
+                conversationWithSystem,
+                String(dialogueId),
+                {
+                    temperature: 0.7,
+                    model: model,
+                    systemPrompt: systemPrompt
+                },
+                (chunk) => {
+                    fullResponse += chunk;
+                }
+            );
+        }
+
+        const responseText = fullResponse || "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and content creation.";
+        
+        // Create a mock ragResponse for compatibility
+        return {
+            answer: responseText,
+            sources: [],
+            context_used: false,
+            search_results_count: 0,
+            search_results: [],
+            applied_filters: { bypass_reason: "Self-referential question detected" }
+        };
+        
+    } catch (llmError) {
+        console.error('Direct LLM call failed:', llmError);
+        const fallbackResponse = "Hello! I'm ALFRED, your AI assistant. I'm designed to help you stay informed and productive by answering questions, and retrieving information from stored records. How can I assist you today?";
+        
+        if (handleTextChunk) {
+            handleTextChunk(fallbackResponse);
+        }
+        
+        return {
+            answer: fallbackResponse,
+            sources: [],
+            context_used: false,
+            search_results_count: 0,
+            search_results: [],
+            applied_filters: { bypass_reason: "Self-referential question - LLM fallback" }
+        };
+    }
+}
+
 // Utility function for safe axios calls with error handling
 async function safeAxiosCall(url, options, serviceName = 'Service') {
     const controller = new AbortController();
@@ -609,22 +708,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             return res.status(400).json({ error: 'No text to process' });
         }
 
-        // Step 2: Check if this is a self-referential question about the AI
-        function isSelfReferentialQuestion(text) {
-            const lowerText = text.toLowerCase();
-            const selfReferentialPatterns = [
-                /\b(tell me about yourself|about yourself|who are you|what are you|introduce yourself|describe yourself)\b/,
-                /\b(your capabilities|what can you do|what do you do|your purpose|your role)\b/,
-                /\b(are you|you are|yourself|your name|your identity)\b/,
-                /\b(hello.*yourself|hi.*yourself|greet.*yourself)\b/,
-                /\b(how do you work|how were you made|how were you created)\b/,
-                /\b(what is your function|what is your job|what is your mission)\b/
-            ];
-            
-            return selfReferentialPatterns.some(pattern => pattern.test(lowerText));
-        }
-
-        // Step 3: Generate text response - use direct LLM for self-referential questions, RAG for others
+        // Step 2: Generate text response - use direct LLM for self-referential questions, RAG for others
         const {
             model = 'llama3.2:3b',
             voice_id = 'female_1',
@@ -641,61 +725,17 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         if (isSelfReferentialQuestion(inputText)) {
             console.log(`[Voice Chat] Self-referential question detected: "${inputText}" - bypassing RAG`);
             
-            // Call LLM directly with system prompt for self-referential questions
-            const { generateStreamingResponse } = require('../helpers/generators');
-            
-            const conversationHistory = [
-                {
-                    role: "system",
-                    content: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis. When asked about yourself, explain your role as an AI assistant that helps with information retrieval and explanation."
-                },
+            // Build conversation history for self-referential handling
+            const conversationForSelfRef = [
                 {
                     role: "user",
                     content: inputText
                 }
             ];
-
-            try {
-                // Generate streaming response using the generalized function
-                let fullResponse = '';
-                const dialogueId = 'voice-chat-' + Date.now();
-
-                await generateStreamingResponse(
-                    model,
-                    conversationHistory,
-                    {
-                        systemPrompt: systemPrompt,
-                        dialogueId: dialogueId
-                    },
-                    (chunk) => {
-                        fullResponse += chunk;
-                    }
-                );
-
-                responseText = fullResponse || "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and content creation.";
-                
-                // Create a mock ragResponse for compatibility
-                ragResponse = {
-                    answer: responseText,
-                    sources: [],
-                    context_used: false,
-                    search_results_count: 0,
-                    search_results: [],
-                    applied_filters: { bypass_reason: "Self-referential question detected" }
-                };
-                
-            } catch (llmError) {
-                console.error('[Voice Chat] Direct LLM call failed:', llmError);
-                responseText = "Hello! I'm ALFRED, your AI assistant. I'm designed to help you stay informed and productive by answering questions, and retrieving information from stored records. How can I assist you today?";
-                ragResponse = {
-                    answer: responseText,
-                    sources: [],
-                    context_used: false,
-                    search_results_count: 0,
-                    search_results: [],
-                    applied_filters: { bypass_reason: "Self-referential question - LLM fallback" }
-                };
-            }
+            
+            // Use shared function to handle self-referential questions (non-streaming mode)
+            ragResponse = await handleSelfReferentialQuestion(inputText, model, conversationForSelfRef, null);
+            responseText = ragResponse.answer;
         } else {
             console.log(`[Voice Chat] Using RAG for question: "${inputText}"`);
             
@@ -1447,11 +1487,26 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     }
                 };
 
-                // Always use ALFRED RAG system for ALL questions
-                console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
-                
-                // Use ALFRED RAG system for all queries
-                const ragOptions = {
+                // Check if this is a self-referential question about ALFRED
+                if (isSelfReferentialQuestion(inputText)) {
+                    console.log(`[Voice Converse] Self-referential question detected: "${inputText}" - using direct LLM`);
+                    
+                    // Use shared function to handle self-referential questions with streaming
+                    const ragResponse = await handleSelfReferentialQuestion(inputText, model, conversationHistory, handleTextChunk);
+                    
+                    // Store RAG metadata for response
+                    ongoingStream.ragMetadata = {
+                        sources: ragResponse.sources,
+                        context_used: ragResponse.context_used,
+                        search_results_count: ragResponse.search_results_count,
+                        search_results: ragResponse.search_results,
+                        applied_filters: ragResponse.applied_filters || {}
+                    };
+                } else {
+                    console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
+                    
+                    // Use ALFRED RAG system for contextual queries
+                    const ragOptions = {
                         model,
                         searchParams: {
                             creatorHandle: creator_filter,
@@ -1527,12 +1582,13 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                             applied_filters: ragResponse.applied_filters || {}
                         };
                         
-                } catch (ragError) {
-                    console.error('Error in ALFRED RAG processing:', ragError);
-                    
-                    // Fallback to direct LLM if RAG fails
-                    const fallbackResponse = "I encountered an issue accessing my knowledge base. Let me try to help you with a general response.";
-                    await handleTextChunk(fallbackResponse);
+                    } catch (ragError) {
+                        console.error('Error in ALFRED RAG processing:', ragError);
+                        
+                        // Fallback to direct LLM if RAG fails
+                        const fallbackResponse = "I encountered an issue accessing my knowledge base. Let me try to help you with a general response.";
+                        await handleTextChunk(fallbackResponse);
+                    }
                 }
                 
                 // NEW: Flush any remaining text in the accumulator
