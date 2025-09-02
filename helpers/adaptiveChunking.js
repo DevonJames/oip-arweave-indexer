@@ -101,8 +101,8 @@ class AdaptiveChunking {
             if (bootstrapChunk) {
                 chunks.push(bootstrapChunk);
                 session.bootstrapSent = true;
-                session.chunkCount++;
                 session.lastChunkTime = Date.now();
+                // Note: chunkCount is set in extractBootstrapChunk
             }
         }
 
@@ -111,8 +111,8 @@ class AdaptiveChunking {
             const chunk = this.extractNextChunk(session);
             if (chunk) {
                 chunks.push(chunk);
-                session.chunkCount++;
                 session.lastChunkTime = Date.now();
+                // Note: chunkCount is incremented in extractNextChunk
             } else {
                 break;
             }
@@ -154,6 +154,7 @@ class AdaptiveChunking {
         // Update session state
         session.processedLength = breakPoint;
         session.totalWordsProcessed += this.getWords(finalText).length;
+        session.chunkCount = 1; // Set chunk count to 1 for bootstrap (don't increment here)
 
         return {
             text: finalText,
@@ -214,6 +215,9 @@ class AdaptiveChunking {
             return null;
         }
 
+        // Increment chunk count first to ensure sequential numbering
+        session.chunkCount++;
+        
         // Update session state
         session.processedLength += breakPoint;
         session.totalWordsProcessed += this.getWords(chunkText).length;
@@ -227,11 +231,11 @@ class AdaptiveChunking {
         } else {
             session.forcedBreaks++;
         }
-
+        
         return {
             text: chunkText,
             type: 'adaptive',
-            chunkIndex: session.chunkCount + 1, // Add 1 to match client expectations (client starts at 1)
+            chunkIndex: session.chunkCount, // Use current count for sequential chunks
             wordCount: this.getWords(chunkText).length,
             naturalBreak: this.hasNaturalEnding(chunkText),
             chunkSize: session.currentChunkSize,
@@ -254,13 +258,16 @@ class AdaptiveChunking {
             return null;
         }
 
+        // Increment for final chunk
+        session.chunkCount++;
+        
         session.isComplete = true;
         session.processedLength = session.buffer.length;
 
         return {
             text: remainingText,
             type: 'final',
-            chunkIndex: session.chunkCount + 1, // Add 1 to match client expectations
+            chunkIndex: session.chunkCount, // Use current count
             wordCount: this.getWords(remainingText).length,
             naturalBreak: true, // Final chunk is always considered complete
             isFinal: true

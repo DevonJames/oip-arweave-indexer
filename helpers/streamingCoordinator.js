@@ -175,14 +175,11 @@ class StreamingCoordinator {
                     isFinal: chunk.isFinal || false
                 };
 
-                // Add to queue for ordered playback
-                session.audioQueue.push(audioChunk);
-                
-                // Sort queue by chunk index to ensure proper order
-                session.audioQueue.sort((a, b) => a.chunkIndex - b.chunkIndex);
-                
-                // Process queue to send chunks in order
-                await this.processOrderedAudioQueue(session);
+                // For maximum responsiveness, send chunks immediately as they're ready
+                // The client will handle ordering and queueing
+                console.log(`[StreamingCoordinator] 🎵 Sending immediate chunk ${audioChunk.chunkIndex} (${audioChunk.wordCount} words, ${audioChunk.audioData.length} bytes)`);
+                await this.sendAudioChunk(session, audioChunk);
+                session.currentlyPlaying = audioChunk;
                 
                 session.metrics.audioChunksGenerated++;
                 
@@ -372,6 +369,11 @@ class StreamingCoordinator {
             session.nextExpectedChunkIndex = 1; // Start at 1 to match client expectations
         }
         
+        // Initialize timeout tracking for missing chunks
+        if (!session.lastChunkWaitTime) {
+            session.lastChunkWaitTime = Date.now();
+        }
+        
         // Send chunks in order as they become available
         while (session.audioQueue.length > 0) {
             // Find the next chunk we're expecting
@@ -389,12 +391,30 @@ class StreamingCoordinator {
                 await this.sendAudioChunk(session, nextChunk);
                 session.currentlyPlaying = nextChunk;
                 session.nextExpectedChunkIndex++; // Increment for next chunk
+                session.lastChunkWaitTime = Date.now(); // Reset wait time
                 
                 // Small delay to prevent overwhelming the client
                 await new Promise(resolve => setTimeout(resolve, 50));
             } else {
+                // Check if we've been waiting too long for the next chunk
+                const waitTime = Date.now() - session.lastChunkWaitTime;
+                const maxWaitTime = 2000; // 2 seconds max wait for missing chunk
+                
+                if (waitTime > maxWaitTime) {
+                    console.log(`[StreamingCoordinator] ⚠️ Timeout waiting for chunk ${session.nextExpectedChunkIndex}, skipping to next available chunk`);
+                    
+                    // Find the next available chunk and skip the missing one
+                    if (session.audioQueue.length > 0) {
+                        session.audioQueue.sort((a, b) => a.chunkIndex - b.chunkIndex);
+                        const nextAvailable = session.audioQueue[0];
+                        session.nextExpectedChunkIndex = nextAvailable.chunkIndex;
+                        session.lastChunkWaitTime = Date.now();
+                        continue; // Try again with the new expected index
+                    }
+                }
+                
                 // Next expected chunk not ready yet
-                console.log(`[StreamingCoordinator] Waiting for chunk ${session.nextExpectedChunkIndex}, have chunks: ${session.audioQueue.map(c => c.chunkIndex).sort().join(', ')}`);
+                console.log(`[StreamingCoordinator] Waiting for chunk ${session.nextExpectedChunkIndex}, have chunks: ${session.audioQueue.map(c => c.chunkIndex).sort().join(', ')} (waited ${waitTime}ms)`);
                 break;
             }
         }
@@ -518,11 +538,8 @@ class StreamingCoordinator {
                 await this.processChunk(session, finalChunk);
             }
 
-            // Process any remaining chunks in the queue
-            await this.processOrderedAudioQueue(session);
-            
             // Wait a moment for any final TTS requests to complete
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Mark session as complete
             session.isComplete = true;
@@ -599,7 +616,7 @@ class StreamingCoordinator {
             isActive: session.isActive,
             isComplete: session.isComplete,
             metrics: session.metrics,
-            queueSize: session.audioQueue.length,
+            queueSize: 0, // Immediate sending - no queueing
             activeTTSRequests: session.ttsRequests.size,
             chunkingDiagnostics: chunkingDiagnostics,
             sessionDuration: Date.now() - session.startTime
