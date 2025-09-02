@@ -6161,3 +6161,1904 @@ INFO:     127.0.0.1:54062 - "GET /health HTTP/1.1" 200 OK
 INFO:     127.0.0.1:54197 - "GET /health HTTP/1.1" 200 OK
 INFO:     127.0.0.1:54331 - "GET /health HTTP/1.1" 200 OK
 INFO:     127.0.0.1:54481 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54630 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54833 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54960 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55112 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55239 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55380 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55518 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55652 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55931 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56085 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56310 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56472 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56607 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56738 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56763 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56930 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57061 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57186 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57312 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57443 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57624 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57766 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57906 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58032 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58191 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58330 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58473 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58602 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58734 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58860 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59054 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59181 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59323 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59452 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59590 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59731 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59865 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59987 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60117 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 183219 bytes, first 20 bytes: b'\x1aE\xdf\xa3\xa3B\x86\x81\x01B\xf7\x81\x01B\xf2\x81\x04B\xf3\x81'
+INFO:__main__:Successfully converted WebM to WAV using ffmpeg: /var/folders/mg/6htxlqfs26s5xydhrtb4mj4r0000gn/T/tmpwsff90tw.wav
+INFO:__main__:Applying VAD preprocessing...
+INFO:__main__:VAD detected 1 speech segments, 35.79% speech
+INFO:__main__:VAD processing: 1 segments, 35.79% speech
+Detected language: English
+  0%|          | 0/34 [00:00<?, ?frames/s]100%|██████████| 34/34 [00:01<00:00, 25.17frames/s]100%|██████████| 34/34 [00:01<00:00, 25.15frames/s]
+INFO:     127.0.0.1:60156 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1948350 bytes, first 20 bytes: b'\x1aE\xdf\xa3\xa3B\x86\x81\x01B\xf7\x81\x01B\xf2\x81\x04B\xf3\x81'
+INFO:__main__:Successfully converted WebM to WAV using ffmpeg: /var/folders/mg/6htxlqfs26s5xydhrtb4mj4r0000gn/T/tmpriij4xhk.wav
+INFO:__main__:Applying VAD preprocessing...
+INFO:__main__:VAD detected 1 speech segments, 11.36% speech
+INFO:__main__:VAD processing: 1 segments, 11.36% speech
+  0%|          | 0/114 [00:00<?, ?frames/s]100%|██████████| 114/114 [00:01<00:00, 96.99frames/s]100%|██████████| 114/114 [00:01<00:00, 96.94frames/s]
+INFO:     127.0.0.1:60193 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 181292 bytes, first 20 bytes: b'\x1aE\xdf\xa3\xa3B\x86\x81\x01B\xf7\x81\x01B\xf2\x81\x04B\xf3\x81'
+INFO:__main__:Successfully converted WebM to WAV using ffmpeg: /var/folders/mg/6htxlqfs26s5xydhrtb4mj4r0000gn/T/tmp00_lu0qj.wav
+INFO:__main__:Applying VAD preprocessing...
+INFO:__main__:VAD detected 0 speech segments, 0.00% speech
+INFO:__main__:Short audio sample (0.9s) with 0.00%% speech - running Whisper anyway for endpoint detection
+Detected language: English
+  0%|          | 0/94 [00:00<?, ?frames/s]100%|██████████| 94/94 [00:00<00:00, 123.49frames/s]100%|██████████| 94/94 [00:00<00:00, 123.45frames/s]
+INFO:     127.0.0.1:60193 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 614866 bytes, first 20 bytes: b'\x1aE\xdf\xa3\xa3B\x86\x81\x01B\xf7\x81\x01B\xf2\x81\x04B\xf3\x81'
+INFO:__main__:Successfully converted WebM to WAV using ffmpeg: /var/folders/mg/6htxlqfs26s5xydhrtb4mj4r0000gn/T/tmpj2xuysf8.wav
+INFO:__main__:Applying VAD preprocessing...
+INFO:__main__:VAD detected 0 speech segments, 0.00% speech
+INFO:__main__:VAD detected NO SPEECH in 3.2s audio (0.00%% speech) - skipping Whisper to prevent hallucination
+INFO:     127.0.0.1:60193 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 202335 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60193 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60260 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 242802 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60193 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 302539 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60193 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 364203 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60193 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 425867 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 487531 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 547268 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 608932 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 682158 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 743822 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 786216 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 847880 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 911471 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 992405 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1054069 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1115733 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1177397 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1217864 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1298798 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60267 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1360462 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1400929 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1464520 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1526184 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1587848 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1647585 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1709249 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1770913 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1832577 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1896168 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 1957832 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2019496 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2081160 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2142824 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2204488 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2264225 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60284 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2343232 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2404896 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2466560 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2526297 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2587961 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2651552 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2713216 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2776807 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2836544 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2896281 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 2956018 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3038879 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3098616 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3156426 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3218090 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60305 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3279754 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3343345 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3422352 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3484016 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3545680 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3609271 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3670935 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3753796 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3817387 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3877124 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 3938788 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4000452 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4079459 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4143050 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4204714 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60326 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4264451 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4326115 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4408976 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4468713 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4530377 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4593968 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4653705 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4715369 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4796303 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4856040 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4919631 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 4983222 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5042959 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5127747 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5189411 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60348 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5251075 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5312739 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5395600 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5457264 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5518928 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5580592 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5661542 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5721279 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5802213 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5861950 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 5921687 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6000694 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60442 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6064285 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6145219 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60376 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6204956 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6264693 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6349481 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6411145 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6492079 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6553743 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6632750 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6690560 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6773421 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6833158 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6912165 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 6971902 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7054763 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7114500 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7195434 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7255171 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7334178 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7397769 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7478703 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7538440 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7617447 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7679111 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7763899 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7823636 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7902643 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 7985504 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8068365 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60449 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8130029 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8210963 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8272627 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8355488 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8417152 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8500013 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8579020 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8638757 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8721618 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8802552 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8887340 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 8949004 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9031865 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60499 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9112799 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9195660 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9257324 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9338258 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9419192 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9502053 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9561790 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9642724 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9723658 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9804592 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9885526 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 9966460 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60522 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10051248 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10112912 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10193846 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10276707 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10359568 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10421232 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10504093 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10585027 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10665961 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10746895 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10806632 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10885639 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 10968500 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60540 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11032091 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11113025 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11193959 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11274893 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11336557 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11419434 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11500368 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11581302 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11660309 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11720046 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60580 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11802908 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11885768 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60566 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 11966702 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12047636 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12130497 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12211431 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12311635 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12392569 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12477357 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12558291 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12639225 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12720159 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12803020 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12882027 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60587 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 12964888 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13065092 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13144099 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13226960 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13327164 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13410025 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13490959 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13571893 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13650900 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13753031 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13832038 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60613 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13912972 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 13993906 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14094110 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14202022 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14286810 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14365817 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14446751 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14572006 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14654867 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14737728 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14818662 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 14918866 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15001727 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15082661 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15165522 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15246456 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15350514 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15452645 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15535506 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15599097 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15685812 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15766746 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60631 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15849607 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 15934395 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16015329 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16117460 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16217664 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16319795 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16402656 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16485517 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16568378 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16672436 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16755297 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16836232 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 16919092 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17021223 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17102157 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17186962 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17267896 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17348830 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17450961 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17531895 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60725 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17610902 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17689909 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60677 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17772770 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17874901 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 17957762 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18059893 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18163951 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18244885 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18368213 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18449147 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18551278 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18674606 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18772883 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18905846 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 18988707 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19090838 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19191042 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19291246 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19370253 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19470457 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19572588 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60736 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19672792 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19753726 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19853930 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 19956061 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20058192 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20158397 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20256673 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20339534 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20439738 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20541869 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60781 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20644000 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20740350 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20844408 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 20927269 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21035181 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21137312 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21239443 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21360844 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21462975 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21567033 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21673018 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21773222 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21875353 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 21981338 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22081542 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22183673 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22287731 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22391789 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22491993 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60803 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22572927 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22678912 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22779116 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22887028 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 22991103 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23093234 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23174168 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23276299 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60868 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23378430 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23478634 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23598108 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23677115 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23781173 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 23902574 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24022048 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24122252 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24224383 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24324587 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24426718 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60850 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24526922 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24627126 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24727330 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24827534 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 24929665 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25012526 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25137781 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25241839 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25342043 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60897 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25444174 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25546305 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25646509 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25748640 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25850771 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 25976026 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 26099354 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 26220755 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 26338302 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 26461630 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 26561834 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 26690943 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 26793074 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 26899059 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27003117 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27128372 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27228576 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27336488 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27461743 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27565801 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27687202 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27808603 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 27914588 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28035989 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28136193 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28255667 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60919 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28378995 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60985 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28481126 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60985 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28602527 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60985 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28725872 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60985 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28826076 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60985 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 28947477 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60985 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 29072732 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60985 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61003 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 29174863 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:60985 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 29298191 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 29440789 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 29581460 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 29708642 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 29857021 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 29980349 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 30101750 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 30205808 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 30325282 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 30446683 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 30570011 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 30691412 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 30814740 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 30955411 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 31076812 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 31202067 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 31325395 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 31446796 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 31589394 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 31712722 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 31895787 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 32036458 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61010 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 32180983 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 32327435 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 32452690 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 32597215 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 32699346 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 32826528 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 32963345 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 33086673 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 33208074 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 33331402 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 33497124 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 33643576 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 33805444 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 33928772 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 34059808 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 34181209 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 34304537 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 34424011 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 34545429 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 34713078 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61178 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 34853749 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 34996347 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 35138945 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 35260346 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 35408725 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 35530126 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 35651527 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 35774855 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 35936723 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61102 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 36058124 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 36206503 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 36347174 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 36472429 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 36616954 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 36801946 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 36942617 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 37106412 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 37245156 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 37407024 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 37601651 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 37746176 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 37871431 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 38023664 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 38162408 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 38308860 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 38459166 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 38603691 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 38746289 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 38890814 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 39014142 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 39162521 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 39287776 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 39438082 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 39578753 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 39723278 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 39865876 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 40008474 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 40174196 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 40312957 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 40474825 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61321 - "GET /health HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 40625131 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 40786999 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 40929597 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 41070268 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 41210939 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 41357391 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 41528894 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 41654149 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 41804455 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 41970177 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 42112775 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 42276570 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 42436511 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 42617649 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61209 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 42819984 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 42970290 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 43116742 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 43280537 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 43442405 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 43606200 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 43812389 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 43987746 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 44149614 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 44317263 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 44484912 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
+INFO:__main__:Received audio data: 44650634 bytes, first 20 bytes: b'G\x84\x81\x03\xb5\x80\xd3\xd6\x99<=\x9e\x97<I\x9c\x95</\xf2'
+WARNING:__main__:Audio data does not appear to be valid WebM (missing EBML header)
+WARNING:__main__:Data starts with: 47848103b580d3d6993c3d9e973c499c953c2ff2933ce8c1913c7d4a8f3c8e488d3cdf378b3c42f9883c5267873c629e853c
+INFO:     127.0.0.1:61381 - "POST /transcribe_file HTTP/1.1" 200 OK
