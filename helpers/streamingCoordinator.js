@@ -175,9 +175,14 @@ class StreamingCoordinator {
                     isFinal: chunk.isFinal || false
                 };
 
-                // Add to queue and try to play immediately
+                // Add to queue for ordered playback
                 session.audioQueue.push(audioChunk);
-                await this.processAudioQueue(session);
+                
+                // Sort queue by chunk index to ensure proper order
+                session.audioQueue.sort((a, b) => a.chunkIndex - b.chunkIndex);
+                
+                // Process queue to send chunks in order
+                await this.processOrderedAudioQueue(session);
                 
                 session.metrics.audioChunksGenerated++;
                 
@@ -358,23 +363,49 @@ class StreamingCoordinator {
     }
 
     /**
-     * Process the audio queue and send chunks to client
+     * Process the audio queue in order and send chunks to client
+     * @param {Object} session - Session state
+     */
+    async processOrderedAudioQueue(session) {
+        // Initialize expected chunk index if not set
+        if (!session.nextExpectedChunkIndex) {
+            session.nextExpectedChunkIndex = 1; // Start at 1 to match client expectations
+        }
+        
+        // Send chunks in order as they become available
+        while (session.audioQueue.length > 0) {
+            // Find the next chunk we're expecting
+            const nextChunkIndex = session.audioQueue.findIndex(chunk => 
+                chunk.chunkIndex === session.nextExpectedChunkIndex
+            );
+            
+            if (nextChunkIndex !== -1) {
+                // Found the next expected chunk
+                const nextChunk = session.audioQueue[nextChunkIndex];
+                session.audioQueue.splice(nextChunkIndex, 1); // Remove from queue
+                
+                console.log(`[StreamingCoordinator] 🎵 Sending ordered chunk ${nextChunk.chunkIndex} (${nextChunk.wordCount} words, ${nextChunk.audioData.length} bytes)`);
+                
+                await this.sendAudioChunk(session, nextChunk);
+                session.currentlyPlaying = nextChunk;
+                session.nextExpectedChunkIndex++; // Increment for next chunk
+                
+                // Small delay to prevent overwhelming the client
+                await new Promise(resolve => setTimeout(resolve, 50));
+            } else {
+                // Next expected chunk not ready yet
+                console.log(`[StreamingCoordinator] Waiting for chunk ${session.nextExpectedChunkIndex}, have chunks: ${session.audioQueue.map(c => c.chunkIndex).sort().join(', ')}`);
+                break;
+            }
+        }
+    }
+
+    /**
+     * Legacy method for compatibility
      * @param {Object} session - Session state
      */
     async processAudioQueue(session) {
-        // Send audio chunks in order
-        while (session.audioQueue.length > 0) {
-            const nextChunk = session.audioQueue[0];
-            
-            // Check if this chunk is ready to play
-            if (this.isChunkReadyToPlay(session, nextChunk)) {
-                session.audioQueue.shift(); // Remove from queue
-                await this.sendAudioChunk(session, nextChunk);
-                session.currentlyPlaying = nextChunk;
-            } else {
-                break; // Wait for current chunk to finish or timeout
-            }
-        }
+        return this.processOrderedAudioQueue(session);
     }
 
     /**
@@ -385,23 +416,29 @@ class StreamingCoordinator {
      */
     isChunkReadyToPlay(session, chunk) {
         // First chunk can always play immediately
-        if (chunk.chunkIndex === 0) {
+        if (chunk.chunkIndex === 1 || chunk.chunkIndex === 0) {
+            console.log(`[StreamingCoordinator] First chunk ${chunk.chunkIndex} ready to play immediately`);
             return true;
         }
 
         // If nothing is currently playing, can play next chunk
         if (!session.currentlyPlaying) {
+            console.log(`[StreamingCoordinator] No audio currently playing, chunk ${chunk.chunkIndex} ready`);
             return true;
         }
 
+        // For real-time streaming, be more aggressive about sending chunks
         // Check if enough time has passed since last chunk started
         const timeSinceLastChunk = Date.now() - session.currentlyPlaying.playStartTime;
         const estimatedPlaybackTime = this.estimatePlaybackTime(session.currentlyPlaying);
         
-        // Allow some overlap to prevent gaps
-        const bufferTime = Math.max(100, estimatedPlaybackTime * 0.1);
+        // Use shorter buffer time for more responsive streaming
+        const bufferTime = Math.max(50, estimatedPlaybackTime * 0.05); // Reduced from 0.1 to 0.05
+        const isReady = timeSinceLastChunk >= (estimatedPlaybackTime - bufferTime);
         
-        return timeSinceLastChunk >= (estimatedPlaybackTime - bufferTime);
+        console.log(`[StreamingCoordinator] Chunk ${chunk.chunkIndex} ready check: timeSince=${timeSinceLastChunk}ms, estimated=${estimatedPlaybackTime}ms, buffer=${bufferTime}ms, ready=${isReady}`);
+        
+        return isReady;
     }
 
     /**
@@ -481,11 +518,11 @@ class StreamingCoordinator {
                 await this.processChunk(session, finalChunk);
             }
 
-            // Wait for audio queue to empty
-            while (session.audioQueue.length > 0) {
-                await this.processAudioQueue(session);
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+            // Process any remaining chunks in the queue
+            await this.processOrderedAudioQueue(session);
+            
+            // Wait a moment for any final TTS requests to complete
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             // Mark session as complete
             session.isComplete = true;

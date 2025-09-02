@@ -158,7 +158,7 @@ class AdaptiveChunking {
         return {
             text: finalText,
             type: 'bootstrap',
-            chunkIndex: 0,
+            chunkIndex: 1, // Start at 1 to match client expectations
             wordCount: this.getWords(finalText).length,
             naturalBreak: this.hasNaturalEnding(finalText),
             latency: timeSinceStart
@@ -231,7 +231,7 @@ class AdaptiveChunking {
         return {
             text: chunkText,
             type: 'adaptive',
-            chunkIndex: session.chunkCount,
+            chunkIndex: session.chunkCount + 1, // Add 1 to match client expectations (client starts at 1)
             wordCount: this.getWords(chunkText).length,
             naturalBreak: this.hasNaturalEnding(chunkText),
             chunkSize: session.currentChunkSize,
@@ -260,7 +260,7 @@ class AdaptiveChunking {
         return {
             text: remainingText,
             type: 'final',
-            chunkIndex: session.chunkCount,
+            chunkIndex: session.chunkCount + 1, // Add 1 to match client expectations
             wordCount: this.getWords(remainingText).length,
             naturalBreak: true, // Final chunk is always considered complete
             isFinal: true
