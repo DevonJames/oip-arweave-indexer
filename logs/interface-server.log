@@ -13,22 +13,22 @@ Backend: https://api.oip.onl/api
    Press Ctrl+C to stop the server
 🔗 Proxying request to: https://api.oip.onl/api/voice/converse
 📦 Request body: {
-  "userInput": "Hello there, who are you?",
+  "userInput": "Hi there, what can you tell me about the mission to the moon?",
   "model": "llama3.2:3b",
   "conversationHistory": [],
   "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
 }
 ✅ Backend response status: 200
-🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756853311462-0vs0o6hfjq
+🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756854308551-wbim7175qi
 ✅ Backend voice streaming response status: 200
 🔌 Voice stream client disconnected
 🔗 Proxying request to: https://api.oip.onl/api/voice/converse
 📦 Request body: {
-  "userInput": "Hey there, what can you tell me about yourself?",
+  "userInput": "Hello, can you hear me?",
   "model": "llama3.2:3b",
   "conversationHistory": [],
   "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
 }
 ✅ Backend response status: 200
-🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756853403451-5p738y9hgt
+🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756854542494-uwi52l15i1
 ✅ Backend voice streaming response status: 200

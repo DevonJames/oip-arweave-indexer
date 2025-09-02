@@ -491,12 +491,28 @@
                 return;
             }
             
+            // Check MediaRecorder state before starting
+            if (mediaRecorder.state !== 'inactive') {
+                debug(`MediaRecorder in ${mediaRecorder.state} state, stopping first...`);
+                mediaRecorder.stop();
+                // Wait a bit for it to stop
+                setTimeout(() => startListening(), 100);
+                return;
+            }
+            
             // CRITICAL: Always clear audio chunks when starting to listen
             audioChunks = [];
             debug(`Cleared audio chunks in startListening(), starting fresh`);
             
-            mediaRecorder.start(100); // Collect data every 100ms for responsiveness
-            isListening = true;
+            try {
+                mediaRecorder.start(100); // Collect data every 100ms for responsiveness
+                isListening = true;
+                debug('MediaRecorder started successfully');
+            } catch (error) {
+                debug(`Failed to start MediaRecorder: ${error.message}`);
+                status.textContent = 'Failed to start recording. Please try again.';
+                return;
+            }
             
             voiceButton.classList.add('listening');
             voiceButton.textContent = '🔵';
@@ -858,9 +874,95 @@
                         // Double-clear before restart
                         audioChunks = [];
                         debug(`Double-cleared audio chunks before timeout restart`);
-                        startContinuousListening();
+                        
+                        // CRITICAL FIX: Reinitialize audio completely for next conversation
+                        reinitializeAudioForContinuousMode();
                     }, 2000);
                 }
+            }
+        }
+
+        async function reinitializeAudioForContinuousMode() {
+            debug('Reinitializing audio for continuous mode...');
+            
+            try {
+                // Stop any existing MediaRecorder
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+                
+                // Stop existing audio tracks
+                if (mediaRecorder && mediaRecorder.stream) {
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Clear state
+                audioChunks = [];
+                isListening = false;
+                isProcessing = false;
+                isSpeaking = false;
+                
+                // Get fresh audio stream
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        volume: 1.0,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                // Setup new MediaRecorder with optimized format
+                const preferredFormats = [
+                    'audio/webm;codecs=pcm',
+                    'audio/ogg;codecs=opus',
+                    'audio/webm;codecs=opus',
+                    'audio/mp4',
+                    'audio/mpeg'
+                ];
+                
+                let mimeType = 'audio/webm;codecs=opus';
+                for (const format of preferredFormats) {
+                    if (MediaRecorder.isTypeSupported(format)) {
+                        mimeType = format;
+                        break;
+                    }
+                }
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: mimeType,
+                    audioBitsPerSecond: 16000
+                });
+                
+                debug(`Reinitialized with audio format: ${mimeType}`);
+                
+                // Setup event handlers
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = processAudio;
+                
+                // Setup Web Audio API for VAD visualization
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyserNode = audioContext.createAnalyser();
+                analyserNode.fftSize = 256;
+                source.connect(analyserNode);
+                
+                dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+                
+                // Start continuous listening
+                startContinuousListening();
+                
+                debug('Audio reinitialization complete, continuous listening restarted');
+                
+            } catch (error) {
+                debug(`Audio reinitialization failed: ${error.message}`);
+                status.textContent = 'Microphone access lost. Please refresh page.';
+                console.error('Audio reinitialization error:', error);
             }
         }
 

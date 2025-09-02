@@ -12,9 +12,9 @@ const { preprocessTextForTTS } = require('./alfred');
 class AdaptiveChunking {
     constructor() {
         // Timing constants
-        this.BOOTSTRAP_TIMEOUT = 300; // Max time to wait for bootstrap chunk (ms)
+        this.BOOTSTRAP_TIMEOUT = 200; // Max time to wait for bootstrap chunk (ms)
         this.BOOTSTRAP_MIN_WORDS = 20; // Min words for bootstrap chunk
-        this.BOOTSTRAP_MAX_WORDS = 30; // Max words for bootstrap chunk
+        this.BOOTSTRAP_MAX_WORDS = 40; // Max words for bootstrap chunk
         this.MAX_CHUNK_DISPATCH_DELAY = 100; // Max delay between chunks (ms)
         
         // Chunk sizing constants - PROGRESSIVE SIZING
