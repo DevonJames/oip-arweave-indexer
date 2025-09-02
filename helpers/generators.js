@@ -2412,6 +2412,78 @@ async function callOpenAiVision(params) {
   }
 }
 
+/**
+ * Enhanced streaming TTS with adaptive chunking for near-real-time speech
+ * Uses the new StreamingCoordinator for optimal latency and smooth playback
+ * @param {string} text - Text chunk from LLM
+ * @param {string} sessionId - Unique session identifier
+ * @param {Object} voiceConfig - Voice configuration
+ * @param {Function} onAudioChunk - Callback for audio chunks
+ * @param {Function} onTextChunk - Callback for text chunks
+ * @returns {Promise<void>}
+ */
+async function streamAdaptiveTextToSpeech(text, sessionId, voiceConfig = {}, onAudioChunk, onTextChunk = null) {
+    try {
+        const streamingCoordinator = require('./streamingCoordinator');
+        
+        // Initialize session if not already active
+        let sessionStatus = streamingCoordinator.getSessionStatus(sessionId);
+        if (!sessionStatus.exists) {
+            console.log(`[Adaptive TTS] Initializing new session: ${sessionId}`);
+            await streamingCoordinator.initSession(sessionId, {
+                ...voiceConfig,
+                onAudioChunk: onAudioChunk,
+                onTextChunk: onTextChunk,
+                targetLatency: 300, // 300ms first-word latency target
+                maxChunkSize: 800,
+                speechRate: 3.0 // words per second
+            });
+        }
+        
+        // Add text to the streaming pipeline
+        const result = await streamingCoordinator.addText(sessionId, text);
+        
+        if (!result.success) {
+            console.error(`[Adaptive TTS] Failed to process text for session ${sessionId}:`, result.error);
+        } else {
+            console.log(`[Adaptive TTS] Processed ${result.chunksProcessed} chunks, queue size: ${result.queueSize}`);
+        }
+        
+    } catch (error) {
+        console.error('[Adaptive TTS] Error in streamAdaptiveTextToSpeech:', error);
+        throw error;
+    }
+}
+
+/**
+ * Finish an adaptive streaming session and flush remaining text
+ * @param {string} sessionId - Session identifier
+ * @returns {Promise<Object>} Final metrics
+ */
+async function finishAdaptiveTextToSpeech(sessionId) {
+    try {
+        const streamingCoordinator = require('./streamingCoordinator');
+        const metrics = await streamingCoordinator.finishSession(sessionId);
+        
+        console.log(`[Adaptive TTS] Session ${sessionId} completed with metrics:`, metrics);
+        return metrics;
+        
+    } catch (error) {
+        console.error(`[Adaptive TTS] Error finishing session ${sessionId}:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get diagnostics for an adaptive streaming session
+ * @param {string} sessionId - Session identifier
+ * @returns {Object} Session diagnostics
+ */
+function getAdaptiveStreamingDiagnostics(sessionId) {
+    const streamingCoordinator = require('./streamingCoordinator');
+    return streamingCoordinator.getSessionStatus(sessionId);
+}
+
 module.exports = {
     getVoiceModels,
     replaceAcronyms,
@@ -2436,6 +2508,10 @@ module.exports = {
     callOpenAiVision,
     streamChunkedTextToSpeech,
     flushRemainingText,
-    stripEmojisForTTS
+    stripEmojisForTTS,
+    // New adaptive streaming functions
+    streamAdaptiveTextToSpeech,
+    finishAdaptiveTextToSpeech,
+    getAdaptiveStreamingDiagnostics
 }
 

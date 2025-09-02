@@ -1335,7 +1335,14 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
         }
 
         // Import required modules for streaming
-        const { generateStreamingResponse, streamChunkedTextToSpeech, flushRemainingText } = require('../helpers/generators');
+        const { 
+            generateStreamingResponse, 
+            streamChunkedTextToSpeech, 
+            flushRemainingText,
+            streamAdaptiveTextToSpeech,
+            finishAdaptiveTextToSpeech,
+            getAdaptiveStreamingDiagnostics
+        } = require('../helpers/generators');
         const { ongoingDialogues } = require('../helpers/sharedState');
         const socketManager = require('../socket/socketManager');
 
@@ -1421,13 +1428,20 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 } = req.body;
 
                 let responseText = '';
-                const textAccumulator = {}; // Initialize text accumulator for chunking
                 
-                // Configure voice settings for TTS
+                // Configure voice settings for adaptive TTS
                 const voiceConfig = {
                     engine: 'elevenlabs', // Use ElevenLabs for reliable audio
+                    voiceId: voice_id,
+                    voiceSettings: {
+                        stability: 0.5,
+                        similarity_boost: 0.75,
+                        style: 0.0,
+                        use_speaker_boost: true
+                    },
+                    // Legacy format for fallback compatibility
                     elevenlabs: {
-                        selectedVoice: voice_id, // Use selectedVoice to match TTS function expectations
+                        selectedVoice: voice_id,
                         speed: speed,
                         stability: 0.5,
                         similarity_boost: 0.75,
@@ -1455,14 +1469,14 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         }
                     });
                     
-                    // NEW: Use chunked streaming TTS for immediate audio generation
+                    // NEW: Use adaptive streaming TTS for near-real-time audio generation
                     try {
-                        await streamChunkedTextToSpeech(
+                        await streamAdaptiveTextToSpeech(
                             textChunk,
-                            textAccumulator,
-                            voiceConfig, // Use voiceConfig instead of voiceSettings
+                            String(dialogueId), // Use dialogueId as session identifier
+                            voiceConfig,
                             (audioChunk, chunkIndex, chunkText, isFinal = false) => {
-                                console.log(`🎤 Streaming audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
+                                console.log(`🎵 Adaptive audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..." (${audioChunk.length} bytes)`);
                                 
                                 // Send audio chunk to client immediately (live only, don't buffer)
                                 socketManager.sendToClients(dialogueId, {
@@ -1470,16 +1484,42 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                                     audio: audioChunk,
                                     chunkIndex: chunkIndex,
                                     text: chunkText,
-                                    isFinal: isFinal
+                                    isFinal: isFinal,
+                                    adaptive: true // Mark as adaptive streaming
                                 });
                                 
                                 // DON'T buffer audio chunks - they should only play once in real-time
                                 // ongoingStream.data.push() removed to prevent duplicate audio playback
                             },
-                            String(dialogueId)
+                            (textChunk) => {
+                                // Text chunk callback (already handled above)
+                            }
                         );
                     } catch (ttsError) {
-                        console.error('Error in chunked TTS:', ttsError.message);
+                        console.error('Error in adaptive TTS:', ttsError.message);
+                        // Fallback to legacy chunked TTS if adaptive fails
+                        console.log('Falling back to legacy chunked TTS...');
+                        const textAccumulator = {}; // Initialize for fallback
+                        try {
+                            await streamChunkedTextToSpeech(
+                                textChunk,
+                                textAccumulator,
+                                voiceConfig,
+                                (audioChunk, chunkIndex, chunkText, isFinal = false) => {
+                                    socketManager.sendToClients(dialogueId, {
+                                        type: 'audioChunk',
+                                        audio: audioChunk,
+                                        chunkIndex: chunkIndex,
+                                        text: chunkText,
+                                        isFinal: isFinal,
+                                        fallback: true
+                                    });
+                                },
+                                String(dialogueId)
+                            );
+                        } catch (fallbackError) {
+                            console.error('Fallback TTS also failed:', fallbackError.message);
+                        }
                     }
                 };
 
@@ -1587,30 +1627,50 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     }
                 }
                 
-                // NEW: Flush any remaining text in the accumulator
+                // NEW: Finish adaptive streaming session and get final metrics
                 try {
-                    await flushRemainingText(
-                        textAccumulator,
-                        voiceConfig, // Use voiceConfig instead of voiceSettings
-                        (audioChunk, chunkIndex, chunkText, isFinal = true) => {
-                            console.log(`🎤 Flushing final audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
-                            
-                            // Send final audio chunk to client (live only, don't buffer)
-                            socketManager.sendToClients(dialogueId, {
-                                type: 'audioChunk',
-                                audio: audioChunk,
-                                chunkIndex: chunkIndex,
-                                text: chunkText,
-                                isFinal: true
-                            });
-                            
-                            // DON'T buffer final audio chunks - they should only play once in real-time
-                            // ongoingStream.data.push() removed to prevent duplicate audio playback
-                        },
-                        String(dialogueId)
-                    );
-                } catch (flushError) {
-                    console.error('Error flushing remaining text:', flushError.message);
+                    console.log(`🎯 Finishing adaptive streaming session: ${dialogueId}`);
+                    const finalMetrics = await finishAdaptiveTextToSpeech(String(dialogueId));
+                    
+                    if (finalMetrics.success) {
+                        console.log(`🎉 Adaptive streaming completed successfully:`, {
+                            firstAudioLatency: finalMetrics.firstAudioLatency,
+                            chunksGenerated: finalMetrics.chunksGenerated,
+                            naturalBreakRate: finalMetrics.naturalBreakRate,
+                            sessionDuration: finalMetrics.sessionDuration
+                        });
+                        
+                        // Store final metrics in the ongoing stream for client access
+                        ongoingStream.adaptiveMetrics = finalMetrics;
+                    } else {
+                        console.warn(`⚠️ Adaptive streaming session finished with issues:`, finalMetrics.error);
+                    }
+                } catch (finishError) {
+                    console.error('Error finishing adaptive streaming session:', finishError.message);
+                    
+                    // Fallback: try to flush any remaining text with legacy system
+                    try {
+                        const textAccumulator = {}; // Initialize for fallback
+                        await flushRemainingText(
+                            textAccumulator,
+                            voiceConfig,
+                            (audioChunk, chunkIndex, chunkText, isFinal = true) => {
+                                console.log(`🎤 Fallback final audio chunk ${chunkIndex} for text: "${chunkText.substring(0, 50)}..."`);
+                                
+                                socketManager.sendToClients(dialogueId, {
+                                    type: 'audioChunk',
+                                    audio: audioChunk,
+                                    chunkIndex: chunkIndex,
+                                    text: chunkText,
+                                    isFinal: true,
+                                    fallback: true
+                                });
+                            },
+                            String(dialogueId)
+                        );
+                    } catch (fallbackFlushError) {
+                        console.error('Fallback flush also failed:', fallbackFlushError.message);
+                    }
                 }
                 
                 // Calculate total processing time
@@ -1877,6 +1937,40 @@ router.post('/rag', async (req, res) => {
         console.error('RAG query error:', error.message);
         res.status(500).json({
             error: 'RAG query failed',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/voice/adaptive-diagnostics/:sessionId
+ * Get adaptive streaming diagnostics for a session
+ */
+router.get('/adaptive-diagnostics/:sessionId', (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { getAdaptiveStreamingDiagnostics } = require('../helpers/generators');
+        
+        const diagnostics = getAdaptiveStreamingDiagnostics(sessionId);
+        
+        if (!diagnostics.exists) {
+            return res.status(404).json({
+                error: 'Session not found',
+                sessionId: sessionId
+            });
+        }
+        
+        res.json({
+            success: true,
+            sessionId: sessionId,
+            diagnostics: diagnostics,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error(`Error getting diagnostics for session ${req.params.sessionId}:`, error);
+        res.status(500).json({
+            error: 'Failed to get diagnostics',
             details: error.message
         });
     }
