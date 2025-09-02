@@ -13,8 +13,8 @@ class AdaptiveChunking {
     constructor() {
         // Timing constants
         this.BOOTSTRAP_TIMEOUT = 300; // Max time to wait for bootstrap chunk (ms)
-        this.BOOTSTRAP_MIN_WORDS = 12; // Min words for bootstrap chunk
-        this.BOOTSTRAP_MAX_WORDS = 22; // Max words for bootstrap chunk
+        this.BOOTSTRAP_MIN_WORDS = 20; // Min words for bootstrap chunk
+        this.BOOTSTRAP_MAX_WORDS = 30; // Max words for bootstrap chunk
         this.MAX_CHUNK_DISPATCH_DELAY = 100; // Max delay between chunks (ms)
         
         // Chunk sizing constants - PROGRESSIVE SIZING
@@ -36,9 +36,9 @@ class AdaptiveChunking {
         this.NATURAL_PAUSES = /\s+(?:after|before|during|while|when|where|since|because|although|unless|until)\s+/gi;
         
         // Speech rate estimation (words per minute -> words per second)
-        this.AVERAGE_SPEECH_RATE = 120 / 60; // ~3 words/second
-        this.FAST_SPEECH_RATE = 180 / 60; // ~3.67 words/second
-        this.SLOW_SPEECH_RATE = 100 / 60; // ~2.33 words/second
+        this.AVERAGE_SPEECH_RATE = 120 / 60; // ~2 words/second
+        this.FAST_SPEECH_RATE = 180 / 60; // ~3 words/second
+        this.SLOW_SPEECH_RATE = 100 / 60; // ~1.67 words/second
     }
 
     /**
