@@ -17,10 +17,16 @@ class AdaptiveChunking {
         this.BOOTSTRAP_MAX_WORDS = 22; // Max words for bootstrap chunk
         this.MAX_CHUNK_DISPATCH_DELAY = 100; // Max delay between chunks (ms)
         
-        // Chunk sizing constants
-        this.MIN_CHUNK_CHARS = 40; // Minimum chunk size in characters
+        // Chunk sizing constants - PROGRESSIVE SIZING
+        this.MIN_CHUNK_CHARS = 40; // Start small for immediate response
         this.MAX_CHUNK_CHARS = 800; // Maximum chunk size in characters
         this.GROWTH_FACTOR = 1.4; // How much to grow chunk size each iteration
+        
+        // Progressive chunk sizing strategy - EACH STAGE BUILDS ON THE PREVIOUS
+        this.BOOTSTRAP_CHUNK_SIZE = 80; // Small first chunk for immediate audio
+        this.EARLY_CHUNK_SIZE = 150; // Larger chunks for chunks 2-4 (builds on bootstrap)
+        this.MATURE_CHUNK_SIZE = 250; // Even larger chunks for chunks 5-8 (builds on early)
+        this.LARGE_CHUNK_SIZE = 400; // Largest chunks for chunks 9+ (builds on mature)
         
         // Natural boundary patterns (ordered by preference)
         this.SENTENCE_ENDINGS = /[.!?]+\s*/g;
@@ -55,8 +61,8 @@ class AdaptiveChunking {
             lastChunkTime: Date.now(),
             bootstrapSent: false,
             
-            // Adaptive sizing
-            currentChunkSize: this.MIN_CHUNK_CHARS,
+            // Adaptive sizing - starts small and grows progressively
+            currentChunkSize: this.BOOTSTRAP_CHUNK_SIZE, // Start with bootstrap size, then grow
             generationSpeed: 0, // words/second
             synthesisSpeed: this.AVERAGE_SPEECH_RATE, // words/second
             
@@ -103,18 +109,24 @@ class AdaptiveChunking {
                 session.bootstrapSent = true;
                 session.lastChunkTime = Date.now();
                 // Note: chunkCount is set in extractBootstrapChunk
+                
+                // Return immediately after bootstrap - don't process additional chunks
+                // This prevents conflicts between bootstrap and adaptive chunking
+                return { chunks, session };
             }
         }
 
-        // Extract additional ready chunks
-        while (this.hasReadyChunk(session)) {
-            const chunk = this.extractNextChunk(session);
-            if (chunk) {
-                chunks.push(chunk);
-                session.lastChunkTime = Date.now();
-                // Note: chunkCount is incremented in extractNextChunk
-            } else {
-                break;
+        // Extract additional ready chunks (only if bootstrap already sent)
+        if (session.bootstrapSent) {
+            while (this.hasReadyChunk(session)) {
+                const chunk = this.extractNextChunk(session);
+                if (chunk) {
+                    chunks.push(chunk);
+                    session.lastChunkTime = Date.now();
+                    // Note: chunkCount is incremented in extractNextChunk
+                } else {
+                    break;
+                }
             }
         }
 
@@ -167,7 +179,7 @@ class AdaptiveChunking {
     }
 
     /**
-     * Check if there's a chunk ready for processing
+     * Check if there's a chunk ready for processing - PROGRESSIVE STRATEGY
      * @param {Object} session - Session state
      * @returns {boolean} True if chunk is ready
      */
@@ -177,16 +189,47 @@ class AdaptiveChunking {
             return false;
         }
 
-        // Check if we have enough text for current chunk size
-        if (unprocessedText.length >= session.currentChunkSize) {
-            return true;
-        }
-
-        // Check timeout-based chunking (don't let text sit too long)
+        // PROGRESSIVE READINESS: Different strategies based on chunk number
         const timeSinceLastChunk = Date.now() - session.lastChunkTime;
         const maxWaitTime = this.calculateMaxWaitTime(session);
         
-        return timeSinceLastChunk >= maxWaitTime && unprocessedText.length >= this.MIN_CHUNK_CHARS;
+        if (session.chunkCount <= 1) {
+            // Bootstrap: Send as soon as we have bootstrap-sized text OR timeout
+            return unprocessedText.length >= this.BOOTSTRAP_CHUNK_SIZE || timeSinceLastChunk >= maxWaitTime;
+            
+        } else if (session.chunkCount <= 4) {
+            // Early chunks: Larger than bootstrap, but still prioritize speed
+            const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
+            const hasCommaBreak = /[,;:]+\s*$/.test(unprocessedText.trim());
+            
+            // Use EARLY_CHUNK_SIZE as target (larger than bootstrap)
+            return unprocessedText.length >= this.EARLY_CHUNK_SIZE || 
+                   hasNaturalEnding || 
+                   (hasCommaBreak && unprocessedText.length >= this.BOOTSTRAP_CHUNK_SIZE) ||
+                   timeSinceLastChunk >= maxWaitTime;
+                   
+        } else if (session.chunkCount <= 8) {
+            // Mature chunks: Even larger, prioritize natural boundaries
+            const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
+            const hasStrongPunctuation = /[;:]+\s*$/.test(unprocessedText.trim());
+            
+            // Use MATURE_CHUNK_SIZE as target (larger than early)
+            return hasNaturalEnding || 
+                   hasStrongPunctuation ||
+                   unprocessedText.length >= this.MATURE_CHUNK_SIZE ||
+                   timeSinceLastChunk >= maxWaitTime;
+                   
+        } else {
+            // Large chunks: Largest size, wait for complete thoughts
+            const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
+            const hasStrongPunctuation = /[;:]+\s*$/.test(unprocessedText.trim());
+            
+            // Use LARGE_CHUNK_SIZE as target (largest)
+            return hasNaturalEnding || 
+                   hasStrongPunctuation ||
+                   unprocessedText.length >= this.LARGE_CHUNK_SIZE ||
+                   timeSinceLastChunk >= maxWaitTime;
+        }
     }
 
     /**
@@ -328,33 +371,45 @@ class AdaptiveChunking {
     }
 
     /**
-     * Adapt chunk size based on generation and synthesis speeds
+     * Adapt chunk size based on generation and synthesis speeds AND progressive strategy
      * @param {Object} session - Session state
      */
     adaptChunkSize(session) {
-        if (session.generationSpeed <= 0 || session.synthesisSpeed <= 0) {
-            return; // Can't adapt without speed data
-        }
-
-        // Calculate optimal chunk size based on speed ratio
-        const speedRatio = session.generationSpeed / session.synthesisSpeed;
+        // PROGRESSIVE CHUNK SIZING: Start small, grow larger over time
+        let targetSize;
         
-        if (speedRatio > 1.2) {
-            // LLM is generating faster than TTS can speak - increase chunk size
-            session.currentChunkSize = Math.min(
-                session.currentChunkSize * this.GROWTH_FACTOR,
-                session.maxChunkSize
-            );
-        } else if (speedRatio < 0.8) {
-            // TTS is speaking faster than LLM generates - decrease chunk size
-            session.currentChunkSize = Math.max(
-                session.currentChunkSize / this.GROWTH_FACTOR,
-                this.MIN_CHUNK_CHARS
-            );
+        if (session.chunkCount <= 1) {
+            // Bootstrap chunk: very small for immediate response
+            targetSize = this.BOOTSTRAP_CHUNK_SIZE;
+        } else if (session.chunkCount <= 4) {
+            // Early chunks: small for quick follow-up
+            targetSize = this.EARLY_CHUNK_SIZE;
+        } else if (session.chunkCount <= 8) {
+            // Mature chunks: medium size for balanced flow
+            targetSize = this.MATURE_CHUNK_SIZE;
+        } else {
+            // Large chunks: for smooth long-form speech
+            targetSize = this.LARGE_CHUNK_SIZE;
         }
-        // If ratio is between 0.8-1.2, keep current size (balanced)
 
-        console.log(`[AdaptiveChunking] Speed ratio: ${speedRatio.toFixed(2)}, new chunk size: ${Math.round(session.currentChunkSize)}`);
+        // Fine-tune based on LLM vs TTS speed if we have data
+        if (session.generationSpeed > 0 && session.synthesisSpeed > 0) {
+            const speedRatio = session.generationSpeed / session.synthesisSpeed;
+            
+            if (speedRatio > 1.5) {
+                // LLM much faster than TTS - can afford larger chunks
+                targetSize = Math.min(targetSize * 1.3, this.MAX_CHUNK_CHARS);
+            } else if (speedRatio < 0.7) {
+                // TTS faster than LLM - use smaller chunks to prevent delays
+                targetSize = Math.max(targetSize * 0.8, this.MIN_CHUNK_CHARS);
+            }
+            
+            console.log(`[AdaptiveChunking] Chunk ${session.chunkCount}: Progressive target=${targetSize}, speed ratio=${speedRatio.toFixed(2)}`);
+        } else {
+            console.log(`[AdaptiveChunking] Chunk ${session.chunkCount}: Progressive target=${targetSize} (no speed data yet)`);
+        }
+
+        session.currentChunkSize = targetSize;
     }
 
     /**
@@ -372,20 +427,33 @@ class AdaptiveChunking {
     }
 
     /**
-     * Calculate maximum wait time before forcing a chunk
+     * Calculate maximum wait time before forcing a chunk - PROGRESSIVE TIMING
      * @param {Object} session - Session state
      * @returns {number} Max wait time in milliseconds
      */
     calculateMaxWaitTime(session) {
-        // Base wait time increases with chunk count (later chunks can wait longer)
-        const baseWait = session.chunkCount < 3 ? 800 : 2000;
+        // PROGRESSIVE WAIT TIMES: Short waits for early chunks, longer for later chunks
+        let baseWait;
+        
+        if (session.chunkCount <= 1) {
+            baseWait = 500; // Very short wait for bootstrap (immediate response)
+        } else if (session.chunkCount <= 4) {
+            baseWait = 800; // Short wait for early chunks (quick follow-up)
+        } else if (session.chunkCount <= 8) {
+            baseWait = 1500; // Medium wait for mature chunks (natural pacing)
+        } else {
+            baseWait = 2500; // Longer wait for large chunks (complete thoughts)
+        }
         
         // Adjust based on generation speed
         if (session.generationSpeed > 0) {
             const speedMultiplier = Math.max(0.5, Math.min(2.0, this.AVERAGE_SPEECH_RATE / session.generationSpeed));
-            return baseWait * speedMultiplier;
+            const finalWait = baseWait * speedMultiplier;
+            console.log(`[AdaptiveChunking] Chunk ${session.chunkCount}: Wait time=${finalWait}ms (base=${baseWait}, speed=${speedMultiplier.toFixed(2)})`);
+            return finalWait;
         }
         
+        console.log(`[AdaptiveChunking] Chunk ${session.chunkCount}: Wait time=${baseWait}ms (no speed data)`);
         return baseWait;
     }
 

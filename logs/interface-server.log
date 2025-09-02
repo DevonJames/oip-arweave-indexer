@@ -13,55 +13,23 @@ Backend: https://api.oip.onl/api
    Press Ctrl+C to stop the server
 🔗 Proxying request to: https://api.oip.onl/api/voice/converse
 📦 Request body: {
-  "userInput": "Hi, who are you?",
+  "userInput": "Hi there, who are you?",
   "model": "llama3.2:3b",
   "conversationHistory": [],
   "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
 }
 ✅ Backend response status: 200
-🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756844538880-ydo58qry1t
+🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756851792090-7czaaknaat
 ✅ Backend voice streaming response status: 200
 🔌 Voice stream client disconnected
 🔗 Proxying request to: https://api.oip.onl/api/voice/converse
 📦 Request body: {
-  "userInput": "Hey there, who are you?",
+  "userInput": "Thank you.",
   "model": "llama3.2:3b",
   "conversationHistory": [],
   "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
 }
 ✅ Backend response status: 200
-🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756846437028-ehk1kupbr4
+🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756851839598-m74fvf8c4c
 ✅ Backend voice streaming response status: 200
 🔌 Voice stream client disconnected
-🔗 Proxying request to: https://api.oip.onl/api/voice/converse
-📦 Request body: {
-  "userInput": "Hello there, who are you?",
-  "model": "llama3.2:3b",
-  "conversationHistory": [],
-  "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
-}
-✅ Backend response status: 200
-🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756848153583-1la4ugs7w0
-✅ Backend voice streaming response status: 200
-🔌 Voice stream client disconnected
-🔗 Proxying request to: https://api.oip.onl/api/voice/converse
-📦 Request body: {
-  "userInput": "Hey there, who are you?",
-  "model": "llama3.2:3b",
-  "conversationHistory": [],
-  "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
-}
-✅ Backend response status: 200
-🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756848196505-hkii48opbg
-✅ Backend voice streaming response status: 200
-🔌 Voice stream client disconnected
-🔗 Proxying request to: https://api.oip.onl/api/voice/converse
-📦 Request body: {
-  "userInput": "Hello, who are you?",
-  "model": "llama3.2:3b",
-  "conversationHistory": [],
-  "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
-}
-✅ Backend response status: 200
-🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756850011792-qp9thj68wu
-✅ Backend voice streaming response status: 200
