@@ -19,6 +19,5 @@ Backend: https://api.oip.onl/api
   "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
 }
 ✅ Backend response status: 200
-🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756842896000-fvihyj1op6
+🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756844538880-ydo58qry1t
 ✅ Backend voice streaming response status: 200
-🔌 Voice stream client disconnected

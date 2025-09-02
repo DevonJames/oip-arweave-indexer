@@ -1430,9 +1430,12 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 let responseText = '';
                 
                 // Configure voice settings for adaptive TTS
+                // Default to local TTS service if ElevenLabs key not available
+                const hasElevenLabsKey = !!process.env.ELEVENLABS_API_KEY;
+                
                 const voiceConfig = {
-                    engine: 'elevenlabs', // Use ElevenLabs for reliable audio
-                    voiceId: voice_id,
+                    engine: hasElevenLabsKey ? 'elevenlabs' : 'local',
+                    voiceId: hasElevenLabsKey ? voice_id : null,
                     voiceSettings: {
                         stability: 0.5,
                         similarity_boost: 0.75,
@@ -1440,7 +1443,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         use_speaker_boost: true
                     },
                     // Legacy format for fallback compatibility
-                    elevenlabs: {
+                    elevenlabs: hasElevenLabsKey ? {
                         selectedVoice: voice_id,
                         speed: speed,
                         stability: 0.5,
@@ -1448,8 +1451,19 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         model_id: 'eleven_turbo_v2',
                         style: 0.0,
                         use_speaker_boost: true
+                    } : null,
+                    // Local TTS configuration
+                    chatterbox: {
+                        selectedVoice: 'female_expressive',
+                        gender: 'female',
+                        emotion: 'expressive',
+                        exaggeration: 0.6,
+                        cfg_weight: 0.7,
+                        voiceCloning: { enabled: false }
                     }
                 };
+                
+                console.log(`[Voice Converse] Using TTS engine: ${voiceConfig.engine} (ElevenLabs available: ${hasElevenLabsKey})`);
 
                 const handleTextChunk = async (textChunk) => {
                     responseText += textChunk;

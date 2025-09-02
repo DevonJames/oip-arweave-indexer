@@ -1,5 +1,4 @@
 const adaptiveChunking = require('./adaptiveChunking');
-const { generateElevenLabsTTS } = require('./generators');
 const axios = require('axios');
 
 /**
@@ -224,11 +223,12 @@ class StreamingCoordinator {
         try {
             let audioData;
 
+            // Determine which TTS engine to use
             if (session.voiceConfig.engine === 'elevenlabs' && this.ELEVENLABS_API_KEY) {
-                // Use ElevenLabs for high-quality synthesis
+                console.log(`[StreamingCoordinator] Using ElevenLabs for chunk ${chunk.chunkIndex}`);
                 audioData = await this.synthesizeWithElevenLabs(session, chunk);
             } else {
-                // Use local TTS service
+                console.log(`[StreamingCoordinator] Using local TTS service for chunk ${chunk.chunkIndex} (engine: ${session.voiceConfig.engine})`);
                 audioData = await this.synthesizeWithLocalTTS(session, chunk);
             }
 
@@ -237,6 +237,21 @@ class StreamingCoordinator {
 
             return audioData;
 
+        } catch (error) {
+            console.error(`[StreamingCoordinator] TTS synthesis failed for chunk ${chunk.chunkIndex}:`, error.message);
+            
+            // Try fallback TTS if primary method fails
+            if (session.voiceConfig.engine === 'elevenlabs') {
+                console.log(`[StreamingCoordinator] ElevenLabs failed, trying local TTS fallback for chunk ${chunk.chunkIndex}`);
+                try {
+                    return await this.synthesizeWithLocalTTS(session, chunk);
+                } catch (fallbackError) {
+                    console.error(`[StreamingCoordinator] Fallback TTS also failed:`, fallbackError.message);
+                    throw error; // Throw original error
+                }
+            } else {
+                throw error;
+            }
         } finally {
             session.ttsRequests.delete(requestId);
         }
@@ -249,14 +264,50 @@ class StreamingCoordinator {
      * @returns {Promise<Buffer>} Audio buffer
      */
     async synthesizeWithElevenLabs(session, chunk) {
-        const { voiceId, settings } = session.voiceConfig;
+        if (!this.ELEVENLABS_API_KEY) {
+            throw new Error('ElevenLabs API key not configured');
+        }
+
+        const voiceId = session.voiceConfig.voiceId || session.voiceConfig.elevenlabs?.selectedVoice;
+        const settings = session.voiceConfig.voiceSettings || session.voiceConfig.elevenlabs || {};
         
-        return await generateElevenLabsTTS(
-            chunk.text,
-            voiceId,
-            settings,
-            'eleven_turbo_v2' // Use fastest model for real-time
+        if (!voiceId) {
+            throw new Error('No voice ID specified for ElevenLabs synthesis');
+        }
+
+        const requestData = {
+            text: chunk.text,
+            model_id: 'eleven_turbo_v2', // Use fastest model for real-time
+            voice_settings: {
+                stability: settings.stability || 0.5,
+                similarity_boost: settings.similarity_boost || 0.75,
+                style: settings.style || 0.0,
+                use_speaker_boost: settings.use_speaker_boost !== false
+            },
+            output_format: 'mp3_44100_128'
+        };
+
+        console.log(`[StreamingCoordinator] ElevenLabs request for voice ${voiceId}: "${chunk.text.substring(0, 50)}..."`);
+
+        const response = await axios.post(
+            `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+            requestData,
+            {
+                headers: {
+                    'xi-api-key': this.ELEVENLABS_API_KEY,
+                    'Content-Type': 'application/json'
+                },
+                responseType: 'arraybuffer',
+                timeout: this.TTS_TIMEOUT
+            }
         );
+
+        if (response.status === 200 && response.data) {
+            console.log(`[StreamingCoordinator] ElevenLabs generated ${response.data.byteLength} bytes for chunk ${chunk.chunkIndex}`);
+            return Buffer.from(response.data);
+        } else {
+            throw new Error(`ElevenLabs API returned status: ${response.status}`);
+        }
     }
 
     /**
@@ -276,8 +327,8 @@ class StreamingCoordinator {
             const cb = session.voiceConfig.chatterbox;
             formData.append('gender', cb.gender || 'female');
             formData.append('emotion', cb.emotion || 'expressive');
-            formData.append('exaggeration', cb.exaggeration || '0.6');
-            formData.append('cfg_weight', cb.cfg_weight || '0.7');
+            formData.append('exaggeration', String(cb.exaggeration || 0.6));
+            formData.append('cfg_weight', String(cb.cfg_weight || 0.7));
             formData.append('voice_cloning', cb.voiceCloning?.enabled ? 'true' : 'false');
         } else {
             // Default settings
@@ -288,6 +339,8 @@ class StreamingCoordinator {
             formData.append('voice_cloning', 'false');
         }
 
+        console.log(`[StreamingCoordinator] Local TTS request to ${this.TTS_SERVICE_URL}/synthesize for chunk ${chunk.chunkIndex}`);
+
         const response = await axios.post(`${this.TTS_SERVICE_URL}/synthesize`, formData, {
             headers: {
                 ...formData.getHeaders()
@@ -297,9 +350,10 @@ class StreamingCoordinator {
         });
 
         if (response.status === 200 && response.data) {
+            console.log(`[StreamingCoordinator] Local TTS generated ${response.data.byteLength} bytes for chunk ${chunk.chunkIndex}`);
             return Buffer.from(response.data);
         } else {
-            throw new Error('Local TTS service returned invalid response');
+            throw new Error(`Local TTS service returned status: ${response.status}`);
         }
     }
 
