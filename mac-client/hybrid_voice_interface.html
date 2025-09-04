@@ -1071,61 +1071,94 @@
                         throw new Error('No text transcribed from audio');
                     }
                     
-                    // STEP 2: Send TEXT to REMOTE backend for LLM/RAG processing
-                    console.log('STEP 2: Sending transcribed TEXT to REMOTE RTX 4090 for LLM/RAG...');
+                    // STEP 2: Initialize STREAMING conversation with REMOTE backend
+                    console.log('STEP 2: Starting STREAMING conversation with REMOTE RTX 4090...');
                     
-                    const ragResponse = await fetch(`${this.backendUrl}/api/voice/rag`, {
+                    // Reset audio queue for new conversation
+                    this.resetAudioQueue();
+
+                    // First, initiate streaming conversation
+                    const initResponse = await fetch(`${this.backendUrl}/api/voice/converse`, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
                             text: transcribedText,
-                            model: 'llama3.2:3b'
+                            model: "llama3.2:3b",
+                            conversationHistory: this.getConversationHistory(),
+                            systemPrompt: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
                         })
                     });
-                    
-                    if (!ragResponse.ok) {
-                        throw new Error(`Remote backend error: HTTP ${ragResponse.status}`);
+
+                    if (!initResponse.ok) {
+                        throw new Error(`Backend failed: ${initResponse.status}`);
                     }
+
+                    const initData = await initResponse.json();
+                    const dialogueId = initData.dialogueId;
+                    console.log(`Started streaming conversation: ${dialogueId}`);
+
+                    // STEP 3: Connect to real-time streaming response
+                    let fullResponse = '';
+                    let assistantMessageElement = null;
+
+                    const eventSource = new EventSource(`${this.backendUrl}/api/voice/open-stream?dialogueId=${dialogueId}`);
                     
-                    const ragResult = await ragResponse.json();
-                    
-                    console.log('REMOTE LLM/RAG response:', ragResult);
-                    
-                    // STEP 3: Send TEXT response to REMOTE backend for TTS generation
-                    console.log('STEP 3: Sending response TEXT to REMOTE backend for TTS...');
-                    
-                    const ttsResponse = await fetch(`${this.backendUrl}/api/voice/synthesize`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            text: ragResult.answer || ragResult.response_text,
-                            voice_id: 'en-GB-RyanNeural',
-                            engine: 'edge_tts',
-                            speed: 1.0
-                        })
-                    });
-                    
-                    const processingTime = Date.now() - startTime;
-                    console.log(`Complete processing time: ${processingTime}ms`);
-                    
-                    // Show ALFRED's response (from REMOTE LLM/RAG)
-                    if (ragResult.answer || ragResult.response_text) {
-                        const responseText = ragResult.answer || ragResult.response_text;
-                        this.addMessage('assistant', responseText);
-                        console.log(`REMOTE LLM/RAG response: "${responseText}"`);
-                    }
-                    
-                    // Play TTS audio (from REMOTE backend)
-                    if (ttsResponse.ok) {
-                        const audioArrayBuffer = await ttsResponse.arrayBuffer();
-                        await this.playTTSAudioBuffer(audioArrayBuffer);
-                    } else {
-                        console.warn('TTS generation failed, text-only response');
-                    }
+                    eventSource.onopen = function() {
+                        console.log('Real-time streaming connection opened');
+                        this.showStatus('Receiving live response...');
+                    }.bind(this);
+
+                    eventSource.addEventListener('textChunk', function(event) {
+                        const data = JSON.parse(event.data);
+                        if (data.role === 'assistant' && data.text) {
+                            fullResponse += data.text;
+                            
+                            // Create or update assistant message in real-time
+                            if (!assistantMessageElement) {
+                                assistantMessageElement = this.addMessage('assistant', fullResponse);
+                            } else {
+                                this.updateMessage(assistantMessageElement, fullResponse);
+                            }
+                            
+                            console.log(`Live text chunk: "${data.text}" (total: ${fullResponse.length} chars)`);
+                        }
+                    }.bind(this));
+
+                    eventSource.addEventListener('audioChunk', function(event) {
+                        const data = JSON.parse(event.data);
+                        console.log(`Audio chunk received: hasAudio=${!!data.audio}, audioLength=${data.audio ? data.audio.length : 0}, chunkIndex=${data.chunkIndex}`);
+                        if (data.audio) {
+                            // Queue audio chunk for sequential playback
+                            console.log(`Queueing audio chunk ${data.chunkIndex} for sequential playback`);
+                            this.playAudioChunk(data.audio, data.chunkIndex);
+                        }
+                    }.bind(this));
+
+                    eventSource.addEventListener('complete', function(event) {
+                        console.log('Real-time streaming complete');
+                        eventSource.close();
+                        this.showStatus('Live response complete');
+                        
+                        // Update conversation history with final response
+                        if (fullResponse) {
+                            this.addToConversationHistory('assistant', fullResponse);
+                        }
+                        
+                        const processingTime = Date.now() - startTime;
+                        console.log(`Complete streaming processing time: ${processingTime}ms`);
+                    }.bind(this));
+
+                    eventSource.onerror = function(event) {
+                        console.error('Real-time streaming error:', event);
+                        eventSource.close();
+                        if (!fullResponse) {
+                            // Fallback if streaming failed
+                            this.addMessage('assistant', 'I apologize, but I encountered an error while generating a response. Please try again.');
+                        }
+                        this.showStatus('Ready');
+                    }.bind(this);
                     
                     // Update metrics
                     this.performanceMetrics.responseTime = processingTime;
@@ -1385,6 +1418,132 @@
                     text,
                     timestamp: Date.now()
                 });
+                
+                return message; // Return element for streaming updates
+            }
+
+            updateMessage(messageElement, newText) {
+                if (messageElement) {
+                    const bubble = messageElement.querySelector('.message-bubble');
+                    if (bubble) {
+                        bubble.textContent = newText;
+                        document.getElementById('conversationMessages').scrollTop = document.getElementById('conversationMessages').scrollHeight;
+                    }
+                }
+            }
+
+            // Audio chunk queue management for streaming
+            resetAudioQueue() {
+                console.log('Resetting audio queue');
+                this.audioQueue = [];
+                this.nextExpectedChunk = 1;
+                if (this.currentAudio) {
+                    this.currentAudio.pause();
+                    this.currentAudio = null;
+                }
+            }
+
+            playAudioChunk(audioData, chunkIndex) {
+                if (!audioData) {
+                    console.log('No audio data provided to playAudioChunk');
+                    return;
+                }
+                
+                console.log(`Received audio chunk ${chunkIndex}: ${audioData.length} chars of base64 data`);
+                
+                try {
+                    const audioBlob = new Blob([Uint8Array.from(atob(audioData), c => c.charCodeAt(0))], {
+                        type: 'audio/wav'
+                    });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Initialize queue if needed
+                    if (!this.audioQueue) this.audioQueue = [];
+                    if (!this.nextExpectedChunk) this.nextExpectedChunk = 1;
+                    
+                    // Add to queue with proper sequencing
+                    this.audioQueue.push({
+                        chunkIndex: chunkIndex,
+                        audioUrl: audioUrl,
+                        audioBlob: audioBlob
+                    });
+                    
+                    console.log(`Added chunk ${chunkIndex} to queue (queue length: ${this.audioQueue.length})`);
+                    
+                    // Try to play next chunk in sequence
+                    this.processAudioQueue();
+                    
+                } catch (error) {
+                    console.log(`Error preparing audio chunk ${chunkIndex}: ${error.message}`);
+                    console.error('Error preparing audio chunk:', error);
+                }
+            }
+
+            processAudioQueue() {
+                if (!this.audioQueue) return;
+                
+                // Sort queue by chunk index to ensure proper order
+                this.audioQueue.sort((a, b) => a.chunkIndex - b.chunkIndex);
+                
+                // If currently playing audio, wait for it to finish
+                if (this.currentAudio && !this.currentAudio.ended && !this.currentAudio.paused) {
+                    console.log(`Currently playing chunk, waiting... (next expected: ${this.nextExpectedChunk})`);
+                    return;
+                }
+                
+                // Find the next chunk we're expecting
+                const nextChunk = this.audioQueue.find(chunk => chunk.chunkIndex === this.nextExpectedChunk);
+                
+                if (nextChunk) {
+                    console.log(`Playing chunk ${nextChunk.chunkIndex} in sequence (blob: ${nextChunk.audioBlob.size} bytes)`);
+                    
+                    this.currentAudio = new Audio(nextChunk.audioUrl);
+                    
+                    this.currentAudio.play().then(() => {
+                        console.log(`Audio chunk ${nextChunk.chunkIndex} started playing successfully`);
+                    }).catch(error => {
+                        console.log(`Audio chunk ${nextChunk.chunkIndex} playback failed: ${error.message}`);
+                        console.error('Audio chunk playback failed:', error);
+                    });
+                    
+                    this.currentAudio.addEventListener('ended', () => {
+                        console.log(`Audio chunk ${nextChunk.chunkIndex} playback completed`);
+                        URL.revokeObjectURL(nextChunk.audioUrl);
+                        
+                        // Remove completed chunk from queue
+                        this.audioQueue = this.audioQueue.filter(chunk => chunk.chunkIndex !== nextChunk.chunkIndex);
+                        this.nextExpectedChunk++;
+                        
+                        // Try to play next chunk
+                        setTimeout(() => this.processAudioQueue(), 50); // Small delay for smooth transition
+                    });
+                    
+                    this.currentAudio.addEventListener('error', (error) => {
+                        console.log(`Audio chunk ${nextChunk.chunkIndex} error: ${error.message}`);
+                        console.error('Audio chunk error:', error);
+                        
+                        // Skip this chunk and try next
+                        URL.revokeObjectURL(nextChunk.audioUrl);
+                        this.audioQueue = this.audioQueue.filter(chunk => chunk.chunkIndex !== nextChunk.chunkIndex);
+                        this.nextExpectedChunk++;
+                        this.processAudioQueue();
+                    });
+                } else {
+                    console.log(`Waiting for chunk ${this.nextExpectedChunk} (queue has: ${this.audioQueue.map(c => c.chunkIndex).join(', ')})`);
+                }
+            }
+
+            getConversationHistory() {
+                // Return last 6 messages to keep context manageable
+                return this.conversation.slice(-6).map(msg => ({
+                    role: msg.role === 'system' ? 'user' : msg.role, // Convert system to user for context
+                    content: msg.text
+                }));
+            }
+
+            addToConversationHistory(role, content) {
+                // This is handled by the streaming UI updates
+                console.log(`Added to conversation: ${role} - ${content.substring(0, 50)}...`);
             }
             
             showTypingIndicator() {

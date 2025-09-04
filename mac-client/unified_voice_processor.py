@@ -17,6 +17,7 @@ import asyncio
 import io
 import json
 import logging
+import os
 import time
 import wave
 import threading
@@ -26,6 +27,7 @@ from queue import Queue, Empty
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, BackgroundTasks
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import torch
 from mlx_whisper.load_models import load_model
@@ -333,11 +335,16 @@ class UnifiedVoiceProcessor:
             return energy > self.interruption_config['energy_threshold'], energy
         
         try:
-            # Ensure proper format for Silero VAD
-            if len(audio_data) < 512:
-                padded = np.zeros(512)
-                padded[:len(audio_data)] = audio_data
-                audio_data = padded
+            # Silero VAD requires exactly 512 samples for 16kHz
+            if len(audio_data) != 512:
+                if len(audio_data) > 512:
+                    # Take first 512 samples
+                    audio_data = audio_data[:512]
+                else:
+                    # Pad to 512 samples
+                    padded = np.zeros(512)
+                    padded[:len(audio_data)] = audio_data
+                    audio_data = padded
             
             # Process with shared VAD model
             audio_tensor = torch.FloatTensor(audio_data).unsqueeze(0)
@@ -399,12 +406,10 @@ class UnifiedVoiceProcessor:
             # Quick transcription with minimal processing
             result = transcribe(
                 combined_audio,
-                path_or_hf_repo=self.whisper_model,
+                path_or_hf_repo="mlx-community/whisper-large-v3-mlx-4bit",
                 language="en",
                 task="transcribe",
                 temperature=0.0,
-                best_of=1,
-                beam_size=1,
                 condition_on_previous_text=False,
                 fp16=True,
                 no_speech_threshold=0.6
@@ -431,12 +436,10 @@ class UnifiedVoiceProcessor:
             # Full quality transcription
             result = transcribe(
                 combined_audio,
-                path_or_hf_repo=self.whisper_model,
+                path_or_hf_repo="mlx-community/whisper-large-v3-mlx-4bit",
                 language="en",
                 task="transcribe",
                 temperature=0.0,
-                best_of=3,
-                beam_size=3,
                 condition_on_previous_text=True,
                 fp16=True,
                 no_speech_threshold=0.6
@@ -702,9 +705,58 @@ class UnifiedVoiceProcessor:
             raise HTTPException(status_code=500, detail=f"Processing failed: {e}")
     
     def _preprocess_audio(self, audio_bytes: bytes) -> np.ndarray:
-        """Preprocess raw audio bytes"""
+        """Preprocess audio bytes (handles WebM, WAV, etc.)"""
         try:
-            # Try WAV format first
+            # For WebM/Opus audio, we need to use a different approach
+            # First try to save and use external tool, then fallback to raw processing
+            
+            import tempfile
+            import subprocess
+            
+            try:
+                # Save audio to temporary file
+                with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_file:
+                    temp_file.write(audio_bytes)
+                    temp_path = temp_file.name
+                
+                try:
+                    # Try to convert WebM to WAV using ffmpeg (if available)
+                    wav_path = temp_path.replace('.webm', '.wav')
+                    result = subprocess.run([
+                        'ffmpeg', '-i', temp_path, '-ar', '16000', '-ac', '1', 
+                        '-f', 'wav', wav_path, '-y'
+                    ], capture_output=True, timeout=10)
+                    
+                    if result.returncode == 0:
+                        # Read the converted WAV file
+                        with open(wav_path, 'rb') as wav_file:
+                            wav_data = wav_file.read()
+                        
+                        # Clean up temp files
+                        os.unlink(temp_path)
+                        os.unlink(wav_path)
+                        
+                        # Process WAV data
+                        with io.BytesIO(wav_data) as wav_io:
+                            with wave.open(wav_io, 'rb') as wav:
+                                frames = wav.readframes(-1)
+                                audio_data = np.frombuffer(frames, dtype=np.int16)
+                                return audio_data.astype(np.float32) / 32768.0
+                    
+                except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+                    # ffmpeg not available or failed, try other methods
+                    pass
+                finally:
+                    # Clean up temp file
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+                
+            except Exception:
+                pass
+            
+            # Fallback: Try to treat as WAV
             try:
                 with io.BytesIO(audio_bytes) as wav_io:
                     with wave.open(wav_io, 'rb') as wav_file:
@@ -712,9 +764,20 @@ class UnifiedVoiceProcessor:
                         audio_data = np.frombuffer(frames, dtype=np.int16)
                         return audio_data.astype(np.float32) / 32768.0
             except:
-                # Assume raw PCM
+                pass
+            
+            # Final fallback: Try as raw PCM (but check buffer size first)
+            if len(audio_bytes) % 2 != 0:
+                # Odd number of bytes, can't be 16-bit PCM
+                logger.error(f"Invalid audio data: {len(audio_bytes)} bytes (not 16-bit PCM compatible)")
+                raise ValueError("Invalid audio format - cannot process")
+            
+            try:
                 audio_data = np.frombuffer(audio_bytes, dtype=np.int16)
                 return audio_data.astype(np.float32) / 32768.0
+            except Exception as e:
+                logger.error(f"Final fallback failed: {e}")
+                raise ValueError(f"Cannot process audio format: {e}")
                 
         except Exception as e:
             logger.error(f"Audio preprocessing error: {e}")
@@ -780,6 +843,19 @@ app = FastAPI(
     title="Unified Voice Processor",
     description="Combined VAD, STT, and Smart Turn processing in single pipeline",
     version="4.0.0"
+)
+
+# Add CORS middleware to allow requests from the voice interface
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3001",  # Voice interface
+        "http://localhost:3000",  # Other interfaces
+        "http://localhost:8080",  # Development
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 @app.on_event("startup")
@@ -859,21 +935,61 @@ async def transcribe_file_legacy(
     task: str = Form("transcribe")
 ):
     """Legacy transcription endpoint"""
-    # Redirect to unified processing
-    session_id = f"legacy_{int(time.time())}"
-    audio_bytes = await file.read()
+    start_time = time.time()
     
-    # Process through unified pipeline
-    result = await unified_processor.process_audio_frame(session_id, audio_bytes)
-    
-    # Wait for processing and return result
-    # This is a simplified version - real implementation would wait for actual result
-    return {
-        "text": "Processed through unified pipeline",
-        "language": language,
-        "duration": 1.0,
-        "confidence": 0.95
-    }
+    try:
+        # Read audio file
+        audio_bytes = await file.read()
+        
+        # Preprocess audio
+        audio_data = unified_processor._preprocess_audio(audio_bytes)
+        
+        # Check for speech
+        has_speech, confidence = unified_processor._process_vad(audio_data)
+        
+        if not has_speech and len(audio_data) < unified_processor.sample_rate:
+            # Very short audio with no speech
+            return {
+                "text": "",
+                "language": language,
+                "duration": len(audio_data) / unified_processor.sample_rate,
+                "confidence": 0.0,
+                "has_speech": False
+            }
+        
+        # Get transcription using the model path (not model object)
+        if len(audio_data) < unified_processor.sample_rate * 0.3:  # Less than 300ms
+            text = ""
+        else:
+            result = transcribe(
+                audio_data,
+                path_or_hf_repo="mlx-community/whisper-large-v3-mlx-4bit",  # Use model path, not object
+                language=language,
+                task=task,
+                temperature=0.0,
+                condition_on_previous_text=False,
+                fp16=True,
+                no_speech_threshold=0.6
+            )
+            text = result.get('text', '').strip()
+        
+        duration = len(audio_data) / unified_processor.sample_rate
+        processing_time = (time.time() - start_time) * 1000
+        
+        logger.info(f"Transcribed ({processing_time:.1f}ms): '{text}'")
+        
+        return {
+            "text": text,
+            "language": result.get('language', language) if 'result' in locals() else language,
+            "duration": duration,
+            "confidence": 1.0 - result.get('no_speech_prob', 0.0) if 'result' in locals() else confidence,
+            "has_speech": has_speech,
+            "processing_time_ms": processing_time
+        }
+        
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
 
 @app.post("/predict_endpoint")
 async def predict_endpoint_legacy(

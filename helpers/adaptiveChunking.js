@@ -333,13 +333,14 @@ class AdaptiveChunking {
         const maxSearch = Math.min(text.length, targetSize * 1.2); // Don't exceed 120% of target
         const searchText = text.substring(minSearch, maxSearch);
         
-        // Try to find natural boundaries in order of preference
+        // TEMPORARILY: Use only periods for cleaner speech (less fragmented)
         const boundaries = [
-            { pattern: this.SENTENCE_ENDINGS, priority: 4 },
-            { pattern: this.STRONG_PUNCTUATION, priority: 3 },
-            { pattern: this.COMMA_BREAKS, priority: 2 },
-            { pattern: this.CLAUSE_BREAKS, priority: 1 },
-            { pattern: this.NATURAL_PAUSES, priority: 1 }
+            { pattern: this.SENTENCE_ENDINGS, priority: 4 }
+            // Commented out other patterns to test period-only chunking:
+            // { pattern: this.STRONG_PUNCTUATION, priority: 3 },
+            // { pattern: this.COMMA_BREAKS, priority: 2 },
+            // { pattern: this.CLAUSE_BREAKS, priority: 1 },
+            // { pattern: this.NATURAL_PAUSES, priority: 1 }
         ];
 
         let bestBreak = { index: targetSize, priority: 0 };
