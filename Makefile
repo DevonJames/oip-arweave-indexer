@@ -735,7 +735,7 @@ mac-stt-services: ## Start Mac STT services (Smart Turn, STT, Interface Server) 
 	@echo "$(BLUE)🍎 Starting Mac STT Services Stack...$(NC)"
 	@echo "$(YELLOW)📱 This starts the client-side services for Mac voice interface$(NC)"
 	@echo "$(GREEN)Services starting:$(NC)"
-	@echo "  🧠 Smart Turn Service (port 8012)"
+	@echo "  🧠 Smart Turn Service (port 8014)"
 	@echo "  🎤 STT Service (port 8013)" 
 	@echo "  🌐 Interface Server (port 3001)"
 	@echo ""
@@ -827,10 +827,10 @@ mac-status: ## Check status of Mac STT services
 	fi
 	@echo ""
 	@echo "$(BLUE)Port Status:$(NC)"
-	@if lsof -i :8012 >/dev/null 2>&1; then \
-		echo "$(GREEN)  Port 8012 (Smart Turn): ✅ Active$(NC)"; \
+	@if lsof -i :8014 >/dev/null 2>&1; then \
+		echo "$(GREEN)  Port 8014 (Smart Turn): ✅ Active$(NC)"; \
 	else \
-		echo "$(RED)  Port 8012 (Smart Turn): ❌ Free$(NC)"; \
+		echo "$(RED)  Port 8014 (Smart Turn): ❌ Free$(NC)"; \
 	fi
 	@if lsof -i :8013 >/dev/null 2>&1; then \
 		echo "$(GREEN)  Port 8013 (STT): ✅ Active$(NC)"; \

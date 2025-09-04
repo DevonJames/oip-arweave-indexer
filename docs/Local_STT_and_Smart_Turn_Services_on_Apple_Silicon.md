@@ -47,7 +47,7 @@ The local Mac services work in conjunction with the remote backend services to c
 
 **Purpose**: Detects when a user has finished speaking to trigger response processing.
 
-**Port**: `8012`
+**Port**: `8014`
 
 **Model**: Custom endpoint detection model
 - **Algorithm**: Probabilistic speech endpoint detection
@@ -198,7 +198,7 @@ Mac STT Services Status:
 🌐 Interface Server: ✅ Running (PID: 12347)
 
 Port Status:
-  Port 8012 (Smart Turn): ✅ Active
+  Port 8014 (Smart Turn): ✅ Active
   Port 8013 (STT): ✅ Active
   Port 3001 (Interface): ✅ Active
 ```
@@ -212,7 +212,7 @@ Mac STT Services Status:
 🌐 Interface Server: ✅ Running (PID: 12347)
 
 Port Status:
-  Port 8012 (Smart Turn): ❌ Free
+  Port 8014 (Smart Turn): ❌ Free
   Port 8013 (STT): ✅ Active  
   Port 3001 (Interface): ✅ Active
 ```
@@ -260,7 +260,7 @@ INFO:__main__:Transcription: "Hello, how are you today?"
 **Smart Turn Service Log:**
 ```
 INFO:__main__:🚀 Starting Smart Turn Detection Service...
-INFO:__main__:✅ Smart Turn service started on port 8012
+INFO:__main__:✅ Smart Turn service started on port 8014
 INFO:__main__:Endpoint detection request: 23456 bytes audio
 INFO:__main__:Smart Turn probability: 0.85 (threshold: 0.5)
 INFO:__main__:✅ Endpoint detected - user finished speaking
@@ -294,7 +294,7 @@ INFO:__main__:✅ Endpoint detected - user finished speaking
 **1. Services Won't Start**
 ```bash
 # Check if ports are in use
-lsof -i :8012 :8013 :3001
+lsof -i :8014 :8013 :3001
 
 # Kill conflicting processes
 make mac-stop
@@ -347,7 +347,7 @@ Test individual services:
 curl http://localhost:8013/health
 
 # Smart Turn Service Health  
-curl http://localhost:8012/health
+curl http://localhost:8014/health
 
 # Interface Server Health
 curl http://localhost:3001/health
@@ -380,7 +380,7 @@ STT_DEVICE="mps"
 STT_PORT="8013"
 
 # Smart Turn Service Configuration  
-SMART_TURN_PORT="8012"
+SMART_TURN_PORT="8014"
 SMART_TURN_THRESHOLD="0.5"
 
 # Interface Server Configuration
