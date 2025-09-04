@@ -11,14 +11,11 @@ Backend: https://api.oip.onl/api
 [Interface] 🎤 WebRTC test: http://localhost:3001/webrtc
 [Interface] 🚀 Enhanced interface: http://localhost:3001/enhanced
 [Interface] 📡 WebRTC signaling: ws://localhost:3002
-[Interface] GET /health - 2025-09-04T18:23:45.602Z
-[Interface] GET /enhanced - 2025-09-04T18:23:50.164Z
-[Interface] GET /enhanced - 2025-09-04T18:23:53.976Z
-[Interface] GET /health - 2025-09-04T18:23:58.476Z
-[Interface] GET /health - 2025-09-04T18:24:28.474Z
-[Interface] GET /health - 2025-09-04T18:24:58.475Z
-[Interface] GET /health - 2025-09-04T18:25:28.474Z
-[Interface] GET /health - 2025-09-04T18:25:58.475Z
+[Interface] GET /enhanced - 2025-09-04T18:39:55.143Z
+[Interface] GET /health - 2025-09-04T18:39:58.305Z
+[Interface] GET /health - 2025-09-04T18:40:00.758Z
+[Interface] GET /enhanced - 2025-09-04T18:40:08.757Z
+[Interface] GET /health - 2025-09-04T18:40:28.307Z
 
 [Interface] Received SIGTERM, shutting down gracefully...
 [Interface] Stopping Enhanced Voice Interface Server...

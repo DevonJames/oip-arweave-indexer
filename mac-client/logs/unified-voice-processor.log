@@ -1,4 +1,4 @@
-2025-09-04 11:23:37,137 - __main__ - INFO - 🚀 Initializing Unified Voice Processor...
+2025-09-04 11:39:52,897 - __main__ - INFO - 🚀 Initializing Unified Voice Processor...
 /Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/unified_voice_processor.py:785: DeprecationWarning: 
         on_event is deprecated, use lifespan event handlers instead.
 
@@ -13,21 +13,22 @@
         [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
         
   @app.on_event("shutdown")
-2025-09-04 11:23:37,142 - __main__ - INFO - 🚀 Starting Unified Voice Processor on 0.0.0.0:8015
-INFO:     Started server process [64008]
+2025-09-04 11:39:52,902 - __main__ - INFO - 🚀 Starting Unified Voice Processor on 0.0.0.0:8015
+INFO:     Started server process [87593]
 INFO:     Waiting for application startup.
-2025-09-04 11:23:37,168 - __main__ - INFO - 📥 Loading models for unified pipeline...
-2025-09-04 11:23:37,168 - __main__ - INFO - Loading MLX Whisper model...
-Fetching 5 files:   0%|          | 0/5 [00:00<?, ?it/s]Fetching 5 files: 100%|██████████| 5/5 [00:00<00:00, 60963.72it/s]
-2025-09-04 11:23:38,434 - __main__ - INFO - ✅ MLX Whisper model loaded
-2025-09-04 11:23:38,434 - __main__ - INFO - Loading Silero VAD model...
+2025-09-04 11:39:52,930 - __main__ - INFO - 📥 Loading models for unified pipeline...
+2025-09-04 11:39:52,930 - __main__ - INFO - Loading MLX Whisper model...
+Fetching 5 files:   0%|          | 0/5 [00:00<?, ?it/s]Fetching 5 files: 100%|██████████| 5/5 [00:00<00:00, 47127.01it/s]
+2025-09-04 11:39:55,236 - __main__ - INFO - ✅ MLX Whisper model loaded
+2025-09-04 11:39:55,236 - __main__ - INFO - Loading Silero VAD model...
 Using cache found in /Users/devon/.cache/torch/hub/snakers4_silero-vad_master
-2025-09-04 11:23:38,850 - __main__ - INFO - ✅ Silero VAD model loaded
-2025-09-04 11:23:38,850 - __main__ - INFO - 🎯 Starting unified processing loop...
-2025-09-04 11:23:38,850 - __main__ - INFO - 🔄 Unified processing thread started
-2025-09-04 11:23:38,850 - __main__ - INFO - ✅ Unified Voice Processor initialized successfully
+2025-09-04 11:39:55,790 - __main__ - INFO - ✅ Silero VAD model loaded
+2025-09-04 11:39:55,791 - __main__ - INFO - 🎯 Starting unified processing loop...
+2025-09-04 11:39:55,791 - __main__ - INFO - 🔄 Unified processing thread started
+2025-09-04 11:39:55,791 - __main__ - INFO - ✅ Unified Voice Processor initialized successfully
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8015 (Press CTRL+C to quit)
-INFO:     127.0.0.1:61589 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61611 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61614 - "GET /health HTTP/1.1" 200 OK
+ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 8015): address already in use
+INFO:     Waiting for application shutdown.
+2025-09-04 11:39:55,791 - __main__ - INFO - 🛑 Shutting down Unified Voice Processor...
+2025-09-04 11:39:55,801 - __main__ - INFO - ✅ Unified Voice ProINFO:     127.0.0.1:62526 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62538 - "GET /health HTTP/1.1" 200 OK
