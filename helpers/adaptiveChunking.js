@@ -17,8 +17,8 @@ class AdaptiveChunking {
         this.BOOTSTRAP_MAX_WORDS = 40; // Max words for bootstrap chunk
         this.MAX_CHUNK_DISPATCH_DELAY = 100; // Max delay between chunks (ms)
         
-        // Chunk sizing constants - PROGRESSIVE SIZING
-        this.MIN_CHUNK_CHARS = 40; // Start small for immediate response
+        // Chunk sizing constants - CONSERVATIVE SIZING for period-only chunking
+        this.MIN_CHUNK_CHARS = 80; // Larger minimum to ensure we reach sentence endings
         this.MAX_CHUNK_CHARS = 800; // Maximum chunk size in characters
         this.GROWTH_FACTOR = 1.4; // How much to grow chunk size each iteration
         
@@ -155,16 +155,29 @@ class AdaptiveChunking {
         const bootstrapWords = words.slice(0, targetWords);
         const bootstrapText = bootstrapWords.join(' ');
         
-        // Find best break point within bootstrap text
-        const breakPoint = this.findBestBreakPoint(bootstrapText, bootstrapText.length);
-        const finalText = bootstrapText.substring(0, breakPoint).trim();
+        // For bootstrap, ONLY use complete sentences
+        const sentencePattern = /[.!?]+\s*/g;
+        let lastSentenceEnd = 0;
+        let match;
         
-        if (finalText.length < 10) { // Too short, wait for more
+        while ((match = sentencePattern.exec(bootstrapText)) !== null) {
+            lastSentenceEnd = match.index + match[0].length;
+        }
+        
+        // If no complete sentence found, wait for more text
+        if (lastSentenceEnd === 0) {
+            console.log(`[AdaptiveChunking] Bootstrap: No complete sentence found in ${bootstrapText.length} chars, waiting...`);
+            return null;
+        }
+        
+        const finalText = bootstrapText.substring(0, lastSentenceEnd).trim();
+        
+        if (finalText.length < 15) { // Too short, wait for more
             return null;
         }
 
         // Update session state
-        session.processedLength = breakPoint;
+        session.processedLength = lastSentenceEnd;
         session.totalWordsProcessed += this.getWords(finalText).length;
         session.chunkCount = 1; // Set chunk count to 1 for bootstrap (don't increment here)
 
@@ -312,7 +325,7 @@ class AdaptiveChunking {
     }
 
     /**
-     * Find the best break point within target size, preferring natural boundaries
+     * Find the best break point within target size, ONLY using sentence endings
      * @param {string} text - Text to analyze
      * @param {number} targetSize - Target chunk size
      * @returns {number} Break point index
@@ -322,47 +335,41 @@ class AdaptiveChunking {
             return text.length;
         }
 
-        // Define search ranges (prefer breaks closer to target)
-        const minSearch = Math.floor(targetSize * 0.7); // Don't go below 70% of target
-        const maxSearch = Math.min(text.length, targetSize * 1.2); // Don't exceed 120% of target
-        const searchText = text.substring(minSearch, maxSearch);
-        
-        // TEMPORARILY: Use only periods for cleaner speech (less fragmented)
-        const boundaries = [
-            { pattern: this.SENTENCE_ENDINGS, priority: 4 }
-            // Commented out other patterns to test period-only chunking:
-            // { pattern: this.STRONG_PUNCTUATION, priority: 3 },
-            // { pattern: this.COMMA_BREAKS, priority: 2 },
-            // { pattern: this.CLAUSE_BREAKS, priority: 1 },
-            // { pattern: this.NATURAL_PAUSES, priority: 1 }
-        ];
+        // PERIOD-ONLY STRATEGY: Only break at sentence endings
+        // Look for the closest sentence ending to our target size
+        const sentencePattern = /[.!?]+\s*/g;
+        let bestBreak = null;
+        let match;
 
-        let bestBreak = { index: targetSize, priority: 0 };
-
-        for (const boundary of boundaries) {
-            const matches = Array.from(searchText.matchAll(boundary.pattern));
+        // Find all sentence endings in the text
+        while ((match = sentencePattern.exec(text)) !== null) {
+            const endIndex = match.index + match[0].length;
             
-            for (const match of matches) {
-                const absoluteIndex = minSearch + match.index + match[0].length;
-                
-                // Prefer breaks closer to target size with higher priority
-                const distanceFromTarget = Math.abs(absoluteIndex - targetSize);
-                const score = boundary.priority - (distanceFromTarget / targetSize);
-                
-                if (score > bestBreak.priority || 
-                   (score === bestBreak.priority && distanceFromTarget < Math.abs(bestBreak.index - targetSize))) {
-                    bestBreak = { index: absoluteIndex, priority: score };
+            // If this sentence ending is within reasonable range, consider it
+            if (endIndex >= this.MIN_CHUNK_CHARS && endIndex <= text.length) {
+                if (!bestBreak) {
+                    bestBreak = endIndex;
+                } else {
+                    // Prefer the sentence ending closest to our target size
+                    const currentDistance = Math.abs(endIndex - targetSize);
+                    const bestDistance = Math.abs(bestBreak - targetSize);
+                    
+                    if (currentDistance < bestDistance) {
+                        bestBreak = endIndex;
+                    }
                 }
             }
         }
 
-        // Ensure we don't break mid-word
-        let finalIndex = bestBreak.index;
-        while (finalIndex > 0 && finalIndex < text.length && !/\s/.test(text[finalIndex - 1])) {
-            finalIndex--;
+        // If we found a sentence ending, use it
+        if (bestBreak !== null) {
+            return bestBreak;
         }
 
-        return Math.max(minSearch, finalIndex);
+        // If no sentence ending found, DON'T break - return full text length
+        // This will cause the system to wait longer for a natural break
+        console.log(`[AdaptiveChunking] No sentence ending found in text of length ${text.length}, waiting for more text`);
+        return text.length;
     }
 
     /**
