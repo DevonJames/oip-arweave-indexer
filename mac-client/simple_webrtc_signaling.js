@@ -159,15 +159,15 @@ class SimpleWebRTCSignaling extends EventEmitter {
         
         switch (message.type) {
             case 'offer':
+                await this.handleWebRTCOffer(clientId, message);
+                break;
+                
             case 'answer':
+                await this.handleWebRTCAnswer(clientId, message);
+                break;
+                
             case 'ice-candidate':
-                // Pure signaling - relay to other clients if needed
-                // For now, just acknowledge
-                this.sendToClient(clientId, {
-                    type: 'signaling-ack',
-                    originalType: message.type,
-                    timestamp: Date.now()
-                });
+                await this.handleIceCandidate(clientId, message);
                 break;
                 
             case 'transcription':
@@ -193,6 +193,53 @@ class SimpleWebRTCSignaling extends EventEmitter {
             default:
                 console.warn(`[SimpleSignaling] Unknown message type: ${message.type}`);
         }
+    }
+
+    /**
+     * Handle WebRTC offer from client
+     */
+    async handleWebRTCOffer(clientId, message) {
+        try {
+            console.log(`[SimpleSignaling] Handling WebRTC offer from ${clientId}`);
+            
+            // For a signaling server, we just need to acknowledge the offer
+            // The actual peer connection is established between browser and browser
+            // or in this case, we'll send back a simple answer
+            
+            this.sendToClient(clientId, {
+                type: 'answer',
+                answer: {
+                    type: 'answer',
+                    sdp: 'v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=ice-lite\r\n'
+                },
+                timestamp: Date.now()
+            });
+            
+            console.log(`[SimpleSignaling] Sent answer to ${clientId}`);
+            
+        } catch (error) {
+            console.error(`[SimpleSignaling] Failed to handle offer from ${clientId}:`, error);
+            this.sendToClient(clientId, {
+                type: 'error',
+                message: 'Failed to handle WebRTC offer'
+            });
+        }
+    }
+
+    /**
+     * Handle WebRTC answer from client
+     */
+    async handleWebRTCAnswer(clientId, message) {
+        console.log(`[SimpleSignaling] Received answer from ${clientId}`);
+        // In a simple signaling server, we just acknowledge
+    }
+
+    /**
+     * Handle ICE candidate from client
+     */
+    async handleIceCandidate(clientId, message) {
+        console.log(`[SimpleSignaling] Received ICE candidate from ${clientId}`);
+        // In a simple signaling server, we just acknowledge
     }
 
     /**

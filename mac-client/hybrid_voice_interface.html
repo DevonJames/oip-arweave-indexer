@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALFRED Voice Assistant - Hybrid Implementation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        
+        .app-container {
+            width: 100%;
+            max-width: 1000px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .main-content {
+            padding: 32px;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-status.disconnected {
+            background-color: #fff5f5;
+            color: #c53030;
+            border: 2px solid #feb2b2;
+        }
+        
+        .connection-status.connecting {
+            background-color: #fffaf0;
+            color: #c05621;
+            border: 2px solid #fbd38d;
+        }
+        
+        .connection-status.connected {
+            background-color: #f0fff4;
+            color: #22543d;
+            border: 2px solid #9ae6b4;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+        
+        .status-dot.connecting {
+            animation: pulse 1.5s infinite;
+        }
+        
+        .voice-interface {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .voice-controls {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .voice-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            font-size: 48px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .voice-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 122, 255, 0.3);
+        }
+        
+        .voice-button:active {
+            transform: scale(0.95);
+        }
+        
+        .voice-button.listening {
+            background: linear-gradient(135deg, #34c759, #30d158);
+            animation: listening-pulse 2s infinite;
+        }
+        
+        .voice-button.processing {
+            background: linear-gradient(135deg, #ff9500, #ffb340);
+            animation: processing-spin 1s linear infinite;
+        }
+        
+        .voice-button.speaking {
+            background: linear-gradient(135deg, #5856d6, #af52de);
+            animation: speaking-wave 1.5s ease-in-out infinite;
+        }
+        
+        .voice-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .voice-status {
+            font-size: 16px;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .voice-subtitle {
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .audio-visualization {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px;
+        }
+        
+        .audio-viz-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .audio-viz-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .audio-level-container {
+            margin-bottom: 20px;
+        }
+        
+        .audio-level {
+            width: 100%;
+            height: 8px;
+            background-color: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        
+        .audio-level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #34c759, #30d158, #ff9500);
+            width: 0%;
+            transition: width 0.1s ease;
+        }
+        
+        .audio-level-text {
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .waveform-container {
+            height: 80px;
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .waveform {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .conversation-area {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            max-height: 400px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .conversation-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .conversation-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .conversation-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .control-btn {
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: white;
+            color: #666;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #f7fafc;
+            border-color: #cbd5e0;
+        }
+        
+        .conversation-messages {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 300px;
+        }
+        
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .message-avatar.user {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+        }
+        
+        .message-avatar.assistant {
+            background: linear-gradient(135deg, #34c759, #30d158);
+            color: white;
+        }
+        
+        .message-avatar.system {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .message-content {
+            flex: 1;
+            max-width: 70%;
+        }
+        
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 15px;
+            line-height: 1.4;
+            position: relative;
+        }
+        
+        .message-bubble.user {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message-bubble.assistant {
+            background: #f7fafc;
+            color: #333;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-bubble.system {
+            background: #e9ecef;
+            color: #495057;
+            border-bottom-left-radius: 4px;
+            font-style: italic;
+        }
+        
+        .message-bubble.partial {
+            opacity: 0.7;
+            font-style: italic;
+            border-style: dashed;
+        }
+        
+        .message-bubble.interrupted {
+            background: #fff5f0;
+            border-color: #fed7aa;
+            color: #c05621;
+        }
+        
+        .message-meta {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .message.user .message-meta {
+            justify-content: flex-end;
+        }
+        
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 12px 16px;
+            background: #f7fafc;
+            border-radius: 16px;
+            border-bottom-left-radius: 4px;
+            margin-bottom: 16px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #cbd5e0;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        .performance-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 20px;
+        }
+        
+        .performance-metric {
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007aff;
+            margin-bottom: 4px;
+        }
+        
+        .metric-value.warning { color: #ff9500; }
+        .metric-value.error { color: #ff3b30; }
+        .metric-value.success { color: #34c759; }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .controls-panel {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 24px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .error-banner {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .success-banner {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        
+        @keyframes listening-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.4); }
+            50% { box-shadow: 0 0 0 20px rgba(52, 199, 89, 0); }
+        }
+        
+        @keyframes processing-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes speaking-wave {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.1); }
+            50% { transform: scale(1.05); }
+            75% { transform: scale(1.15); }
+        }
+        
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-10px); opacity: 1; }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .voice-interface {
+                grid-template-columns: 1fr;
+            }
+            
+            .app-container {
+                margin: 10px;
+                border-radius: 16px;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>🎤 ALFRED Voice Assistant</h1>
+            <p>Hybrid implementation: Advanced UI + Existing Backend + Real Audio</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- Connection Status -->
+            <div id="connectionStatus" class="connection-status disconnected">
+                <div class="status-dot"></div>
+                <span>Ready to connect with echo cancellation and real audio processing</span>
+            </div>
+            
+            <!-- Error/Success Banners -->
+            <div id="errorBanner" class="error-banner">
+                <span>⚠️</span>
+                <span id="errorMessage">An error occurred</span>
+            </div>
+            
+            <div id="successBanner" class="success-banner">
+                <span>✅</span>
+                <span id="successMessage">Success!</span>
+            </div>
+            
+            <!-- Main Voice Interface -->
+            <div class="voice-interface">
+                <!-- Voice Controls -->
+                <div class="voice-controls">
+                    <button id="voiceButton" class="voice-button" disabled>
+                        🎤
+                    </button>
+                    <div id="voiceStatus" class="voice-status">Ready to Connect</div>
+                    <div id="voiceSubtitle" class="voice-subtitle">Advanced audio processing with your existing backend</div>
+                </div>
+                
+                <!-- Audio Visualization -->
+                <div class="audio-visualization">
+                    <div class="audio-viz-header">
+                        <div class="audio-viz-title">Real-Time Audio Activity</div>
+                    </div>
+                    
+                    <div class="audio-level-container">
+                        <div class="audio-level">
+                            <div id="audioLevelBar" class="audio-level-bar"></div>
+                        </div>
+                        <div id="audioLevelText" class="audio-level-text">0% - No Audio</div>
+                    </div>
+                    
+                    <div class="waveform-container">
+                        <div id="waveform" class="waveform">
+                            Audio waveform visualization
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Conversation Area -->
+            <div class="conversation-area">
+                <div class="conversation-header">
+                    <h3 class="conversation-title">💬 Conversation</h3>
+                    <div class="conversation-controls">
+                        <button class="control-btn" onclick="clearConversation()">Clear</button>
+                        <button class="control-btn" onclick="exportConversation()">Export</button>
+                    </div>
+                </div>
+                
+                <div id="conversationMessages" class="conversation-messages">
+                    <!-- Welcome message -->
+                    <div class="message">
+                        <div class="message-avatar assistant">🤖</div>
+                        <div class="message-content">
+                            <div class="message-bubble assistant">
+                                Hello! I'm ALFRED with enhanced voice processing. This version uses advanced audio capture with echo cancellation while connecting to your existing RTX 4090 backend. Click Connect to start real voice interaction.
+                            </div>
+                            <div class="message-meta">
+                                <span>Just now</span>
+                                <span>•</span>
+                                <span>System message</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Typing indicator -->
+                <div id="typingIndicator" class="typing-indicator" style="display: none;">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <span style="margin-left: 8px; color: #666;">ALFRED is thinking...</span>
+                </div>
+            </div>
+            
+            <!-- Performance Panel -->
+            <div class="performance-panel">
+                <div class="performance-metric">
+                    <div id="responseTime" class="metric-value">--</div>
+                    <div class="metric-label">Response Time</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="audioQuality" class="metric-value success">Good</div>
+                    <div class="metric-label">Audio Quality</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="backendStatus" class="metric-value">--</div>
+                    <div class="metric-label">Backend Status</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="conversationTurns" class="metric-value">0</div>
+                    <div class="metric-label">Conversation Turns</div>
+                </div>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="controls-panel">
+                <button id="connectBtn" class="btn btn-primary">
+                    <span>🔌</span>
+                    <span>Connect to ALFRED</span>
+                </button>
+                <button id="testBtn" class="btn btn-secondary">
+                    <span>🧪</span>
+                    <span>Test Backend</span>
+                </button>
+                <button id="debugBtn" class="btn btn-secondary" disabled>
+                    <span>🔍</span>
+                    <span>Debug Audio</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class HybridALFREDInterface {
+            constructor() {
+                // Audio components
+                this.localStream = null;
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.audioContext = null;
+                this.analyser = null;
+                this.animationFrame = null;
+                
+                // State management
+                this.isConnected = false;
+                this.isRecording = false;
+                this.conversationTurns = 0;
+                
+                // Voice processing state (keeping from WebRTC implementation)
+                this.voiceState = {
+                    currentTurn: 'user',           // 'user', 'agent', 'processing'
+                    speechActive: false,
+                    agentSpeaking: false,
+                    canInterrupt: false,
+                    lastInterruption: null
+                };
+                
+                // Performance tracking (keeping from Phase 5)
+                this.performanceMetrics = {
+                    responseTime: 0,
+                    audioQuality: 'good',
+                    backendStatus: 'unknown',
+                    conversationTurns: 0
+                };
+                
+                this.conversation = [];
+                // Correct architecture: Local processing + Remote LLM
+                this.localProcessorUrl = 'http://localhost:8015'; // LOCAL speech processing
+                this.backendUrl = 'https://api.oip.onl'; // REMOTE LLM/RAG only
+                
+                this.setupEventListeners();
+                this.updateUI();
+                this.testBackendOnLoad();
+            }
+            
+            setupEventListeners() {
+                document.getElementById('connectBtn').addEventListener('click', () => this.toggleConnection());
+                document.getElementById('testBtn').addEventListener('click', () => this.testBackend());
+                document.getElementById('debugBtn').addEventListener('click', () => this.debugAudio());
+                document.getElementById('voiceButton').addEventListener('click', () => this.toggleRecording());
+                
+                // Keyboard shortcuts (keeping from Phase 5)
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space' && !e.repeat) {
+                        e.preventDefault();
+                        if (this.isConnected) {
+                            this.toggleRecording();
+                        }
+                    }
+                });
+            }
+            
+            async testBackendOnLoad() {
+                try {
+                    // Test LOCAL processor
+                    const localResponse = await fetch(`${this.localProcessorUrl}/health`);
+                    const localData = await localResponse.json();
+                    console.log('LOCAL processor health:', localData);
+                    
+                    // Test REMOTE backend
+                    const remoteResponse = await fetch(`${this.backendUrl}/api/voice/health`);
+                    const remoteData = await remoteResponse.json();
+                    console.log('REMOTE backend health:', remoteData);
+                    
+                    this.performanceMetrics.backendStatus = 'healthy';
+                    this.updatePerformanceMetrics();
+                    
+                } catch (error) {
+                    console.warn('Services not available on load:', error);
+                    this.performanceMetrics.backendStatus = 'unavailable';
+                    this.updatePerformanceMetrics();
+                }
+            }
+            
+            async toggleConnection() {
+                if (this.isConnected) {
+                    await this.disconnect();
+                } else {
+                    await this.connect();
+                }
+            }
+            
+            async connect() {
+                try {
+                    this.updateConnectionStatus('connecting', 'Setting up advanced audio processing...');
+                    
+                    // Get microphone with WebRTC-quality settings (keeping echo cancellation)
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,        // Critical for preventing self-interruption
+                            noiseSuppression: true,        // From WebRTC implementation
+                            autoGainControl: true,         // From WebRTC implementation
+                            sampleRate: 16000,             // Optimized for speech processing
+                            channelCount: 1,               // Mono for efficiency
+                            latency: 0.01                  // Low latency from WebRTC work
+                        }
+                    });
+                    
+                    console.log('Microphone access granted with advanced audio settings');
+                    
+                    // Setup enhanced audio visualization (from Phase 5)
+                    await this.setupAudioVisualization();
+                    
+                    // Setup MediaRecorder for real audio capture
+                    this.setupMediaRecorder();
+                    
+                    // Test your existing backend
+                    await this.testBackend();
+                    
+                    this.isConnected = true;
+                    this.updateConnectionStatus('connected', 'Connected with advanced audio processing');
+                    this.updateUI();
+                    
+                    this.showSuccess('Connected! Advanced audio processing ready. Your voice will be processed (not test messages).');
+                    this.addMessage('system', '🎤 Advanced audio setup complete. Click microphone or press spacebar to record your REAL voice.');
+                    
+                } catch (error) {
+                    console.error('Connection failed:', error);
+                    this.showError(`Setup failed: ${error.message}`);
+                    this.updateConnectionStatus('disconnected', 'Connection failed');
+                }
+            }
+            
+            setupMediaRecorder() {
+                try {
+                    // Use WebM format (compatible with your existing backend)
+                    let options = { mimeType: 'audio/webm;codecs=opus' };
+                    
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options = {}; // Use default
+                        console.warn('WebM not supported, using default format');
+                    }
+                    
+                    this.mediaRecorder = new MediaRecorder(this.localStream, options);
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                            console.log(`Audio chunk recorded: ${event.data.size} bytes`);
+                        }
+                    };
+                    
+                    this.mediaRecorder.onstop = () => {
+                        console.log('Recording stopped - processing REAL audio...');
+                        this.processRecordedAudio();
+                    };
+                    
+                    this.mediaRecorder.onerror = (error) => {
+                        console.error('MediaRecorder error:', error);
+                        this.showError('Audio recording error occurred');
+                    };
+                    
+                    console.log('MediaRecorder setup complete for REAL audio capture');
+                    
+                } catch (error) {
+                    console.error('MediaRecorder setup failed:', error);
+                    throw error;
+                }
+            }
+            
+            async setupAudioVisualization() {
+                try {
+                    // Enhanced audio context setup (from Phase 5 work)
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 16000,
+                        latencyHint: 'interactive'  // From WebRTC optimization
+                    });
+                    
+                    const source = this.audioContext.createMediaStreamSource(this.localStream);
+                    this.analyser = this.audioContext.createAnalyser();
+                    this.analyser.fftSize = 512;
+                    
+                    source.connect(this.analyser);
+                    
+                    // Start real-time visualization
+                    this.startAudioVisualization();
+                    
+                    console.log('Enhanced audio visualization setup complete');
+                    
+                } catch (error) {
+                    console.warn('Audio visualization setup failed:', error);
+                }
+            }
+            
+            startAudioVisualization() {
+                const audioData = new Uint8Array(this.analyser.frequencyBinCount);
+                
+                const updateVisualization = () => {
+                    if (!this.isConnected || !this.analyser) {
+                        return;
+                    }
+                    
+                    this.analyser.getByteFrequencyData(audioData);
+                    
+                    // Calculate average audio level
+                    const average = audioData.reduce((a, b) => a + b) / audioData.length;
+                    const percentage = Math.min(100, (average / 128) * 100);
+                    
+                    // Update audio level visualization
+                    this.updateAudioLevel(percentage);
+                    
+                    // Update waveform
+                    this.updateWaveform(audioData);
+                    
+                    this.animationFrame = requestAnimationFrame(updateVisualization);
+                };
+                
+                updateVisualization();
+            }
+            
+            updateAudioLevel(percentage) {
+                const bar = document.getElementById('audioLevelBar');
+                const text = document.getElementById('audioLevelText');
+                
+                bar.style.width = `${percentage}%`;
+                
+                if (percentage < 5) {
+                    text.textContent = '0% - No Audio';
+                } else if (percentage < 20) {
+                    text.textContent = `${Math.round(percentage)}% - Quiet`;
+                } else if (percentage < 60) {
+                    text.textContent = `${Math.round(percentage)}% - Speaking`;
+                } else {
+                    text.textContent = `${Math.round(percentage)}% - Loud`;
+                }
+                
+                // Update audio quality metric
+                if (percentage > 10) {
+                    this.performanceMetrics.audioQuality = 'good';
+                } else {
+                    this.performanceMetrics.audioQuality = 'poor';
+                }
+            }
+            
+            updateWaveform(audioData) {
+                const waveform = document.getElementById('waveform');
+                
+                if (audioData && audioData.length > 0) {
+                    const average = audioData.reduce((a, b) => a + b) / audioData.length;
+                    if (average > 10) {
+                        waveform.style.background = `linear-gradient(90deg, 
+                            rgba(52, 199, 89, 0.1) 0%, 
+                            rgba(52, 199, 89, ${average / 128}) 50%, 
+                            rgba(52, 199, 89, 0.1) 100%)`;
+                        waveform.textContent = '🎵 Audio detected';
+                    } else {
+                        waveform.style.background = '#ffffff';
+                        waveform.textContent = '🔇 Silence';
+                    }
+                }
+            }
+            
+            toggleRecording() {
+                if (this.isRecording) {
+                    this.stopRecording();
+                } else {
+                    this.startRecording();
+                }
+            }
+            
+            startRecording() {
+                if (!this.mediaRecorder || this.mediaRecorder.state !== 'inactive') {
+                    this.showError('Audio recorder not ready');
+                    return;
+                }
+                
+                try {
+                    this.audioChunks = [];
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    
+                    // Update UI to show recording state
+                    this.voiceState.speechActive = true;
+                    this.updateVoiceButton();
+                    
+                    console.log('Started recording REAL audio (NO TEST MESSAGES!)');
+                    this.addMessage('system', '🔴 Recording your voice... Speak now! (Real audio capture active)');
+                    
+                    // Auto-stop after 10 seconds
+                    setTimeout(() => {
+                        if (this.isRecording) {
+                            this.stopRecording();
+                        }
+                    }, 10000);
+                    
+                } catch (error) {
+                    console.error('Failed to start recording:', error);
+                    this.showError('Failed to start audio recording');
+                }
+            }
+            
+            stopRecording() {
+                if (!this.isRecording || !this.mediaRecorder) {
+                    return;
+                }
+                
+                try {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                    
+                    // Update UI
+                    this.voiceState.speechActive = false;
+                    this.updateVoiceButton();
+                    
+                    console.log('Recording stopped - will process REAL audio...');
+                    this.addMessage('system', '⏹️ Recording stopped - sending your voice to ALFRED backend...');
+                    
+                } catch (error) {
+                    console.error('Failed to stop recording:', error);
+                    this.showError('Failed to stop recording');
+                }
+            }
+            
+            async processRecordedAudio() {
+                try {
+                    if (this.audioChunks.length === 0) {
+                        this.showError('No audio data recorded');
+                        return;
+                    }
+                    
+                    // Create audio blob from recorded chunks
+                    const audioBlob = new Blob(this.audioChunks, { 
+                        type: this.mediaRecorder.mimeType || 'audio/webm' 
+                    });
+                    
+                    console.log(`Processing ${audioBlob.size} bytes of YOUR REAL VOICE (not "Hello ALFRED, this is a test message")`);
+                    
+                    // Send to your existing ALFRED backend
+                    await this.sendToALFREDBackend(audioBlob);
+                    
+                } catch (error) {
+                    console.error('Audio processing failed:', error);
+                    this.showError('Failed to process recorded audio');
+                }
+            }
+            
+            async sendToALFREDBackend(audioBlob) {
+                try {
+                    const startTime = Date.now();
+                    
+                    // Show processing state
+                    this.voiceState.currentTurn = 'processing';
+                    this.updateVoiceButton();
+                    this.showTypingIndicator();
+                    
+                    // STEP 1: Send audio to LOCAL speech processor (our unified voice processor)
+                    console.log('STEP 1: Sending audio to LOCAL speech processor for STT...');
+                    
+                    const formData = new FormData();
+                    formData.append('file', audioBlob, 'recording.webm');
+                    formData.append('language', 'en');
+                    formData.append('task', 'transcribe');
+                    
+                    const sttResponse = await fetch(`${this.localProcessorUrl}/transcribe_file`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!sttResponse.ok) {
+                        throw new Error(`Local STT failed: HTTP ${sttResponse.status}`);
+                    }
+                    
+                    const sttResult = await sttResponse.json();
+                    const transcribedText = sttResult.text;
+                    
+                    console.log(`LOCAL STT result: "${transcribedText}"`);
+                    
+                    // Show what you actually said (from LOCAL processing)
+                    if (transcribedText && transcribedText.trim()) {
+                        this.addMessage('user', transcribedText);
+                        console.log(`REAL transcription from LOCAL Mac processing: "${transcribedText}"`);
+                    } else {
+                        throw new Error('No text transcribed from audio');
+                    }
+                    
+                    // STEP 2: Send TEXT to REMOTE backend for LLM/RAG processing
+                    console.log('STEP 2: Sending transcribed TEXT to REMOTE RTX 4090 for LLM/RAG...');
+                    
+                    const ragResponse = await fetch(`${this.backendUrl}/api/voice/rag`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            text: transcribedText,
+                            model: 'llama3.2:3b'
+                        })
+                    });
+                    
+                    if (!ragResponse.ok) {
+                        throw new Error(`Remote backend error: HTTP ${ragResponse.status}`);
+                    }
+                    
+                    const ragResult = await ragResponse.json();
+                    
+                    console.log('REMOTE LLM/RAG response:', ragResult);
+                    
+                    // STEP 3: Send TEXT response to REMOTE backend for TTS generation
+                    console.log('STEP 3: Sending response TEXT to REMOTE backend for TTS...');
+                    
+                    const ttsResponse = await fetch(`${this.backendUrl}/api/voice/synthesize`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            text: ragResult.answer || ragResult.response_text,
+                            voice_id: 'en-GB-RyanNeural',
+                            engine: 'edge_tts',
+                            speed: 1.0
+                        })
+                    });
+                    
+                    const processingTime = Date.now() - startTime;
+                    console.log(`Complete processing time: ${processingTime}ms`);
+                    
+                    // Show ALFRED's response (from REMOTE LLM/RAG)
+                    if (ragResult.answer || ragResult.response_text) {
+                        const responseText = ragResult.answer || ragResult.response_text;
+                        this.addMessage('assistant', responseText);
+                        console.log(`REMOTE LLM/RAG response: "${responseText}"`);
+                    }
+                    
+                    // Play TTS audio (from REMOTE backend)
+                    if (ttsResponse.ok) {
+                        const audioArrayBuffer = await ttsResponse.arrayBuffer();
+                        await this.playTTSAudioBuffer(audioArrayBuffer);
+                    } else {
+                        console.warn('TTS generation failed, text-only response');
+                    }
+                    
+                    // Update metrics
+                    this.performanceMetrics.responseTime = processingTime;
+                    this.conversationTurns++;
+                    this.performanceMetrics.conversationTurns = this.conversationTurns;
+                    this.updatePerformanceMetrics();
+                    
+                    // Hide typing indicator
+                    this.hideTypingIndicator();
+                    
+                    // Show what you actually said (not test message!)
+                    if (result.input_text) {
+                        this.addMessage('user', result.input_text);
+                        console.log(`REAL transcription of what YOU said: "${result.input_text}"`);
+                    }
+                    
+                    // Show ALFRED's response
+                    if (result.response_text) {
+                        this.addMessage('assistant', result.response_text);
+                    }
+                    
+                    // Play TTS audio from your RTX 4090
+                    if (result.audio_data) {
+                        await this.playTTSAudio(result.audio_data);
+                    }
+                    
+                    this.showSuccess(`Voice processed in ${processingTime}ms - transcribed your REAL speech!`);
+                    
+                    // Reset to user turn
+                    this.voiceState.currentTurn = 'user';
+                    this.updateVoiceButton();
+                    
+                } catch (error) {
+                    console.error('Backend communication failed:', error);
+                    this.showError(`Backend error: ${error.message}`);
+                    this.hideTypingIndicator();
+                    this.voiceState.currentTurn = 'user';
+                    this.updateVoiceButton();
+                }
+            }
+            
+            async playTTSAudio(audioBase64) {
+                try {
+                    console.log('Playing TTS from your RTX 4090 backend...');
+                    
+                    // Convert base64 to audio blob
+                    const audioBlob = this.base64ToBlob(audioBase64, 'audio/wav');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Update state for speaking
+                    this.voiceState.agentSpeaking = true;
+                    this.voiceState.canInterrupt = true; // Could implement interruption later
+                    this.voiceState.currentTurn = 'agent';
+                    this.updateVoiceButton();
+                    
+                    // Play audio
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        this.voiceState.agentSpeaking = false;
+                        this.voiceState.canInterrupt = false;
+                        this.voiceState.currentTurn = 'user';
+                        this.updateVoiceButton();
+                        console.log('TTS playback completed');
+                    };
+                    
+                    await audio.play();
+                    
+                } catch (error) {
+                    console.error('TTS playback failed:', error);
+                    this.showError('Failed to play TTS audio');
+                }
+            }
+            
+            async playTTSAudioBuffer(audioArrayBuffer) {
+                try {
+                    console.log('Playing TTS audio from REMOTE RTX 4090 backend...');
+                    
+                    // Create blob from array buffer
+                    const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Update state for speaking
+                    this.voiceState.agentSpeaking = true;
+                    this.voiceState.canInterrupt = true;
+                    this.voiceState.currentTurn = 'agent';
+                    this.updateVoiceButton();
+                    
+                    // Play audio
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        this.voiceState.agentSpeaking = false;
+                        this.voiceState.canInterrupt = false;
+                        this.voiceState.currentTurn = 'user';
+                        this.updateVoiceButton();
+                        console.log('TTS playback completed');
+                    };
+                    
+                    await audio.play();
+                    
+                } catch (error) {
+                    console.error('TTS playback failed:', error);
+                    this.showError('Failed to play TTS audio');
+                }
+            }
+            
+            // UI Methods (keeping from Phase 5)
+            
+            updateVoiceButton() {
+                const button = document.getElementById('voiceButton');
+                const status = document.getElementById('voiceStatus');
+                const subtitle = document.getElementById('voiceSubtitle');
+                
+                // Remove all state classes
+                button.className = 'voice-button';
+                button.disabled = !this.isConnected;
+                
+                if (!this.isConnected) {
+                    button.textContent = '🎤';
+                    status.textContent = 'Disconnected';
+                    subtitle.textContent = 'Connect to start voice interaction';
+                    
+                } else if (this.voiceState.currentTurn === 'processing') {
+                    button.classList.add('processing');
+                    button.textContent = '⚙️';
+                    status.textContent = 'Processing';
+                    subtitle.textContent = 'ALFRED is processing your voice...';
+                    
+                } else if (this.voiceState.agentSpeaking) {
+                    button.classList.add('speaking');
+                    button.textContent = '🗣️';
+                    status.textContent = 'ALFRED Speaking';
+                    subtitle.textContent = 'Playing response from RTX 4090';
+                    
+                } else if (this.isRecording) {
+                    button.classList.add('listening');
+                    button.textContent = '🔴';
+                    status.textContent = 'Recording';
+                    subtitle.textContent = 'Speak now... (recording your REAL voice)';
+                    
+                } else {
+                    button.textContent = '🎤';
+                    status.textContent = 'Ready';
+                    subtitle.textContent = 'Click to record your voice (NOT test message)';
+                }
+            }
+            
+            updatePerformanceMetrics() {
+                document.getElementById('responseTime').textContent = 
+                    this.performanceMetrics.responseTime > 0 ? 
+                    `${this.performanceMetrics.responseTime}ms` : '--';
+                
+                const audioQualityElement = document.getElementById('audioQuality');
+                audioQualityElement.textContent = this.performanceMetrics.audioQuality;
+                audioQualityElement.className = `metric-value ${this.performanceMetrics.audioQuality === 'good' ? 'success' : 'warning'}`;
+                
+                const backendElement = document.getElementById('backendStatus');
+                backendElement.textContent = this.performanceMetrics.backendStatus;
+                backendElement.className = `metric-value ${this.getBackendStatusClass(this.performanceMetrics.backendStatus)}`;
+                
+                document.getElementById('conversationTurns').textContent = this.performanceMetrics.conversationTurns;
+            }
+            
+            getBackendStatusClass(status) {
+                if (status === 'healthy') return 'success';
+                if (status === 'unavailable') return 'error';
+                return 'warning';
+            }
+            
+            async testBackend() {
+                try {
+                    this.addMessage('system', '🧪 Testing your existing ALFRED backend...');
+                    
+                    const response = await fetch(`${this.backendUrl}/api/voice/health`);
+                    const data = await response.json();
+                    
+                    console.log('Backend health check:', data);
+                    
+                    this.performanceMetrics.backendStatus = data.status || 'healthy';
+                    this.updatePerformanceMetrics();
+                    
+                    if (data.status === 'healthy' || data.tts_status) {
+                        this.showSuccess('✅ Your RTX 4090 ALFRED backend is healthy and ready!');
+                        this.addMessage('assistant', `Backend status: ${data.status}. TTS: ${data.tts_status}. Ready for voice interaction!`);
+                    } else {
+                        this.showError('Backend health check failed');
+                    }
+                    
+                } catch (error) {
+                    console.error('Backend test failed:', error);
+                    this.showError(`Cannot reach backend: ${error.message}`);
+                    this.performanceMetrics.backendStatus = 'unavailable';
+                    this.updatePerformanceMetrics();
+                }
+            }
+            
+            debugAudio() {
+                console.log('=== AUDIO DEBUG INFO ===');
+                console.log('Media recorder:', this.mediaRecorder);
+                console.log('Media recorder state:', this.mediaRecorder?.state);
+                console.log('Local stream:', this.localStream);
+                console.log('Audio context:', this.audioContext);
+                console.log('Is recording:', this.isRecording);
+                console.log('Is connected:', this.isConnected);
+                console.log('Backend URL:', this.backendUrl);
+                console.log('Voice state:', this.voiceState);
+                
+                if (this.localStream) {
+                    const audioTrack = this.localStream.getAudioTracks()[0];
+                    console.log('Audio track enabled:', audioTrack.enabled);
+                    console.log('Audio track settings:', audioTrack.getSettings());
+                    console.log('Audio track constraints:', audioTrack.getConstraints());
+                }
+                
+                this.addMessage('system', '🔍 Debug info logged to console. Check dev tools for audio setup details.');
+            }
+            
+            // Utility methods
+            
+            addMessage(role, text) {
+                const messagesContainer = document.getElementById('conversationMessages');
+                const message = document.createElement('div');
+                message.className = `message ${role} slide-in`;
+                
+                const avatar = document.createElement('div');
+                avatar.className = `message-avatar ${role}`;
+                avatar.textContent = role === 'user' ? '👤' : role === 'assistant' ? '🤖' : '⚙️';
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                
+                const bubble = document.createElement('div');
+                bubble.className = `message-bubble ${role}`;
+                bubble.textContent = text;
+                
+                const meta = document.createElement('div');
+                meta.className = 'message-meta';
+                meta.innerHTML = `
+                    <span>${new Date().toLocaleTimeString()}</span>
+                    <span>•</span>
+                    <span>Real audio processing</span>
+                `;
+                
+                content.appendChild(bubble);
+                content.appendChild(meta);
+                message.appendChild(avatar);
+                message.appendChild(content);
+                
+                messagesContainer.appendChild(message);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+                this.conversation.push({
+                    role,
+                    text,
+                    timestamp: Date.now()
+                });
+            }
+            
+            showTypingIndicator() {
+                document.getElementById('typingIndicator').style.display = 'flex';
+            }
+            
+            hideTypingIndicator() {
+                document.getElementById('typingIndicator').style.display = 'none';
+            }
+            
+            updateConnectionStatus(state, message) {
+                const statusElement = document.getElementById('connectionStatus');
+                const statusDot = statusElement.querySelector('.status-dot');
+                
+                statusElement.className = `connection-status ${state}`;
+                statusElement.querySelector('span:last-child').textContent = message;
+                
+                if (state === 'connecting') {
+                    statusDot.classList.add('connecting');
+                } else {
+                    statusDot.classList.remove('connecting');
+                }
+            }
+            
+            updateUI() {
+                const connectBtn = document.getElementById('connectBtn');
+                const testBtn = document.getElementById('testBtn');
+                const debugBtn = document.getElementById('debugBtn');
+                
+                connectBtn.innerHTML = this.isConnected ? 
+                    '<span>🔌</span><span>Disconnect</span>' :
+                    '<span>🔌</span><span>Connect to ALFRED</span>';
+                
+                testBtn.disabled = false; // Always allow testing
+                debugBtn.disabled = !this.isConnected;
+                
+                this.updateVoiceButton();
+                this.updatePerformanceMetrics();
+            }
+            
+            showError(message) {
+                const banner = document.getElementById('errorBanner');
+                const messageElement = document.getElementById('errorMessage');
+                messageElement.textContent = message;
+                banner.style.display = 'flex';
+                
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 5000);
+                
+                console.error('[ALFRED] Error:', message);
+            }
+            
+            showSuccess(message) {
+                const banner = document.getElementById('successBanner');
+                const messageElement = document.getElementById('successMessage');
+                messageElement.textContent = message;
+                banner.style.display = 'flex';
+                
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 3000);
+                
+                console.log('[ALFRED] Success:', message);
+            }
+            
+            base64ToBlob(base64, mimeType) {
+                const byteCharacters = atob(base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                
+                const byteArray = new Uint8Array(byteNumbers);
+                return new Blob([byteArray], { type: mimeType });
+            }
+            
+            async disconnect() {
+                console.log('Disconnecting...');
+                
+                // Stop recording if active
+                if (this.isRecording) {
+                    this.stopRecording();
+                }
+                
+                // Stop visualization
+                if (this.animationFrame) {
+                    cancelAnimationFrame(this.animationFrame);
+                    this.animationFrame = null;
+                }
+                
+                // Close audio streams
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                    this.localStream = null;
+                }
+                
+                // Close audio context
+                if (this.audioContext && this.audioContext.state !== 'closed') {
+                    await this.audioContext.close();
+                    this.audioContext = null;
+                }
+                
+                this.isConnected = false;
+                this.updateConnectionStatus('disconnected', 'Disconnected');
+                this.updateUI();
+            }
+        }
+        
+        // Global utility functions
+        function clearConversation() {
+            const messages = document.getElementById('conversationMessages');
+            messages.innerHTML = '';
+            
+            // Add welcome message back
+            const welcomeMessage = `
+                <div class="message">
+                    <div class="message-avatar assistant">🤖</div>
+                    <div class="message-content">
+                        <div class="message-bubble assistant">
+                            Hello! I'm ALFRED with enhanced voice processing. Ready to process your REAL voice.
+                        </div>
+                        <div class="message-meta">
+                            <span>Just now</span>
+                            <span>•</span>
+                            <span>System message</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            messages.innerHTML = welcomeMessage;
+        }
+        
+        function exportConversation() {
+            const conversation = alfredInterface.conversation;
+            const exportData = JSON.stringify(conversation, null, 2);
+            
+            const blob = new Blob([exportData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `alfred_conversation_${new Date().toISOString()}.json`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+        }
+        
+        // Initialize the interface
+        const alfredInterface = new HybridALFREDInterface();
+    </script>
+</body>
+</html>

@@ -92,9 +92,9 @@ class EnhancedVoiceInterfaceServer {
             res.sendFile(path.join(__dirname, 'webrtc_test_client.html'));
         });
         
-        // Serve enhanced voice interface
+        // Serve hybrid voice interface (keeps WebRTC improvements + works with existing backend)
         this.app.get('/enhanced', (req, res) => {
-            res.sendFile(path.join(__dirname, 'simple_voice_interface.html'));
+            res.sendFile(path.join(__dirname, 'hybrid_voice_interface.html'));
         });
         
         // Serve Phase 3 interruption test interface

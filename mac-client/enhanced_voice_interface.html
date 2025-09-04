@@ -945,8 +945,8 @@
                     this.updateConnectionStatus('connecting', 'Connecting to ALFRED...');
                     this.showMessage('system', 'Connecting to voice services...');
                     
-                    // Connect to WebRTC signaling server
-                    this.ws = new WebSocket('ws://localhost:3002');
+                    // Skip WebRTC for now, connect directly to existing backend
+                    await this.connectDirectly();
                     
                     this.ws.onopen = () => {
                         this.log('WebSocket connected to unified server');
@@ -982,6 +982,247 @@
                     this.showError(`Failed to connect: ${error.message}`);
                     this.updateConnectionStatus('disconnected', 'Connection failed');
                 }
+            }
+            
+            async connectDirectly() {
+                try {
+                    // Get microphone access with echo cancellation (keeping the WebRTC audio constraints)
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,        // Keep echo cancellation from WebRTC implementation
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: 16000,
+                            channelCount: 1,
+                            latency: 0.01                  // Keep low latency settings
+                        }
+                    });
+                    
+                    this.log('Microphone access granted with echo cancellation');
+                    
+                    // Setup audio visualization (keep from Phase 5)
+                    await this.setupAudioVisualization();
+                    
+                    // Setup MediaRecorder for actual audio capture (not test messages!)
+                    this.setupMediaRecorder();
+                    
+                    // Test connection to your existing backend
+                    await this.testBackendConnection();
+                    
+                    this.handleConnectionEstablished();
+                    
+                } catch (error) {
+                    this.log(`Direct connection failed: ${error.message}`, 'error');
+                    throw error;
+                }
+            }
+            
+            setupMediaRecorder() {
+                try {
+                    // Use WebM format for compatibility with your existing system
+                    const options = {
+                        mimeType: 'audio/webm;codecs=opus'
+                    };
+                    
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        // Fallback to default
+                        this.mediaRecorder = new MediaRecorder(this.localStream);
+                    } else {
+                        this.mediaRecorder = new MediaRecorder(this.localStream, options);
+                    }
+                    
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                        }
+                    };
+                    
+                    this.mediaRecorder.onstop = () => {
+                        this.processRealAudio();
+                    };
+                    
+                    this.mediaRecorder.onerror = (error) => {
+                        console.error('MediaRecorder error:', error);
+                        this.errorRecovery?.handleError('AUDIO_PROCESSING_FAILED', error, {
+                            component: 'media_recorder'
+                        });
+                    };
+                    
+                    console.log('MediaRecorder setup complete - ready for REAL audio capture');
+                    
+                } catch (error) {
+                    console.error('MediaRecorder setup failed:', error);
+                    throw error;
+                }
+            }
+            
+            async testBackendConnection() {
+                try {
+                    const response = await fetch('https://api.oip.onl/api/voice/health');
+                    const data = await response.json();
+                    console.log('Backend health check:', data);
+                    this.log('Backend connection verified');
+                } catch (error) {
+                    console.warn('Backend test failed:', error);
+                    // Continue anyway - backend might be available for actual requests
+                }
+            }
+            
+            async processRealAudio() {
+                try {
+                    if (this.audioChunks.length === 0) {
+                        this.showError('No audio recorded');
+                        return;
+                    }
+                    
+                    // Create audio blob from recorded chunks
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    console.log(`Processing ${audioBlob.size} bytes of REAL recorded audio (not test message!)`);
+                    
+                    // Send to your existing ALFRED backend
+                    await this.sendToALFREDBackend(audioBlob);
+                    
+                } catch (error) {
+                    console.error('Real audio processing failed:', error);
+                    this.errorRecovery?.handleError('AUDIO_PROCESSING_FAILED', error, {
+                        component: 'real_audio_processing'
+                    });
+                }
+            }
+            
+            async sendToALFREDBackend(audioBlob) {
+                try {
+                    const startTime = Date.now();
+                    
+                    // Use your existing /api/voice/chat endpoint
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob, 'recording.webm');
+                    formData.append('model', 'llama3.2:3b');
+                    formData.append('voice_id', 'en-GB-RyanNeural');
+                    formData.append('return_audio', 'true');
+                    
+                    console.log('Sending REAL audio to existing ALFRED backend...');
+                    
+                    // Show processing state
+                    this.voiceState.currentTurn = 'processing';
+                    this.updateVoiceButton();
+                    
+                    if (this.conversationUI) {
+                        this.conversationUI.showTypingIndicator('ALFRED is processing your voice...');
+                    }
+                    
+                    const response = await fetch('https://api.oip.onl/api/voice/chat', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const result = await response.json();
+                    const processingTime = Date.now() - startTime;
+                    
+                    console.log('Backend response received:', result);
+                    
+                    // Update performance metrics
+                    this.performanceMetrics.responseTime = processingTime;
+                    this.updatePerformanceMetrics();
+                    
+                    // Show transcription (what you actually said!)
+                    if (result.input_text) {
+                        if (this.conversationUI) {
+                            this.conversationUI.addMessage('user', result.input_text, 'normal');
+                        } else {
+                            this.addMessage('user', result.input_text);
+                        }
+                        console.log(`REAL transcription of your voice: "${result.input_text}"`);
+                    }
+                    
+                    // Show ALFRED's response
+                    if (result.response_text) {
+                        if (this.conversationUI) {
+                            this.conversationUI.hideTypingIndicator();
+                            this.conversationUI.showStreamingResponse(result.response_text, {
+                                confidence: 1.0,
+                                processingTime: processingTime
+                            });
+                        } else {
+                            this.addMessage('assistant', result.response_text);
+                        }
+                    }
+                    
+                    // Play TTS audio if available
+                    if (result.audio_data) {
+                        await this.playTTSAudio(result.audio_data);
+                    }
+                    
+                    this.showSuccess(`Response received in ${processingTime}ms`);
+                    
+                    // Reset to user turn
+                    this.voiceState.currentTurn = 'user';
+                    this.updateVoiceButton();
+                    
+                } catch (error) {
+                    console.error('Backend communication failed:', error);
+                    this.errorRecovery?.handleError('BACKEND_SERVICE_UNAVAILABLE', error, {
+                        component: 'backend_communication',
+                        backendUrl: 'https://api.oip.onl'
+                    });
+                }
+            }
+            
+            async playTTSAudio(audioBase64) {
+                try {
+                    console.log('Playing TTS audio from your RTX 4090 backend...');
+                    
+                    // Convert base64 to audio blob
+                    const audioBlob = this.base64ToBlob(audioBase64, 'audio/wav');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Update state for potential interruption
+                    this.voiceState.agentSpeaking = true;
+                    this.voiceState.canInterrupt = true;
+                    this.voiceState.currentTurn = 'agent';
+                    this.updateVoiceButton();
+                    
+                    // Play audio
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onplay = () => {
+                        console.log('TTS playback started - can be interrupted');
+                    };
+                    
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        this.voiceState.agentSpeaking = false;
+                        this.voiceState.canInterrupt = false;
+                        this.voiceState.currentTurn = 'user';
+                        this.updateVoiceButton();
+                        console.log('TTS playback completed');
+                    };
+                    
+                    await audio.play();
+                    
+                } catch (error) {
+                    console.error('TTS playback failed:', error);
+                    this.showError('Failed to play TTS audio');
+                }
+            }
+            
+            // Utility method for base64 conversion
+            base64ToBlob(base64, mimeType) {
+                const byteCharacters = atob(base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                
+                const byteArray = new Uint8Array(byteNumbers);
+                return new Blob([byteArray], { type: mimeType });
             }
             
             async initializeWebRTC() {
