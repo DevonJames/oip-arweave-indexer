@@ -22,11 +22,11 @@ class AdaptiveChunking {
         this.MAX_CHUNK_CHARS = 800; // Maximum chunk size in characters
         this.GROWTH_FACTOR = 1.4; // How much to grow chunk size each iteration
         
-        // Progressive chunk sizing strategy - EACH STAGE BUILDS ON THE PREVIOUS
-        this.BOOTSTRAP_CHUNK_SIZE = 80; // Small first chunk for immediate audio
-        this.EARLY_CHUNK_SIZE = 150; // Larger chunks for chunks 2-4 (builds on bootstrap)
-        this.MATURE_CHUNK_SIZE = 250; // Even larger chunks for chunks 5-8 (builds on early)
-        this.LARGE_CHUNK_SIZE = 400; // Largest chunks for chunks 9+ (builds on mature)
+        // Progressive chunk sizing strategy - LARGER SIZES for period-only chunking
+        this.BOOTSTRAP_CHUNK_SIZE = 120; // Larger first chunk to reach first period
+        this.EARLY_CHUNK_SIZE = 200; // Larger chunks for chunks 2-4 
+        this.MATURE_CHUNK_SIZE = 350; // Even larger chunks for chunks 5-8
+        this.LARGE_CHUNK_SIZE = 500; // Largest chunks for chunks 9+
         
         // Natural boundary patterns (ordered by preference)
         this.SENTENCE_ENDINGS = /[.!?]+\s*/g;
@@ -198,35 +198,29 @@ class AdaptiveChunking {
             return unprocessedText.length >= this.BOOTSTRAP_CHUNK_SIZE || timeSinceLastChunk >= maxWaitTime;
             
         } else if (session.chunkCount <= 4) {
-            // Early chunks: Larger than bootstrap, but still prioritize speed
+            // Early chunks: ONLY use periods for natural breaks
             const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
-            const hasCommaBreak = /[,;:]+\s*$/.test(unprocessedText.trim());
             
             // Use EARLY_CHUNK_SIZE as target (larger than bootstrap)
             return unprocessedText.length >= this.EARLY_CHUNK_SIZE || 
                    hasNaturalEnding || 
-                   (hasCommaBreak && unprocessedText.length >= this.BOOTSTRAP_CHUNK_SIZE) ||
                    timeSinceLastChunk >= maxWaitTime;
                    
         } else if (session.chunkCount <= 8) {
-            // Mature chunks: Even larger, prioritize natural boundaries
+            // Mature chunks: ONLY use periods for natural breaks
             const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
-            const hasStrongPunctuation = /[;:]+\s*$/.test(unprocessedText.trim());
             
             // Use MATURE_CHUNK_SIZE as target (larger than early)
             return hasNaturalEnding || 
-                   hasStrongPunctuation ||
                    unprocessedText.length >= this.MATURE_CHUNK_SIZE ||
                    timeSinceLastChunk >= maxWaitTime;
                    
         } else {
-            // Large chunks: Largest size, wait for complete thoughts
+            // Large chunks: ONLY use periods for natural breaks
             const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
-            const hasStrongPunctuation = /[;:]+\s*$/.test(unprocessedText.trim());
             
             // Use LARGE_CHUNK_SIZE as target (largest)
             return hasNaturalEnding || 
-                   hasStrongPunctuation ||
                    unprocessedText.length >= this.LARGE_CHUNK_SIZE ||
                    timeSinceLastChunk >= maxWaitTime;
         }
@@ -437,13 +431,13 @@ class AdaptiveChunking {
         let baseWait;
         
         if (session.chunkCount <= 1) {
-            baseWait = 500; // Very short wait for bootstrap (immediate response)
+            baseWait = 800; // Longer wait for bootstrap to find first period
         } else if (session.chunkCount <= 4) {
-            baseWait = 800; // Short wait for early chunks (quick follow-up)
+            baseWait = 1200; // More wait for early chunks to find periods
         } else if (session.chunkCount <= 8) {
-            baseWait = 1500; // Medium wait for mature chunks (natural pacing)
+            baseWait = 2000; // More wait for mature chunks (complete sentences)
         } else {
-            baseWait = 2500; // Longer wait for large chunks (complete thoughts)
+            baseWait = 3000; // Even longer wait for large chunks (complete thoughts)
         }
         
         // Adjust based on generation speed
