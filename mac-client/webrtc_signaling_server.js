@@ -201,13 +201,9 @@ class WebRTCSignalingServer extends EventEmitter {
         try {
             const connection = this.connections.get(clientId);
             
-            // Create peer connection for this client
-            const peerConnection = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            });
+            // Note: We don't create RTCPeerConnection on server side
+            // WebRTC peer connections are handled entirely in the browser
+            // Server only handles signaling messages
             
             connection.peerConnection = peerConnection;
             this.peerConnections.set(clientId, peerConnection);

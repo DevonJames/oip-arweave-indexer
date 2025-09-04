@@ -945,8 +945,8 @@
                     this.updateConnectionStatus('connecting', 'Connecting to ALFRED...');
                     this.showMessage('system', 'Connecting to voice services...');
                     
-                    // Connect to unified WebRTC server
-                    this.ws = new WebSocket('ws://localhost:3003');
+                    // Connect to WebRTC signaling server
+                    this.ws = new WebSocket('ws://localhost:3002');
                     
                     this.ws.onopen = () => {
                         this.log('WebSocket connected to unified server');

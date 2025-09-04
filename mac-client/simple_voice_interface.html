@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALFRED Voice Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        
+        .app-container {
+            width: 100%;
+            max-width: 800px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .main-content {
+            padding: 32px;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-status.disconnected {
+            background-color: #fff5f5;
+            color: #c53030;
+            border: 2px solid #feb2b2;
+        }
+        
+        .connection-status.connecting {
+            background-color: #fffaf0;
+            color: #c05621;
+            border: 2px solid #fbd38d;
+        }
+        
+        .connection-status.connected {
+            background-color: #f0fff4;
+            color: #22543d;
+            border: 2px solid #9ae6b4;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+        
+        .status-dot.connecting {
+            animation: pulse 1.5s infinite;
+        }
+        
+        .voice-controls {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .voice-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            font-size: 48px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .voice-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 122, 255, 0.3);
+        }
+        
+        .voice-button:active {
+            transform: scale(0.95);
+        }
+        
+        .voice-button.listening {
+            background: linear-gradient(135deg, #34c759, #30d158);
+            animation: listening-pulse 2s infinite;
+        }
+        
+        .voice-button.processing {
+            background: linear-gradient(135deg, #ff9500, #ffb340);
+            animation: processing-spin 1s linear infinite;
+        }
+        
+        .voice-button.speaking {
+            background: linear-gradient(135deg, #5856d6, #af52de);
+            animation: speaking-wave 1.5s ease-in-out infinite;
+        }
+        
+        .voice-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .voice-status {
+            font-size: 18px;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .voice-subtitle {
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .conversation-area {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            max-height: 400px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .conversation-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .conversation-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .conversation-messages {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 300px;
+        }
+        
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .message-avatar.user {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+        }
+        
+        .message-avatar.assistant {
+            background: linear-gradient(135deg, #34c759, #30d158);
+            color: white;
+        }
+        
+        .message-content {
+            flex: 1;
+            max-width: 70%;
+        }
+        
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 15px;
+            line-height: 1.4;
+        }
+        
+        .message-bubble.user {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message-bubble.assistant {
+            background: #f7fafc;
+            color: #333;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-bubble.partial {
+            opacity: 0.7;
+            font-style: italic;
+            border-style: dashed;
+        }
+        
+        .message-meta {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .message.user .message-meta {
+            text-align: right;
+        }
+        
+        .controls-panel {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .error-banner {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .success-banner {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        
+        @keyframes listening-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.4); }
+            50% { box-shadow: 0 0 0 20px rgba(52, 199, 89, 0); }
+        }
+        
+        @keyframes processing-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes speaking-wave {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.1); }
+            50% { transform: scale(1.05); }
+            75% { transform: scale(1.15); }
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>🎤 ALFRED Voice Assistant</h1>
+            <p>Real-time voice interaction with advanced interruption handling</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- Connection Status -->
+            <div id="connectionStatus" class="connection-status disconnected">
+                <div class="status-dot"></div>
+                <span>Ready to connect to voice services</span>
+            </div>
+            
+            <!-- Error/Success Banners -->
+            <div id="errorBanner" class="error-banner">
+                <span>⚠️</span>
+                <span id="errorMessage">An error occurred</span>
+            </div>
+            
+            <div id="successBanner" class="success-banner">
+                <span>✅</span>
+                <span id="successMessage">Success!</span>
+            </div>
+            
+            <!-- Voice Controls -->
+            <div class="voice-controls">
+                <button id="voiceButton" class="voice-button" disabled>
+                    🎤
+                </button>
+                <div id="voiceStatus" class="voice-status">Ready to Connect</div>
+                <div id="voiceSubtitle" class="voice-subtitle">Click Connect to start</div>
+            </div>
+            
+            <!-- Conversation Area -->
+            <div class="conversation-area">
+                <div class="conversation-header">
+                    <h3 class="conversation-title">💬 Conversation</h3>
+                </div>
+                
+                <div id="conversationMessages" class="conversation-messages">
+                    <!-- Welcome message -->
+                    <div class="message">
+                        <div class="message-avatar assistant">🤖</div>
+                        <div class="message-content">
+                            <div class="message-bubble assistant">
+                                Hello! I'm ALFRED, your voice assistant. Connect to start our conversation. You can interrupt me at any time by simply speaking.
+                            </div>
+                            <div class="message-meta">
+                                Just now • System message
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="controls-panel">
+                <button id="connectBtn" class="btn btn-primary">
+                    <span>🔌</span>
+                    <span>Connect to ALFRED</span>
+                </button>
+                <button id="testBtn" class="btn btn-secondary" disabled>
+                    <span>🧪</span>
+                    <span>Test Connection</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SimpleALFREDInterface {
+            constructor() {
+                this.ws = null;
+                this.isConnected = false;
+                this.conversation = [];
+                
+                this.setupEventListeners();
+                this.updateUI();
+            }
+            
+            setupEventListeners() {
+                document.getElementById('connectBtn').addEventListener('click', () => this.toggleConnection());
+                document.getElementById('testBtn').addEventListener('click', () => this.testConnection());
+                document.getElementById('voiceButton').addEventListener('click', () => this.handleVoiceClick());
+            }
+            
+            async toggleConnection() {
+                if (this.isConnected) {
+                    await this.disconnect();
+                } else {
+                    await this.connect();
+                }
+            }
+            
+            async connect() {
+                try {
+                    this.updateConnectionStatus('connecting', 'Connecting to ALFRED...');
+                    
+                    // Connect to signaling server
+                    this.ws = new WebSocket('ws://localhost:3002');
+                    
+                    this.ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.handleConnectionEstablished();
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        this.handleServerMessage(JSON.parse(event.data));
+                    };
+                    
+                    this.ws.onclose = () => {
+                        console.log('WebSocket disconnected');
+                        this.handleConnectionLost();
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.showError('Connection failed. Please check that ALFRED services are running.');
+                        this.handleConnectionLost();
+                    };
+                    
+                } catch (error) {
+                    this.showError(`Failed to connect: ${error.message}`);
+                    this.updateConnectionStatus('disconnected', 'Connection failed');
+                }
+            }
+            
+            async disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+                this.handleConnectionLost();
+            }
+            
+            handleConnectionEstablished() {
+                this.isConnected = true;
+                this.updateConnectionStatus('connected', 'Connected to ALFRED');
+                this.updateUI();
+                
+                this.showSuccess('Connected successfully! Voice interaction is ready.');
+                this.addMessage('system', 'Connection established. You can now interact with ALFRED!');
+                
+                const connectBtn = document.getElementById('connectBtn');
+                connectBtn.innerHTML = '<span>🔌</span><span>Disconnect</span>';
+            }
+            
+            handleConnectionLost() {
+                this.isConnected = false;
+                this.updateConnectionStatus('disconnected', 'Disconnected');
+                this.updateUI();
+                
+                const connectBtn = document.getElementById('connectBtn');
+                connectBtn.innerHTML = '<span>🔌</span><span>Connect to ALFRED</span>';
+            }
+            
+            handleServerMessage(message) {
+                console.log('Server message:', message.type, message);
+                
+                switch (message.type) {
+                    case 'connected':
+                        console.log(`Connected with client ID: ${message.clientId}`);
+                        break;
+                        
+                    case 'transcription':
+                        this.handleTranscription(message);
+                        break;
+                        
+                    case 'llm_response':
+                        this.handleLLMResponse(message);
+                        break;
+                        
+                    case 'tts_audio':
+                        this.handleTTSAudio(message);
+                        break;
+                        
+                    case 'error':
+                        this.showError(message.message || 'Server error occurred');
+                        break;
+                        
+                    default:
+                        console.log('Unknown message type:', message.type);
+                }
+            }
+            
+            handleTranscription(message) {
+                console.log(`Transcription: "${message.text}"`);
+                if (message.text.trim()) {
+                    this.addMessage('user', message.text);
+                }
+            }
+            
+            handleLLMResponse(message) {
+                console.log(`LLM Response: "${message.text}"`);
+                this.addMessage('assistant', message.text);
+            }
+            
+            handleTTSAudio(message) {
+                console.log('Received TTS audio');
+                
+                try {
+                    // Play TTS audio
+                    const audioData = atob(message.audio);
+                    const arrayBuffer = new ArrayBuffer(audioData.length);
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    
+                    for (let i = 0; i < audioData.length; i++) {
+                        uint8Array[i] = audioData.charCodeAt(i);
+                    }
+                    
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    audioContext.decodeAudioData(arrayBuffer).then(audioBuffer => {
+                        const source = audioContext.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(audioContext.destination);
+                        source.start();
+                        
+                        console.log('TTS audio playing');
+                    }).catch(error => {
+                        console.error('Audio playback error:', error);
+                    });
+                    
+                } catch (error) {
+                    console.error('TTS audio processing error:', error);
+                }
+            }
+            
+            async testConnection() {
+                try {
+                    const response = await fetch('http://localhost:8015/health');
+                    const data = await response.json();
+                    
+                    if (data.status === 'healthy') {
+                        this.showSuccess('Voice processor is healthy and ready!');
+                    } else {
+                        this.showError('Voice processor is not healthy');
+                    }
+                } catch (error) {
+                    this.showError('Cannot reach voice processor. Please check that services are running.');
+                }
+            }
+            
+            handleVoiceClick() {
+                if (!this.isConnected) {
+                    this.showError('Please connect to ALFRED first');
+                    return;
+                }
+                
+                // For now, show a simple test message
+                this.sendTestMessage();
+            }
+            
+            sendTestMessage() {
+                const testMessage = 'Hello ALFRED, this is a test message.';
+                
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'transcription',
+                        text: testMessage,
+                        timestamp: Date.now()
+                    }));
+                    
+                    this.addMessage('user', testMessage);
+                    console.log('Test message sent');
+                } else {
+                    this.showError('Connection not ready');
+                }
+            }
+            
+            addMessage(role, text) {
+                const messagesContainer = document.getElementById('conversationMessages');
+                const message = document.createElement('div');
+                message.className = `message ${role}`;
+                
+                const avatar = document.createElement('div');
+                avatar.className = `message-avatar ${role}`;
+                avatar.textContent = role === 'user' ? '👤' : role === 'assistant' ? '🤖' : '⚙️';
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                
+                const bubble = document.createElement('div');
+                bubble.className = `message-bubble ${role}`;
+                bubble.textContent = text;
+                
+                const meta = document.createElement('div');
+                meta.className = 'message-meta';
+                meta.textContent = new Date().toLocaleTimeString();
+                
+                content.appendChild(bubble);
+                content.appendChild(meta);
+                message.appendChild(avatar);
+                message.appendChild(content);
+                
+                messagesContainer.appendChild(message);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+                this.conversation.push({
+                    role,
+                    text,
+                    timestamp: Date.now()
+                });
+            }
+            
+            updateConnectionStatus(state, message) {
+                const statusElement = document.getElementById('connectionStatus');
+                const statusDot = statusElement.querySelector('.status-dot');
+                
+                statusElement.className = `connection-status ${state}`;
+                statusElement.querySelector('span:last-child').textContent = message;
+                
+                if (state === 'connecting') {
+                    statusDot.classList.add('connecting');
+                } else {
+                    statusDot.classList.remove('connecting');
+                }
+            }
+            
+            updateUI() {
+                const connectBtn = document.getElementById('connectBtn');
+                const testBtn = document.getElementById('testBtn');
+                const voiceBtn = document.getElementById('voiceButton');
+                const voiceStatus = document.getElementById('voiceStatus');
+                const voiceSubtitle = document.getElementById('voiceSubtitle');
+                
+                connectBtn.disabled = false;
+                testBtn.disabled = !this.isConnected;
+                voiceBtn.disabled = !this.isConnected;
+                
+                if (this.isConnected) {
+                    voiceStatus.textContent = 'Ready';
+                    voiceSubtitle.textContent = 'Click microphone or press space to talk';
+                } else {
+                    voiceStatus.textContent = 'Disconnected';
+                    voiceSubtitle.textContent = 'Connect to start talking';
+                }
+            }
+            
+            showError(message) {
+                const banner = document.getElementById('errorBanner');
+                const messageElement = document.getElementById('errorMessage');
+                messageElement.textContent = message;
+                banner.style.display = 'flex';
+                
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 5000);
+                
+                console.error('[ALFRED] Error:', message);
+            }
+            
+            showSuccess(message) {
+                const banner = document.getElementById('successBanner');
+                const messageElement = document.getElementById('successMessage');
+                messageElement.textContent = message;
+                banner.style.display = 'flex';
+                
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 3000);
+                
+                console.log('[ALFRED] Success:', message);
+            }
+        }
+        
+        // Initialize the interface
+        const alfredInterface = new SimpleALFREDInterface();
+    </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+2025-09-04 10:26:35,280 - __main__ - INFO - 🚀 Initializing Unified Voice Processor...
+/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/unified_voice_processor.py:785: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+/Users/devon/Documents/CODE-local/oip-arweave-indexer/mac-client/unified_voice_processor.py:790: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("shutdown")
+2025-09-04 10:26:35,285 - __main__ - INFO - 🚀 Starting Unified Voice Processor on 0.0.0.0:8015
+INFO:     Started server process [82981]
+INFO:     Waiting for application startup.
+2025-09-04 10:26:35,314 - __main__ - INFO - 📥 Loading models for unified pipeline...
+2025-09-04 10:26:35,314 - __main__ - INFO - Loading MLX Whisper model...
+Fetching 5 files:   0%|          | 0/5 [00:00<?, ?it/s]Fetching 5 files: 100%|██████████| 5/5 [00:00<00:00, 51025.60it/s]
+2025-09-04 10:26:37,283 - __main__ - INFO - ✅ MLX Whisper model loaded
+2025-09-04 10:26:37,283 - __main__ - INFO - Loading Silero VAD model...
+Using cache found in /Users/devon/.cache/torch/hub/snakers4_silero-vad_master
+2025-09-04 10:26:38,033 - __main__ - INFO - ✅ Silero VAD model loaded
+2025-09-04 10:26:38,033 - __main__ - INFO - 🎯 Starting unified processing loop...
+2025-09-04 10:26:38,033 - __main__ - INFO - 🔄 Unified processing thread started
+2025-09-04 10:26:38,033 - __main__ - INFO - ✅ Unified Voice Processor initialized successfully
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8015 (Press CTRL+C to quit)
+INFO:     127.0.0.1:61796 - "GET /health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2025-09-04 10:32:47,186 - __main__ - INFO - 🛑 Shutting down Unified Voice Processor...
+2025-09-04 10:32:47,193 - __main__ - INFO - ✅ Unified Voice Processor shutdown complete
+INFO:     Application shutdown complete.
+INFO:     Finished server process [82981]

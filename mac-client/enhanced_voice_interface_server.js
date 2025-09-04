@@ -11,7 +11,7 @@ const path = require('path');
 const cors = require('cors');
 const { createServer } = require('http');
 const MacClientCoordinator = require('./mac_client_coordinator');
-const { WebRTCSignalingServer } = require('./webrtc_signaling_server');
+const SimpleWebRTCSignaling = require('./simple_webrtc_signaling');
 
 class EnhancedVoiceInterfaceServer {
     constructor() {
@@ -92,9 +92,9 @@ class EnhancedVoiceInterfaceServer {
             res.sendFile(path.join(__dirname, 'webrtc_test_client.html'));
         });
         
-        // Serve enhanced voice interface (will create this next)
+        // Serve enhanced voice interface
         this.app.get('/enhanced', (req, res) => {
-            res.sendFile(path.join(__dirname, 'enhanced_voice_interface.html'));
+            res.sendFile(path.join(__dirname, 'simple_voice_interface.html'));
         });
         
         // Serve Phase 3 interruption test interface
@@ -344,12 +344,11 @@ class EnhancedVoiceInterfaceServer {
             this.server = createServer(this.app);
             
             // Initialize WebRTC signaling server
-            console.log('[Interface] Initializing WebRTC signaling server...');
-            this.webrtcSignaling = new WebRTCSignalingServer({
+            console.log('[Interface] Initializing simple WebRTC signaling server...');
+            this.webrtcSignaling = new SimpleWebRTCSignaling({
                 port: this.config.webrtcPort,
                 backendUrl: this.config.backendUrl,
-                sttServiceUrl: this.config.sttServiceUrl,
-                smartTurnServiceUrl: this.config.smartTurnServiceUrl
+                unifiedProcessorUrl: 'http://localhost:8015'
             });
             
             // Setup WebRTC event handlers

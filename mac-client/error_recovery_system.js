@@ -12,7 +12,33 @@
  * - Performance monitoring and alerting
  */
 
-const EventEmitter = require('events');
+// Browser-compatible EventEmitter
+class EventEmitter {
+    constructor() {
+        this.events = {};
+    }
+    
+    on(event, listener) {
+        if (!this.events[event]) {
+            this.events[event] = [];
+        }
+        this.events[event].push(listener);
+    }
+    
+    emit(event, ...args) {
+        if (this.events[event]) {
+            this.events[event].forEach(listener => listener(...args));
+        }
+    }
+    
+    removeAllListeners(event) {
+        if (event) {
+            delete this.events[event];
+        } else {
+            this.events = {};
+        }
+    }
+}
 
 class ErrorRecoverySystem extends EventEmitter {
     constructor(options = {}) {
@@ -375,16 +401,19 @@ class ErrorRecoverySystem extends EventEmitter {
     async recoverConnection(context) {
         try {
             // Test connection to services
-            const axios = require('axios');
             
             // Check unified processor
-            await axios.get('http://localhost:8015/health', { timeout: 5000 });
+            const response = await fetch('http://localhost:8015/health');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
-            // Check WebRTC signaling
-            await axios.get('http://localhost:3003/health', { timeout: 5000 }).catch(() => {
-                // WebRTC server might not have health endpoint
+            // Check WebRTC signaling (optional)
+            try {
+                const signalResponse = await fetch('http://localhost:3003/health');
+                // WebRTC server might not have health endpoint, so we don't throw on failure
+                console.log('[ErrorRecovery] WebRTC server health check completed');
+            } catch (error) {
                 console.log('[ErrorRecovery] WebRTC server health check skipped');
-            });
+            }
             
             console.log('[ErrorRecovery] Services are available, attempting reconnection...');
             
@@ -409,16 +438,19 @@ class ErrorRecoverySystem extends EventEmitter {
      */
     async recoverSTTService(context) {
         try {
-            const axios = require('axios');
-            
             // Test STT service
-            const response = await axios.get('http://localhost:8015/health', { timeout: 5000 });
+            const response = await fetch('http://localhost:8015/health');
             
-            if (response.data.status === 'healthy') {
-                console.log('[ErrorRecovery] STT service recovered');
-                return { success: true, method: 'service_recovery' };
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'healthy') {
+                    console.log('[ErrorRecovery] STT service recovered');
+                    return { success: true, method: 'service_recovery' };
+                } else {
+                    return { success: false, reason: 'service_unhealthy' };
+                }
             } else {
-                return { success: false, reason: 'service_unhealthy' };
+                return { success: false, reason: 'service_unavailable' };
             }
             
         } catch (error) {
@@ -432,16 +464,19 @@ class ErrorRecoverySystem extends EventEmitter {
      */
     async recoverSmartTurnService(context) {
         try {
-            const axios = require('axios');
-            
             // Test Smart Turn functionality through unified processor
-            const response = await axios.get('http://localhost:8015/health', { timeout: 5000 });
+            const response = await fetch('http://localhost:8015/health');
             
-            if (response.data.status === 'healthy') {
-                console.log('[ErrorRecovery] Smart Turn service recovered');
-                return { success: true, method: 'service_recovery' };
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'healthy') {
+                    console.log('[ErrorRecovery] Smart Turn service recovered');
+                    return { success: true, method: 'service_recovery' };
+                } else {
+                    return { success: false, reason: 'service_unhealthy' };
+                }
             } else {
-                return { success: false, reason: 'service_unhealthy' };
+                return { success: false, reason: 'service_unavailable' };
             }
             
         } catch (error) {
@@ -455,11 +490,9 @@ class ErrorRecoverySystem extends EventEmitter {
      */
     async recoverBackendService(context) {
         try {
-            const axios = require('axios');
-            
             // Test backend connectivity
             const backendUrl = context.backendUrl || 'https://api.oip.onl';
-            const response = await axios.get(`${backendUrl}/health`, { timeout: 10000 });
+            const response = await fetch(`${backendUrl}/health`);
             
             console.log('[ErrorRecovery] Backend service recovered');
             return { success: true, method: 'backend_recovery' };

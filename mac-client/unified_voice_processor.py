@@ -28,7 +28,8 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, BackgroundTa
 from fastapi.responses import JSONResponse
 import uvicorn
 import torch
-import mlx_whisper
+from mlx_whisper.load_models import load_model
+from mlx_whisper import transcribe
 
 # Configure logging
 logging.basicConfig(
@@ -142,7 +143,7 @@ class UnifiedVoiceProcessor:
             
             # Load Whisper model
             logger.info("Loading MLX Whisper model...")
-            self.whisper_model = mlx_whisper.load_model("mlx-community/whisper-large-v3-mlx-4bit")
+            self.whisper_model = load_model("mlx-community/whisper-large-v3-mlx-4bit")
             logger.info("✅ MLX Whisper model loaded")
             
             # Load Silero VAD
@@ -396,9 +397,9 @@ class UnifiedVoiceProcessor:
                 return ""
             
             # Quick transcription with minimal processing
-            result = mlx_whisper.transcribe(
+            result = transcribe(
                 combined_audio,
-                model=self.whisper_model,
+                path_or_hf_repo=self.whisper_model,
                 language="en",
                 task="transcribe",
                 temperature=0.0,
@@ -428,9 +429,9 @@ class UnifiedVoiceProcessor:
                 return ""
             
             # Full quality transcription
-            result = mlx_whisper.transcribe(
+            result = transcribe(
                 combined_audio,
-                model=self.whisper_model,
+                path_or_hf_repo=self.whisper_model,
                 language="en",
                 task="transcribe",
                 temperature=0.0,
