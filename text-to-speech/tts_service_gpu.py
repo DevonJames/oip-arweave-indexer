@@ -11,7 +11,8 @@ from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
 from fastapi import FastAPI, HTTPException, Request, Form, File, UploadFile  
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 import numpy as np
 import subprocess
@@ -647,6 +648,20 @@ class GPUTTSService:
 # Initialize service
 tts_service = GPUTTSService()
 
+# Add validation error handler
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"[GPU TTS Service] ===== VALIDATION ERROR =====")
+    logger.error(f"Request URL: {request.url}")
+    logger.error(f"Request method: {request.method}")
+    logger.error(f"Validation errors: {exc.errors()}")
+    logger.error(f"Request body: {await request.body()}")
+    logger.error(f"[GPU TTS Service] ================================")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
+
 @app.post("/synthesize")
 async def synthesize_speech(
     text: str = Form(...),
@@ -663,14 +678,18 @@ async def synthesize_speech(
     """Synthesize text to speech using the best available engine with optional voice cloning - Form Data API matching standard service."""
     
     # Debug logging to see what parameters we're actually receiving
-    logger.info(f"[GPU TTS Service] Received Form request:")
-    logger.info(f"  text: {text[:50]}...")
-    logger.info(f"  gender: {gender} (type: {type(gender)})")
-    logger.info(f"  emotion: {emotion} (type: {type(emotion)})")
+    logger.info(f"[GPU TTS Service] ===== RECEIVED FORM REQUEST =====")
+    logger.info(f"  text: '{text[:50]}...' (type: {type(text)})")
+    logger.info(f"  gender: '{gender}' (type: {type(gender)})")
+    logger.info(f"  emotion: '{emotion}' (type: {type(emotion)})")
     logger.info(f"  exaggeration: {exaggeration} (type: {type(exaggeration)})")
     logger.info(f"  cfg_weight: {cfg_weight} (type: {type(cfg_weight)})")
+    logger.info(f"  voice_id: '{voice_id}' (type: {type(voice_id)})")
+    logger.info(f"  speed: {speed} (type: {type(speed)})")
+    logger.info(f"  engine: '{engine}' (type: {type(engine)})")
     logger.info(f"  voice_cloning: {voice_cloning} (type: {type(voice_cloning)})")
     logger.info(f"  audio_prompt: {audio_prompt.filename if audio_prompt else 'None'}")
+    logger.info(f"[GPU TTS Service] =====================================")
     
     start_time = time.time()
     

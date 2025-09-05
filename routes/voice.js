@@ -471,25 +471,28 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         const buildFormData = (engineTry, voiceTry) => {
             const fd = new FormData();
             fd.append('text', finalText);
-            // Some TTS backends work best when engine is omitted (auto)
-            if (engineTry && engineTry !== 'edge_tts') fd.append('engine', String(engineTry));
-            if (voiceTry) fd.append('voice_id', String(voiceTry));
+            
+            // Always send the engine parameter - this is required by TTS service
+            fd.append('engine', String(engineTry || 'auto'));
+            
+            // Always send voice_id parameter - this is required by TTS service  
+            fd.append('voice_id', String(voiceTry || voice_id || 'default'));
+            
+            // Required parameters for TTS service
             fd.append('gender', chatterboxParams.gender);
             fd.append('emotion', chatterboxParams.emotion);
             fd.append('exaggeration', chatterboxParams.exaggeration.toString());
             fd.append('cfg_weight', chatterboxParams.cfg_weight.toString());
             fd.append('speed', String(effectiveSpeed));
-            // Derive locale from voice if available (Edge voices: en-GB-*, en-US-*)
-            const derivedLocale = (voiceTry && typeof voiceTry === 'string') ? voiceTry.split('-').slice(0,2).join('-') : null;
-            // const langToSend = derivedLocale || language;
-            const langToSend = 'en-GB';
-            if (langToSend) fd.append('language', String(langToSend));
+            
+            // Voice cloning parameter (required)
             if (voice_cloning === 'true' && audioFile) {
                 fd.append('voice_cloning', true);
                 fd.append('audio_prompt', audioFile);
             } else {
                 fd.append('voice_cloning', false);
             }
+            
             return fd;
         };
         
