@@ -693,6 +693,10 @@
                     <span>🔍</span>
                     <span>Debug Audio</span>
                 </button>
+                <button id="monitorBtn" class="btn btn-secondary" onclick="openPipelineMonitor()">
+                    <span>📊</span>
+                    <span>Pipeline Monitor</span>
+                </button>
             </div>
         </div>
     </div>
@@ -1165,74 +1169,122 @@
                 try {
                     console.log('[TTS Viz] Setting up TTS audio visualization...');
                     
-                    // Create audio context for TTS visualization
-                    if (!this.ttsAudioContext) {
-                        this.ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    // Use existing audio context to avoid issues
+                    if (!this.audioContext) {
+                        console.warn('[TTS Viz] No audio context available');
+                        return;
                     }
                     
-                    // Resume TTS audio context if needed
-                    if (this.ttsAudioContext.state === 'suspended') {
-                        this.ttsAudioContext.resume();
-                        console.log('[TTS Viz] TTS audio context resumed');
+                    // Resume audio context if needed
+                    if (this.audioContext.state === 'suspended') {
+                        this.audioContext.resume();
+                        console.log('[TTS Viz] Audio context resumed for TTS');
                     }
                     
                     // Create analyser for TTS audio (avoid duplicate source creation)
                     if (!audioElement._ttsSource) {
-                        const ttsSource = this.ttsAudioContext.createMediaElementSource(audioElement);
-                        const ttsAnalyser = this.ttsAudioContext.createAnalyser();
-                        ttsAnalyser.fftSize = 512;
-                        ttsAnalyser.smoothingTimeConstant = 0.8;
-                        
-                        // Connect TTS audio to analyser and destination
-                        ttsSource.connect(ttsAnalyser);
-                        ttsSource.connect(this.ttsAudioContext.destination);
-                        
-                        // Store references to avoid recreating
-                        audioElement._ttsSource = ttsSource;
-                        audioElement._ttsAnalyser = ttsAnalyser;
-                        
-                        console.log('[TTS Viz] TTS analyser created');
+                        try {
+                            const ttsSource = this.audioContext.createMediaElementSource(audioElement);
+                            const ttsAnalyser = this.audioContext.createAnalyser();
+                            ttsAnalyser.fftSize = 512;
+                            ttsAnalyser.smoothingTimeConstant = 0.3; // Faster response for TTS
+                            
+                            // Connect TTS audio to analyser and destination
+                            ttsSource.connect(ttsAnalyser);
+                            ttsSource.connect(this.audioContext.destination);
+                            
+                            // Store references to avoid recreating
+                            audioElement._ttsSource = ttsSource;
+                            audioElement._ttsAnalyser = ttsAnalyser;
+                            
+                            console.log('[TTS Viz] TTS analyser created successfully');
+                            
+                            // Start TTS visualization immediately
+                            this.startTTSVisualization(ttsAnalyser, audioElement);
+                            
+                        } catch (sourceError) {
+                            console.warn('[TTS Viz] Could not create media element source:', sourceError);
+                            // Fallback: Show visual indicator without audio analysis
+                            this.showTTSVisualFallback();
+                        }
+                    } else {
+                        // Use existing analyser
+                        this.startTTSVisualization(audioElement._ttsAnalyser, audioElement);
                     }
-                    
-                    // Start TTS visualization
-                    this.startTTSVisualization(audioElement._ttsAnalyser);
                     
                 } catch (error) {
                     console.warn('[TTS Viz] TTS visualization setup failed:', error);
+                    this.showTTSVisualFallback();
                 }
             }
 
-            startTTSVisualization(ttsAnalyser) {
+            showTTSVisualFallback() {
+                // Simple visual indicator when audio analysis isn't available
+                const waveform = document.getElementById('waveform');
+                waveform.style.background = 'linear-gradient(90deg, rgba(255, 149, 0, 0.1) 0%, rgba(255, 149, 0, 0.6) 50%, rgba(255, 149, 0, 0.1) 100%)';
+                waveform.textContent = '🔊 ALFRED Speaking (TTS Active)';
+                
+                // Update audio level to show TTS activity
+                this.updateAudioLevel(50); // Show moderate level during TTS
+            }
+
+            startTTSVisualization(ttsAnalyser, audioElement) {
+                if (!ttsAnalyser) {
+                    console.warn('[TTS Viz] No analyser provided, using fallback');
+                    this.showTTSVisualFallback();
+                    return;
+                }
+                
                 const ttsAudioData = new Uint8Array(ttsAnalyser.frequencyBinCount);
+                let ttsVisualizationActive = true;
                 
                 const updateTTSVisualization = () => {
-                    if (!this.currentAudio || this.currentAudio.paused || this.currentAudio.ended) {
+                    if (!ttsVisualizationActive || !this.currentAudio || this.currentAudio.paused || this.currentAudio.ended) {
                         // Reset waveform when TTS stops
                         const waveform = document.getElementById('waveform');
                         waveform.style.background = '#ffffff';
                         waveform.textContent = 'Audio waveform visualization';
+                        console.log('[TTS Viz] TTS visualization stopped');
                         return;
                     }
                     
-                    ttsAnalyser.getByteFrequencyData(ttsAudioData);
-                    
-                    // Calculate TTS audio level
-                    const average = ttsAudioData.reduce((a, b) => a + b) / ttsAudioData.length;
-                    const percentage = Math.min(100, (average / 128) * 100);
-                    
-                    console.log(`[TTS Viz] TTS Audio Level: ${percentage.toFixed(1)}%, Average: ${average.toFixed(1)}`);
-                    
-                    // Update waveform with TTS audio data (override input visualization)
-                    this.updateWaveform(ttsAudioData, true); // true = isPlayback
-                    
-                    // Also update the audio level bar with TTS levels
-                    this.updateAudioLevel(percentage);
+                    try {
+                        ttsAnalyser.getByteFrequencyData(ttsAudioData);
+                        
+                        // Calculate TTS audio level
+                        const average = ttsAudioData.reduce((a, b) => a + b) / ttsAudioData.length;
+                        const percentage = Math.min(100, (average / 128) * 100);
+                        
+                        // Debug log occasionally
+                        if (Math.random() < 0.1) {
+                            console.log(`[TTS Viz] TTS Audio Level: ${percentage.toFixed(1)}%, Average: ${average.toFixed(1)}`);
+                        }
+                        
+                        // Update waveform with TTS audio data (override input visualization)
+                        if (percentage > 5) {
+                            this.updateWaveform(ttsAudioData, true); // true = isPlayback
+                            this.updateAudioLevel(percentage);
+                        } else {
+                            // Fallback visual when no audio data
+                            this.showTTSVisualFallback();
+                        }
+                        
+                    } catch (analyserError) {
+                        console.warn('[TTS Viz] Analyser error:', analyserError);
+                        this.showTTSVisualFallback();
+                    }
                     
                     // Continue visualization
                     requestAnimationFrame(updateTTSVisualization);
                 };
                 
+                // Stop TTS visualization when audio ends
+                audioElement.addEventListener('ended', () => {
+                    ttsVisualizationActive = false;
+                }, { once: true });
+                
                 updateTTSVisualization();
+                console.log('[TTS Viz] TTS visualization started');
             }
             
             toggleRecording() {
@@ -1858,6 +1910,11 @@
                     
                     this.currentAudio = new Audio(nextChunk.audioUrl);
                     
+                    // Update voice state to show ALFRED is speaking
+                    this.voiceState.agentSpeaking = true;
+                    this.voiceState.currentTurn = 'agent';
+                    this.updateVoiceButton();
+                    
                     // Setup audio visualization for TTS playback
                     this.setupTTSVisualization(this.currentAudio);
                     
@@ -1871,6 +1928,18 @@
                     this.currentAudio.addEventListener('ended', () => {
                         console.log(`Audio chunk ${nextChunk.chunkIndex} playback completed`);
                         URL.revokeObjectURL(nextChunk.audioUrl);
+                        
+                        // Check if this is the last chunk
+                        const remainingChunks = this.audioQueue.filter(chunk => chunk.chunkIndex > nextChunk.chunkIndex);
+                        if (remainingChunks.length === 0) {
+                            // Last chunk completed - reset voice state
+                            this.voiceState.agentSpeaking = false;
+                            this.voiceState.currentTurn = 'user';
+                            this.updateVoiceButton();
+                            
+                            // Reset waveform visualization
+                            this.updateWaveformIdle();
+                        }
                         
                         // Remove completed chunk from queue
                         this.audioQueue = this.audioQueue.filter(chunk => chunk.chunkIndex !== nextChunk.chunkIndex);
@@ -2056,10 +2125,16 @@
             
             URL.revokeObjectURL(url);
         }
+
+        function openPipelineMonitor() {
+            // Open pipeline monitor in new tab
+            window.open('/monitor', '_blank');
+        }
         
         // Initialize the interface
         const alfredInterface = new HybridALFREDInterface();
     </script>
 </body>
 </html>
+
 
