@@ -522,20 +522,14 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         for (const voiceTry of voiceAttempts) {
             try {
                 // Use new Kokoro TTS service JSON API
-                const ttsRequest = {
-                    text: finalText,
-                    voice: voiceTry,
-                    language: language,
-                    speed: parseFloat(speed) || 1.0,
-                    engine: engine === 'auto' ? undefined : engine
-                };
+                // Use FormData instead of JSON for TTS service
+                const formData = buildFormData(engine, voiceTry);
                 
                 const kokoroResponse = await safeAxiosCall(
                     `${TTS_SERVICE_URL}/synthesize`,
                     {
                         method: 'POST',
-                        data: ttsRequest,
-                        headers: { 'Content-Type': 'application/json' },
+                        data: formData,
                         timeout: 30000
                     },
                     'Kokoro TTS'
@@ -874,25 +868,25 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     const chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
                     console.log(`[Voice Chat] Using Chatterbox params:`, chatterboxParams);
                     
-                    // Use Edge TTS instead of Kokoro for better reliability
-                    // Build TTS request (matching expected format)
-                    const ttsRequest = {
-                        text: textForTTS,
-                        engine: req.body.engine || 'edge_tts',
-                        voice_id: voice_id || 'en-GB-RyanNeural',
-                        speed: 1.0,
-                        language: 'en-GB',
-                        voice_cloning: false
-                    };
+                    // Use FormData for TTS service (not JSON)
+                    const formData = new FormData();
+                    formData.append('text', textForTTS);
+                    formData.append('engine', req.body.engine || 'edge_tts');
+                    formData.append('voice_id', voice_id || 'en-GB-RyanNeural');
+                    formData.append('speed', '1.0');
+                    formData.append('gender', chatterboxParams.gender);
+                    formData.append('emotion', chatterboxParams.emotion);
+                    formData.append('exaggeration', chatterboxParams.exaggeration.toString());
+                    formData.append('cfg_weight', chatterboxParams.cfg_weight.toString());
+                    formData.append('voice_cloning', false);
 
                     const ttsStartTime = Date.now();
-                    console.log(`[Voice Chat] Sending Edge TTS request with text length: ${textForTTS.length} chars`);
+                    console.log(`[Voice Chat] Sending FormData request with text length: ${textForTTS.length} chars`);
                     const ttsResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
                             method: 'POST',
-                            data: ttsRequest,
-                            headers: { 'Content-Type': 'application/json' },
+                            data: formData,
                             timeout: 30000
                         },
                         'Edge TTS'
