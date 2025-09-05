@@ -1442,7 +1442,11 @@ Answer the question directly and conversationally:`;
 
             console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
             
-            const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
+            // Create parallel requests - local LLM with shorter timeout + cloud fallbacks
+            const requests = [];
+            
+            // Local Ollama request with reduced timeout
+            const ollamaRequest = axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                 model: this.defaultModel,
                 prompt: prompt,
                 stream: false,
@@ -1452,70 +1456,73 @@ Answer the question directly and conversationally:`;
                     max_tokens: 512
                 }
             }, {
-                timeout: 45000 // Increased timeout to 45 seconds
-            });
-
-            const answer = response.data?.response?.trim() || "I couldn't generate a response based on the available information.";
-            
-            console.log(`[ALFRED] Generated response (${answer.length} chars)`);
-            
-            return {
-                answer: answer,
+                timeout: 15000 // Reduced timeout to 15 seconds
+            }).then(response => ({
+                answer: response.data?.response?.trim() || "I couldn't generate a response based on the available information.",
                 model_used: this.defaultModel,
-                context_length: context.length
-            };
+                context_length: context.length,
+                source: 'ollama'
+            })).catch(error => {
+                console.warn(`[ALFRED] Ollama request failed: ${error.message}`);
+                return null;
+            });
+            
+            requests.push(ollamaRequest);
+            
+            // Add cloud model requests in parallel
+            if (this.openaiApiKey) {
+                const openaiRequest = this.callCloudModel('gpt-4o-mini', prompt, {
+                    temperature: 0.4,
+                    max_tokens: 700,
+                    stop: null
+                }).then(cloudText => ({
+                    answer: cloudText.trim(),
+                    model_used: 'gpt-4o-mini',
+                    context_length: context.length,
+                    source: 'openai'
+                })).catch(error => {
+                    console.warn(`[ALFRED] OpenAI request failed: ${error.message}`);
+                    return null;
+                });
+                requests.push(openaiRequest);
+            }
+            
+            if (this.xaiApiKey) {
+                const xaiRequest = this.callCloudModel('grok-beta', prompt, {
+                    temperature: 0.4,
+                    max_tokens: 700,
+                    stop: null
+                }).then(cloudText => ({
+                    answer: cloudText.trim(),
+                    model_used: 'grok-beta',
+                    context_length: context.length,
+                    source: 'xai'
+                })).catch(error => {
+                    console.warn(`[ALFRED] XAI request failed: ${error.message}`);
+                    return null;
+                });
+                requests.push(xaiRequest);
+            }
+            
+            // Wait for the first successful response
+            const results = await Promise.allSettled(requests);
+            const successfulResults = results
+                .filter(result => result.status === 'fulfilled' && result.value !== null)
+                .map(result => result.value)
+                .filter(Boolean);
+            
+            if (successfulResults.length > 0) {
+                // Return the first successful response
+                const winner = successfulResults[0];
+                console.log(`[ALFRED] Generated response using ${winner.source} (${winner.answer.length} chars)`);
+                return winner;
+            } else {
+                console.warn(`[ALFRED] All parallel requests failed`);
+                throw new Error('All LLM requests failed');
+            }
             
         } catch (error) {
             console.error(`[ALFRED] RAG generation error:`, error.message);
-
-            // Attempt cloud fallback if available
-            try {
-                const cloudCandidates = [];
-                if (this.openaiApiKey) cloudCandidates.push('gpt-4o-mini');
-                if (this.xaiApiKey) cloudCandidates.push('grok-beta');
-
-                // Reconstruct prompt for cloud fallback
-                const cloudPrompt = `You are ALFRED, an AI assistant that answers questions directly and clearly. You have access to specific information from articles and documents. Your job is to answer the user's question using this information.
-
-Information available:
-${context}
-
-${convoSection}
-
-User's Question: ${question}
-
-CRITICAL INSTRUCTIONS:
-1. Answer the user's question DIRECTLY using the information provided above
-2. For questions like "Who is the president?" - look for the current president's name in the articles and state it clearly
-3. For factual questions, extract the specific facts that answer the question
-4. DO NOT say "I found information about..." or "According to the article..." 
-5. DO NOT summarize articles unless specifically asked to summarize
-6. If the information doesn't contain the answer, say "I don't have current information about that in my database, but based on my general knowledge..."
-
-Answer the question directly and conversationally:`;
-
-                for (const modelName of cloudCandidates) {
-                    try {
-                        console.log(`[ALFRED] 🌐 Falling back to cloud model: ${modelName}`);
-                        const cloudText = await this.callCloudModel(modelName, cloudPrompt, {
-                            temperature: 0.4,
-                            max_tokens: 700,
-                            stop: null
-                        });
-                        if (cloudText && cloudText.trim()) {
-                            return {
-                                answer: cloudText.trim(),
-                                model_used: modelName,
-                                context_length: context.length
-                            };
-                        }
-                    } catch (cloudErr) {
-                        console.warn(`[ALFRED] Cloud fallback with ${modelName} failed:`, cloudErr.message);
-                    }
-                }
-            } catch (cloudSetupErr) {
-                console.warn('[ALFRED] Cloud fallback setup error:', cloudSetupErr.message);
-            }
 
             // Improved local fallback that tries to provide specific information
             let fallbackAnswer;

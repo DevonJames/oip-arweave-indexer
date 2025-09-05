@@ -1555,6 +1555,19 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 } else {
                     console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
                     
+                    // Send immediate "checking" response while RAG processes
+                    const checkingResponses = [
+                        "Let me check that for you.",
+                        "One moment, checking...",
+                        "Let me find out.",
+                        "Searching for that information...",
+                        "Looking that up now..."
+                    ];
+                    const checkingResponse = checkingResponses[Math.floor(Math.random() * checkingResponses.length)];
+                    
+                    // Send the checking response immediately
+                    await handleTextChunk(checkingResponse + " ");
+                    
                     // Use ALFRED RAG system for contextual queries
                     const ragOptions = {
                         model,
