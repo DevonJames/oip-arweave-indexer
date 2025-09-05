@@ -701,6 +701,7 @@
                 this.audioContext = null;
                 this.analyser = null;
                 this.animationFrame = null;
+                this.ttsAudioContext = null; // For TTS visualization
                 
                 // WebRTC components (Phase 1.1)
                 this.webrtcClient = null;
@@ -740,7 +741,18 @@
             }
             
             setupEventListeners() {
-                document.getElementById('connectBtn').addEventListener('click', () => this.toggleConnection());
+                document.getElementById('connectBtn').addEventListener('click', async () => {
+                    // Resume audio contexts on user interaction (browser requirement)
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                        console.log('[Audio Viz] Input audio context resumed on user click');
+                    }
+                    if (this.ttsAudioContext && this.ttsAudioContext.state === 'suspended') {
+                        await this.ttsAudioContext.resume();
+                        console.log('[TTS Viz] TTS audio context resumed on user click');
+                    }
+                    this.toggleConnection();
+                });
                 document.getElementById('testBtn').addEventListener('click', () => this.testBackend());
                 document.getElementById('debugBtn').addEventListener('click', () => this.debugAudio());
                 document.getElementById('voiceButton').addEventListener('click', () => this.toggleRecording());
@@ -976,17 +988,28 @@
             
             async setupAudioVisualization() {
                 try {
+                    console.log('[Audio Viz] Setting up audio visualization...');
+                    
                     // Enhanced audio context setup (from Phase 5 work)
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
                         sampleRate: 16000,
                         latencyHint: 'interactive'  // From WebRTC optimization
                     });
                     
+                    // Resume audio context if suspended (required by browsers)
+                    if (this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                        console.log('[Audio Viz] Audio context resumed');
+                    }
+                    
                     const source = this.audioContext.createMediaStreamSource(this.localStream);
                     this.analyser = this.audioContext.createAnalyser();
                     this.analyser.fftSize = 512;
+                    this.analyser.smoothingTimeConstant = 0.8;
                     
                     source.connect(this.analyser);
+                    
+                    console.log(`[Audio Viz] Analyser created - FFT size: ${this.analyser.fftSize}, Frequency bins: ${this.analyser.frequencyBinCount}`);
                     
                     // Start real-time visualization
                     this.startAudioVisualization();
@@ -994,7 +1017,10 @@
                     console.log('Enhanced audio visualization setup complete');
                     
                 } catch (error) {
-                    console.warn('Audio visualization setup failed:', error);
+                    console.error('Audio visualization setup failed:', error);
+                    // Initialize basic elements anyway
+                    this.updateAudioLevel(0);
+                    this.updateWaveformIdle();
                 }
             }
             
@@ -1002,26 +1028,53 @@
                 const audioData = new Uint8Array(this.analyser.frequencyBinCount);
                 
                 const updateVisualization = () => {
-                    if (!this.isConnected || !this.analyser) {
+                    if (!this.analyser) {
+                        // Restart if analyser is missing
+                        setTimeout(() => {
+                            if (this.isConnected) {
+                                this.startAudioVisualization();
+                            }
+                        }, 1000);
                         return;
                     }
                     
-                    this.analyser.getByteFrequencyData(audioData);
-                    
-                    // Calculate average audio level
-                    const average = audioData.reduce((a, b) => a + b) / audioData.length;
-                    const percentage = Math.min(100, (average / 128) * 100);
-                    
-                    // Update audio level visualization
-                    this.updateAudioLevel(percentage);
-                    
-                    // Update waveform
-                    this.updateWaveform(audioData);
+                    try {
+                        this.analyser.getByteFrequencyData(audioData);
+                        
+                        // Calculate average audio level
+                        const average = audioData.reduce((a, b) => a + b) / audioData.length;
+                        const percentage = Math.min(100, (average / 128) * 100);
+                        
+                        // Always update audio level visualization
+                        this.updateAudioLevel(percentage);
+                        
+                        // Update waveform - show input when recording, show idle when not
+                        if (this.isRecording) {
+                            this.updateWaveform(audioData, false); // false = input audio
+                        } else if (percentage < 5) {
+                            // Show idle state when not recording and no audio
+                            this.updateWaveformIdle();
+                        }
+                        
+                        // Debug log every 30 frames (about once per second)
+                        if (Math.random() < 0.033) {
+                            console.log(`[Audio Viz] Level: ${percentage.toFixed(1)}%, Recording: ${this.isRecording}, Average: ${average.toFixed(1)}, Context: ${this.audioContext?.state}`);
+                        }
+                        
+                    } catch (error) {
+                        console.warn('[Audio Viz] Visualization update failed:', error);
+                    }
                     
                     this.animationFrame = requestAnimationFrame(updateVisualization);
                 };
                 
                 updateVisualization();
+            }
+
+            updateWaveformIdle() {
+                const waveform = document.getElementById('waveform');
+                waveform.style.background = '#f8fafc';
+                waveform.textContent = '🎵 Ready for audio...';
             }
             
             updateAudioLevel(percentage) {
@@ -1048,22 +1101,92 @@
                 }
             }
             
-            updateWaveform(audioData) {
+            updateWaveform(audioData, isPlayback = false) {
                 const waveform = document.getElementById('waveform');
                 
                 if (audioData && audioData.length > 0) {
                     const average = audioData.reduce((a, b) => a + b) / audioData.length;
                     if (average > 10) {
+                        // Different colors for input vs output audio
+                        const color = isPlayback ? '255, 149, 0' : '52, 199, 89'; // Orange for TTS, Green for input
+                        const icon = isPlayback ? '🔊' : '🎤';
+                        const label = isPlayback ? 'TTS Audio Playing' : 'Microphone Input';
+                        
                         waveform.style.background = `linear-gradient(90deg, 
-                            rgba(52, 199, 89, 0.1) 0%, 
-                            rgba(52, 199, 89, ${average / 128}) 50%, 
-                            rgba(52, 199, 89, 0.1) 100%)`;
-                        waveform.textContent = '🎵 Audio detected';
+                            rgba(${color}, 0.1) 0%, 
+                            rgba(${color}, ${average / 128}) 50%, 
+                            rgba(${color}, 0.1) 100%)`;
+                        waveform.textContent = `${icon} ${label}`;
                     } else {
                         waveform.style.background = '#ffffff';
                         waveform.textContent = '🔇 Silence';
                     }
                 }
+            }
+
+            setupTTSVisualization(audioElement) {
+                try {
+                    console.log('[TTS Viz] Setting up TTS audio visualization...');
+                    
+                    // Create audio context for TTS visualization
+                    if (!this.ttsAudioContext) {
+                        this.ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    
+                    // Resume TTS audio context if needed
+                    if (this.ttsAudioContext.state === 'suspended') {
+                        this.ttsAudioContext.resume();
+                        console.log('[TTS Viz] TTS audio context resumed');
+                    }
+                    
+                    // Create analyser for TTS audio (avoid duplicate source creation)
+                    if (!audioElement._ttsSource) {
+                        const ttsSource = this.ttsAudioContext.createMediaElementSource(audioElement);
+                        const ttsAnalyser = this.ttsAudioContext.createAnalyser();
+                        ttsAnalyser.fftSize = 512;
+                        ttsAnalyser.smoothingTimeConstant = 0.8;
+                        
+                        // Connect TTS audio to analyser and destination
+                        ttsSource.connect(ttsAnalyser);
+                        ttsSource.connect(this.ttsAudioContext.destination);
+                        
+                        // Store references to avoid recreating
+                        audioElement._ttsSource = ttsSource;
+                        audioElement._ttsAnalyser = ttsAnalyser;
+                        
+                        console.log('[TTS Viz] TTS analyser created');
+                    }
+                    
+                    // Start TTS visualization
+                    this.startTTSVisualization(audioElement._ttsAnalyser);
+                    
+                } catch (error) {
+                    console.warn('[TTS Viz] TTS visualization setup failed:', error);
+                }
+            }
+
+            startTTSVisualization(ttsAnalyser) {
+                const ttsAudioData = new Uint8Array(ttsAnalyser.frequencyBinCount);
+                
+                const updateTTSVisualization = () => {
+                    if (!this.currentAudio || this.currentAudio.paused || this.currentAudio.ended) {
+                        // Reset waveform when TTS stops
+                        const waveform = document.getElementById('waveform');
+                        waveform.style.background = '#ffffff';
+                        waveform.textContent = 'Audio waveform visualization';
+                        return;
+                    }
+                    
+                    ttsAnalyser.getByteFrequencyData(ttsAudioData);
+                    
+                    // Update waveform with TTS audio data
+                    this.updateWaveform(ttsAudioData, true); // true = isPlayback
+                    
+                    // Continue visualization
+                    requestAnimationFrame(updateTTSVisualization);
+                };
+                
+                updateTTSVisualization();
             }
             
             toggleRecording() {
@@ -1074,8 +1197,14 @@
                 }
             }
             
-            startRecording() {
+            async startRecording() {
                 try {
+                    // Resume audio context for visualization (required by browsers)
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                        console.log('[Audio Viz] Audio context resumed for recording');
+                    }
+                    
                     // Phase 1.1: Use WebRTC streaming or fallback to MediaRecorder
                     if (this.useWebRTC && this.webrtcClient && this.webrtcClient.isConnected) {
                         this.startWebRTCStreaming();
@@ -1322,8 +1451,18 @@
                             this.addToConversationHistory('assistant', fullResponse);
                         }
                         
+                        // Calculate and update response time metrics
                         const processingTime = Date.now() - startTime;
                         console.log(`Complete streaming processing time: ${processingTime}ms`);
+                        
+                        // Update performance metrics with actual response time
+                        this.performanceMetrics.responseTime = processingTime;
+                        this.updatePerformanceMetrics();
+                        
+                        // Reset to user turn (but don't disconnect!)
+                        this.voiceState.currentTurn = 'user';
+                        this.updateVoiceButton();
+                        
                     }.bind(this));
 
                     eventSource.onerror = function(event) {
@@ -1344,28 +1483,6 @@
                     
                     // Hide typing indicator
                     this.hideTypingIndicator();
-                    
-                    // Show what you actually said (not test message!)
-                    if (result.input_text) {
-                        this.addMessage('user', result.input_text);
-                        console.log(`REAL transcription of what YOU said: "${result.input_text}"`);
-                    }
-                    
-                    // Show ALFRED's response
-                    if (result.response_text) {
-                        this.addMessage('assistant', result.response_text);
-                    }
-                    
-                    // Play TTS audio from your RTX 4090
-                    if (result.audio_data) {
-                        await this.playTTSAudio(result.audio_data);
-                    }
-                    
-                    this.showSuccess(`Voice processed in ${processingTime}ms - transcribed your REAL speech!`);
-                    
-                    // Reset to user turn
-                    this.voiceState.currentTurn = 'user';
-                    this.updateVoiceButton();
                     
                 } catch (error) {
                     console.error('Backend communication failed:', error);
@@ -1675,6 +1792,9 @@
                     
                     this.currentAudio = new Audio(nextChunk.audioUrl);
                     
+                    // Setup audio visualization for TTS playback
+                    this.setupTTSVisualization(this.currentAudio);
+                    
                     this.currentAudio.play().then(() => {
                         console.log(`Audio chunk ${nextChunk.chunkIndex} started playing successfully`);
                     }).catch(error => {
@@ -1799,7 +1919,9 @@
             }
             
             async disconnect() {
+                // DEBUG: Find out what's calling disconnect
                 console.log('Disconnecting...');
+                console.trace('[DEBUG] disconnect() called from:');
                 
                 // Stop recording if active
                 if (this.isRecording) {
