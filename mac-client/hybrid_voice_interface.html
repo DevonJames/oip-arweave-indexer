@@ -687,6 +687,10 @@
         </div>
     </div>
 
+    <!-- WebRTC Dependencies for Phase 1.1 -->
+    <script src="http://localhost:3002/socket.io/socket.io.js"></script>
+    <script src="webrtc_audio_client.js"></script>
+
     <script>
         class HybridALFREDInterface {
             constructor() {
@@ -697,6 +701,11 @@
                 this.audioContext = null;
                 this.analyser = null;
                 this.animationFrame = null;
+                
+                // WebRTC components (Phase 1.1)
+                this.webrtcClient = null;
+                this.useWebRTC = true; // Toggle WebRTC vs MediaRecorder
+                this.webrtcSignalingUrl = 'http://localhost:3002';
                 
                 // State management
                 this.isConnected = false;
@@ -798,8 +807,13 @@
                     // Setup enhanced audio visualization (from Phase 5)
                     await this.setupAudioVisualization();
                     
-                    // Setup MediaRecorder for real audio capture
-                    this.setupMediaRecorder();
+                    // Phase 1.1: Setup WebRTC or fallback to MediaRecorder
+                    if (this.useWebRTC) {
+                        await this.setupWebRTCAudio();
+                    } else {
+                        // Fallback: Setup MediaRecorder for real audio capture
+                        this.setupMediaRecorder();
+                    }
                     
                     // Test your existing backend
                     await this.testBackend();
@@ -853,6 +867,105 @@
                 } catch (error) {
                     console.error('MediaRecorder setup failed:', error);
                     throw error;
+                }
+            }
+            
+            // Phase 1.1: WebRTC Audio Setup
+            async setupWebRTCAudio() {
+                try {
+                    console.log('[WebRTC] Setting up WebRTC audio streaming...');
+                    
+                    // Initialize WebRTC client
+                    if (typeof WebRTCAudioClient === 'undefined') {
+                        console.warn('[WebRTC] WebRTCAudioClient not loaded, falling back to MediaRecorder');
+                        this.useWebRTC = false;
+                        this.setupMediaRecorder();
+                        return;
+                    }
+                    
+                    this.webrtcClient = new WebRTCAudioClient(this.webrtcSignalingUrl);
+                    
+                    // Setup event handlers
+                    this.webrtcClient.onConnected = () => {
+                        console.log('[WebRTC] Connected to signaling server');
+                        this.performanceMetrics.webrtcStatus = 'connected';
+                        this.updatePerformanceMetrics();
+                    };
+                    
+                    this.webrtcClient.onDisconnected = () => {
+                        console.log('[WebRTC] Disconnected from signaling server');
+                        this.performanceMetrics.webrtcStatus = 'disconnected';
+                        this.updatePerformanceMetrics();
+                    };
+                    
+                    this.webrtcClient.onSTTResult = (result) => {
+                        console.log('[WebRTC] STT result received:', result);
+                        this.handleWebRTCSTTResult(result);
+                    };
+                    
+                    this.webrtcClient.onError = (error) => {
+                        console.error('[WebRTC] Error:', error);
+                        this.showError(`WebRTC error: ${error.message || error}`);
+                    };
+                    
+                    // Connect to signaling server
+                    await this.webrtcClient.connect();
+                    
+                    console.log('[WebRTC] WebRTC audio streaming setup complete');
+                    
+                } catch (error) {
+                    console.error('[WebRTC] Setup failed:', error);
+                    console.log('[WebRTC] Falling back to MediaRecorder');
+                    this.useWebRTC = false;
+                    this.setupMediaRecorder();
+                }
+            }
+            
+            handleWebRTCSTTResult(result) {
+                // Handle real-time STT results from WebRTC streaming
+                if (result.text && result.text.trim()) {
+                    console.log(`[WebRTC] Real-time STT: "${result.text}"`);
+                    
+                    // Add to conversation
+                    this.addMessage('user', result.text);
+                    
+                    // Send to backend for LLM processing (Phase 1.2 will make this streaming)
+                    this.sendTextToBackend(result.text);
+                }
+            }
+            
+            async sendTextToBackend(text) {
+                try {
+                    const startTime = Date.now();
+                    
+                    // This will be optimized in Phase 1.2 for streaming
+                    const response = await fetch(`${this.backendUrl}/api/voice/converse`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            text: text,
+                            model: 'llama3.2:3b'
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Backend error: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    // Show response
+                    if (result.response || result.answer) {
+                        const responseText = result.response || result.answer;
+                        this.addMessage('assistant', responseText);
+                    }
+                    
+                    const processingTime = Date.now() - startTime;
+                    console.log(`[WebRTC] Backend processing time: ${processingTime}ms`);
+                    
+                } catch (error) {
+                    console.error('[WebRTC] Backend communication error:', error);
+                    this.showError(`Backend error: ${error.message}`);
                 }
             }
             
@@ -957,29 +1070,13 @@
             }
             
             startRecording() {
-                if (!this.mediaRecorder || this.mediaRecorder.state !== 'inactive') {
-                    this.showError('Audio recorder not ready');
-                    return;
-                }
-                
                 try {
-                    this.audioChunks = [];
-                    this.mediaRecorder.start();
-                    this.isRecording = true;
-                    
-                    // Update UI to show recording state
-                    this.voiceState.speechActive = true;
-                    this.updateVoiceButton();
-                    
-                    console.log('Started recording REAL audio (NO TEST MESSAGES!)');
-                    this.addMessage('system', '🔴 Recording your voice... Speak now! (Real audio capture active)');
-                    
-                    // Auto-stop after 10 seconds
-                    setTimeout(() => {
-                        if (this.isRecording) {
-                            this.stopRecording();
-                        }
-                    }, 10000);
+                    // Phase 1.1: Use WebRTC streaming or fallback to MediaRecorder
+                    if (this.useWebRTC && this.webrtcClient && this.webrtcClient.isConnected) {
+                        this.startWebRTCStreaming();
+                    } else {
+                        this.startMediaRecorderCapture();
+                    }
                     
                 } catch (error) {
                     console.error('Failed to start recording:', error);
@@ -987,26 +1084,99 @@
                 }
             }
             
+            startWebRTCStreaming() {
+                console.log('[WebRTC] Starting real-time audio streaming...');
+                
+                this.webrtcClient.startAudioStreaming();
+                this.isRecording = true;
+                
+                // Update UI
+                this.voiceState.speechActive = true;
+                this.updateVoiceButton();
+                
+                this.addMessage('system', '🔴 WebRTC streaming active... Speak now! (Ultra-low latency)');
+                
+                // Auto-stop after 10 seconds
+                setTimeout(() => {
+                    if (this.isRecording) {
+                        this.stopRecording();
+                    }
+                }, 10000);
+            }
+            
+            startMediaRecorderCapture() {
+                if (!this.mediaRecorder || this.mediaRecorder.state !== 'inactive') {
+                    this.showError('Audio recorder not ready');
+                    return;
+                }
+                
+                console.log('Starting MediaRecorder fallback...');
+                
+                this.audioChunks = [];
+                this.mediaRecorder.start();
+                this.isRecording = true;
+                
+                // Update UI to show recording state
+                this.voiceState.speechActive = true;
+                this.updateVoiceButton();
+                
+                console.log('Started recording REAL audio (NO TEST MESSAGES!)');
+                this.addMessage('system', '🔴 Recording your voice... Speak now! (Real audio capture active)');
+                
+                // Auto-stop after 10 seconds
+                setTimeout(() => {
+                    if (this.isRecording) {
+                        this.stopRecording();
+                    }
+                }, 10000);
+            }
+            
             stopRecording() {
-                if (!this.isRecording || !this.mediaRecorder) {
+                if (!this.isRecording) {
                     return;
                 }
                 
                 try {
-                    this.mediaRecorder.stop();
-                    this.isRecording = false;
-                    
-                    // Update UI
-                    this.voiceState.speechActive = false;
-                    this.updateVoiceButton();
-                    
-                    console.log('Recording stopped - will process REAL audio...');
-                    this.addMessage('system', '⏹️ Recording stopped - sending your voice to ALFRED backend...');
+                    // Phase 1.1: Stop WebRTC streaming or MediaRecorder
+                    if (this.useWebRTC && this.webrtcClient) {
+                        this.stopWebRTCStreaming();
+                    } else {
+                        this.stopMediaRecorderCapture();
+                    }
                     
                 } catch (error) {
                     console.error('Failed to stop recording:', error);
                     this.showError('Failed to stop recording');
                 }
+            }
+            
+            stopWebRTCStreaming() {
+                console.log('[WebRTC] Stopping audio streaming...');
+                
+                this.webrtcClient.stopAudioStreaming();
+                this.isRecording = false;
+                
+                // Update UI
+                this.voiceState.speechActive = false;
+                this.updateVoiceButton();
+                
+                this.addMessage('system', '⏹️ WebRTC streaming stopped - processing complete!');
+            }
+            
+            stopMediaRecorderCapture() {
+                if (!this.mediaRecorder) {
+                    return;
+                }
+                
+                this.mediaRecorder.stop();
+                this.isRecording = false;
+                
+                // Update UI
+                this.voiceState.speechActive = false;
+                this.updateVoiceButton();
+                
+                console.log('Recording stopped - will process REAL audio...');
+                this.addMessage('system', '⏹️ Recording stopped - sending your voice to ALFRED backend...');
             }
             
             async processRecordedAudio() {
@@ -1698,3 +1868,4 @@
     </script>
 </body>
 </html>
+

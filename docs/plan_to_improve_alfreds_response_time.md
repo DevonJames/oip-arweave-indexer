@@ -122,21 +122,20 @@ After implementing the hybrid voice interface with streaming capabilities, the a
 
 **Expected Result**: Audio transmission drops from 500ms to <100ms
 
-#### 1.2 **Local LLM for Simple Queries** (Priority 2)
-**Impact**: -1-2 seconds for simple conversational responses
+#### 1.2 **Streaming STT → Backend Communication** (Priority 2)
+**Impact**: -500ms-1s by starting backend processing during speech
 **Status**: ❌ Not implemented
 
 **Checklist**:
-- [ ] Install Ollama on Mac: `curl -fsSL https://ollama.ai/install.sh | sh`
-- [ ] Download lightweight model: `ollama pull llama3.2:3b`
-- [ ] Create local LLM service in `mac-client/local_llm_service.py`
-- [ ] Implement query classification (simple vs. complex/RAG)
-- [ ] Route simple conversational queries to local LLM
-- [ ] Keep complex RAG queries on remote backend
-- [ ] Add fallback to remote backend if local LLM fails
-- [ ] Test response quality and speed comparison
+- [ ] Implement partial STT results streaming to backend
+- [ ] Modify backend to accept and process partial transcriptions
+- [ ] Add confidence thresholds for early LLM processing start
+- [ ] Implement streaming text accumulation on backend
+- [ ] Add early TTS generation from first confident word chunks
+- [ ] Test partial processing accuracy vs. speed tradeoff
+- [ ] Add fallback to complete transcription if partial fails
 
-**Expected Result**: Simple responses drop from 3-5s to <1s
+**Expected Result**: Backend processing starts 1-2 seconds earlier during user speech
 
 #### 1.3 **Optimize HTTP Communication** (Priority 3)
 **Impact**: -200-300ms per request through connection reuse
@@ -248,18 +247,18 @@ After implementing the hybrid voice interface with streaming capabilities, the a
 
 ## Expected Performance After Implementation
 
-### Phase 1 Results (WebRTC + Local LLM + HTTP Optimization)
+### Phase 1 Results (WebRTC + Streaming STT + HTTP Optimization)
 | Metric | Current | After Phase 1 | Improvement |
 |--------|---------|---------------|-------------|
-| **End-to-End Response** | 3-5s | 1.5-2s | **50-60% faster** |
+| **End-to-End Response** | 3-5s | 2-2.5s | **40-50% faster** |
 | **Audio Transmission** | 500ms | <100ms | **80% faster** |
-| **Simple Query Response** | 3-5s | <1s | **70-80% faster** |
+| **Backend Processing Start** | After speech ends | During speech | **1-2s earlier** |
 | **HTTP Overhead** | 300-500ms | <200ms | **40-60% faster** |
 
 ### Phase 2 Results (Real-Time Processing)
 | Metric | After Phase 1 | After Phase 2 | Improvement |
 |--------|---------------|---------------|-------------|
-| **End-to-End Response** | 1.5-2s | <800ms | **50-60% faster** |
+| **End-to-End Response** | 2-2.5s | <800ms | **60-70% faster** |
 | **STT Start Time** | 1-2s | <100ms | **90% faster** |
 | **Pipeline Processing** | Sequential | Parallel | **40-50% faster** |
 | **Interruption Response** | N/A | <200ms | **New capability** |
@@ -276,7 +275,7 @@ After implementing the hybrid voice interface with streaming capabilities, the a
 
 ### **High Impact, Low Effort** (Do First)
 1. **WebRTC Audio Streaming** - Eliminates HTTP upload overhead
-2. **Local LLM for Simple Queries** - Handles 60%+ of queries locally  
+2. **Streaming STT → Backend** - Start backend processing during user speech
 3. **HTTP Connection Optimization** - Easy wins through connection reuse
 
 ### **High Impact, High Effort** (Do Second)
@@ -309,9 +308,9 @@ After implementing the hybrid voice interface with streaming capabilities, the a
 ## Success Metrics
 
 ### **Phase 1 Targets** (4-6 weeks)
-- [ ] End-to-end response time: <2 seconds (from current 3-5s)
+- [ ] End-to-end response time: <2.5 seconds (from current 3-5s)
 - [ ] Audio transmission: <100ms (from current 500ms)
-- [ ] Simple query processing: 80%+ handled locally in <1s
+- [ ] Backend processing start: During user speech (1-2s earlier)
 - [ ] HTTP connection optimization: <200ms overhead
 
 ### **Phase 2 Targets** (8-10 weeks)  
@@ -333,10 +332,10 @@ The current implementation, while functional, compromised on the key architectur
 1. **HTTP communication** adds 400-500ms per audio interaction  
 2. **Sequential processing** prevents parallel STT/LLM/TTS execution
 3. **Large audio chunks** prevent real-time processing pipeline
-4. **Remote LLM dependency** adds 1-2 seconds for simple conversational queries
+4. **Waiting for complete speech** before starting backend processing adds 1-2 seconds
 
-Your **adaptive chunking system** is actually sophisticated and should provide excellent TTS performance once the other bottlenecks are eliminated. The remote TTS with streaming chunks is likely faster than local TTS would be.
+Your **adaptive chunking system** is actually sophisticated and should provide excellent TTS performance once the other bottlenecks are eliminated. The remote TTS with streaming chunks is likely faster than local TTS would be. Your RTX 4090 + 6x RAM setup is also optimal for LLM/RAG processing.
 
-By implementing **WebRTC audio streaming** and **local LLM for simple queries** first (Phase 1), we can achieve **50-60% performance improvement** with relatively low risk. The subsequent phases will bring us to the original <800ms target through real-time processing and advanced optimizations.
+By implementing **WebRTC audio streaming** and **streaming STT → backend communication** first (Phase 1), we can achieve **40-50% performance improvement** with relatively low risk. The subsequent phases will bring us to the original <800ms target through real-time processing and advanced optimizations.
 
-The key insight is that **network communication elimination** (WebRTC) and **selective local processing** (simple queries) provide the biggest performance gains. The streaming architecture is correct - we just need to optimize the underlying communication and processing layers.
+The key insight is that **network communication optimization** (WebRTC) and **parallel processing** (start backend during speech) provide the biggest performance gains. The current architecture (Mac STT + RTX 4090 LLM/TTS) is actually optimal - we just need to optimize the communication and timing.

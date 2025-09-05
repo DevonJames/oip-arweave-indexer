@@ -17,7 +17,9 @@
     "form-data": "^4.0.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
