@@ -1079,7 +1079,7 @@
                     
                     // Create audio blob from recorded chunks
                     const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-                    console.log(`Processing ${audioBlob.size} bytes of REAL recorded audio (not test message!)`);
+                    console.log(`Processing ${audioBlob.size} bytes of recorded audio`);
                     
                     // Send to your existing ALFRED backend
                     await this.sendToALFREDBackend(audioBlob);
