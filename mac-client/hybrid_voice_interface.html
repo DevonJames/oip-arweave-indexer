@@ -14,7 +14,9 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -22,14 +24,17 @@
         }
         
         .app-container {
-            width: 100%;
-            max-width: 1000px;
+            width: calc(100% - 40px);
+            max-width: 1200px;
+            height: calc(100vh - 40px);
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(20px);
             border-radius: 24px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             overflow: hidden;
             margin: 20px;
+            display: flex;
+            flex-direction: column;
         }
         
         .header {
@@ -52,6 +57,10 @@
         
         .main-content {
             padding: 32px;
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
         
         .connection-status {
@@ -237,7 +246,8 @@
             border-radius: 16px;
             padding: 24px;
             margin-bottom: 24px;
-            max-height: 400px;
+            flex: 1;
+            min-height: 300px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -282,7 +292,7 @@
         .conversation-messages {
             flex: 1;
             overflow-y: auto;
-            max-height: 300px;
+            min-height: 200px;
         }
         
         .message {
@@ -850,7 +860,8 @@
                     this.updateUI();
                     
                     this.showSuccess('Connected! Advanced audio processing ready. Your voice will be processed (not test messages).');
-                    this.addMessage('system', '🎤 Advanced audio setup complete. Click microphone or press spacebar to record your REAL voice.');
+                    // Don't add setup messages to conversation history
+                    console.log('🎤 Advanced audio setup complete. Click microphone or press spacebar to record your REAL voice.');
                     
                 } catch (error) {
                     console.error('Connection failed:', error);
@@ -1264,7 +1275,8 @@
                 this.voiceState.speechActive = true;
                 this.updateVoiceButton();
                 
-                this.addMessage('system', '🔴 WebRTC streaming active... Speak now! (Ultra-low latency)');
+                // Don't add recording messages to conversation history
+                console.log('🔴 WebRTC streaming active... Speak now! (Ultra-low latency)');
                 
                 // Auto-stop after 10 seconds
                 setTimeout(() => {
@@ -1291,7 +1303,8 @@
                 this.updateVoiceButton();
                 
                 console.log('Started recording REAL audio (NO TEST MESSAGES!)');
-                this.addMessage('system', '🔴 Recording your voice... Speak now! (Real audio capture active)');
+                // Don't add recording messages to conversation history
+                console.log('🔴 Recording your voice... Speak now! (Real audio capture active)');
                 
                 // Auto-stop after 10 seconds
                 setTimeout(() => {
@@ -1330,7 +1343,8 @@
                 this.voiceState.speechActive = false;
                 this.updateVoiceButton();
                 
-                this.addMessage('system', '⏹️ WebRTC streaming stopped - processing complete!');
+                // Don't add stop messages to conversation history
+                console.log('⏹️ WebRTC streaming stopped - processing complete!');
             }
             
             stopMediaRecorderCapture() {
@@ -1346,7 +1360,8 @@
                 this.updateVoiceButton();
                 
                 console.log('Recording stopped - will process REAL audio...');
-                this.addMessage('system', '⏹️ Recording stopped - sending your voice to ALFRED backend...');
+                // Don't add stop messages to conversation history
+                console.log('⏹️ Recording stopped - sending your voice to ALFRED backend...');
             }
             
             async processRecordedAudio() {
@@ -1380,6 +1395,9 @@
                     this.voiceState.currentTurn = 'processing';
                     this.updateVoiceButton();
                     this.showTypingIndicator();
+                    
+                    // Update status to show STT processing
+                    this.updateConnectionStatus('connected', 'Processing speech with local STT...');
                     
                     // STEP 1: Send audio to LOCAL speech processor (our unified voice processor)
                     console.log('STEP 1: Sending audio to LOCAL speech processor for STT...');
@@ -1418,6 +1436,9 @@
                     // STEP 2: Initialize STREAMING conversation with REMOTE backend
                     console.log('STEP 2: Starting STREAMING conversation with REMOTE RTX 4090...');
                     
+                    // Update status to show LLM processing
+                    this.updateConnectionStatus('connected', 'Sending to RTX 4090 for LLM/RAG processing...');
+                    
                     // Reset audio queue for new conversation
                     this.resetAudioQueue();
 
@@ -1451,7 +1472,8 @@
                     
                     eventSource.onopen = function() {
                         console.log('Real-time streaming connection opened');
-                        // this.showStatus('Receiving live response...');
+                        // Update status to show streaming response
+                        this.updateConnectionStatus('connected', 'Receiving live response from RTX 4090...');
                     }.bind(this);
 
                     eventSource.addEventListener('textChunk', function(event) {
@@ -1503,6 +1525,9 @@
                         // Reset to user turn (but don't disconnect!)
                         this.voiceState.currentTurn = 'user';
                         this.updateVoiceButton();
+                        
+                        // Update status back to ready
+                        this.updateConnectionStatus('connected', 'Ready for next conversation turn');
                         
                     }.bind(this));
 
