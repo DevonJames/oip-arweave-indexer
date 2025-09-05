@@ -1107,7 +1107,7 @@
                     
                     eventSource.onopen = function() {
                         console.log('Real-time streaming connection opened');
-                        this.showStatus('Receiving live response...');
+                        // this.showStatus('Receiving live response...');
                     }.bind(this);
 
                     eventSource.addEventListener('textChunk', function(event) {
@@ -1139,7 +1139,7 @@
                     eventSource.addEventListener('complete', function(event) {
                         console.log('Real-time streaming complete');
                         eventSource.close();
-                        this.showStatus('Live response complete');
+                        // this.showStatus('Live response complete');
                         
                         // Update conversation history with final response
                         if (fullResponse) {
@@ -1157,11 +1157,11 @@
                             // Fallback if streaming failed
                             this.addMessage('assistant', 'I apologize, but I encountered an error while generating a response. Please try again.');
                         }
-                        this.showStatus('Ready');
+                        // this.showStatus('Ready');
                     }.bind(this);
                     
-                    // Update metrics
-                    this.performanceMetrics.responseTime = processingTime;
+                    // Update metrics (processingTime calculated when streaming completes)
+                    // this.performanceMetrics.responseTime = processingTime;
                     this.conversationTurns++;
                     this.performanceMetrics.conversationTurns = this.conversationTurns;
                     this.updatePerformanceMetrics();
