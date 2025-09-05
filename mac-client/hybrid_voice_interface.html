@@ -891,6 +891,10 @@
                     
                     console.log('MediaRecorder setup complete for REAL audio capture');
                     
+                    // MediaRecorder is working properly - set good audio quality
+                    this.performanceMetrics.audioQuality = 'good';
+                    this.updatePerformanceMetrics();
+                    
                 } catch (error) {
                     console.error('MediaRecorder setup failed:', error);
                     throw error;
@@ -1108,11 +1112,18 @@
                     text.textContent = `${Math.round(percentage)}% - Loud`;
                 }
                 
-                // Update audio quality metric
-                if (percentage > 10) {
+                // Update audio quality metric based on actual audio levels
+                if (percentage > 15) {
                     this.performanceMetrics.audioQuality = 'good';
+                } else if (percentage > 5) {
+                    this.performanceMetrics.audioQuality = 'fair';
                 } else {
                     this.performanceMetrics.audioQuality = 'poor';
+                }
+                
+                // If we're successfully recording/processing, audio quality should be good
+                if (this.isRecording && percentage > 10) {
+                    this.performanceMetrics.audioQuality = 'good';
                 }
             }
             
@@ -1396,6 +1407,10 @@
                     if (transcribedText && transcribedText.trim()) {
                         this.addMessage('user', transcribedText);
                         console.log(`REAL transcription from LOCAL Mac processing: "${transcribedText}"`);
+                        
+                        // STT worked successfully - confirm good audio quality
+                        this.performanceMetrics.audioQuality = 'good';
+                        this.updatePerformanceMetrics();
                     } else {
                         throw new Error('No text transcribed from audio');
                     }
@@ -1481,7 +1496,9 @@
                         
                         // Update performance metrics with actual response time
                         this.performanceMetrics.responseTime = processingTime;
+                        console.log(`[Response Time] Updated to ${processingTime}ms`);
                         this.updatePerformanceMetrics();
+                        console.log(`[Response Time] UI should now show: ${processingTime}ms`);
                         
                         // Reset to user turn (but don't disconnect!)
                         this.voiceState.currentTurn = 'user';
