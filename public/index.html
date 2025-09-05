@@ -615,16 +615,15 @@
                 
                 // Extract TTS engine information from the health response
                 const ttsDetails = data.services?.tts?.details;
-                if (ttsDetails && ttsDetails.engines) {
-                    await populateEnginesFromHealth(ttsDetails.engines, ttsDetails.engines_dict);
+                const availableEnginesList = data.available_engines || [];
+                
+                if (ttsDetails && (ttsDetails.engines || availableEnginesList.length > 0)) {
+                    await populateEnginesFromHealth(ttsDetails.engines, ttsDetails.engines_dict, availableEnginesList);
                 }
                 
                 // Update status based on available engines
-                const availableEngines = ttsDetails?.engines?.filter(e => e.available) || [];
-                const engineNames = availableEngines.map(e => e.name);
-                
-                if (availableEngines.length > 0) {
-                    updateStatus(`✅ ${availableEngines.length} Voice Engine${availableEngines.length > 1 ? 's' : ''} Available: ${engineNames.join(', ')}`);
+                if (availableEnginesList.length > 0) {
+                    updateStatus(`✅ ${availableEnginesList.length} Voice Engine${availableEnginesList.length > 1 ? 's' : ''} Available: ${availableEnginesList.join(', ')}`);
                     document.querySelector('.status-indicator').style.background = '#4CAF50';
                 } else {
                     updateStatus('❌ No Voice Engines Available');
@@ -638,16 +637,21 @@
         }
         
         // Populate engines dropdown from health endpoint
-        async function populateEnginesFromHealth(engines, enginesDict) {
+        async function populateEnginesFromHealth(engines, enginesDict, availableEnginesList) {
             const engineSelect = document.getElementById('voice-engine');
             
             // Clear existing options except the loading one
             engineSelect.innerHTML = '';
             
-            // Add available engines dynamically
-            const availableEngines = engines.filter(engine => engine.available);
+            // Use the available_engines list from the health response if provided
+            let engineNames = availableEnginesList || [];
             
-            if (availableEngines.length === 0) {
+            // If no available_engines list, fall back to parsing engines array
+            if (engineNames.length === 0 && engines) {
+                engineNames = engines.filter(engine => engine.available).map(engine => engine.name);
+            }
+            
+            if (engineNames.length === 0) {
                 engineSelect.innerHTML = '<option value="">No engines available</option>';
                 return;
             }
@@ -662,23 +666,24 @@
                 'elevenlabs': 'ElevenLabs (Premium + Ultra Fast)'
             };
             
-            availableEngines.forEach(engine => {
+            engineNames.forEach(engineName => {
                 const option = document.createElement('option');
-                option.value = engine.name;
-                option.textContent = engineLabels[engine.name] || `${engine.name} TTS`;
-                if (engine.primary) {
-                    option.selected = true;
-                    voiceConfig.selectedEngine = engine.name;
-                }
+                option.value = engineName;
+                option.textContent = engineLabels[engineName] || `${engineName} TTS`;
                 engineSelect.appendChild(option);
             });
             
-            console.log(`🎛️ Populated ${availableEngines.length} engines:`, availableEngines.map(e => e.name));
+            // Set the first available engine as selected
+            if (engineNames.length > 0) {
+                engineSelect.value = engineNames[0];
+                voiceConfig.selectedEngine = engineNames[0];
+            }
+            
+            console.log(`🎛️ Populated ${engineNames.length} engines:`, engineNames);
             
             // Load voices for the selected engine
-            const selectedEngine = engineSelect.value || availableEngines[0]?.name;
+            const selectedEngine = engineSelect.value;
             if (selectedEngine) {
-                voiceConfig.selectedEngine = selectedEngine;
                 await switchEngine(); // This will populate voices and update UI
             }
         }
@@ -1095,7 +1100,7 @@
                 formData.append('emotion', 'neutral');
                 formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
                 formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
-                formData.append('voice_cloning', 'false');
+                formData.append('voice_cloning', false);
                 
                 // Add engine-specific voice configuration
                 if (engine === 'kokoro') {
@@ -1164,7 +1169,7 @@
                 formData.append('emotion', 'neutral');
                 formData.append('exaggeration', (voiceConfig.edge.pitch / 10 + 0.5).toString()); // Convert pitch to exaggeration range
                 formData.append('cfg_weight', (voiceConfig.edge.volume / 20 + 0.5).toString());  // Convert volume to cfg_weight range
-                formData.append('voice_cloning', 'false');
+                formData.append('voice_cloning', false);
                 
                 const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
@@ -1331,12 +1336,12 @@
                 
                 if (voiceConfig.chatterbox.voiceCloning.enabled && voiceConfig.chatterbox.voiceCloning.audioFile) {
                     // Voice cloning mode - add audio file
-                    formData.append('voice_cloning', 'true');
+                    formData.append('voice_cloning', true);
                     formData.append('audio_prompt', voiceConfig.chatterbox.voiceCloning.audioFile);
                     console.log('🎤 Adding voice cloning audio file to request:', voiceConfig.chatterbox.voiceCloning.audioFile.name);
                 } else {
                     // Regular synthesis mode
-                    formData.append('voice_cloning', 'false');
+                    formData.append('voice_cloning', false);
                 }
                 
                 // Create abort controller for timeout (2 minutes for Chatterbox synthesis)

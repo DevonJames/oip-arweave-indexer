@@ -613,10 +613,11 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
         // Fallback to eSpeak if Chatterbox service fails
         try {
             console.log('[TTS] Chatterbox failed, falling back to eSpeak...');
-            console.log(`[TTS] Synthesizing with espeak: voice=en, speed=${speed || 175}`);
+            const fallbackSpeed = parseFloat(speed) || 1.0;
+            console.log(`[TTS] Synthesizing with espeak: voice=en, speed=${fallbackSpeed}`);
             
             // Use the same text that was prepared for Chatterbox
-            const audioData = await synthesizeWithEspeak(finalText, voice_id, speed || 1.0);
+            const audioData = await synthesizeWithEspeak(finalText, voice_id, fallbackSpeed);
             
             res.set({
                 'Content-Type': 'audio/wav',
@@ -2010,8 +2011,7 @@ router.get('/adaptive-diagnostics/:sessionId', (req, res) => {
 router.get('/health', async (req, res) => {
     const services = {
         stt: { url: STT_SERVICE_URL, status: 'unknown' },
-        tts: { url: TTS_SERVICE_URL, status: 'unknown', engine: 'kokoro' },
-        text_generator: { url: TEXT_GENERATOR_URL, status: 'unknown' }
+        tts: { url: TTS_SERVICE_URL, status: 'unknown', engine: 'kokoro' }
     };
     
     // Enhanced: Add Smart Turn service if enabled
@@ -2020,7 +2020,7 @@ router.get('/health', async (req, res) => {
     }
 
     // Check external services
-    const serviceNames = ['stt', 'tts', 'text_generator'];
+    const serviceNames = ['stt', 'tts'];
     if (SMART_TURN_ENABLED) {
         serviceNames.push('smart_turn');
     }
@@ -2057,36 +2057,50 @@ router.get('/health', async (req, res) => {
          (services.tts.details.engines && 
           services.tts.details.engines.some(engine => engine.name === 'chatterbox' && engine.available)));
 
+    // Extract available engines from TTS details
+    const availableEngines = [];
+    if (services.tts?.details?.engines) {
+        services.tts.details.engines.forEach(engine => {
+            if (engine.available) {
+                availableEngines.push(engine.name);
+            }
+        });
+    }
+    
+    // Add kokoro if it's the primary engine and healthy
+    if (services.tts?.status === 'healthy' && services.tts?.engine === 'kokoro') {
+        if (!availableEngines.includes('kokoro')) {
+            availableEngines.unshift('kokoro'); // Add at beginning as primary
+        }
+    }
+    
+    // Determine TTS status based on actual available engines
+    let ttsStatusMessage = 'No TTS Engines Available';
+    if (availableEngines.length > 0) {
+        const primaryEngine = availableEngines[0];
+        const engineNames = {
+            'kokoro': 'Kokoro',
+            'chatterbox': 'Chatterbox', 
+            'edge_tts': 'Edge TTS',
+            'gtts': 'Google TTS',
+            'espeak': 'eSpeak'
+        };
+        ttsStatusMessage = `${engineNames[primaryEngine] || primaryEngine} Available`;
+        if (availableEngines.length > 1) {
+            ttsStatusMessage += ` + ${availableEngines.length - 1} more`;
+        }
+    }
+    
     const healthResponse = {
         status: allHealthy ? 'healthy' : 'degraded',
-        services,
-        tts_status: ttsStatus,
-        chatterbox_available: chatterboxAvailable,
+        services: {
+            stt: services.stt,
+            tts: services.tts
+        },
+        tts_status: ttsStatusMessage,
+        available_engines: availableEngines,
         timestamp: new Date().toISOString()
     };
-    
-    // Enhanced: Add pipeline information
-    if (ENHANCED_PIPELINE_ENABLED) {
-        healthResponse.enhanced_pipeline = {
-            enabled: true,
-            features: {
-                smart_turn: {
-                    enabled: SMART_TURN_ENABLED,
-                    healthy: SMART_TURN_ENABLED ? services.smart_turn?.status === 'healthy' : null,
-                    url: SMART_TURN_ENABLED ? SMART_TURN_URL : null
-                },
-                vad: {
-                    enabled: VAD_ENABLED,
-                    healthy: VAD_ENABLED ? true : null  // Will be updated when VAD is implemented
-                }
-            }
-        };
-    } else {
-        healthResponse.enhanced_pipeline = {
-            enabled: false,
-            message: "Enhanced pipeline features are disabled"
-        };
-    }
     
     res.json(healthResponse);
 });
