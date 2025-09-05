@@ -11,8 +11,8 @@ const { preprocessTextForTTS } = require('./alfred');
  */
 class AdaptiveChunking {
     constructor() {
-        // Timing constants
-        this.BOOTSTRAP_TIMEOUT = 200; // Max time to wait for bootstrap chunk (ms)
+        // Timing constants - More patient for sentence-only chunking
+        this.BOOTSTRAP_TIMEOUT = 1000; // Longer wait for bootstrap chunk (ms)
         this.BOOTSTRAP_MIN_WORDS = 20; // Min words for bootstrap chunk
         this.BOOTSTRAP_MAX_WORDS = 40; // Max words for bootstrap chunk
         this.MAX_CHUNK_DISPATCH_DELAY = 100; // Max delay between chunks (ms)
@@ -140,59 +140,68 @@ class AdaptiveChunking {
      */
     extractBootstrapChunk(session) {
         const timeSinceStart = Date.now() - session.sessionStartTime;
-        const words = this.getWords(session.buffer);
         
-        // Send bootstrap if we have enough words OR timeout reached
-        const hasEnoughWords = words.length >= this.BOOTSTRAP_MIN_WORDS;
-        const timeoutReached = timeSinceStart >= this.BOOTSTRAP_TIMEOUT;
-        
-        if (!hasEnoughWords && !timeoutReached) {
-            return null;
-        }
-
-        // Extract bootstrap text (prefer natural boundary)
-        const targetWords = Math.min(words.length, this.BOOTSTRAP_MAX_WORDS);
-        const bootstrapWords = words.slice(0, targetWords);
-        const bootstrapText = bootstrapWords.join(' ');
-        
-        // For bootstrap, ONLY use complete sentences
+        // For bootstrap, look for the FIRST complete sentence in the buffer
         const sentencePattern = /[.!?]+\s*/g;
-        let lastSentenceEnd = 0;
-        let match;
+        let firstSentenceEnd = 0;
+        let match = sentencePattern.exec(session.buffer);
         
-        while ((match = sentencePattern.exec(bootstrapText)) !== null) {
-            lastSentenceEnd = match.index + match[0].length;
+        if (match) {
+            firstSentenceEnd = match.index + match[0].length;
         }
         
-        // If no complete sentence found, wait for more text
-        if (lastSentenceEnd === 0) {
-            console.log(`[AdaptiveChunking] Bootstrap: No complete sentence found in ${bootstrapText.length} chars, waiting...`);
-            return null;
-        }
-        
-        const finalText = bootstrapText.substring(0, lastSentenceEnd).trim();
-        
-        if (finalText.length < 15) { // Too short, wait for more
-            return null;
-        }
+        // If we found a complete sentence, use it
+        if (firstSentenceEnd > 0) {
+            const finalText = session.buffer.substring(0, firstSentenceEnd).trim();
+            
+            if (finalText.length >= 15) { // Must be substantial
+                console.log(`[AdaptiveChunking] Bootstrap: Found first sentence (${finalText.length} chars): "${finalText.slice(-30)}"`);
+                
+                // Update session state
+                session.processedLength = firstSentenceEnd;
+                session.totalWordsProcessed += this.getWords(finalText).length;
+                session.chunkCount = 1;
 
-        // Update session state
-        session.processedLength = lastSentenceEnd;
-        session.totalWordsProcessed += this.getWords(finalText).length;
-        session.chunkCount = 1; // Set chunk count to 1 for bootstrap (don't increment here)
+                return {
+                    text: finalText,
+                    type: 'bootstrap',
+                    chunkIndex: 1,
+                    wordCount: this.getWords(finalText).length,
+                    naturalBreak: true, // Bootstrap is always a complete sentence
+                    latency: timeSinceStart
+                };
+            }
+        }
+        
+        // If no complete sentence found, check timeout
+        const timeoutReached = timeSinceStart >= this.BOOTSTRAP_TIMEOUT;
+        if (timeoutReached && session.buffer.length >= 30) {
+            console.log(`[AdaptiveChunking] Bootstrap timeout: No sentence found in ${timeSinceStart}ms, forcing partial chunk`);
+            // Emergency fallback - send partial text but try to end at word boundary
+            const words = this.getWords(session.buffer);
+            const partialWords = words.slice(0, Math.min(words.length, this.BOOTSTRAP_MIN_WORDS));
+            const partialText = partialWords.join(' ');
+            
+            session.processedLength = partialText.length;
+            session.totalWordsProcessed += partialWords.length;
+            session.chunkCount = 1;
 
-        return {
-            text: finalText,
-            type: 'bootstrap',
-            chunkIndex: 1, // Start at 1 to match client expectations
-            wordCount: this.getWords(finalText).length,
-            naturalBreak: this.hasNaturalEnding(finalText),
-            latency: timeSinceStart
-        };
+            return {
+                text: partialText,
+                type: 'bootstrap',
+                chunkIndex: 1,
+                wordCount: partialWords.length,
+                naturalBreak: false,
+                latency: timeSinceStart
+            };
+        }
+        
+        console.log(`[AdaptiveChunking] Bootstrap: No complete sentence found in ${session.buffer.length} chars, waiting...`);
+        return null;
     }
 
     /**
-     * Check if there's a chunk ready for processing - PROGRESSIVE STRATEGY
+     * Check if there's a chunk ready for processing - SENTENCE-ONLY STRATEGY
      * @param {Object} session - Session state
      * @returns {boolean} True if chunk is ready
      */
@@ -202,41 +211,25 @@ class AdaptiveChunking {
             return false;
         }
 
-        // PROGRESSIVE READINESS: Different strategies based on chunk number
-        const timeSinceLastChunk = Date.now() - session.lastChunkTime;
-        const maxWaitTime = this.calculateMaxWaitTime(session);
+        // SENTENCE-ONLY STRATEGY: Only send chunks when we have complete sentences
+        const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
         
-        if (session.chunkCount <= 1) {
-            // Bootstrap: Send as soon as we have bootstrap-sized text OR timeout
-            return unprocessedText.length >= this.BOOTSTRAP_CHUNK_SIZE || timeSinceLastChunk >= maxWaitTime;
-            
-        } else if (session.chunkCount <= 4) {
-            // Early chunks: ONLY use periods for natural breaks
-            const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
-            
-            // Use EARLY_CHUNK_SIZE as target (larger than bootstrap)
-            return unprocessedText.length >= this.EARLY_CHUNK_SIZE || 
-                   hasNaturalEnding || 
-                   timeSinceLastChunk >= maxWaitTime;
-                   
-        } else if (session.chunkCount <= 8) {
-            // Mature chunks: ONLY use periods for natural breaks
-            const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
-            
-            // Use MATURE_CHUNK_SIZE as target (larger than early)
-            return hasNaturalEnding || 
-                   unprocessedText.length >= this.MATURE_CHUNK_SIZE ||
-                   timeSinceLastChunk >= maxWaitTime;
-                   
-        } else {
-            // Large chunks: ONLY use periods for natural breaks
-            const hasNaturalEnding = /[.!?]+\s*$/.test(unprocessedText.trim());
-            
-            // Use LARGE_CHUNK_SIZE as target (largest)
-            return hasNaturalEnding || 
-                   unprocessedText.length >= this.LARGE_CHUNK_SIZE ||
-                   timeSinceLastChunk >= maxWaitTime;
+        if (hasNaturalEnding) {
+            console.log(`[AdaptiveChunking] Found sentence ending in ${unprocessedText.length} chars: "${unprocessedText.trim().slice(-20)}"`);
+            return true;
         }
+
+        // EMERGENCY TIMEOUT: Only break after a very long wait to prevent infinite waiting
+        const timeSinceLastChunk = Date.now() - session.lastChunkTime;
+        const emergencyTimeout = 5000; // 5 seconds emergency timeout
+        
+        if (timeSinceLastChunk >= emergencyTimeout) {
+            console.log(`[AdaptiveChunking] Emergency timeout reached (${timeSinceLastChunk}ms), forcing chunk`);
+            return true;
+        }
+
+        // Otherwise, wait for a sentence ending
+        return false;
     }
 
     /**

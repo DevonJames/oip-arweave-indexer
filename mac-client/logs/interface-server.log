@@ -11,23 +11,24 @@ Backend: https://api.oip.onl/api
 [Interface] 🎤 WebRTC test: http://localhost:3001/webrtc
 [Interface] 🚀 Enhanced interface: http://localhost:3001/enhanced
 [Interface] 📡 WebRTC signaling: ws://localhost:3002
-[Interface] GET /enhanced - 2025-09-04T19:09:08.595Z
-[Interface] GET /.well-known/appspecific/com.chrome.devtools.json - 2025-09-04T19:09:08.635Z
-[Interface] GET /health - 2025-09-04T19:09:12.958Z
-[Interface] GET /enhanced - 2025-09-04T19:09:20.801Z
-[Interface] GET /health - 2025-09-04T19:09:28.393Z
-[Interface] GET /health - 2025-09-04T19:09:58.391Z
-[Interface] GET /health - 2025-09-04T19:10:28.389Z
-[Interface] GET /enhanced - 2025-09-04T19:10:32.675Z
-[Interface] GET /.well-known/appspecific/com.chrome.devtools.json - 2025-09-04T19:10:32.709Z
-[Interface] GET /favicon.ico - 2025-09-04T19:10:32.856Z
-[Interface] GET /enhanced - 2025-09-04T19:10:35.608Z
-[Interface] GET /.well-known/appspecific/com.chrome.devtools.json - 2025-09-04T19:10:35.626Z
-[Interface] GET /health - 2025-09-04T19:10:58.396Z
-[Interface] GET /health - 2025-09-04T19:11:28.392Z
-
-[Interface] Received SIGTERM, shutting down gracefully...
-[Interface] Stopping Enhanced Voice Interface Server...
-[SimpleSignaling] Stopping WebRTC signaling server...
-[SimpleSignaling] ✅ WebRTC signaling server stopped
-[Interface] ✅ Enhanced Voice Interface Server stopped
+[Interface] GET /health - 2025-09-05T15:12:37.405Z
+[Interface] GET /health - 2025-09-05T15:12:42.504Z
+[Interface] GET /enhanced - 2025-09-05T15:12:51.438Z
+[Interface] GET /enhanced - 2025-09-05T15:12:57.954Z
+[Interface] GET /.well-known/appspecific/com.chrome.devtools.json - 2025-09-05T15:12:58.018Z
+[Interface] GET /health - 2025-09-05T15:13:07.405Z
+[Interface] GET /favicon.ico - 2025-09-05T15:13:30.092Z
+[Interface] GET /health - 2025-09-05T15:13:37.406Z
+[Interface] GET /health - 2025-09-05T15:14:07.404Z
+[Interface] GET /health - 2025-09-05T15:14:37.402Z
+[Interface] GET /health - 2025-09-05T15:15:07.404Z
+[Interface] GET /health - 2025-09-05T15:15:37.404Z
+[Interface] GET /health - 2025-09-05T15:16:07.405Z
+[Interface] GET /health - 2025-09-05T15:16:37.403Z
+[Interface] GET /health - 2025-09-05T15:17:07.455Z
+[Interface] GET /health - 2025-09-05T15:17:37.461Z
+[Interface] GET /health - 2025-09-05T15:18:07.455Z
+[Interface] GET /health - 2025-09-05T15:18:37.452Z
+[Interface] GET /health - 2025-09-05T15:19:07.450Z
+[Interface] GET /health - 2025-09-05T15:19:37.455Z
+[Interface] GET /health - 2025-09-05T15:20:07.452Z

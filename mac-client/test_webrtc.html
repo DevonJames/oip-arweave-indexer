@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebRTC Audio Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .processing { background: #fff3cd; color: #856404; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+        #log { background: #f8f9fa; padding: 10px; border-radius: 5px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>WebRTC Audio Streaming Test</h1>
+    <div id="status" class="status disconnected">Disconnected</div>
+    <button id="connectBtn">Connect</button>
+    <button id="startBtn" disabled>Start Audio</button>
+    <button id="stopBtn" disabled>Stop Audio</button>
+    
+    <h3>Log:</h3>
+    <div id="log"></div>
+    
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="webrtc_audio_client.js"></script>
+    <script>
+        const status = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const log = document.getElementById('log');
+        
+        let webrtcClient;
+        
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        connectBtn.onclick = async () => {
+            try {
+                addLog('Initializing WebRTC client...');
+                webrtcClient = new WebRTCAudioClient('http://localhost:3002');
+                
+                webrtcClient.onConnected = () => {
+                    status.textContent = 'Connected to WebRTC signaling server';
+                    status.className = 'status connected';
+                    connectBtn.disabled = true;
+                    startBtn.disabled = false;
+                    addLog('✅ Connected to signaling server');
+                };
+                
+                webrtcClient.onDisconnected = () => {
+                    status.textContent = 'Disconnected';
+                    status.className = 'status disconnected';
+                    connectBtn.disabled = false;
+                    startBtn.disabled = true;
+                    stopBtn.disabled = true;
+                    addLog('❌ Disconnected from signaling server');
+                };
+                
+                webrtcClient.onSTTResult = (result) => {
+                    addLog(`🎤 STT Result: "${result.text}" (confidence: ${result.confidence})`);
+                };
+                
+                webrtcClient.onError = (error) => {
+                    addLog(`❌ Error: ${error.message || error}`);
+                };
+                
+                webrtcClient.onAudioData = (pcmData) => {
+                    // Show audio data being captured (don't log every frame to avoid spam)
+                    if (Math.random() < 0.01) { // Log ~1% of frames
+                        addLog(`🔊 Audio data: ${pcmData.length} samples`);
+                    }
+                };
+                
+                await webrtcClient.connect();
+                
+            } catch (error) {
+                addLog(`❌ Connection failed: ${error.message}`);
+                status.textContent = 'Connection failed';
+                status.className = 'status disconnected';
+            }
+        };
+        
+        startBtn.onclick = async () => {
+            try {
+                addLog('🎤 Starting audio streaming...');
+                await webrtcClient.startAudioStreaming();
+                
+                status.textContent = 'Audio streaming active';
+                status.className = 'status processing';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                
+                addLog('✅ Audio streaming started');
+                
+            } catch (error) {
+                addLog(`❌ Failed to start audio: ${error.message}`);
+            }
+        };
+        
+        stopBtn.onclick = () => {
+            addLog('🛑 Stopping audio streaming...');
+            webrtcClient.stopAudioStreaming();
+            
+            status.textContent = 'Connected (audio stopped)';
+            status.className = 'status connected';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            addLog('✅ Audio streaming stopped');
+        };
+        
+        addLog('WebRTC Audio Test loaded. Click Connect to start.');
+    </script>
+</body>
+</html>

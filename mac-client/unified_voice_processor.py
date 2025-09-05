@@ -991,6 +991,67 @@ async def transcribe_file_legacy(
         logger.error(f"Transcription error: {e}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
 
+@app.post("/process_audio_stream")
+async def process_audio_stream(
+    audio_data: str = Form(...),
+    client_id: str = Form(...),
+    format: Optional[str] = Form("raw")
+):
+    """Process streaming audio data from WebRTC client"""
+    try:
+        logger.info(f"Processing audio stream from client {client_id}, format: {format}")
+        
+        # Convert audio data from array format
+        if isinstance(audio_data, str):
+            # Parse JSON array of PCM samples from WebRTC
+            import json
+            try:
+                pcm_samples = json.loads(audio_data)
+                # Convert to numpy array and then to bytes
+                import numpy as np
+                pcm_array = np.array(pcm_samples, dtype=np.int16)
+                audio_bytes = pcm_array.tobytes()
+            except Exception as e:
+                logger.warning(f"Failed to parse WebRTC audio data: {e}")
+                # Fallback: treat as raw bytes
+                audio_bytes = audio_data.encode() if isinstance(audio_data, str) else audio_data
+        else:
+            audio_bytes = audio_data
+        
+        logger.info(f"Processing {len(audio_bytes)} bytes of streaming audio")
+        
+        # For WebRTC streaming, accumulate audio and process when we have enough
+        session_id = f"webrtc_{client_id}"
+        
+        # Convert bytes directly to numpy array for WebRTC PCM data
+        try:
+            import numpy as np
+            if len(audio_bytes) % 2 == 0:  # Valid 16-bit PCM
+                audio_data = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                
+                # Use unified processor's frame processing (accumulates audio over time)
+                result = await unified_processor.process_audio_frame(session_id, audio_bytes)
+                
+            else:
+                logger.error(f"Invalid PCM data length: {len(audio_bytes)} bytes")
+                result = {"text": "", "confidence": 0.0, "has_speech": False, "processing_time_ms": 0}
+                
+        except Exception as e:
+            logger.error(f"WebRTC audio processing error: {e}")
+            result = {"text": "", "confidence": 0.0, "has_speech": False, "processing_time_ms": 0}
+        
+        return {
+            "text": str(result.get("text", "")),
+            "confidence": float(result.get("confidence", 0.0)),
+            "has_speech": bool(result.get("has_speech", False)),
+            "processing_time_ms": int(result.get("processing_time_ms", 0)),
+            "session_id": str(session_id)
+        }
+        
+    except Exception as e:
+        logger.error(f"Streaming audio processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"Streaming processing failed: {e}")
+
 @app.post("/predict_endpoint")
 async def predict_endpoint_legacy(
     audio_file: UploadFile = File(...),

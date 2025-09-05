@@ -688,7 +688,7 @@
     </div>
 
     <!-- WebRTC Dependencies for Phase 1.1 -->
-    <script src="http://localhost:3002/socket.io/socket.io.js"></script>
+    <script src="http://localhost:3002/socket.io/socket.io.js" onerror="this.onerror=null; this.src='https://cdn.socket.io/4.7.5/socket.io.min.js'"></script>
     <script src="webrtc_audio_client.js"></script>
 
     <script>
@@ -923,6 +923,8 @@
             
             handleWebRTCSTTResult(result) {
                 // Handle real-time STT results from WebRTC streaming
+                console.log(`[WebRTC] STT result: "${result.text}" (confidence: ${result.confidence}, speech: ${result.has_speech})`);
+                
                 if (result.text && result.text.trim()) {
                     console.log(`[WebRTC] Real-time STT: "${result.text}"`);
                     
@@ -931,6 +933,9 @@
                     
                     // Send to backend for LLM processing (Phase 1.2 will make this streaming)
                     this.sendTextToBackend(result.text);
+                } else {
+                    // Don't disconnect on empty results - this is normal for continuous streaming
+                    console.log(`[WebRTC] No speech detected in this audio chunk (normal for continuous streaming)`);
                 }
             }
             
@@ -1087,7 +1092,8 @@
             startWebRTCStreaming() {
                 console.log('[WebRTC] Starting real-time audio streaming...');
                 
-                this.webrtcClient.startAudioStreaming();
+                // Pass the existing localStream to avoid duplicate microphone access
+                this.webrtcClient.startAudioStreaming(this.localStream);
                 this.isRecording = true;
                 
                 // Update UI

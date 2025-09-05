@@ -82,10 +82,12 @@ class WebRTCSignalingServer {
             const FormData = require('form-data');
             
             const formData = new FormData();
-            formData.append('audio_data', Buffer.from(audioData));
+            // Send audio data as JSON string of the PCM array
+            formData.append('audio_data', JSON.stringify(audioData));
             formData.append('client_id', clientId);
+            formData.append('format', 'pcm');
             
-            const response = await axios.post('http://localhost:8015/process_audio_stream', formData, {
+            const response = await axios.post('http://127.0.0.1:8015/process_audio_stream', formData, {
                 headers: formData.getHeaders(),
                 timeout: 5000
             });

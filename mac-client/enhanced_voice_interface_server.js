@@ -96,6 +96,17 @@ class EnhancedVoiceInterfaceServer {
         this.app.get('/enhanced', (req, res) => {
             res.sendFile(path.join(__dirname, 'hybrid_voice_interface.html'));
         });
+
+        // Serve WebRTC test page
+        this.app.get('/test_webrtc.html', (req, res) => {
+            res.sendFile(path.join(__dirname, 'test_webrtc.html'));
+        });
+
+        // Serve WebRTC audio client
+        this.app.get('/webrtc_audio_client.js', (req, res) => {
+            res.setHeader('Content-Type', 'application/javascript');
+            res.sendFile(path.join(__dirname, 'webrtc_audio_client.js'));
+        });
         
         // Serve Phase 3 interruption test interface
         this.app.get('/interruption', (req, res) => {
@@ -343,19 +354,23 @@ class EnhancedVoiceInterfaceServer {
             // Create HTTP server
             this.server = createServer(this.app);
             
-            // Initialize WebRTC signaling server
-            console.log('[Interface] Initializing simple WebRTC signaling server...');
-            this.webrtcSignaling = new SimpleWebRTCSignaling({
-                port: this.config.webrtcPort,
-                backendUrl: this.config.backendUrl,
-                unifiedProcessorUrl: 'http://localhost:8015'
-            });
-            
-            // Setup WebRTC event handlers
-            this.setupWebRTCEventHandlers();
-            
-            // Start WebRTC signaling server
-            await this.webrtcSignaling.start();
+            // Initialize WebRTC signaling server (unless disabled)
+            if (!process.env.DISABLE_INTERNAL_WEBRTC) {
+                console.log('[Interface] Initializing simple WebRTC signaling server...');
+                this.webrtcSignaling = new SimpleWebRTCSignaling({
+                    port: this.config.webrtcPort,
+                    backendUrl: this.config.backendUrl,
+                    unifiedProcessorUrl: 'http://localhost:8015'
+                });
+                
+                // Setup WebRTC event handlers
+                this.setupWebRTCEventHandlers();
+                
+                // Start WebRTC signaling server
+                await this.webrtcSignaling.start();
+            } else {
+                console.log('[Interface] ⚠️  Internal WebRTC signaling disabled (using external signaling server)');
+            }
             
             // Start main HTTP server
             await new Promise((resolve, reject) => {

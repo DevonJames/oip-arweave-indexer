@@ -44,8 +44,9 @@ class WebRTCAudioClient {
         try {
             console.log('[WebRTC] Connecting to signaling server...');
             
-            // Import Socket.IO client (assumes it's loaded globally)
+            // Import Socket.IO client (check if loaded globally)
             if (typeof io === 'undefined') {
+                console.warn('[WebRTC] Socket.IO client not available, cannot use WebRTC');
                 throw new Error('Socket.IO client not loaded');
             }
             
@@ -101,7 +102,7 @@ class WebRTCAudioClient {
         });
     }
     
-    async startAudioStreaming() {
+    async startAudioStreaming(existingStream = null) {
         try {
             if (this.isStreaming) {
                 console.log('[WebRTC] Already streaming');
@@ -110,9 +111,14 @@ class WebRTCAudioClient {
             
             console.log('[WebRTC] Starting audio streaming...');
             
-            // Get microphone access
-            this.localStream = await navigator.mediaDevices.getUserMedia(this.audioConstraints);
-            console.log('[WebRTC] Microphone access granted');
+            // Use existing stream if provided, otherwise get new one
+            if (existingStream) {
+                this.localStream = existingStream;
+                console.log('[WebRTC] Using existing audio stream');
+            } else {
+                this.localStream = await navigator.mediaDevices.getUserMedia(this.audioConstraints);
+                console.log('[WebRTC] Microphone access granted');
+            }
             
             // For now, use Socket.IO fallback instead of full WebRTC peer connection
             // This gives us most of the performance benefits with less complexity
@@ -130,7 +136,37 @@ class WebRTCAudioClient {
     startSocketAudioStreaming() {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const source = audioContext.createMediaStreamSource(this.localStream);
-        const processor = audioContext.createScriptProcessorNode(4096, 1, 1);
+        
+        // Try modern AudioWorkletNode first, fall back to ScriptProcessorNode
+        if (audioContext.audioWorklet && window.AudioWorkletNode) {
+            this.startAudioWorkletStreaming(audioContext, source);
+        } else {
+            this.startScriptProcessorStreaming(audioContext, source);
+        }
+    }
+    
+    startAudioWorkletStreaming(audioContext, source) {
+        // Modern approach - would need a separate worklet file
+        // For now, fall back to ScriptProcessorNode
+        console.log('[WebRTC] AudioWorklet not implemented yet, using ScriptProcessor fallback');
+        this.startScriptProcessorStreaming(audioContext, source);
+    }
+    
+    startScriptProcessorStreaming(audioContext, source) {
+        // Use deprecated but widely supported ScriptProcessorNode
+        let processor;
+        
+        try {
+            // Try the standard method first
+            processor = audioContext.createScriptProcessor(4096, 1, 1);
+        } catch (e) {
+            try {
+                // Try the webkit prefixed version
+                processor = audioContext.createJavaScriptNode(4096, 1, 1);
+            } catch (e2) {
+                throw new Error('ScriptProcessor not supported in this browser');
+            }
+        }
         
         processor.onaudioprocess = (event) => {
             if (!this.isStreaming) return;
@@ -159,7 +195,7 @@ class WebRTCAudioClient {
         this.audioProcessor = processor;
         this.audioContext = audioContext;
         
-        console.log('[WebRTC] Socket.IO audio streaming started');
+        console.log('[WebRTC] ScriptProcessor audio streaming started');
     }
     
     stopAudioStreaming() {
