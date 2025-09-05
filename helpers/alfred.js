@@ -21,8 +21,9 @@ class ALFRED {
         
         // Define which models are cloud-hosted vs self-hosted
         this.cloudModels = {
-            // XAI Models (Grok)
-            'grok-beta': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
+            // XAI Models (Grok) - Updated to current models
+            'grok-4': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
+            'grok-beta': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' }, // Legacy fallback
             
             // OpenAI Models
             'gpt-4o': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' },
@@ -221,6 +222,7 @@ class ALFRED {
             if (!apiKey) {
                 throw new Error('XAI_API_KEY environment variable is required for Grok models');
             }
+            console.log(`[ALFRED] XAI API Key available: ${apiKey ? 'Yes' : 'No'}, Length: ${apiKey ? apiKey.length : 0}`);
         } else if (modelConfig.provider === 'openai') {
             apiKey = this.openaiApiKey;
             if (!apiKey) {
@@ -252,17 +254,57 @@ class ALFRED {
             stop: finalOptions.stop
         };
 
-        console.log(`[ALFRED] 🌐 Calling ${modelConfig.provider} API for ${modelName}`);
+        console.log(`[ALFRED] 🌐 Calling ${modelConfig.provider} API for ${modelName} at ${modelConfig.apiUrl}`);
+        console.log(`[ALFRED] Request body:`, JSON.stringify(requestBody, null, 2));
 
-        const response = await axios.post(modelConfig.apiUrl, requestBody, {
-            headers: headers,
-            timeout: 30000
-        });
+        try {
+            const response = await axios.post(modelConfig.apiUrl, requestBody, {
+                headers: headers,
+                timeout: 30000
+            });
 
-        if (response.data?.choices?.[0]?.message?.content) {
-            return response.data.choices[0].message.content.trim();
-        } else {
-            throw new Error(`Invalid response format from ${modelConfig.provider} API`);
+            if (response.data?.choices?.[0]?.message?.content) {
+                return response.data.choices[0].message.content.trim();
+            } else {
+                console.error(`[ALFRED] Invalid response format from ${modelConfig.provider}:`, response.data);
+                throw new Error(`Invalid response format from ${modelConfig.provider} API`);
+            }
+        } catch (error) {
+            console.error(`[ALFRED] ${modelConfig.provider} API Error:`, {
+                message: error.message,
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                url: modelConfig.apiUrl
+            });
+            
+            // If XAI gives 404, try alternative endpoint
+            if (modelConfig.provider === 'xai' && error.response?.status === 404) {
+                console.log(`[ALFRED] XAI 404 error, trying alternative endpoint...`);
+                const altUrl = 'https://api.x.ai/v1/completions'; // Try non-chat endpoint
+                try {
+                    const altRequestBody = {
+                        model: modelName,
+                        prompt: requestBody.messages[0].content,
+                        temperature: requestBody.temperature,
+                        max_tokens: requestBody.max_tokens
+                    };
+                    
+                    const altResponse = await axios.post(altUrl, altRequestBody, {
+                        headers: headers,
+                        timeout: 30000
+                    });
+                    
+                    if (altResponse.data?.choices?.[0]?.text) {
+                        console.log(`[ALFRED] XAI alternative endpoint succeeded`);
+                        return altResponse.data.choices[0].text.trim();
+                    }
+                } catch (altError) {
+                    console.error(`[ALFRED] XAI alternative endpoint also failed:`, altError.message);
+                }
+            }
+            
+            throw error;
         }
     }
 
@@ -377,7 +419,7 @@ JSON Response:`;
                         stop: ["\n\n", "Question:", "Explanation:", "Note:"]
                     }
                 }, {
-                    timeout: 10000
+                    timeout: 20000 // Increased from 10s to 20s
                 });
                 
                 rawResponse = response.data?.response?.trim() || '';
@@ -1244,7 +1286,7 @@ JSON Response:`;
         try {
             console.log(`[ALFRED] Fetching full text from: ${url}`);
             const response = await axios.get(url, { 
-                timeout: 10000,
+                timeout: 15000, // Increased from 10s to 15s
                 maxContentLength: 500000
             });
             
@@ -1445,7 +1487,7 @@ Answer the question directly and conversationally:`;
             // Create parallel requests - local LLM with shorter timeout + cloud fallbacks
             const requests = [];
             
-            // Local Ollama request with reduced timeout
+            // Local Ollama request with optimized settings
             const ollamaRequest = axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                 model: this.defaultModel,
                 prompt: prompt,
@@ -1453,17 +1495,20 @@ Answer the question directly and conversationally:`;
                 options: {
                     temperature: 0.3,
                     top_p: 0.9,
-                    max_tokens: 512
+                    top_k: 40, // Add top_k for better performance
+                    repeat_penalty: 1.1, // Prevent repetition
+                    num_predict: 512, // Use num_predict instead of max_tokens for Ollama
+                    stop: ["\n\n", "Question:", "Explanation:", "Note:"]
                 }
             }, {
-                timeout: 15000 // Reduced timeout to 15 seconds
+                timeout: 25000 // Increased timeout back to 25 seconds for better reliability
             }).then(response => ({
                 answer: response.data?.response?.trim() || "I couldn't generate a response based on the available information.",
                 model_used: this.defaultModel,
                 context_length: context.length,
                 source: 'ollama'
             })).catch(error => {
-                console.warn(`[ALFRED] Ollama request failed: ${error.message}`);
+                console.warn(`[ALFRED] Ollama request failed after 25s: ${error.message}`);
                 return null;
             });
             
@@ -1487,14 +1532,15 @@ Answer the question directly and conversationally:`;
                 requests.push(openaiRequest);
             }
             
+            // Re-enabled XAI with updated grok-4 model
             if (this.xaiApiKey) {
-                const xaiRequest = this.callCloudModel('grok-beta', prompt, {
+                const xaiRequest = this.callCloudModel('grok-4', prompt, {
                     temperature: 0.4,
                     max_tokens: 700,
                     stop: null
                 }).then(cloudText => ({
                     answer: cloudText.trim(),
-                    model_used: 'grok-beta',
+                    model_used: 'grok-4',
                     context_length: context.length,
                     source: 'xai'
                 })).catch(error => {
@@ -1634,7 +1680,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                     max_tokens: 512
                 }
             }, {
-                timeout: 30000
+                timeout: 20000 // Reduced from 30s to 20s
             });
 
             const answer = response.data?.response?.trim() || `I didn't find any specific records about "${appliedFilters.search}", but feel free to ask me about it anyway - I might be able to help with general information.`;
@@ -2226,7 +2272,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
         try {
             console.log(`[RAG] Fetching full text from: ${url}`);
             const response = await axios.get(url, { 
-                timeout: 10000, // 10 second timeout
+                timeout: 15000, // Increased from 10s to 15s
                 maxContentLength: 500000 // 500KB max
             });
             
@@ -2422,7 +2468,7 @@ Please provide a helpful, conversational answer starting with "I didn't find any
                         max_tokens: 500
                     }
                 }, {
-                    timeout: 30000 // 30 second timeout
+                    timeout: 20000 // Reduced from 30s to 20s
                 });
                 
                 responseText = response.data.response?.trim() || '';
