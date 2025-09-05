@@ -758,11 +758,26 @@
                 document.getElementById('voiceButton').addEventListener('click', () => this.toggleRecording());
                 
                 // Keyboard shortcuts (keeping from Phase 5)
+                let spaceKeyDown = false;
+                
                 document.addEventListener('keydown', (e) => {
-                    if (e.code === 'Space' && !e.repeat) {
+                    if (e.code === 'Space' && !e.repeat && !spaceKeyDown) {
                         e.preventDefault();
-                        if (this.isConnected) {
-                            this.toggleRecording();
+                        spaceKeyDown = true;
+                        if (this.isConnected && !this.isRecording) {
+                            console.log('[Spacebar] Starting recording...');
+                            this.startRecording();
+                        }
+                    }
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    if (e.code === 'Space' && spaceKeyDown) {
+                        e.preventDefault();
+                        spaceKeyDown = false;
+                        if (this.isConnected && this.isRecording) {
+                            console.log('[Spacebar] Stopping recording...');
+                            this.stopRecording();
                         }
                     }
                 });
@@ -1179,8 +1194,17 @@
                     
                     ttsAnalyser.getByteFrequencyData(ttsAudioData);
                     
-                    // Update waveform with TTS audio data
+                    // Calculate TTS audio level
+                    const average = ttsAudioData.reduce((a, b) => a + b) / ttsAudioData.length;
+                    const percentage = Math.min(100, (average / 128) * 100);
+                    
+                    console.log(`[TTS Viz] TTS Audio Level: ${percentage.toFixed(1)}%, Average: ${average.toFixed(1)}`);
+                    
+                    // Update waveform with TTS audio data (override input visualization)
                     this.updateWaveform(ttsAudioData, true); // true = isPlayback
+                    
+                    // Also update the audio level bar with TTS levels
+                    this.updateAudioLevel(percentage);
                     
                     // Continue visualization
                     requestAnimationFrame(updateTTSVisualization);
