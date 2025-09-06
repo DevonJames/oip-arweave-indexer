@@ -727,97 +727,60 @@ async def synthesize_speech(
                 logger.error(f"Failed to save audio prompt: {e}")
                 raise HTTPException(status_code=400, detail=f"Failed to process audio file: {str(e)}")
         
-        # Try engines in priority order (Chatterbox first, then GPU optimized fallbacks)
-        engines_to_try = []
+        # Use the working synthesize method instead of this broken loop
+        logger.info(f"[GPU TTS Service] Using working synthesize method with engine: {engine}")
         
-        if engine == "chatterbox" or engine == "auto":
-            engines_to_try.append("chatterbox")
+        # Map kokoro to silero for compatibility  
+        if engine == "kokoro":
+            engine = "silero"
+            
+        result = await tts_service.synthesize(
+            text=text,
+            voice=voice_id, 
+            engine=engine
+        )
         
-        # Add GPU-optimized fallback order
-        if engine == "auto":
-            engines_to_try.extend(["silero", "edge_tts", "gtts", "espeak"])
-        
-        # Try each engine until one succeeds
-        for engine_name in engines_to_try:
+        if result and result.audio_file and os.path.exists(result.audio_file):
+            logger.info(f"Successfully synthesized with {result.engine_used}")
+            
+            # Clean up temporary file
+            if audio_prompt_path and os.path.exists(audio_prompt_path):
+                try:
+                    os.unlink(audio_prompt_path)
+                except:
+                    pass
+            
+            # Read and return the audio file
+            with open(result.audio_file, 'rb') as f:
+                audio_data = f.read()
+            
+            # Clean up audio file
             try:
-                logger.info(f"Attempting GPU synthesis with {engine_name}")
-                
-                if engine_name == "chatterbox":
-                    if tts_service.chatterbox_engine and tts_service.chatterbox_engine is not None:
-                        audio_file = await tts_service.synthesize_with_chatterbox(
-                            text=text,
-                            voice=voice_id,
-                            gender=gender,
-                            emotion=emotion,
-                            exaggeration=exaggeration,
-                            cfg_weight=cfg_weight,
-                            audio_prompt_path=audio_prompt_path
-                        )
-                    else:
-                        logger.warning("Chatterbox engine not available")
-                        continue
-                elif engine_name == "silero":
-                    if tts_service.silero_model is not None:
-                        audio_file = await tts_service.synthesize_with_silero(text, voice_id)
-                    else:
-                        logger.warning("Silero model not available")
-                        continue
-                elif engine_name == "edge_tts":
-                    audio_file = await tts_service.synthesize_with_edge_tts(text, voice_id)
-                elif engine_name == "gtts":
-                    audio_file = await tts_service.synthesize_with_gtts(text)
-                elif engine_name == "espeak":
-                    audio_file = await tts_service.synthesize_with_espeak(text, voice_id)
-                else:
-                    continue
-                
-                if audio_file and os.path.exists(audio_file):
-                    logger.info(f"Successfully synthesized with {engine_name}")
-                    
-                    # Clean up temporary file
-                    if audio_prompt_path and os.path.exists(audio_prompt_path):
-                        try:
-                            os.unlink(audio_prompt_path)
-                        except:
-                            pass
-                    
-                    # Read and return the audio file
-                    with open(audio_file, 'rb') as f:
-                        audio_data = f.read()
-                    
-                    # Clean up audio file
-                    try:
-                        os.unlink(audio_file)
-                    except:
-                        pass
-                    
-                    return Response(
-                        content=audio_data,
-                        media_type="audio/wav",
-                        headers={
-                            "X-Engine-Used": engine_name,
-                            "X-Voice-ID": voice_id if not voice_cloning else "voice_clone",
-                            "X-Voice-Cloning": "true" if voice_cloning else "false"
-                        }
-                    )
-                    
-            except Exception as e:
-                last_error = str(e)
-                logger.warning(f"GPU Engine {engine_name} failed: {str(e)}")
-                continue
-        
-        # Clean up temporary file on failure
-        if audio_prompt_path and os.path.exists(audio_prompt_path):
-            try:
-                os.unlink(audio_prompt_path)
+                os.unlink(result.audio_file)
             except:
                 pass
-        
-        # If all engines failed, return error
-        raise HTTPException(
-            status_code=500, 
-            detail=f"All TTS engines failed. Last error: {last_error}"
-        )
+            
+            return Response(
+                content=audio_data,
+                media_type="audio/wav",
+                headers={
+                    "X-Engine-Used": result.engine_used,
+                    "X-Voice-ID": result.voice_used,
+                    "X-Voice-Cloning": "true" if voice_cloning else "false"
+                }
+            )
+        else:
+            # Clean up temporary file on failure
+            if audio_prompt_path and os.path.exists(audio_prompt_path):
+                try:
+                    os.unlink(audio_prompt_path)
+                except:
+                    pass
+            
+            raise HTTPException(
+                status_code=500, 
+                detail=f"TTS synthesis failed - no audio generated"
+            )
         
     except HTTPException:
         # Re-raise HTTP exceptions
