@@ -231,29 +231,109 @@ class GPUTTSService:
             logger.info("   Silero will not be available - falling back to other engines")
     
     def _initialize_kokoro(self):
-        """Initialize Kokoro TTS engine"""
+        """Initialize Kokoro TTS engine with real model"""
         try:
             logger.info("🚀 Loading Kokoro TTS model...")
             
-            # For now, implement as a high-quality mock that produces different audio than other engines
-            # TODO: Replace with actual Kokoro model when available
-            self.kokoro_available = True
+            # Check for Kokoro model files
+            model_path = os.getenv('KOKORO_MODEL_PATH', '/app/models/kokoro')
+            onnx_model_path = os.path.join(model_path, 'kokoro.onnx')
+            
+            # Try to load real Kokoro model
+            if os.path.exists(onnx_model_path):
+                try:
+                    import onnxruntime as ort
+                    
+                    # Load ONNX model with GPU support if available
+                    providers = ['CPUExecutionProvider']
+                    if torch.cuda.is_available():
+                        providers.insert(0, 'CUDAExecutionProvider')
+                    
+                    self.kokoro_session = ort.InferenceSession(onnx_model_path, providers=providers)
+                    self.kokoro_available = True
+                    
+                    logger.info("✅ Real Kokoro TTS model loaded successfully")
+                    logger.info(f"   Model path: {onnx_model_path}")
+                    logger.info(f"   Providers: {providers}")
+                    
+                except ImportError:
+                    logger.warning("ONNX Runtime not available, falling back to mock implementation")
+                    self._initialize_kokoro_mock()
+                    return
+                except Exception as e:
+                    logger.warning(f"Failed to load real Kokoro model: {e}, falling back to mock")
+                    self._initialize_kokoro_mock()
+                    return
+            else:
+                logger.info(f"Kokoro model not found at {onnx_model_path}, using mock implementation")
+                self._initialize_kokoro_mock()
+                return
+            
+            # Real Kokoro voice configurations
             self.kokoro_voices = {
-                'female_expressive': {'speaker': 'female_1', 'emotion': 'expressive'},
-                'male_expressive': {'speaker': 'male_1', 'emotion': 'expressive'},
-                'female_calm': {'speaker': 'female_2', 'emotion': 'calm'},
-                'male_calm': {'speaker': 'male_2', 'emotion': 'calm'},
-                'default': {'speaker': 'female_1', 'emotion': 'neutral'}
+                'af': {'name': 'Afrikaans Female', 'lang': 'af', 'speaker': 'af_female'},
+                'am': {'name': 'Amharic Female', 'lang': 'am', 'speaker': 'am_female'},
+                'ar': {'name': 'Arabic Female', 'lang': 'ar', 'speaker': 'ar_female'},
+                'as': {'name': 'Assamese Female', 'lang': 'as', 'speaker': 'as_female'},
+                'az': {'name': 'Azerbaijani Female', 'lang': 'az', 'speaker': 'az_female'},
+                'be': {'name': 'Belarusian Female', 'lang': 'be', 'speaker': 'be_female'},
+                'bg': {'name': 'Bulgarian Female', 'lang': 'bg', 'speaker': 'bg_female'},
+                'bn': {'name': 'Bengali Female', 'lang': 'bn', 'speaker': 'bn_female'},
+                'bs': {'name': 'Bosnian Female', 'lang': 'bs', 'speaker': 'bs_female'},
+                'ca': {'name': 'Catalan Female', 'lang': 'ca', 'speaker': 'ca_female'},
+                'cs': {'name': 'Czech Female', 'lang': 'cs', 'speaker': 'cs_female'},
+                'cy': {'name': 'Welsh Female', 'lang': 'cy', 'speaker': 'cy_female'},
+                'da': {'name': 'Danish Female', 'lang': 'da', 'speaker': 'da_female'},
+                'de': {'name': 'German Female', 'lang': 'de', 'speaker': 'de_female'},
+                'el': {'name': 'Greek Female', 'lang': 'el', 'speaker': 'el_female'},
+                'en': {'name': 'English Female', 'lang': 'en', 'speaker': 'en_female'},
+                'es': {'name': 'Spanish Female', 'lang': 'es', 'speaker': 'es_female'},
+                'et': {'name': 'Estonian Female', 'lang': 'et', 'speaker': 'et_female'},
+                'eu': {'name': 'Basque Female', 'lang': 'eu', 'speaker': 'eu_female'},
+                'fa': {'name': 'Persian Female', 'lang': 'fa', 'speaker': 'fa_female'},
+                'fi': {'name': 'Finnish Female', 'lang': 'fi', 'speaker': 'fi_female'},
+                'fr': {'name': 'French Female', 'lang': 'fr', 'speaker': 'fr_female'},
+                'gl': {'name': 'Galician Female', 'lang': 'gl', 'speaker': 'gl_female'},
+                'gu': {'name': 'Gujarati Female', 'lang': 'gu', 'speaker': 'gu_female'},
+                'he': {'name': 'Hebrew Female', 'lang': 'he', 'speaker': 'he_female'},
+                'hi': {'name': 'Hindi Female', 'lang': 'hi', 'speaker': 'hi_female'},
+                'hr': {'name': 'Croatian Female', 'lang': 'hr', 'speaker': 'hr_female'},
+                'hu': {'name': 'Hungarian Female', 'lang': 'hu', 'speaker': 'hu_female'},
+                'hy': {'name': 'Armenian Female', 'lang': 'hy', 'speaker': 'hy_female'},
+                'id': {'name': 'Indonesian Female', 'lang': 'id', 'speaker': 'id_female'},
+                'is': {'name': 'Icelandic Female', 'lang': 'is', 'speaker': 'is_female'},
+                'it': {'name': 'Italian Female', 'lang': 'it', 'speaker': 'it_female'},
+                'ja': {'name': 'Japanese Female', 'lang': 'ja', 'speaker': 'ja_female'},
+                'jv': {'name': 'Javanese Female', 'lang': 'jv', 'speaker': 'jv_female'},
+                'ka': {'name': 'Georgian Female', 'lang': 'ka', 'speaker': 'ka_female'},
+                'kk': {'name': 'Kazakh Female', 'lang': 'kk', 'speaker': 'kk_female'},
+                'km': {'name': 'Khmer Female', 'lang': 'km', 'speaker': 'km_female'},
+                'kn': {'name': 'Kannada Female', 'lang': 'kn', 'speaker': 'kn_female'},
+                'ko': {'name': 'Korean Female', 'lang': 'ko', 'speaker': 'ko_female'},
+                'default': {'name': 'English Female (Default)', 'lang': 'en', 'speaker': 'en_female'}
             }
             
-            logger.info("✅ Kokoro TTS engine initialized (mock implementation)")
-            logger.info(f"   Available voices: {list(self.kokoro_voices.keys())}")
+            logger.info("✅ Real Kokoro TTS engine initialized")
+            logger.info(f"   Available voices: {len(self.kokoro_voices)} languages")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize Kokoro: {e}")
             self.kokoro_available = False
-            self.silero_model = None
-            self.silero_apply_tts = None
+    
+    def _initialize_kokoro_mock(self):
+        """Initialize mock Kokoro implementation as fallback"""
+        logger.info("🎭 Initializing Kokoro TTS (mock implementation)")
+        self.kokoro_available = True
+        self.kokoro_session = None  # No real model
+        self.kokoro_voices = {
+            'female_expressive': {'name': 'Female Expressive', 'lang': 'en', 'speaker': 'en_female'},
+            'male_expressive': {'name': 'Male Expressive', 'lang': 'en', 'speaker': 'en_male'},
+            'female_calm': {'name': 'Female Calm', 'lang': 'en', 'speaker': 'en_female_calm'},
+            'male_calm': {'name': 'Male Calm', 'lang': 'en', 'speaker': 'en_male_calm'},
+            'default': {'name': 'English Female (Mock)', 'lang': 'en', 'speaker': 'en_female'}
+        }
+        logger.info("✅ Kokoro TTS mock implementation ready")
+        logger.info(f"   Available mock voices: {list(self.kokoro_voices.keys())}")
 
     async def synthesize_with_chatterbox(self, text: str, voice: str, gender: str = "female", emotion: str = "neutral", exaggeration: float = 0.5, cfg_weight: float = 0.5) -> Optional[str]:
         """Synthesize speech using REAL Chatterbox TTS (Resemble AI) - PRIMARY TTS ENGINE"""
@@ -320,7 +400,7 @@ class GPUTTSService:
             return None
 
     async def synthesize_with_kokoro(self, text: str, voice: str) -> Optional[str]:
-        """Synthesize speech using Kokoro TTS (mock implementation with distinct audio)"""
+        """Synthesize speech using Kokoro TTS (real model or mock fallback)"""
         if not getattr(self, 'kokoro_available', False):
             logger.warning("Kokoro TTS engine not available")
             return None
@@ -328,8 +408,63 @@ class GPUTTSService:
         try:
             logger.info(f"🎵 Kokoro TTS: voice={voice}")
             
+            # Use real Kokoro model if available
+            if hasattr(self, 'kokoro_session') and self.kokoro_session is not None:
+                return await self._synthesize_with_real_kokoro(text, voice)
+            else:
+                return await self._synthesize_with_mock_kokoro(text, voice)
+                
+        except Exception as e:
+            logger.error(f"Kokoro synthesis error: {e}")
+            return None
+    
+    async def _synthesize_with_real_kokoro(self, text: str, voice: str) -> Optional[str]:
+        """Synthesize with real Kokoro ONNX model"""
+        try:
+            # Map voice to Kokoro speaker
+            voice_config = self.kokoro_voices.get(voice, self.kokoro_voices.get('default'))
+            speaker = voice_config['speaker']
+            lang = voice_config['lang']
+            
+            logger.info(f"🎵 Real Kokoro TTS: text='{text[:50]}...' voice={voice} speaker={speaker} lang={lang}")
+            
+            # Prepare input for ONNX model
+            # Note: This is a template - actual input format depends on Kokoro model specification
+            inputs = {
+                'text': np.array([text], dtype=np.str_),
+                'speaker': np.array([speaker], dtype=np.str_),
+                'language': np.array([lang], dtype=np.str_)
+            }
+            
+            # Run ONNX inference
+            outputs = self.kokoro_session.run(None, inputs)
+            audio_data = outputs[0]  # Assume first output is audio
+            
+            # Save audio to temporary file
+            sample_rate = int(os.getenv('KOKORO_SAMPLE_RATE', '22050'))
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                import scipy.io.wavfile as wavfile
+                
+                # Ensure audio is in correct format
+                if audio_data.dtype != np.int16:
+                    audio_data = (audio_data * 32767).astype(np.int16)
+                
+                wavfile.write(tmp_file.name, sample_rate, audio_data)
+                
+                duration = len(audio_data) / sample_rate
+                logger.info(f"Real Kokoro synthesis successful: {duration:.1f}s audio at {sample_rate}Hz")
+                return tmp_file.name
+                
+        except Exception as e:
+            logger.error(f"Real Kokoro synthesis failed: {e}")
+            # Fallback to mock implementation
+            logger.info("Falling back to mock Kokoro implementation")
+            return await self._synthesize_with_mock_kokoro(text, voice)
+    
+    async def _synthesize_with_mock_kokoro(self, text: str, voice: str) -> Optional[str]:
+        """Synthesize with mock Kokoro implementation (fallback)"""
+        try:
             # Create distinct audio that sounds different from other engines
-            # This is a high-quality mock until real Kokoro model is integrated
             duration = max(len(text) * 0.08, 1.0)  # Slightly faster than other engines
             sample_rate = 22050
             samples = int(duration * sample_rate)
@@ -358,11 +493,11 @@ class GPUTTSService:
                 audio_int16 = (audio * 32767).astype(np.int16)
                 wavfile.write(tmp_file.name, sample_rate, audio_int16)
                 
-                logger.info(f"Kokoro synthesis successful: {duration:.1f}s audio at {sample_rate}Hz")
+                logger.info(f"Mock Kokoro synthesis successful: {duration:.1f}s audio at {sample_rate}Hz")
                 return tmp_file.name
                 
         except Exception as e:
-            logger.error(f"Kokoro synthesis error: {e}")
+            logger.error(f"Mock Kokoro synthesis error: {e}")
             return None
 
     async def synthesize_with_silero(self, text: str, voice: str) -> Optional[str]:

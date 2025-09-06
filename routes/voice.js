@@ -314,6 +314,304 @@ async function safeAxiosCall(url, options, serviceName = 'Service') {
     }
 }
 
+// ========================================================================
+// DIRECT LLM PROCESSING FUNCTIONS (for processing_mode bypass)
+// ========================================================================
+
+/**
+ * Process question directly with LLM(s) bypassing RAG
+ */
+async function processDirectLLM(inputText, processingMode, model, conversationHistory, handleTextChunk) {
+    try {
+        const startTime = Date.now();
+        
+        // Build conversation for LLM
+        const conversationWithSystem = [
+            {
+                role: "system",
+                content: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. Answer questions directly and conversationally. Do not use emojis, asterisks, or markdown formatting."
+            },
+            ...conversationHistory
+        ];
+
+        let fullResponse = '';
+        let modelUsed = '';
+        
+        if (processingMode === 'llm') {
+            // Parallel requests to multiple models
+            console.log(`[Direct LLM] Running parallel requests to: OpenAI, Grok-4, Mistral 7B, LLaMA 2 7B`);
+            
+            const requests = [];
+            
+            // OpenAI request
+            if (process.env.OPENAI_API_KEY) {
+                requests.push(callOpenAI(conversationWithSystem, 'gpt-4o-mini'));
+            }
+            
+            // Grok-4 request  
+            if (process.env.XAI_API_KEY) {
+                requests.push(callGrok(conversationWithSystem, 'grok-4'));
+            }
+            
+            // Ollama requests
+            requests.push(callOllama(conversationWithSystem, 'mistral:7b'));
+            requests.push(callOllama(conversationWithSystem, 'llama2:7b'));
+            
+            // Wait for first successful response
+            const results = await Promise.allSettled(requests);
+            const successfulResults = results
+                .filter(result => result.status === 'fulfilled' && result.value !== null)
+                .map(result => result.value)
+                .filter(Boolean);
+            
+            if (successfulResults.length > 0) {
+                const winner = successfulResults[0];
+                fullResponse = winner.response;
+                modelUsed = winner.source;
+                console.log(`[Direct LLM] First response from ${winner.source} (${Date.now() - startTime}ms)`);
+            } else {
+                throw new Error('All LLM requests failed');
+            }
+            
+        } else if (processingMode.startsWith('llm-')) {
+            // Specific model request
+            const modelName = processingMode.replace('llm-', '');
+            console.log(`[Direct LLM] Using specific model: ${modelName}`);
+            
+            let result;
+            if (modelName.startsWith('gpt-') || modelName.includes('openai')) {
+                const actualModel = modelName.replace('openai-', '').replace('openai', 'gpt-4o-mini');
+                result = await callOpenAI(conversationWithSystem, actualModel);
+            } else if (modelName.startsWith('grok-')) {
+                result = await callGrok(conversationWithSystem, modelName);
+            } else {
+                // Assume it's an Ollama model
+                result = await callOllama(conversationWithSystem, modelName);
+            }
+            
+            if (result && result.response) {
+                fullResponse = result.response;
+                modelUsed = result.source;
+                console.log(`[Direct LLM] Response from ${modelName} (${Date.now() - startTime}ms)`);
+            } else {
+                throw new Error(`Failed to get response from ${modelName}`);
+            }
+        }
+        
+        // Stream the response
+        if (fullResponse) {
+            const words = fullResponse.split(' ');
+            const chunkSize = 3;
+            
+            for (let i = 0; i < words.length; i += chunkSize) {
+                const chunk = words.slice(i, i + chunkSize).join(' ');
+                if (i + chunkSize < words.length) {
+                    await handleTextChunk(chunk + ' ');
+                } else {
+                    await handleTextChunk(chunk);
+                }
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+        
+        return {
+            answer: fullResponse,
+            sources: [],
+            context_used: false,
+            search_results_count: 0,
+            search_results: [],
+            applied_filters: { processing_mode: processingMode, model_used: modelUsed },
+            model_used: modelUsed
+        };
+        
+    } catch (error) {
+        console.error(`[Direct LLM] Error in processDirectLLM:`, error);
+        await handleTextChunk("I encountered an error processing your question directly. ");
+        throw error;
+    }
+}
+
+/**
+ * Call OpenAI API directly
+ */
+async function callOpenAI(conversation, modelName = 'gpt-4o-mini') {
+    try {
+        const response = await axiosInstance.post('https://api.openai.com/v1/chat/completions', {
+            model: modelName,
+            messages: conversation,
+            temperature: 0.7,
+            max_tokens: 500
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 15000
+        });
+        
+        return {
+            response: response.data.choices[0].message.content.trim(),
+            source: `openai-${modelName}`
+        };
+    } catch (error) {
+        console.warn(`[Direct LLM] OpenAI ${modelName} failed:`, error.message);
+        return null;
+    }
+}
+
+/**
+ * Call Grok/XAI API directly
+ */
+async function callGrok(conversation, modelName = 'grok-4') {
+    try {
+        const response = await axiosInstance.post('https://api.x.ai/v1/chat/completions', {
+            model: modelName,
+            messages: conversation,
+            temperature: 0.7,
+            max_tokens: 500
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 15000
+        });
+        
+        return {
+            response: response.data.choices[0].message.content.trim(),
+            source: `xai-${modelName}`
+        };
+    } catch (error) {
+        console.warn(`[Direct LLM] XAI ${modelName} failed:`, error.message);
+        return null;
+    }
+}
+
+/**
+ * Call Ollama API directly
+ */
+async function callOllama(conversation, modelName) {
+    try {
+        // Convert conversation to single prompt for Ollama
+        const prompt = conversation.map(msg => `${msg.role}: ${msg.content}`).join('\n') + '\nassistant:';
+        
+        const ollamaBaseUrl = process.env.OLLAMA_HOST || 'http://ollama:11434';
+        const response = await axiosInstance.post(`${ollamaBaseUrl}/api/generate`, {
+            model: modelName,
+            prompt: prompt,
+            stream: false,
+            options: {
+                temperature: 0.7,
+                top_p: 0.9,
+                top_k: 40,
+                repeat_penalty: 1.1,
+                num_predict: 500
+            }
+        }, {
+            timeout: 20000
+        });
+        
+        return {
+            response: response.data.response?.trim() || '',
+            source: `ollama-${modelName}`
+        };
+    } catch (error) {
+        console.warn(`[Direct LLM] Ollama ${modelName} failed:`, error.message);
+        return null;
+    }
+}
+
+/**
+ * Process question directly with LLM(s) bypassing RAG (non-streaming version)
+ */
+async function processDirectLLMNonStreaming(inputText, processingMode, model, conversationHistory) {
+    try {
+        const startTime = Date.now();
+        
+        // Build conversation for LLM
+        const conversationWithSystem = [
+            {
+                role: "system",
+                content: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. Answer questions directly and conversationally. Do not use emojis, asterisks, or markdown formatting."
+            },
+            ...conversationHistory
+        ];
+
+        let fullResponse = '';
+        let modelUsed = '';
+        
+        if (processingMode === 'llm') {
+            // Parallel requests to multiple models
+            console.log(`[Direct LLM Non-Streaming] Running parallel requests to: OpenAI, Grok-4, Mistral 7B, LLaMA 2 7B`);
+            
+            const requests = [];
+            
+            // OpenAI request
+            if (process.env.OPENAI_API_KEY) {
+                requests.push(callOpenAI(conversationWithSystem, 'gpt-4o-mini'));
+            }
+            
+            // Grok-4 request  
+            if (process.env.XAI_API_KEY) {
+                requests.push(callGrok(conversationWithSystem, 'grok-4'));
+            }
+            
+            // Ollama requests
+            requests.push(callOllama(conversationWithSystem, 'mistral:7b'));
+            requests.push(callOllama(conversationWithSystem, 'llama2:7b'));
+            
+            // Wait for first successful response
+            const results = await Promise.allSettled(requests);
+            const successfulResults = results
+                .filter(result => result.status === 'fulfilled' && result.value !== null)
+                .map(result => result.value)
+                .filter(Boolean);
+            
+            if (successfulResults.length > 0) {
+                const winner = successfulResults[0];
+                fullResponse = winner.response;
+                modelUsed = winner.source;
+                console.log(`[Direct LLM Non-Streaming] First response from ${winner.source} (${Date.now() - startTime}ms)`);
+            } else {
+                throw new Error('All LLM requests failed');
+            }
+            
+        } else if (processingMode.startsWith('llm-')) {
+            // Specific model request
+            const modelName = processingMode.replace('llm-', '');
+            console.log(`[Direct LLM Non-Streaming] Using specific model: ${modelName}`);
+            
+            let result;
+            if (modelName.startsWith('gpt-') || modelName.includes('openai')) {
+                const actualModel = modelName.replace('openai-', '').replace('openai', 'gpt-4o-mini');
+                result = await callOpenAI(conversationWithSystem, actualModel);
+            } else if (modelName.startsWith('grok-')) {
+                result = await callGrok(conversationWithSystem, modelName);
+            } else {
+                // Assume it's an Ollama model
+                result = await callOllama(conversationWithSystem, modelName);
+            }
+            
+            if (result && result.response) {
+                fullResponse = result.response;
+                modelUsed = result.source;
+                console.log(`[Direct LLM Non-Streaming] Response from ${modelName} (${Date.now() - startTime}ms)`);
+            } else {
+                throw new Error(`Failed to get response from ${modelName}`);
+            }
+        }
+        
+        return {
+            answer: fullResponse,
+            model_used: modelUsed
+        };
+        
+    } catch (error) {
+        console.error(`[Direct LLM Non-Streaming] Error in processDirectLLMNonStreaming:`, error);
+        throw error;
+    }
+}
+
 /**
  * POST /api/voice/transcribe
  * Transcribe uploaded audio file to text
@@ -746,9 +1044,14 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             ragResponse = await handleSelfReferentialQuestion(inputText, model, conversationForSelfRef, null);
             responseText = ragResponse.answer;
         } else {
-            console.log(`[Voice Chat] Using RAG for question: "${inputText}"`);
+            // Check processing mode preference (new parameter)
+            const processingMode = req.body.processing_mode || 'rag'; // Default to RAG
+            console.log(`[Voice Chat] Processing mode: ${processingMode} for question: "${inputText}"`);
             
-            // Use RAG service to get context-aware response
+            if (processingMode === 'rag') {
+                console.log(`[Voice Chat] Using RAG for question: "${inputText}"`);
+                
+                // Use RAG service to get context-aware response
             const ragOptions = {
                 model,
                 searchParams: {
@@ -820,6 +1123,70 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             
             responseText = ragResponse.answer;
             console.log(`[Voice Chat] RAG processing (${processingMetrics.rag_time_ms}ms): Generated ${responseText.length} chars`);
+            
+            } else if (processingMode === 'llm' || processingMode.startsWith('llm-')) {
+                console.log(`[Voice Chat] Using direct LLM mode: ${processingMode} for question: "${inputText}"`);
+                
+                try {
+                    const llmStartTime = Date.now();
+                    
+                    // Build conversation history for LLM
+                    const conversationForLLM = [
+                        {
+                            role: "user",
+                            content: inputText
+                        }
+                    ];
+                    
+                    // Process with direct LLM (non-streaming version)
+                    const llmResult = await processDirectLLMNonStreaming(inputText, processingMode, model, conversationForLLM);
+                    processingMetrics.rag_time_ms = Date.now() - llmStartTime; // Reuse rag_time_ms field
+                    
+                    responseText = llmResult.answer;
+                    console.log(`[Voice Chat] Direct LLM processing (${processingMetrics.rag_time_ms}ms): Generated ${responseText.length} chars`);
+                    
+                    // Create mock RAG response for compatibility
+                    ragResponse = {
+                        answer: responseText,
+                        sources: [],
+                        context_used: false,
+                        search_results_count: 0,
+                        search_results: [],
+                        applied_filters: { processing_mode: processingMode, model_used: llmResult.model_used }
+                    };
+                    
+                } catch (llmError) {
+                    console.error('Error in direct LLM processing:', llmError);
+                    responseText = "I encountered an error processing your question directly.";
+                    ragResponse = {
+                        answer: responseText,
+                        sources: [],
+                        context_used: false,
+                        search_results_count: 0,
+                        search_results: [],
+                        applied_filters: { processing_mode: processingMode, error: llmError.message }
+                    };
+                }
+            } else {
+                // Invalid processing mode - fallback to RAG
+                console.warn(`[Voice Chat] Invalid processing_mode: ${processingMode}, falling back to RAG`);
+                
+                const ragOptions = {
+                    model,
+                    searchParams: {
+                        creatorHandle: creator_filter,
+                        recordType: record_type_filter,
+                        tags: tag_filter
+                    }
+                };
+                
+                const ragStartTime = Date.now();
+                ragResponse = await alfred.query(inputText, ragOptions);
+                processingMetrics.rag_time_ms = Date.now() - ragStartTime;
+                
+                responseText = ragResponse.answer;
+                console.log(`[Voice Chat] Fallback RAG processing (${processingMetrics.rag_time_ms}ms): Generated ${responseText.length} chars`);
+            }
         }
 
         if (!responseText || !responseText.trim()) {
@@ -1564,22 +1931,27 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         applied_filters: ragResponse.applied_filters || {}
                     };
                 } else {
-                    console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
+                    // Check processing mode preference (new parameter)
+                    const processingMode = req.body.processing_mode || 'rag'; // Default to RAG
+                    console.log(`[Voice Converse] Processing mode: ${processingMode} for question: "${inputText}"`);
                     
-                    // Send immediate "checking" response while RAG processes
-                    const checkingResponses = [
-                        "Let me check that for you.",
-                        "One moment, checking...",
-                        "Let me find out.",
-                        "Searching for that information...",
-                        "Looking that up now..."
-                    ];
-                    const checkingResponse = checkingResponses[Math.floor(Math.random() * checkingResponses.length)];
-                    
-                    // Send the checking response immediately
-                    await handleTextChunk(checkingResponse + " ");
-                    
-                    // Use ALFRED RAG system for contextual queries
+                    if (processingMode === 'rag') {
+                        console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
+                        
+                        // Send immediate "checking" response while RAG processes
+                        const checkingResponses = [
+                            "Let me check that for you.",
+                            "One moment, checking...",
+                            "Let me find out.",
+                            "Searching for that information...",
+                            "Looking that up now..."
+                        ];
+                        const checkingResponse = checkingResponses[Math.floor(Math.random() * checkingResponses.length)];
+                        
+                        // Send the checking response immediately
+                        await handleTextChunk(checkingResponse + " ");
+                        
+                        // Use ALFRED RAG system for contextual queries
                     const ragOptions = {
                         model,
                         searchParams: {
@@ -1662,6 +2034,88 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         // Fallback to direct LLM if RAG fails
                         const fallbackResponse = "I encountered an issue accessing my knowledge base. Let me try to help you with a general response.";
                         await handleTextChunk(fallbackResponse);
+                    }
+                        
+                    } else if (processingMode === 'llm' || processingMode.startsWith('llm-')) {
+                        console.log(`[Voice Converse] Using direct LLM mode: ${processingMode} for question: "${inputText}"`);
+                        
+                        // Send immediate response for LLM mode
+                        const llmResponses = [
+                            "Let me think about that.",
+                            "Processing your question...",
+                            "Analyzing that for you...",
+                            "Working on your question..."
+                        ];
+                        const llmResponse = llmResponses[Math.floor(Math.random() * llmResponses.length)];
+                        await handleTextChunk(llmResponse + " ");
+                        
+                        try {
+                            // Process with direct LLM
+                            const ragResponse = await processDirectLLM(inputText, processingMode, model, conversationHistory, handleTextChunk);
+                            
+                            // Store metadata
+                            ongoingStream.ragMetadata = {
+                                sources: [],
+                                context_used: false,
+                                search_results_count: 0,
+                                search_results: [],
+                                applied_filters: { processing_mode: processingMode, bypass_reason: "Direct LLM mode" }
+                            };
+                            
+                        } catch (llmError) {
+                            console.error('Error in direct LLM processing:', llmError);
+                            
+                            // Fallback error message
+                            const errorResponse = "I encountered an error processing your question. Please try again.";
+                            await handleTextChunk(errorResponse);
+                        }
+                        
+                    } else {
+                        // Invalid processing mode - fallback to RAG
+                        console.warn(`[Voice Converse] Invalid processing_mode: ${processingMode}, falling back to RAG`);
+                        
+                        // Send immediate "checking" response
+                        await handleTextChunk("Let me check that for you. ");
+                        
+                        // Use RAG as fallback (simplified version)
+                        try {
+                            const ragOptions = {
+                                model,
+                                searchParams: {
+                                    creatorHandle: creator_filter,
+                                    recordType: record_type_filter,
+                                    tags: tag_filter
+                                }
+                            };
+                            
+                            const ragResponse = await alfred.query(inputText, ragOptions);
+                            
+                            // Stream the fallback response
+                            const words = ragResponse.answer.split(' ');
+                            const chunkSize = 3;
+                            
+                            for (let i = 0; i < words.length; i += chunkSize) {
+                                const chunk = words.slice(i, i + chunkSize).join(' ');
+                                if (i + chunkSize < words.length) {
+                                    await handleTextChunk(chunk + ' ');
+                                } else {
+                                    await handleTextChunk(chunk);
+                                }
+                                await new Promise(resolve => setTimeout(resolve, 50));
+                            }
+                            
+                            ongoingStream.ragMetadata = {
+                                sources: ragResponse.sources,
+                                context_used: ragResponse.context_used,
+                                search_results_count: ragResponse.search_results_count,
+                                search_results: ragResponse.search_results,
+                                applied_filters: ragResponse.applied_filters || {}
+                            };
+                            
+                        } catch (fallbackError) {
+                            console.error('Fallback RAG also failed:', fallbackError);
+                            await handleTextChunk("I'm having trouble processing your question right now.");
+                        }
                     }
                 }
                 

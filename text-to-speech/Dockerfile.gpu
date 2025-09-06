@@ -53,6 +53,11 @@ RUN pip3 install --no-cache-dir \
     omegaconf \
     tqdm
 
+# Install ONNX Runtime for Kokoro TTS support
+RUN pip3 install --no-cache-dir \
+    onnxruntime-gpu==1.16.3 \
+    onnx==1.15.0
+
 # Install Chatterbox TTS during build (like working standard profile) 
 # This prevents pip dependency conflicts from post-deployment installation
 RUN pip3 install --no-cache-dir chatterbox-tts || echo "Chatterbox TTS installation failed - will fallback to other engines"
@@ -66,6 +71,9 @@ RUN mkdir -p /root/.local/share/tts
 
 # Pre-download Silero models for faster startup
 RUN python3 download_models.py || echo "Failed to pre-load models, will download on first use"
+
+# Setup Kokoro TTS model structure
+RUN python3 download_kokoro_model.py || echo "Failed to setup Kokoro model structure"
 
 # Expose port
 EXPOSE 5002

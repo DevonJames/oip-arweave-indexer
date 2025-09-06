@@ -358,7 +358,22 @@
         let availableVoices = {
             chatterbox: [],
             edge_tts: [],
-            elevenlabs: []
+            elevenlabs: [
+                { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male, Deep)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Female, Sweet)', gender: 'female', engine: 'elevenlabs' },
+                { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold (Male, Crisp)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'pMsXgVXv3BLzUgSXRplE', name: 'Freya (Female, Conversational)', gender: 'female', engine: 'elevenlabs' },
+                { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel (Male, British)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'CYw3kZ02Hs0563khs1Fj', name: 'Gigi (Female, Childlike)', gender: 'female', engine: 'elevenlabs' },
+                { id: 'bVMeCyTHy58xNoL34h3p', name: 'Jeremy (Male, American)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte (Female, Seductive)', gender: 'female', engine: 'elevenlabs' },
+                { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George (Male, Raspy)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace (Female, Calm)', gender: 'female', engine: 'elevenlabs' }
+            ],
+            kokoro: [],
+            silero: [],
+            gtts: [],
+            espeak: []
         };
 
         // Voice configuration matrix: Gender + Emotion combinations
@@ -667,12 +682,43 @@
                 'elevenlabs': 'ElevenLabs (Premium + Ultra Fast)'
             };
             
-            engineNames.forEach(engineName => {
-                const option = document.createElement('option');
-                option.value = engineName;
-                option.textContent = engineLabels[engineName] || `${engineName} TTS`;
-                engineSelect.appendChild(option);
-            });
+            // Separate engines into Local and Cloud categories
+            const localEngines = ['kokoro', 'chatterbox', 'silero', 'espeak'];
+            const cloudEngines = ['edge_tts', 'gtts', 'elevenlabs'];
+            
+            const localAvailable = engineNames.filter(name => localEngines.includes(name));
+            const cloudAvailable = engineNames.filter(name => cloudEngines.includes(name));
+            
+            // Add local engines section
+            if (localAvailable.length > 0) {
+                const localGroup = document.createElement('optgroup');
+                localGroup.label = 'Local Engines';
+                localAvailable.forEach(engineName => {
+                    const option = document.createElement('option');
+                    option.value = engineName;
+                    option.textContent = engineLabels[engineName] || `${engineName} TTS`;
+                    localGroup.appendChild(option);
+                });
+                engineSelect.appendChild(localGroup);
+            }
+            
+            // Add cloud engines section (including ElevenLabs)
+            const allCloudEngines = [...cloudAvailable];
+            if (!allCloudEngines.includes('elevenlabs')) {
+                allCloudEngines.push('elevenlabs'); // Always show ElevenLabs as option
+            }
+            
+            if (allCloudEngines.length > 0) {
+                const cloudGroup = document.createElement('optgroup');
+                cloudGroup.label = 'Cloud Engines';
+                allCloudEngines.forEach(engineName => {
+                    const option = document.createElement('option');
+                    option.value = engineName;
+                    option.textContent = engineLabels[engineName] || `${engineName} TTS`;
+                    cloudGroup.appendChild(option);
+                });
+                engineSelect.appendChild(cloudGroup);
+            }
             
             // Set the first available engine as selected
             if (engineNames.length > 0) {
