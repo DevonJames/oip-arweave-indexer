@@ -39,7 +39,7 @@
       transition:width .25s ease, transform .25s ease, opacity .2s ease;
     }
     .conversation{
-      position:relative;height:calc(100dvh - 56px - var(--dock-h) - 24px);overflow:auto;padding:12px;
+      position:relative;height:calc(100dvh - 56px - var(--dock-h) - 140px);overflow:auto;padding:12px;
       background:var(--glass);border-radius:var(--radius);backdrop-filter:blur(20px) saturate(140%);
     }
     .message{max-width:80ch;margin:10px 0;padding:12px 14px;border-radius:14px;line-height:1.55}
@@ -60,8 +60,8 @@
     /* Control dock (responsive) */
     .control-dock{
       position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;
-      /* mic | mute | hardmute | toggle | composer */
-      grid-template-columns:auto auto auto auto 1fr;
+      /* mic | mute | connect | processing-toggle | output-toggle | composer */
+      grid-template-columns:auto auto auto auto auto 1fr;
       gap:8px;align-items:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom,8px));
       background:linear-gradient(180deg, rgba(16,20,26,.4), rgba(16,20,26,.85));
       backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,.06);height:var(--dock-h)
@@ -112,6 +112,18 @@
     .model-item{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer}
     .model-item:hover{background:rgba(255,255,255,.08)}
 
+    /* Range slider styling */
+    input[type="range"]::-webkit-slider-thumb{
+      appearance:none;width:16px;height:16px;border-radius:50%;
+      background:linear-gradient(90deg,var(--accent-1),var(--accent-2));
+      cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)
+    }
+    input[type="range"]::-moz-range-thumb{
+      width:16px;height:16px;border-radius:50%;border:none;
+      background:linear-gradient(90deg,var(--accent-1),var(--accent-2));
+      cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)
+    }
+
     /* Settings dialog — glassy + dark */
     dialog.settings-modal{border:none;padding:0;background:transparent}
     dialog.settings-modal::backdrop{background:rgba(0,0,0,.4);backdrop-filter:blur(2px)}
@@ -151,6 +163,35 @@
     .metric-value.fair{color:#ff9500}
     .metric-value.poor{color:#ff3b30}
 
+    /* Spritz-style text display - positioned in same place as waveform */
+    .spritz-display{
+      position:absolute;top:0;left:0;right:0;bottom:0;
+      display:none;align-items:center;justify-content:center;
+      text-align:center;font-size:24px;font-weight:600;color:var(--text);
+      background:var(--glass);border-radius:8px;backdrop-filter:blur(20px) saturate(140%);
+      border:1px solid rgba(255,255,255,.12);z-index:10;
+    }
+    .spritz-display.active{display:flex}
+    .spritz-word{opacity:0;transform:translateY(10px);transition:all 0.2s ease}
+    .spritz-word.visible{opacity:1;transform:translateY(0)}
+
+    /* Hide waveform when spritz is active */
+    .waveform-container.spritz-active canvas.waveform{opacity:0}
+
+    /* Waveform container for positioning */
+    .waveform-container{position:relative}
+
+    /* Interface feedback box - pinned above text input */
+    .interface-feedback{
+      position:fixed;left:12px;right:12px;bottom:calc(var(--dock-h) + 12px);
+      background:var(--glass);border-radius:var(--radius);padding:12px;
+      backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,.06);
+      z-index:20;
+    }
+    .interface-feedback .badges{margin:0 0 8px 0}
+    .interface-feedback .metrics{margin:8px 0}
+    .interface-feedback canvas.waveform{height:48px}
+
     /* Tablet & Desktop responsive behavior */
     @media (min-width:768px){
       .app-main{grid-template-columns:var(--history-w) 1fr}
@@ -166,7 +207,7 @@
   <header class="app-header">
     <div class="brand">
       <button class="nav-toggle" aria-label="Toggle history">☰</button>
-      <span class="logo">ALFRED</span>
+      <span class="logo">ΛLFRED</span>
       <span class="mode-chip" id="modeChip">RAG</span>
     </div>
     <div style="display:flex;align-items:center;gap:12px">
@@ -187,39 +228,48 @@
     <section class="conversation" id="conversation" aria-live="polite" aria-atomic="false">
       <div class="message ai">
         <div class="stream-text">
-          Hello! I'm ALFRED with enhanced voice processing. I can use RAG to search your content or direct LLM for general questions. Click the microphone to start voice interaction or type below. <span class="cursor"></span>
+          Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue <span class="cursor"></span>
         </div>
-      </div>
-      <div class="live-area">
-        <div class="badges">
-          <span class="badge listening" id="badgeListening" hidden>🎤 Recording</span>
-          <span class="badge processing" id="badgeProcessing" hidden>⚙️ Processing</span>
-          <span class="badge speaking" id="badgeSpeaking" hidden>🔊 ALFRED Speaking</span>
-          <span class="badge mode" id="badgeMode">Mode: <strong>RAG</strong></span>
-          <span class="badge" id="badgeModel">Model: <strong id="modelName">llama3.2:3b</strong></span>
-        </div>
-        <div class="metrics">
-          <div class="metric">
-            <span>Response:</span>
-            <span id="responseTime" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span>Audio:</span>
-            <span id="audioQuality" class="metric-value good">good</span>
-          </div>
-          <div class="metric">
-            <span>Backend:</span>
-            <span id="backendStatus" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span>Turns:</span>
-            <span id="conversationTurns" class="metric-value">0</span>
-          </div>
-        </div>
-        <canvas class="waveform" id="waveform"></canvas>
       </div>
     </section>
   </main>
+
+  <!-- Interface feedback box - pinned above text input -->
+  <div class="interface-feedback">
+    <div class="badges">
+      <span class="badge listening" id="badgeListening" hidden>🎤 Recording</span>
+      <span class="badge processing" id="badgeProcessing" hidden>⚙️ Processing</span>
+      <span class="badge speaking" id="badgeSpeaking" hidden>🔊 ΛLFRED Speaking</span>
+      <span class="badge mode" id="badgeMode">Mode: <strong>RAG</strong></span>
+      <span class="badge" id="badgeModel">Model: <strong id="modelName">llama3.2:3b</strong></span>
+      <span class="badge" id="badgeOutputMode">Output: <strong>Spoken</strong></span>
+    </div>
+    <div class="metrics">
+      <div class="metric">
+        <span>Response:</span>
+        <span id="responseTime" class="metric-value">--</span>
+      </div>
+      <div class="metric">
+        <span>Audio:</span>
+        <span id="audioQuality" class="metric-value good">good</span>
+      </div>
+      <div class="metric">
+        <span>Backend:</span>
+        <span id="backendStatus" class="metric-value">--</span>
+      </div>
+      <div class="metric">
+        <span>Turns:</span>
+        <span id="conversationTurns" class="metric-value">0</span>
+      </div>
+    </div>
+    <div class="waveform-container">
+      <canvas class="waveform" id="waveform"></canvas>
+      <!-- Spritz display positioned over waveform -->
+      <div id="spritzDisplay" class="spritz-display">
+        <div id="spritzWord" class="spritz-word"></div>
+      </div>
+    </div>
+  </div>
 
   <footer class="control-dock">
     <button class="btn" id="btnMic" aria-pressed="false" title="Start/stop voice recording">🎤</button>
@@ -231,6 +281,14 @@
       <div style="position:relative;display:inline-block">
         <button id="btnLLM" aria-pressed="false">LLM</button>
         <button id="btnLLMDisclosure" class="disclosure" aria-haspopup="listbox" aria-expanded="false" aria-controls="modelPopover" title="Choose LLM model"></button>
+      </div>
+    </div>
+
+    <div class="seg-toggle" role="group" aria-label="Output mode">
+      <button id="btnSpoken" aria-pressed="true">🔊 Spoken</button>
+      <div style="position:relative;display:inline-block">
+        <button id="btnOnScreen" aria-pressed="false">📖 On-Screen</button>
+        <button id="btnWPMDisclosure" class="disclosure" aria-haspopup="listbox" aria-expanded="false" aria-controls="wpmPopover" title="Adjust reading speed"></button>
       </div>
     </div>
 
@@ -293,6 +351,25 @@
     <div class="model-item"><input type="radio" name="llm" value="parallel" id="mdl6"><label for="mdl6">Parallel (All Models)</label></div>
   </div>
 
+  <!-- WPM speed popover -->
+  <div id="wpmPopover" class="popover" role="dialog" aria-label="Adjust reading speed">
+    <div style="padding:12px;min-width:200px">
+      <div style="margin-bottom:12px;font-weight:600;color:var(--text)">Reading Speed</div>
+      <div style="margin-bottom:8px">
+        <input type="range" id="wpmSlider" min="150" max="500" step="10" value="280" 
+               style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.2);outline:none;appearance:none">
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+        <span>150 WPM</span>
+        <span id="wpmValue" style="color:var(--text);font-weight:600">280 WPM</span>
+        <span>500 WPM</span>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">
+        Adjust how fast words appear in On-Screen mode
+      </div>
+    </div>
+  </div>
+
   <script>
     class ALFREDInterface {
       constructor() {
@@ -339,10 +416,18 @@
         this.nextExpectedChunk = 1;
         this.currentAudio = null;
         
+        // Spritz display
+        this.spritzActive = false;
+        this.spritzWords = [];
+        this.spritzIndex = 0;
+        this.spritzTimer = null;
+        
         // Settings
         this.settings = {
           processingMode: 'rag', // 'rag' or 'llm'
           selectedModel: 'llama3.2:3b',
+          outputMode: 'spoken', // 'spoken' or 'onscreen'
+          spritzWPM: 280, // Reading speed for on-screen mode
           ttsEngine: 'elevenlabs',
           voiceId: 'onwK4e9ZLuTAKqWW03F9',
           speechSpeed: 1.0,
@@ -367,8 +452,15 @@
         document.getElementById('btnRAG').addEventListener('click', () => this.setMode('rag'));
         document.getElementById('btnLLM').addEventListener('click', () => this.setMode('llm'));
         
+        // Output mode toggle
+        document.getElementById('btnSpoken').addEventListener('click', () => this.setOutputMode('spoken'));
+        document.getElementById('btnOnScreen').addEventListener('click', () => this.setOutputMode('onscreen'));
+        
         // Model picker
         this.setupModelPicker();
+        
+        // WPM picker
+        this.setupWPMPicker();
         
         // Composer
         document.getElementById('composer').addEventListener('submit', (e) => this.handleTextSubmit(e));
@@ -652,6 +744,147 @@
         ctx.fillText('🎵 Ready for audio...', canvas.width / 2, canvas.height / 2 + 5 * devicePixelRatio);
       }
       
+      setupRealTTSVisualization(audioElement) {
+        try {
+          console.log('[TTS Viz] Setting up REAL TTS audio visualization...');
+          
+          // Create separate audio context for TTS analysis
+          if (!this.ttsAudioContext) {
+            this.ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          
+          // Resume TTS audio context if needed
+          if (this.ttsAudioContext.state === 'suspended') {
+            this.ttsAudioContext.resume();
+            console.log('[TTS Viz] TTS audio context resumed');
+          }
+          
+          // Create analyser for TTS audio (only once per audio element)
+          if (!audioElement._ttsAnalyser) {
+            try {
+              const ttsSource = this.ttsAudioContext.createMediaElementSource(audioElement);
+              const ttsAnalyser = this.ttsAudioContext.createAnalyser();
+              ttsAnalyser.fftSize = 1024; // Higher resolution for TTS
+              ttsAnalyser.smoothingTimeConstant = 0.1; // Fast response
+              
+              // Connect TTS audio to analyser and destination
+              ttsSource.connect(ttsAnalyser);
+              ttsSource.connect(this.ttsAudioContext.destination);
+              
+              // Store references
+              audioElement._ttsSource = ttsSource;
+              audioElement._ttsAnalyser = ttsAnalyser;
+              
+              console.log('[TTS Viz] TTS analyser created for REAL audio analysis');
+              
+            } catch (sourceError) {
+              console.warn('[TTS Viz] Could not create media element source:', sourceError);
+              this.startTTSWaveformAnimation(); // Fallback to animation
+              return;
+            }
+          }
+          
+          // Start REAL TTS visualization using actual audio data
+          this.startRealTTSVisualization(audioElement._ttsAnalyser, audioElement);
+          
+        } catch (error) {
+          console.warn('[TTS Viz] REAL TTS visualization setup failed:', error);
+          this.startTTSWaveformAnimation(); // Fallback to animation
+        }
+      }
+
+      startRealTTSVisualization(ttsAnalyser, audioElement) {
+        if (!ttsAnalyser) {
+          console.warn('[TTS Viz] No analyser provided, using animation fallback');
+          this.startTTSWaveformAnimation();
+          return;
+        }
+        
+        const ttsAudioData = new Uint8Array(ttsAnalyser.frequencyBinCount);
+        let ttsVisualizationActive = true;
+        
+        const updateRealTTSVisualization = () => {
+          // Check if we should continue TTS visualization
+          if (!ttsVisualizationActive || !this.voiceState.agentSpeaking) {
+            console.log('[TTS Viz] REAL TTS visualization stopped');
+            this.drawIdleWaveform();
+            return;
+          }
+          
+          // Check if audio element is still valid
+          if (!audioElement) {
+            console.log('[TTS Viz] Audio element not available, stopping visualization');
+            ttsVisualizationActive = false;
+            return;
+          }
+          
+          try {
+            // Get REAL frequency data from the TTS audio
+            ttsAnalyser.getByteFrequencyData(ttsAudioData);
+            
+            // Draw real TTS waveform
+            this.drawTTSWaveform(ttsAudioData);
+            
+            // Debug log occasionally
+            if (Math.random() < 0.05) {
+              const average = ttsAudioData.reduce((a, b) => a + b) / ttsAudioData.length;
+              console.log(`[TTS Viz] REAL TTS Audio Level: ${(average / 128 * 100).toFixed(1)}%`);
+            }
+            
+          } catch (analyserError) {
+            console.warn('[TTS Viz] Analyser error:', analyserError);
+            // Fallback to animation if real analysis fails
+            this.startTTSWaveformAnimation();
+            return;
+          }
+          
+          // Continue visualization with REAL audio data
+          requestAnimationFrame(updateRealTTSVisualization);
+        };
+        
+        // Stop TTS visualization when audio ends
+        audioElement.addEventListener('ended', () => {
+          ttsVisualizationActive = false;
+          console.log('[TTS Viz] Audio ended, stopping REAL TTS visualization');
+        }, { once: true });
+        
+        // Stop TTS visualization when audio errors
+        audioElement.addEventListener('error', () => {
+          ttsVisualizationActive = false;
+          console.log('[TTS Viz] Audio error, stopping REAL TTS visualization');
+        }, { once: true });
+        
+        updateRealTTSVisualization();
+        console.log('[TTS Viz] REAL TTS visualization started with actual audio data');
+      }
+
+      drawTTSWaveform(audioData) {
+        if (!this.waveformCtx || !audioData) return;
+        
+        const canvas = this.waveformCanvas;
+        const ctx = this.waveformCtx;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw frequency bars using real TTS data
+        const barCount = Math.max(32, Math.floor(canvas.clientWidth / 14));
+        const barWidth = canvas.width / barCount;
+        
+        for (let i = 0; i < barCount; i++) {
+          const dataIndex = Math.floor(i * audioData.length / barCount);
+          const barHeight = (audioData[dataIndex] / 255) * canvas.height * 0.8;
+          const x = i * barWidth + barWidth * 0.2;
+          const y = (canvas.height - barHeight) / 2;
+          
+          const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
+          gradient.addColorStop(0, 'rgba(255,149,0,0.9)');
+          gradient.addColorStop(1, 'rgba(212,95,255,0.9)');
+          
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, y, barWidth * 0.6, barHeight);
+        }
+      }
+
       startTTSWaveformAnimation() {
         let animationActive = true;
         
@@ -667,7 +900,7 @@
           
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           
-          // Draw animated TTS frequency bars
+          // Draw animated TTS frequency bars (fallback)
           const barCount = Math.max(32, Math.floor(canvas.clientWidth / 14));
           const barWidth = canvas.width / barCount;
           
@@ -830,11 +1063,11 @@
               conversationHistory: this.getConversationHistory(),
               voiceConfig: JSON.stringify({
                 engine: this.settings.ttsEngine,
-                enabled: true,
+                enabled: this.settings.outputMode === 'spoken', // Only enable TTS for spoken mode
                 voice_id: this.settings.voiceId,
                 speed: this.settings.speechSpeed
               }),
-              systemPrompt: "You are ALFRED, a versatile AI assistant. Provide clear, concise responses without emojis or markdown formatting for optimal text-to-speech synthesis."
+              systemPrompt: "You are ΛLFRED, a versatile AI assistant. Provide clear, concise responses without emojis or markdown formatting for optimal text-to-speech synthesis."
             })
           });
           
@@ -864,15 +1097,26 @@
               
               if (!assistantMessageElement) {
                 assistantMessageElement = this.addMessage('assistant', fullResponse);
+                
+                // Only start Spritz display in on-screen mode
+                if (this.settings.outputMode === 'onscreen') {
+                  this.startSpritzDisplay(fullResponse);
+                }
               } else {
                 this.updateMessage(assistantMessageElement, fullResponse);
+                
+                // Only update Spritz display in on-screen mode
+                if (this.settings.outputMode === 'onscreen') {
+                  this.startSpritzDisplay(fullResponse);
+                }
               }
             }
           });
           
           eventSource.addEventListener('audioChunk', (event) => {
             const data = JSON.parse(event.data);
-            if (data.audio) {
+            if (data.audio && this.settings.outputMode === 'spoken') {
+              // Only play audio chunks in spoken mode
               this.playAudioChunk(data.audio, data.chunkIndex);
             }
           });
@@ -888,6 +1132,13 @@
             this.updateUI();
             this.updateBadges();
             this.updateConnectionStatus('connected', 'Ready for next turn');
+            
+            // Stop Spritz display when streaming is complete (only in on-screen mode)
+            if (this.settings.outputMode === 'onscreen') {
+              setTimeout(() => {
+                this.stopSpritzDisplay();
+              }, 2000); // Keep visible for 2 seconds after completion
+            }
           });
           
           eventSource.onerror = (event) => {
@@ -964,13 +1215,17 @@
           this.updateUI();
           this.updateBadges();
           
-          // Start TTS waveform animation
-          this.startTTSWaveformAnimation();
-          
           this.currentAudio.play().then(() => {
             console.log(`Audio chunk ${nextChunk.chunkIndex} playing`);
+            
+            // Setup REAL TTS visualization (after audio starts)
+            this.setupRealTTSVisualization(this.currentAudio);
+            
           }).catch(error => {
             console.error('Audio playback failed:', error);
+            
+            // Fallback to animation if audio fails
+            this.startTTSWaveformAnimation();
           });
           
           this.currentAudio.addEventListener('ended', () => {
@@ -1030,7 +1285,7 @@
               text: text,
               processing_mode: processingMode,
               model: model,
-              return_audio: true,
+              return_audio: this.settings.outputMode === 'spoken', // Only request audio in spoken mode
               voiceConfig: JSON.stringify({
                 engine: this.settings.ttsEngine,
                 voice_id: this.settings.voiceId,
@@ -1049,10 +1304,22 @@
           if (result.response || result.answer || result.response_text) {
             const responseText = result.response || result.answer || result.response_text;
             this.addMessage('assistant', responseText);
+            
+            // Handle output mode
+            if (this.settings.outputMode === 'onscreen') {
+              // Start Spritz display for on-screen mode
+              this.startSpritzDisplay(responseText);
+              
+              // Stop Spritz display after a delay (based on user's WPM setting)
+              const msPerWord = (60 / this.settings.spritzWPM) * 1000;
+              setTimeout(() => {
+                this.stopSpritzDisplay();
+              }, Math.max(3000, responseText.split(' ').length * msPerWord)); // Minimum 3s, or based on WPM setting
+            }
           }
           
-          // Play audio if available
-          if (result.audio_data) {
+          // Play audio if available and in spoken mode
+          if (result.audio_data && this.settings.outputMode === 'spoken') {
             await this.playTTSAudio(result.audio_data);
           }
           
@@ -1085,8 +1352,6 @@
           this.updateUI();
           this.updateBadges();
           
-          this.startTTSWaveformAnimation();
-          
           const audio = new Audio(audioUrl);
           
           audio.onended = () => {
@@ -1102,6 +1367,9 @@
           };
           
           await audio.play();
+          
+          // Setup REAL TTS visualization after audio starts
+          this.setupRealTTSVisualization(audio);
           
         } catch (error) {
           console.error('TTS playback failed:', error);
@@ -1136,6 +1404,27 @@
         modeChip.textContent = mode.toUpperCase();
         
         this.saveSettings();
+      }
+      
+      setOutputMode(mode) {
+        this.settings.outputMode = mode;
+        
+        const btnSpoken = document.getElementById('btnSpoken');
+        const btnOnScreen = document.getElementById('btnOnScreen');
+        const badgeOutputMode = document.querySelector('#badgeOutputMode strong');
+        
+        const isSpoken = mode === 'spoken';
+        btnSpoken.setAttribute('aria-pressed', isSpoken);
+        btnOnScreen.setAttribute('aria-pressed', !isSpoken);
+        badgeOutputMode.textContent = isSpoken ? 'Spoken' : 'On-Screen';
+        
+        // Stop any active Spritz display when switching modes
+        if (this.spritzActive) {
+          this.stopSpritzDisplay();
+        }
+        
+        this.saveSettings();
+        console.log(`[Output Mode] Switched to ${mode} mode`);
       }
       
       updateUI() {
@@ -1195,6 +1484,110 @@
         return 'fair';
       }
       
+      // Spritz-style text display
+      startSpritzDisplay(text, estimatedDuration = 0) {
+        // If already active, just update the word queue instead of restarting
+        if (this.spritzActive) {
+          this.updateSpritzWords(text);
+          return;
+        }
+        
+        // Split text into words
+        this.spritzWords = text.split(/\s+/).filter(word => word.length > 0);
+        this.spritzIndex = 0;
+        this.spritzActive = true;
+        
+        // Show spritz container and hide waveform
+        const spritzDisplay = document.getElementById('spritzDisplay');
+        const spritzWord = document.getElementById('spritzWord');
+        const waveformContainer = document.querySelector('.waveform-container');
+        
+        spritzDisplay.classList.add('active');
+        waveformContainer.classList.add('spritz-active');
+        
+        // Calculate timing - use user's WPM setting
+        let wordsPerMinute = this.settings.spritzWPM; // Use dynamic setting
+        if (estimatedDuration > 0 && this.spritzWords.length > 0) {
+          // Sync with actual TTS duration
+          const estimatedWPM = (this.spritzWords.length / estimatedDuration) * 60;
+          wordsPerMinute = Math.max(150, Math.min(500, estimatedWPM)); // Clamp between 150-500 WPM
+        }
+        
+        const msPerWord = (60 / wordsPerMinute) * 1000;
+        
+        console.log(`[Spritz] Starting display: ${this.spritzWords.length} words at ${wordsPerMinute} WPM (${msPerWord}ms per word)`);
+        
+        this.showNextSpritzWord(spritzWord, msPerWord);
+      }
+      
+      updateSpritzWords(newText) {
+        // Update the word queue with new text without restarting
+        const newWords = newText.split(/\s+/).filter(word => word.length > 0);
+        this.spritzWords = newWords; // Replace entire word list with updated text
+        
+        console.log(`[Spritz] Updated word queue: ${this.spritzWords.length} words (currently at index ${this.spritzIndex})`);
+      }
+      
+      showNextSpritzWord(spritzWordElement, msPerWord) {
+        if (!this.spritzActive || this.spritzIndex >= this.spritzWords.length) {
+          this.stopSpritzDisplay();
+          return;
+        }
+        
+        const word = this.spritzWords[this.spritzIndex];
+        
+        // Hide current word
+        spritzWordElement.classList.remove('visible');
+        
+        setTimeout(() => {
+          // Show new word
+          spritzWordElement.textContent = word;
+          spritzWordElement.classList.add('visible');
+          
+          this.spritzIndex++;
+          
+          // Schedule next word - adjust timing based on word length
+          let nextDelay = msPerWord;
+          if (word.length > 8) {
+            nextDelay *= 1.3; // Longer pause for long words
+          } else if (word.length < 3) {
+            nextDelay *= 0.7; // Shorter pause for short words
+          }
+          
+          // Add extra pause for punctuation
+          if (word.match(/[.!?]$/)) {
+            nextDelay *= 1.5;
+          } else if (word.match(/[,;:]$/)) {
+            nextDelay *= 1.2;
+          }
+          
+          this.spritzTimer = setTimeout(() => {
+            this.showNextSpritzWord(spritzWordElement, msPerWord);
+          }, nextDelay);
+          
+        }, 100); // Brief transition delay
+      }
+      
+      stopSpritzDisplay() {
+        this.spritzActive = false;
+        
+        if (this.spritzTimer) {
+          clearTimeout(this.spritzTimer);
+          this.spritzTimer = null;
+        }
+        
+        const spritzDisplay = document.getElementById('spritzDisplay');
+        const spritzWord = document.getElementById('spritzWord');
+        const waveformContainer = document.querySelector('.waveform-container');
+        
+        spritzDisplay.classList.remove('active');
+        spritzWord.classList.remove('visible');
+        spritzWord.textContent = '';
+        waveformContainer.classList.remove('spritz-active');
+        
+        console.log('[Spritz] Display stopped');
+      }
+
       // Message management
       addMessage(role, text) {
         const conversation = document.getElementById('conversation');
@@ -1334,6 +1727,7 @@
         
         // Update UI with loaded settings
         this.setMode(this.settings.processingMode);
+        this.setOutputMode(this.settings.outputMode);
         document.getElementById('modelName').textContent = this.settings.selectedModel;
         
         // Update model picker
@@ -1341,6 +1735,10 @@
         modelInputs.forEach(input => {
           input.checked = input.value === this.settings.selectedModel;
         });
+        
+        // Update WPM slider
+        document.getElementById('wpmSlider').value = this.settings.spritzWPM;
+        document.getElementById('wpmValue').textContent = `${this.settings.spritzWPM} WPM`;
       }
       
       saveSettings() {
@@ -1379,6 +1777,38 @@
         });
       }
       
+      // WPM picker
+      setupWPMPicker() {
+        const disclosure = document.getElementById('btnWPMDisclosure');
+        const popover = document.getElementById('wpmPopover');
+        const slider = document.getElementById('wpmSlider');
+        const wpmValue = document.getElementById('wpmValue');
+        
+        disclosure.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = popover.classList.contains('open');
+          if (isOpen) {
+            this.closeWPMPopover();
+          } else {
+            this.openWPMPopover();
+          }
+        });
+        
+        slider.addEventListener('input', (e) => {
+          const wpm = parseInt(e.target.value);
+          this.settings.spritzWPM = wpm;
+          wpmValue.textContent = `${wpm} WPM`;
+          this.saveSettings();
+          console.log(`[WPM] Reading speed updated to ${wpm} WPM`);
+        });
+        
+        window.addEventListener('click', (e) => {
+          if (!popover.contains(e.target) && e.target !== disclosure) {
+            this.closeWPMPopover();
+          }
+        });
+      }
+      
       openModelPopover() {
         const popover = document.getElementById('modelPopover');
         const disclosure = document.getElementById('btnLLMDisclosure');
@@ -1395,6 +1825,27 @@
       closeModelPopover() {
         const popover = document.getElementById('modelPopover');
         const disclosure = document.getElementById('btnLLMDisclosure');
+        
+        popover.classList.remove('open');
+        disclosure.setAttribute('aria-expanded', 'false');
+      }
+      
+      openWPMPopover() {
+        const popover = document.getElementById('wpmPopover');
+        const disclosure = document.getElementById('btnWPMDisclosure');
+        
+        popover.classList.add('open');
+        disclosure.setAttribute('aria-expanded', 'true');
+        
+        // Position popover above the disclosure button
+        const rect = disclosure.getBoundingClientRect();
+        popover.style.left = rect.left + 'px';
+        popover.style.top = (rect.top - popover.offsetHeight - 8) + 'px';
+      }
+      
+      closeWPMPopover() {
+        const popover = document.getElementById('wpmPopover');
+        const disclosure = document.getElementById('btnWPMDisclosure');
         
         popover.classList.remove('open');
         disclosure.setAttribute('aria-expanded', 'false');
@@ -1481,3 +1932,4 @@
   </script>
 </body>
 </html>
+
