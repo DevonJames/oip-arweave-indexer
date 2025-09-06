@@ -235,37 +235,24 @@ class GPUTTSService:
         try:
             logger.info("🚀 Loading Kokoro TTS model...")
             
-            # Check for Kokoro model files
-            model_path = os.getenv('KOKORO_MODEL_PATH', '/app/models/kokoro')
-            onnx_model_path = os.path.join(model_path, 'kokoro.onnx')
-            
-            # Try to load real Kokoro model
-            if os.path.exists(onnx_model_path):
-                try:
-                    import onnxruntime as ort
-                    
-                    # Load ONNX model with GPU support if available
-                    providers = ['CPUExecutionProvider']
-                    if torch.cuda.is_available():
-                        providers.insert(0, 'CUDAExecutionProvider')
-                    
-                    self.kokoro_session = ort.InferenceSession(onnx_model_path, providers=providers)
-                    self.kokoro_available = True
-                    
-                    logger.info("✅ Real Kokoro TTS model loaded successfully")
-                    logger.info(f"   Model path: {onnx_model_path}")
-                    logger.info(f"   Providers: {providers}")
-                    
-                except ImportError:
-                    logger.warning("ONNX Runtime not available, falling back to mock implementation")
-                    self._initialize_kokoro_mock()
-                    return
-                except Exception as e:
-                    logger.warning(f"Failed to load real Kokoro model: {e}, falling back to mock")
-                    self._initialize_kokoro_mock()
-                    return
-            else:
-                logger.info(f"Kokoro model not found at {onnx_model_path}, using mock implementation")
+            # Use the real Kokoro TTS Python package
+            try:
+                import kokoro
+                from kokoro import KPipeline
+                
+                # Initialize Kokoro pipeline with default American English
+                self.kokoro_pipeline = KPipeline(lang_code='a')
+                self.kokoro_available = True
+                
+                logger.info("✅ Real Kokoro TTS loaded successfully")
+                logger.info("   Using official Kokoro Python package")
+                
+            except ImportError as e:
+                logger.warning(f"Kokoro package not available: {e}, falling back to mock implementation")
+                self._initialize_kokoro_mock()
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load Kokoro TTS: {e}, falling back to mock")
                 self._initialize_kokoro_mock()
                 return
             
@@ -408,8 +395,8 @@ class GPUTTSService:
         try:
             logger.info(f"🎵 Kokoro TTS: voice={voice}")
             
-            # Use real Kokoro model if available
-            if hasattr(self, 'kokoro_session') and self.kokoro_session is not None:
+            # Use real Kokoro pipeline if available
+            if hasattr(self, 'kokoro_pipeline') and self.kokoro_pipeline is not None:
                 return await self._synthesize_with_real_kokoro(text, voice)
             else:
                 return await self._synthesize_with_mock_kokoro(text, voice)
@@ -419,37 +406,59 @@ class GPUTTSService:
             return None
     
     async def _synthesize_with_real_kokoro(self, text: str, voice: str) -> Optional[str]:
-        """Synthesize with real Kokoro ONNX model"""
+        """Synthesize with real Kokoro Python package"""
         try:
-            # Map voice to Kokoro speaker
-            voice_config = self.kokoro_voices.get(voice, self.kokoro_voices.get('default'))
-            speaker = voice_config['speaker']
-            lang = voice_config['lang']
-            
-            logger.info(f"🎵 Real Kokoro TTS: text='{text[:50]}...' voice={voice} speaker={speaker} lang={lang}")
-            
-            # Prepare input for ONNX model
-            # Note: This is a template - actual input format depends on Kokoro model specification
-            inputs = {
-                'text': np.array([text], dtype=np.str_),
-                'speaker': np.array([speaker], dtype=np.str_),
-                'language': np.array([lang], dtype=np.str_)
+            # Map voice to language code for Kokoro
+            voice_mapping = {
+                'en': 'a',  # American English
+                'en-gb': 'b',  # British English  
+                'es': 'e',  # Spanish
+                'fr': 'f',  # French
+                'de': 'd',  # German
+                'it': 'i',  # Italian
+                'pt': 'p',  # Portuguese
+                'ja': 'j',  # Japanese
+                'ko': 'k',  # Korean
+                'zh': 'z',  # Chinese
+                'default': 'a'
             }
             
-            # Run ONNX inference
-            outputs = self.kokoro_session.run(None, inputs)
-            audio_data = outputs[0]  # Assume first output is audio
+            # Get language code for voice
+            lang_code = voice_mapping.get(voice, voice_mapping.get('default'))
+            
+            logger.info(f"🎵 Real Kokoro TTS: text='{text[:50]}...' voice={voice} lang_code={lang_code}")
+            
+            # Generate audio using Kokoro pipeline
+            import asyncio
+            from kokoro import KPipeline
+            
+            # Create pipeline for specific language if different from current
+            if not hasattr(self, 'kokoro_current_lang') or self.kokoro_current_lang != lang_code:
+                self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+                self.kokoro_current_lang = lang_code
+            
+            # Generate audio (run in thread to avoid blocking)
+            def generate_audio():
+                # Generate audio samples
+                for i, (gs, ps, audio) in enumerate(self.kokoro_pipeline(text, voice='af_heart')):
+                    return audio  # Return first generated audio chunk
+                return None
+            
+            # Run synthesis in thread pool
+            loop = asyncio.get_event_loop()
+            audio_data = await loop.run_in_executor(None, generate_audio)
+            
+            if audio_data is None:
+                logger.error("Kokoro TTS failed to generate audio")
+                return None
             
             # Save audio to temporary file
-            sample_rate = int(os.getenv('KOKORO_SAMPLE_RATE', '22050'))
+            import soundfile as sf
+            sample_rate = 24000  # Kokoro default sample rate
+            
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                import scipy.io.wavfile as wavfile
-                
-                # Ensure audio is in correct format
-                if audio_data.dtype != np.int16:
-                    audio_data = (audio_data * 32767).astype(np.int16)
-                
-                wavfile.write(tmp_file.name, sample_rate, audio_data)
+                # Write audio data to WAV file
+                sf.write(tmp_file.name, audio_data, sample_rate)
                 
                 duration = len(audio_data) / sample_rate
                 logger.info(f"Real Kokoro synthesis successful: {duration:.1f}s audio at {sample_rate}Hz")

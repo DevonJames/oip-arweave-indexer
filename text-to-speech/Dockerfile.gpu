@@ -53,10 +53,10 @@ RUN pip3 install --no-cache-dir \
     omegaconf \
     tqdm
 
-# Install ONNX Runtime for Kokoro TTS support
+# Install Kokoro TTS package
 RUN pip3 install --no-cache-dir \
-    onnxruntime-gpu==1.16.3 \
-    onnx==1.15.0
+    kokoro==0.3.1 \
+    soundfile
 
 # Install Chatterbox TTS during build (like working standard profile) 
 # This prevents pip dependency conflicts from post-deployment installation
