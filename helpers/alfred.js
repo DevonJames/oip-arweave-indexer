@@ -314,7 +314,23 @@ class ALFRED {
      */
     async analyzeQuestionWithLLM(question, selectedModel = null, context = null) {
         try {
-            const modelToUse = selectedModel || this.defaultModel;
+            // Handle special model selections and validate model names
+            let modelToUse = selectedModel || this.defaultModel;
+            
+            // Handle special cases and invalid model names
+            if (modelToUse === 'parallel') {
+                // For question analysis, use a reliable local model instead of parallel processing
+                modelToUse = 'llama2:7b'; // Use LLaMA 2 7B as requested
+                console.log(`[ALFRED] 🔄 'parallel' model detected, using ${modelToUse} for question analysis`);
+            } else if (modelToUse === 'grok-2') {
+                // Handle invalid grok-2 model name, use grok-4 instead
+                modelToUse = 'grok-4';
+                console.log(`[ALFRED] 🔄 Invalid 'grok-2' model, using ${modelToUse} for question analysis`);
+            } else if (!this.isCloudModel(modelToUse) && !modelToUse.includes(':')) {
+                // If it's not a cloud model and doesn't look like an Ollama model, use default
+                console.log(`[ALFRED] ⚠️ Unknown model '${modelToUse}', falling back to ${this.defaultModel}`);
+                modelToUse = this.defaultModel;
+            }
             
             // Build context information for the prompt
             let contextInfo = '';
@@ -475,14 +491,46 @@ JSON Response:`;
             return result;
             
         } catch (error) {
-            console.warn(`[ALFRED] ⚠️ LLM question analysis failed, using fallback: ${error.message}`);
+            console.warn(`[ALFRED] ⚠️ LLM question analysis failed, using enhanced fallback: ${error.message}`);
             
-            // Fallback to simple pattern-based approach
+            // Enhanced fallback with better pattern detection
+            const lowerQuestion = question.toLowerCase();
+            let category = 'news'; // Default
+            let primaryEntity = question;
+            let modifiers = [];
+            
+            // Better category detection
+            if (lowerQuestion.includes('recipe') || lowerQuestion.includes('cook') || lowerQuestion.includes('marinade') || 
+                lowerQuestion.includes('ingredient') || lowerQuestion.includes('mediterranean') || lowerQuestion.includes('grilled')) {
+                category = 'recipe';
+                
+                // Extract meaningful parts for recipe questions
+                if (lowerQuestion.includes('mediterranean') && lowerQuestion.includes('chicken')) {
+                    primaryEntity = 'mediterranean grilled chicken';
+                    modifiers = ['mediterranean', 'grilled'];
+                } else if (lowerQuestion.includes('grilled chicken')) {
+                    primaryEntity = 'grilled chicken';
+                    modifiers = ['grilled'];
+                } else if (lowerQuestion.includes('chicken')) {
+                    primaryEntity = 'chicken';
+                }
+            } else if (lowerQuestion.includes('exercise') || lowerQuestion.includes('workout') || lowerQuestion.includes('press') || 
+                      lowerQuestion.includes('overhead') || lowerQuestion.includes('fitness')) {
+                category = 'exercise';
+                
+                if (lowerQuestion.includes('overhead press')) {
+                    primaryEntity = 'overhead press';
+                    modifiers = ['overhead'];
+                }
+            }
+            
+            console.log(`[ALFRED] 🔄 Enhanced fallback analysis: category=${category}, entity="${primaryEntity}", modifiers=[${modifiers.join(', ')}]`);
+            
             return {
                 isFollowUp: false,
-                category: question.toLowerCase().includes('recipe') ? 'recipe' : 'news',
-                primaryEntity: question,
-                modifiers: [],
+                category: category,
+                primaryEntity: primaryEntity,
+                modifiers: modifiers,
                 secondEntity: ''
             };
         }
