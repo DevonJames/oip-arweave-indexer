@@ -2077,8 +2077,9 @@ router.get('/health', async (req, res) => {
         });
     }
     
-    // Add kokoro if it's the primary engine and healthy
-    if (services.tts?.status === 'healthy' && services.tts?.engine === 'kokoro') {
+    // Add kokoro if it's available in the TTS service
+    if (services.tts?.status === 'healthy' && 
+        services.tts?.details?.engines?.some(e => e.name === 'kokoro' && e.available)) {
         if (!availableEngines.includes('kokoro')) {
             availableEngines.unshift('kokoro'); // Add at beginning as primary
         }
