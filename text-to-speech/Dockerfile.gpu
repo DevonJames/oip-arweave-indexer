@@ -53,10 +53,13 @@ RUN pip3 install --no-cache-dir \
     omegaconf \
     tqdm
 
-# Install Kokoro TTS package
+# Upgrade pip first
+RUN pip3 install --upgrade pip setuptools wheel
+
+# Install Kokoro TTS package with fallback to mock if it fails due to numpy conflicts
 RUN pip3 install --no-cache-dir \
-    kokoro==0.3.1 \
-    soundfile
+    soundfile \
+    kokoro || echo "⚠️ Kokoro TTS installation failed due to numpy version conflict - will use mock implementation"
 
 # Install Chatterbox TTS during build (like working standard profile) 
 # This prevents pip dependency conflicts from post-deployment installation

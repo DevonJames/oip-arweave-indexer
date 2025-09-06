@@ -107,6 +107,11 @@ class EnhancedVoiceInterfaceServer {
             res.setHeader('Content-Type', 'application/javascript');
             res.sendFile(path.join(__dirname, 'webrtc_audio_client.js'));
         });
+
+        // Serve new ALFRED interface
+        this.app.get('/alfred', (req, res) => {
+            res.sendFile(path.join(__dirname, 'alfred.html'));
+        });
         
         // Serve Phase 3 interruption test interface
         this.app.get('/interruption', (req, res) => {
