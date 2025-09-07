@@ -239,6 +239,7 @@
       <span class="badge listening" id="badgeListening" hidden>🎤 Recording</span>
       <span class="badge processing" id="badgeProcessing" hidden>⚙️ Processing</span>
       <span class="badge speaking" id="badgeSpeaking" hidden>🔊 ΛLFRED Speaking</span>
+      <span class="badge" id="badgeInterrupted" hidden style="background:rgba(255,149,0,.08);border-color:rgba(255,149,0,.35)">🔄 Interrupted</span>
       <span class="badge mode" id="badgeMode">Mode: <strong>RAG</strong></span>
       <span class="badge" id="badgeModel">Model: <strong id="modelName">llama3.2:3b</strong></span>
       <span class="badge" id="badgeOutputMode">Output: <strong>Spoken</strong></span>
@@ -418,8 +419,19 @@
           currentTurn: 'user',
           speechActive: false,
           agentSpeaking: false,
-          canInterrupt: false
+          canInterrupt: true, // Enable interruption capability
+          lastInterruption: null
         };
+        
+        // Interruption detection
+        this.interruptionConfig = {
+          enabled: true,
+          energyThreshold: 0.15, // Minimum energy to consider interruption
+          sustainedFrames: 3, // Number of consecutive frames needed
+          cooldownMs: 1000 // Minimum time between interruptions
+        };
+        this.interruptionBuffer = [];
+        this.lastInterruptionTime = 0;
         
         // Performance metrics
         this.performanceMetrics = {
@@ -498,9 +510,17 @@
             !document.getElementById('inputText').matches(':focus')) {
           e.preventDefault();
           this.spaceKeyDown = true;
-          if (this.isConnected && !this.isRecording) {
-            console.log('[Spacebar] Starting recording...');
-            this.startRecording();
+          
+          if (this.isConnected) {
+            if (this.voiceState.agentSpeaking) {
+              // Interrupt ΛLFRED if speaking
+              console.log('[Spacebar] Interrupting ΛLFRED speech...');
+              this.handleInterruption();
+            } else if (!this.isRecording) {
+              // Start normal recording
+              console.log('[Spacebar] Starting recording...');
+              this.startRecording();
+            }
           }
         }
       }
@@ -691,7 +711,7 @@
             const average = audioData.reduce((a, b) => a + b) / audioData.length;
             const percentage = Math.min(100, (average / 128) * 100);
             
-            // Update audio quality metric
+            // Update audio quality metric and check for interruptions
             if (!this.voiceState.agentSpeaking) {
               if (percentage > 15) {
                 this.performanceMetrics.audioQuality = 'good';
@@ -704,6 +724,9 @@
               if (this.isRecording && percentage > 10) {
                 this.performanceMetrics.audioQuality = 'good';
               }
+            } else {
+              // Check for interruption during TTS playback
+              this.checkForInterruption(percentage, audioData);
             }
             
             // Update waveform
@@ -945,6 +968,97 @@
         
         this.stopTTSAnimation = () => { animationActive = false; };
         animateTTSWaveform();
+      }
+      
+      checkForInterruption(audioLevel, audioData) {
+        if (!this.interruptionConfig.enabled || !this.voiceState.agentSpeaking) {
+          return;
+        }
+        
+        // Check cooldown period
+        const now = Date.now();
+        if (now - this.lastInterruptionTime < this.interruptionConfig.cooldownMs) {
+          return;
+        }
+        
+        // Convert audio level percentage to energy threshold
+        const energyLevel = audioLevel / 100;
+        const hasSignificantAudio = energyLevel > this.interruptionConfig.energyThreshold;
+        
+        // Add to interruption buffer
+        this.interruptionBuffer.push({
+          timestamp: now,
+          energy: energyLevel,
+          hasSpeech: hasSignificantAudio,
+          audioData: audioData
+        });
+        
+        // Keep buffer to reasonable size (last 500ms = ~15 frames at 30fps)
+        if (this.interruptionBuffer.length > 15) {
+          this.interruptionBuffer = this.interruptionBuffer.slice(-15);
+        }
+        
+        // Check for sustained speech pattern
+        if (this.interruptionBuffer.length >= this.interruptionConfig.sustainedFrames) {
+          const recentFrames = this.interruptionBuffer.slice(-this.interruptionConfig.sustainedFrames);
+          const sustainedSpeech = recentFrames.every(frame => frame.hasSpeech);
+          
+          if (sustainedSpeech) {
+            console.log(`[Interruption] Detected sustained speech during TTS - triggering interruption`);
+            this.handleInterruption();
+          }
+        }
+      }
+      
+      async handleInterruption() {
+        try {
+          this.lastInterruptionTime = Date.now();
+          
+          console.log('[Interruption] User interruption detected - stopping TTS and switching to recording');
+          
+          // Immediately stop all TTS audio
+          this.stopAllTTSAudio();
+          
+          // Clear audio queue to prevent further playback
+          this.resetAudioQueue();
+          
+          // Stop any TTS animations
+          if (this.stopTTSAnimation) {
+            this.stopTTSAnimation();
+          }
+          
+          // Update state to show interruption
+          this.voiceState.agentSpeaking = false;
+          this.voiceState.currentTurn = 'user';
+          this.voiceState.lastInterruption = Date.now();
+          
+          // Start recording immediately (since user is already speaking)
+          await this.startRecording();
+          
+          this.updateUI();
+          this.updateBadges();
+          
+        } catch (error) {
+          console.error('[Interruption] Error handling interruption:', error);
+        }
+      }
+      
+      stopAllTTSAudio() {
+        // Stop current audio if playing
+        if (this.currentAudio) {
+          this.currentAudio.pause();
+          this.currentAudio.currentTime = 0;
+          this.currentAudio = null;
+        }
+        
+        // Stop any queued audio
+        this.audioQueue.forEach(chunk => {
+          if (chunk.audioUrl) {
+            URL.revokeObjectURL(chunk.audioUrl);
+          }
+        });
+        
+        console.log('[Interruption] All TTS audio stopped');
       }
       
       toggleRecording() {
@@ -1469,10 +1583,19 @@
         const listening = document.getElementById('badgeListening');
         const processing = document.getElementById('badgeProcessing');
         const speaking = document.getElementById('badgeSpeaking');
+        const interrupted = document.getElementById('badgeInterrupted');
         
         listening.hidden = !this.isRecording;
         processing.hidden = this.voiceState.currentTurn !== 'processing';
         speaking.hidden = !this.voiceState.agentSpeaking;
+        
+        // Show interrupted badge briefly after interruption
+        if (this.voiceState.lastInterruption && 
+            Date.now() - this.voiceState.lastInterruption < 3000) {
+          interrupted.hidden = false;
+        } else {
+          interrupted.hidden = true;
+        }
       }
       
       updateConnectionStatus(state, message) {
