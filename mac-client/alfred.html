@@ -42,7 +42,7 @@
       position:relative;height:calc(100dvh - 56px - var(--dock-h) - 140px);overflow:auto;padding:12px;
       background:var(--glass);border-radius:var(--radius);backdrop-filter:blur(20px) saturate(140%);
     }
-    .message{max-width:80ch;margin:10px 0;padding:12px 14px;border-radius:14px;line-height:1.55}
+    .message{max-width:95%;margin:10px 0;padding:12px 14px;border-radius:14px;line-height:1.55}
     .message.user{background:rgba(21,230,255,.08);border:1px solid rgba(21,230,255,.35)}
     .message.ai{background:rgba(212,95,255,.08);border:1px solid rgba(212,95,255,.35);box-shadow:var(--glow)}
     .message.system{background:rgba(144,164,180,.08);border:1px solid rgba(144,164,180,.35);font-style:italic;font-size:14px}
@@ -172,8 +172,7 @@
       border:1px solid rgba(255,255,255,.12);z-index:10;
     }
     .spritz-display.active{display:flex}
-    .spritz-word{opacity:0;transform:translateY(10px);transition:all 0.2s ease}
-    .spritz-word.visible{opacity:1;transform:translateY(0)}
+    .spritz-word{opacity:1}
 
     /* Hide waveform when spritz is active */
     .waveform-container.spritz-active canvas.waveform{opacity:0}
@@ -353,19 +352,39 @@
 
   <!-- WPM speed popover -->
   <div id="wpmPopover" class="popover" role="dialog" aria-label="Adjust reading speed">
-    <div style="padding:12px;min-width:200px">
-      <div style="margin-bottom:12px;font-weight:600;color:var(--text)">Reading Speed</div>
-      <div style="margin-bottom:8px">
-        <input type="range" id="wpmSlider" min="150" max="500" step="10" value="280" 
-               style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.2);outline:none;appearance:none">
+    <div style="padding:12px;min-width:220px">
+      <div style="margin-bottom:12px;font-weight:600;color:var(--text)">On-Screen Settings</div>
+      
+      <!-- Reading Speed -->
+      <div style="margin-bottom:16px">
+        <div style="margin-bottom:8px;font-size:14px;color:var(--text)">Reading Speed</div>
+        <div style="margin-bottom:8px">
+          <input type="range" id="wpmSlider" min="150" max="500" step="10" value="280" 
+                 style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.2);outline:none;appearance:none">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+          <span>150 WPM</span>
+          <span id="wpmValue" style="color:var(--text);font-weight:600">280 WPM</span>
+          <span>500 WPM</span>
+        </div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
-        <span>150 WPM</span>
-        <span id="wpmValue" style="color:var(--text);font-weight:600">280 WPM</span>
-        <span>500 WPM</span>
+      
+      <!-- Font Size -->
+      <div style="margin-bottom:12px">
+        <div style="margin-bottom:8px;font-size:14px;color:var(--text)">Text Size</div>
+        <div style="margin-bottom:8px">
+          <input type="range" id="fontSizeSlider" min="16" max="48" step="2" value="24" 
+                 style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.2);outline:none;appearance:none">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+          <span>16px</span>
+          <span id="fontSizeValue" style="color:var(--text);font-weight:600">24px</span>
+          <span>48px</span>
+        </div>
       </div>
-      <div style="margin-top:8px;font-size:11px;color:var(--muted);text-align:center">
-        Adjust how fast words appear in On-Screen mode
+      
+      <div style="font-size:11px;color:var(--muted);text-align:center">
+        Adjust speed and size for optimal reading
       </div>
     </div>
   </div>
@@ -428,6 +447,7 @@
           selectedModel: 'llama3.2:3b',
           outputMode: 'spoken', // 'spoken' or 'onscreen'
           spritzWPM: 280, // Reading speed for on-screen mode
+          spritzFontSize: 24, // Font size for on-screen mode (px)
           ttsEngine: 'elevenlabs',
           voiceId: 'onwK4e9ZLuTAKqWW03F9',
           speechSpeed: 1.0,
@@ -1536,36 +1556,28 @@
         
         const word = this.spritzWords[this.spritzIndex];
         
-        // Hide current word
-        spritzWordElement.classList.remove('visible');
+        // Show new word instantly
+        spritzWordElement.textContent = word;
+        this.spritzIndex++;
         
-        setTimeout(() => {
-          // Show new word
-          spritzWordElement.textContent = word;
-          spritzWordElement.classList.add('visible');
-          
-          this.spritzIndex++;
-          
-          // Schedule next word - adjust timing based on word length
-          let nextDelay = msPerWord;
-          if (word.length > 8) {
-            nextDelay *= 1.3; // Longer pause for long words
-          } else if (word.length < 3) {
-            nextDelay *= 0.7; // Shorter pause for short words
-          }
-          
-          // Add extra pause for punctuation
-          if (word.match(/[.!?]$/)) {
-            nextDelay *= 1.5;
-          } else if (word.match(/[,;:]$/)) {
-            nextDelay *= 1.2;
-          }
-          
-          this.spritzTimer = setTimeout(() => {
-            this.showNextSpritzWord(spritzWordElement, msPerWord);
-          }, nextDelay);
-          
-        }, 100); // Brief transition delay
+        // Schedule next word - adjust timing based on word length
+        let nextDelay = msPerWord;
+        if (word.length > 8) {
+          nextDelay *= 1.3; // Longer pause for long words
+        } else if (word.length < 3) {
+          nextDelay *= 0.7; // Shorter pause for short words
+        }
+        
+        // Add extra pause for punctuation
+        if (word.match(/[.!?]$/)) {
+          nextDelay *= 1.5;
+        } else if (word.match(/[,;:]$/)) {
+          nextDelay *= 1.2;
+        }
+        
+        this.spritzTimer = setTimeout(() => {
+          this.showNextSpritzWord(spritzWordElement, msPerWord);
+        }, nextDelay);
       }
       
       stopSpritzDisplay() {
@@ -1581,7 +1593,6 @@
         const waveformContainer = document.querySelector('.waveform-container');
         
         spritzDisplay.classList.remove('active');
-        spritzWord.classList.remove('visible');
         spritzWord.textContent = '';
         waveformContainer.classList.remove('spritz-active');
         
@@ -1739,6 +1750,11 @@
         // Update WPM slider
         document.getElementById('wpmSlider').value = this.settings.spritzWPM;
         document.getElementById('wpmValue').textContent = `${this.settings.spritzWPM} WPM`;
+        
+        // Update font size slider and apply initial font size
+        document.getElementById('fontSizeSlider').value = this.settings.spritzFontSize;
+        document.getElementById('fontSizeValue').textContent = `${this.settings.spritzFontSize}px`;
+        document.getElementById('spritzDisplay').style.fontSize = `${this.settings.spritzFontSize}px`;
       }
       
       saveSettings() {
@@ -1781,8 +1797,10 @@
       setupWPMPicker() {
         const disclosure = document.getElementById('btnWPMDisclosure');
         const popover = document.getElementById('wpmPopover');
-        const slider = document.getElementById('wpmSlider');
+        const wpmSlider = document.getElementById('wpmSlider');
         const wpmValue = document.getElementById('wpmValue');
+        const fontSizeSlider = document.getElementById('fontSizeSlider');
+        const fontSizeValue = document.getElementById('fontSizeValue');
         
         disclosure.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1794,12 +1812,25 @@
           }
         });
         
-        slider.addEventListener('input', (e) => {
+        wpmSlider.addEventListener('input', (e) => {
           const wpm = parseInt(e.target.value);
           this.settings.spritzWPM = wpm;
           wpmValue.textContent = `${wpm} WPM`;
           this.saveSettings();
           console.log(`[WPM] Reading speed updated to ${wpm} WPM`);
+        });
+        
+        fontSizeSlider.addEventListener('input', (e) => {
+          const fontSize = parseInt(e.target.value);
+          this.settings.spritzFontSize = fontSize;
+          fontSizeValue.textContent = `${fontSize}px`;
+          
+          // Update the Spritz display font size immediately
+          const spritzDisplay = document.getElementById('spritzDisplay');
+          spritzDisplay.style.fontSize = `${fontSize}px`;
+          
+          this.saveSettings();
+          console.log(`[Font Size] Spritz font size updated to ${fontSize}px`);
         });
         
         window.addEventListener('click', (e) => {
