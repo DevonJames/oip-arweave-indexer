@@ -111,7 +111,6 @@ class GPUTTSService:
         self._initialize_chatterbox()
         # Initialize Kokoro TTS
         self._initialize_kokoro()
-    
     def _initialize_chatterbox(self):
         """Initialize Chatterbox TTS (Resemble AI) - REAL Chatterbox TTS ENGINE"""
         if not CHATTERBOX_AVAILABLE:
@@ -840,6 +839,7 @@ class GPUTTSService:
                 logger.info(f"Trying {engine_name} for synthesis")
                 
                 if engine_name in ["kokoro", "chatterbox", "silero", "edge_tts", "espeak"]:
+
                     audio_file = await method(text, voice)
                 else:
                     audio_file = await method(text)
@@ -914,6 +914,7 @@ async def synthesize_speech(
     logger.info(f"  voice_cloning: {voice_cloning} (type: {type(voice_cloning)})")
     logger.info(f"  audio_prompt: {audio_prompt.filename if audio_prompt else 'None'}")
     logger.info(f"[GPU TTS Service] =====================================")
+
     
     start_time = time.time()
     
@@ -1007,6 +1008,7 @@ async def synthesize_speech(
                 status_code=500, 
                 detail=f"TTS synthesis failed - no audio generated"
             )
+
         
     except HTTPException:
         # Re-raise HTTP exceptions
@@ -1122,6 +1124,7 @@ async def health_check():
     engines_array = [
         {"name": "kokoro", "available": getattr(tts_service, 'kokoro_available', False), "primary": True},
         {"name": "chatterbox", "available": tts_service.chatterbox_engine is not None, "primary": False},
+
         {"name": "silero", "available": tts_service.silero_model is not None, "primary": False},
         {"name": "edge_tts", "available": True, "primary": False},
         {"name": "gtts", "available": True, "primary": False},

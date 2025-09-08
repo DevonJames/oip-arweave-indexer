@@ -464,12 +464,14 @@
                 // These engines use basic controls - show chatterbox controls but hide voice cloning
                 document.getElementById('chatterbox-controls').style.display = 'block';
                 // Voice cloning section already hidden above
+
             }
             
             // Load voices for selected engine
             await populateVoiceDropdown(selectedEngine);
             updateVoicePreview();
             updateStatus(`🔄 Switched to ${engineTitles[selectedEngine] || selectedEngine}`);
+
         }
         
         // Load available voices from API
@@ -621,11 +623,12 @@
         }
 
         // Check voice service status and populate engines
+
         async function checkVoiceStatus() {
             try {
                 const response = await fetch('/api/alfred/health');
                 const data = await response.json();
-                
+              
                 console.log('🔍 Health endpoint response:', data);
                 
                 // Extract TTS engine information from the health response
@@ -734,7 +737,7 @@
                 await switchEngine(); // This will populate voices and update UI
             }
         }
-        
+
         // Edge TTS slider update functions
         function updateSpeed(value) {
             voiceConfig.edge.speed = value / 100;
@@ -1092,12 +1095,14 @@
                 preview = `Current: eSpeak TTS with offline synthesis. Lightweight and reliable text-to-speech engine. 💻 Always available offline.`;
             } else {
                 preview = `Current: ${engine} TTS engine selected. Voice synthesis ready for testing.`;
+
             }
             
             document.getElementById('voice-preview').textContent = preview;
         }
-        
+
         // Universal voice synthesis function (handles all engines)
+
         async function synthesizeVoice(text) {
             console.log('🎵 synthesizeVoice called with text:', text);
             
@@ -1117,6 +1122,7 @@
                     await synthesizeWithElevenLabs(text);
                 } else if (engine === 'kokoro' || engine === 'silero' || engine === 'gtts' || engine === 'espeak') {
                     await synthesizeWithGenericEngine(text, engine);
+
                 } else {
                     throw new Error(`Unknown engine: ${engine}`);
                 }
@@ -1125,6 +1131,7 @@
                 updateStatus(`❌ ${engine} synthesis failed - trying fallback...`);
                 
                 // Fallback to browser TTS if synthesis fails
+
                 if ('speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.rate = 0.9;
@@ -1221,6 +1228,7 @@
                 formData.append('exaggeration', (voiceConfig.edge.pitch / 10 + 0.5).toString()); // Convert pitch to exaggeration range
                 formData.append('cfg_weight', (voiceConfig.edge.volume / 20 + 0.5).toString());  // Convert volume to cfg_weight range
                 formData.append('voice_cloning', false);
+
                 
                 const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
@@ -1353,6 +1361,7 @@
             };
             
             updateStatus(`🎵 Testing ${engineNames[engine] || engine} voice...`);
+
             
             try {
                 await synthesizeVoice(testText);
@@ -1374,7 +1383,7 @@
                 updateStatus(voiceConfig.chatterbox.voiceCloning.enabled ? 
                     '🎤 Synthesizing with voice cloning...' : 
                     '🎵 Synthesizing with Chatterbox TTS...');
-                
+
                 // Always use FormData with all required parameters
                 const formData = new FormData();
                 formData.append('text', text);
@@ -1391,6 +1400,7 @@
                 if (voiceConfig.chatterbox.voiceCloning.enabled && voiceConfig.chatterbox.voiceCloning.audioFile) {
                     // Voice cloning mode - add audio file
                     formData.append('voice_cloning', true);
+
                     formData.append('audio_prompt', voiceConfig.chatterbox.voiceCloning.audioFile);
                     console.log('🎤 Adding voice cloning audio file to request:', voiceConfig.chatterbox.voiceCloning.audioFile.name);
                 } else {
@@ -1398,6 +1408,7 @@
                     formData.append('voice_cloning', false);
                 }
                 
+
                 // Create abort controller for timeout (2 minutes for Chatterbox synthesis)
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 120000);
@@ -1405,6 +1416,7 @@
                 const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
                     body: formData,
+
                     signal: controller.signal
                 });
                 
