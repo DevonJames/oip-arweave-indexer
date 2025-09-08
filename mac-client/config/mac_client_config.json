@@ -4,7 +4,7 @@
       "stt": {
         "enabled": true,
         "port": 8013,
-        "model": "mlx-community/whisper-large-v3-mlx-4bit",
+        "model": "large-v3-turbo",
         "device": "mps",
         "quantization": "int4"
       },
@@ -15,19 +15,19 @@
       },
       "vad": {
         "enabled": true,
-        "threshold": 0.7,
-        "min_speech_ms": 300,
-        "min_silence_ms": 500
+        "threshold": 0.5,
+        "min_speech_ms": 200,
+        "min_silence_ms": 300
       }
     },
     "backend": {
-      "host": "api.oip.onl",
-      "port": 443,
-      "protocol": "https",
+      "host": "100.124.42.82",
+      "port": 3005,
+      "protocol": "http",
       "endpoints": {
-        "health": "/api/alfred/chat",
-        "chat": "/api/alfred/chat",
-        "rag": "/api/alfred/chat"
+        "health": "/api/voice/health",
+        "chat": "/api/voice/chat",
+        "rag": "/api/alfred/query"
       }
     },
     "audio": {
