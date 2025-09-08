@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALFRED Voice Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        
+        .app-container {
+            width: 100%;
+            max-width: 800px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .main-content {
+            padding: 32px;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-status.disconnected {
+            background-color: #fff5f5;
+            color: #c53030;
+            border: 2px solid #feb2b2;
+        }
+        
+        .connection-status.connecting {
+            background-color: #fffaf0;
+            color: #c05621;
+            border: 2px solid #fbd38d;
+        }
+        
+        .connection-status.connected {
+            background-color: #f0fff4;
+            color: #22543d;
+            border: 2px solid #9ae6b4;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+        
+        .status-dot.connecting {
+            animation: pulse 1.5s infinite;
+        }
+        
+        .voice-interface {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .voice-controls {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .audio-visualization {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px;
+        }
+        
+        .audio-viz-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .audio-viz-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .audio-level-container {
+            margin-bottom: 20px;
+        }
+        
+        .audio-level {
+            width: 100%;
+            height: 8px;
+            background-color: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        
+        .audio-level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #34c759, #30d158, #ff9500);
+            width: 0%;
+            transition: width 0.1s ease;
+        }
+        
+        .audio-level-text {
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .waveform-container {
+            height: 80px;
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .waveform {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .voice-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            font-size: 48px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .voice-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 122, 255, 0.3);
+        }
+        
+        .voice-button:active {
+            transform: scale(0.95);
+        }
+        
+        .voice-button.listening {
+            background: linear-gradient(135deg, #34c759, #30d158);
+            animation: listening-pulse 2s infinite;
+        }
+        
+        .voice-button.processing {
+            background: linear-gradient(135deg, #ff9500, #ffb340);
+            animation: processing-spin 1s linear infinite;
+        }
+        
+        .voice-button.speaking {
+            background: linear-gradient(135deg, #5856d6, #af52de);
+            animation: speaking-wave 1.5s ease-in-out infinite;
+        }
+        
+        .voice-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .voice-status {
+            font-size: 18px;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .voice-subtitle {
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .conversation-area {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            max-height: 400px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .conversation-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .conversation-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .conversation-messages {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 300px;
+        }
+        
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .message-avatar.user {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+        }
+        
+        .message-avatar.assistant {
+            background: linear-gradient(135deg, #34c759, #30d158);
+            color: white;
+        }
+        
+        .message-content {
+            flex: 1;
+            max-width: 70%;
+        }
+        
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 15px;
+            line-height: 1.4;
+        }
+        
+        .message-bubble.user {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message-bubble.assistant {
+            background: #f7fafc;
+            color: #333;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-bubble.partial {
+            opacity: 0.7;
+            font-style: italic;
+            border-style: dashed;
+        }
+        
+        .message-meta {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .message.user .message-meta {
+            text-align: right;
+        }
+        
+        .performance-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .performance-metric {
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007aff;
+            margin-bottom: 4px;
+        }
+        
+        .metric-value.warning { color: #ff9500; }
+        .metric-value.error { color: #ff3b30; }
+        .metric-value.success { color: #34c759; }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .controls-panel {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .floating-controls {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 1000;
+        }
+        
+        .floating-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 122, 255, 0.9);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .floating-btn:hover {
+            background: rgba(0, 122, 255, 1);
+            transform: scale(1.1);
+        }
+        
+        .error-banner {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .success-banner {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        
+        @keyframes listening-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.4); }
+            50% { box-shadow: 0 0 0 20px rgba(52, 199, 89, 0); }
+        }
+        
+        @keyframes processing-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes speaking-wave {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.1); }
+            50% { transform: scale(1.05); }
+            75% { transform: scale(1.15); }
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>🎤 ALFRED Voice Assistant</h1>
+            <p>Real-time voice interaction with advanced interruption handling</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- Connection Status -->
+            <div id="connectionStatus" class="connection-status disconnected">
+                <div class="status-dot"></div>
+                <span>Ready to connect to voice services</span>
+            </div>
+            
+            <!-- Error/Success Banners -->
+            <div id="errorBanner" class="error-banner">
+                <span>⚠️</span>
+                <span id="errorMessage">An error occurred</span>
+            </div>
+            
+            <div id="successBanner" class="success-banner">
+                <span>✅</span>
+                <span id="successMessage">Success!</span>
+            </div>
+            
+            <!-- Main Voice Interface -->
+            <div class="voice-interface">
+                <!-- Voice Controls -->
+                <div class="voice-controls">
+                    <button id="voiceButton" class="voice-button" disabled>
+                        🎤
+                    </button>
+                    <div id="voiceStatus" class="voice-status">Ready to Connect</div>
+                    <div id="voiceSubtitle" class="voice-subtitle">Click Connect to start</div>
+                </div>
+                
+                <!-- Audio Visualization -->
+                <div class="audio-visualization">
+                    <div class="audio-viz-header">
+                        <div class="audio-viz-title">Audio Activity</div>
+                    </div>
+                    
+                    <div class="audio-level-container">
+                        <div class="audio-level">
+                            <div id="audioLevelBar" class="audio-level-bar"></div>
+                        </div>
+                        <div id="audioLevelText" class="audio-level-text">0% - No Audio</div>
+                    </div>
+                    
+                    <div class="waveform-container">
+                        <div id="waveform" class="waveform">
+                            Audio waveform visualization
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Conversation Area -->
+            <div class="conversation-area">
+                <div class="conversation-header">
+                    <h3 class="conversation-title">💬 Conversation</h3>
+                </div>
+                
+                <div id="conversationMessages" class="conversation-messages">
+                    <!-- Welcome message -->
+                    <div class="message">
+                        <div class="message-avatar assistant">🤖</div>
+                        <div class="message-content">
+                            <div class="message-bubble assistant">
+                                Hello! I'm ALFRED, your voice assistant. Connect to start our conversation. You can interrupt me at any time by simply speaking.
+                            </div>
+                            <div class="message-meta">
+                                Just now • System message
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Performance Panel -->
+            <div class="performance-panel">
+                <div class="performance-metric">
+                    <div id="responseTime" class="metric-value">--</div>
+                    <div class="metric-label">Response Time</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="interruptionLatency" class="metric-value">--</div>
+                    <div class="metric-label">Interruption Latency</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="pipelineHealth" class="metric-value success">Healthy</div>
+                    <div class="metric-label">Pipeline Health</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="processingLoad" class="metric-value">--</div>
+                    <div class="metric-label">Processing Load</div>
+                </div>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="controls-panel">
+                <button id="connectBtn" class="btn btn-primary">
+                    <span>🔌</span>
+                    <span>Connect to ALFRED</span>
+                </button>
+                <button id="testBtn" class="btn btn-secondary" disabled>
+                    <span>🧪</span>
+                    <span>Test Connection</span>
+                </button>
+                <button id="debugBtn" class="btn btn-secondary" disabled>
+                    <span>🔍</span>
+                    <span>Debug Audio</span>
+                </button>
+                <button id="settingsBtn" class="btn btn-secondary" disabled>
+                    <span>⚙️</span>
+                    <span>Settings</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Floating Controls -->
+    <div class="floating-controls">
+        <button class="floating-btn" onclick="toggleMute()" title="Mute/Unmute">
+            <span id="muteIcon">🔊</span>
+        </button>
+        <button class="floating-btn" onclick="showPerformanceDetails()" title="Performance Details">
+            📊
+        </button>
+    </div>
+
+    <script>
+        class SimpleALFREDInterface {
+            constructor() {
+                this.ws = null;
+                this.peerConnection = null;
+                this.localStream = null;
+                this.dataChannel = null;
+                
+                this.isConnected = false;
+                this.isListening = false;
+                this.isSpeaking = false;
+                this.conversationActive = false;
+                
+                // Voice processing state
+                this.voiceState = {
+                    currentTurn: 'user',
+                    speechActive: false,
+                    agentSpeaking: false,
+                    canInterrupt: false,
+                    lastInterruption: null
+                };
+                
+                // Performance tracking
+                this.performanceMetrics = {
+                    responseTime: 0,
+                    interruptionLatency: 0,
+                    pipelineHealth: 'unknown',
+                    processingLoad: 0,
+                    frameRate: 0,
+                    audioQuality: 'good'
+                };
+                
+                this.conversation = [];
+                this.audioContext = null;
+                this.analyser = null;
+                this.animationFrame = null;
+                
+                this.setupEventListeners();
+                this.updateUI();
+            }
+            
+            setupEventListeners() {
+                document.getElementById('connectBtn').addEventListener('click', () => this.toggleConnection());
+                document.getElementById('testBtn').addEventListener('click', () => this.testConnection());
+                document.getElementById('debugBtn').addEventListener('click', () => this.debugAudio());
+                document.getElementById('voiceButton').addEventListener('click', () => this.handleVoiceClick());
+            }
+            
+            async toggleConnection() {
+                if (this.isConnected) {
+                    await this.disconnect();
+                } else {
+                    await this.connect();
+                }
+            }
+            
+            async connect() {
+                try {
+                    this.updateConnectionStatus('connecting', 'Connecting to ALFRED...');
+                    
+                    // Connect to signaling server
+                    this.ws = new WebSocket('ws://localhost:3002');
+                    
+                    this.ws.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.initializeWebRTC();
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        this.handleServerMessage(JSON.parse(event.data));
+                    };
+                    
+                    this.ws.onclose = () => {
+                        console.log('WebSocket disconnected');
+                        this.handleConnectionLost();
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.showError('Connection failed. Please check that ALFRED services are running.');
+                        this.handleConnectionLost();
+                    };
+                    
+                } catch (error) {
+                    this.showError(`Failed to connect: ${error.message}`);
+                    this.updateConnectionStatus('disconnected', 'Connection failed');
+                }
+            }
+            
+            async initializeWebRTC() {
+                try {
+                    // Create peer connection
+                    this.peerConnection = new RTCPeerConnection({
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' }
+                        ]
+                    });
+                    
+                    // Setup peer connection handlers
+                    this.setupPeerConnectionHandlers();
+                    
+                    // Get user media with echo cancellation
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: 16000,
+                            channelCount: 1
+                        }
+                    });
+                    
+                    console.log('Microphone access granted with echo cancellation');
+                    
+                    // Setup audio visualization
+                    await this.setupAudioVisualization();
+                    
+                    // Add tracks to peer connection
+                    this.localStream.getTracks().forEach(track => {
+                        this.peerConnection.addTrack(track, this.localStream);
+                    });
+                    
+                    // Create data channel
+                    this.dataChannel = this.peerConnection.createDataChannel('conversation', {
+                        ordered: true,
+                        maxRetransmits: 0
+                    });
+                    
+                    this.setupDataChannelHandlers();
+                    
+                    // Create and send offer
+                    const offer = await this.peerConnection.createOffer();
+                    await this.peerConnection.setLocalDescription(offer);
+                    
+                    this.sendToServer({
+                        type: 'offer',
+                        offer: offer
+                    });
+                    
+                    console.log('WebRTC offer sent');
+                    
+                } catch (error) {
+                    console.error('WebRTC initialization failed:', error);
+                    this.showError(`WebRTC setup failed: ${error.message}`);
+                    this.handleConnectionLost();
+                }
+            }
+            
+            setupPeerConnectionHandlers() {
+                this.peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        this.sendToServer({
+                            type: 'ice-candidate',
+                            candidate: event.candidate
+                        });
+                    }
+                };
+                
+                this.peerConnection.onconnectionstatechange = () => {
+                    const state = this.peerConnection.connectionState;
+                    console.log(`WebRTC connection state: ${state}`);
+                    
+                    if (state === 'connected') {
+                        this.handleConnectionEstablished();
+                    } else if (state === 'disconnected' || state === 'failed') {
+                        this.handleConnectionLost();
+                    }
+                };
+                
+                this.peerConnection.ontrack = (event) => {
+                    console.log('Received remote audio track');
+                    this.setupTTSPlayback(event.streams[0]);
+                };
+            }
+            
+            setupDataChannelHandlers() {
+                this.dataChannel.onopen = () => {
+                    console.log('Data channel opened');
+                    this.conversationActive = true;
+                };
+                
+                this.dataChannel.onmessage = (event) => {
+                    this.handleConversationMessage(JSON.parse(event.data));
+                };
+                
+                this.dataChannel.onerror = (error) => {
+                    console.error('Data channel error:', error);
+                };
+            }
+            
+            async setupAudioVisualization() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 16000,
+                        latencyHint: 'interactive'
+                    });
+                    
+                    const source = this.audioContext.createMediaStreamSource(this.localStream);
+                    this.analyser = this.audioContext.createAnalyser();
+                    this.analyser.fftSize = 512;
+                    
+                    source.connect(this.analyser);
+                    
+                    // Setup real audio processing for transcription
+                    await this.setupRealAudioProcessing(source);
+                    
+                    // Start visualization
+                    this.startAudioVisualization();
+                    
+                    console.log('Audio visualization and processing setup complete');
+                    
+                } catch (error) {
+                    console.warn('Audio setup failed:', error);
+                    this.showError('Audio processing setup failed. You may only be able to use test messages.');
+                }
+            }
+            
+            async setupRealAudioProcessing(source) {
+                try {
+                    // Create script processor for capturing audio frames
+                    const frameSize = 4096; // Larger buffer for browser compatibility
+                    this.scriptProcessor = this.audioContext.createScriptProcessor(frameSize, 1, 1);
+                    
+                    // Process audio frames
+                    this.scriptProcessor.onaudioprocess = (event) => {
+                        if (this.isListening && this.conversationActive) {
+                            const inputBuffer = event.inputBuffer;
+                            const inputData = inputBuffer.getChannelData(0);
+                            
+                            // Send audio frame for processing
+                            this.processAudioFrame(inputData);
+                        }
+                    };
+                    
+                    // Connect audio processing chain
+                    source.connect(this.scriptProcessor);
+                    this.scriptProcessor.connect(this.audioContext.destination);
+                    
+                    console.log('Real audio processing pipeline setup complete');
+                    
+                } catch (error) {
+                    console.error('Real audio processing setup failed:', error);
+                    throw error;
+                }
+            }
+            
+            processAudioFrame(audioData) {
+                try {
+                    // Convert Float32Array to base64 for transmission
+                    const audioBuffer = new ArrayBuffer(audioData.length * 2);
+                    const view = new DataView(audioBuffer);
+                    
+                    for (let i = 0; i < audioData.length; i++) {
+                        const sample = Math.max(-1, Math.min(1, audioData[i]));
+                        view.setInt16(i * 2, sample * 32767, true);
+                    }
+                    
+                    const uint8Array = new Uint8Array(audioBuffer);
+                    const base64Audio = btoa(String.fromCharCode.apply(null, uint8Array));
+                    
+                    // Send real audio frame to server
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({
+                            type: 'audioFrame',
+                            audioData: base64Audio,
+                            timestamp: Date.now(),
+                            frameSize: audioData.length
+                        }));
+                    }
+                    
+                } catch (error) {
+                    console.error('Audio frame processing error:', error);
+                }
+            }
+            
+            startAudioVisualization() {
+                const audioData = new Uint8Array(this.analyser.frequencyBinCount);
+                
+                const updateVisualization = () => {
+                    if (!this.isConnected || !this.analyser) {
+                        return;
+                    }
+                    
+                    this.analyser.getByteFrequencyData(audioData);
+                    
+                    // Calculate average audio level
+                    const average = audioData.reduce((a, b) => a + b) / audioData.length;
+                    const percentage = Math.min(100, (average / 128) * 100);
+                    
+                    // Update audio level visualization
+                    this.updateAudioLevel(percentage);
+                    
+                    // Update waveform
+                    this.updateWaveform(audioData);
+                    
+                    this.animationFrame = requestAnimationFrame(updateVisualization);
+                };
+                
+                updateVisualization();
+            }
+            
+            updateAudioLevel(percentage) {
+                const bar = document.getElementById('audioLevelBar');
+                const text = document.getElementById('audioLevelText');
+                
+                bar.style.width = `${percentage}%`;
+                
+                if (percentage < 5) {
+                    text.textContent = '0% - No Audio';
+                } else if (percentage < 20) {
+                    text.textContent = `${Math.round(percentage)}% - Quiet`;
+                } else if (percentage < 60) {
+                    text.textContent = `${Math.round(percentage)}% - Speaking`;
+                } else {
+                    text.textContent = `${Math.round(percentage)}% - Loud`;
+                }
+            }
+            
+            updateWaveform(audioData) {
+                const waveform = document.getElementById('waveform');
+                
+                if (audioData && audioData.length > 0) {
+                    const average = audioData.reduce((a, b) => a + b) / audioData.length;
+                    if (average > 10) {
+                        waveform.style.background = `linear-gradient(90deg, 
+                            rgba(52, 199, 89, 0.1) 0%, 
+                            rgba(52, 199, 89, ${average / 128}) 50%, 
+                            rgba(52, 199, 89, 0.1) 100%)`;
+                        waveform.textContent = '🎵 Audio detected';
+                    } else {
+                        waveform.style.background = '#ffffff';
+                        waveform.textContent = '🔇 Silence';
+                    }
+                }
+            }
+            
+            setupTTSPlayback(stream) {
+                const audio = new Audio();
+                audio.srcObject = stream;
+                
+                audio.onplay = () => {
+                    this.voiceState.agentSpeaking = true;
+                    this.updateVoiceButton();
+                    console.log('TTS playback started');
+                };
+                
+                audio.onended = () => {
+                    this.voiceState.agentSpeaking = false;
+                    this.voiceState.currentTurn = 'user';
+                    this.updateVoiceButton();
+                    console.log('TTS playback ended');
+                };
+                
+                audio.play().catch(error => {
+                    console.error('TTS playback error:', error);
+                });
+            }
+            
+            async disconnect() {
+                console.log('Disconnecting from ALFRED...');
+                
+                // Stop audio visualization
+                if (this.animationFrame) {
+                    cancelAnimationFrame(this.animationFrame);
+                    this.animationFrame = null;
+                }
+                
+                // Close local stream
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                    this.localStream = null;
+                }
+                
+                // Disconnect script processor
+                if (this.scriptProcessor) {
+                    this.scriptProcessor.disconnect();
+                    this.scriptProcessor = null;
+                }
+                
+                // Close audio context
+                if (this.audioContext && this.audioContext.state !== 'closed') {
+                    await this.audioContext.close();
+                    this.audioContext = null;
+                }
+                
+                // Close data channel
+                if (this.dataChannel) {
+                    this.dataChannel.close();
+                    this.dataChannel = null;
+                }
+                
+                // Close peer connection
+                if (this.peerConnection) {
+                    this.peerConnection.close();
+                    this.peerConnection = null;
+                }
+                
+                // Close WebSocket
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+                
+                this.handleConnectionLost();
+            }
+            
+            handleConnectionEstablished() {
+                this.isConnected = true;
+                this.updateConnectionStatus('connected', 'Connected to ALFRED');
+                this.updateUI();
+                
+                this.showSuccess('Connected successfully! Voice interaction is ready.');
+                this.addMessage('system', 'Connection established. You can now interact with ALFRED!');
+                
+                const connectBtn = document.getElementById('connectBtn');
+                connectBtn.innerHTML = '<span>🔌</span><span>Disconnect</span>';
+            }
+            
+            handleConnectionLost() {
+                this.isConnected = false;
+                this.updateConnectionStatus('disconnected', 'Disconnected');
+                this.updateUI();
+                
+                const connectBtn = document.getElementById('connectBtn');
+                connectBtn.innerHTML = '<span>🔌</span><span>Connect to ALFRED</span>';
+            }
+            
+            handleServerMessage(message) {
+                console.log('Server message:', message.type, message);
+                
+                switch (message.type) {
+                    case 'connected':
+                        console.log(`Connected with client ID: ${message.clientId}`);
+                        break;
+                        
+                    case 'answer':
+                        this.peerConnection.setRemoteDescription(message.answer);
+                        break;
+                        
+                    case 'ice-candidate':
+                        this.peerConnection.addIceCandidate(message.candidate);
+                        break;
+                        
+                    case 'speechStart':
+                        this.handleSpeechStart(message);
+                        break;
+                        
+                    case 'speechEnd':
+                        this.handleSpeechEnd(message);
+                        break;
+                        
+                    case 'partialTranscription':
+                        this.handlePartialTranscription(message);
+                        break;
+                        
+                    case 'finalTranscription':
+                        this.handleFinalTranscription(message);
+                        break;
+                        
+                    case 'transcription':
+                        this.handleTranscription(message);
+                        break;
+                        
+                    case 'llm_response':
+                        this.handleLLMResponse(message);
+                        break;
+                        
+                    case 'ttsStarted':
+                        this.handleTTSStarted(message);
+                        break;
+                        
+                    case 'ttsCompleted':
+                        this.handleTTSCompleted(message);
+                        break;
+                        
+                    case 'ttsInterrupted':
+                        this.handleTTSInterrupted(message);
+                        break;
+                        
+                    case 'interruption':
+                        this.handleInterruption(message);
+                        break;
+                        
+                    case 'pipelineHealth':
+                        this.updatePipelineHealth(message);
+                        break;
+                        
+                    case 'tts_audio':
+                        this.handleTTSAudio(message);
+                        break;
+                        
+                    case 'error':
+                        this.showError(message.message || 'Server error occurred');
+                        break;
+                        
+                    default:
+                        console.log('Unknown message type:', message.type);
+                }
+            }
+            
+            handleSpeechStart(message) {
+                this.voiceState.speechActive = true;
+                this.updateVoiceButton();
+                console.log('User speech started');
+            }
+            
+            handleSpeechEnd(message) {
+                this.voiceState.speechActive = false;
+                this.updateVoiceButton();
+                console.log('User speech ended');
+            }
+            
+            handlePartialTranscription(message) {
+                console.log(`Partial transcription: "${message.text}"`);
+                this.showPartialMessage(message.text);
+            }
+            
+            handleFinalTranscription(message) {
+                console.log(`Final transcription: "${message.text}"`);
+                this.replacePartialMessage(message.text);
+                
+                // Start processing
+                this.voiceState.currentTurn = 'processing';
+                this.updateVoiceButton();
+            }
+            
+            handleTranscription(message) {
+                console.log(`Transcription: "${message.text}"`);
+                if (message.text.trim()) {
+                    this.addMessage('user', message.text);
+                }
+            }
+            
+            handleLLMResponse(message) {
+                console.log(`LLM Response: "${message.text}"`);
+                this.addMessage('assistant', message.text);
+                
+                // Update performance metrics
+                if (message.processingTime) {
+                    this.performanceMetrics.responseTime = message.processingTime;
+                    this.updatePerformanceMetrics();
+                }
+            }
+            
+            handleTTSStarted(message) {
+                this.voiceState.agentSpeaking = true;
+                this.voiceState.canInterrupt = message.canBeInterrupted || false;
+                this.voiceState.currentTurn = 'agent';
+                
+                this.updateVoiceButton();
+                console.log(`Agent started speaking: "${message.text}"`);
+                
+                // Add message if not already added
+                if (message.text && !this.conversation.find(m => m.text === message.text && m.role === 'assistant')) {
+                    this.addMessage('assistant', message.text);
+                }
+            }
+            
+            handleTTSCompleted(message) {
+                this.voiceState.agentSpeaking = false;
+                this.voiceState.canInterrupt = false;
+                this.voiceState.currentTurn = 'user';
+                
+                this.updateVoiceButton();
+                console.log('Agent finished speaking');
+            }
+            
+            handleTTSInterrupted(message) {
+                this.voiceState.agentSpeaking = false;
+                this.voiceState.canInterrupt = false;
+                this.voiceState.currentTurn = 'user';
+                
+                this.updateVoiceButton();
+                console.log(`Agent speech interrupted: "${message.interruptedText}"`);
+                
+                if (message.interruptedText) {
+                    this.markMessageAsInterrupted(message.interruptedText);
+                }
+                
+                this.showSuccess('Interruption successful! Continue speaking.');
+            }
+            
+            handleInterruption(message) {
+                this.voiceState.lastInterruption = Date.now();
+                this.performanceMetrics.interruptionLatency = message.latency || 0;
+                
+                this.updatePerformanceMetrics();
+                console.log(`Interruption detected (${message.confidence?.toFixed(3)} confidence, ${message.latency}ms)`);
+            }
+            
+            updatePipelineHealth(message) {
+                this.performanceMetrics.pipelineHealth = message.health;
+                this.performanceMetrics.processingLoad = message.processingLoad;
+                
+                this.updatePerformanceMetrics();
+                
+                if (message.health !== 'healthy') {
+                    console.warn(`Pipeline health: ${message.health} (${message.processingLoad?.toFixed(1)}% load)`);
+                }
+            }
+            
+            handleTTSAudio(message) {
+                console.log('Received TTS audio');
+                
+                try {
+                    // Play TTS audio
+                    const audioData = atob(message.audio);
+                    const arrayBuffer = new ArrayBuffer(audioData.length);
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    
+                    for (let i = 0; i < audioData.length; i++) {
+                        uint8Array[i] = audioData.charCodeAt(i);
+                    }
+                    
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    audioContext.decodeAudioData(arrayBuffer).then(audioBuffer => {
+                        const source = audioContext.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(audioContext.destination);
+                        source.start();
+                        
+                        console.log('TTS audio playing');
+                    }).catch(error => {
+                        console.error('Audio playback error:', error);
+                    });
+                    
+                } catch (error) {
+                    console.error('TTS audio processing error:', error);
+                }
+            }
+            
+            async testConnection() {
+                try {
+                    const response = await fetch('http://localhost:8015/health');
+                    const data = await response.json();
+                    
+                    if (data.status === 'healthy') {
+                        this.showSuccess('Voice processor is healthy and ready!');
+                        console.log('Voice processor status:', data);
+                    } else {
+                        this.showError('Voice processor is not healthy');
+                    }
+                } catch (error) {
+                    this.showError('Cannot reach voice processor. Please check that services are running.');
+                }
+            }
+            
+            debugAudio() {
+                if (!this.isConnected) {
+                    this.showError('Please connect first');
+                    return;
+                }
+                
+                console.log('=== AUDIO DEBUG INFO ===');
+                console.log('Local stream:', this.localStream);
+                console.log('Audio context:', this.audioContext);
+                console.log('Script processor:', this.scriptProcessor);
+                console.log('Data channel:', this.dataChannel);
+                console.log('Is listening:', this.isListening);
+                console.log('Conversation active:', this.conversationActive);
+                console.log('Voice state:', this.voiceState);
+                
+                if (this.localStream) {
+                    const audioTrack = this.localStream.getAudioTracks()[0];
+                    console.log('Audio track enabled:', audioTrack.enabled);
+                    console.log('Audio track settings:', audioTrack.getSettings());
+                }
+                
+                this.addMessage('system', '🔍 Audio debug info logged to console. Check browser dev tools.');
+            }
+            
+            handleVoiceClick() {
+                if (!this.isConnected) {
+                    this.showError('Please connect to ALFRED first');
+                    return;
+                }
+                
+                if (!this.conversationActive) {
+                    this.showError('Voice processing not ready. Please wait for WebRTC connection.');
+                    return;
+                }
+                
+                // Toggle listening state
+                if (this.isListening) {
+                    this.stopListening();
+                } else {
+                    this.startListening();
+                }
+            }
+            
+            startListening() {
+                if (!this.localStream || !this.dataChannel) {
+                    this.showError('Audio not ready. Please check microphone permissions.');
+                    return;
+                }
+                
+                this.isListening = true;
+                this.voiceState.speechActive = true;
+                this.updateVoiceButton();
+                
+                console.log('Started listening for voice input - REAL AUDIO PROCESSING ACTIVE');
+                this.addMessage('system', '🎤 Listening for your voice... (Real audio processing active)');
+                
+                // Real audio processing will happen through WebRTC audio stream
+                // The unified voice processor will handle the actual audio frames
+                // and send back transcription results
+            }
+            
+            stopListening() {
+                this.isListening = false;
+                this.voiceState.speechActive = false;
+                this.updateVoiceButton();
+                
+                console.log('Stopped listening');
+            }
+            
+            addMessage(role, text, type = 'normal') {
+                const messagesContainer = document.getElementById('conversationMessages');
+                const message = document.createElement('div');
+                message.className = `message ${role} slide-in`;
+                
+                const avatar = document.createElement('div');
+                avatar.className = `message-avatar ${role}`;
+                avatar.textContent = role === 'user' ? '👤' : role === 'assistant' ? '🤖' : '⚙️';
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                
+                const bubble = document.createElement('div');
+                bubble.className = `message-bubble ${role} ${type}`;
+                bubble.textContent = text;
+                
+                const meta = document.createElement('div');
+                meta.className = 'message-meta';
+                meta.innerHTML = `
+                    <span>${new Date().toLocaleTimeString()}</span>
+                    <span>•</span>
+                    <span>${type === 'partial' ? 'Partial' : type === 'interrupted' ? 'Interrupted' : 'Complete'}</span>
+                `;
+                
+                content.appendChild(bubble);
+                content.appendChild(meta);
+                message.appendChild(avatar);
+                message.appendChild(content);
+                
+                messagesContainer.appendChild(message);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+                this.conversation.push({
+                    role,
+                    text,
+                    type,
+                    timestamp: Date.now()
+                });
+                
+                // Limit conversation length
+                if (this.conversation.length > 50) {
+                    const firstMessage = messagesContainer.querySelector('.message');
+                    if (firstMessage && !firstMessage.textContent.includes('Hello! I\'m ALFRED')) {
+                        firstMessage.remove();
+                        this.conversation.shift();
+                    }
+                }
+            }
+            
+            updateConnectionStatus(state, message) {
+                const statusElement = document.getElementById('connectionStatus');
+                const statusDot = statusElement.querySelector('.status-dot');
+                
+                statusElement.className = `connection-status ${state}`;
+                statusElement.querySelector('span:last-child').textContent = message;
+                
+                if (state === 'connecting') {
+                    statusDot.classList.add('connecting');
+                } else {
+                    statusDot.classList.remove('connecting');
+                }
+            }
+            
+            updateVoiceButton() {
+                const button = document.getElementById('voiceButton');
+                const status = document.getElementById('voiceStatus');
+                const subtitle = document.getElementById('voiceSubtitle');
+                
+                // Remove all state classes
+                button.className = 'voice-button';
+                button.disabled = !this.isConnected;
+                
+                if (!this.isConnected) {
+                    button.textContent = '🎤';
+                    status.textContent = 'Disconnected';
+                    subtitle.textContent = 'Connect to start talking';
+                    
+                } else if (this.voiceState.currentTurn === 'processing') {
+                    button.classList.add('processing');
+                    button.textContent = '⚙️';
+                    status.textContent = 'Processing';
+                    subtitle.textContent = 'ALFRED is thinking...';
+                    
+                } else if (this.voiceState.agentSpeaking) {
+                    button.classList.add('speaking');
+                    button.textContent = '🗣️';
+                    status.textContent = 'ALFRED Speaking';
+                    subtitle.textContent = this.voiceState.canInterrupt ? 
+                        'Speak to interrupt' : 'Please wait...';
+                    
+                } else if (this.voiceState.speechActive) {
+                    button.classList.add('listening');
+                    button.textContent = '👂';
+                    status.textContent = 'Listening';
+                    subtitle.textContent = 'Speak clearly...';
+                    
+                } else {
+                    button.textContent = '🎤';
+                    status.textContent = 'Ready';
+                    subtitle.textContent = 'Click or press space to talk';
+                }
+            }
+            
+            updatePerformanceMetrics() {
+                document.getElementById('responseTime').textContent = 
+                    this.performanceMetrics.responseTime > 0 ? 
+                    `${this.performanceMetrics.responseTime}ms` : '--';
+                
+                const interruptionElement = document.getElementById('interruptionLatency');
+                const latency = this.performanceMetrics.interruptionLatency;
+                interruptionElement.textContent = latency > 0 ? `${latency}ms` : '--';
+                interruptionElement.className = `metric-value ${this.getLatencyClass(latency)}`;
+                
+                const healthElement = document.getElementById('pipelineHealth');
+                healthElement.textContent = this.performanceMetrics.pipelineHealth;
+                healthElement.className = `metric-value ${this.getHealthClass(this.performanceMetrics.pipelineHealth)}`;
+                
+                const loadElement = document.getElementById('processingLoad');
+                const load = this.performanceMetrics.processingLoad;
+                loadElement.textContent = load > 0 ? `${load.toFixed(1)}%` : '--';
+                loadElement.className = `metric-value ${this.getLoadClass(load)}`;
+            }
+            
+            showPartialMessage(text) {
+                // Remove existing partial message
+                const existing = document.querySelector('.message.partial-placeholder');
+                if (existing) {
+                    existing.remove();
+                }
+                
+                if (text.trim()) {
+                    this.addMessage('user', text + ' ⋯', 'partial');
+                    const lastMessage = document.querySelector('.message:last-child');
+                    lastMessage.classList.add('partial-placeholder');
+                }
+            }
+            
+            replacePartialMessage(finalText) {
+                const partialMessage = document.querySelector('.message.partial-placeholder');
+                if (partialMessage) {
+                    const bubble = partialMessage.querySelector('.message-bubble');
+                    bubble.textContent = finalText;
+                    bubble.classList.remove('partial');
+                    partialMessage.classList.remove('partial-placeholder');
+                }
+            }
+            
+            markMessageAsInterrupted(interruptedText) {
+                const messages = document.querySelectorAll('.message.assistant .message-bubble');
+                const lastMessage = messages[messages.length - 1];
+                
+                if (lastMessage && lastMessage.textContent.includes(interruptedText)) {
+                    lastMessage.classList.add('interrupted');
+                    lastMessage.textContent = `${interruptedText} [interrupted]`;
+                    lastMessage.style.backgroundColor = '#fff3cd';
+                    lastMessage.style.borderColor = '#ffc107';
+                }
+            }
+            
+            getLatencyClass(latency) {
+                if (latency > 300) return 'error';
+                if (latency > 200) return 'warning';
+                return 'success';
+            }
+            
+            getHealthClass(health) {
+                if (health === 'healthy') return 'success';
+                if (health === 'stressed') return 'warning';
+                return 'error';
+            }
+            
+            getLoadClass(load) {
+                if (load > 80) return 'error';
+                if (load > 60) return 'warning';
+                return 'success';
+            }
+            
+            sendToServer(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(message));
+                }
+            }
+            
+            updateUI() {
+                const connectBtn = document.getElementById('connectBtn');
+                const testBtn = document.getElementById('testBtn');
+                const debugBtn = document.getElementById('debugBtn');
+                const settingsBtn = document.getElementById('settingsBtn');
+                
+                connectBtn.disabled = false;
+                testBtn.disabled = !this.isConnected;
+                debugBtn.disabled = !this.isConnected;
+                settingsBtn.disabled = !this.isConnected;
+                
+                this.updateVoiceButton();
+                this.updatePerformanceMetrics();
+            }
+            
+            showError(message) {
+                const banner = document.getElementById('errorBanner');
+                const messageElement = document.getElementById('errorMessage');
+                messageElement.textContent = message;
+                banner.style.display = 'flex';
+                
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 5000);
+                
+                console.error('[ALFRED] Error:', message);
+            }
+            
+            showSuccess(message) {
+                const banner = document.getElementById('successBanner');
+                const messageElement = document.getElementById('successMessage');
+                messageElement.textContent = message;
+                banner.style.display = 'flex';
+                
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 3000);
+                
+                console.log('[ALFRED] Success:', message);
+            }
+        }
+        
+        // Initialize the interface
+        const alfredInterface = new SimpleALFREDInterface();
+        
+        // Global utility functions
+        function toggleMute() {
+            const icon = document.getElementById('muteIcon');
+            if (alfredInterface.localStream) {
+                const audioTrack = alfredInterface.localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    audioTrack.enabled = !audioTrack.enabled;
+                    icon.textContent = audioTrack.enabled ? '🔊' : '🔇';
+                    console.log(`Microphone ${audioTrack.enabled ? 'unmuted' : 'muted'}`);
+                }
+            }
+        }
+        
+        function showPerformanceDetails() {
+            window.open('/monitor', '_blank');
+        }
+        
+        function clearConversation() {
+            const messages = document.getElementById('conversationMessages');
+            messages.innerHTML = '';
+            alfredInterface.conversation = [];
+            
+            // Add welcome message back
+            alfredInterface.addMessage('system', 'Hello! I\'m ALFRED, your voice assistant. You can interrupt me at any time by simply speaking.');
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !e.repeat) {
+                e.preventDefault();
+                if (alfredInterface.isConnected) {
+                    alfredInterface.handleVoiceClick();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

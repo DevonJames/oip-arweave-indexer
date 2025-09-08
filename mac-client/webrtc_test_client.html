@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALFRED WebRTC Voice Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        
+        .status.disconnected { background-color: #fee; color: #c00; }
+        .status.connecting { background-color: #fff3cd; color: #856404; }
+        .status.connected { background-color: #d4edda; color: #155724; }
+        
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        button.primary {
+            background-color: #007aff;
+            color: white;
+        }
+        
+        button.primary:hover {
+            background-color: #0056b3;
+        }
+        
+        button.secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        button.danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+        }
+        
+        .audio-level {
+            flex: 1;
+            height: 8px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .audio-level-bar {
+            height: 100%;
+            background-color: #28a745;
+            width: 0%;
+            transition: width 0.1s;
+        }
+        
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 16px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+        }
+        
+        .log-entry.info { color: #007aff; }
+        .log-entry.success { color: #28a745; }
+        .log-entry.warning { color: #ffc107; }
+        .log-entry.error { color: #dc3545; }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        
+        .metric {
+            background-color: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007aff;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
+        .frame-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+            margin: 10px 0;
+            padding: 12px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .frame-metric {
+            text-align: center;
+        }
+        
+        .frame-metric-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        
+        .frame-metric-label {
+            font-size: 10px;
+            color: #6c757d;
+        }
+        
+        .speech-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        .speech-indicator.active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .speech-indicator.inactive {
+            background-color: #f8f9fa;
+            color: #6c757d;
+        }
+        
+        .speech-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #6c757d;
+        }
+        
+        .speech-dot.active {
+            background-color: #28a745;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 ALFRED WebRTC Voice Test</h1>
+        <p>Test the WebRTC audio pipeline for real-time voice interaction.</p>
+        
+        <div id="status" class="status disconnected">
+            Disconnected
+        </div>
+        
+        <div class="controls">
+            <button id="connectBtn" class="primary">Connect</button>
+            <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+            <button id="testAudioBtn" class="secondary" disabled>Test Audio</button>
+            <button id="clearLogBtn" class="secondary">Clear Log</button>
+        </div>
+        
+        <div class="audio-controls">
+            <span>Audio Level:</span>
+            <div class="audio-level">
+                <div id="audioLevelBar" class="audio-level-bar"></div>
+            </div>
+            <span id="audioLevelText">0%</span>
+        </div>
+        
+        <div id="speechIndicator" class="speech-indicator inactive">
+            <div id="speechDot" class="speech-dot"></div>
+            <span id="speechText">No Speech Detected</span>
+        </div>
+        
+        <div class="frame-metrics">
+            <div class="frame-metric">
+                <div id="frameCountValue" class="frame-metric-value">--</div>
+                <div class="frame-metric-label">Frames</div>
+            </div>
+            <div class="frame-metric">
+                <div id="speechFramesValue" class="frame-metric-value">--</div>
+                <div class="frame-metric-label">Speech Frames</div>
+            </div>
+            <div class="frame-metric">
+                <div id="partialResultsValue" class="frame-metric-value">--</div>
+                <div class="frame-metric-label">Partial Results</div>
+            </div>
+            <div class="frame-metric">
+                <div id="processingTimeValue" class="frame-metric-value">--</div>
+                <div class="frame-metric-label">Proc Time (ms)</div>
+            </div>
+        </div>
+        
+        <div class="metrics">
+            <div class="metric">
+                <div id="latencyValue" class="metric-value">--</div>
+                <div class="metric-label">Latency (ms)</div>
+            </div>
+            <div class="metric">
+                <div id="packetsLostValue" class="metric-value">--</div>
+                <div class="metric-label">Packets Lost</div>
+            </div>
+            <div class="metric">
+                <div id="connectionTimeValue" class="metric-value">--</div>
+                <div class="metric-label">Connected (s)</div>
+            </div>
+            <div class="metric">
+                <div id="audioQualityValue" class="metric-value">--</div>
+                <div class="metric-label">Audio Quality</div>
+            </div>
+        </div>
+        
+        <div class="log" id="log"></div>
+    </div>
+
+    <script>
+        class WebRTCVoiceTest {
+            constructor() {
+                this.ws = null;
+                this.peerConnection = null;
+                this.localStream = null;
+                this.dataChannel = null;
+                
+                this.isConnected = false;
+                this.connectionStartTime = null;
+                this.metrics = {
+                    latency: 0,
+                    packetsLost: 0,
+                    audioQuality: 'unknown'
+                };
+                
+                // Frame processing metrics
+                this.frameMetrics = {
+                    frameCount: 0,
+                    speechFrames: 0,
+                    partialResults: 0,
+                    processingTime: 0,
+                    speechActive: false
+                };
+                
+                this.setupEventListeners();
+                this.updateUI();
+            }
+            
+            setupEventListeners() {
+                document.getElementById('connectBtn').addEventListener('click', () => this.connect());
+                document.getElementById('disconnectBtn').addEventListener('click', () => this.disconnect());
+                document.getElementById('testAudioBtn').addEventListener('click', () => this.testAudio());
+                document.getElementById('clearLogBtn').addEventListener('click', () => this.clearLog());
+            }
+            
+            async connect() {
+                try {
+                    this.log('Connecting to WebRTC signaling server...', 'info');
+                    this.updateStatus('connecting', 'Connecting...');
+                    
+                    // Connect to signaling server
+                    this.ws = new WebSocket('ws://localhost:3002');
+                    
+                    this.ws.onopen = () => {
+                        this.log('WebSocket connected', 'success');
+                        this.initializeWebRTC();
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        this.handleSignalingMessage(JSON.parse(event.data));
+                    };
+                    
+                    this.ws.onclose = () => {
+                        this.log('WebSocket disconnected', 'warning');
+                        this.disconnect();
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        this.log(`WebSocket error: ${error}`, 'error');
+                        this.disconnect();
+                    };
+                    
+                } catch (error) {
+                    this.log(`Connection failed: ${error.message}`, 'error');
+                    this.updateStatus('disconnected', 'Connection failed');
+                }
+            }
+            
+            async initializeWebRTC() {
+                try {
+                    // Create peer connection
+                    this.peerConnection = new RTCPeerConnection({
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' }
+                        ]
+                    });
+                    
+                    // Setup peer connection handlers
+                    this.setupPeerConnectionHandlers();
+                    
+                    // Get user media with echo cancellation
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: 16000,
+                            channelCount: 1
+                        }
+                    });
+                    
+                    this.log('Microphone access granted', 'success');
+                    
+                    // Add tracks to peer connection
+                    this.localStream.getTracks().forEach(track => {
+                        this.peerConnection.addTrack(track, this.localStream);
+                        this.log(`Added ${track.kind} track`, 'info');
+                    });
+                    
+                    // Setup audio monitoring
+                    this.setupAudioMonitoring();
+                    
+                    // Create data channel
+                    this.dataChannel = this.peerConnection.createDataChannel('text', {
+                        ordered: true,
+                        maxRetransmits: 0
+                    });
+                    
+                    this.setupDataChannelHandlers();
+                    
+                    // Create offer
+                    const offer = await this.peerConnection.createOffer();
+                    await this.peerConnection.setLocalDescription(offer);
+                    
+                    // Send offer to signaling server
+                    this.sendSignalingMessage({
+                        type: 'offer',
+                        offer: offer
+                    });
+                    
+                    this.log('WebRTC offer sent', 'info');
+                    
+                } catch (error) {
+                    this.log(`WebRTC initialization failed: ${error.message}`, 'error');
+                    this.disconnect();
+                }
+            }
+            
+            setupPeerConnectionHandlers() {
+                this.peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        this.sendSignalingMessage({
+                            type: 'ice-candidate',
+                            candidate: event.candidate
+                        });
+                    }
+                };
+                
+                this.peerConnection.onconnectionstatechange = () => {
+                    const state = this.peerConnection.connectionState;
+                    this.log(`Connection state: ${state}`, 'info');
+                    
+                    if (state === 'connected') {
+                        this.isConnected = true;
+                        this.connectionStartTime = Date.now();
+                        this.updateStatus('connected', 'Connected');
+                        this.startMetricsCollection();
+                    } else if (state === 'disconnected' || state === 'failed') {
+                        this.disconnect();
+                    }
+                };
+                
+                this.peerConnection.ontrack = (event) => {
+                    this.log('Received remote audio track', 'success');
+                    // Handle remote audio (TTS playback)
+                    const audio = new Audio();
+                    audio.srcObject = event.streams[0];
+                    audio.play();
+                };
+            }
+            
+            setupDataChannelHandlers() {
+                this.dataChannel.onopen = () => {
+                    this.log('Data channel opened', 'success');
+                };
+                
+                this.dataChannel.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.log(`Received: ${data.type}`, 'info');
+                };
+                
+                this.dataChannel.onerror = (error) => {
+                    this.log(`Data channel error: ${error}`, 'error');
+                };
+            }
+            
+            setupAudioMonitoring() {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(this.localStream);
+                const analyser = audioContext.createAnalyser();
+                
+                analyser.fftSize = 256;
+                source.connect(analyser);
+                
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                const updateAudioLevel = () => {
+                    if (!this.isConnected) return;
+                    
+                    analyser.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                    const percentage = Math.min(100, (average / 128) * 100);
+                    
+                    document.getElementById('audioLevelBar').style.width = `${percentage}%`;
+                    document.getElementById('audioLevelText').textContent = `${Math.round(percentage)}%`;
+                    
+                    requestAnimationFrame(updateAudioLevel);
+                };
+                
+                updateAudioLevel();
+            }
+            
+            handleSignalingMessage(message) {
+                this.log(`Signaling: ${message.type}`, 'info');
+                
+                switch (message.type) {
+                    case 'connected':
+                        this.log(`Client ID: ${message.clientId}`, 'success');
+                        break;
+                        
+                    case 'answer':
+                        this.peerConnection.setRemoteDescription(message.answer);
+                        break;
+                        
+                    case 'ice-candidate':
+                        this.peerConnection.addIceCandidate(message.candidate);
+                        break;
+                        
+                    case 'transcription':
+                        const isPartial = message.isPartial ? ' (partial)' : '';
+                        this.log(`Transcription${isPartial}: "${message.text}"`, 'success');
+                        if (!message.isPartial) {
+                            this.frameMetrics.partialResults++;
+                        }
+                        break;
+                        
+                    case 'speechStart':
+                        this.handleSpeechStart();
+                        break;
+                        
+                    case 'speechEnd':
+                        this.handleSpeechEnd();
+                        break;
+                        
+                    case 'frameProcessed':
+                        this.handleFrameProcessed(message);
+                        break;
+                        
+                    case 'llm_response':
+                        this.log(`LLM Response: "${message.text}"`, 'success');
+                        break;
+                        
+                    case 'tts_start':
+                        this.log('TTS started', 'info');
+                        break;
+                        
+                    case 'tts_end':
+                        this.log('TTS completed', 'info');
+                        break;
+                        
+                    case 'error':
+                        this.log(`Server error: ${message.message}`, 'error');
+                        break;
+                }
+            }
+            
+            sendSignalingMessage(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(message));
+                }
+            }
+            
+            testAudio() {
+                if (this.dataChannel && this.dataChannel.readyState === 'open') {
+                    const testMessage = {
+                        type: 'transcription',
+                        text: 'Hello, this is a test message.',
+                        timestamp: Date.now()
+                    };
+                    
+                    this.dataChannel.send(JSON.stringify(testMessage));
+                    this.log('Sent test transcription', 'info');
+                } else {
+                    this.log('Data channel not ready', 'warning');
+                }
+            }
+            
+            startMetricsCollection() {
+                setInterval(() => {
+                    if (!this.isConnected || !this.peerConnection) return;
+                    
+                    this.peerConnection.getStats().then(stats => {
+                        stats.forEach(report => {
+                            if (report.type === 'inbound-rtp' && report.mediaType === 'audio') {
+                                this.metrics.packetsLost = report.packetsLost || 0;
+                            }
+                            if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                                this.metrics.latency = Math.round((report.currentRoundTripTime || 0) * 1000);
+                            }
+                        });
+                        
+                        this.updateMetrics();
+                    });
+                }, 1000);
+            }
+            
+            handleSpeechStart() {
+                this.frameMetrics.speechActive = true;
+                this.updateSpeechIndicator();
+                this.log('Speech activity started', 'success');
+            }
+            
+            handleSpeechEnd() {
+                this.frameMetrics.speechActive = false;
+                this.updateSpeechIndicator();
+                this.log('Speech activity ended', 'info');
+            }
+            
+            handleFrameProcessed(message) {
+                this.frameMetrics.frameCount++;
+                if (message.vadResult && message.vadResult.isSpeech) {
+                    this.frameMetrics.speechFrames++;
+                }
+                if (message.sttResult && message.sttResult.partialText) {
+                    this.frameMetrics.partialResults++;
+                }
+                this.updateFrameMetrics();
+            }
+            
+            updateSpeechIndicator() {
+                const indicator = document.getElementById('speechIndicator');
+                const dot = document.getElementById('speechDot');
+                const text = document.getElementById('speechText');
+                
+                if (this.frameMetrics.speechActive) {
+                    indicator.className = 'speech-indicator active';
+                    dot.className = 'speech-dot active';
+                    text.textContent = 'Speech Detected';
+                } else {
+                    indicator.className = 'speech-indicator inactive';
+                    dot.className = 'speech-dot';
+                    text.textContent = 'No Speech Detected';
+                }
+            }
+            
+            updateFrameMetrics() {
+                document.getElementById('frameCountValue').textContent = this.frameMetrics.frameCount;
+                document.getElementById('speechFramesValue').textContent = this.frameMetrics.speechFrames;
+                document.getElementById('partialResultsValue').textContent = this.frameMetrics.partialResults;
+                document.getElementById('processingTimeValue').textContent = this.frameMetrics.processingTime.toFixed(1);
+            }
+            
+            updateMetrics() {
+                document.getElementById('latencyValue').textContent = this.metrics.latency || '--';
+                document.getElementById('packetsLostValue').textContent = this.metrics.packetsLost || '--';
+                document.getElementById('audioQualityValue').textContent = this.metrics.audioQuality || '--';
+                
+                if (this.connectionStartTime) {
+                    const connectionTime = Math.round((Date.now() - this.connectionStartTime) / 1000);
+                    document.getElementById('connectionTimeValue').textContent = connectionTime;
+                }
+                
+                this.updateFrameMetrics();
+            }
+            
+            disconnect() {
+                this.log('Disconnecting...', 'info');
+                
+                this.isConnected = false;
+                this.connectionStartTime = null;
+                
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                    this.localStream = null;
+                }
+                
+                if (this.dataChannel) {
+                    this.dataChannel.close();
+                    this.dataChannel = null;
+                }
+                
+                if (this.peerConnection) {
+                    this.peerConnection.close();
+                    this.peerConnection = null;
+                }
+                
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+                
+                this.updateStatus('disconnected', 'Disconnected');
+                this.updateUI();
+                
+                this.log('Disconnected', 'info');
+            }
+            
+            updateStatus(state, message) {
+                const statusElement = document.getElementById('status');
+                statusElement.className = `status ${state}`;
+                statusElement.textContent = message;
+            }
+            
+            updateUI() {
+                const connectBtn = document.getElementById('connectBtn');
+                const disconnectBtn = document.getElementById('disconnectBtn');
+                const testAudioBtn = document.getElementById('testAudioBtn');
+                
+                connectBtn.disabled = this.isConnected;
+                disconnectBtn.disabled = !this.isConnected;
+                testAudioBtn.disabled = !this.isConnected;
+            }
+            
+            log(message, type = 'info') {
+                const logElement = document.getElementById('log');
+                const timestamp = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.textContent = `[${timestamp}] ${message}`;
+                
+                logElement.appendChild(entry);
+                logElement.scrollTop = logElement.scrollHeight;
+                
+                console.log(`[WebRTC Test] ${message}`);
+            }
+            
+            clearLog() {
+                document.getElementById('log').innerHTML = '';
+            }
+        }
+        
+        // Initialize the test client
+        const voiceTest = new WebRTCVoiceTest();
+    </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "client": {
+    "services": {
+      "stt": {
+        "enabled": true,
+        "port": 8013,
+        "model": "mlx-community/whisper-large-v3-mlx-4bit",
+        "device": "mps",
+        "quantization": "int4"
+      },
+      "smart_turn": {
+        "enabled": true,
+        "port": 8014,
+        "model_path": "models/smart_turn/"
+      },
+      "vad": {
+        "enabled": true,
+        "threshold": 0.7,
+        "min_speech_ms": 300,
+        "min_silence_ms": 500
+      }
+    },
+    "backend": {
+      "host": "api.oip.onl",
+      "port": 443,
+      "protocol": "https",
+      "endpoints": {
+        "health": "/api/alfred/chat",
+        "chat": "/api/alfred/chat",
+        "rag": "/api/alfred/chat"
+      }
+    },
+    "audio": {
+      "sample_rate": 16000,
+      "channels": 1,
+      "format": "wav"
+    },
+    "logging": {
+      "level": "INFO",
+      "file": "logs/mac_client.log"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "whisper": {
+    "model": "large-v3-turbo",
+    "framework": "MLX",
+    "quantization": "int4",
+    "platform": "Apple Silicon",
+    "path": "models/whisper-mlx/",
+    "status": "mock_implementation",
+    "expected_size": "~1.5GB",
+    "performance": "10-20x real-time"
+  },
+  "silero_vad": {
+    "model": "silero_vad",
+    "framework": "PyTorch",
+    "platform": "Apple Silicon + MPS",
+    "path": "models/silero_vad/",
+    "status": "downloaded",
+    "size": "~42MB",
+    "sample_rate": 16000
+  },
+  "smart_turn": {
+    "model": "smart-turn-v2-mac",
+    "framework": "Enhanced Mock",
+    "platform": "Apple Silicon",
+    "path": "models/smart_turn/",
+    "status": "mock_implementation",
+    "features": [
+      "Audio energy analysis",
+      "Transcript linguistic analysis",
+      "Temporal pattern detection",
+      "Silence detection"
+    ]
+  },
+  "download_date": "2024-01-XX",
+  "total_size_estimate": "~1.6GB",
+  "platform": "Apple Silicon (M1/M2/M3/M4)",
+  "optimization": "Metal Performance Shaders + MLX"
+}

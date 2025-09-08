@@ -80,7 +80,7 @@ const corsOptions = {
     // List of allowed origins
     const allowedOrigins = [
       'http://localhost:3000',
-      'http://localhost:3001',
+      'http://localhost:3001',  // Added for ALFRED voice interface
       'http://localhost:3005',
       'http://localhost:8080',
       'https://api.oip.onl',

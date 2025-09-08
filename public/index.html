@@ -358,7 +358,22 @@
         let availableVoices = {
             chatterbox: [],
             edge_tts: [],
-            elevenlabs: []
+            elevenlabs: [
+                { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male, Deep)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Female, Sweet)', gender: 'female', engine: 'elevenlabs' },
+                { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold (Male, Crisp)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'pMsXgVXv3BLzUgSXRplE', name: 'Freya (Female, Conversational)', gender: 'female', engine: 'elevenlabs' },
+                { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel (Male, British)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'CYw3kZ02Hs0563khs1Fj', name: 'Gigi (Female, Childlike)', gender: 'female', engine: 'elevenlabs' },
+                { id: 'bVMeCyTHy58xNoL34h3p', name: 'Jeremy (Male, American)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte (Female, Seductive)', gender: 'female', engine: 'elevenlabs' },
+                { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George (Male, Raspy)', gender: 'male', engine: 'elevenlabs' },
+                { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace (Female, Calm)', gender: 'female', engine: 'elevenlabs' }
+            ],
+            kokoro: [],
+            silero: [],
+            gtts: [],
+            espeak: []
         };
 
         // Voice configuration matrix: Gender + Emotion combinations
@@ -408,34 +423,55 @@
             
             console.log(`🔄 Switching to engine: ${selectedEngine}`);
             
-            // Update UI visibility
+            // Hide all engine-specific controls first
+            document.getElementById('chatterbox-controls').style.display = 'none';
+            document.getElementById('edge-controls').style.display = 'none';
+            document.getElementById('elevenlabs-controls').style.display = 'none';
+            document.getElementById('voice-cloning-section').style.display = 'none';
+            
+            // Update UI based on selected engine
+            const engineTitles = {
+                'chatterbox': 'Chatterbox TTS (High Quality)',
+                'kokoro': 'Kokoro TTS (Neural Synthesis)',
+                'edge_tts': 'Edge TTS (Fast Response)', 
+                'gtts': 'Google TTS (Cloud)',
+                'espeak': 'eSpeak TTS (Offline)',
+                'elevenlabs': 'ElevenLabs (Premium)'
+            };
+            
+            const engineLabels = {
+                'chatterbox': 'Enable Chatterbox TTS',
+                'kokoro': 'Enable Kokoro TTS',
+                'edge_tts': 'Enable Edge TTS',
+                'gtts': 'Enable Google TTS', 
+                'espeak': 'Enable eSpeak TTS',
+                'elevenlabs': 'Enable ElevenLabs TTS'
+            };
+            
+            // Set title and label
+            document.getElementById('engine-title').textContent = engineTitles[selectedEngine] || `${selectedEngine} TTS`;
+            document.getElementById('tts-enable-label').textContent = engineLabels[selectedEngine] || `Enable ${selectedEngine} TTS`;
+            
+            // Show appropriate controls based on engine
             if (selectedEngine === 'chatterbox') {
                 document.getElementById('chatterbox-controls').style.display = 'block';
-                document.getElementById('edge-controls').style.display = 'none';
-                document.getElementById('elevenlabs-controls').style.display = 'none';
                 document.getElementById('voice-cloning-section').style.display = 'block';
-                document.getElementById('engine-title').textContent = 'Chatterbox TTS (High Quality)';
-                document.getElementById('tts-enable-label').textContent = 'Enable Chatterbox TTS';
             } else if (selectedEngine === 'edge_tts') {
-                document.getElementById('chatterbox-controls').style.display = 'none';
                 document.getElementById('edge-controls').style.display = 'block';
-                document.getElementById('elevenlabs-controls').style.display = 'none';
-                document.getElementById('voice-cloning-section').style.display = 'none';
-                document.getElementById('engine-title').textContent = 'Edge TTS (Fast Response)';
-                document.getElementById('tts-enable-label').textContent = 'Enable Edge TTS';
             } else if (selectedEngine === 'elevenlabs') {
-                document.getElementById('chatterbox-controls').style.display = 'none';
-                document.getElementById('edge-controls').style.display = 'none';
                 document.getElementById('elevenlabs-controls').style.display = 'block';
-                document.getElementById('voice-cloning-section').style.display = 'none';
-                document.getElementById('engine-title').textContent = 'ElevenLabs (Premium)';
-                document.getElementById('tts-enable-label').textContent = 'Enable ElevenLabs TTS';
+            } else if (selectedEngine === 'kokoro' || selectedEngine === 'silero' || selectedEngine === 'gtts' || selectedEngine === 'espeak') {
+                // These engines use basic controls - show chatterbox controls but hide voice cloning
+                document.getElementById('chatterbox-controls').style.display = 'block';
+                // Voice cloning section already hidden above
+
             }
             
             // Load voices for selected engine
             await populateVoiceDropdown(selectedEngine);
             updateVoicePreview();
-            updateStatus(`🔄 Switched to ${selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : selectedEngine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs'}`);
+            updateStatus(`🔄 Switched to ${engineTitles[selectedEngine] || selectedEngine}`);
+
         }
         
         // Load available voices from API
@@ -586,22 +622,27 @@
             console.log(`🎵 Selected voice: ${selectedVoice} for engine: ${engine}`);
         }
 
-        // Check voice service status
+        // Check voice service status and populate engines
+
         async function checkVoiceStatus() {
             try {
                 const response = await fetch('/api/alfred/health');
                 const data = await response.json();
+              
+                console.log('🔍 Health endpoint response:', data);
                 
-                const engines = data.engines || [];
-                const chatterboxAvailable = engines.find(e => e.name === 'chatterbox')?.available || false;
-                const edgeAvailable = engines.find(e => e.name === 'edge_tts')?.available || false;
+                // Extract TTS engine information from the health response
+                const ttsDetails = data.services?.tts?.details;
+                const availableEnginesList = data.available_engines || [];
                 
-                if (chatterboxAvailable && edgeAvailable) {
-                    updateStatus('✅ All Voice Engines Ready - Chatterbox & Edge TTS Available');
+                if (ttsDetails && (ttsDetails.engines || availableEnginesList.length > 0)) {
+                    await populateEnginesFromHealth(ttsDetails.engines, ttsDetails.engines_dict, availableEnginesList);
+                }
+                
+                // Update status based on available engines
+                if (availableEnginesList.length > 0) {
+                    updateStatus(`✅ ${availableEnginesList.length} Voice Engine${availableEnginesList.length > 1 ? 's' : ''} Available: ${availableEnginesList.join(', ')}`);
                     document.querySelector('.status-indicator').style.background = '#4CAF50';
-                } else if (chatterboxAvailable || edgeAvailable) {
-                    updateStatus('⚠️ Some Voice Engines Available - Check Engine Selection');
-                    document.querySelector('.status-indicator').style.background = '#FF9800';
                 } else {
                     updateStatus('❌ No Voice Engines Available');
                     document.querySelector('.status-indicator').style.background = '#f44336';
@@ -613,6 +654,90 @@
             }
         }
         
+        // Populate engines dropdown from health endpoint
+        async function populateEnginesFromHealth(engines, enginesDict, availableEnginesList) {
+            const engineSelect = document.getElementById('voice-engine');
+            
+            // Clear existing options except the loading one
+            engineSelect.innerHTML = '';
+            
+            // Use the available_engines list from the health response if provided
+            let engineNames = availableEnginesList || [];
+            
+            // If no available_engines list, fall back to parsing engines array
+            if (engineNames.length === 0 && engines) {
+                engineNames = engines.filter(engine => engine.available).map(engine => engine.name);
+            }
+            
+            if (engineNames.length === 0) {
+                engineSelect.innerHTML = '<option value="">No engines available</option>';
+                return;
+            }
+            
+            // Map engine names to user-friendly labels
+            const engineLabels = {
+                'kokoro': 'Kokoro TTS (Neural Synthesis)',
+                'chatterbox': 'Chatterbox TTS (High Quality + Voice Cloning)',
+                'silero': 'Silero Neural TTS (GPU Accelerated)', 
+                'edge_tts': 'Edge TTS (Fast + Many Voices)',
+                'gtts': 'Google TTS (Cloud)',
+                'espeak': 'eSpeak TTS (Offline)',
+                'elevenlabs': 'ElevenLabs (Premium + Ultra Fast)'
+            };
+            
+            // Separate engines into Local and Cloud categories
+            const localEngines = ['kokoro', 'chatterbox', 'silero', 'espeak'];
+            const cloudEngines = ['edge_tts', 'gtts', 'elevenlabs'];
+            
+            const localAvailable = engineNames.filter(name => localEngines.includes(name));
+            const cloudAvailable = engineNames.filter(name => cloudEngines.includes(name));
+            
+            // Add local engines section
+            if (localAvailable.length > 0) {
+                const localGroup = document.createElement('optgroup');
+                localGroup.label = 'Local Engines';
+                localAvailable.forEach(engineName => {
+                    const option = document.createElement('option');
+                    option.value = engineName;
+                    option.textContent = engineLabels[engineName] || `${engineName} TTS`;
+                    localGroup.appendChild(option);
+                });
+                engineSelect.appendChild(localGroup);
+            }
+            
+            // Add cloud engines section (including ElevenLabs)
+            const allCloudEngines = [...cloudAvailable];
+            if (!allCloudEngines.includes('elevenlabs')) {
+                allCloudEngines.push('elevenlabs'); // Always show ElevenLabs as option
+            }
+            
+            if (allCloudEngines.length > 0) {
+                const cloudGroup = document.createElement('optgroup');
+                cloudGroup.label = 'Cloud Engines';
+                allCloudEngines.forEach(engineName => {
+                    const option = document.createElement('option');
+                    option.value = engineName;
+                    option.textContent = engineLabels[engineName] || `${engineName} TTS`;
+                    cloudGroup.appendChild(option);
+                });
+                engineSelect.appendChild(cloudGroup);
+            }
+            
+            // Set the first available engine as selected
+            if (engineNames.length > 0) {
+                engineSelect.value = engineNames[0];
+                voiceConfig.selectedEngine = engineNames[0];
+            }
+            
+            console.log(`🎛️ Populated ${engineNames.length} engines:`, engineNames);
+            
+            // Load voices for the selected engine
+            const selectedEngine = engineSelect.value;
+            if (selectedEngine) {
+                await switchEngine(); // This will populate voices and update UI
+            }
+        }
+
         // Edge TTS slider update functions
         function updateSpeed(value) {
             voiceConfig.edge.speed = value / 100;
@@ -956,12 +1081,28 @@
                 preview += ` with ${stability}% stability, ${similarity}% similarity`;
                 if (style > 0) preview += `, ${style}% style`;
                 preview += '. Premium quality ultra-fast synthesis. 🚀 Professional grade voice.';
+            } else if (engine === 'kokoro') {
+                const emotionLevel = Math.round(voiceConfig.chatterbox.exaggeration * 100);
+                const selectedVoice = voiceConfig.chatterbox.selectedVoice;
+                preview = `Current: Kokoro TTS with ${selectedVoice} voice and ${emotionLevel}% emotion. High-quality neural synthesis engine. 🎵 Natural voice generation.`;
+            } else if (engine === 'silero') {
+                const emotionLevel = Math.round(voiceConfig.chatterbox.exaggeration * 100);
+                const selectedVoice = voiceConfig.chatterbox.selectedVoice;
+                preview = `Current: Silero Neural TTS with ${selectedVoice} voice and ${emotionLevel}% emotion. GPU-accelerated neural synthesis engine. 🎵 Natural voice generation.`;
+            } else if (engine === 'gtts') {
+                preview = `Current: Google Text-to-Speech with cloud-based synthesis. Reliable online voice generation with natural pronunciation. 🌐 Cloud-powered TTS.`;
+            } else if (engine === 'espeak') {
+                preview = `Current: eSpeak TTS with offline synthesis. Lightweight and reliable text-to-speech engine. 💻 Always available offline.`;
+            } else {
+                preview = `Current: ${engine} TTS engine selected. Voice synthesis ready for testing.`;
+
             }
             
             document.getElementById('voice-preview').textContent = preview;
         }
-        
-        // Universal voice synthesis function (handles both engines)
+
+        // Universal voice synthesis function (handles all engines)
+
         async function synthesizeVoice(text) {
             console.log('🎵 synthesizeVoice called with text:', text);
             
@@ -979,6 +1120,9 @@
                     await synthesizeWithEdge(text);
                 } else if (engine === 'elevenlabs') {
                     await synthesizeWithElevenLabs(text);
+                } else if (engine === 'kokoro' || engine === 'silero' || engine === 'gtts' || engine === 'espeak') {
+                    await synthesizeWithGenericEngine(text, engine);
+
                 } else {
                     throw new Error(`Unknown engine: ${engine}`);
                 }
@@ -986,7 +1130,8 @@
                 console.error(`Voice synthesis failed with ${engine}:`, error);
                 updateStatus(`❌ ${engine} synthesis failed - trying fallback...`);
                 
-                // Fallback to browser TTS if both engines fail
+                // Fallback to browser TTS if synthesis fails
+
                 if ('speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.rate = 0.9;
@@ -998,22 +1143,92 @@
             }
         }
         
+        // Generic synthesis for simple engines (kokoro, gtts, espeak)
+        async function synthesizeWithGenericEngine(text, engine) {
+            try {
+                updateStatus(`🎵 Synthesizing with ${engine}...`);
+                
+                // Prepare form data with all required parameters
+                const formData = new FormData();
+                formData.append('text', text);
+                formData.append('engine', engine);
+                
+                // Required parameters for all engines
+                formData.append('gender', 'female');
+                formData.append('emotion', 'neutral');
+                formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                formData.append('voice_cloning', false);
+                
+                // Add engine-specific voice configuration
+                if (engine === 'kokoro') {
+                    // Kokoro might support voice selection
+                    formData.append('voice_id', voiceConfig.chatterbox.selectedVoice || 'default');
+                    formData.append('speed', '1.0');
+                } else if (engine === 'gtts') {
+                    // Google TTS supports language/voice
+                    formData.append('voice_id', 'en');
+                    formData.append('speed', '1.0');
+                } else if (engine === 'espeak') {
+                    // eSpeak basic parameters
+                    formData.append('voice_id', 'en');
+                    formData.append('speed', '1.0'); // Let backend handle speed conversion
+                }
+                
+                const response = await fetch('/api/alfred/synthesize', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Stop any currently playing audio and play new audio
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                
+                currentAudio = new Audio(audioUrl);
+                currentAudio.play();
+                
+                currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    updateStatus(`🎵 ${engine} Ready`);
+                };
+                
+                updateStatus(`🔊 Playing ${engine} synthesis...`);
+                
+            } catch (error) {
+                console.error(`${engine} synthesis failed:`, error);
+                throw error;
+            }
+        }
+        
         
         // Synthesize with Edge TTS (new function)
         async function synthesizeWithEdge(text) {
             try {
                 updateStatus('⚡ Synthesizing with Edge TTS...');
                 
-                // Prepare form data for Edge TTS
+                // Prepare form data with all required parameters
                 const formData = new FormData();
                 formData.append('text', text);
+                formData.append('engine', 'edge_tts');
                 formData.append('voice_id', voiceConfig.edge.selectedVoice);
                 formData.append('speed', voiceConfig.edge.speed.toString());
-                formData.append('engine', 'edge_tts');
                 
-                // Add exaggeration and cfg_weight for compatibility (Edge will convert these to pitch/volume)
+                // Required parameters with defaults
+                formData.append('gender', 'female');
+                formData.append('emotion', 'neutral');
                 formData.append('exaggeration', (voiceConfig.edge.pitch / 10 + 0.5).toString()); // Convert pitch to exaggeration range
                 formData.append('cfg_weight', (voiceConfig.edge.volume / 20 + 0.5).toString());  // Convert volume to cfg_weight range
+                formData.append('voice_cloning', false);
+
                 
                 const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
@@ -1123,9 +1338,30 @@
                 const stability = Math.round(voiceConfig.elevenlabs.stability * 100);
                 const similarity = Math.round(voiceConfig.elevenlabs.similarity_boost * 100);
                 testText = `Hello! I'm your AI assistant powered by ElevenLabs premium TTS. This voice uses ${stability} percent stability and ${similarity} percent similarity for ultra-fast, professional quality synthesis.`;
+            } else if (engine === 'kokoro') {
+                testText = `Hello! I'm your AI assistant using Kokoro TTS. This is a high-quality neural text-to-speech engine with natural voice synthesis.`;
+            } else if (engine === 'silero') {
+                testText = `Hello! I'm your AI assistant using Silero Neural TTS. This is a high-quality GPU-accelerated text-to-speech engine with natural voice synthesis.`;
+            } else if (engine === 'gtts') {
+                testText = `Hello! I'm your AI assistant using Google Text-to-Speech. This is a cloud-based service with excellent voice quality.`;
+            } else if (engine === 'espeak') {
+                testText = `Hello! I'm your AI assistant using eSpeak TTS. This is a reliable offline text-to-speech engine.`;
+            } else {
+                testText = `Hello! I'm your AI assistant using ${engine} TTS. Testing voice synthesis with the selected engine.`;
             }
             
-            updateStatus(`🎵 Testing ${engine === 'chatterbox' ? 'Chatterbox' : engine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs'} voice...`);
+            const engineNames = {
+                'kokoro': 'Kokoro',
+                'chatterbox': 'Chatterbox',
+                'edge_tts': 'Edge TTS',
+                'elevenlabs': 'ElevenLabs',
+                'silero': 'Silero Neural TTS',
+                'gtts': 'Google TTS',
+                'espeak': 'eSpeak'
+            };
+            
+            updateStatus(`🎵 Testing ${engineNames[engine] || engine} voice...`);
+
             
             try {
                 await synthesizeVoice(testText);
@@ -1147,36 +1383,40 @@
                 updateStatus(voiceConfig.chatterbox.voiceCloning.enabled ? 
                     '🎤 Synthesizing with voice cloning...' : 
                     '🎵 Synthesizing with Chatterbox TTS...');
-                
-                // Always use FormData for consistency with backend expectations
+
+                // Always use FormData with all required parameters
                 const formData = new FormData();
                 formData.append('text', text);
+                formData.append('engine', 'chatterbox');
                 formData.append('voice_id', voiceConfig.chatterbox.selectedVoice);
+                formData.append('speed', '1.0');
+                
+                // Chatterbox-specific parameters
+                formData.append('gender', 'female');
+                formData.append('emotion', 'neutral');
                 formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
                 formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
-                formData.append('engine', 'chatterbox');
                 
                 if (voiceConfig.chatterbox.voiceCloning.enabled && voiceConfig.chatterbox.voiceCloning.audioFile) {
                     // Voice cloning mode - add audio file
-                    formData.append('voice_cloning', 'true');
+                    formData.append('voice_cloning', true);
+
                     formData.append('audio_prompt', voiceConfig.chatterbox.voiceCloning.audioFile);
                     console.log('🎤 Adding voice cloning audio file to request:', voiceConfig.chatterbox.voiceCloning.audioFile.name);
                 } else {
                     // Regular synthesis mode
-                    formData.append('voice_cloning', 'false');
+                    formData.append('voice_cloning', false);
                 }
                 
-                const requestBody = formData;
-                const headers = {}; // Don't set Content-Type, let browser set it for FormData
-                
+
                 // Create abort controller for timeout (2 minutes for Chatterbox synthesis)
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 120000);
                 
                 const response = await fetch('/api/alfred/synthesize', {
                     method: 'POST',
-                    headers: headers,
-                    body: requestBody,
+                    body: formData,
+
                     signal: controller.signal
                 });
                 

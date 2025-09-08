@@ -1,0 +1,2363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALFRED Voice Assistant - Hybrid Implementation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        
+        .app-container {
+            width: calc(100% - 40px);
+            max-width: 1200px;
+            height: calc(100vh - 40px);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            margin: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .main-content {
+            padding: 32px;
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-status.disconnected {
+            background-color: #fff5f5;
+            color: #c53030;
+            border: 2px solid #feb2b2;
+        }
+        
+        .connection-status.connecting {
+            background-color: #fffaf0;
+            color: #c05621;
+            border: 2px solid #fbd38d;
+        }
+        
+        .connection-status.connected {
+            background-color: #f0fff4;
+            color: #22543d;
+            border: 2px solid #9ae6b4;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+        
+        .status-dot.connecting {
+            animation: pulse 1.5s infinite;
+        }
+        
+        .voice-interface {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .voice-controls {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .voice-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            font-size: 48px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .voice-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 122, 255, 0.3);
+        }
+        
+        .voice-button:active {
+            transform: scale(0.95);
+        }
+        
+        .voice-button.listening {
+            background: linear-gradient(135deg, #34c759, #30d158);
+            animation: listening-pulse 2s infinite;
+        }
+        
+        .voice-button.processing {
+            background: linear-gradient(135deg, #ff9500, #ffb340);
+            animation: processing-spin 1s linear infinite;
+        }
+        
+        .voice-button.speaking {
+            background: linear-gradient(135deg, #5856d6, #af52de);
+            animation: speaking-wave 1.5s ease-in-out infinite;
+        }
+        
+        .voice-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .voice-status {
+            font-size: 16px;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .voice-subtitle {
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .audio-visualization {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px;
+        }
+        
+        .audio-viz-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .audio-viz-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .audio-level-container {
+            margin-bottom: 20px;
+        }
+        
+        .audio-level {
+            width: 100%;
+            height: 8px;
+            background-color: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        
+        .audio-level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #34c759, #30d158, #ff9500);
+            width: 0%;
+            transition: width 0.1s ease;
+        }
+        
+        .audio-level-text {
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .waveform-container {
+            height: 80px;
+            background: #ffffff;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .waveform {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .conversation-area {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            flex: 1;
+            min-height: 300px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .conversation-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .conversation-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .conversation-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .control-btn {
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: white;
+            color: #666;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #f7fafc;
+            border-color: #cbd5e0;
+        }
+        
+        .conversation-messages {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 200px;
+        }
+        
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .message-avatar.user {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+        }
+        
+        .message-avatar.assistant {
+            background: linear-gradient(135deg, #34c759, #30d158);
+            color: white;
+        }
+        
+        .message-avatar.system {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .message-content {
+            flex: 1;
+            max-width: 70%;
+        }
+        
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 15px;
+            line-height: 1.4;
+            position: relative;
+        }
+        
+        .message-bubble.user {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message-bubble.assistant {
+            background: #f7fafc;
+            color: #333;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-bubble.system {
+            background: #e9ecef;
+            color: #495057;
+            border-bottom-left-radius: 4px;
+            font-style: italic;
+        }
+        
+        .message-bubble.partial {
+            opacity: 0.7;
+            font-style: italic;
+            border-style: dashed;
+        }
+        
+        .message-bubble.interrupted {
+            background: #fff5f0;
+            border-color: #fed7aa;
+            color: #c05621;
+        }
+        
+        .message-meta {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .message.user .message-meta {
+            justify-content: flex-end;
+        }
+        
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 12px 16px;
+            background: #f7fafc;
+            border-radius: 16px;
+            border-bottom-left-radius: 4px;
+            margin-bottom: 16px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #cbd5e0;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        .performance-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 20px;
+        }
+        
+        .performance-metric {
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007aff;
+            margin-bottom: 4px;
+        }
+        
+        .metric-value.warning { color: #ff9500; }
+        .metric-value.error { color: #ff3b30; }
+        .metric-value.success { color: #34c759; }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .controls-panel {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 24px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #007aff, #5856d6);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .error-banner {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .success-banner {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        
+        @keyframes listening-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.4); }
+            50% { box-shadow: 0 0 0 20px rgba(52, 199, 89, 0); }
+        }
+        
+        @keyframes processing-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes speaking-wave {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.1); }
+            50% { transform: scale(1.05); }
+            75% { transform: scale(1.15); }
+        }
+        
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-10px); opacity: 1; }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes tts-pulse {
+            0%, 100% { width: 60%; opacity: 1; }
+            50% { width: 75%; opacity: 0.8; }
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .voice-interface {
+                grid-template-columns: 1fr;
+            }
+            
+            .app-container {
+                margin: 10px;
+                border-radius: 16px;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>🎤 ALFRED Voice Assistant</h1>
+            <p>Hybrid implementation: Advanced UI + Existing Backend + Real Audio</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- Connection Status -->
+            <div id="connectionStatus" class="connection-status disconnected">
+                <div class="status-dot"></div>
+                <span>Ready to connect with echo cancellation and real audio processing</span>
+            </div>
+            
+            <!-- Error/Success Banners -->
+            <div id="errorBanner" class="error-banner">
+                <span>⚠️</span>
+                <span id="errorMessage">An error occurred</span>
+            </div>
+            
+            <div id="successBanner" class="success-banner">
+                <span>✅</span>
+                <span id="successMessage">Success!</span>
+            </div>
+            
+            <!-- Main Voice Interface -->
+            <div class="voice-interface">
+                <!-- Voice Controls -->
+                <div class="voice-controls">
+                    <button id="voiceButton" class="voice-button" disabled>
+                        🎤
+                    </button>
+                    <div id="voiceStatus" class="voice-status">Ready to Connect</div>
+                    <div id="voiceSubtitle" class="voice-subtitle">Advanced audio processing with your existing backend</div>
+                </div>
+                
+                <!-- Audio Visualization -->
+                <div class="audio-visualization">
+                    <div class="audio-viz-header">
+                        <div class="audio-viz-title">Real-Time Audio Activity</div>
+                    </div>
+                    
+                    <div class="audio-level-container">
+                        <div class="audio-level">
+                            <div id="audioLevelBar" class="audio-level-bar"></div>
+                        </div>
+                        <div id="audioLevelText" class="audio-level-text">0% - No Audio</div>
+                    </div>
+                    
+                    <div class="waveform-container">
+                        <canvas id="waveformCanvas" width="400" height="80" style="width: 100%; height: 100%; border-radius: 8px;"></canvas>
+                        <div id="waveform" class="waveform" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none;">
+                            Audio waveform visualization
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Conversation Area -->
+            <div class="conversation-area">
+                <div class="conversation-header">
+                    <h3 class="conversation-title">💬 Conversation</h3>
+                    <div class="conversation-controls">
+                        <button class="control-btn" onclick="clearConversation()">Clear</button>
+                        <button class="control-btn" onclick="exportConversation()">Export</button>
+                    </div>
+                </div>
+                
+                <div id="conversationMessages" class="conversation-messages">
+                    <!-- Welcome message -->
+                    <div class="message">
+                        <div class="message-avatar assistant">🤖</div>
+                        <div class="message-content">
+                            <div class="message-bubble assistant">
+                                Hello! I'm ALFRED with enhanced voice processing. This version uses advanced audio capture with echo cancellation while connecting to your existing RTX 4090 backend. Click Connect to start real voice interaction.
+                            </div>
+                            <div class="message-meta">
+                                <span>Just now</span>
+                                <span>•</span>
+                                <span>System message</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Typing indicator -->
+                <div id="typingIndicator" class="typing-indicator" style="display: none;">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <span style="margin-left: 8px; color: #666;">ALFRED is thinking...</span>
+                </div>
+            </div>
+            
+            <!-- Performance Panel -->
+            <div class="performance-panel">
+                <div class="performance-metric">
+                    <div id="responseTime" class="metric-value">--</div>
+                    <div class="metric-label">Response Time</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="audioQuality" class="metric-value success">Good</div>
+                    <div class="metric-label">Audio Quality</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="backendStatus" class="metric-value">--</div>
+                    <div class="metric-label">Backend Status</div>
+                </div>
+                <div class="performance-metric">
+                    <div id="conversationTurns" class="metric-value">0</div>
+                    <div class="metric-label">Conversation Turns</div>
+                </div>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="controls-panel">
+                <button id="connectBtn" class="btn btn-primary">
+                    <span>🔌</span>
+                    <span>Connect to ALFRED</span>
+                </button>
+                <button id="testBtn" class="btn btn-secondary">
+                    <span>🧪</span>
+                    <span>Test Backend</span>
+                </button>
+                <button id="debugBtn" class="btn btn-secondary" disabled>
+                    <span>🔍</span>
+                    <span>Debug Audio</span>
+                </button>
+                <button id="monitorBtn" class="btn btn-secondary" onclick="openPipelineMonitor()">
+                    <span>📊</span>
+                    <span>Pipeline Monitor</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WebRTC Dependencies for Phase 1.1 -->
+    <script src="http://localhost:3002/socket.io/socket.io.js" onerror="this.onerror=null; this.src='https://cdn.socket.io/4.7.5/socket.io.min.js'"></script>
+    <script src="webrtc_audio_client.js"></script>
+
+    <script>
+        class HybridALFREDInterface {
+            constructor() {
+                // Audio components
+                this.localStream = null;
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.audioContext = null;
+                this.analyser = null;
+                this.animationFrame = null;
+                this.ttsAudioContext = null; // For TTS visualization
+                this.waveformCanvas = null;
+                this.waveformCtx = null;
+                
+                // WebRTC components (Phase 1.1)
+                this.webrtcClient = null;
+                this.useWebRTC = true; // Toggle WebRTC vs MediaRecorder
+                this.webrtcSignalingUrl = 'http://localhost:3002';
+                
+                // State management
+                this.isConnected = false;
+                this.isRecording = false;
+                this.conversationTurns = 0;
+                
+                // Voice processing state (keeping from WebRTC implementation)
+                this.voiceState = {
+                    currentTurn: 'user',           // 'user', 'agent', 'processing'
+                    speechActive: false,
+                    agentSpeaking: false,
+                    canInterrupt: false,
+                    lastInterruption: null
+                };
+                
+                // Performance tracking (keeping from Phase 5)
+                this.performanceMetrics = {
+                    responseTime: 0,
+                    audioQuality: 'good',
+                    backendStatus: 'unknown',
+                    conversationTurns: 0
+                };
+                
+                this.conversation = [];
+                // Correct architecture: Local processing + Remote LLM
+                this.localProcessorUrl = 'http://localhost:8015'; // LOCAL speech processing
+                this.backendUrl = 'https://api.oip.onl'; // REMOTE LLM/RAG only
+                
+                this.setupEventListeners();
+                this.updateUI();
+                this.testBackendOnLoad();
+            }
+            
+            setupEventListeners() {
+                document.getElementById('connectBtn').addEventListener('click', async () => {
+                    // Resume audio contexts on user interaction (browser requirement)
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                        console.log('[Audio Viz] Input audio context resumed on user click');
+                    }
+                    if (this.ttsAudioContext && this.ttsAudioContext.state === 'suspended') {
+                        await this.ttsAudioContext.resume();
+                        console.log('[TTS Viz] TTS audio context resumed on user click');
+                    }
+                    this.toggleConnection();
+                });
+                document.getElementById('testBtn').addEventListener('click', () => this.testBackend());
+                document.getElementById('debugBtn').addEventListener('click', () => this.debugAudio());
+                document.getElementById('voiceButton').addEventListener('click', () => this.toggleRecording());
+                
+                // Keyboard shortcuts (keeping from Phase 5)
+                let spaceKeyDown = false;
+                
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space' && !e.repeat && !spaceKeyDown) {
+                        e.preventDefault();
+                        spaceKeyDown = true;
+                        if (this.isConnected && !this.isRecording) {
+                            console.log('[Spacebar] Starting recording...');
+                            this.startRecording();
+                        }
+                    }
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    if (e.code === 'Space' && spaceKeyDown) {
+                        e.preventDefault();
+                        spaceKeyDown = false;
+                        if (this.isConnected && this.isRecording) {
+                            console.log('[Spacebar] Stopping recording...');
+                            this.stopRecording();
+                        }
+                    }
+                });
+            }
+            
+            async testBackendOnLoad() {
+                try {
+                    // Test LOCAL processor
+                    const localResponse = await fetch(`${this.localProcessorUrl}/health`);
+                    const localData = await localResponse.json();
+                    console.log('LOCAL processor health:', localData);
+                    
+                    // Test REMOTE backend
+                    const remoteResponse = await fetch(`${this.backendUrl}/api/voice/health`);
+                    const remoteData = await remoteResponse.json();
+                    console.log('REMOTE backend health:', remoteData);
+                    
+                    this.performanceMetrics.backendStatus = 'healthy';
+                    this.updatePerformanceMetrics();
+                    
+                } catch (error) {
+                    console.warn('Services not available on load:', error);
+                    this.performanceMetrics.backendStatus = 'unavailable';
+                    this.updatePerformanceMetrics();
+                }
+            }
+            
+            async toggleConnection() {
+                if (this.isConnected) {
+                    await this.disconnect();
+                } else {
+                    await this.connect();
+                }
+            }
+            
+            async connect() {
+                try {
+                    this.updateConnectionStatus('connecting', 'Setting up advanced audio processing...');
+                    
+                    // Get microphone with WebRTC-quality settings (keeping echo cancellation)
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,        // Critical for preventing self-interruption
+                            noiseSuppression: true,        // From WebRTC implementation
+                            autoGainControl: true,         // From WebRTC implementation
+                            sampleRate: 16000,             // Optimized for speech processing
+                            channelCount: 1,               // Mono for efficiency
+                            latency: 0.01                  // Low latency from WebRTC work
+                        }
+                    });
+                    
+                    console.log('Microphone access granted with advanced audio settings');
+                    
+                    // Setup enhanced audio visualization (from Phase 5)
+                    await this.setupAudioVisualization();
+                    
+                    // Phase 1.1: Setup WebRTC or fallback to MediaRecorder
+                    if (this.useWebRTC) {
+                        await this.setupWebRTCAudio();
+                    } else {
+                        // Fallback: Setup MediaRecorder for real audio capture
+                        this.setupMediaRecorder();
+                    }
+                    
+                    // Test your existing backend
+                    await this.testBackend();
+                    
+                    this.isConnected = true;
+                    this.updateConnectionStatus('connected', 'Connected with advanced audio processing');
+                    this.updateUI();
+                    
+                    this.showSuccess('Connected! Advanced audio processing ready. Your voice will be processed.');
+                    // Don't add setup messages to conversation history
+                    console.log('🎤 Advanced audio setup complete. Click microphone or press spacebar to speak to ALFRED.');
+                    
+                } catch (error) {
+                    console.error('Connection failed:', error);
+                    this.showError(`Setup failed: ${error.message}`);
+                    this.updateConnectionStatus('disconnected', 'Connection failed');
+                }
+            }
+            
+            setupMediaRecorder() {
+                try {
+                    // Use WebM format (compatible with your existing backend)
+                    let options = { mimeType: 'audio/webm;codecs=opus' };
+                    
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options = {}; // Use default
+                        console.warn('WebM not supported, using default format');
+                    }
+                    
+                    this.mediaRecorder = new MediaRecorder(this.localStream, options);
+                    this.audioChunks = [];
+                    
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                            console.log(`Audio chunk recorded: ${event.data.size} bytes`);
+                        }
+                    };
+                    
+                    this.mediaRecorder.onstop = () => {
+                        console.log('Recording stopped - processing REAL audio...');
+                        this.processRecordedAudio();
+                    };
+                    
+                    this.mediaRecorder.onerror = (error) => {
+                        console.error('MediaRecorder error:', error);
+                        this.showError('Audio recording error occurred');
+                    };
+                    
+                    console.log('MediaRecorder setup complete for REAL audio capture');
+                    
+                    // MediaRecorder is working properly - set good audio quality
+                    this.performanceMetrics.audioQuality = 'good';
+                    this.updatePerformanceMetrics();
+                    
+                } catch (error) {
+                    console.error('MediaRecorder setup failed:', error);
+                    throw error;
+                }
+            }
+            
+            // Phase 1.1: WebRTC Audio Setup
+            async setupWebRTCAudio() {
+                try {
+                    console.log('[WebRTC] Setting up WebRTC audio streaming...');
+                    
+                    // Initialize WebRTC client
+                    if (typeof WebRTCAudioClient === 'undefined') {
+                        console.warn('[WebRTC] WebRTCAudioClient not loaded, falling back to MediaRecorder');
+                        this.useWebRTC = false;
+                        this.setupMediaRecorder();
+                        return;
+                    }
+                    
+                    this.webrtcClient = new WebRTCAudioClient(this.webrtcSignalingUrl);
+                    
+                    // Setup event handlers
+                    this.webrtcClient.onConnected = () => {
+                        console.log('[WebRTC] Connected to signaling server');
+                        this.performanceMetrics.webrtcStatus = 'connected';
+                        this.updatePerformanceMetrics();
+                    };
+                    
+                    this.webrtcClient.onDisconnected = () => {
+                        console.log('[WebRTC] Disconnected from signaling server');
+                        this.performanceMetrics.webrtcStatus = 'disconnected';
+                        this.updatePerformanceMetrics();
+                    };
+                    
+                    this.webrtcClient.onSTTResult = (result) => {
+                        console.log('[WebRTC] STT result received:', result);
+                        this.handleWebRTCSTTResult(result);
+                    };
+                    
+                    this.webrtcClient.onError = (error) => {
+                        console.error('[WebRTC] Error:', error);
+                        this.showError(`WebRTC error: ${error.message || error}`);
+                    };
+                    
+                    // Connect to signaling server
+                    await this.webrtcClient.connect();
+                    
+                    console.log('[WebRTC] WebRTC audio streaming setup complete');
+                    
+                } catch (error) {
+                    console.error('[WebRTC] Setup failed:', error);
+                    console.log('[WebRTC] Falling back to MediaRecorder');
+                    this.useWebRTC = false;
+                    this.setupMediaRecorder();
+                }
+            }
+            
+            handleWebRTCSTTResult(result) {
+                // Handle real-time STT results from WebRTC streaming
+                console.log(`[WebRTC] STT result: "${result.text}" (confidence: ${result.confidence}, speech: ${result.has_speech})`);
+                
+                if (result.text && result.text.trim()) {
+                    console.log(`[WebRTC] Real-time STT: "${result.text}"`);
+                    
+                    // Add to conversation
+                    this.addMessage('user', result.text);
+                    
+                    // Send to backend for LLM processing (Phase 1.2 will make this streaming)
+                    this.sendTextToBackend(result.text);
+                } else {
+                    // Don't disconnect on empty results - this is normal for continuous streaming
+                    console.log(`[WebRTC] No speech detected in this audio chunk (normal for continuous streaming)`);
+                }
+            }
+            
+            async sendTextToBackend(text) {
+                try {
+                    const startTime = Date.now();
+                    
+                    // This will be optimized in Phase 1.2 for streaming
+                    const response = await fetch(`${this.backendUrl}/api/voice/converse`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            text: text,
+                            model: 'llama3.2:3b'
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Backend error: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    // Show response
+                    if (result.response || result.answer) {
+                        const responseText = result.response || result.answer;
+                        this.addMessage('assistant', responseText);
+                    }
+                    
+                    const processingTime = Date.now() - startTime;
+                    console.log(`[WebRTC] Backend processing time: ${processingTime}ms`);
+                    
+                } catch (error) {
+                    console.error('[WebRTC] Backend communication error:', error);
+                    this.showError(`Backend error: ${error.message}`);
+                }
+            }
+            
+            async setupAudioVisualization() {
+                try {
+                    console.log('[Audio Viz] Setting up audio visualization...');
+                    
+                    // Enhanced audio context setup (from Phase 5 work)
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 16000,
+                        latencyHint: 'interactive'  // From WebRTC optimization
+                    });
+                    
+                    // Resume audio context if suspended (required by browsers)
+                    if (this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                        console.log('[Audio Viz] Audio context resumed');
+                    }
+                    
+                    const source = this.audioContext.createMediaStreamSource(this.localStream);
+                    this.analyser = this.audioContext.createAnalyser();
+                    this.analyser.fftSize = 512;
+                    this.analyser.smoothingTimeConstant = 0.8;
+                    
+                    source.connect(this.analyser);
+                    
+                    console.log(`[Audio Viz] Analyser created - FFT size: ${this.analyser.fftSize}, Frequency bins: ${this.analyser.frequencyBinCount}`);
+                    
+                    // Setup canvas for waveform visualization
+                    this.setupWaveformCanvas();
+                    
+                    // Start real-time visualization
+                    this.startAudioVisualization();
+                    
+                    console.log('Enhanced audio visualization setup complete');
+                    
+                } catch (error) {
+                    console.error('Audio visualization setup failed:', error);
+                    // Initialize basic elements anyway
+                    this.updateAudioLevel(0);
+                    this.updateWaveformIdle();
+                }
+            }
+            
+            startAudioVisualization() {
+                const audioData = new Uint8Array(this.analyser.frequencyBinCount);
+                
+                const updateVisualization = () => {
+                    if (!this.analyser) {
+                        // Restart if analyser is missing
+                        setTimeout(() => {
+                            if (this.isConnected) {
+                                this.startAudioVisualization();
+                            }
+                        }, 1000);
+                        return;
+                    }
+                    
+                    try {
+                        this.analyser.getByteFrequencyData(audioData);
+                        
+                        // Calculate average audio level
+                        const average = audioData.reduce((a, b) => a + b) / audioData.length;
+                        const percentage = Math.min(100, (average / 128) * 100);
+                        
+                        // Update audio level visualization (but don't override TTS levels)
+                        if (!this.voiceState.agentSpeaking) {
+                            this.updateAudioLevel(percentage);
+                        }
+                        
+                        // Update waveform - show input when recording, show idle when not (but don't interfere with TTS)
+                        if (this.isRecording) {
+                            this.updateWaveform(audioData, false); // false = input audio
+                        } else if (percentage < 5 && !this.voiceState.agentSpeaking) {
+                            // Show idle state when not recording, no audio, AND ALFRED is not speaking
+                            this.updateWaveformIdle();
+                        }
+                        
+                        // Debug log every 30 frames (about once per second)
+                        if (Math.random() < 0.033) {
+                            console.log(`[Audio Viz] Level: ${percentage.toFixed(1)}%, Recording: ${this.isRecording}, Average: ${average.toFixed(1)}, Context: ${this.audioContext?.state}`);
+                        }
+                        
+                    } catch (error) {
+                        console.warn('[Audio Viz] Visualization update failed:', error);
+                    }
+                    
+                    this.animationFrame = requestAnimationFrame(updateVisualization);
+                };
+                
+                updateVisualization();
+            }
+
+            setupWaveformCanvas() {
+                this.waveformCanvas = document.getElementById('waveformCanvas');
+                this.waveformCtx = this.waveformCanvas.getContext('2d');
+                
+                // Set canvas size
+                const rect = this.waveformCanvas.getBoundingClientRect();
+                this.waveformCanvas.width = 400;
+                this.waveformCanvas.height = 80;
+                
+                console.log('[Audio Viz] Waveform canvas setup complete');
+            }
+
+            updateWaveformIdle() {
+                if (this.waveformCtx) {
+                    // Clear canvas
+                    this.waveformCtx.clearRect(0, 0, this.waveformCanvas.width, this.waveformCanvas.height);
+                    
+                    // Draw idle message
+                    this.waveformCtx.fillStyle = '#999';
+                    this.waveformCtx.font = '14px -apple-system, BlinkMacSystemFont';
+                    this.waveformCtx.textAlign = 'center';
+                    this.waveformCtx.fillText('🎵 Ready for audio...', this.waveformCanvas.width / 2, this.waveformCanvas.height / 2 + 5);
+                }
+            }
+            
+            updateAudioLevel(percentage) {
+                const bar = document.getElementById('audioLevelBar');
+                const text = document.getElementById('audioLevelText');
+                
+                bar.style.width = `${percentage}%`;
+                
+                if (percentage < 5) {
+                    text.textContent = '0% - No Audio';
+                } else if (percentage < 20) {
+                    text.textContent = `${Math.round(percentage)}% - Quiet`;
+                } else if (percentage < 60) {
+                    text.textContent = `${Math.round(percentage)}% - Speaking`;
+                } else {
+                    text.textContent = `${Math.round(percentage)}% - Loud`;
+                }
+                
+                // Update audio quality metric based on actual audio levels
+                if (percentage > 15) {
+                    this.performanceMetrics.audioQuality = 'good';
+                } else if (percentage > 5) {
+                    this.performanceMetrics.audioQuality = 'fair';
+                } else {
+                    this.performanceMetrics.audioQuality = 'poor';
+                }
+                
+                // If we're successfully recording/processing, audio quality should be good
+                if (this.isRecording && percentage > 10) {
+                    this.performanceMetrics.audioQuality = 'good';
+                }
+            }
+            
+            updateWaveform(audioData, isPlayback = false) {
+                if (!this.waveformCtx || !audioData || audioData.length === 0) return;
+                
+                const canvas = this.waveformCanvas;
+                const ctx = this.waveformCtx;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Set colors for input vs TTS
+                const color = isPlayback ? '#ff9500' : '#34c759'; // Orange for TTS, Green for input
+                const label = isPlayback ? '🔊 TTS Audio' : '🎤 Microphone';
+                
+                // Draw waveform
+                const sliceWidth = canvas.width / audioData.length;
+                let x = 0;
+                
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = color;
+                ctx.beginPath();
+                
+                for (let i = 0; i < audioData.length; i++) {
+                    const v = audioData[i] / 128.0; // Normalize to 0-2 range
+                    const y = (v * canvas.height) / 2;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                    
+                    x += sliceWidth;
+                }
+                
+                ctx.stroke();
+                
+                // Add label
+                ctx.fillStyle = color;
+                ctx.font = '12px -apple-system, BlinkMacSystemFont';
+                ctx.textAlign = 'left';
+                ctx.fillText(label, 10, 20);
+                
+                // Add frequency bars for additional visualization
+                this.drawFrequencyBars(audioData, isPlayback);
+            }
+
+            drawFrequencyBars(audioData, isPlayback) {
+                const ctx = this.waveformCtx;
+                const canvas = this.waveformCanvas;
+                
+                // Draw frequency bars
+                const barCount = 32;
+                const barWidth = canvas.width / barCount;
+                const color = isPlayback ? 'rgba(255, 149, 0, 0.6)' : 'rgba(52, 199, 89, 0.6)';
+                
+                ctx.fillStyle = color;
+                
+                for (let i = 0; i < barCount; i++) {
+                    const dataIndex = Math.floor(i * audioData.length / barCount);
+                    const barHeight = (audioData[dataIndex] / 255) * canvas.height * 0.8;
+                    
+                    ctx.fillRect(i * barWidth, canvas.height - barHeight, barWidth - 2, barHeight);
+                }
+            }
+
+            drawTTSWaveform(time, level) {
+                if (!this.waveformCtx) return;
+                
+                const ctx = this.waveformCtx;
+                const canvas = this.waveformCanvas;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw animated TTS waveform
+                const centerY = canvas.height / 2;
+                const amplitude = (level / 100) * 30; // Scale amplitude based on level
+                
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#ff9500';
+                ctx.beginPath();
+                
+                // Draw sine wave with multiple frequencies for realistic TTS look
+                for (let x = 0; x < canvas.width; x++) {
+                    const progress = x / canvas.width;
+                    const wave1 = Math.sin((progress * 8 + time * 2) * Math.PI) * amplitude;
+                    const wave2 = Math.sin((progress * 16 + time * 3) * Math.PI) * amplitude * 0.5;
+                    const wave3 = Math.sin((progress * 32 + time * 5) * Math.PI) * amplitude * 0.25;
+                    
+                    const y = centerY + wave1 + wave2 + wave3;
+                    
+                    if (x === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                
+                ctx.stroke();
+                
+                // Add frequency bars for TTS
+                ctx.fillStyle = 'rgba(255, 149, 0, 0.4)';
+                const barCount = 24;
+                const barWidth = canvas.width / barCount;
+                
+                for (let i = 0; i < barCount; i++) {
+                    const freq = i / barCount;
+                    const barHeight = (Math.sin(time * 4 + freq * 10) * 0.5 + 0.5) * amplitude;
+                    
+                    ctx.fillRect(i * barWidth, canvas.height - barHeight, barWidth - 2, barHeight);
+                }
+                
+                // Add label
+                ctx.fillStyle = '#ff9500';
+                ctx.font = '12px -apple-system, BlinkMacSystemFont';
+                ctx.textAlign = 'left';
+                ctx.fillText('🔊 ALFRED Speaking', 10, 20);
+            }
+
+            setupRealTTSVisualization(audioElement) {
+                try {
+                    console.log('[TTS Viz] Setting up REAL TTS audio visualization...');
+                    
+                    // Create separate audio context for TTS analysis
+                    if (!this.ttsAudioContext) {
+                        this.ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    
+                    // Resume TTS audio context if needed
+                    if (this.ttsAudioContext.state === 'suspended') {
+                        this.ttsAudioContext.resume();
+                        console.log('[TTS Viz] TTS audio context resumed');
+                    }
+                    
+                    // Create analyser for TTS audio (only once per audio element)
+                    if (!audioElement._ttsAnalyser) {
+                        try {
+                            const ttsSource = this.ttsAudioContext.createMediaElementSource(audioElement);
+                            const ttsAnalyser = this.ttsAudioContext.createAnalyser();
+                            ttsAnalyser.fftSize = 1024; // Higher resolution for TTS
+                            ttsAnalyser.smoothingTimeConstant = 0.1; // Fast response
+                            
+                            // Connect TTS audio to analyser and destination
+                            ttsSource.connect(ttsAnalyser);
+                            ttsSource.connect(this.ttsAudioContext.destination);
+                            
+                            // Store references
+                            audioElement._ttsSource = ttsSource;
+                            audioElement._ttsAnalyser = ttsAnalyser;
+                            
+                            console.log('[TTS Viz] TTS analyser created for REAL audio analysis');
+                            
+                        } catch (sourceError) {
+                            console.warn('[TTS Viz] Could not create media element source:', sourceError);
+                            this.startTTSVisualizationTimer(); // Fallback to animation
+                            return;
+                        }
+                    }
+                    
+                    // Start REAL TTS visualization using actual audio data
+                    this.startRealTTSVisualization(audioElement._ttsAnalyser, audioElement);
+                    
+                } catch (error) {
+                    console.warn('[TTS Viz] REAL TTS visualization setup failed:', error);
+                    this.startTTSVisualizationTimer(); // Fallback to animation
+                }
+            }
+
+            showTTSVisualFallback() {
+                // Simple visual indicator when audio analysis isn't available
+                const waveform = document.getElementById('waveform');
+                const bar = document.getElementById('audioLevelBar');
+                const text = document.getElementById('audioLevelText');
+                
+                // Show orange waveform for TTS
+                waveform.style.background = 'linear-gradient(90deg, rgba(255, 149, 0, 0.1) 0%, rgba(255, 149, 0, 0.6) 50%, rgba(255, 149, 0, 0.1) 100%)';
+                waveform.textContent = '🔊 ALFRED Speaking (TTS Active)';
+                
+                // Show animated audio level during TTS
+                bar.style.width = '60%';
+                text.textContent = '60% - ALFRED Speaking';
+                
+                // Add pulsing animation to show activity
+                bar.style.animation = 'tts-pulse 1.5s ease-in-out infinite';
+                
+                console.log('[TTS Viz] Showing TTS visual fallback indicator');
+            }
+
+            startTTSVisualizationTimer() {
+                // Create animated TTS visualization since echo cancellation blocks real audio analysis
+                let ttsAnimationActive = true;
+                let animationPhase = 0;
+                
+                const animateTTSVisualization = () => {
+                    if (!ttsAnimationActive || !this.voiceState.agentSpeaking) {
+                        console.log('[TTS Viz] TTS animation stopped');
+                        return;
+                    }
+                    
+                    // Create simulated waveform data for TTS
+                    const time = Date.now() / 1000;
+                    const baseLevel = 40 + Math.sin(time * 2) * 15; // 25-55% range
+                    const variation = Math.sin(time * 8) * 10; // High frequency variation
+                    const finalLevel = Math.max(20, Math.min(70, baseLevel + variation));
+                    
+                    // Update waveform with simulated TTS activity
+                    const bar = document.getElementById('audioLevelBar');
+                    const text = document.getElementById('audioLevelText');
+                    
+                    // Draw animated TTS waveform on canvas
+                    this.drawTTSWaveform(time, finalLevel);
+                    
+                    // Animated audio level
+                    bar.style.width = `${finalLevel}%`;
+                    bar.style.animation = 'none'; // Remove CSS animation, use JS
+                    text.textContent = `${Math.round(finalLevel)}% - ALFRED Speaking`;
+                    
+                    animationPhase++;
+                    
+                    // Continue animation
+                    setTimeout(() => requestAnimationFrame(animateTTSVisualization), 50); // 20 FPS
+                };
+                
+                // Stop animation when audio ends
+                const stopAnimation = () => {
+                    ttsAnimationActive = false;
+                };
+                
+                // Store stop function for cleanup
+                this.stopTTSAnimation = stopAnimation;
+                
+                animateTTSVisualization();
+                console.log('[TTS Viz] Started TTS animation timer');
+            }
+
+            resetTTSVisualization() {
+                // Stop any active TTS animation
+                if (this.stopTTSAnimation) {
+                    this.stopTTSAnimation();
+                    this.stopTTSAnimation = null;
+                }
+                
+                const waveform = document.getElementById('waveform');
+                const bar = document.getElementById('audioLevelBar');
+                const text = document.getElementById('audioLevelText');
+                
+                // Reset to idle state
+                this.updateWaveformIdle();
+                
+                // Reset audio level
+                bar.style.width = '0%';
+                bar.style.animation = 'none';
+                text.textContent = '0% - No Audio';
+                
+                console.log('[TTS Viz] TTS visualization reset to idle');
+            }
+
+            startRealTTSVisualization(ttsAnalyser, audioElement) {
+                if (!ttsAnalyser) {
+                    console.warn('[TTS Viz] No analyser provided, using timer fallback');
+                    this.startTTSVisualizationTimer();
+                    return;
+                }
+                
+                const ttsAudioData = new Uint8Array(ttsAnalyser.frequencyBinCount);
+                let ttsVisualizationActive = true;
+                
+                const updateRealTTSVisualization = () => {
+                    // Check if we should continue TTS visualization
+                    if (!ttsVisualizationActive || !this.voiceState.agentSpeaking) {
+                        console.log('[TTS Viz] REAL TTS visualization stopped');
+                        this.updateWaveformIdle();
+                        return;
+                    }
+                    
+                    // Check if audio element is still valid (don't check playing state immediately)
+                    if (!audioElement) {
+                        console.log('[TTS Viz] Audio element not available, stopping visualization');
+                        ttsVisualizationActive = false;
+                        return;
+                    }
+                    
+                    try {
+                        // Get REAL frequency data from the TTS audio
+                        ttsAnalyser.getByteFrequencyData(ttsAudioData);
+                        
+                        // Calculate actual TTS audio level
+                        const average = ttsAudioData.reduce((a, b) => a + b) / ttsAudioData.length;
+                        const percentage = Math.min(100, (average / 128) * 100);
+                        
+                        // Debug log occasionally to show real data
+                        if (Math.random() < 0.05) {
+                            console.log(`[TTS Viz] REAL TTS Audio Level: ${percentage.toFixed(1)}%, Average: ${average.toFixed(1)}`);
+                        }
+                        
+                        // Update waveform with REAL TTS audio data
+                        this.updateWaveform(ttsAudioData, true); // true = isPlayback
+                        
+                        // Update audio level with REAL TTS levels
+                        const bar = document.getElementById('audioLevelBar');
+                        const text = document.getElementById('audioLevelText');
+                        bar.style.width = `${percentage}%`;
+                        bar.style.animation = 'none';
+                        text.textContent = `${Math.round(percentage)}% - ALFRED Speaking (Real Audio)`;
+                        
+                    } catch (analyserError) {
+                        console.warn('[TTS Viz] Analyser error:', analyserError);
+                        // Fallback to timer animation if real analysis fails
+                        this.startTTSVisualizationTimer();
+                        return;
+                    }
+                    
+                    // Continue visualization with REAL audio data
+                    requestAnimationFrame(updateRealTTSVisualization);
+                };
+                
+                // Stop TTS visualization when audio ends
+                audioElement.addEventListener('ended', () => {
+                    ttsVisualizationActive = false;
+                    console.log('[TTS Viz] Audio ended, stopping REAL TTS visualization');
+                }, { once: true });
+                
+                // Stop TTS visualization when audio errors
+                audioElement.addEventListener('error', () => {
+                    ttsVisualizationActive = false;
+                    console.log('[TTS Viz] Audio error, stopping REAL TTS visualization');
+                }, { once: true });
+                
+                updateRealTTSVisualization();
+                console.log('[TTS Viz] REAL TTS visualization started with actual audio data');
+            }
+            
+            toggleRecording() {
+                if (this.isRecording) {
+                    this.stopRecording();
+                } else {
+                    this.startRecording();
+                }
+            }
+            
+            async startRecording() {
+                try {
+                    // Resume audio context for visualization (required by browsers)
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                        console.log('[Audio Viz] Audio context resumed for recording');
+                    }
+                    
+                    // Phase 1.1: Use WebRTC streaming or fallback to MediaRecorder
+                    if (this.useWebRTC && this.webrtcClient && this.webrtcClient.isConnected) {
+                        this.startWebRTCStreaming();
+                    } else {
+                        this.startMediaRecorderCapture();
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to start recording:', error);
+                    this.showError('Failed to start audio recording');
+                }
+            }
+            
+            startWebRTCStreaming() {
+                console.log('[WebRTC] Starting real-time audio streaming...');
+                
+                // Pass the existing localStream to avoid duplicate microphone access
+                this.webrtcClient.startAudioStreaming(this.localStream);
+                this.isRecording = true;
+                
+                // Update UI
+                this.voiceState.speechActive = true;
+                this.updateVoiceButton();
+                
+                // Don't add recording messages to conversation history
+                console.log('🔴 WebRTC streaming active... Speak now! (Ultra-low latency)');
+                
+                // Auto-stop after 10 seconds
+                setTimeout(() => {
+                    if (this.isRecording) {
+                        this.stopRecording();
+                    }
+                }, 10000);
+            }
+            
+            startMediaRecorderCapture() {
+                if (!this.mediaRecorder || this.mediaRecorder.state !== 'inactive') {
+                    this.showError('Audio recorder not ready');
+                    return;
+                }
+                
+                console.log('Starting MediaRecorder fallback...');
+                
+                this.audioChunks = [];
+                this.mediaRecorder.start();
+                this.isRecording = true;
+                
+                // Update UI to show recording state
+                this.voiceState.speechActive = true;
+                this.updateVoiceButton();
+                
+                console.log('Started recording REAL audio (NO TEST MESSAGES!)');
+                // Don't add recording messages to conversation history
+                console.log('🔴 Recording your voice... Speak now! (Real audio capture active)');
+                
+                // Auto-stop after 10 seconds
+                setTimeout(() => {
+                    if (this.isRecording) {
+                        this.stopRecording();
+                    }
+                }, 10000);
+            }
+            
+            stopRecording() {
+                if (!this.isRecording) {
+                    return;
+                }
+                
+                try {
+                    // Phase 1.1: Stop WebRTC streaming or MediaRecorder
+                    if (this.useWebRTC && this.webrtcClient) {
+                        this.stopWebRTCStreaming();
+                    } else {
+                        this.stopMediaRecorderCapture();
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to stop recording:', error);
+                    this.showError('Failed to stop recording');
+                }
+            }
+            
+            stopWebRTCStreaming() {
+                console.log('[WebRTC] Stopping audio streaming...');
+                
+                this.webrtcClient.stopAudioStreaming();
+                this.isRecording = false;
+                
+                // Update UI
+                this.voiceState.speechActive = false;
+                this.updateVoiceButton();
+                
+                // Don't add stop messages to conversation history
+                console.log('⏹️ WebRTC streaming stopped - processing complete!');
+            }
+            
+            stopMediaRecorderCapture() {
+                if (!this.mediaRecorder) {
+                    return;
+                }
+                
+                this.mediaRecorder.stop();
+                this.isRecording = false;
+                
+                // Update UI
+                this.voiceState.speechActive = false;
+                this.updateVoiceButton();
+                
+                console.log('Recording stopped - will process REAL audio...');
+                // Don't add stop messages to conversation history
+                console.log('⏹️ Recording stopped - sending your voice to ALFRED backend...');
+            }
+            
+            async processRecordedAudio() {
+                try {
+                    if (this.audioChunks.length === 0) {
+                        this.showError('No audio data recorded');
+                        return;
+                    }
+                    
+                    // Create audio blob from recorded chunks
+                    const audioBlob = new Blob(this.audioChunks, { 
+                        type: this.mediaRecorder.mimeType || 'audio/webm' 
+                    });
+                    
+                    console.log(`Processing ${audioBlob.size} bytes of YOUR REAL VOICE (not "Hello ALFRED, this is a test message")`);
+                    
+                    // Send to your existing ALFRED backend
+                    await this.sendToALFREDBackend(audioBlob);
+                    
+                } catch (error) {
+                    console.error('Audio processing failed:', error);
+                    this.showError('Failed to process recorded audio');
+                }
+            }
+            
+            async sendToALFREDBackend(audioBlob) {
+                try {
+                    const startTime = Date.now();
+                    
+                    // Show processing state
+                    this.voiceState.currentTurn = 'processing';
+                    this.updateVoiceButton();
+                    this.showTypingIndicator();
+                    
+                    // Update status to show STT processing
+                    this.updateConnectionStatus('connected', 'Processing speech with local STT...');
+                    
+                    // STEP 1: Send audio to LOCAL speech processor (our unified voice processor)
+                    console.log('STEP 1: Sending audio to LOCAL speech processor for STT...');
+                    
+                    const formData = new FormData();
+                    formData.append('file', audioBlob, 'recording.webm');
+                    formData.append('language', 'en');
+                    formData.append('task', 'transcribe');
+                    
+                    const sttResponse = await fetch(`${this.localProcessorUrl}/transcribe_file`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (!sttResponse.ok) {
+                        throw new Error(`Local STT failed: HTTP ${sttResponse.status}`);
+                    }
+                    
+                    const sttResult = await sttResponse.json();
+                    const transcribedText = sttResult.text;
+                    
+                    console.log(`LOCAL STT result: "${transcribedText}"`);
+                    
+                    // Show what you actually said (from LOCAL processing)
+                    if (transcribedText && transcribedText.trim()) {
+                        this.addMessage('user', transcribedText);
+                        console.log(`REAL transcription from LOCAL Mac processing: "${transcribedText}"`);
+                        
+                        // STT worked successfully - confirm good audio quality
+                        this.performanceMetrics.audioQuality = 'good';
+                        this.updatePerformanceMetrics();
+                    } else {
+                        throw new Error('No text transcribed from audio');
+                    }
+                    
+                    // STEP 2: Initialize STREAMING conversation with REMOTE backend
+                    console.log('STEP 2: Starting STREAMING conversation with REMOTE RTX 4090...');
+                    
+                    // Update status to show LLM processing
+                    this.updateConnectionStatus('connected', 'Sending to RTX 4090 for LLM/RAG processing...');
+                    
+                    // Reset audio queue for new conversation
+                    this.resetAudioQueue();
+
+                    // First, initiate streaming conversation
+                    const initResponse = await fetch(`${this.backendUrl}/api/voice/converse`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            text: transcribedText,
+                            model: "llama3.2:3b",
+                            conversationHistory: this.getConversationHistory(),
+                            systemPrompt: "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
+                        })
+                    });
+
+                    if (!initResponse.ok) {
+                        throw new Error(`Backend failed: ${initResponse.status}`);
+                    }
+
+                    const initData = await initResponse.json();
+                    const dialogueId = initData.dialogueId;
+                    console.log(`Started streaming conversation: ${dialogueId}`);
+
+                    // STEP 3: Connect to real-time streaming response
+                    let fullResponse = '';
+                    let assistantMessageElement = null;
+
+                    const eventSource = new EventSource(`${this.backendUrl}/api/voice/open-stream?dialogueId=${dialogueId}`);
+                    
+                    eventSource.onopen = function() {
+                        console.log('Real-time streaming connection opened');
+                        // Update status to show streaming response
+                        this.updateConnectionStatus('connected', 'Receiving live response from RTX 4090...');
+                    }.bind(this);
+
+                    eventSource.addEventListener('textChunk', function(event) {
+                        const data = JSON.parse(event.data);
+                        if (data.role === 'assistant' && data.text) {
+                            fullResponse += data.text;
+                            
+                            // Create or update assistant message in real-time
+                            if (!assistantMessageElement) {
+                                assistantMessageElement = this.addMessage('assistant', fullResponse);
+                            } else {
+                                this.updateMessage(assistantMessageElement, fullResponse);
+                            }
+                            
+                            console.log(`Live text chunk: "${data.text}" (total: ${fullResponse.length} chars)`);
+                        }
+                    }.bind(this));
+
+                    eventSource.addEventListener('audioChunk', function(event) {
+                        const data = JSON.parse(event.data);
+                        console.log(`Audio chunk received: hasAudio=${!!data.audio}, audioLength=${data.audio ? data.audio.length : 0}, chunkIndex=${data.chunkIndex}`);
+                        if (data.audio) {
+                            // Queue audio chunk for sequential playback
+                            console.log(`Queueing audio chunk ${data.chunkIndex} for sequential playback`);
+                            this.playAudioChunk(data.audio, data.chunkIndex);
+                        }
+                    }.bind(this));
+
+                    eventSource.addEventListener('complete', function(event) {
+                        console.log('Real-time streaming complete');
+                        eventSource.close();
+                        // this.showStatus('Live response complete');
+                        
+                        // Update conversation history with final response
+                        if (fullResponse) {
+                            this.addToConversationHistory('assistant', fullResponse);
+                        }
+                        
+                        // Calculate and update response time metrics
+                        const processingTime = Date.now() - startTime;
+                        console.log(`Complete streaming processing time: ${processingTime}ms`);
+                        
+                        // Update performance metrics with actual response time
+                        this.performanceMetrics.responseTime = processingTime;
+                        console.log(`[Response Time] Updated to ${processingTime}ms`);
+                        this.updatePerformanceMetrics();
+                        console.log(`[Response Time] UI should now show: ${processingTime}ms`);
+                        
+                        // Reset to user turn (but don't disconnect!)
+                        this.voiceState.currentTurn = 'user';
+                        this.updateVoiceButton();
+                        
+                        // Update status back to ready
+                        this.updateConnectionStatus('connected', 'Ready for next conversation turn');
+                        
+                    }.bind(this));
+
+                    eventSource.onerror = function(event) {
+                        console.error('Real-time streaming error:', event);
+                        eventSource.close();
+                        if (!fullResponse) {
+                            // Fallback if streaming failed
+                            this.addMessage('assistant', 'I apologize, but I encountered an error while generating a response. Please try again.');
+                        }
+                        // this.showStatus('Ready');
+                    }.bind(this);
+                    
+                    // Update metrics (processingTime calculated when streaming completes)
+                    // this.performanceMetrics.responseTime = processingTime;
+                    this.conversationTurns++;
+                    this.performanceMetrics.conversationTurns = this.conversationTurns;
+                    this.updatePerformanceMetrics();
+                    
+                    // Hide typing indicator
+                    this.hideTypingIndicator();
+                    
+                } catch (error) {
+                    console.error('Backend communication failed:', error);
+                    this.showError(`Backend error: ${error.message}`);
+                    this.hideTypingIndicator();
+                    this.voiceState.currentTurn = 'user';
+                    this.updateVoiceButton();
+                }
+            }
+            
+            async playTTSAudio(audioBase64) {
+                try {
+                    console.log('Playing TTS from your RTX 4090 backend...');
+                    
+                    // Convert base64 to audio blob
+                    const audioBlob = this.base64ToBlob(audioBase64, 'audio/wav');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Update state for speaking
+                    this.voiceState.agentSpeaking = true;
+                    this.voiceState.canInterrupt = true; // Could implement interruption later
+                    this.voiceState.currentTurn = 'agent';
+                    this.updateVoiceButton();
+                    
+                    // Play audio
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        this.voiceState.agentSpeaking = false;
+                        this.voiceState.canInterrupt = false;
+                        this.voiceState.currentTurn = 'user';
+                        this.updateVoiceButton();
+                        console.log('TTS playback completed');
+                    };
+                    
+                    await audio.play();
+                    
+                } catch (error) {
+                    console.error('TTS playback failed:', error);
+                    this.showError('Failed to play TTS audio');
+                }
+            }
+            
+            async playTTSAudioBuffer(audioArrayBuffer) {
+                try {
+                    console.log('Playing TTS audio from REMOTE RTX 4090 backend...');
+                    
+                    // Create blob from array buffer
+                    const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Update state for speaking
+                    this.voiceState.agentSpeaking = true;
+                    this.voiceState.canInterrupt = true;
+                    this.voiceState.currentTurn = 'agent';
+                    this.updateVoiceButton();
+                    
+                    // Play audio
+                    const audio = new Audio(audioUrl);
+                    
+                    audio.onended = () => {
+                        URL.revokeObjectURL(audioUrl);
+                        this.voiceState.agentSpeaking = false;
+                        this.voiceState.canInterrupt = false;
+                        this.voiceState.currentTurn = 'user';
+                        this.updateVoiceButton();
+                        console.log('TTS playback completed');
+                    };
+                    
+                    await audio.play();
+                    
+                } catch (error) {
+                    console.error('TTS playback failed:', error);
+                    this.showError('Failed to play TTS audio');
+                }
+            }
+            
+            // UI Methods (keeping from Phase 5)
+            
+            updateVoiceButton() {
+                const button = document.getElementById('voiceButton');
+                const status = document.getElementById('voiceStatus');
+                const subtitle = document.getElementById('voiceSubtitle');
+                
+                // Remove all state classes
+                button.className = 'voice-button';
+                button.disabled = !this.isConnected;
+                
+                if (!this.isConnected) {
+                    button.textContent = '🎤';
+                    status.textContent = 'Disconnected';
+                    subtitle.textContent = 'Connect to start voice interaction';
+                    
+                } else if (this.voiceState.currentTurn === 'processing') {
+                    button.classList.add('processing');
+                    button.textContent = '⚙️';
+                    status.textContent = 'Processing';
+                    subtitle.textContent = 'ALFRED is processing your voice...';
+                    
+                } else if (this.voiceState.agentSpeaking) {
+                    button.classList.add('speaking');
+                    button.textContent = '🗣️';
+                    status.textContent = 'ALFRED Speaking';
+                    subtitle.textContent = 'Playing response from RTX 4090';
+                    
+                } else if (this.isRecording) {
+                    button.classList.add('listening');
+                    button.textContent = '🔴';
+                    status.textContent = 'Recording';
+                    subtitle.textContent = 'Speak now...';
+                    
+                } else {
+                    button.textContent = '🎤';
+                    status.textContent = 'Ready';
+                    subtitle.textContent = 'Click to speak to ALFRED';
+                }
+            }
+            
+            updatePerformanceMetrics() {
+                document.getElementById('responseTime').textContent = 
+                    this.performanceMetrics.responseTime > 0 ? 
+                    `${this.performanceMetrics.responseTime}ms` : '--';
+                
+                const audioQualityElement = document.getElementById('audioQuality');
+                audioQualityElement.textContent = this.performanceMetrics.audioQuality;
+                audioQualityElement.className = `metric-value ${this.performanceMetrics.audioQuality === 'good' ? 'success' : 'warning'}`;
+                
+                const backendElement = document.getElementById('backendStatus');
+                backendElement.textContent = this.performanceMetrics.backendStatus;
+                backendElement.className = `metric-value ${this.getBackendStatusClass(this.performanceMetrics.backendStatus)}`;
+                
+                document.getElementById('conversationTurns').textContent = this.performanceMetrics.conversationTurns;
+            }
+            
+            getBackendStatusClass(status) {
+                if (status === 'healthy') return 'success';
+                if (status === 'unavailable') return 'error';
+                return 'warning';
+            }
+            
+            async testBackend() {
+                try {
+                    this.addMessage('system', '🧪 Testing your existing ALFRED backend...');
+                    
+                    const response = await fetch(`${this.backendUrl}/api/voice/health`);
+                    const data = await response.json();
+                    
+                    console.log('Backend health check:', data);
+                    
+                    this.performanceMetrics.backendStatus = data.status || 'healthy';
+                    this.updatePerformanceMetrics();
+                    
+                    if (data.status === 'healthy' || data.tts_status) {
+                        this.showSuccess('✅ Your RTX 4090 ALFRED backend is healthy and ready!');
+                        this.addMessage('assistant', `Backend status: ${data.status}. TTS: ${data.tts_status}. Ready for voice interaction!`);
+                    } else {
+                        this.showError('Backend health check failed');
+                    }
+                    
+                } catch (error) {
+                    console.error('Backend test failed:', error);
+                    this.showError(`Cannot reach backend: ${error.message}`);
+                    this.performanceMetrics.backendStatus = 'unavailable';
+                    this.updatePerformanceMetrics();
+                }
+            }
+            
+            debugAudio() {
+                console.log('=== AUDIO DEBUG INFO ===');
+                console.log('Media recorder:', this.mediaRecorder);
+                console.log('Media recorder state:', this.mediaRecorder?.state);
+                console.log('Local stream:', this.localStream);
+                console.log('Audio context:', this.audioContext);
+                console.log('Is recording:', this.isRecording);
+                console.log('Is connected:', this.isConnected);
+                console.log('Backend URL:', this.backendUrl);
+                console.log('Voice state:', this.voiceState);
+                
+                if (this.localStream) {
+                    const audioTrack = this.localStream.getAudioTracks()[0];
+                    console.log('Audio track enabled:', audioTrack.enabled);
+                    console.log('Audio track settings:', audioTrack.getSettings());
+                    console.log('Audio track constraints:', audioTrack.getConstraints());
+                }
+                
+                this.addMessage('system', '🔍 Debug info logged to console. Check dev tools for audio setup details.');
+            }
+            
+            // Utility methods
+            
+            addMessage(role, text) {
+                const messagesContainer = document.getElementById('conversationMessages');
+                const message = document.createElement('div');
+                message.className = `message ${role} slide-in`;
+                
+                const avatar = document.createElement('div');
+                avatar.className = `message-avatar ${role}`;
+                avatar.textContent = role === 'user' ? '👤' : role === 'assistant' ? '🤖' : '⚙️';
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                
+                const bubble = document.createElement('div');
+                bubble.className = `message-bubble ${role}`;
+                bubble.textContent = text;
+                
+                const meta = document.createElement('div');
+                meta.className = 'message-meta';
+                meta.innerHTML = `
+                    <span>${new Date().toLocaleTimeString()}</span>
+                    <span>•</span>
+                    <span>Real audio processing</span>
+                `;
+                
+                content.appendChild(bubble);
+                content.appendChild(meta);
+                message.appendChild(avatar);
+                message.appendChild(content);
+                
+                messagesContainer.appendChild(message);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+                this.conversation.push({
+                    role,
+                    text,
+                    timestamp: Date.now()
+                });
+                
+                return message; // Return element for streaming updates
+            }
+
+            updateMessage(messageElement, newText) {
+                if (messageElement) {
+                    const bubble = messageElement.querySelector('.message-bubble');
+                    if (bubble) {
+                        bubble.textContent = newText;
+                        document.getElementById('conversationMessages').scrollTop = document.getElementById('conversationMessages').scrollHeight;
+                    }
+                }
+            }
+
+            // Audio chunk queue management for streaming
+            resetAudioQueue() {
+                console.log('Resetting audio queue');
+                this.audioQueue = [];
+                this.nextExpectedChunk = 1;
+                if (this.currentAudio) {
+                    this.currentAudio.pause();
+                    this.currentAudio = null;
+                }
+            }
+
+            playAudioChunk(audioData, chunkIndex) {
+                if (!audioData) {
+                    console.log('No audio data provided to playAudioChunk');
+                    return;
+                }
+                
+                console.log(`Received audio chunk ${chunkIndex}: ${audioData.length} chars of base64 data`);
+                
+                try {
+                    const audioBlob = new Blob([Uint8Array.from(atob(audioData), c => c.charCodeAt(0))], {
+                        type: 'audio/wav'
+                    });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // Initialize queue if needed
+                    if (!this.audioQueue) this.audioQueue = [];
+                    if (!this.nextExpectedChunk) this.nextExpectedChunk = 1;
+                    
+                    // Add to queue with proper sequencing
+                    this.audioQueue.push({
+                        chunkIndex: chunkIndex,
+                        audioUrl: audioUrl,
+                        audioBlob: audioBlob
+                    });
+                    
+                    console.log(`Added chunk ${chunkIndex} to queue (queue length: ${this.audioQueue.length})`);
+                    
+                    // Try to play next chunk in sequence
+                    this.processAudioQueue();
+                    
+                } catch (error) {
+                    console.log(`Error preparing audio chunk ${chunkIndex}: ${error.message}`);
+                    console.error('Error preparing audio chunk:', error);
+                }
+            }
+
+            processAudioQueue() {
+                if (!this.audioQueue) return;
+                
+                // Sort queue by chunk index to ensure proper order
+                this.audioQueue.sort((a, b) => a.chunkIndex - b.chunkIndex);
+                
+                // If currently playing audio, wait for it to finish
+                if (this.currentAudio && !this.currentAudio.ended && !this.currentAudio.paused) {
+                    console.log(`Currently playing chunk, waiting... (next expected: ${this.nextExpectedChunk})`);
+                    return;
+                }
+                
+                // Find the next chunk we're expecting
+                const nextChunk = this.audioQueue.find(chunk => chunk.chunkIndex === this.nextExpectedChunk);
+                
+                if (nextChunk) {
+                    console.log(`Playing chunk ${nextChunk.chunkIndex} in sequence (blob: ${nextChunk.audioBlob.size} bytes)`);
+                    
+                    this.currentAudio = new Audio(nextChunk.audioUrl);
+                    
+                    // Update voice state to show ALFRED is speaking
+                    this.voiceState.agentSpeaking = true;
+                    this.voiceState.currentTurn = 'agent';
+                    this.updateVoiceButton();
+                    
+                    this.currentAudio.play().then(() => {
+                        console.log(`Audio chunk ${nextChunk.chunkIndex} started playing successfully`);
+                        
+                        // NOW setup REAL TTS audio visualization (after audio starts)
+                        this.setupRealTTSVisualization(this.currentAudio);
+                        
+                    }).catch(error => {
+                        console.log(`Audio chunk ${nextChunk.chunkIndex} playback failed: ${error.message}`);
+                        console.error('Audio chunk playback failed:', error);
+                        
+                        // Fallback to animation if audio fails
+                        this.startTTSVisualizationTimer();
+                    });
+                    
+                    this.currentAudio.addEventListener('ended', () => {
+                        console.log(`Audio chunk ${nextChunk.chunkIndex} playback completed`);
+                        URL.revokeObjectURL(nextChunk.audioUrl);
+                        
+                        // Check if this is the last chunk
+                        const remainingChunks = this.audioQueue.filter(chunk => chunk.chunkIndex > nextChunk.chunkIndex);
+                        if (remainingChunks.length === 0) {
+                            // Last chunk completed - reset voice state
+                            this.voiceState.agentSpeaking = false;
+                            this.voiceState.currentTurn = 'user';
+                            this.updateVoiceButton();
+                            
+                            // Reset waveform and audio level visualization
+                            this.resetTTSVisualization();
+                        }
+                        
+                        // Remove completed chunk from queue
+                        this.audioQueue = this.audioQueue.filter(chunk => chunk.chunkIndex !== nextChunk.chunkIndex);
+                        this.nextExpectedChunk++;
+                        
+                        // Try to play next chunk
+                        setTimeout(() => this.processAudioQueue(), 50); // Small delay for smooth transition
+                    });
+                    
+                    this.currentAudio.addEventListener('error', (error) => {
+                        console.log(`Audio chunk ${nextChunk.chunkIndex} error: ${error.message}`);
+                        console.error('Audio chunk error:', error);
+                        
+                        // Skip this chunk and try next
+                        URL.revokeObjectURL(nextChunk.audioUrl);
+                        this.audioQueue = this.audioQueue.filter(chunk => chunk.chunkIndex !== nextChunk.chunkIndex);
+                        this.nextExpectedChunk++;
+                        this.processAudioQueue();
+                    });
+                } else {
+                    console.log(`Waiting for chunk ${this.nextExpectedChunk} (queue has: ${this.audioQueue.map(c => c.chunkIndex).join(', ')})`);
+                }
+            }
+
+            getConversationHistory() {
+                // Return last 6 messages to keep context manageable
+                return this.conversation.slice(-6).map(msg => ({
+                    role: msg.role === 'system' ? 'user' : msg.role, // Convert system to user for context
+                    content: msg.text
+                }));
+            }
+
+            addToConversationHistory(role, content) {
+                // This is handled by the streaming UI updates
+                console.log(`Added to conversation: ${role} - ${content.substring(0, 50)}...`);
+            }
+            
+            showTypingIndicator() {
+                document.getElementById('typingIndicator').style.display = 'flex';
+            }
+            
+            hideTypingIndicator() {
+                document.getElementById('typingIndicator').style.display = 'none';
+            }
+            
+            updateConnectionStatus(state, message) {
+                const statusElement = document.getElementById('connectionStatus');
+                const statusDot = statusElement.querySelector('.status-dot');
+                
+                statusElement.className = `connection-status ${state}`;
+                statusElement.querySelector('span:last-child').textContent = message;
+                
+                if (state === 'connecting') {
+                    statusDot.classList.add('connecting');
+                } else {
+                    statusDot.classList.remove('connecting');
+                }
+            }
+            
+            updateUI() {
+                const connectBtn = document.getElementById('connectBtn');
+                const testBtn = document.getElementById('testBtn');
+                const debugBtn = document.getElementById('debugBtn');
+                
+                connectBtn.innerHTML = this.isConnected ? 
+                    '<span>🔌</span><span>Disconnect</span>' :
+                    '<span>🔌</span><span>Connect to ALFRED</span>';
+                
+                testBtn.disabled = false; // Always allow testing
+                debugBtn.disabled = !this.isConnected;
+                
+                this.updateVoiceButton();
+                this.updatePerformanceMetrics();
+            }
+            
+            showError(message) {
+                const banner = document.getElementById('errorBanner');
+                const messageElement = document.getElementById('errorMessage');
+                messageElement.textContent = message;
+                banner.style.display = 'flex';
+                
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 5000);
+                
+                console.error('[ALFRED] Error:', message);
+            }
+            
+            showSuccess(message) {
+                const banner = document.getElementById('successBanner');
+                const messageElement = document.getElementById('successMessage');
+                messageElement.textContent = message;
+                banner.style.display = 'flex';
+                
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 3000);
+                
+                console.log('[ALFRED] Success:', message);
+            }
+            
+            base64ToBlob(base64, mimeType) {
+                const byteCharacters = atob(base64);
+                const byteNumbers = new Array(byteCharacters.length);
+                
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                
+                const byteArray = new Uint8Array(byteNumbers);
+                return new Blob([byteArray], { type: mimeType });
+            }
+            
+            async disconnect() {
+                // DEBUG: Find out what's calling disconnect
+                console.log('Disconnecting...');
+                console.trace('[DEBUG] disconnect() called from:');
+                
+                // Stop recording if active
+                if (this.isRecording) {
+                    this.stopRecording();
+                }
+                
+                // Stop visualization
+                if (this.animationFrame) {
+                    cancelAnimationFrame(this.animationFrame);
+                    this.animationFrame = null;
+                }
+                
+                // Close audio streams
+                if (this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                    this.localStream = null;
+                }
+                
+                // Close audio context
+                if (this.audioContext && this.audioContext.state !== 'closed') {
+                    await this.audioContext.close();
+                    this.audioContext = null;
+                }
+                
+                this.isConnected = false;
+                this.updateConnectionStatus('disconnected', 'Disconnected');
+                this.updateUI();
+            }
+        }
+        
+        // Global utility functions
+        function clearConversation() {
+            const messages = document.getElementById('conversationMessages');
+            messages.innerHTML = '';
+            
+            // Add welcome message back
+            const welcomeMessage = `
+                <div class="message">
+                    <div class="message-avatar assistant">🤖</div>
+                    <div class="message-content">
+                        <div class="message-bubble assistant">
+                            Hello! I'm ALFRED with enhanced voice processing. Ready to process your REAL voice.
+                        </div>
+                        <div class="message-meta">
+                            <span>Just now</span>
+                            <span>•</span>
+                            <span>System message</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            messages.innerHTML = welcomeMessage;
+        }
+        
+        function exportConversation() {
+            const conversation = alfredInterface.conversation;
+            const exportData = JSON.stringify(conversation, null, 2);
+            
+            const blob = new Blob([exportData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `alfred_conversation_${new Date().toISOString()}.json`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+        }
+
+        function openPipelineMonitor() {
+            // Open pipeline monitor in new tab
+            window.open('/monitor', '_blank');
+        }
+        
+        // Initialize the interface
+        const alfredInterface = new HybridALFREDInterface();
+    </script>
+</body>
+</html>
+
+
