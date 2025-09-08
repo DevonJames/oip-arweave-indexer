@@ -24,7 +24,7 @@ class ALFRED {
             // XAI Models (Grok) - Updated to current models
             'grok-4': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
             'grok-beta': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' }, // Legacy fallback
-            
+
             // OpenAI Models
             'gpt-4o': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' },
             'gpt-4o-mini': { provider: 'openai', apiUrl: 'https://api.openai.com/v1/chat/completions' },
@@ -331,7 +331,7 @@ class ALFRED {
                 console.log(`[ALFRED] ⚠️ Unknown model '${modelToUse}', falling back to ${this.defaultModel}`);
                 modelToUse = this.defaultModel;
             }
-            
+
             // Build context information for the prompt
             let contextInfo = '';
             if (context) {
@@ -1617,6 +1617,35 @@ Answer the question directly and conversationally:`;
             
         } catch (error) {
             console.error(`[ALFRED] RAG generation error:`, error.message);
+
+            // Attempt cloud fallback if available
+            try {
+                const cloudCandidates = [];
+                if (this.openaiApiKey) cloudCandidates.push('gpt-4o-mini');
+                if (this.xaiApiKey) cloudCandidates.push('grok-beta');
+
+                for (const modelName of cloudCandidates) {
+                    try {
+                        console.log(`[ALFRED] 🌐 Falling back to cloud model: ${modelName}`);
+                        const cloudText = await this.callCloudModel(modelName, prompt, {
+                            temperature: 0.4,
+                            max_tokens: 700,
+                            stop: null
+                        });
+                        if (cloudText && cloudText.trim()) {
+                            return {
+                                answer: cloudText.trim(),
+                                model_used: modelName,
+                                context_length: context.length
+                            };
+                        }
+                    } catch (cloudErr) {
+                        console.warn(`[ALFRED] Cloud fallback with ${modelName} failed:`, cloudErr.message);
+                    }
+                }
+            } catch (cloudSetupErr) {
+                console.warn('[ALFRED] Cloud fallback setup error:', cloudSetupErr.message);
+            }
 
             // Improved local fallback that tries to provide specific information
             let fallbackAnswer;

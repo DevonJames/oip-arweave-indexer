@@ -1230,12 +1230,12 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
         
         // Track full response for logging
         let fullResponse = '';
-        
+
         // Process the streaming response differently for cloud vs Ollama
+
         response.data.on('data', (chunk) => {
             const chunkStr = chunk.toString().trim();
             if (!chunkStr) return;
-            
             if (isCloud) {
                 // Handle cloud API SSE format (OpenAI/xAI)
                 const lines = chunkStr.split('\n');
@@ -1308,6 +1308,7 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
                 } catch (e) {
                     console.error('Error parsing Ollama stream data:', e);
                     console.error('Problematic data chunk:', chunkStr.substring(0, 100));
+
                 }
             }
         });
@@ -1632,6 +1633,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
         const SENTENCE_ENDINGS = /[.!?]+[\s]*$/; // Sentence ending patterns
         const PHRASE_ENDINGS = /[,;:]+[\s]*$/;   // Phrase ending patterns
         const PARAGRAPH_BREAKS = /\n\s*\n/;      // Paragraph breaks for larger chunks
+
         
         let shouldProcessChunk = false;
         let chunkToProcess = '';
@@ -1784,6 +1786,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     // Use environment variable for TTS service URL (supports remote backend)
                     const ttsServiceUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
                     const ttsResponse = await axios.post(`${ttsServiceUrl}/synthesize`, formData, {
+
                         headers: {
                             ...formData.getHeaders()
                         },
@@ -1891,6 +1894,7 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     // DON'T send via socket manager - onAudioChunk already handles client sending
                 } else {
                     throw new Error('No audio generated from main TTS service');
+
                 }
                 
             } catch (ttsError) {
@@ -2067,6 +2071,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                     // Use environment variable for TTS service URL (supports remote backend)
                     const ttsServiceUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
                     const ttsResponse = await axios.post(`${ttsServiceUrl}/synthesize`, formData, {
+
                         headers: {
                             ...formData.getHeaders()
                         },
@@ -2087,6 +2092,7 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                     }
                     
                     // DON'T send via socket manager - onAudioChunk already handles client sending
+
                 }
             } catch (error) {
                 console.error('Error processing final text chunk:', error);
@@ -2483,6 +2489,7 @@ function getAdaptiveStreamingDiagnostics(sessionId) {
     const streamingCoordinator = require('./streamingCoordinator');
     return streamingCoordinator.getSessionStatus(sessionId);
 }
+
 
 module.exports = {
     getVoiceModels,

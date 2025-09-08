@@ -777,6 +777,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             fd.append('voice_id', String(voiceTry || voice_id || 'default'));
             
             // Required parameters for TTS service
+
             fd.append('gender', chatterboxParams.gender);
             fd.append('emotion', chatterboxParams.emotion);
             fd.append('exaggeration', chatterboxParams.exaggeration.toString());
@@ -791,6 +792,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
                 fd.append('voice_cloning', false);
             }
             
+
             return fd;
         };
         
@@ -861,6 +863,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
                 } else {
                     throw new Error('Invalid response from Kokoro TTS service');
                 }
+
                 // Success
                 break;
             } catch (err) {
@@ -924,6 +927,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
             
             // Use the same text that was prepared for Chatterbox
             const audioData = await synthesizeWithEspeak(finalText, voice_id, fallbackSpeed);
+
             
             res.set({
                 'Content-Type': 'audio/wav',
@@ -959,6 +963,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         total_time_ms: 0
     };
     
+
     try {
         let inputText = '';
         
@@ -977,6 +982,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             });
 
             const sttStartTime = Date.now();
+
             const sttResponse = await safeAxiosCall(
                 `${STT_SERVICE_URL}/transcribe_file`,
                 {
@@ -1005,6 +1011,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     console.warn(`[Voice Chat] Smart Turn prediction failed: ${error.message}`);
                 }
             }
+
         } else if (req.body.text) {
             inputText = req.body.text;
         } else {
@@ -1016,6 +1023,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         }
 
         // Step 2: Generate text response - use direct LLM for self-referential questions, RAG for others
+
         const {
             model = 'llama3.2:3b',
             voice_id = 'female_1',
@@ -1034,6 +1042,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             
             // Build conversation history for self-referential handling
             const conversationForSelfRef = [
+
                 {
                     role: "user",
                     content: inputText
@@ -1052,6 +1061,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 console.log(`[Voice Chat] Using RAG for question: "${inputText}"`);
                 
                 // Use RAG service to get context-aware response
+
             const ragOptions = {
                 model,
                 searchParams: {
@@ -1187,6 +1197,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 responseText = ragResponse.answer;
                 console.log(`[Voice Chat] Fallback RAG processing (${processingMetrics.rag_time_ms}ms): Generated ${responseText.length} chars`);
             }
+
         }
 
         if (!responseText || !responseText.trim()) {
@@ -1261,6 +1272,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
 
                     const ttsStartTime = Date.now();
                     console.log(`[Voice Chat] Sending TTS request with text length: ${textForTTS.length} chars`);
+
                     const ttsResponse = await safeAxiosCall(
                         `${TTS_SERVICE_URL}/synthesize`,
                         {
@@ -1294,6 +1306,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     }
                     if (ttsError.code) {
                         console.warn(`[Voice Chat] TTS error code:`, ttsError.code);
+
                     }
                     
                     // Use the same text preprocessing and truncation for eSpeak
@@ -1317,6 +1330,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     response_text: responseText,
                     response: responseText,  // Mac client expects this field
                     answer: responseText,    // Fallback field that Mac client checks
+
                     model_used: model,
                     voice_id,
                     has_audio: true,
@@ -1370,6 +1384,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     response_text: responseText,
                     response: responseText,  // Mac client expects this field
                     answer: responseText,    // Fallback field that Mac client checks
+
                     model_used: model,
                     has_audio: false,
                     tts_error: 'Speech synthesis failed',
@@ -1413,6 +1428,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             
             // Text-only response with RAG metadata
             const response = {
+
                 success: true,
                 input_text: inputText,
                 response_text: responseText,
@@ -1451,6 +1467,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             }
             
             res.json(response);
+
         }
 
     } catch (error) {
