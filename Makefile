@@ -29,8 +29,10 @@ help: ## Show this help message
 	@echo "  $(GREEN)standard-gpu$(NC)         - Complete stack: all services + GPU acceleration + Chatterbox TTS"
 	@echo "  $(GREEN)chatterbox$(NC)           - Standard with Chatterbox TTS focus (CPU optimized)"
 	@echo "  $(GREEN)chatterbox-gpu$(NC)       - Chatterbox TTS with GPU acceleration (RTX 4090 optimized)"
+	@echo "  $(GREEN)backend-only$(NC)         - Distributed: Backend services only for Mac/iOS clients"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
+	@echo "  make backend-only              # Deploy backend for Mac/iOS clients + ngrok"
 	@echo "  make chatterbox-gpu            # Deploy Chatterbox TTS with GPU acceleration + ngrok"
 	@echo "  make rebuild-standard          # Build complete stack with Chatterbox TTS + ngrok"
 	@echo "  make ngrok-debug               # Debug ngrok setup (simple v3 command)"
@@ -39,6 +41,15 @@ help: ## Show this help message
 	@echo "  make install-chatterbox        # Install/update Chatterbox TTS model"
 	@echo "  make status                    # Check service status"
 	@echo "  make logs SERVICE=chatterbox-tts # View Chatterbox TTS logs"
+	@echo ""
+	@echo "$(YELLOW)Mac Client Services:$(NC)"
+	@echo "  make mac-stt-services          # Start all Mac STT services with logging"
+	@echo "  make mac-stop                  # Stop all Mac STT services"
+	@echo "  make mac-status                # Check Mac STT services status"
+	@echo "  make mac-logs-stt              # Monitor STT service logs"
+	@echo "  make mac-logs-smart-turn       # Monitor Smart Turn service logs"
+	@echo "  make mac-logs-interface        # Monitor Interface server logs"
+	@echo "  make mac-logs-all              # Monitor all Mac service logs"
 	@echo ""
 	@echo "$(YELLOW)ngrok Integration (Simplified v3 Command):$(NC)"
 	@echo "  🌐 API available at: $(GREEN)https://api.oip.onl$(NC)"
@@ -155,8 +166,8 @@ stop-ngrok:
 # Validate profile
 validate-profile:
 	@case "$(PROFILE)" in \
-		minimal|minimal-with-scrape|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu|chatterbox|chatterbox-gpu) ;; \
-		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-monolithic, gpu, oip-gpu-only, standard-gpu, chatterbox, or chatterbox-gpu$(NC)"; exit 1 ;; \
+		minimal|minimal-with-scrape|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu|chatterbox|chatterbox-gpu|backend-only) ;; \
+		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-monolithic, gpu, oip-gpu-only, standard-gpu, chatterbox, chatterbox-gpu, or backend-only$(NC)"; exit 1 ;; \
 	esac
 
 # Check if .env file exists
@@ -377,6 +388,11 @@ chatterbox-gpu: ## Quick deploy: Chatterbox TTS with GPU acceleration (RTX 4090 
 	@echo "$(YELLOW)🎭 Installing GPU-optimized Chatterbox TTS model...$(NC)"
 	@make install-chatterbox
 
+backend-only: ## Quick deploy: Backend services only for distributed Mac/iOS client architecture + ngrok
+	@echo "$(BLUE)🍎 Deploying backend-only services for Mac/iOS clients...$(NC)"
+	@echo "$(YELLOW)📱 This profile expects STT/VAD/Smart Turn to run on Mac/iOS clients$(NC)"
+	@./deploy-backend-only.sh
+
 # Quick rebuild targets for common scenarios
 rebuild-minimal: ## Quick rebuild: Core services only (elasticsearch, kibana, oip - no canvas) + ngrok
 	@make rebuild PROFILE=minimal
@@ -425,6 +441,11 @@ rebuild-chatterbox: ## Quick rebuild: Standard deployment with Chatterbox TTS fo
 rebuild-chatterbox-gpu: ## Quick rebuild: Chatterbox TTS with GPU acceleration (RTX 4090 optimized) + ngrok
 	@make rebuild PROFILE=chatterbox-gpu
 	@echo "$(YELLOW)🎭 Installing GPU-optimized Chatterbox TTS model...$(NC)"
+
+rebuild-backend-only: ## Quick rebuild: Backend services only for distributed Mac/iOS client architecture + ngrok
+	@echo "$(BLUE)🍎 Rebuilding backend-only services for Mac/iOS clients...$(NC)"
+	@echo "$(YELLOW)📱 This profile expects STT/VAD/Smart Turn to run on Mac/iOS clients$(NC)"
+	@./deploy-backend-only.sh
 
 rebuild-tts: ## Rebuild only the TTS service (no cache) - fast fix for TTS issues
 	@echo "$(BLUE)🔧 Rebuilding TTS service only...$(NC)"
@@ -707,4 +728,158 @@ dev-logs-chatterbox: ## Development: Show logs for container with Chatterbox TTS
 		echo "$(RED)No container with Chatterbox TTS support is running$(NC)"; \
 		echo "$(YELLOW)Available containers:$(NC)"; \
 		docker-compose ps --services --filter status=running | head -10; \
+	fi
+
+# Mac Client Services Management
+mac-stt-services: ## Start Mac STT services (Smart Turn, STT, Interface Server) with logging
+	@echo "$(BLUE)🍎 Starting Mac STT Services Stack...$(NC)"
+	@echo "$(YELLOW)📱 This starts the client-side services for Mac voice interface$(NC)"
+	@echo "$(GREEN)Services starting:$(NC)"
+	@echo "  🧠 Smart Turn Service (port 8014)"
+	@echo "  🎤 STT Service (port 8013)" 
+	@echo "  🌐 Interface Server (port 3001)"
+	@echo ""
+	@mkdir -p logs
+	@echo "$(BLUE)📋 Logs will be saved to:$(NC)"
+	@echo "  📄 logs/smart-turn-service.log"
+	@echo "  📄 logs/stt-service.log"
+	@echo "  📄 logs/interface-server.log"
+	@echo ""
+	@echo "$(YELLOW)💡 Monitor logs with:$(NC)"
+	@echo "  make mac-logs-smart-turn    # Smart Turn service logs"
+	@echo "  make mac-logs-stt          # STT service logs"
+	@echo "  make mac-logs-interface    # Interface server logs"
+	@echo "  make mac-logs-all          # All services logs"
+	@echo ""
+	@cd mac-client && \
+	echo "$(GREEN)🧠 Starting Smart Turn Service...$(NC)" && \
+	source mac-client-env/bin/activate && \
+	(nohup python mac_smart_turn_service.py > ../logs/smart-turn-service.log 2>&1 & echo $$! > ../logs/smart-turn-service.pid) && \
+	echo "$(GREEN)🎤 Starting STT Service...$(NC)" && \
+	(nohup python mac_stt_service.py > ../logs/stt-service.log 2>&1 & echo $$! > ../logs/stt-service.pid) && \
+	echo "$(GREEN)🌐 Starting Interface Server...$(NC)" && \
+	(nohup node voice_interface_server.js > ../logs/interface-server.log 2>&1 & echo $$! > ../logs/interface-server.pid)
+	@sleep 3
+	@echo ""
+	@echo "$(GREEN)✅ All Mac STT services started!$(NC)"
+	@echo "$(BLUE)🔍 Service Status:$(NC)"
+	@make mac-status
+
+mac-stop: ## Stop all Mac STT services
+	@echo "$(BLUE)🛑 Stopping Mac STT Services...$(NC)"
+	@if [ -f logs/smart-turn-service.pid ]; then \
+		PID=$$(cat logs/smart-turn-service.pid); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "$(YELLOW)Stopping Smart Turn Service (PID: $$PID)...$(NC)"; \
+			kill $$PID; \
+		fi; \
+		rm -f logs/smart-turn-service.pid; \
+	fi
+	@if [ -f logs/stt-service.pid ]; then \
+		PID=$$(cat logs/stt-service.pid); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "$(YELLOW)Stopping STT Service (PID: $$PID)...$(NC)"; \
+			kill $$PID; \
+		fi; \
+		rm -f logs/stt-service.pid; \
+	fi
+	@if [ -f logs/interface-server.pid ]; then \
+		PID=$$(cat logs/interface-server.pid); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "$(YELLOW)Stopping Interface Server (PID: $$PID)...$(NC)"; \
+			kill $$PID; \
+		fi; \
+		rm -f logs/interface-server.pid; \
+	fi
+	@echo "$(GREEN)🔗 All Mac STT services stopped$(NC)"
+
+mac-status: ## Check status of Mac STT services
+	@echo "$(BLUE)Mac STT Services Status:$(NC)"
+	@if [ -f logs/smart-turn-service.pid ]; then \
+		PID=$$(cat logs/smart-turn-service.pid); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "$(GREEN)🧠 Smart Turn Service: ✅ Running (PID: $$PID)$(NC)"; \
+		else \
+			echo "$(RED)🧠 Smart Turn Service: ❌ Stopped$(NC)"; \
+		fi; \
+	else \
+		echo "$(RED)🧠 Smart Turn Service: ❌ Not started$(NC)"; \
+	fi
+	@if [ -f logs/stt-service.pid ]; then \
+		PID=$$(cat logs/stt-service.pid); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "$(GREEN)🎤 STT Service: ✅ Running (PID: $$PID)$(NC)"; \
+		else \
+			echo "$(RED)🎤 STT Service: ❌ Stopped$(NC)"; \
+		fi; \
+	else \
+		echo "$(RED)🎤 STT Service: ❌ Not started$(NC)"; \
+	fi
+	@if [ -f logs/interface-server.pid ]; then \
+		PID=$$(cat logs/interface-server.pid); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "$(GREEN)🌐 Interface Server: ✅ Running (PID: $$PID)$(NC)"; \
+		else \
+			echo "$(RED)🌐 Interface Server: ❌ Stopped$(NC)"; \
+		fi; \
+	else \
+		echo "$(RED)🌐 Interface Server: ❌ Not started$(NC)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)Port Status:$(NC)"
+	@if lsof -i :8014 >/dev/null 2>&1; then \
+		echo "$(GREEN)  Port 8014 (Smart Turn): ✅ Active$(NC)"; \
+	else \
+		echo "$(RED)  Port 8014 (Smart Turn): ❌ Free$(NC)"; \
+	fi
+	@if lsof -i :8013 >/dev/null 2>&1; then \
+		echo "$(GREEN)  Port 8013 (STT): ✅ Active$(NC)"; \
+	else \
+		echo "$(RED)  Port 8013 (STT): ❌ Free$(NC)"; \
+	fi
+	@if lsof -i :3001 >/dev/null 2>&1; then \
+		echo "$(GREEN)  Port 3001 (Interface): ✅ Active$(NC)"; \
+	else \
+		echo "$(RED)  Port 3001 (Interface): ❌ Free$(NC)"; \
+	fi
+
+mac-restart: ## Restart all Mac STT services
+	@echo "$(BLUE)🔄 Restarting Mac STT Services...$(NC)"
+	@make mac-stop
+	@sleep 2
+	@make mac-stt-services
+
+mac-logs-smart-turn: ## Show Smart Turn service logs
+	@echo "$(BLUE)🧠 Smart Turn Service Logs:$(NC)"
+	@if [ -f logs/smart-turn-service.log ]; then \
+		tail -f logs/smart-turn-service.log; \
+	else \
+		echo "$(YELLOW)No Smart Turn service log found. Start services with: make mac-stt-services$(NC)"; \
+	fi
+
+mac-logs-stt: ## Show STT service logs  
+	@echo "$(BLUE)🎤 STT Service Logs:$(NC)"
+	@if [ -f logs/stt-service.log ]; then \
+		tail -f logs/stt-service.log; \
+	else \
+		echo "$(YELLOW)No STT service log found. Start services with: make mac-stt-services$(NC)"; \
+	fi
+
+mac-logs-interface: ## Show Interface server logs
+	@echo "$(BLUE)🌐 Interface Server Logs:$(NC)"
+	@if [ -f logs/interface-server.log ]; then \
+		tail -f logs/interface-server.log; \
+	else \
+		echo "$(YELLOW)No Interface server log found. Start services with: make mac-stt-services$(NC)"; \
+	fi
+
+mac-logs-all: ## Show all Mac STT service logs (multiplexed)
+	@echo "$(BLUE)📋 All Mac STT Service Logs:$(NC)"
+	@if [ -f logs/smart-turn-service.log ] && [ -f logs/stt-service.log ] && [ -f logs/interface-server.log ]; then \
+		echo "$(YELLOW)💡 Press Ctrl+C to stop monitoring$(NC)"; \
+		tail -f logs/smart-turn-service.log logs/stt-service.log logs/interface-server.log; \
+	else \
+		echo "$(YELLOW)Some log files missing. Start services with: make mac-stt-services$(NC)"; \
+		echo "$(BLUE)Available logs:$(NC)"; \
+		ls -la logs/*.log 2>/dev/null || echo "  No logs found"; \
 	fi 

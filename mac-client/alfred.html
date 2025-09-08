@@ -1,0 +1,2089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ALFRED — Voice Assistant</title>
+  <style>
+    :root{
+      --bg:#10141A; --glass:rgba(255,255,255,.08); --text:#E8EEF6; --muted:#90A4B4;
+      --accent-1:#15e6ff; --accent-2:#d45fff; --radius:16px; --dock-h:96px; --history-w:280px;
+      --glow:0 0 20px rgba(21,230,255,.35), 0 0 40px rgba(212,95,255,.25);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+      font:normal 16px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans"}
+
+    /* Header */
+    .app-header{
+      position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
+      height:56px;padding:0 12px;background:linear-gradient(180deg, rgba(16,20,26,.8), rgba(16,20,26,.2));
+      backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.06)
+    }
+    .brand{display:flex;gap:10px;align-items:center}
+    .nav-toggle,.btn-icon{
+      width:40px;height:40px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);cursor:pointer;color:var(--text);display:grid;place-items:center
+    }
+    .logo{font-weight:700;letter-spacing:.08em}
+    .mode-chip{margin-left:8px;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06)}
+
+    /* Layout */
+    .app-main{
+      display:grid;grid-template-columns:1fr;gap:12px;padding:12px;
+      padding-bottom:calc(var(--dock-h) + env(safe-area-inset-bottom,16px));
+      min-height:100dvh;transition:grid-template-columns .25s ease;
+    }
+    .history-pane{
+      display:none;background:var(--glass);border-radius:var(--radius);overflow:auto;padding:10px;
+      transition:width .25s ease, transform .25s ease, opacity .2s ease;
+    }
+    .conversation{
+      position:relative;height:calc(100dvh - 56px - var(--dock-h) - 140px);overflow:auto;padding:12px;
+      background:var(--glass);border-radius:var(--radius);backdrop-filter:blur(20px) saturate(140%);
+    }
+    .message{max-width:95%;margin:10px 0;padding:12px 14px;border-radius:14px;line-height:1.55}
+    .message.user{background:rgba(21,230,255,.08);border:1px solid rgba(21,230,255,.35)}
+    .message.ai{background:rgba(212,95,255,.08);border:1px solid rgba(212,95,255,.35);box-shadow:var(--glow)}
+    .message.system{background:rgba(144,164,180,.08);border:1px solid rgba(144,164,180,.35);font-style:italic;font-size:14px}
+    .stream-text .cursor{display:inline-block;width:1px;background:var(--text);height:1em;vertical-align:bottom;animation:blink 1s steps(1) infinite}
+    @keyframes blink{50%{opacity:0}}
+    .live-area{position:sticky;bottom:0;margin-top:12px;padding:8px;background:linear-gradient(180deg,transparent 0, rgba(0,0,0,.25) 60%)}
+    .badges{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap}
+    .badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06)}
+    .badge.listening{box-shadow:0 0 8px rgba(21,230,255,.6)}
+    .badge.speaking{box-shadow:0 0 8px rgba(212,95,255,.6)}
+    .badge.processing{box-shadow:0 0 8px rgba(255,149,0,.6)}
+    .badge.mode{border-color:rgba(21,230,255,.35)}
+    canvas.waveform{width:100%;height:64px;display:block;opacity:.95}
+
+    /* Control dock (responsive) */
+    .control-dock{
+      position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;
+      /* mic | mute | connect | processing-toggle | output-toggle | composer */
+      grid-template-columns:auto auto auto auto auto 1fr;
+      gap:8px;align-items:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom,8px));
+      background:linear-gradient(180deg, rgba(16,20,26,.4), rgba(16,20,26,.85));
+      backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,.06);height:var(--dock-h)
+    }
+    .btn{height:44px;min-width:44px;display:inline-grid;place-items:center;border-radius:999px;
+      background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);cursor:pointer}
+    .btn:hover{box-shadow:var(--glow)}
+    .btn[aria-pressed="true"]{outline:2px solid var(--accent-1)}
+    .btn:disabled{opacity:0.5;cursor:not-allowed}
+
+    /* Composer stretches to the right edge */
+    .composer{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;min-width:0}
+    .composer input{height:44px;padding:0 12px;border-radius:999px;width:100%;min-width:0;
+      background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:var(--text);outline:none}
+    .composer input:focus{box-shadow:var(--glow);border-color:rgba(21,230,255,.5)}
+    .composer .send{height:44px;width:44px;border-radius:999px}
+
+    /* Segmented toggle — style only the two pills (not the disclosure) */
+    .seg-toggle{
+      display:inline-grid;grid-auto-flow:column;gap:4px;padding:4px;border-radius:999px;
+      background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);position:relative
+    }
+    .seg-toggle > button,
+    .seg-toggle > div > button:not(.disclosure){
+      min-width:64px;height:36px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.04);color:var(--text);cursor:pointer;position:relative;appearance:none;
+    }
+    .seg-toggle > button[aria-pressed="true"],
+    .seg-toggle > div > button[aria-pressed="true"]:not(.disclosure){
+      background:linear-gradient(90deg,var(--accent-1),var(--accent-2));border-color:transparent;color:#061018;box-shadow:var(--glow)
+    }
+
+    /* Tiny disclosure that never inherits pill styles */
+    .disclosure{
+      all:unset;
+      position:absolute; right:-6px; top:-6px; width:14px; height:14px;
+      display:grid;place-items:center; border-radius:999px;
+      background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22);
+      cursor:pointer; z-index:2; line-height:1; box-sizing:border-box;
+    }
+    .disclosure::after{ content:"▾"; font-size:9px; color:var(--text); }
+
+    /* Popover */
+    .popover{position:fixed; z-index:50; min-width:200px; background:var(--glass);
+      border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:8px;
+      backdrop-filter:blur(20px) saturate(140%); box-shadow:0 10px 40px rgba(0,0,0,.5); display:none;}
+    .popover.open{ display:block; }
+    .model-item{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer}
+    .model-item:hover{background:rgba(255,255,255,.08)}
+
+    /* Range slider styling */
+    input[type="range"]::-webkit-slider-thumb{
+      appearance:none;width:16px;height:16px;border-radius:50%;
+      background:linear-gradient(90deg,var(--accent-1),var(--accent-2));
+      cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)
+    }
+    input[type="range"]::-moz-range-thumb{
+      width:16px;height:16px;border-radius:50%;border:none;
+      background:linear-gradient(90deg,var(--accent-1),var(--accent-2));
+      cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)
+    }
+
+    /* Settings dialog — glassy + dark */
+    dialog.settings-modal{border:none;padding:0;background:transparent}
+    dialog.settings-modal::backdrop{background:rgba(0,0,0,.4);backdrop-filter:blur(2px)}
+    dialog.settings-modal form{
+      min-width:min(720px,90vw);max-width:90vw;color:var(--text);
+      background:var(--glass);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;
+      backdrop-filter:blur(20px) saturate(140%); box-shadow:var(--glow)
+    }
+    dialog.settings-modal h2{margin:0 0 12px}
+    dialog.settings-modal .grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+    dialog.settings-modal label{color:var(--muted);display:grid;gap:6px;font-size:14px}
+    dialog.settings-modal select, dialog.settings-modal input[type="range"]{
+      background:rgba(255,255,255,.08); color:var(--text); border:1px solid rgba(255,255,255,.16); border-radius:12px; height:40px; padding:0 10px;
+    }
+    dialog.settings-modal input[type="range"]{height:auto;padding:0}
+    dialog.settings-modal menu{display:flex;justify-content:flex-end;gap:8px;margin:16px 0 0}
+    dialog.settings-modal menu .btn{box-shadow:none}
+
+    /* Connection status indicator */
+    .connection-status{
+      display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);
+      padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+    }
+    .status-dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+    .connection-status.connected{color:#34c759;border-color:rgba(52,199,89,.35)}
+    .connection-status.connecting{color:#ff9500;border-color:rgba(255,149,0,.35);animation:pulse 1.5s infinite}
+    .connection-status.disconnected{color:#ff3b30;border-color:rgba(255,59,48,.35)}
+    
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.05)}}
+
+    /* Performance metrics */
+    .metrics{display:flex;gap:12px;font-size:11px;color:var(--muted);margin:6px 0}
+    .metric{display:flex;align-items:center;gap:4px}
+    .metric-value{color:var(--text);font-weight:500}
+    .metric-value.good{color:#34c759}
+    .metric-value.fair{color:#ff9500}
+    .metric-value.poor{color:#ff3b30}
+
+    /* Spritz-style text display - positioned in same place as waveform */
+    .spritz-display{
+      position:absolute;top:0;left:0;right:0;bottom:0;
+      display:none;align-items:center;justify-content:center;
+      text-align:center;font-size:24px;font-weight:600;color:var(--text);
+      background:var(--glass);border-radius:8px;backdrop-filter:blur(20px) saturate(140%);
+      border:1px solid rgba(255,255,255,.12);z-index:10;
+    }
+    .spritz-display.active{display:flex}
+    .spritz-word{opacity:1}
+
+    /* Hide waveform when spritz is active */
+    .waveform-container.spritz-active canvas.waveform{opacity:0}
+
+    /* Waveform container for positioning */
+    .waveform-container{position:relative}
+
+    /* Interface feedback box - pinned above text input */
+    .interface-feedback{
+      position:fixed;left:12px;right:12px;bottom:calc(var(--dock-h) + 12px);
+      background:var(--glass);border-radius:var(--radius);padding:12px;
+      backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,.06);
+      z-index:20;
+    }
+    .interface-feedback .badges{margin:0 0 8px 0}
+    .interface-feedback .metrics{margin:8px 0}
+    .interface-feedback canvas.waveform{height:48px}
+
+    /* Tablet & Desktop responsive behavior */
+    @media (min-width:768px){
+      .app-main{grid-template-columns:var(--history-w) 1fr}
+      .history-pane{display:block}
+      canvas.waveform{height:80px}
+      .collapsed .app-main{grid-template-columns:0 1fr}
+      .collapsed .history-pane{width:0;opacity:0;pointer-events:none}
+    }
+    @media (min-width:1024px){ :root{--dock-h:100px} .conversation{padding:16px 20px} }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <button class="nav-toggle" aria-label="Toggle history">☰</button>
+      <span class="logo">ΛLFRED</span>
+      <span class="mode-chip" id="modeChip">RAG</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div id="connectionStatus" class="connection-status disconnected">
+        <div class="status-dot"></div>
+        <span>Disconnected</span>
+      </div>
+      <button class="btn-icon settings" aria-haspopup="dialog" aria-controls="settings-modal" title="Settings">⚙</button>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <aside class="history-pane" aria-label="Conversation history">
+      <h3 style="margin:8px 0 6px 0;font:600 14px/1 Inter,system-ui;color:var(--muted)">History</h3>
+      <ul id="historyList" style="list-style:none;margin:0;padding:0;display:grid;gap:8px"></ul>
+    </aside>
+
+    <section class="conversation" id="conversation" aria-live="polite" aria-atomic="false">
+      <div class="message ai">
+        <div class="stream-text">
+          Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue <span class="cursor"></span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Interface feedback box - pinned above text input -->
+  <div class="interface-feedback">
+    <div class="badges">
+      <span class="badge listening" id="badgeListening" hidden>🎤 Recording</span>
+      <span class="badge processing" id="badgeProcessing" hidden>⚙️ Processing</span>
+      <span class="badge speaking" id="badgeSpeaking" hidden>🔊 ΛLFRED Speaking</span>
+      <span class="badge" id="badgeInterrupted" hidden style="background:rgba(255,149,0,.08);border-color:rgba(255,149,0,.35)">🔄 Interrupted</span>
+      <span class="badge mode" id="badgeMode">Mode: <strong>RAG</strong></span>
+      <span class="badge" id="badgeModel">Model: <strong id="modelName">llama3.2:3b</strong></span>
+      <span class="badge" id="badgeOutputMode">Output: <strong>Spoken</strong></span>
+    </div>
+    <div class="metrics">
+      <div class="metric">
+        <span>Response:</span>
+        <span id="responseTime" class="metric-value">--</span>
+      </div>
+      <div class="metric">
+        <span>Audio:</span>
+        <span id="audioQuality" class="metric-value good">good</span>
+      </div>
+      <div class="metric">
+        <span>Backend:</span>
+        <span id="backendStatus" class="metric-value">--</span>
+      </div>
+      <div class="metric">
+        <span>Turns:</span>
+        <span id="conversationTurns" class="metric-value">0</span>
+      </div>
+    </div>
+    <div class="waveform-container">
+      <canvas class="waveform" id="waveform"></canvas>
+      <!-- Spritz display positioned over waveform -->
+      <div id="spritzDisplay" class="spritz-display">
+        <div id="spritzWord" class="spritz-word"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="control-dock">
+    <button class="btn" id="btnMic" aria-pressed="false" title="Start/stop voice recording">🎤</button>
+    <button class="btn" id="btnMute" aria-pressed="false" title="Mute TTS audio">🔇</button>
+    <button class="btn" id="btnConnect" aria-pressed="false" title="Connect to ALFRED">🔌</button>
+
+    <div class="seg-toggle" role="group" aria-label="Processing mode">
+      <button id="btnRAG" aria-pressed="true">RAG</button>
+      <div style="position:relative;display:inline-block">
+        <button id="btnLLM" aria-pressed="false">LLM</button>
+        <button id="btnLLMDisclosure" class="disclosure" aria-haspopup="listbox" aria-expanded="false" aria-controls="modelPopover" title="Choose LLM model"></button>
+      </div>
+    </div>
+
+    <div class="seg-toggle" role="group" aria-label="Output mode">
+      <button id="btnSpoken" aria-pressed="true">🔊 Spoken</button>
+      <div style="position:relative;display:inline-block">
+        <button id="btnOnScreen" aria-pressed="false">📖 On-Screen</button>
+        <button id="btnWPMDisclosure" class="disclosure" aria-haspopup="listbox" aria-expanded="false" aria-controls="wpmPopover" title="Adjust reading speed"></button>
+      </div>
+    </div>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <input type="text" id="inputText" placeholder="Type your question or use voice…" />
+      <button class="btn send" type="submit" aria-label="Send">➤</button>
+    </form>
+  </footer>
+
+  <!-- Settings dialog -->
+  <dialog id="settings-modal" class="settings-modal">
+    <form method="dialog">
+      <h2>⚙️ ALFRED Settings</h2>
+      <div class="grid">
+        <label>TTS Engine
+          <select id="selTTSEngine">
+            <option value="elevenlabs">ElevenLabs (Premium)</option>
+            <option value="edge_tts">Edge TTS (Fast)</option>
+            <option value="kokoro">Kokoro (Local)</option>
+            <option value="chatterbox">Chatterbox (Local)</option>
+            <option value="silero">Silero (Local)</option>
+            <option value="gtts">Google TTS</option>
+            <option value="espeak">eSpeak (Fallback)</option>
+          </select>
+        </label>
+        <label>Voice Selection
+          <select id="selVoice">
+            <option value="onwK4e9ZLuTAKqWW03F9">Daniel (British Male)</option>
+            <option value="pNInz6obpgDQGcFmaJgB">Adam (Deep Male)</option>
+            <option value="EXAVITQu4vr4xnSDxMaL">Bella (Sweet Female)</option>
+            <option value="pMsXgVXv3BLzUgSXRplE">Freya (Conversational Female)</option>
+            <option value="en-GB-RyanNeural">Ryan (Edge TTS British)</option>
+            <option value="en-US-JennyNeural">Jenny (Edge TTS American)</option>
+          </select>
+        </label>
+        <label>Speech Speed
+          <input id="rngSpeed" type="range" min="0.7" max="1.3" step="0.05" value="1.0" />
+        </label>
+        <label>Audio Quality
+          <select id="selAudioQuality">
+            <option value="high">High Quality</option>
+            <option value="medium">Medium Quality</option>
+            <option value="low">Low Quality (Fast)</option>
+          </select>
+        </label>
+      </div>
+      <menu>
+        <button class="btn" value="cancel">Close</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Model picker popover -->
+  <div id="modelPopover" class="popover" role="listbox" aria-label="Select LLM model">
+    <div class="model-item"><input type="radio" name="llm" value="llama3.2:3b" checked id="mdl1"><label for="mdl1">LLaMA 3.2 3B (Fast)</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="mistral:7b" id="mdl2"><label for="mdl2">Mistral 7B</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="llama2:7b" id="mdl3"><label for="mdl3">LLaMA 2 7B</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="gpt-4o-mini" id="mdl4"><label for="mdl4">GPT-4o Mini (Cloud)</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="grok-4" id="mdl5"><label for="mdl5">Grok-4 (Cloud)</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="parallel" id="mdl6"><label for="mdl6">Parallel (All Models)</label></div>
+  </div>
+
+  <!-- WPM speed popover -->
+  <div id="wpmPopover" class="popover" role="dialog" aria-label="Adjust reading speed">
+    <div style="padding:12px;min-width:220px">
+      <div style="margin-bottom:12px;font-weight:600;color:var(--text)">On-Screen Settings</div>
+      
+      <!-- Reading Speed -->
+      <div style="margin-bottom:16px">
+        <div style="margin-bottom:8px;font-size:14px;color:var(--text)">Reading Speed</div>
+        <div style="margin-bottom:8px">
+          <input type="range" id="wpmSlider" min="150" max="500" step="10" value="280" 
+                 style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.2);outline:none;appearance:none">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+          <span>150 WPM</span>
+          <span id="wpmValue" style="color:var(--text);font-weight:600">280 WPM</span>
+          <span>500 WPM</span>
+        </div>
+      </div>
+      
+      <!-- Font Size -->
+      <div style="margin-bottom:12px">
+        <div style="margin-bottom:8px;font-size:14px;color:var(--text)">Text Size</div>
+        <div style="margin-bottom:8px">
+          <input type="range" id="fontSizeSlider" min="16" max="48" step="2" value="24" 
+                 style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.2);outline:none;appearance:none">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">
+          <span>16px</span>
+          <span id="fontSizeValue" style="color:var(--text);font-weight:600">24px</span>
+          <span>48px</span>
+        </div>
+      </div>
+      
+      <div style="font-size:11px;color:var(--muted);text-align:center">
+        Adjust speed and size for optimal reading
+      </div>
+    </div>
+  </div>
+
+  <script>
+    class ALFREDInterface {
+      constructor() {
+        // Configuration
+        this.localProcessorUrl = 'http://localhost:8015';
+        this.backendUrl = 'https://api.oip.onl';
+        
+        // Audio components (from hybrid_voice_interface.html)
+        this.localStream = null;
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.audioContext = null;
+        this.analyser = null;
+        this.animationFrame = null;
+        this.ttsAudioContext = null;
+        this.waveformCanvas = null;
+        this.waveformCtx = null;
+        
+        // State management
+        this.isConnected = false;
+        this.isRecording = false;
+        this.isMuted = false;
+        this.conversationTurns = 0;
+        
+        // Voice processing state
+        this.voiceState = {
+          currentTurn: 'user',
+          speechActive: false,
+          agentSpeaking: false,
+          canInterrupt: true, // Enable interruption capability
+          lastInterruption: null
+        };
+        
+        // Interruption detection
+        this.interruptionConfig = {
+          enabled: true,
+          energyThreshold: 0.15, // Minimum energy to consider interruption
+          sustainedFrames: 3, // Number of consecutive frames needed
+          cooldownMs: 1000 // Minimum time between interruptions
+        };
+        this.interruptionBuffer = [];
+        this.lastInterruptionTime = 0;
+        
+        // Performance metrics
+        this.performanceMetrics = {
+          responseTime: 0,
+          audioQuality: 'good',
+          backendStatus: 'unknown',
+          conversationTurns: 0
+        };
+        
+        // Conversation and audio queue
+        this.conversation = [];
+        this.audioQueue = [];
+        this.nextExpectedChunk = 1;
+        this.currentAudio = null;
+        
+        // Spritz display
+        this.spritzActive = false;
+        this.spritzWords = [];
+        this.spritzIndex = 0;
+        this.spritzTimer = null;
+        
+        // Settings
+        this.settings = {
+          processingMode: 'rag', // 'rag' or 'llm'
+          selectedModel: 'llama3.2:3b',
+          outputMode: 'spoken', // 'spoken' or 'onscreen'
+          spritzWPM: 280, // Reading speed for on-screen mode
+          spritzFontSize: 24, // Font size for on-screen mode (px)
+          ttsEngine: 'elevenlabs',
+          voiceId: 'onwK4e9ZLuTAKqWW03F9',
+          speechSpeed: 1.0,
+          audioQuality: 'high'
+        };
+        
+        this.setupEventListeners();
+        this.initializeInterface();
+      }
+      
+      setupEventListeners() {
+        // Header controls
+        document.querySelector('.nav-toggle').addEventListener('click', () => this.toggleHistory());
+        document.querySelector('.settings').addEventListener('click', () => this.openSettings());
+        
+        // Control dock
+        document.getElementById('btnMic').addEventListener('click', () => this.toggleRecording());
+        document.getElementById('btnMute').addEventListener('click', () => this.toggleMute());
+        document.getElementById('btnConnect').addEventListener('click', () => this.toggleConnection());
+        
+        // Mode toggle
+        document.getElementById('btnRAG').addEventListener('click', () => this.setMode('rag'));
+        document.getElementById('btnLLM').addEventListener('click', () => this.setMode('llm'));
+        
+        // Output mode toggle
+        document.getElementById('btnSpoken').addEventListener('click', () => this.setOutputMode('spoken'));
+        document.getElementById('btnOnScreen').addEventListener('click', () => this.setOutputMode('onscreen'));
+        
+        // Model picker
+        this.setupModelPicker();
+        
+        // WPM picker
+        this.setupWPMPicker();
+        
+        // Composer
+        document.getElementById('composer').addEventListener('submit', (e) => this.handleTextSubmit(e));
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+        document.addEventListener('keyup', (e) => this.handleKeyboardUp(e));
+        
+        // Settings form
+        this.setupSettingsHandlers();
+      }
+      
+      handleKeyboard(e) {
+        if (e.code === 'Space' && !e.repeat && !this.spaceKeyDown && 
+            !document.getElementById('inputText').matches(':focus')) {
+          e.preventDefault();
+          this.spaceKeyDown = true;
+          
+          if (this.isConnected) {
+            if (this.voiceState.agentSpeaking) {
+              // Interrupt ΛLFRED if speaking
+              console.log('[Spacebar] Interrupting ΛLFRED speech...');
+              this.handleInterruption();
+            } else if (!this.isRecording) {
+              // Start normal recording
+              console.log('[Spacebar] Starting recording...');
+              this.startRecording();
+            }
+          }
+        }
+      }
+      
+      handleKeyboardUp(e) {
+        if (e.code === 'Space' && this.spaceKeyDown) {
+          e.preventDefault();
+          this.spaceKeyDown = false;
+          if (this.isConnected && this.isRecording) {
+            console.log('[Spacebar] Stopping recording...');
+            this.stopRecording();
+          }
+        }
+      }
+      
+      async initializeInterface() {
+        this.updateUI();
+        this.setupWaveform();
+        this.loadSettings();
+        await this.testBackendHealth();
+      }
+      
+      setupWaveform() {
+        const canvas = document.getElementById('waveform');
+        this.waveformCanvas = canvas;
+        this.waveformCtx = canvas.getContext('2d');
+        
+        function resize() {
+          canvas.width = canvas.clientWidth * devicePixelRatio;
+          canvas.height = canvas.clientHeight * devicePixelRatio;
+        }
+        resize();
+        addEventListener('resize', resize);
+        
+        this.drawIdleWaveform();
+      }
+      
+      drawIdleWaveform() {
+        if (!this.waveformCtx) return;
+        
+        const canvas = this.waveformCanvas;
+        const ctx = this.waveformCtx;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw idle message
+        ctx.fillStyle = '#90A4B4';
+        ctx.font = `${14 * devicePixelRatio}px Inter, system-ui`;
+        ctx.textAlign = 'center';
+        ctx.fillText('🎵 Ready for audio...', canvas.width / 2, canvas.height / 2 + 5 * devicePixelRatio);
+      }
+      
+      async testBackendHealth() {
+        try {
+          // Test LOCAL processor
+          const localResponse = await fetch(`${this.localProcessorUrl}/health`);
+          const localData = await localResponse.json();
+          console.log('LOCAL processor health:', localData);
+          
+          // Test REMOTE backend
+          const remoteResponse = await fetch(`${this.backendUrl}/api/voice/health`);
+          const remoteData = await remoteResponse.json();
+          console.log('REMOTE backend health:', remoteData);
+          
+          this.performanceMetrics.backendStatus = 'healthy';
+          this.updateMetrics();
+          
+        } catch (error) {
+          console.warn('Services not available on load:', error);
+          this.performanceMetrics.backendStatus = 'unavailable';
+          this.updateMetrics();
+        }
+      }
+      
+      async toggleConnection() {
+        if (this.isConnected) {
+          await this.disconnect();
+        } else {
+          await this.connect();
+        }
+      }
+      
+      async connect() {
+        try {
+          this.updateConnectionStatus('connecting', 'Setting up audio processing...');
+          
+          // Get microphone with advanced settings
+          this.localStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: 16000,
+              channelCount: 1,
+              latency: 0.01
+            }
+          });
+          
+          console.log('Microphone access granted');
+          
+          // Setup audio visualization
+          await this.setupAudioVisualization();
+          
+          // Setup MediaRecorder
+          this.setupMediaRecorder();
+          
+          this.isConnected = true;
+          this.updateConnectionStatus('connected', 'Connected with advanced audio processing');
+          this.updateUI();
+          
+          this.addMessage('system', '✅ Connected! Voice processing ready. Press spacebar or click mic to speak.');
+          
+        } catch (error) {
+          console.error('Connection failed:', error);
+          this.updateConnectionStatus('disconnected', 'Connection failed');
+          this.addMessage('system', `❌ Connection failed: ${error.message}`);
+        }
+      }
+      
+      async setupAudioVisualization() {
+        try {
+          this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: 16000,
+            latencyHint: 'interactive'
+          });
+          
+          if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+          }
+          
+          const source = this.audioContext.createMediaStreamSource(this.localStream);
+          this.analyser = this.audioContext.createAnalyser();
+          this.analyser.fftSize = 512;
+          this.analyser.smoothingTimeConstant = 0.8;
+          
+          source.connect(this.analyser);
+          this.startAudioVisualization();
+          
+        } catch (error) {
+          console.error('Audio visualization setup failed:', error);
+        }
+      }
+      
+      setupMediaRecorder() {
+        try {
+          let options = { mimeType: 'audio/webm;codecs=opus' };
+          
+          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = {};
+          }
+          
+          this.mediaRecorder = new MediaRecorder(this.localStream, options);
+          this.audioChunks = [];
+          
+          this.mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              this.audioChunks.push(event.data);
+            }
+          };
+          
+          this.mediaRecorder.onstop = () => {
+            this.processRecordedAudio();
+          };
+          
+          this.mediaRecorder.onerror = (error) => {
+            console.error('MediaRecorder error:', error);
+            this.addMessage('system', '❌ Audio recording error');
+          };
+          
+          // MediaRecorder working - set good audio quality
+          this.performanceMetrics.audioQuality = 'good';
+          this.updateMetrics();
+          
+        } catch (error) {
+          console.error('MediaRecorder setup failed:', error);
+        }
+      }
+      
+      startAudioVisualization() {
+        const audioData = new Uint8Array(this.analyser.frequencyBinCount);
+        
+        const updateVisualization = () => {
+          if (!this.analyser) return;
+          
+          try {
+            this.analyser.getByteFrequencyData(audioData);
+            
+            const average = audioData.reduce((a, b) => a + b) / audioData.length;
+            const percentage = Math.min(100, (average / 128) * 100);
+            
+            // Update audio quality metric and check for interruptions
+            if (!this.voiceState.agentSpeaking) {
+              if (percentage > 15) {
+                this.performanceMetrics.audioQuality = 'good';
+              } else if (percentage > 5) {
+                this.performanceMetrics.audioQuality = 'fair';
+              } else {
+                this.performanceMetrics.audioQuality = 'poor';
+              }
+              
+              if (this.isRecording && percentage > 10) {
+                this.performanceMetrics.audioQuality = 'good';
+              }
+            } else {
+              // Check for interruption during TTS playback
+              this.checkForInterruption(percentage, audioData);
+            }
+            
+            // Update waveform
+            if (this.isRecording) {
+              this.drawInputWaveform(audioData);
+            } else if (!this.voiceState.agentSpeaking) {
+              this.drawIdleWaveform();
+            }
+            
+            this.animationFrame = requestAnimationFrame(updateVisualization);
+          } catch (error) {
+            console.warn('Visualization update failed:', error);
+          }
+        };
+        
+        updateVisualization();
+      }
+      
+      drawInputWaveform(audioData) {
+        if (!this.waveformCtx) return;
+        
+        const canvas = this.waveformCanvas;
+        const ctx = this.waveformCtx;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw frequency bars
+        const barCount = Math.max(32, Math.floor(canvas.clientWidth / 14));
+        const barWidth = canvas.width / barCount;
+        
+        for (let i = 0; i < barCount; i++) {
+          const dataIndex = Math.floor(i * audioData.length / barCount);
+          const barHeight = (audioData[dataIndex] / 255) * canvas.height * 0.8;
+          const x = i * barWidth + barWidth * 0.2;
+          const y = (canvas.height - barHeight) / 2;
+          
+          const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
+          gradient.addColorStop(0, 'rgba(21,230,255,0.9)');
+          gradient.addColorStop(1, 'rgba(52,199,89,0.9)');
+          
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, y, barWidth * 0.6, barHeight);
+        }
+      }
+      
+      drawIdleWaveform() {
+        if (!this.waveformCtx) return;
+        
+        const canvas = this.waveformCanvas;
+        const ctx = this.waveformCtx;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw idle message
+        ctx.fillStyle = '#90A4B4';
+        ctx.font = `${14 * devicePixelRatio}px Inter, system-ui`;
+        ctx.textAlign = 'center';
+        ctx.fillText('🎵 Ready for audio...', canvas.width / 2, canvas.height / 2 + 5 * devicePixelRatio);
+      }
+      
+      setupRealTTSVisualization(audioElement) {
+        try {
+          console.log('[TTS Viz] Setting up REAL TTS audio visualization...');
+          
+          // Create separate audio context for TTS analysis
+          if (!this.ttsAudioContext) {
+            this.ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          
+          // Resume TTS audio context if needed
+          if (this.ttsAudioContext.state === 'suspended') {
+            this.ttsAudioContext.resume();
+            console.log('[TTS Viz] TTS audio context resumed');
+          }
+          
+          // Create analyser for TTS audio (only once per audio element)
+          if (!audioElement._ttsAnalyser) {
+            try {
+              const ttsSource = this.ttsAudioContext.createMediaElementSource(audioElement);
+              const ttsAnalyser = this.ttsAudioContext.createAnalyser();
+              ttsAnalyser.fftSize = 1024; // Higher resolution for TTS
+              ttsAnalyser.smoothingTimeConstant = 0.1; // Fast response
+              
+              // Connect TTS audio to analyser and destination
+              ttsSource.connect(ttsAnalyser);
+              ttsSource.connect(this.ttsAudioContext.destination);
+              
+              // Store references
+              audioElement._ttsSource = ttsSource;
+              audioElement._ttsAnalyser = ttsAnalyser;
+              
+              console.log('[TTS Viz] TTS analyser created for REAL audio analysis');
+              
+            } catch (sourceError) {
+              console.warn('[TTS Viz] Could not create media element source:', sourceError);
+              this.startTTSWaveformAnimation(); // Fallback to animation
+              return;
+            }
+          }
+          
+          // Start REAL TTS visualization using actual audio data
+          this.startRealTTSVisualization(audioElement._ttsAnalyser, audioElement);
+          
+        } catch (error) {
+          console.warn('[TTS Viz] REAL TTS visualization setup failed:', error);
+          this.startTTSWaveformAnimation(); // Fallback to animation
+        }
+      }
+
+      startRealTTSVisualization(ttsAnalyser, audioElement) {
+        if (!ttsAnalyser) {
+          console.warn('[TTS Viz] No analyser provided, using animation fallback');
+          this.startTTSWaveformAnimation();
+          return;
+        }
+        
+        const ttsAudioData = new Uint8Array(ttsAnalyser.frequencyBinCount);
+        let ttsVisualizationActive = true;
+        
+        const updateRealTTSVisualization = () => {
+          // Check if we should continue TTS visualization
+          if (!ttsVisualizationActive || !this.voiceState.agentSpeaking) {
+            console.log('[TTS Viz] REAL TTS visualization stopped');
+            this.drawIdleWaveform();
+            return;
+          }
+          
+          // Check if audio element is still valid
+          if (!audioElement) {
+            console.log('[TTS Viz] Audio element not available, stopping visualization');
+            ttsVisualizationActive = false;
+            return;
+          }
+          
+          try {
+            // Get REAL frequency data from the TTS audio
+            ttsAnalyser.getByteFrequencyData(ttsAudioData);
+            
+            // Draw real TTS waveform
+            this.drawTTSWaveform(ttsAudioData);
+            
+            // Debug log occasionally
+            if (Math.random() < 0.05) {
+              const average = ttsAudioData.reduce((a, b) => a + b) / ttsAudioData.length;
+              console.log(`[TTS Viz] REAL TTS Audio Level: ${(average / 128 * 100).toFixed(1)}%`);
+            }
+            
+          } catch (analyserError) {
+            console.warn('[TTS Viz] Analyser error:', analyserError);
+            // Fallback to animation if real analysis fails
+            this.startTTSWaveformAnimation();
+            return;
+          }
+          
+          // Continue visualization with REAL audio data
+          requestAnimationFrame(updateRealTTSVisualization);
+        };
+        
+        // Stop TTS visualization when audio ends
+        audioElement.addEventListener('ended', () => {
+          ttsVisualizationActive = false;
+          console.log('[TTS Viz] Audio ended, stopping REAL TTS visualization');
+        }, { once: true });
+        
+        // Stop TTS visualization when audio errors
+        audioElement.addEventListener('error', () => {
+          ttsVisualizationActive = false;
+          console.log('[TTS Viz] Audio error, stopping REAL TTS visualization');
+        }, { once: true });
+        
+        updateRealTTSVisualization();
+        console.log('[TTS Viz] REAL TTS visualization started with actual audio data');
+      }
+
+      drawTTSWaveform(audioData) {
+        if (!this.waveformCtx || !audioData) return;
+        
+        const canvas = this.waveformCanvas;
+        const ctx = this.waveformCtx;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw frequency bars using real TTS data
+        const barCount = Math.max(32, Math.floor(canvas.clientWidth / 14));
+        const barWidth = canvas.width / barCount;
+        
+        for (let i = 0; i < barCount; i++) {
+          const dataIndex = Math.floor(i * audioData.length / barCount);
+          const barHeight = (audioData[dataIndex] / 255) * canvas.height * 0.8;
+          const x = i * barWidth + barWidth * 0.2;
+          const y = (canvas.height - barHeight) / 2;
+          
+          const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
+          gradient.addColorStop(0, 'rgba(255,149,0,0.9)');
+          gradient.addColorStop(1, 'rgba(212,95,255,0.9)');
+          
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, y, barWidth * 0.6, barHeight);
+        }
+      }
+
+      startTTSWaveformAnimation() {
+        let animationActive = true;
+        
+        const animateTTSWaveform = () => {
+          if (!animationActive || !this.voiceState.agentSpeaking) {
+            this.drawIdleWaveform();
+            return;
+          }
+          
+          const canvas = this.waveformCanvas;
+          const ctx = this.waveformCtx;
+          const time = Date.now() / 1000;
+          
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw animated TTS frequency bars (fallback)
+          const barCount = Math.max(32, Math.floor(canvas.clientWidth / 14));
+          const barWidth = canvas.width / barCount;
+          
+          for (let i = 0; i < barCount; i++) {
+            const phase = (i / barCount) * Math.PI * 2 + time * 2;
+            const amplitude = 0.3 + Math.sin(time * 3 + i * 0.1) * 0.2;
+            const barHeight = Math.max(4 * devicePixelRatio, Math.abs(Math.sin(phase)) * amplitude * canvas.height);
+            
+            const x = i * barWidth + barWidth * 0.2;
+            const y = (canvas.height - barHeight) / 2;
+            
+            const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight);
+            gradient.addColorStop(0, 'rgba(255,149,0,0.9)');
+            gradient.addColorStop(1, 'rgba(212,95,255,0.9)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, y, barWidth * 0.6, barHeight);
+          }
+          
+          requestAnimationFrame(animateTTSWaveform);
+        };
+        
+        this.stopTTSAnimation = () => { animationActive = false; };
+        animateTTSWaveform();
+      }
+      
+      checkForInterruption(audioLevel, audioData) {
+        if (!this.interruptionConfig.enabled || !this.voiceState.agentSpeaking) {
+          return;
+        }
+        
+        // Check cooldown period
+        const now = Date.now();
+        if (now - this.lastInterruptionTime < this.interruptionConfig.cooldownMs) {
+          return;
+        }
+        
+        // Convert audio level percentage to energy threshold
+        const energyLevel = audioLevel / 100;
+        const hasSignificantAudio = energyLevel > this.interruptionConfig.energyThreshold;
+        
+        // Add to interruption buffer
+        this.interruptionBuffer.push({
+          timestamp: now,
+          energy: energyLevel,
+          hasSpeech: hasSignificantAudio,
+          audioData: audioData
+        });
+        
+        // Keep buffer to reasonable size (last 500ms = ~15 frames at 30fps)
+        if (this.interruptionBuffer.length > 15) {
+          this.interruptionBuffer = this.interruptionBuffer.slice(-15);
+        }
+        
+        // Check for sustained speech pattern
+        if (this.interruptionBuffer.length >= this.interruptionConfig.sustainedFrames) {
+          const recentFrames = this.interruptionBuffer.slice(-this.interruptionConfig.sustainedFrames);
+          const sustainedSpeech = recentFrames.every(frame => frame.hasSpeech);
+          
+          if (sustainedSpeech) {
+            console.log(`[Interruption] Detected sustained speech during TTS - triggering interruption`);
+            this.handleInterruption();
+          }
+        }
+      }
+      
+      async handleInterruption() {
+        try {
+          this.lastInterruptionTime = Date.now();
+          
+          console.log('[Interruption] User interruption detected - stopping TTS and switching to recording');
+          
+          // Immediately stop all TTS audio
+          this.stopAllTTSAudio();
+          
+          // Clear audio queue to prevent further playback
+          this.resetAudioQueue();
+          
+          // Stop any TTS animations
+          if (this.stopTTSAnimation) {
+            this.stopTTSAnimation();
+          }
+          
+          // Update state to show interruption
+          this.voiceState.agentSpeaking = false;
+          this.voiceState.currentTurn = 'user';
+          this.voiceState.lastInterruption = Date.now();
+          
+          // Start recording immediately (since user is already speaking)
+          await this.startRecording();
+          
+          this.updateUI();
+          this.updateBadges();
+          
+        } catch (error) {
+          console.error('[Interruption] Error handling interruption:', error);
+        }
+      }
+      
+      stopAllTTSAudio() {
+        // Stop current audio if playing
+        if (this.currentAudio) {
+          this.currentAudio.pause();
+          this.currentAudio.currentTime = 0;
+          this.currentAudio = null;
+        }
+        
+        // Stop any queued audio
+        this.audioQueue.forEach(chunk => {
+          if (chunk.audioUrl) {
+            URL.revokeObjectURL(chunk.audioUrl);
+          }
+        });
+        
+        console.log('[Interruption] All TTS audio stopped');
+      }
+      
+      toggleRecording() {
+        if (!this.isConnected) {
+          this.addMessage('system', '❌ Please connect first');
+          return;
+        }
+        
+        if (this.isRecording) {
+          this.stopRecording();
+        } else {
+          this.startRecording();
+        }
+      }
+      
+      async startRecording() {
+        try {
+          if (this.audioContext && this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+          }
+          
+          if (!this.mediaRecorder || this.mediaRecorder.state !== 'inactive') {
+            this.addMessage('system', '❌ Audio recorder not ready');
+            return;
+          }
+          
+          this.audioChunks = [];
+          this.mediaRecorder.start();
+          this.isRecording = true;
+          
+          this.voiceState.speechActive = true;
+          this.updateUI();
+          this.updateBadges();
+          
+          // Auto-stop after 10 seconds
+          setTimeout(() => {
+            if (this.isRecording) {
+              this.stopRecording();
+            }
+          }, 10000);
+          
+        } catch (error) {
+          console.error('Failed to start recording:', error);
+          this.addMessage('system', `❌ Recording failed: ${error.message}`);
+        }
+      }
+      
+      stopRecording() {
+        if (!this.isRecording) return;
+        
+        try {
+          this.mediaRecorder.stop();
+          this.isRecording = false;
+          
+          this.voiceState.speechActive = false;
+          this.updateUI();
+          this.updateBadges();
+          
+        } catch (error) {
+          console.error('Failed to stop recording:', error);
+        }
+      }
+      
+      async processRecordedAudio() {
+        try {
+          if (this.audioChunks.length === 0) {
+            this.addMessage('system', '❌ No audio recorded');
+            return;
+          }
+          
+          const audioBlob = new Blob(this.audioChunks, { 
+            type: this.mediaRecorder.mimeType || 'audio/webm' 
+          });
+          
+          await this.sendToALFREDBackend(audioBlob);
+          
+        } catch (error) {
+          console.error('Audio processing failed:', error);
+          this.addMessage('system', `❌ Processing failed: ${error.message}`);
+        }
+      }
+      
+      async sendToALFREDBackend(audioBlob) {
+        try {
+          const startTime = Date.now();
+          
+          this.voiceState.currentTurn = 'processing';
+          this.updateUI();
+          this.updateBadges();
+          this.updateConnectionStatus('connected', 'Processing speech...');
+          
+          // STEP 1: Local STT
+          const formData = new FormData();
+          formData.append('file', audioBlob, 'recording.webm');
+          formData.append('language', 'en');
+          formData.append('task', 'transcribe');
+          
+          const sttResponse = await fetch(`${this.localProcessorUrl}/transcribe_file`, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (!sttResponse.ok) {
+            throw new Error(`Local STT failed: HTTP ${sttResponse.status}`);
+          }
+          
+          const sttResult = await sttResponse.json();
+          const transcribedText = sttResult.text;
+          
+          if (!transcribedText || !transcribedText.trim()) {
+            throw new Error('No text transcribed from audio');
+          }
+          
+          this.addMessage('user', transcribedText);
+          
+          // STT success - confirm good audio quality
+          this.performanceMetrics.audioQuality = 'good';
+          this.updateMetrics();
+          
+          // STEP 2: Backend processing
+          this.updateConnectionStatus('connected', 'Sending to RTX 4090...');
+          
+          this.resetAudioQueue();
+          
+          // Determine processing mode and model
+          const processingMode = this.settings.processingMode;
+          const model = this.settings.selectedModel;
+          
+          const initResponse = await fetch(`${this.backendUrl}/api/voice/converse`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: transcribedText,
+              processing_mode: processingMode,
+              model: model,
+              conversationHistory: this.getConversationHistory(),
+              voiceConfig: JSON.stringify({
+                engine: this.settings.ttsEngine,
+                enabled: this.settings.outputMode === 'spoken', // Only enable TTS for spoken mode
+                voice_id: this.settings.voiceId,
+                speed: this.settings.speechSpeed
+              }),
+              systemPrompt: "You are ΛLFRED, a versatile AI assistant. Provide clear, concise responses without emojis or markdown formatting for optimal text-to-speech synthesis."
+            })
+          });
+          
+          if (!initResponse.ok) {
+            throw new Error(`Backend failed: ${initResponse.status}`);
+          }
+          
+          const initData = await initResponse.json();
+          const dialogueId = initData.dialogueId;
+          
+          // STEP 3: Streaming response
+          this.updateConnectionStatus('connected', 'Receiving live response...');
+          
+          let fullResponse = '';
+          let assistantMessageElement = null;
+          
+          const eventSource = new EventSource(`${this.backendUrl}/api/voice/open-stream?dialogueId=${dialogueId}`);
+          
+          eventSource.onopen = () => {
+            console.log('Streaming connection opened');
+          };
+          
+          eventSource.addEventListener('textChunk', (event) => {
+            const data = JSON.parse(event.data);
+            if (data.role === 'assistant' && data.text) {
+              fullResponse += data.text;
+              
+              if (!assistantMessageElement) {
+                assistantMessageElement = this.addMessage('assistant', fullResponse);
+                
+                // Only start Spritz display in on-screen mode
+                if (this.settings.outputMode === 'onscreen') {
+                  this.startSpritzDisplay(fullResponse);
+                }
+              } else {
+                this.updateMessage(assistantMessageElement, fullResponse);
+                
+                // Only update Spritz display in on-screen mode
+                if (this.settings.outputMode === 'onscreen') {
+                  this.startSpritzDisplay(fullResponse);
+                }
+              }
+            }
+          });
+          
+          eventSource.addEventListener('audioChunk', (event) => {
+            const data = JSON.parse(event.data);
+            if (data.audio && this.settings.outputMode === 'spoken') {
+              // Only play audio chunks in spoken mode
+              this.playAudioChunk(data.audio, data.chunkIndex);
+            }
+          });
+          
+          eventSource.addEventListener('complete', () => {
+            eventSource.close();
+            
+            const processingTime = Date.now() - startTime;
+            this.performanceMetrics.responseTime = processingTime;
+            this.updateMetrics();
+            
+            this.voiceState.currentTurn = 'user';
+            this.updateUI();
+            this.updateBadges();
+            this.updateConnectionStatus('connected', 'Ready for next turn');
+            
+            // Stop Spritz display when streaming is complete (only in on-screen mode)
+            if (this.settings.outputMode === 'onscreen') {
+              setTimeout(() => {
+                this.stopSpritzDisplay();
+              }, 2000); // Keep visible for 2 seconds after completion
+            }
+          });
+          
+          eventSource.onerror = (event) => {
+            console.error('Streaming error:', event);
+            eventSource.close();
+            if (!fullResponse) {
+              this.addMessage('assistant', 'I apologize, but I encountered an error generating a response.');
+            }
+          };
+          
+          this.conversationTurns++;
+          this.performanceMetrics.conversationTurns = this.conversationTurns;
+          this.updateMetrics();
+          
+        } catch (error) {
+          console.error('Backend communication failed:', error);
+          this.addMessage('system', `❌ Backend error: ${error.message}`);
+          this.voiceState.currentTurn = 'user';
+          this.updateUI();
+          this.updateBadges();
+        }
+      }
+      
+      // Audio queue management (from hybrid_voice_interface.html)
+      resetAudioQueue() {
+        this.audioQueue = [];
+        this.nextExpectedChunk = 1;
+        if (this.currentAudio) {
+          this.currentAudio.pause();
+          this.currentAudio = null;
+        }
+      }
+      
+      playAudioChunk(audioData, chunkIndex) {
+        try {
+          const audioBlob = new Blob([Uint8Array.from(atob(audioData), c => c.charCodeAt(0))], {
+            type: 'audio/wav'
+          });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          
+          if (!this.audioQueue) this.audioQueue = [];
+          if (!this.nextExpectedChunk) this.nextExpectedChunk = 1;
+          
+          this.audioQueue.push({
+            chunkIndex: chunkIndex,
+            audioUrl: audioUrl,
+            audioBlob: audioBlob
+          });
+          
+          this.processAudioQueue();
+          
+        } catch (error) {
+          console.error('Error preparing audio chunk:', error);
+        }
+      }
+      
+      processAudioQueue() {
+        if (!this.audioQueue) return;
+        
+        this.audioQueue.sort((a, b) => a.chunkIndex - b.chunkIndex);
+        
+        if (this.currentAudio && !this.currentAudio.ended && !this.currentAudio.paused) {
+          return;
+        }
+        
+        const nextChunk = this.audioQueue.find(chunk => chunk.chunkIndex === this.nextExpectedChunk);
+        
+        if (nextChunk) {
+          this.currentAudio = new Audio(nextChunk.audioUrl);
+          
+          // Update state for TTS playback
+          this.voiceState.agentSpeaking = true;
+          this.voiceState.currentTurn = 'agent';
+          this.updateUI();
+          this.updateBadges();
+          
+          this.currentAudio.play().then(() => {
+            console.log(`Audio chunk ${nextChunk.chunkIndex} playing`);
+            
+            // Setup REAL TTS visualization (after audio starts)
+            this.setupRealTTSVisualization(this.currentAudio);
+            
+          }).catch(error => {
+            console.error('Audio playback failed:', error);
+            
+            // Fallback to animation if audio fails
+            this.startTTSWaveformAnimation();
+          });
+          
+          this.currentAudio.addEventListener('ended', () => {
+            URL.revokeObjectURL(nextChunk.audioUrl);
+            
+            const remainingChunks = this.audioQueue.filter(chunk => chunk.chunkIndex > nextChunk.chunkIndex);
+            if (remainingChunks.length === 0) {
+              // Last chunk - reset state
+              this.voiceState.agentSpeaking = false;
+              this.voiceState.currentTurn = 'user';
+              this.updateUI();
+              this.updateBadges();
+              
+              if (this.stopTTSAnimation) {
+                this.stopTTSAnimation();
+              }
+            }
+            
+            this.audioQueue = this.audioQueue.filter(chunk => chunk.chunkIndex !== nextChunk.chunkIndex);
+            this.nextExpectedChunk++;
+            
+            setTimeout(() => this.processAudioQueue(), 50);
+          });
+        }
+      }
+      
+      // Text input handling
+      async handleTextSubmit(e) {
+        e.preventDefault();
+        const input = document.getElementById('inputText');
+        const text = input.value.trim();
+        
+        if (!text) return;
+        
+        input.value = '';
+        this.addMessage('user', text);
+        
+        // Process text directly (no audio)
+        await this.sendTextToBackend(text);
+      }
+      
+      async sendTextToBackend(text) {
+        try {
+          const startTime = Date.now();
+          
+          this.voiceState.currentTurn = 'processing';
+          this.updateUI();
+          this.updateBadges();
+          
+          const processingMode = this.settings.processingMode;
+          const model = this.settings.selectedModel;
+          
+          const response = await fetch(`${this.backendUrl}/api/voice/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: text,
+              processing_mode: processingMode,
+              model: model,
+              return_audio: this.settings.outputMode === 'spoken', // Only request audio in spoken mode
+              voiceConfig: JSON.stringify({
+                engine: this.settings.ttsEngine,
+                voice_id: this.settings.voiceId,
+                speed: this.settings.speechSpeed
+              })
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Backend error: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          
+          // Show response
+          if (result.response || result.answer || result.response_text) {
+            const responseText = result.response || result.answer || result.response_text;
+            this.addMessage('assistant', responseText);
+            
+            // Handle output mode
+            if (this.settings.outputMode === 'onscreen') {
+              // Start Spritz display for on-screen mode
+              this.startSpritzDisplay(responseText);
+              
+              // Stop Spritz display after a delay (based on user's WPM setting)
+              const msPerWord = (60 / this.settings.spritzWPM) * 1000;
+              setTimeout(() => {
+                this.stopSpritzDisplay();
+              }, Math.max(3000, responseText.split(' ').length * msPerWord)); // Minimum 3s, or based on WPM setting
+            }
+          }
+          
+          // Play audio if available and in spoken mode
+          if (result.audio_data && this.settings.outputMode === 'spoken') {
+            await this.playTTSAudio(result.audio_data);
+          }
+          
+          const processingTime = Date.now() - startTime;
+          this.performanceMetrics.responseTime = processingTime;
+          this.conversationTurns++;
+          this.performanceMetrics.conversationTurns = this.conversationTurns;
+          this.updateMetrics();
+          
+          this.voiceState.currentTurn = 'user';
+          this.updateUI();
+          this.updateBadges();
+          
+        } catch (error) {
+          console.error('Text backend communication failed:', error);
+          this.addMessage('system', `❌ Error: ${error.message}`);
+          this.voiceState.currentTurn = 'user';
+          this.updateUI();
+          this.updateBadges();
+        }
+      }
+      
+      async playTTSAudio(audioBase64) {
+        try {
+          const audioBlob = this.base64ToBlob(audioBase64, 'audio/wav');
+          const audioUrl = URL.createObjectURL(audioBlob);
+          
+          this.voiceState.agentSpeaking = true;
+          this.voiceState.currentTurn = 'agent';
+          this.updateUI();
+          this.updateBadges();
+          
+          const audio = new Audio(audioUrl);
+          
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            this.voiceState.agentSpeaking = false;
+            this.voiceState.currentTurn = 'user';
+            this.updateUI();
+            this.updateBadges();
+            
+            if (this.stopTTSAnimation) {
+              this.stopTTSAnimation();
+            }
+          };
+          
+          await audio.play();
+          
+          // Setup REAL TTS visualization after audio starts
+          this.setupRealTTSVisualization(audio);
+          
+        } catch (error) {
+          console.error('TTS playback failed:', error);
+        }
+      }
+      
+      base64ToBlob(base64, mimeType) {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: mimeType });
+      }
+      
+      // UI Management
+      setMode(mode) {
+        this.settings.processingMode = mode;
+        
+        const btnRAG = document.getElementById('btnRAG');
+        const btnLLM = document.getElementById('btnLLM');
+        const modeChip = document.getElementById('modeChip');
+        const badgeMode = document.querySelector('#badgeMode strong');
+        
+        const isRAG = mode === 'rag';
+        btnRAG.setAttribute('aria-pressed', isRAG);
+        btnLLM.setAttribute('aria-pressed', !isRAG);
+        badgeMode.textContent = mode.toUpperCase();
+        modeChip.textContent = mode.toUpperCase();
+        
+        this.saveSettings();
+      }
+      
+      setOutputMode(mode) {
+        this.settings.outputMode = mode;
+        
+        const btnSpoken = document.getElementById('btnSpoken');
+        const btnOnScreen = document.getElementById('btnOnScreen');
+        const badgeOutputMode = document.querySelector('#badgeOutputMode strong');
+        
+        const isSpoken = mode === 'spoken';
+        btnSpoken.setAttribute('aria-pressed', isSpoken);
+        btnOnScreen.setAttribute('aria-pressed', !isSpoken);
+        badgeOutputMode.textContent = isSpoken ? 'Spoken' : 'On-Screen';
+        
+        // Stop any active Spritz display when switching modes
+        if (this.spritzActive) {
+          this.stopSpritzDisplay();
+        }
+        
+        this.saveSettings();
+        console.log(`[Output Mode] Switched to ${mode} mode`);
+      }
+      
+      updateUI() {
+        const btnMic = document.getElementById('btnMic');
+        const btnConnect = document.getElementById('btnConnect');
+        
+        // Update mic button
+        if (!this.isConnected) {
+          btnMic.disabled = true;
+          btnMic.setAttribute('aria-pressed', 'false');
+        } else {
+          btnMic.disabled = false;
+          btnMic.setAttribute('aria-pressed', this.isRecording ? 'true' : 'false');
+        }
+        
+        // Update connect button
+        btnConnect.setAttribute('aria-pressed', this.isConnected ? 'true' : 'false');
+        btnConnect.title = this.isConnected ? 'Disconnect from ALFRED' : 'Connect to ALFRED';
+      }
+      
+      updateBadges() {
+        const listening = document.getElementById('badgeListening');
+        const processing = document.getElementById('badgeProcessing');
+        const speaking = document.getElementById('badgeSpeaking');
+        const interrupted = document.getElementById('badgeInterrupted');
+        
+        listening.hidden = !this.isRecording;
+        processing.hidden = this.voiceState.currentTurn !== 'processing';
+        speaking.hidden = !this.voiceState.agentSpeaking;
+        
+        // Show interrupted badge briefly after interruption
+        if (this.voiceState.lastInterruption && 
+            Date.now() - this.voiceState.lastInterruption < 3000) {
+          interrupted.hidden = false;
+        } else {
+          interrupted.hidden = true;
+        }
+      }
+      
+      updateConnectionStatus(state, message) {
+        const statusElement = document.getElementById('connectionStatus');
+        const statusText = statusElement.querySelector('span');
+        
+        statusElement.className = `connection-status ${state}`;
+        statusText.textContent = message;
+      }
+      
+      updateMetrics() {
+        document.getElementById('responseTime').textContent = 
+          this.performanceMetrics.responseTime > 0 ? `${this.performanceMetrics.responseTime}ms` : '--';
+        
+        const audioQualityElement = document.getElementById('audioQuality');
+        audioQualityElement.textContent = this.performanceMetrics.audioQuality;
+        audioQualityElement.className = `metric-value ${this.performanceMetrics.audioQuality}`;
+        
+        const backendElement = document.getElementById('backendStatus');
+        backendElement.textContent = this.performanceMetrics.backendStatus;
+        backendElement.className = `metric-value ${this.getBackendStatusClass(this.performanceMetrics.backendStatus)}`;
+        
+        document.getElementById('conversationTurns').textContent = this.performanceMetrics.conversationTurns;
+      }
+      
+      getBackendStatusClass(status) {
+        if (status === 'healthy') return 'good';
+        if (status === 'unavailable') return 'poor';
+        return 'fair';
+      }
+      
+      // Spritz-style text display
+      startSpritzDisplay(text, estimatedDuration = 0) {
+        // If already active, just update the word queue instead of restarting
+        if (this.spritzActive) {
+          this.updateSpritzWords(text);
+          return;
+        }
+        
+        // Split text into words
+        this.spritzWords = text.split(/\s+/).filter(word => word.length > 0);
+        this.spritzIndex = 0;
+        this.spritzActive = true;
+        
+        // Show spritz container and hide waveform
+        const spritzDisplay = document.getElementById('spritzDisplay');
+        const spritzWord = document.getElementById('spritzWord');
+        const waveformContainer = document.querySelector('.waveform-container');
+        
+        spritzDisplay.classList.add('active');
+        waveformContainer.classList.add('spritz-active');
+        
+        // Calculate timing - use user's WPM setting
+        let wordsPerMinute = this.settings.spritzWPM; // Use dynamic setting
+        if (estimatedDuration > 0 && this.spritzWords.length > 0) {
+          // Sync with actual TTS duration
+          const estimatedWPM = (this.spritzWords.length / estimatedDuration) * 60;
+          wordsPerMinute = Math.max(150, Math.min(500, estimatedWPM)); // Clamp between 150-500 WPM
+        }
+        
+        const msPerWord = (60 / wordsPerMinute) * 1000;
+        
+        console.log(`[Spritz] Starting display: ${this.spritzWords.length} words at ${wordsPerMinute} WPM (${msPerWord}ms per word)`);
+        
+        this.showNextSpritzWord(spritzWord, msPerWord);
+      }
+      
+      updateSpritzWords(newText) {
+        // Update the word queue with new text without restarting
+        const newWords = newText.split(/\s+/).filter(word => word.length > 0);
+        this.spritzWords = newWords; // Replace entire word list with updated text
+        
+        console.log(`[Spritz] Updated word queue: ${this.spritzWords.length} words (currently at index ${this.spritzIndex})`);
+      }
+      
+      showNextSpritzWord(spritzWordElement, msPerWord) {
+        if (!this.spritzActive || this.spritzIndex >= this.spritzWords.length) {
+          this.stopSpritzDisplay();
+          return;
+        }
+        
+        const word = this.spritzWords[this.spritzIndex];
+        
+        // Show new word instantly
+        spritzWordElement.textContent = word;
+        this.spritzIndex++;
+        
+        // Schedule next word - adjust timing based on word length
+        let nextDelay = msPerWord;
+        if (word.length > 8) {
+          nextDelay *= 1.3; // Longer pause for long words
+        } else if (word.length < 3) {
+          nextDelay *= 0.7; // Shorter pause for short words
+        }
+        
+        // Add extra pause for punctuation
+        if (word.match(/[.!?]$/)) {
+          nextDelay *= 1.5;
+        } else if (word.match(/[,;:]$/)) {
+          nextDelay *= 1.2;
+        }
+        
+        this.spritzTimer = setTimeout(() => {
+          this.showNextSpritzWord(spritzWordElement, msPerWord);
+        }, nextDelay);
+      }
+      
+      stopSpritzDisplay() {
+        this.spritzActive = false;
+        
+        if (this.spritzTimer) {
+          clearTimeout(this.spritzTimer);
+          this.spritzTimer = null;
+        }
+        
+        const spritzDisplay = document.getElementById('spritzDisplay');
+        const spritzWord = document.getElementById('spritzWord');
+        const waveformContainer = document.querySelector('.waveform-container');
+        
+        spritzDisplay.classList.remove('active');
+        spritzWord.textContent = '';
+        waveformContainer.classList.remove('spritz-active');
+        
+        console.log('[Spritz] Display stopped');
+      }
+
+      // Message management
+      addMessage(role, text) {
+        const conversation = document.getElementById('conversation');
+        const message = document.createElement('div');
+        message.className = `message ${role}`;
+        
+        if (role === 'assistant') {
+          const streamDiv = document.createElement('div');
+          streamDiv.className = 'stream-text';
+          streamDiv.textContent = text;
+          message.appendChild(streamDiv);
+        } else {
+          message.textContent = text;
+        }
+        
+        // Insert before live-area
+        const liveArea = conversation.querySelector('.live-area');
+        conversation.insertBefore(message, liveArea);
+        conversation.scrollTop = conversation.scrollHeight;
+        
+        // Add to conversation history
+        this.conversation.push({
+          role: role === 'system' ? 'user' : role, // Convert system to user for context
+          text,
+          timestamp: Date.now()
+        });
+        
+        return message;
+      }
+      
+      updateMessage(messageElement, newText) {
+        if (messageElement) {
+          const streamText = messageElement.querySelector('.stream-text');
+          if (streamText) {
+            streamText.textContent = newText;
+            document.getElementById('conversation').scrollTop = document.getElementById('conversation').scrollHeight;
+          }
+        }
+      }
+      
+      getConversationHistory() {
+        return this.conversation.slice(-6).map(msg => ({
+          role: msg.role,
+          content: msg.text
+        }));
+      }
+      
+      // Settings management
+      setupSettingsHandlers() {
+        const dialog = document.getElementById('settings-modal');
+        
+        // Settings form changes
+        document.getElementById('selTTSEngine').addEventListener('change', (e) => {
+          this.settings.ttsEngine = e.target.value;
+          this.updateVoiceOptions();
+          this.saveSettings();
+        });
+        
+        document.getElementById('selVoice').addEventListener('change', (e) => {
+          this.settings.voiceId = e.target.value;
+          this.saveSettings();
+        });
+        
+        document.getElementById('rngSpeed').addEventListener('input', (e) => {
+          this.settings.speechSpeed = parseFloat(e.target.value);
+          this.saveSettings();
+        });
+        
+        // Close dialog on backdrop click
+        dialog.addEventListener('click', (e) => {
+          if (e.target === dialog) dialog.close();
+        });
+      }
+      
+      updateVoiceOptions() {
+        const voiceSelect = document.getElementById('selVoice');
+        const engine = this.settings.ttsEngine;
+        
+        // Clear existing options
+        voiceSelect.innerHTML = '';
+        
+        // Add voices based on engine
+        const voices = this.getVoicesForEngine(engine);
+        voices.forEach(voice => {
+          const option = document.createElement('option');
+          option.value = voice.id;
+          option.textContent = voice.name;
+          voiceSelect.appendChild(option);
+        });
+        
+        // Set default voice
+        if (voices.length > 0) {
+          this.settings.voiceId = voices[0].id;
+          voiceSelect.value = this.settings.voiceId;
+        }
+      }
+      
+      getVoicesForEngine(engine) {
+        const voiceMap = {
+          elevenlabs: [
+            { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel (British Male)' },
+            { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Deep Male)' },
+            { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella (Sweet Female)' },
+            { id: 'pMsXgVXv3BLzUgSXRplE', name: 'Freya (Conversational Female)' }
+          ],
+          edge_tts: [
+            { id: 'en-GB-RyanNeural', name: 'Ryan (British Male)' },
+            { id: 'en-US-JennyNeural', name: 'Jenny (American Female)' },
+            { id: 'en-GB-SoniaNeural', name: 'Sonia (British Female)' }
+          ],
+          kokoro: [
+            { id: 'en', name: 'American English' },
+            { id: 'en-gb', name: 'British English' },
+            { id: 'default', name: 'Default Voice' }
+          ],
+          silero: [
+            { id: 'female_1', name: 'Female Voice 1' },
+            { id: 'male_1', name: 'Male Voice 1' },
+            { id: 'expressive', name: 'Expressive Voice' }
+          ]
+        };
+        
+        return voiceMap[engine] || [{ id: 'default', name: 'Default Voice' }];
+      }
+      
+      openSettings() {
+        const dialog = document.getElementById('settings-modal');
+        this.updateVoiceOptions();
+        dialog.showModal();
+      }
+      
+      loadSettings() {
+        const saved = localStorage.getItem('alfredSettings');
+        if (saved) {
+          this.settings = { ...this.settings, ...JSON.parse(saved) };
+        }
+        
+        // Update UI with loaded settings
+        this.setMode(this.settings.processingMode);
+        this.setOutputMode(this.settings.outputMode);
+        document.getElementById('modelName').textContent = this.settings.selectedModel;
+        
+        // Update model picker
+        const modelInputs = document.querySelectorAll('input[name="llm"]');
+        modelInputs.forEach(input => {
+          input.checked = input.value === this.settings.selectedModel;
+        });
+        
+        // Update WPM slider
+        document.getElementById('wpmSlider').value = this.settings.spritzWPM;
+        document.getElementById('wpmValue').textContent = `${this.settings.spritzWPM} WPM`;
+        
+        // Update font size slider and apply initial font size
+        document.getElementById('fontSizeSlider').value = this.settings.spritzFontSize;
+        document.getElementById('fontSizeValue').textContent = `${this.settings.spritzFontSize}px`;
+        document.getElementById('spritzDisplay').style.fontSize = `${this.settings.spritzFontSize}px`;
+      }
+      
+      saveSettings() {
+        localStorage.setItem('alfredSettings', JSON.stringify(this.settings));
+      }
+      
+      // Model picker
+      setupModelPicker() {
+        const disclosure = document.getElementById('btnLLMDisclosure');
+        const popover = document.getElementById('modelPopover');
+        const modelName = document.getElementById('modelName');
+        
+        disclosure.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = popover.classList.contains('open');
+          if (isOpen) {
+            this.closeModelPopover();
+          } else {
+            this.openModelPopover();
+          }
+        });
+        
+        popover.addEventListener('change', (e) => {
+          if (e.target.name === 'llm') {
+            this.settings.selectedModel = e.target.value;
+            modelName.textContent = e.target.value;
+            this.saveSettings();
+            this.closeModelPopover();
+          }
+        });
+        
+        window.addEventListener('click', (e) => {
+          if (!popover.contains(e.target) && e.target !== disclosure) {
+            this.closeModelPopover();
+          }
+        });
+      }
+      
+      // WPM picker
+      setupWPMPicker() {
+        const disclosure = document.getElementById('btnWPMDisclosure');
+        const popover = document.getElementById('wpmPopover');
+        const wpmSlider = document.getElementById('wpmSlider');
+        const wpmValue = document.getElementById('wpmValue');
+        const fontSizeSlider = document.getElementById('fontSizeSlider');
+        const fontSizeValue = document.getElementById('fontSizeValue');
+        
+        disclosure.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = popover.classList.contains('open');
+          if (isOpen) {
+            this.closeWPMPopover();
+          } else {
+            this.openWPMPopover();
+          }
+        });
+        
+        wpmSlider.addEventListener('input', (e) => {
+          const wpm = parseInt(e.target.value);
+          this.settings.spritzWPM = wpm;
+          wpmValue.textContent = `${wpm} WPM`;
+          this.saveSettings();
+          console.log(`[WPM] Reading speed updated to ${wpm} WPM`);
+        });
+        
+        fontSizeSlider.addEventListener('input', (e) => {
+          const fontSize = parseInt(e.target.value);
+          this.settings.spritzFontSize = fontSize;
+          fontSizeValue.textContent = `${fontSize}px`;
+          
+          // Update the Spritz display font size immediately
+          const spritzDisplay = document.getElementById('spritzDisplay');
+          spritzDisplay.style.fontSize = `${fontSize}px`;
+          
+          this.saveSettings();
+          console.log(`[Font Size] Spritz font size updated to ${fontSize}px`);
+        });
+        
+        window.addEventListener('click', (e) => {
+          if (!popover.contains(e.target) && e.target !== disclosure) {
+            this.closeWPMPopover();
+          }
+        });
+      }
+      
+      openModelPopover() {
+        const popover = document.getElementById('modelPopover');
+        const disclosure = document.getElementById('btnLLMDisclosure');
+        
+        popover.classList.add('open');
+        disclosure.setAttribute('aria-expanded', 'true');
+        
+        // Position popover
+        const rect = disclosure.getBoundingClientRect();
+        popover.style.left = rect.left + 'px';
+        popover.style.top = (rect.top - popover.offsetHeight - 8) + 'px';
+      }
+      
+      closeModelPopover() {
+        const popover = document.getElementById('modelPopover');
+        const disclosure = document.getElementById('btnLLMDisclosure');
+        
+        popover.classList.remove('open');
+        disclosure.setAttribute('aria-expanded', 'false');
+      }
+      
+      openWPMPopover() {
+        const popover = document.getElementById('wpmPopover');
+        const disclosure = document.getElementById('btnWPMDisclosure');
+        
+        popover.classList.add('open');
+        disclosure.setAttribute('aria-expanded', 'true');
+        
+        // Position popover above the disclosure button
+        const rect = disclosure.getBoundingClientRect();
+        popover.style.left = rect.left + 'px';
+        popover.style.top = (rect.top - popover.offsetHeight - 8) + 'px';
+      }
+      
+      closeWPMPopover() {
+        const popover = document.getElementById('wpmPopover');
+        const disclosure = document.getElementById('btnWPMDisclosure');
+        
+        popover.classList.remove('open');
+        disclosure.setAttribute('aria-expanded', 'false');
+      }
+      
+      toggleHistory() {
+        const historyPane = document.querySelector('.history-pane');
+        const isDesktop = window.matchMedia('(min-width:768px)').matches;
+        
+        if (isDesktop) {
+          document.body.classList.toggle('collapsed');
+        } else {
+          const isOpen = historyPane.style.display === 'block';
+          historyPane.style.display = isOpen ? 'none' : 'block';
+          if (!isOpen) {
+            historyPane.style.position = 'fixed';
+            historyPane.style.top = '56px';
+            historyPane.style.left = '0';
+            historyPane.style.bottom = 'var(--dock-h)';
+            historyPane.style.width = '80vw';
+            historyPane.style.zIndex = '40';
+          }
+        }
+      }
+      
+      toggleMute() {
+        this.isMuted = !this.isMuted;
+        const btnMute = document.getElementById('btnMute');
+        btnMute.setAttribute('aria-pressed', this.isMuted ? 'true' : 'false');
+        
+        if (this.currentAudio) {
+          this.currentAudio.muted = this.isMuted;
+        }
+      }
+      
+      async disconnect() {
+        this.isConnected = false;
+        
+        if (this.isRecording) {
+          this.stopRecording();
+        }
+        
+        if (this.animationFrame) {
+          cancelAnimationFrame(this.animationFrame);
+          this.animationFrame = null;
+        }
+        
+        if (this.localStream) {
+          this.localStream.getTracks().forEach(track => track.stop());
+          this.localStream = null;
+        }
+        
+        if (this.audioContext && this.audioContext.state !== 'closed') {
+          await this.audioContext.close();
+          this.audioContext = null;
+        }
+        
+        this.updateConnectionStatus('disconnected', 'Disconnected');
+        this.updateUI();
+        this.updateBadges();
+        this.drawIdleWaveform();
+      }
+    }
+    
+    // Initialize ALFRED interface
+    const alfred = new ALFREDInterface();
+    
+    // Setup history mock (as requested)
+    (function(){
+      const list = document.getElementById('historyList');
+      for (let i = 1; i <= 8; i++) {
+        const li = document.createElement('li');
+        li.innerHTML = `<a href="#" style="display:block;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);text-decoration:none">Session ${i}</a>`;
+        list.appendChild(li);
+      }
+    })();
+    
+    // Auto-connect on page load
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        alfred.connect();
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
+

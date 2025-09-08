@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ALFRED — Conversational RAG UI</title>
+  <style>
+    :root{
+      --bg:#10141A; --glass:rgba(255,255,255,.08); --text:#E8EEF6; --muted:#90A4B4;
+      --accent-1:#15e6ff; --accent-2:#d45fff; --radius:16px; --dock-h:96px; --history-w:280px;
+      --glow:0 0 20px rgba(21,230,255,.35), 0 0 40px rgba(212,95,255,.25);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+      font:normal 16px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans"}
+
+    /* Header */
+    .app-header{
+      position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
+      height:56px;padding:0 12px;background:linear-gradient(180deg, rgba(16,20,26,.8), rgba(16,20,26,.2));
+      backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.06)
+    }
+    .brand{display:flex;gap:10px;align-items:center}
+    .nav-toggle,.btn-icon{
+      width:40px;height:40px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);cursor:pointer;color:var(--text);display:grid;place-items:center
+    }
+    .logo{font-weight:700;letter-spacing:.08em}
+    .mode-chip{margin-left:8px;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06)}
+
+    /* Layout */
+    .app-main{
+      display:grid;grid-template-columns:1fr;gap:12px;padding:12px;
+      padding-bottom:calc(var(--dock-h) + env(safe-area-inset-bottom,16px));
+      min-height:100dvh;transition:grid-template-columns .25s ease;
+    }
+    .history-pane{
+      display:none;background:var(--glass);border-radius:var(--radius);overflow:auto;padding:10px;
+      transition:width .25s ease, transform .25s ease, opacity .2s ease;
+    }
+    .conversation{
+      position:relative;height:calc(100dvh - 56px - var(--dock-h) - 24px);overflow:auto;padding:12px;
+      background:var(--glass);border-radius:var(--radius);backdrop-filter:blur(20px) saturate(140%);
+    }
+    .message{max-width:80ch;margin:10px 0;padding:12px 14px;border-radius:14px;line-height:1.55}
+    .message.user{background:rgba(21,230,255,.08);border:1px solid rgba(21,230,255,.35)}
+    .message.ai{background:rgba(212,95,255,.08);border:1px solid rgba(212,95,255,.35);box-shadow:var(--glow)}
+    .stream-text .cursor{display:inline-block;width:1px;background:var(--text);height:1em;vertical-align:bottom;animation:blink 1s steps(1) infinite}
+    @keyframes blink{50%{opacity:0}}
+    .live-area{position:sticky;bottom:0;margin-top:12px;padding:8px;background:linear-gradient(180deg,transparent 0, rgba(0,0,0,.25) 60%)}
+    .badges{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap}
+    .badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06)}
+    .badge.listening{box-shadow:0 0 8px rgba(21,230,255,.6)}
+    .badge.speaking{box-shadow:0 0 8px rgba(212,95,255,.6)}
+    .badge.mode{border-color:rgba(21,230,255,.35)}
+    canvas.waveform{width:100%;height:64px;display:block;opacity:.95}
+
+    /* Control dock (responsive) */
+    .control-dock{
+      position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;
+      /* mic | mute | hardmute | toggle | composer */
+      grid-template-columns:auto auto auto auto 1fr;
+      gap:8px;align-items:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom,8px));
+      background:linear-gradient(180deg, rgba(16,20,26,.4), rgba(16,20,26,.85));
+      backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,.06);height:var(--dock-h)
+    }
+    .btn{height:44px;min-width:44px;display:inline-grid;place-items:center;border-radius:999px;
+      background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);cursor:pointer}
+    .btn:hover{box-shadow:var(--glow)}
+    .btn[aria-pressed="true"]{outline:2px solid var(--accent-1)}
+
+    /* Composer stretches to the right edge */
+    .composer{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;min-width:0}
+    .composer input{height:44px;padding:0 12px;border-radius:999px;width:100%;min-width:0;
+      background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:var(--text);outline:none}
+    .composer input:focus{box-shadow:var(--glow);border-color:rgba(21,230,255,.5)}
+    .composer .send{height:44px;width:44px;border-radius:999px}
+
+    /* Segmented toggle — style only the two pills (not the disclosure) */
+    .seg-toggle{
+      display:inline-grid;grid-auto-flow:column;gap:4px;padding:4px;border-radius:999px;
+      background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);position:relative
+    }
+    .seg-toggle > button,
+    .seg-toggle > div > button:not(.disclosure){
+      min-width:64px;height:36px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.04);color:var(--text);cursor:pointer;position:relative;appearance:none;
+    }
+    .seg-toggle > button[aria-pressed="true"],
+    .seg-toggle > div > button[aria-pressed="true"]:not(.disclosure){
+      background:linear-gradient(90deg,var(--accent-1),var(--accent-2));border-color:transparent;color:#061018;box-shadow:var(--glow)
+    }
+
+    /* Tiny disclosure that never inherits pill styles */
+    .disclosure{
+      all:unset;
+      position:absolute; right:-6px; top:-6px; width:14px; height:14px;
+      display:grid;place-items:center; border-radius:999px;
+      background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22);
+      cursor:pointer; z-index:2; line-height:1; box-sizing:border-box;
+    }
+    .disclosure::after{ content:"▾"; font-size:9px; color:var(--text); }
+
+    /* Popover */
+    .popover{position:fixed; z-index:50; min-width:200px; background:var(--glass);
+      border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:8px;
+      backdrop-filter:blur(20px) saturate(140%); box-shadow:0 10px 40px rgba(0,0,0,.5); display:none;}
+    .popover.open{ display:block; }
+    .model-item{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer}
+    .model-item:hover{background:rgba(255,255,255,.08)}
+
+    /* Settings dialog — glassy + dark */
+    dialog.settings-modal{border:none;padding:0;background:transparent}
+    dialog.settings-modal::backdrop{background:rgba(0,0,0,.4);backdrop-filter:blur(2px)}
+    dialog.settings-modal form{
+      min-width:min(720px,90vw);max-width:90vw;color:var(--text);
+      background:var(--glass);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;
+      backdrop-filter:blur(20px) saturate(140%); box-shadow:var(--glow)
+    }
+    dialog.settings-modal h2{margin:0 0 12px}
+    dialog.settings-modal .grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+    dialog.settings-modal label{color:var(--muted);display:grid;gap:6px;font-size:14px}
+    dialog.settings-modal select, dialog.settings-modal input[type="range"]{
+      background:rgba(255,255,255,.08); color:var(--text); border:1px solid rgba(255,255,255,.16); border-radius:12px; height:40px; padding:0 10px;
+    }
+    dialog.settings-modal input[type="range"]{height:auto;padding:0}
+    dialog.settings-modal menu{display:flex;justify-content:flex-end;gap:8px;margin:16px 0 0}
+    dialog.settings-modal menu .btn{box-shadow:none}
+
+    /* Tablet & Desktop responsive behavior */
+    @media (min-width:768px){
+      .app-main{grid-template-columns:var(--history-w) 1fr}
+      .history-pane{display:block}
+      canvas.waveform{height:80px}
+      .collapsed .app-main{grid-template-columns:0 1fr}
+      .collapsed .history-pane{width:0;opacity:0;pointer-events:none}
+    }
+    @media (min-width:1024px){ :root{--dock-h:100px} .conversation{padding:16px 20px} }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <button class="nav-toggle" aria-label="Toggle history">☰</button>
+      <span class="logo">ALFRED</span>
+      <span class="mode-chip" id="modeChip">RAG</span>
+    </div>
+    <button class="btn-icon settings" aria-haspopup="dialog" aria-controls="settings-modal" title="Settings">⚙</button>
+  </header>
+
+  <main class="app-main">
+    <aside class="history-pane" aria-label="Conversation history">
+      <h3 style="margin:8px 0 6px 0;font:600 14px/1 Inter,system-ui;color:var(--muted)">History</h3>
+      <ul id="historyList" style="list-style:none;margin:0;padding:0;display:grid;gap:8px"></ul>
+    </aside>
+
+    <section class="conversation" id="conversation" aria-live="polite" aria-atomic="false">
+      <div class="message user">What can you do?</div>
+      <div class="message ai">
+        <div class="stream-text" id="streamText">
+          I can search decentralized records and synthesize answers using RAG… <span class="cursor"></span>
+        </div>
+      </div>
+      <div class="live-area">
+        <div class="badges">
+          <span class="badge listening" id="badgeListening" hidden>Listening</span>
+          <span class="badge speaking" id="badgeSpeaking" hidden>Speaking</span>
+          <span class="badge mode" id="badgeMode">Mode: <strong>RAG</strong></span>
+          <span class="badge" id="badgeModel">Model: <strong id="modelName">gpt-5</strong></span>
+        </div>
+        <canvas class="waveform" id="waveform"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <footer class="control-dock">
+    <button class="btn" id="btnMic" aria-pressed="false" title="Start/stop listening">🎤</button>
+    <button class="btn" id="btnMute" aria-pressed="false" title="Mute speakers">🔇</button>
+    <button class="btn" id="btnHardMute" aria-pressed="false" title="Turn off mic">🎙🚫</button>
+
+    <div class="seg-toggle" role="group" aria-label="Retrieval mode">
+      <button id="btnRAG" aria-pressed="true">RAG</button>
+      <div style="position:relative;display:inline-block">
+        <button id="btnLLM" aria-pressed="false">LLM</button>
+        <button id="btnLLMDisclosure" class="disclosure" aria-haspopup="listbox" aria-expanded="false" aria-controls="modelPopover" title="Choose LLM model"></button>
+      </div>
+    </div>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <input type="text" id="inputText" placeholder="Type your question…" />
+      <button class="btn send" type="submit" aria-label="Send">➤</button>
+    </form>
+  </footer>
+
+  <!-- Settings dialog -->
+  <dialog id="settings-modal" class="settings-modal">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <div class="grid">
+        <label>TTS Model
+          <select id="selTTS">
+            <option>tts-1-hd</option>
+            <option>tts-1</option>
+            <option>edge-neural</option>
+          </select>
+        </label>
+        <label>Voice
+          <select id="selVoice">
+            <option>Nova</option>
+            <option>Aria</option>
+            <option>Orion</option>
+          </select>
+        </label>
+        <label>Speaking rate
+          <input id="rngRate" type="range" min="0.7" max="1.3" step="0.05" value="1.0" />
+        </label>
+        <label>Pitch
+          <input id="rngPitch" type="range" min="-6" max="6" step="1" value="0" />
+        </label>
+      </div>
+      <menu>
+        <button class="btn" value="cancel">Close</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Model picker popover -->
+  <div id="modelPopover" class="popover" role="listbox" aria-label="Select LLM model">
+    <div class="model-item"><input type="radio" name="llm" value="gpt-5" checked id="mdl1"><label for="mdl1">gpt-5</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="sonnet" id="mdl2"><label for="mdl2">sonnet</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="mistral-large" id="mdl3"><label for="mdl3">mistral-large</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="llama-3.1-70b" id="mdl4"><label for="mdl4">llama-3.1-70b</label></div>
+  </div>
+
+  <script>
+    // Type animation
+    (function(){
+      const el = document.getElementById('streamText');
+      const text = "I can search decentralized records and synthesize answers using RAG. Ask me anything.";
+      el.innerHTML = '<span id="typed"></span><span class="cursor"></span>';
+      const target = document.getElementById('typed');
+      let i=0; (function type(){ if(i<=text.length){ target.textContent = text.slice(0,i++); requestAnimationFrame(type); } })();
+    })();
+
+    // Collapsible history (desktop collapses, mobile drawer)
+    (function(){
+      const history = document.querySelector('.history-pane');
+      const toggle = document.querySelector('.nav-toggle');
+      const KEY = 'alfredHistoryCollapsed';
+      function setCollapsed(collapsed){
+        if(window.matchMedia('(min-width:768px)').matches){
+          document.body.classList.toggle('collapsed', collapsed);
+          localStorage.setItem(KEY, collapsed ? '1' : '0');
+        } else {
+          const open = history.style.display !== 'block';
+          history.style.display = open ? 'block' : 'none';
+          history.style.position = 'fixed'; history.style.top = '56px'; history.style.left = 0;
+          history.style.bottom = 'var(--dock-h)'; history.style.width = '80vw';
+          history.style.zIndex = 40; history.style.padding = '12px'; history.style.boxShadow = '0 0 40px rgba(0,0,0,.6)';
+        }
+      }
+      toggle.addEventListener('click', () => {
+        if(window.matchMedia('(min-width:768px)').matches){
+          const collapsed = !document.body.classList.contains('collapsed'); setCollapsed(collapsed);
+        } else { setCollapsed(false); }
+      });
+      const saved = localStorage.getItem(KEY); if(saved === '1') document.body.classList.add('collapsed');
+    })();
+
+    // Settings dialog
+    (function(){
+      const btn = document.querySelector('.settings');
+      const dlg = document.getElementById('settings-modal');
+      btn.addEventListener('click', () => dlg.showModal());
+      dlg.addEventListener('click', (e) => { if(e.target === dlg) dlg.close(); });
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && dlg.open) dlg.close(); });
+    })();
+
+    // Waveform demo
+    (function(){
+      const c = document.getElementById('waveform'), ctx=c.getContext('2d');
+      function resize(){c.width=c.clientWidth*devicePixelRatio;c.height=c.clientHeight*devicePixelRatio;}
+      resize(); addEventListener('resize',resize);
+      const state={t:0,amp:0.2};
+      function draw(){
+        const w=c.width,h=c.height;ctx.clearRect(0,0,w,h);
+        const bars=Math.max(32,Math.floor(c.clientWidth/14));const bw=w/bars;
+        for(let i=0;i<bars;i++){
+          const phase=(i/bars)*Math.PI*2+state.t;
+          const val=Math.abs(Math.sin(phase))*state.amp;
+          const barH=Math.max(2,val*h),x=i*bw+bw*0.2,y=(h-barH)/2;
+          const g=ctx.createLinearGradient(0,y,0,y+barH);
+          g.addColorStop(0,'rgba(21,230,255,0.9)');g.addColorStop(1,'rgba(212,95,255,0.9)');
+          ctx.fillStyle=g;ctx.fillRect(x,y,bw*0.6,barH);
+        }
+        state.t+=0.04;requestAnimationFrame(draw);
+      }draw();
+    })();
+
+    // Mic/Speaker mock
+    (function(){
+      const btnMic=document.getElementById('btnMic');
+      const btnMute=document.getElementById('btnMute');
+      const btnHard=document.getElementById('btnHardMute');
+      const listening=document.getElementById('badgeListening');
+      const speaking=document.getElementById('badgeSpeaking');
+      let micOn=false, muted=false, hard=false;
+      btnMic.onclick=async()=>{
+        if(hard) return;
+        micOn=!micOn; btnMic.setAttribute('aria-pressed', String(micOn));
+        if(micOn){ listening.hidden=false; setTimeout(()=>{ micOn=false; btnMic.setAttribute('aria-pressed','false'); listening.hidden=true; speaking.hidden=false; setTimeout(()=> speaking.hidden=true, 2000); }, 2000); }
+        else listening.hidden=true;
+      };
+      btnMute.onclick=()=>{ muted=!muted; btnMute.setAttribute('aria-pressed', String(muted)); };
+      btnHard.onclick=()=>{ hard=!hard; btnHard.setAttribute('aria-pressed', String(hard)); if(hard) listening.hidden=true; };
+    })();
+
+    // Mode toggle with persistence
+    (function(){
+      const btnRAG=document.getElementById('btnRAG');
+      const btnLLM=document.getElementById('btnLLM');
+      const modeChip=document.getElementById('modeChip');
+      const badgeMode=document.querySelector('#badgeMode strong');
+      function setMode(mode){
+        const isRAG=mode==='RAG';
+        btnRAG.setAttribute('aria-pressed',isRAG);
+        btnLLM.setAttribute('aria-pressed',!isRAG);
+        badgeMode.textContent=mode;
+        modeChip.textContent=mode;
+        localStorage.setItem('alfredMode',mode);
+      }
+      btnRAG.onclick=()=>setMode('RAG');
+      btnLLM.onclick=()=>setMode('LLM');
+      setMode(localStorage.getItem('alfredMode')||'RAG');
+    })();
+
+    // Composer stub
+    (function(){
+      const form=document.getElementById('composer'),input=document.getElementById('inputText'),convo=document.getElementById('conversation');
+      form.onsubmit=(e)=>{
+        e.preventDefault();
+        if(!input.value.trim())return;
+        const u=document.createElement('div');u.className='message user';u.textContent=input.value;convo.appendChild(u);
+        const a=document.createElement('div');a.className='message ai';a.textContent='[AI response…]';convo.appendChild(a);
+        input.value='';
+      };
+    })();
+
+    // Model picker UP (clamped) + tiny disclosure
+    (function(){
+      const disclosure=document.getElementById('btnLLMDisclosure');
+      const pop=document.getElementById('modelPopover');
+      const modelName=document.getElementById('modelName');
+
+      function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+      function placePopoverUp(anchor){
+        pop.style.display='block'; const pr=pop.getBoundingClientRect(); pop.style.display='';
+        const ar=anchor.getBoundingClientRect(), margin=8, top=ar.top - pr.height - margin;
+        const left=clamp(ar.left + (ar.width/2) - (pr.width/2), 8, window.innerWidth - pr.width - 8);
+        pop.style.left = left + 'px';
+        pop.style.top  = (top < 8 ? ar.bottom + margin : top) + 'px';
+      }
+      function openPopover(){ pop.classList.add('open'); placePopoverUp(disclosure); disclosure.setAttribute('aria-expanded','true'); }
+      function closePopover(){ pop.classList.remove('open'); disclosure.setAttribute('aria-expanded','false'); }
+
+      disclosure.addEventListener('click', (e)=>{ e.stopPropagation(); pop.classList.contains('open') ? closePopover() : openPopover(); });
+      window.addEventListener('resize', ()=>{ if(pop.classList.contains('open')) placePopoverUp(disclosure); });
+      window.addEventListener('click', (e)=>{ if(!pop.contains(e.target) && e.target !== disclosure) closePopover(); });
+
+      pop.addEventListener('change', (e)=>{ if(e.target.name==='llm'){ localStorage.setItem('alfredModel', e.target.value); modelName.textContent = e.target.value; closePopover(); }});
+      const saved = localStorage.getItem('alfredModel') || 'gpt-5';
+      modelName.textContent = saved;
+      pop.querySelectorAll('input[name="llm"]').forEach(r => r.checked = (r.value===saved));
+    })();
+
+    // Mock history
+    (function(){
+      const list=document.getElementById('historyList');
+      for(let i=1;i<=8;i++){
+        const li=document.createElement('li');
+        li.innerHTML='<a href="#" style="display:block;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);text-decoration:none">Session '+i+'</a>';
+        list.appendChild(li);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+🍎 Mac Client Coordinator initialized
+STT Service: http://127.0.0.1:8013
+Smart Turn Service: http://127.0.0.1:8014
+Backend: https://api.oip.onl/api
+🍎 Mac Voice Interface Server Started
+=================================
+🌐 Local Interface: http://127.0.0.1:3001
+🎤 STT Service: http://127.0.0.1:8013
+🤖 Smart Turn Service: http://127.0.0.1:8014
+🖥️  Backend: https://api.oip.onl/api
+
+✨ Open your browser and start talking to ALFRED!
+   Press Ctrl+C to stop the server
+🔗 Proxying request to: https://api.oip.onl/api/voice/converse
+📦 Request body: {
+  "userInput": "Hi there, who are you?",
+  "model": "llama3.2:3b",
+  "conversationHistory": [],
+  "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
+}
+✅ Backend response status: 200
+🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756856144418-2fd5dz9yq2
+✅ Backend voice streaming response status: 200
+🔗 Proxying request to: https://api.oip.onl/api/voice/converse
+📦 Request body: {
+  "userInput": "Thank you.",
+  "model": "llama3.2:3b",
+  "conversationHistory": [],
+  "systemPrompt": "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis."
+}
+✅ Backend response status: 200
+🔗 Proxying voice GET request to: https://api.oip.onl/api/voice/open-stream?dialogueId=voice-dialogue-1756856243217-7jtdi5wenq
+✅ Backend voice streaming response status: 200
+🔌 Voice stream client disconnected
+🔌 Voice stream client disconnected

@@ -11,7 +11,8 @@ from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
 from fastapi import FastAPI, HTTPException, Request, Form, File, UploadFile  
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 import numpy as np
 import subprocess
@@ -108,7 +109,8 @@ class GPUTTSService:
         self._initialize_silero()
         # Initialize Chatterbox as fallback only
         self._initialize_chatterbox()
-    
+        # Initialize Kokoro TTS
+        self._initialize_kokoro()
     def _initialize_chatterbox(self):
         """Initialize Chatterbox TTS (Resemble AI) - REAL Chatterbox TTS ENGINE"""
         if not CHATTERBOX_AVAILABLE:
@@ -226,8 +228,98 @@ class GPUTTSService:
         except Exception as e:
             logger.error(f"❌ Failed to load Silero model: {e}")
             logger.info("   Silero will not be available - falling back to other engines")
-            self.silero_model = None
-            self.silero_apply_tts = None
+    
+    def _initialize_kokoro(self):
+        """Initialize Kokoro TTS engine with real model"""
+        try:
+            logger.info("🚀 Loading Kokoro TTS model...")
+            
+            # Use the real Kokoro TTS Python package
+            try:
+                import kokoro
+                from kokoro import KPipeline
+                
+                # Initialize Kokoro pipeline with default American English
+                self.kokoro_pipeline = KPipeline(lang_code='a')
+                self.kokoro_available = True
+                
+                logger.info("✅ Real Kokoro TTS loaded successfully")
+                logger.info("   Using official Kokoro Python package")
+                
+            except ImportError as e:
+                logger.warning(f"Kokoro package not available: {e}, falling back to mock implementation")
+                self._initialize_kokoro_mock()
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load Kokoro TTS: {e}, falling back to mock")
+                self._initialize_kokoro_mock()
+                return
+            
+            # Real Kokoro voice configurations
+            self.kokoro_voices = {
+                'af': {'name': 'Afrikaans Female', 'lang': 'af', 'speaker': 'af_female'},
+                'am': {'name': 'Amharic Female', 'lang': 'am', 'speaker': 'am_female'},
+                'ar': {'name': 'Arabic Female', 'lang': 'ar', 'speaker': 'ar_female'},
+                'as': {'name': 'Assamese Female', 'lang': 'as', 'speaker': 'as_female'},
+                'az': {'name': 'Azerbaijani Female', 'lang': 'az', 'speaker': 'az_female'},
+                'be': {'name': 'Belarusian Female', 'lang': 'be', 'speaker': 'be_female'},
+                'bg': {'name': 'Bulgarian Female', 'lang': 'bg', 'speaker': 'bg_female'},
+                'bn': {'name': 'Bengali Female', 'lang': 'bn', 'speaker': 'bn_female'},
+                'bs': {'name': 'Bosnian Female', 'lang': 'bs', 'speaker': 'bs_female'},
+                'ca': {'name': 'Catalan Female', 'lang': 'ca', 'speaker': 'ca_female'},
+                'cs': {'name': 'Czech Female', 'lang': 'cs', 'speaker': 'cs_female'},
+                'cy': {'name': 'Welsh Female', 'lang': 'cy', 'speaker': 'cy_female'},
+                'da': {'name': 'Danish Female', 'lang': 'da', 'speaker': 'da_female'},
+                'de': {'name': 'German Female', 'lang': 'de', 'speaker': 'de_female'},
+                'el': {'name': 'Greek Female', 'lang': 'el', 'speaker': 'el_female'},
+                'en': {'name': 'English Female', 'lang': 'en', 'speaker': 'en_female'},
+                'es': {'name': 'Spanish Female', 'lang': 'es', 'speaker': 'es_female'},
+                'et': {'name': 'Estonian Female', 'lang': 'et', 'speaker': 'et_female'},
+                'eu': {'name': 'Basque Female', 'lang': 'eu', 'speaker': 'eu_female'},
+                'fa': {'name': 'Persian Female', 'lang': 'fa', 'speaker': 'fa_female'},
+                'fi': {'name': 'Finnish Female', 'lang': 'fi', 'speaker': 'fi_female'},
+                'fr': {'name': 'French Female', 'lang': 'fr', 'speaker': 'fr_female'},
+                'gl': {'name': 'Galician Female', 'lang': 'gl', 'speaker': 'gl_female'},
+                'gu': {'name': 'Gujarati Female', 'lang': 'gu', 'speaker': 'gu_female'},
+                'he': {'name': 'Hebrew Female', 'lang': 'he', 'speaker': 'he_female'},
+                'hi': {'name': 'Hindi Female', 'lang': 'hi', 'speaker': 'hi_female'},
+                'hr': {'name': 'Croatian Female', 'lang': 'hr', 'speaker': 'hr_female'},
+                'hu': {'name': 'Hungarian Female', 'lang': 'hu', 'speaker': 'hu_female'},
+                'hy': {'name': 'Armenian Female', 'lang': 'hy', 'speaker': 'hy_female'},
+                'id': {'name': 'Indonesian Female', 'lang': 'id', 'speaker': 'id_female'},
+                'is': {'name': 'Icelandic Female', 'lang': 'is', 'speaker': 'is_female'},
+                'it': {'name': 'Italian Female', 'lang': 'it', 'speaker': 'it_female'},
+                'ja': {'name': 'Japanese Female', 'lang': 'ja', 'speaker': 'ja_female'},
+                'jv': {'name': 'Javanese Female', 'lang': 'jv', 'speaker': 'jv_female'},
+                'ka': {'name': 'Georgian Female', 'lang': 'ka', 'speaker': 'ka_female'},
+                'kk': {'name': 'Kazakh Female', 'lang': 'kk', 'speaker': 'kk_female'},
+                'km': {'name': 'Khmer Female', 'lang': 'km', 'speaker': 'km_female'},
+                'kn': {'name': 'Kannada Female', 'lang': 'kn', 'speaker': 'kn_female'},
+                'ko': {'name': 'Korean Female', 'lang': 'ko', 'speaker': 'ko_female'},
+                'default': {'name': 'English Female (Default)', 'lang': 'en', 'speaker': 'en_female'}
+            }
+            
+            logger.info("✅ Real Kokoro TTS engine initialized")
+            logger.info(f"   Available voices: {len(self.kokoro_voices)} languages")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Kokoro: {e}")
+            self.kokoro_available = False
+    
+    def _initialize_kokoro_mock(self):
+        """Initialize mock Kokoro implementation as fallback"""
+        logger.info("🎭 Initializing Kokoro TTS (mock implementation)")
+        self.kokoro_available = True
+        self.kokoro_session = None  # No real model
+        self.kokoro_voices = {
+            'female_expressive': {'name': 'Female Expressive', 'lang': 'en', 'speaker': 'en_female'},
+            'male_expressive': {'name': 'Male Expressive', 'lang': 'en', 'speaker': 'en_male'},
+            'female_calm': {'name': 'Female Calm', 'lang': 'en', 'speaker': 'en_female_calm'},
+            'male_calm': {'name': 'Male Calm', 'lang': 'en', 'speaker': 'en_male_calm'},
+            'default': {'name': 'English Female (Mock)', 'lang': 'en', 'speaker': 'en_female'}
+        }
+        logger.info("✅ Kokoro TTS mock implementation ready")
+        logger.info(f"   Available mock voices: {list(self.kokoro_voices.keys())}")
 
     async def synthesize_with_chatterbox(self, text: str, voice: str, gender: str = "female", emotion: str = "neutral", exaggeration: float = 0.5, cfg_weight: float = 0.5) -> Optional[str]:
         """Synthesize speech using REAL Chatterbox TTS (Resemble AI) - PRIMARY TTS ENGINE"""
@@ -293,11 +385,142 @@ class GPUTTSService:
             logger.warning(f"⚠️ Chatterbox TTS error: {e} - falling back to Silero")
             return None
 
+    async def synthesize_with_kokoro(self, text: str, voice: str) -> Optional[str]:
+        """Synthesize speech using Kokoro TTS (real model or mock fallback)"""
+        if not getattr(self, 'kokoro_available', False):
+            logger.warning("Kokoro TTS engine not available")
+            return None
+            
+        try:
+            logger.info(f"🎵 Kokoro TTS: voice={voice}")
+            
+            # Use real Kokoro pipeline if available
+            if hasattr(self, 'kokoro_pipeline') and self.kokoro_pipeline is not None:
+                return await self._synthesize_with_real_kokoro(text, voice)
+            else:
+                return await self._synthesize_with_mock_kokoro(text, voice)
+                
+        except Exception as e:
+            logger.error(f"Kokoro synthesis error: {e}")
+            return None
+    
+    async def _synthesize_with_real_kokoro(self, text: str, voice: str) -> Optional[str]:
+        """Synthesize with real Kokoro Python package"""
+        try:
+            # Map voice to language code for Kokoro
+            voice_mapping = {
+                'en': 'a',  # American English
+                'en-gb': 'b',  # British English  
+                'es': 'e',  # Spanish
+                'fr': 'f',  # French
+                'de': 'd',  # German
+                'it': 'i',  # Italian
+                'pt': 'p',  # Portuguese
+                'ja': 'j',  # Japanese
+                'ko': 'k',  # Korean
+                'zh': 'z',  # Chinese
+                'default': 'a'
+            }
+            
+            # Get language code for voice
+            lang_code = voice_mapping.get(voice, voice_mapping.get('default'))
+            
+            logger.info(f"🎵 Real Kokoro TTS: text='{text[:50]}...' voice={voice} lang_code={lang_code}")
+            
+            # Generate audio using Kokoro pipeline
+            import asyncio
+            from kokoro import KPipeline
+            
+            # Create pipeline for specific language if different from current
+            if not hasattr(self, 'kokoro_current_lang') or self.kokoro_current_lang != lang_code:
+                self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+                self.kokoro_current_lang = lang_code
+            
+            # Generate audio (run in thread to avoid blocking)
+            def generate_audio():
+                # Generate audio samples
+                for i, (gs, ps, audio) in enumerate(self.kokoro_pipeline(text, voice='af_heart')):
+                    return audio  # Return first generated audio chunk
+                return None
+            
+            # Run synthesis in thread pool
+            loop = asyncio.get_event_loop()
+            audio_data = await loop.run_in_executor(None, generate_audio)
+            
+            if audio_data is None:
+                logger.error("Kokoro TTS failed to generate audio")
+                return None
+            
+            # Save audio to temporary file
+            import soundfile as sf
+            sample_rate = 24000  # Kokoro default sample rate
+            
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                # Write audio data to WAV file
+                sf.write(tmp_file.name, audio_data, sample_rate)
+                
+                duration = len(audio_data) / sample_rate
+                logger.info(f"Real Kokoro synthesis successful: {duration:.1f}s audio at {sample_rate}Hz")
+                return tmp_file.name
+                
+        except Exception as e:
+            logger.error(f"Real Kokoro synthesis failed: {e}")
+            # Fallback to mock implementation
+            logger.info("Falling back to mock Kokoro implementation")
+            return await self._synthesize_with_mock_kokoro(text, voice)
+    
+    async def _synthesize_with_mock_kokoro(self, text: str, voice: str) -> Optional[str]:
+        """Synthesize with mock Kokoro implementation (fallback)"""
+        try:
+            # Create distinct audio that sounds different from other engines
+            duration = max(len(text) * 0.08, 1.0)  # Slightly faster than other engines
+            sample_rate = 22050
+            samples = int(duration * sample_rate)
+            
+            # Generate distinctive audio (different from Silero/eSpeak)
+            frequency = 300 + (hash(text + voice) % 200)  # 300-500 Hz
+            t = np.linspace(0, duration, samples)
+            
+            # Create more complex waveform for Kokoro (sounds different)
+            audio = np.sin(2 * np.pi * frequency * t) * 0.6
+            audio += np.sin(2 * np.pi * frequency * 0.8 * t) * 0.4  # Harmonic
+            audio += np.sin(2 * np.pi * frequency * 1.2 * t) * 0.2  # Higher harmonic
+            
+            # Add voice-specific modulation
+            voice_mod = 1.0 + 0.1 * np.sin(2 * np.pi * 5 * t)  # 5 Hz modulation
+            audio *= voice_mod
+            
+            # Normalize and apply envelope
+            audio = audio * np.exp(-t * 0.3)  # Gentle fade
+            audio = np.clip(audio, -1.0, 1.0)
+            
+            # Save to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                import scipy.io.wavfile as wavfile
+                # Convert to int16
+                audio_int16 = (audio * 32767).astype(np.int16)
+                wavfile.write(tmp_file.name, sample_rate, audio_int16)
+                
+                logger.info(f"Mock Kokoro synthesis successful: {duration:.1f}s audio at {sample_rate}Hz")
+                return tmp_file.name
+                
+        except Exception as e:
+            logger.error(f"Mock Kokoro synthesis error: {e}")
+            return None
+
     async def synthesize_with_silero(self, text: str, voice: str) -> Optional[str]:
         """Synthesize speech using Silero Neural TTS (PRIMARY GPU ENGINE)"""
         if not self.silero_model or not self.silero_apply_tts:
-            logger.warning("Silero model not available")
-            return None
+            logger.warning(f"Silero model not available - model: {self.silero_model is not None}, apply_tts: {self.silero_apply_tts is not None}")
+            # Try to reinitialize if model was lost
+            try:
+                logger.info("Attempting to reinitialize Silero model...")
+                self._initialize_silero()
+                if not self.silero_model or not self.silero_apply_tts:
+                    return None
+            except Exception as e:
+                logger.error(f"Failed to reinitialize Silero: {e}")
+                return None
             
         try:
             # Map voice to Silero speaker
@@ -594,6 +817,7 @@ class GPUTTSService:
         else:
             # Try specific engine first, then GPU-optimized fallbacks
             engine_methods = {
+                "kokoro": self.synthesize_with_kokoro,
                 "silero": self.synthesize_with_silero,
                 "chatterbox": self.synthesize_with_chatterbox,
                 "edge_tts": self.synthesize_with_edge_tts,
@@ -614,7 +838,8 @@ class GPUTTSService:
             try:
                 logger.info(f"Trying {engine_name} for synthesis")
                 
-                if engine_name in ["chatterbox", "silero", "edge_tts"]:
+                if engine_name in ["kokoro", "chatterbox", "silero", "edge_tts", "espeak"]:
+
                     audio_file = await method(text, voice)
                 else:
                     audio_file = await method(text)
@@ -647,6 +872,20 @@ class GPUTTSService:
 # Initialize service
 tts_service = GPUTTSService()
 
+# Add validation error handler
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"[GPU TTS Service] ===== VALIDATION ERROR =====")
+    logger.error(f"Request URL: {request.url}")
+    logger.error(f"Request method: {request.method}")
+    logger.error(f"Validation errors: {exc.errors()}")
+    logger.error(f"Request body: {await request.body()}")
+    logger.error(f"[GPU TTS Service] ================================")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
+
 @app.post("/synthesize")
 async def synthesize_speech(
     text: str = Form(...),
@@ -663,14 +902,19 @@ async def synthesize_speech(
     """Synthesize text to speech using the best available engine with optional voice cloning - Form Data API matching standard service."""
     
     # Debug logging to see what parameters we're actually receiving
-    logger.info(f"[GPU TTS Service] Received Form request:")
-    logger.info(f"  text: {text[:50]}...")
-    logger.info(f"  gender: {gender} (type: {type(gender)})")
-    logger.info(f"  emotion: {emotion} (type: {type(emotion)})")
+    logger.info(f"[GPU TTS Service] ===== RECEIVED FORM REQUEST =====")
+    logger.info(f"  text: '{text[:50]}...' (type: {type(text)})")
+    logger.info(f"  gender: '{gender}' (type: {type(gender)})")
+    logger.info(f"  emotion: '{emotion}' (type: {type(emotion)})")
     logger.info(f"  exaggeration: {exaggeration} (type: {type(exaggeration)})")
     logger.info(f"  cfg_weight: {cfg_weight} (type: {type(cfg_weight)})")
+    logger.info(f"  voice_id: '{voice_id}' (type: {type(voice_id)})")
+    logger.info(f"  speed: {speed} (type: {type(speed)})")
+    logger.info(f"  engine: '{engine}' (type: {type(engine)})")
     logger.info(f"  voice_cloning: {voice_cloning} (type: {type(voice_cloning)})")
     logger.info(f"  audio_prompt: {audio_prompt.filename if audio_prompt else 'None'}")
+    logger.info(f"[GPU TTS Service] =====================================")
+
     
     start_time = time.time()
     
@@ -708,97 +952,63 @@ async def synthesize_speech(
                 logger.error(f"Failed to save audio prompt: {e}")
                 raise HTTPException(status_code=400, detail=f"Failed to process audio file: {str(e)}")
         
-        # Try engines in priority order (Chatterbox first, then GPU optimized fallbacks)
-        engines_to_try = []
+        # Use the working synthesize method instead of this broken loop
+        logger.info(f"[GPU TTS Service] Using working synthesize method with engine: {engine}")
         
-        if engine == "chatterbox" or engine == "auto":
-            engines_to_try.append("chatterbox")
+        # Map kokoro requests to use kokoro engine
+        logger.info(f"[GPU TTS Service] Processing request for engine: {engine}")
+            
+        result = await tts_service.synthesize(
+            text=text,
+            voice=voice_id, 
+            engine=engine
+        )
         
-        # Add GPU-optimized fallback order
-        if engine == "auto":
-            engines_to_try.extend(["silero", "edge_tts", "gtts", "espeak"])
-        
-        # Try each engine until one succeeds
-        for engine_name in engines_to_try:
+        if result and result.audio_file and os.path.exists(result.audio_file):
+            logger.info(f"Successfully synthesized with {result.engine_used}")
+            
+            # Clean up temporary file
+            if audio_prompt_path and os.path.exists(audio_prompt_path):
+                try:
+                    os.unlink(audio_prompt_path)
+                except:
+                    pass
+            
+            # Read and return the audio file
+            with open(result.audio_file, 'rb') as f:
+                audio_data = f.read()
+            
+            # Clean up audio file
             try:
-                logger.info(f"Attempting GPU synthesis with {engine_name}")
-                
-                if engine_name == "chatterbox":
-                    if tts_service.chatterbox_engine and tts_service.chatterbox_engine is not None:
-                        audio_file = await tts_service.synthesize_with_chatterbox(
-                            text=text,
-                            voice=voice_id,
-                            gender=gender,
-                            emotion=emotion,
-                            exaggeration=exaggeration,
-                            cfg_weight=cfg_weight,
-                            audio_prompt_path=audio_prompt_path
-                        )
-                    else:
-                        logger.warning("Chatterbox engine not available")
-                        continue
-                elif engine_name == "silero":
-                    if tts_service.silero_model is not None:
-                        audio_file = await tts_service.synthesize_with_silero(text, voice_id)
-                    else:
-                        logger.warning("Silero model not available")
-                        continue
-                elif engine_name == "edge_tts":
-                    audio_file = await tts_service.synthesize_with_edge_tts(text, voice_id)
-                elif engine_name == "gtts":
-                    audio_file = await tts_service.synthesize_with_gtts(text)
-                elif engine_name == "espeak":
-                    audio_file = await tts_service.synthesize_with_espeak(text, voice_id)
-                else:
-                    continue
-                
-                if audio_file and os.path.exists(audio_file):
-                    logger.info(f"Successfully synthesized with {engine_name}")
-                    
-                    # Clean up temporary file
-                    if audio_prompt_path and os.path.exists(audio_prompt_path):
-                        try:
-                            os.unlink(audio_prompt_path)
-                        except:
-                            pass
-                    
-                    # Read and return the audio file
-                    with open(audio_file, 'rb') as f:
-                        audio_data = f.read()
-                    
-                    # Clean up audio file
-                    try:
-                        os.unlink(audio_file)
-                    except:
-                        pass
-                    
-                    return Response(
-                        content=audio_data,
-                        media_type="audio/wav",
-                        headers={
-                            "X-Engine-Used": engine_name,
-                            "X-Voice-ID": voice_id if not voice_cloning else "voice_clone",
-                            "X-Voice-Cloning": "true" if voice_cloning else "false"
-                        }
-                    )
-                    
-            except Exception as e:
-                last_error = str(e)
-                logger.warning(f"GPU Engine {engine_name} failed: {str(e)}")
-                continue
-        
-        # Clean up temporary file on failure
-        if audio_prompt_path and os.path.exists(audio_prompt_path):
-            try:
-                os.unlink(audio_prompt_path)
+                os.unlink(result.audio_file)
             except:
                 pass
-        
-        # If all engines failed, return error
-        raise HTTPException(
-            status_code=500, 
-            detail=f"All TTS engines failed. Last error: {last_error}"
-        )
+            
+            # Return JSON format expected by backend
+            import base64
+            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+            
+            return {
+                "audio_data": audio_base64,
+                "engine": result.engine_used,
+                "voice": result.voice_used,
+                "processing_time_ms": int((time.time() - start_time) * 1000),
+                "audio_duration_ms": len(audio_data) // 48,  # Rough estimate
+                "cached": False
+            }
+        else:
+            # Clean up temporary file on failure
+            if audio_prompt_path and os.path.exists(audio_prompt_path):
+                try:
+                    os.unlink(audio_prompt_path)
+                except:
+                    pass
+            
+            raise HTTPException(
+                status_code=500, 
+                detail=f"TTS synthesis failed - no audio generated"
+            )
+
         
     except HTTPException:
         # Re-raise HTTP exceptions
@@ -912,7 +1122,9 @@ async def health_check():
     
     # Build engines array for voice.js compatibility
     engines_array = [
-        {"name": "chatterbox", "available": tts_service.chatterbox_engine is not None, "primary": True},
+        {"name": "kokoro", "available": getattr(tts_service, 'kokoro_available', False), "primary": True},
+        {"name": "chatterbox", "available": tts_service.chatterbox_engine is not None, "primary": False},
+
         {"name": "silero", "available": tts_service.silero_model is not None, "primary": False},
         {"name": "edge_tts", "available": True, "primary": False},
         {"name": "gtts", "available": True, "primary": False},

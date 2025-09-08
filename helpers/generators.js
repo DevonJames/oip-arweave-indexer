@@ -1140,66 +1140,148 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
             throw new Error('Invalid dialogueId parameter: must be a string');
         }
         
-        console.log(`Generating streaming response with grok`);
+        const model = options.model || 'llama3.2:3b';
+        console.log(`Generating streaming response with model: ${model}`);
         console.log(`Conversation history length: ${conversationHistory.length}`);
         
-        // Format messages for xAI API
-        let messages = Array.isArray(conversationHistory) ? 
-            conversationHistory.map(msg => ({
-                role: msg.role,
-                content: msg.content
-            })) : 
-            [{ role: "user", content: "Hello, how can I help you today?" }];
+        // Import ALFRED for model routing
+        const alfred = require('./alfred');
+        
+        // Check if this is a cloud model or Ollama model
+        const isCloud = alfred.isCloudModel(model);
+        console.log(`Model ${model} is ${isCloud ? 'cloud' : 'local Ollama'} model`);
+        
+        let response;
+        if (isCloud) {
+            // Format messages for cloud API
+            let messages = Array.isArray(conversationHistory) ? 
+                conversationHistory.map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                })) : 
+                [{ role: "user", content: "Hello, how can I help you today?" }];
+                
+            // Add system prompt if provided, or use a default one
+            const systemPrompt = options.systemPrompt || "You are a helpful AI assistant. IMPORTANT: Do not use emojis, asterisks, or other special symbols in your responses as they interfere with text-to-speech synthesis. Keep your responses conversational and natural.";
             
-        // Add system prompt if provided, or use a default one
-        const systemPrompt = options.systemPrompt || "You are a helpful AI assistant. IMPORTANT: Do not use emojis, asterisks, or other special symbols in your responses as they interfere with text-to-speech synthesis. Keep your responses conversational and natural.";
-        
-        // Prepend system message to conversation
-        messages.unshift({
-            role: "system",
-            content: systemPrompt
-        });
-        
-        console.log(`Added system prompt, total messages: ${messages.length}`);
-        
-        // Make API request to xAI with streaming enabled
-        const response = await axios({
-            method: 'post',
-            url: 'https://api.x.ai/v1/chat/completions',
-            headers: {
-                'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            data: {
-                model: options.model || 'grok-4',
-                messages: messages,
-                stream: true,
-                temperature: options.temperature || 0.7
-            },
-            responseType: 'stream'
-        });
+            // Prepend system message to conversation
+            messages.unshift({
+                role: "system",
+                content: systemPrompt
+            });
+            
+            console.log(`Added system prompt, total messages: ${messages.length}`);
+            
+            // Use cloud API (xAI, OpenAI, etc.)
+            const modelConfig = alfred.cloudModels[model];
+            response = await axios({
+                method: 'post',
+                url: modelConfig.apiUrl,
+                headers: {
+                    'Authorization': `Bearer ${modelConfig.provider === 'xai' ? process.env.XAI_API_KEY : process.env.OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                data: {
+                    model: model,
+                    messages: messages,
+                    stream: true,
+                    temperature: options.temperature || 0.7
+                },
+                responseType: 'stream'
+            });
+        } else {
+            // Use Ollama for local models (llama3.2:3b, mistral, etc.)
+            console.log(`Using Ollama for model: ${model}`);
+            
+            // Build a prompt with system prompt for Ollama
+            const systemPrompt = options.systemPrompt || "You are a helpful AI assistant. IMPORTANT: Do not use emojis, asterisks, or other special symbols in your responses as they interfere with text-to-speech synthesis. Keep your responses conversational and natural.";
+            
+            let prompt = `System: ${systemPrompt}\n\n`;
+            if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+                prompt += conversationHistory.map(msg => {
+                    if (msg.role === 'user') return `Human: ${msg.content}`;
+                    if (msg.role === 'assistant') return `Assistant: ${msg.content}`;
+                    return msg.content;
+                }).join('\n') + '\nAssistant:';
+            } else {
+                prompt += 'Human: Hello, how can I help you today?\nAssistant:';
+            }
+            
+            console.log(`Using system prompt: ${systemPrompt.substring(0, 100)}...`);
+            
+            response = await axios({
+                method: 'post',
+                url: `${alfred.ollamaBaseUrl}/api/generate`,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                data: {
+                    model: model,
+                    prompt: prompt,
+                    stream: true,
+                    options: {
+                        temperature: options.temperature || 0.7,
+                        num_predict: 500
+                    }
+                },
+                responseType: 'stream'
+            });
+        }
         
         // Track full response for logging
         let fullResponse = '';
-        
-        // Process the streaming response
+
+        // Process the streaming response differently for cloud vs Ollama
+
         response.data.on('data', (chunk) => {
             const chunkStr = chunk.toString().trim();
             if (!chunkStr) return;
-            
-            // Handle SSE format
-            const lines = chunkStr.split('\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.substring(6);
-                    if (data === '[DONE]') continue;
-                    
-                    try {
-                        // Skip empty data lines
-                        if (!data.trim()) return;
+            if (isCloud) {
+                // Handle cloud API SSE format (OpenAI/xAI)
+                const lines = chunkStr.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.substring(6);
+                        if (data === '[DONE]') continue;
                         
-                        const parsed = JSON.parse(data);
-                        const content = parsed.choices?.[0]?.delta?.content || '';
+                        try {
+                            // Skip empty data lines
+                            if (!data.trim()) return;
+                            
+                            const parsed = JSON.parse(data);
+                            const content = parsed.choices?.[0]?.delta?.content || '';
+                            
+                            if (content) {
+                                // Add to full response
+                                fullResponse += content;
+                                
+                                // Use the callback if provided
+                                if (typeof onTextChunk === 'function') {
+                                    onTextChunk(content);
+                                } else {
+                                    // Send to client through socket
+                                    socketManager.sendToClients(dialogueId, {
+                                        role: 'assistant',
+                                        text: content
+                                    });
+                                }
+                            }
+                        } catch (e) {
+                            // Only log JSON parsing errors if the data isn't empty
+                            if (data.trim()) {
+                                console.error('Error parsing cloud stream data:', e);
+                                console.error('Problematic data chunk:', data.substring(0, 100));
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Handle Ollama streaming format
+                try {
+                    const lines = chunkStr.split('\n').filter(line => line.trim());
+                    for (const line of lines) {
+                        const parsed = JSON.parse(line);
+                        const content = parsed.response || '';
                         
                         if (content) {
                             // Add to full response
@@ -1216,13 +1298,17 @@ async function generateStreamingResponse(conversationHistory, dialogueId, option
                                 });
                             }
                         }
-                    } catch (e) {
-                        // Only log JSON parsing errors if the data isn't empty
-                        if (data.trim()) {
-                            console.error('Error parsing stream data:', e);
-                            console.error('Problematic data chunk:', data.substring(0, 100));
+                        
+                        // Check if done
+                        if (parsed.done === true) {
+                            console.log('Ollama stream completed');
+                            break;
                         }
                     }
+                } catch (e) {
+                    console.error('Error parsing Ollama stream data:', e);
+                    console.error('Problematic data chunk:', chunkStr.substring(0, 100));
+
                 }
             }
         });
@@ -1302,13 +1388,15 @@ async function streamTextToSpeech(text, voiceConfig = {}, onAudioChunk, dialogue
             formData.append('cfg_weight', voiceConfig?.chatterbox?.cfg_weight?.toString() || '0.7');
             formData.append('voice_cloning', 'false');
             
-            const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
-                headers: {
-                    ...formData.getHeaders()
-                },
-                responseType: 'arraybuffer',
-                timeout: 30000
-            });
+                                // Use environment variable for TTS service URL (supports remote backend)
+                    const ttsServiceUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
+                    const ttsResponse = await axios.post(`${ttsServiceUrl}/synthesize`, formData, {
+                        headers: {
+                            ...formData.getHeaders()
+                        },
+                        responseType: 'arraybuffer',
+                        timeout: 30000
+                    });
             
             if (ttsResponse.status === 200 && ttsResponse.data) {
                 console.log(`🎤 Local TTS generated ${ttsResponse.data.byteLength} bytes of audio`);
@@ -1518,44 +1606,134 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
         // Add new clean text to buffer  
         textAccumulator.buffer += cleanText;
         
-        // Define chunking parameters
-        const MIN_CHUNK_LENGTH = 75;   // Minimum characters before considering TTS
-        const MAX_CHUNK_LENGTH = 150;  // Maximum characters to prevent very long chunks
+        // HYBRID CHUNKING STRATEGY: Small chunks first, then larger batches
+        // Initialize chunk counter if needed
+        if (!textAccumulator.chunkCounter) {
+            textAccumulator.chunkCounter = 0;
+        }
+        
+        // Determine chunking strategy based on chunk number
+        const isEarlyChunk = textAccumulator.chunkCounter < 3; // First 3 chunks are small for immediate response
+        
+        // Define adaptive chunking parameters
+        let MIN_CHUNK_LENGTH, MAX_CHUNK_LENGTH, MAX_WAIT_TIME;
+        
+        if (isEarlyChunk) {
+            // Early chunks: Small and fast for immediate audio feedback (3-4 seconds of speech)
+            MIN_CHUNK_LENGTH = 60;   // Smaller minimum for quick response
+            MAX_CHUNK_LENGTH = 120;  // Shorter chunks for immediate feedback
+            MAX_WAIT_TIME = 1500;    // Faster timeout for responsiveness
+        } else {
+            // Later chunks: Larger batches for smooth flow (8-12 seconds of speech)
+            MIN_CHUNK_LENGTH = 200;  // Wait for more text to accumulate
+            MAX_CHUNK_LENGTH = 400;  // Larger chunks for smoother playback
+            MAX_WAIT_TIME = 3000;    // Allow more time to build complete sentences
+        }
+        
         const SENTENCE_ENDINGS = /[.!?]+[\s]*$/; // Sentence ending patterns
         const PHRASE_ENDINGS = /[,;:]+[\s]*$/;   // Phrase ending patterns
-        const MAX_WAIT_TIME = 2000;    // Max time to wait before forcing TTS (2 seconds)
+        const PARAGRAPH_BREAKS = /\n\s*\n/;      // Paragraph breaks for larger chunks
+
         
         let shouldProcessChunk = false;
         let chunkToProcess = '';
         
         // Check if we should process a chunk
         const timeSinceLastSent = Date.now() - textAccumulator.lastSentTime;
+        const bufferLength = textAccumulator.buffer.length;
         
-        if (textAccumulator.buffer.length >= MIN_CHUNK_LENGTH) {
-            // Look for sentence endings first (best breaking points)
-            if (SENTENCE_ENDINGS.test(textAccumulator.buffer)) {
-                shouldProcessChunk = true;
-                chunkToProcess = textAccumulator.buffer.trim();
-                console.log(`🎤 Chunking at sentence end: "${chunkToProcess.substring(0, 50)}..."`);
-            }
-            // If buffer is getting long, look for phrase endings
-            else if (textAccumulator.buffer.length >= 100 && PHRASE_ENDINGS.test(textAccumulator.buffer)) {
-                shouldProcessChunk = true;
-                chunkToProcess = textAccumulator.buffer.trim();
-                console.log(`🎤 Chunking at phrase end: "${chunkToProcess.substring(0, 50)}..."`);
-            }
-            // Force chunking if buffer is too long or too much time has passed
-            else if (textAccumulator.buffer.length >= MAX_CHUNK_LENGTH || timeSinceLastSent >= MAX_WAIT_TIME) {
-                // Try to break at a space to avoid cutting words
-                let breakPoint = textAccumulator.buffer.lastIndexOf(' ', MAX_CHUNK_LENGTH);
-                if (breakPoint === -1 || breakPoint < MIN_CHUNK_LENGTH) {
-                    breakPoint = Math.min(textAccumulator.buffer.length, MAX_CHUNK_LENGTH);
+        console.log(`🎤 Chunking strategy: ${isEarlyChunk ? 'EARLY' : 'BATCH'} (chunk #${textAccumulator.chunkCounter + 1}, buffer: ${bufferLength} chars)`);
+        
+        if (bufferLength >= MIN_CHUNK_LENGTH) {
+            if (isEarlyChunk) {
+                // EARLY CHUNKS: Prioritize speed - break at first good opportunity
+                if (SENTENCE_ENDINGS.test(textAccumulator.buffer)) {
+                    shouldProcessChunk = true;
+                    chunkToProcess = textAccumulator.buffer.trim();
+                    console.log(`🎤 Early chunking at sentence end: "${chunkToProcess.substring(0, 50)}..."`);
+                }
+                else if (bufferLength >= 90 && PHRASE_ENDINGS.test(textAccumulator.buffer)) {
+                    shouldProcessChunk = true;
+                    chunkToProcess = textAccumulator.buffer.trim();
+                    console.log(`🎤 Early chunking at phrase end: "${chunkToProcess.substring(0, 50)}..."`);
+                }
+                else if (bufferLength >= MAX_CHUNK_LENGTH || timeSinceLastSent >= MAX_WAIT_TIME) {
+                    // Force early chunk if needed
+                    let breakPoint = textAccumulator.buffer.lastIndexOf(' ', MAX_CHUNK_LENGTH);
+                    if (breakPoint === -1 || breakPoint < MIN_CHUNK_LENGTH) {
+                        breakPoint = Math.min(bufferLength, MAX_CHUNK_LENGTH);
+                    }
+                    
+                    chunkToProcess = textAccumulator.buffer.substring(0, breakPoint).trim();
+                    textAccumulator.buffer = textAccumulator.buffer.substring(breakPoint).trim();
+                    shouldProcessChunk = true;
+                    console.log(`🎤 Early force chunking: "${chunkToProcess.substring(0, 50)}..."`);
+                }
+            } else {
+                // LATER CHUNKS: Prioritize smooth flow - wait for complete thoughts
+                
+                // Look for paragraph breaks first (ideal for long responses)
+                if (PARAGRAPH_BREAKS.test(textAccumulator.buffer)) {
+                    const paragraphEnd = textAccumulator.buffer.search(PARAGRAPH_BREAKS);
+                    if (paragraphEnd > MIN_CHUNK_LENGTH) {
+                        chunkToProcess = textAccumulator.buffer.substring(0, paragraphEnd).trim();
+                        textAccumulator.buffer = textAccumulator.buffer.substring(paragraphEnd).replace(/^\s*\n\s*/, '');
+                        shouldProcessChunk = true;
+                        console.log(`🎤 Batch chunking at paragraph break: "${chunkToProcess.substring(0, 50)}..."`);
+                    }
                 }
                 
-                chunkToProcess = textAccumulator.buffer.substring(0, breakPoint).trim();
-                textAccumulator.buffer = textAccumulator.buffer.substring(breakPoint).trim();
-                shouldProcessChunk = true;
-                console.log(`🎤 Force chunking at length/time: "${chunkToProcess.substring(0, 50)}..."`);
+                // Look for multiple sentences (ideal batch size)
+                if (!shouldProcessChunk) {
+                    const sentences = textAccumulator.buffer.match(/[^.!?]*[.!?]+/g);
+                    if (sentences && sentences.length >= 2) {
+                        // Take 2-3 sentences for smooth flow
+                        const sentenceCount = Math.min(3, sentences.length);
+                        const sentenceBatch = sentences.slice(0, sentenceCount).join(' ').trim();
+                        
+                        if (sentenceBatch.length >= MIN_CHUNK_LENGTH && sentenceBatch.length <= MAX_CHUNK_LENGTH) {
+                            chunkToProcess = sentenceBatch;
+                            textAccumulator.buffer = textAccumulator.buffer.substring(sentenceBatch.length).trim();
+                            shouldProcessChunk = true;
+                            console.log(`🎤 Batch chunking ${sentenceCount} sentences: "${chunkToProcess.substring(0, 50)}..."`);
+                        }
+                    }
+                }
+                
+                // Single sentence if it's complete and long enough
+                if (!shouldProcessChunk && SENTENCE_ENDINGS.test(textAccumulator.buffer) && bufferLength >= MIN_CHUNK_LENGTH) {
+                    shouldProcessChunk = true;
+                    chunkToProcess = textAccumulator.buffer.trim();
+                    console.log(`🎤 Batch chunking single sentence: "${chunkToProcess.substring(0, 50)}..."`);
+                }
+                
+                // Force chunking if buffer gets too large or timeout
+                if (!shouldProcessChunk && (bufferLength >= MAX_CHUNK_LENGTH || timeSinceLastSent >= MAX_WAIT_TIME)) {
+                    // Try to break at sentence boundary within limit
+                    let breakPoint = -1;
+                    const sentencePattern = /[.!?]+\s+/g;
+                    let match;
+                    while ((match = sentencePattern.exec(textAccumulator.buffer)) !== null) {
+                        if (match.index + match[0].length <= MAX_CHUNK_LENGTH && match.index + match[0].length >= MIN_CHUNK_LENGTH) {
+                            breakPoint = match.index + match[0].length;
+                        } else if (match.index + match[0].length > MAX_CHUNK_LENGTH) {
+                            break;
+                        }
+                    }
+                    
+                    // Fall back to space break if no sentence boundary found
+                    if (breakPoint === -1) {
+                        breakPoint = textAccumulator.buffer.lastIndexOf(' ', MAX_CHUNK_LENGTH);
+                        if (breakPoint === -1 || breakPoint < MIN_CHUNK_LENGTH) {
+                            breakPoint = Math.min(bufferLength, MAX_CHUNK_LENGTH);
+                        }
+                    }
+                    
+                    chunkToProcess = textAccumulator.buffer.substring(0, breakPoint).trim();
+                    textAccumulator.buffer = textAccumulator.buffer.substring(breakPoint).trim();
+                    shouldProcessChunk = true;
+                    console.log(`🎤 Batch force chunking (${chunkToProcess.length} chars): "${chunkToProcess.substring(0, 50)}..."`);
+                }
             }
         }
         
@@ -1605,7 +1783,10 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                     
                     console.log(`🎤 Sending Edge TTS request with parameters: voice_id=${voiceConfig.edge.selectedVoice}, engine=edge_tts`);
                     
-                    const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                    // Use environment variable for TTS service URL (supports remote backend)
+                    const ttsServiceUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
+                    const ttsResponse = await axios.post(`${ttsServiceUrl}/synthesize`, formData, {
+
                         headers: {
                             ...formData.getHeaders()
                         },
@@ -1710,63 +1891,55 @@ async function streamChunkedTextToSpeech(text, textAccumulator, voiceConfig = {}
                         await onAudioChunk(audioBase64, currentChunkIndex, chunkToProcess);
                     }
                     
-                    // Also send via socket manager
-                    if (dialogueId) {
-                        socketManager.sendToClients(dialogueId, {
-                            type: 'audioChunk',
-                            audio: audioBase64,
-                            chunkIndex: currentChunkIndex,
-                            text: chunkToProcess
-                        });
-                    }
+                    // DON'T send via socket manager - onAudioChunk already handles client sending
+                } else {
+                    throw new Error('No audio generated from main TTS service');
+
                 }
                 
             } catch (ttsError) {
                 console.error(`Error calling ${voiceConfig.engine} TTS service for chunk:`, ttsError.message);
                 
-                // Try ElevenLabs fallback for this chunk
-                try {
-                    console.log('🎤 Trying ElevenLabs fallback for chunk');
-                    const elevenLabsResponse = await axios.post(
-                        `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
-                        {
-                            text: chunkToProcess,
-                            model_id: 'eleven_turbo_v2',
-                            voice_settings: {
-                                stability: 0.5,
-                                similarity_boost: 0.75
+                // Only try fallback if main TTS completely failed (no audioBase64)
+                if (!audioBase64) {
+                    try {
+                        console.log('🎤 Trying ElevenLabs fallback for chunk');
+                        const elevenLabsResponse = await axios.post(
+                            `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
+                            {
+                                text: chunkToProcess,
+                                model_id: 'eleven_turbo_v2',
+                                voice_settings: {
+                                    stability: 0.5,
+                                    similarity_boost: 0.75
+                                },
+                                output_format: 'mp3_44100_128'
                             },
-                            output_format: 'mp3_44100_128'
-                        },
-                        {
-                            headers: {
-                                'xi-api-key': process.env.ELEVENLABS_API_KEY,
-                                'Content-Type': 'application/json'
-                            },
-                            responseType: 'arraybuffer'
-                        }
-                    );
-                    
-                    if (elevenLabsResponse.status === 200 && elevenLabsResponse.data) {
-                        console.log(`🎤 ElevenLabs fallback generated ${elevenLabsResponse.data.byteLength} bytes`);
+                            {
+                                headers: {
+                                    'xi-api-key': process.env.ELEVENLABS_API_KEY,
+                                    'Content-Type': 'application/json'
+                                },
+                                responseType: 'arraybuffer'
+                            }
+                        );
                         
-                        const audioBase64 = Buffer.from(elevenLabsResponse.data).toString('base64');
-                        
-                        if (onAudioChunk && typeof onAudioChunk === 'function') {
-                            await onAudioChunk(audioBase64, currentChunkIndex, chunkToProcess);
+                        if (elevenLabsResponse.status === 200 && elevenLabsResponse.data) {
+                            console.log(`🎤 ElevenLabs fallback generated ${elevenLabsResponse.data.byteLength} bytes`);
+                            
+                            const audioBase64Fallback = Buffer.from(elevenLabsResponse.data).toString('base64');
+                            
+                            if (onAudioChunk && typeof onAudioChunk === 'function') {
+                                await onAudioChunk(audioBase64Fallback, currentChunkIndex, chunkToProcess);
+                            }
+                            
+                            // DON'T send via socket manager - onAudioChunk already handles client sending
                         }
-                        
-                        if (dialogueId) {
-                            socketManager.sendToClients(dialogueId, {
-                                type: 'audioChunk',  
-                                audio: audioBase64,
-                                chunkIndex: currentChunkIndex,
-                                text: chunkToProcess
-                            });
-                        }
+                    } catch (fallbackError) {
+                        console.error('ElevenLabs fallback also failed:', fallbackError.message);
                     }
-                } catch (fallbackError) {
-                    console.error('ElevenLabs fallback also failed:', fallbackError.message);
+                } else {
+                    console.log('🎤 Main TTS succeeded despite error, skipping fallback');
                 }
             }
         }
@@ -1895,7 +2068,10 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                         formData.append('voice_cloning', 'false');
                     }
                     
-                    const ttsResponse = await axios.post('http://tts-service:8005/synthesize', formData, {
+                    // Use environment variable for TTS service URL (supports remote backend)
+                    const ttsServiceUrl = process.env.TTS_SERVICE_URL || 'http://tts-service:8005';
+                    const ttsResponse = await axios.post(`${ttsServiceUrl}/synthesize`, formData, {
+
                         headers: {
                             ...formData.getHeaders()
                         },
@@ -1915,16 +2091,8 @@ async function flushRemainingText(textAccumulator, voiceConfig = {}, onAudioChun
                         await onAudioChunk(audioBase64, finalChunkIndex, remainingText, true);
                     }
                     
-                    if (dialogueId) {
-                        const socketManager = require('../socket/socketManager');
-                        socketManager.sendToClients(dialogueId, {
-                            type: 'audioChunk',
-                            audio: audioBase64,
-                            chunkIndex: finalChunkIndex,
-                            text: remainingText,
-                            isFinal: true
-                        });
-                    }
+                    // DON'T send via socket manager - onAudioChunk already handles client sending
+
                 }
             } catch (error) {
                 console.error('Error processing final text chunk:', error);
@@ -2250,6 +2418,79 @@ async function callOpenAiVision(params) {
   }
 }
 
+/**
+ * Enhanced streaming TTS with adaptive chunking for near-real-time speech
+ * Uses the new StreamingCoordinator for optimal latency and smooth playback
+ * @param {string} text - Text chunk from LLM
+ * @param {string} sessionId - Unique session identifier
+ * @param {Object} voiceConfig - Voice configuration
+ * @param {Function} onAudioChunk - Callback for audio chunks
+ * @param {Function} onTextChunk - Callback for text chunks
+ * @returns {Promise<void>}
+ */
+async function streamAdaptiveTextToSpeech(text, sessionId, voiceConfig = {}, onAudioChunk, onTextChunk = null) {
+    try {
+        const streamingCoordinator = require('./streamingCoordinator');
+        
+        // Initialize session if not already active
+        let sessionStatus = streamingCoordinator.getSessionStatus(sessionId);
+        if (!sessionStatus.exists) {
+            console.log(`[Adaptive TTS] Initializing new session: ${sessionId}`);
+            await streamingCoordinator.initSession(sessionId, {
+                ...voiceConfig,
+                onAudioChunk: onAudioChunk,
+                onTextChunk: onTextChunk,
+                targetLatency: 300, // 300ms first-word latency target
+                maxChunkSize: 800,
+                speechRate: 3.0 // words per second
+            });
+        }
+        
+        // Add text to the streaming pipeline
+        const result = await streamingCoordinator.addText(sessionId, text);
+        
+        if (!result.success) {
+            console.error(`[Adaptive TTS] Failed to process text for session ${sessionId}:`, result.error);
+        } else {
+            console.log(`[Adaptive TTS] Processed ${result.chunksProcessed} chunks, queue size: ${result.queueSize}`);
+        }
+        
+    } catch (error) {
+        console.error('[Adaptive TTS] Error in streamAdaptiveTextToSpeech:', error);
+        throw error;
+    }
+}
+
+/**
+ * Finish an adaptive streaming session and flush remaining text
+ * @param {string} sessionId - Session identifier
+ * @returns {Promise<Object>} Final metrics
+ */
+async function finishAdaptiveTextToSpeech(sessionId) {
+    try {
+        const streamingCoordinator = require('./streamingCoordinator');
+        const metrics = await streamingCoordinator.finishSession(sessionId);
+        
+        console.log(`[Adaptive TTS] Session ${sessionId} completed with metrics:`, metrics);
+        return metrics;
+        
+    } catch (error) {
+        console.error(`[Adaptive TTS] Error finishing session ${sessionId}:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get diagnostics for an adaptive streaming session
+ * @param {string} sessionId - Session identifier
+ * @returns {Object} Session diagnostics
+ */
+function getAdaptiveStreamingDiagnostics(sessionId) {
+    const streamingCoordinator = require('./streamingCoordinator');
+    return streamingCoordinator.getSessionStatus(sessionId);
+}
+
+
 module.exports = {
     getVoiceModels,
     replaceAcronyms,
@@ -2274,6 +2515,10 @@ module.exports = {
     callOpenAiVision,
     streamChunkedTextToSpeech,
     flushRemainingText,
-    stripEmojisForTTS
+    stripEmojisForTTS,
+    // New adaptive streaming functions
+    streamAdaptiveTextToSpeech,
+    finishAdaptiveTextToSpeech,
+    getAdaptiveStreamingDiagnostics
 }
 

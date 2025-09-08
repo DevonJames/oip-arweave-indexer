@@ -17,3 +17,6 @@ media
 text-generator/packages
 text-generator/myenv
 ollama_data
+mac-client/mac-client-env/
+mac-client/logs/
+*.log

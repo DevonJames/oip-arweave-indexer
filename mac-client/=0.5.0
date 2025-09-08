@@ -1,0 +1,2 @@
+Requirement already satisfied: mlx in ./mac-client-env/lib/python3.11/site-packages (0.28.0)
+Requirement already satisfied: mlx-metal==0.28.0 in ./mac-client-env/lib/python3.11/site-packages (from mlx) (0.28.0)
