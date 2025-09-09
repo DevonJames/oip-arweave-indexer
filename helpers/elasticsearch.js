@@ -1156,6 +1156,8 @@ async function getRecords(queryParams) {
         exerciseTypeMatchMode = 'OR', // New parameter for exercise type match behavior (AND/OR, default OR)
         cuisine, // New parameter for recipe cuisine filtering
         cuisineMatchMode = 'OR', // New parameter for cuisine match behavior (AND/OR, default OR)
+        model, // New parameter for model provider filtering
+        modelMatchMode = 'OR', // New parameter for model match behavior (AND/OR, default OR)
     } = queryParams;
 
     // Normalize DID parameter for backward compatibility
@@ -1644,6 +1646,95 @@ async function getRecords(queryParams) {
             console.log('After filtering by cuisine, there are', records.length, 'recipe records');
         }
 
+        // Filter model providers by supported models if model parameter is provided
+        if (model && recordType === 'modelProvider') {
+            console.log('Filtering model providers by supported models:', model, 'match mode:', modelMatchMode);
+            const modelArray = model.split(',').map(modelName => modelName.trim().toLowerCase());
+
+            // Filter records based on match mode (AND vs OR)
+            if (modelMatchMode.toUpperCase() === 'AND') {
+                // AND behavior: model provider must support ALL specified models
+                records = records.filter(record => {
+                    if (!record.data.modelProvider || !record.data.modelProvider.supported_models) return false;
+
+                    let supportedModels = [];
+
+                    // Handle different supported_models data structures
+                    if (Array.isArray(record.data.modelProvider.supported_models)) {
+                        supportedModels = record.data.modelProvider.supported_models.map(model => model.toLowerCase());
+                    } else if (typeof record.data.modelProvider.supported_models === 'string') {
+                        // If it's a string, split by comma and trim
+                        supportedModels = record.data.modelProvider.supported_models.split(',').map(model => model.trim().toLowerCase());
+                    }
+
+                    // Check if ALL requested models are supported
+                    return modelArray.every(requestedModel =>
+                        supportedModels.some(supportedModel =>
+                            supportedModel.includes(requestedModel) || requestedModel.includes(supportedModel)
+                        )
+                    );
+                });
+                console.log('after filtering by models (AND mode), there are', records.length, 'records');
+            } else {
+                // OR behavior: model provider must support ANY of the specified models (default)
+                records = records.filter(record => {
+                    if (!record.data.modelProvider || !record.data.modelProvider.supported_models) return false;
+
+                    let supportedModels = [];
+
+                    // Handle different supported_models data structures
+                    if (Array.isArray(record.data.modelProvider.supported_models)) {
+                        supportedModels = record.data.modelProvider.supported_models.map(model => model.toLowerCase());
+                    } else if (typeof record.data.modelProvider.supported_models === 'string') {
+                        // If it's a string, split by comma and trim
+                        supportedModels = record.data.modelProvider.supported_models.split(',').map(model => model.trim().toLowerCase());
+                    }
+
+                    // Check if ANY requested model is supported
+                    return modelArray.some(requestedModel =>
+                        supportedModels.some(supportedModel =>
+                            supportedModel.includes(requestedModel) || requestedModel.includes(supportedModel)
+                        )
+                    );
+                });
+                console.log('after filtering by models (OR mode), there are', records.length, 'records');
+            }
+
+            // Add model match scores to all filtered records
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.modelProvider || !record.data.modelProvider.supported_models) return 0;
+
+                    let supportedModels = [];
+
+                    // Handle different supported_models data structures
+                    if (Array.isArray(record.data.modelProvider.supported_models)) {
+                        supportedModels = record.data.modelProvider.supported_models.map(model => model.toLowerCase());
+                    } else if (typeof record.data.modelProvider.supported_models === 'string') {
+                        // If it's a string, split by comma and trim
+                        supportedModels = record.data.modelProvider.supported_models.split(',').map(model => model.trim().toLowerCase());
+                    }
+
+                    return modelArray.filter(requestedModel =>
+                        supportedModels.some(supportedModel =>
+                            supportedModel.includes(requestedModel) || requestedModel.includes(supportedModel)
+                        )
+                    ).length;
+                };
+
+                const matches = countMatches(record);
+                const score = (matches / modelArray.length).toFixed(3);
+                return { ...record, modelScore: score, modelMatchedCount: matches };
+            });
+
+            // Sort by model score if no other sorting is specified
+            if (!sortBy || sortBy.split(':')[0] !== 'modelScore') {
+                records.sort((a, b) => (b.modelScore || 0) - (a.modelScore || 0));
+            }
+
+            console.log('After filtering by supported models, there are', records.length, 'model provider records');
+        }
+
         // search records by search parameter
         if (search !== undefined) {
             const searchTerms = search.toLowerCase().split(' ').map(term => term.trim()).filter(Boolean); // Split on spaces to separate search terms
@@ -1908,6 +1999,22 @@ async function getRecords(queryParams) {
                         console.log('sorted by cuisine score (' + order + ')');
                     } else {
                         console.log('Warning: sortBy=cuisineScore specified but no cuisine parameter provided - skipping cuisineScore sort');
+                    }
+                }
+
+                if (fieldToSortBy === 'modelScore') {
+                    // Only allow 'modelScore' sorting when model parameter is provided
+                    if (model != undefined) {
+                        recordsToSort.sort((a, b) => {
+                            if (order === 'asc') {
+                                return (a.modelScore || 0) - (b.modelScore || 0);
+                            } else {
+                                return (b.modelScore || 0) - (a.modelScore || 0);
+                            }
+                        });
+                        console.log('sorted by model score (' + order + ')');
+                    } else {
+                        console.log('Warning: sortBy=modelScore specified but no model parameter provided - skipping modelScore sort');
                     }
                 }
 
