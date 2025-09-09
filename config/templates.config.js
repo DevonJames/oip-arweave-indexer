@@ -18,7 +18,7 @@ module.exports = {
         recipe: "SLsJ91-Z82rRBPkDrZlG87aIpbw6zOlmK96nh5uf6G4",
         nutritionalInfo: "_xuiAaVKxPL1Dsp-AceCpXqnc0C_WwHC-Ws1vN-cBUs",
         podcastShow: "JQ_gsZucnD5aM9V9ue748R5COGFyOZYstGVSm1iX7rU",
-        modelProvider: "znthMR9YZsYrSena2b41CGHsQHqhcn6KkVWKGMmobWA",
+        modelProvider: "j1GfqPoF7s86-e1OuEA5PV_XPmuhUkdQCv7sySTmv1w",
         conversationSession: "eb6irolDympa5_XENtWMIp_bvQ6CLI9q5arRIBTe2sk",
     },
 };
