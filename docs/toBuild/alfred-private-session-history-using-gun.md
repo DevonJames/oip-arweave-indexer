@@ -123,44 +123,75 @@ router.get('/gun', authenticateToken, async (req, res) => {
 ```
 
 #### 1.3 Session Template Definition
-**File**: `config/templates.config.js`
-
-Add conversation session template:
+Final conversationSession template (published on chain):
 
 ```javascript
-conversationSession: {
-  "basic": {
-    "name": "string",
-    "index_name": 0,
-    "description": "string",
-    "index_description": 1,
-    "date": "long",
-    "index_date": 2,
-    "language": "enum",
-    "languageValues": [
-      { "code": "en", "name": "English" }
-    ],
-    "index_language": 3
-  },
-  "session": {
-    "conversationId": "string",
-    "index_conversationId": 4,
+{
+  "conversationSession": {
+    "session_id": "string",
+    "index_session_id": 0,
+    "start_timestamp": "uint64",
+    "index_start_timestamp": 1,
+    "last_activity_timestamp": "uint64",
+    "index_last_activity_timestamp": 2,
+    "last_modified_timestamp": "uint64",
+    "index_last_modified_timestamp": 3,
+    "message_count": "uint64",
+    "index_message_count": 4,
     "messages": "repeated string",
     "index_messages": 5,
-    "startTime": "long",
-    "index_startTime": 6,
-    "endTime": "long",
-    "index_endTime": 7,
-    "model": "string",
-    "index_model": 8,
-    "totalTokens": "long",
-    "index_totalTokens": 9
-  },
-  "accessControl": {
-    "private": "bool",
-    "index_private": 10,
-    "ownerPubKey": "string",
-    "index_ownerPubKey": 11
+    "message_timestamps": "repeated uint64",
+    "index_message_timestamps": 6,
+    "message_roles": "repeated string",
+    "index_message_roles": 7,
+    "model_name": "string",
+    "index_model_name": 8,
+    "model_provider": "repeated dref",
+    "index_model_provider": 9,
+    "total_tokens": "uint64",
+    "index_total_tokens": 10,
+    "input_tokens": "uint64",
+    "index_input_tokens": 11,
+    "output_tokens": "uint64",
+    "index_output_tokens": 12,
+    "processing_mode": "enum",
+    "processingModeValues": [
+      { "code": "rag", "name": "RAG (Retrieval Augmented Generation)" },
+      { "code": "llm", "name": "LLM (Large Language Model)" },
+      { "code": "hybrid", "name": "Hybrid (RAG + LLM)" }
+    ],
+    "index_processing_mode": 13,
+    "conversation_type": "enum",
+    "conversationTypeValues": [
+      { "code": "voice", "name": "Voice Conversation" },
+      { "code": "text", "name": "Text Conversation" },
+      { "code": "mixed", "name": "Mixed Voice/Text" }
+    ],
+    "index_conversation_type": 14,
+    "is_archived": "bool",
+    "index_is_archived": 15,
+    "audio_quality_score": "float",
+    "index_audio_quality_score": 16,
+    "response_time_avg_ms": "uint64",
+    "index_response_time_avg_ms": 17,
+    "error_count": "uint64",
+    "index_error_count": 18,
+    "is_private": "bool",
+    "index_is_private": 19,
+    "owner_pubkey": "string",
+    "index_owner_pubkey": 20,
+    "shared_with": "repeated string",
+    "index_shared_with": 21,
+    "version": "string",
+    "index_version": 22,
+    "device_info": "string",
+    "index_device_info": 23,
+    "folder_id": "dref",
+    "index_folder_id": 24,
+    "is_pinned": "bool",
+    "index_is_pinned": 25,
+    "metadata": "string",
+    "index_metadata": 26
   }
 }
 ```
@@ -405,11 +436,9 @@ class SessionManager {
       },
       conversationSession: {
         session_id: sessionId,
-        title: title || `Session ${this.sessions.length + 1}`,
-        description: 'Alfred conversation session',
         start_timestamp: Date.now(),
-        end_timestamp: null,
-        duration_seconds: 0,
+        last_activity_timestamp: Date.now(),
+        last_modified_timestamp: Date.now(),
         message_count: 0,
         messages: [],
         message_timestamps: [],
@@ -421,8 +450,7 @@ class SessionManager {
         output_tokens: 0,
         processing_mode: 'rag',
         conversation_type: 'voice',
-        language: 'en',
-        tags: [],
+        is_archived: false,
         is_private: true,
         owner_pubkey: this.authManager.user.publisherPubKey,
         version: '1.0.0'
@@ -465,7 +493,6 @@ class SessionManager {
     if (!this.currentSession) return;
 
     const endTime = Date.now();
-    const duration = Math.round((endTime - this.currentSession.conversationSession.start_timestamp) / 1000);
 
     // Extract messages, timestamps, and roles from the conversation
     const messageTexts = [];
@@ -491,9 +518,9 @@ class SessionManager {
       modelProviderDID = await this.lookupModelProviderDID(model);
     }
 
-    this.currentSession.conversationSession.end_timestamp = endTime;
-    this.currentSession.conversationSession.duration_seconds = duration;
-    this.currentSession.conversationSession.message_count = messages.length;
+    this.currentSession.conversationSession.last_activity_timestamp = endTime;
+    this.currentSession.conversationSession.last_modified_timestamp = endTime;
+    this.currentSession.conversationSession.message_count = messageTexts.length;
     this.currentSession.conversationSession.messages = messageTexts;
     this.currentSession.conversationSession.message_timestamps = messageTimestamps;
     this.currentSession.conversationSession.message_roles = messageRoles;
@@ -708,11 +735,9 @@ class ALFREDInterface {
   },
   "conversationSession": {
     "session_id": "session_1703123456789",
-    "title": "Morning Chat with Alfred",
-    "description": "Daily conversation session",
     "start_timestamp": 1703123456789,
-    "end_timestamp": 1703123457000,
-    "duration_seconds": 111,
+    "last_activity_timestamp": 1703123567890,
+    "last_modified_timestamp": 1703123567890,
     "message_count": 6,
     "messages": [
       "Good morning Alfred, what's on the agenda today?",
@@ -740,15 +765,15 @@ class ALFREDInterface {
     "output_tokens": 355,
     "processing_mode": "rag",
     "conversation_type": "voice",
-    "language": "en",
-    "tags": ["productivity", "planning", "morning", "tasks"],
+    "is_archived": false,
     "audio_quality_score": 0.95,
     "response_time_avg_ms": 850,
-    "interruption_count": 1,
     "error_count": 0,
     "is_private": true,
     "owner_pubkey": "user_public_key_hash",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "folder_id": null,
+    "is_pinned": false
   },
   "oip": {
     "did": "did:gun:userhash123:session_1703123456789",
@@ -757,6 +782,10 @@ class ALFREDInterface {
   }
 }
 ```
+
+Once records exist on-chain, you can query them via:
+
+`https://api.oip.onl/api/records?recordType=conversationSession&sortBy=inArweaveBlock:desc`
 
 ## Testing Plan
 
