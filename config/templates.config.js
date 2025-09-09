@@ -19,6 +19,6 @@ module.exports = {
         nutritionalInfo: "_xuiAaVKxPL1Dsp-AceCpXqnc0C_WwHC-Ws1vN-cBUs",
         podcastShow: "JQ_gsZucnD5aM9V9ue748R5COGFyOZYstGVSm1iX7rU",
         modelProvider: "j1GfqPoF7s86-e1OuEA5PV_XPmuhUkdQCv7sySTmv1w",
-        conversationSession: "eb6irolDympa5_XENtWMIp_bvQ6CLI9q5arRIBTe2sk",
+        conversationSession: "KiINbVeLPhF795ADmX7LM9oUuI7oAdBm1QtH5Ncj32I",
     },
 };
