@@ -354,8 +354,9 @@ async function processDirectLLM(inputText, processingMode, model, conversationHi
             }
             
             // Ollama requests
-            requests.push(callOllama(conversationWithSystem, 'mistral:7b'));
-            requests.push(callOllama(conversationWithSystem, 'llama2:7b'));
+            requests.push(callOllama(conversationWithSystem, 'mistral:latest'));
+            const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
+            requests.push(callOllama(conversationWithSystem, defaultModel));
             
             // Wait for first successful response
             const results = await Promise.allSettled(requests);
@@ -557,8 +558,9 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
             }
             
             // Ollama requests
-            requests.push(callOllama(conversationWithSystem, 'mistral:7b'));
-            requests.push(callOllama(conversationWithSystem, 'llama2:7b'));
+            requests.push(callOllama(conversationWithSystem, 'mistral:latest'));
+            const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
+            requests.push(callOllama(conversationWithSystem, defaultModel));
             
             // Wait for first successful response
             const results = await Promise.allSettled(requests);

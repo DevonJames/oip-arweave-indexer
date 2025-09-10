@@ -404,8 +404,8 @@
   <!-- Model picker popover -->
   <div id="modelPopover" class="popover" role="listbox" aria-label="Select LLM model">
     <div class="model-item"><input type="radio" name="llm" value="llama3.2:3b" checked id="mdl1"><label for="mdl1">LLaMA 3.2 3B (Fast)</label></div>
-    <div class="model-item"><input type="radio" name="llm" value="mistral:7b" id="mdl2"><label for="mdl2">Mistral 7B</label></div>
-    <div class="model-item"><input type="radio" name="llm" value="llama2:7b" id="mdl3"><label for="mdl3">LLaMA 2 7B</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="mistral:latest" id="mdl2"><label for="mdl2">Mistral 7B</label></div>
+    <div class="model-item"><input type="radio" name="llm" value="llama2:latest" id="mdl3"><label for="mdl3">LLaMA 2 7B</label></div>
     <div class="model-item"><input type="radio" name="llm" value="gpt-4o-mini" id="mdl4"><label for="mdl4">GPT-4o Mini (Cloud)</label></div>
     <div class="model-item"><input type="radio" name="llm" value="grok-4" id="mdl5"><label for="mdl5">Grok-4 (Cloud)</label></div>
     <div class="model-item"><input type="radio" name="llm" value="parallel" id="mdl6"><label for="mdl6">Parallel (All Models)</label></div>
@@ -1366,7 +1366,7 @@
           }
           
           // Create session if this is the first message and user is authenticated
-          if (this.conversationMessages.length === 0 && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
+          if (!this.sessionManager.currentSession && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
             await this.sessionManager.createNewSession(null, this.settings.selectedModel);
           }
 
@@ -1607,7 +1607,7 @@
         input.value = '';
         
         // Ensure session exists before adding the first user message
-        if (this.conversationMessages.length === 0 && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
+        if (!this.sessionManager.currentSession && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
           await this.sessionManager.createNewSession(null, this.settings.selectedModel);
         }
         
@@ -1622,7 +1622,7 @@
           const startTime = Date.now();
           
           // Create session if this is the first message and user is authenticated
-          if (this.conversationMessages.length === 0 && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
+          if (!this.sessionManager.currentSession && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
             await this.sessionManager.createNewSession(null, this.settings.selectedModel);
           }
           
