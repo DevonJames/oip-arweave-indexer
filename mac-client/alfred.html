@@ -180,6 +180,31 @@
     /* Waveform container for positioning */
     .waveform-container{position:relative}
 
+    /* Authentication Modal */
+    .auth-modal{border:none;padding:0;background:transparent;max-width:400px;width:90vw}
+    .auth-modal::backdrop{background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}
+    .auth-modal form{
+      background:var(--glass);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:24px;
+      backdrop-filter:blur(20px) saturate(140%);box-shadow:var(--glow);color:var(--text)
+    }
+    .auth-modal h2{margin:0 0 20px;text-align:center;font-size:24px}
+    .form-group{margin-bottom:16px}
+    .form-group label{display:block;margin-bottom:6px;color:var(--muted);font-size:14px}
+    .form-group input{
+      width:100%;height:44px;padding:0 12px;border-radius:12px;
+      background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:var(--text);
+      outline:none;font-size:16px
+    }
+    .form-group input:focus{box-shadow:var(--glow);border-color:rgba(21,230,255,.5)}
+    .btn-primary{
+      width:100%;height:44px;border-radius:12px;border:none;
+      background:linear-gradient(90deg,var(--accent-1),var(--accent-2));
+      color:#061018;font-weight:600;cursor:pointer;margin-bottom:16px
+    }
+    .btn-primary:hover{box-shadow:var(--glow)}
+    .auth-toggle{text-align:center}
+    .auth-toggle button{background:none;border:none;color:var(--accent-1);cursor:pointer;text-decoration:underline}
+
     /* Interface feedback box - pinned above text input */
     .interface-feedback{
       position:fixed;left:12px;right:12px;bottom:calc(var(--dock-h) + 12px);
@@ -298,6 +323,41 @@
     </form>
   </footer>
 
+  <!-- Authentication Modal -->
+  <dialog id="auth-modal" class="auth-modal">
+    <form method="dialog" id="auth-form">
+      <h2 id="auth-title">Sign In to Alfred</h2>
+
+      <div id="login-section">
+        <div class="form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" required>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" required>
+        </div>
+        <button type="button" id="btn-login" class="btn-primary">Sign In</button>
+      </div>
+
+      <div id="register-section" style="display:none">
+        <div class="form-group">
+          <label for="register-email">Email</label>
+          <input type="email" id="register-email" required>
+        </div>
+        <div class="form-group">
+          <label for="register-password">Password</label>
+          <input type="password" id="register-password" required>
+        </div>
+        <button type="button" id="btn-register" class="btn-primary">Create Account</button>
+      </div>
+
+      <div class="auth-toggle">
+        <button type="button" id="toggle-auth-mode">Need to register?</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Settings dialog -->
   <dialog id="settings-modal" class="settings-modal">
     <form method="dialog">
@@ -391,11 +451,140 @@
   </div>
 
   <script>
+    // Simple JWT decoder for client-side use
+    function jwt_decode(token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+      } catch (error) {
+        console.error('Error decoding JWT:', error);
+        return null;
+      }
+    }
+
+    class AuthManager {
+      constructor() {
+        this.token = localStorage.getItem('alfred_token');
+        this.user = null;
+        this.backendUrl = 'http://localhost:3005'; // Use localhost for mac client
+        this.setupEventListeners();
+      }
+
+      setupEventListeners() {
+        // Login/Register buttons
+        document.getElementById('btn-login').addEventListener('click', () => this.login());
+        document.getElementById('btn-register').addEventListener('click', () => this.register());
+
+        // Toggle between login/register
+        document.getElementById('toggle-auth-mode').addEventListener('click', () => {
+          const loginSection = document.getElementById('login-section');
+          const registerSection = document.getElementById('register-section');
+          const title = document.getElementById('auth-title');
+          const toggleBtn = document.getElementById('toggle-auth-mode');
+
+          if (loginSection.style.display !== 'none') {
+            loginSection.style.display = 'none';
+            registerSection.style.display = 'block';
+            title.textContent = 'Create Account';
+            toggleBtn.textContent = 'Already have an account?';
+          } else {
+            loginSection.style.display = 'block';
+            registerSection.style.display = 'none';
+            title.textContent = 'Sign In to Alfred';
+            toggleBtn.textContent = 'Need to register?';
+          }
+        });
+      }
+
+      async login() {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+
+        try {
+          const response = await fetch(`${this.backendUrl}/api/user/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            this.token = data.token;
+            this.user = jwt_decode(data.token); // Decode JWT to get user info
+            localStorage.setItem('alfred_token', this.token);
+
+            document.getElementById('auth-modal').close();
+            this.onAuthenticated();
+          } else {
+            alert(data.error || 'Login failed');
+          }
+        } catch (error) {
+          alert('Login failed: ' + error.message);
+        }
+      }
+
+      async register() {
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+
+        try {
+          const response = await fetch(`${this.backendUrl}/api/user/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            alert('Registration successful! Please login.');
+            // Switch back to login mode
+            document.getElementById('toggle-auth-mode').click();
+          } else {
+            alert(data.error || 'Registration failed');
+          }
+        } catch (error) {
+          alert('Registration failed: ' + error.message);
+        }
+      }
+
+      isAuthenticated() {
+        return !!this.token;
+      }
+
+      logout() {
+        this.token = null;
+        this.user = null;
+        localStorage.removeItem('alfred_token');
+        this.showAuthModal();
+      }
+
+      showAuthModal() {
+        document.getElementById('auth-modal').showModal();
+      }
+
+      onAuthenticated() {
+        // Initialize main Alfred interface
+        if (window.alfred) {
+          alfred.initializeInterface();
+        }
+      }
+    }
+
     class ALFREDInterface {
       constructor() {
         // Configuration
         this.localProcessorUrl = 'http://localhost:8015';
         this.backendUrl = 'https://api.oip.onl';
+        
+        // Add session management
+        this.sessionManager = null; // Will be set after initialization
+        this.conversationMessages = [];
         
         // Audio components (from hybrid_voice_interface.html)
         this.localStream = null;
@@ -1174,6 +1363,11 @@
           
           this.addMessage('user', transcribedText);
           
+          // Create session if this is the first message and user is authenticated
+          if (this.conversationMessages.length === 0 && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
+            await this.sessionManager.createNewSession(null, this.settings.selectedModel);
+          }
+          
           // STT success - confirm good audio quality
           this.performanceMetrics.audioQuality = 'good';
           this.updateMetrics();
@@ -1261,6 +1455,17 @@
             const processingTime = Date.now() - startTime;
             this.performanceMetrics.responseTime = processingTime;
             this.updateMetrics();
+            
+            // Update session with new messages and current parameters
+            if (this.sessionManager && this.sessionManager.currentSession && fullResponse) {
+              this.sessionManager.updateCurrentSession(
+                this.conversationMessages,
+                this.settings.selectedModel,
+                0, // Token count (would be provided by backend)
+                this.settings.processingMode,
+                'voice' // Conversation type
+              );
+            }
             
             this.voiceState.currentTurn = 'user';
             this.updateUI();
@@ -1405,6 +1610,11 @@
         try {
           const startTime = Date.now();
           
+          // Create session if this is the first message and user is authenticated
+          if (this.conversationMessages.length === 0 && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
+            await this.sessionManager.createNewSession(null, this.settings.selectedModel);
+          }
+          
           this.voiceState.currentTurn = 'processing';
           this.updateUI();
           this.updateBadges();
@@ -1462,6 +1672,17 @@
           this.conversationTurns++;
           this.performanceMetrics.conversationTurns = this.conversationTurns;
           this.updateMetrics();
+          
+          // Update session with new messages and current parameters
+          if (this.sessionManager && this.sessionManager.currentSession) {
+            this.sessionManager.updateCurrentSession(
+              this.conversationMessages,
+              this.settings.selectedModel,
+              0, // Token count (would be provided by backend)
+              this.settings.processingMode,
+              'text' // Conversation type for text input
+            );
+          }
           
           this.voiceState.currentTurn = 'user';
           this.updateUI();
@@ -1749,6 +1970,13 @@
           timestamp: Date.now()
         });
         
+        // Add to conversation messages for session tracking
+        this.conversationMessages.push({
+          role: role === 'system' ? 'user' : role,
+          content: text,
+          timestamp: Date.now()
+        });
+        
         return message;
       }
       
@@ -1760,6 +1988,24 @@
             document.getElementById('conversation').scrollTop = document.getElementById('conversation').scrollHeight;
           }
         }
+      }
+      
+      loadSessionMessages(messages) {
+        // Clear current conversation UI
+        const conversation = document.getElementById('conversation');
+        const messagesElements = conversation.querySelectorAll('.message');
+        messagesElements.forEach(msg => msg.remove());
+        
+        // Clear conversation state
+        this.conversationMessages = [];
+        this.conversation = [];
+        
+        // Load messages into UI and state
+        messages.forEach(msg => {
+          this.addMessage(msg.role === 'assistant' ? 'assistant' : 'user', msg.content);
+        });
+        
+        console.log(`Loaded ${messages.length} messages from session`);
       }
       
       getConversationHistory() {
@@ -2064,18 +2310,286 @@
       }
     }
     
+    class SessionManager {
+      constructor(authManager) {
+        this.authManager = authManager;
+        this.currentSession = null;
+        this.sessions = [];
+        this.modelProviderCache = {}; // Cache for model provider lookups
+        this.backendUrl = 'http://localhost:3005'; // Use localhost for mac client
+      }
+
+      // Lookup model provider DID by model name
+      async lookupModelProviderDID(modelName) {
+        // Check cache first
+        if (this.modelProviderCache[modelName]) {
+          return this.modelProviderCache[modelName];
+        }
+
+        try {
+          const response = await fetch(`https://api.oip.onl/api/records?recordType=modelProvider&model=${encodeURIComponent(modelName)}&sortBy=inArweaveBlock:desc&limit=1`);
+
+          if (!response.ok) {
+            console.warn(`Failed to lookup model provider for ${modelName}`);
+            return null;
+          }
+
+          const data = await response.json();
+
+          if (data.records && data.records.length > 0) {
+            const providerDID = data.records[0].oip.didTx;
+
+            // Cache the result
+            this.modelProviderCache[modelName] = providerDID;
+
+            console.log(`Found model provider DID for ${modelName}: ${providerDID}`);
+            return providerDID;
+          }
+
+          console.warn(`No model provider found for ${modelName}`);
+          return null;
+        } catch (error) {
+          console.error(`Error looking up model provider for ${modelName}:`, error);
+          return null;
+        }
+      }
+
+      async loadUserSessions() {
+        if (!this.authManager.isAuthenticated()) return;
+
+        try {
+          const response = await fetch(`${this.backendUrl}/api/records/gun?recordType=conversationSession`, {
+            headers: {
+              'Authorization': `Bearer ${this.authManager.token}`
+            }
+          });
+
+          const data = await response.json();
+          this.sessions = data.records || [];
+          this.updateHistoryUI();
+        } catch (error) {
+          console.error('Failed to load sessions:', error);
+        }
+      }
+
+      async createNewSession(title = null, modelName = 'llama3.2:3b') {
+        if (!this.authManager.isAuthenticated()) return null;
+
+        const sessionId = `session_${Date.now()}`;
+
+        // Lookup the model provider DID for the specified model
+        const modelProviderDID = await this.lookupModelProviderDID(modelName);
+
+        const sessionData = {
+          basic: {
+            name: title || `Session ${this.sessions.length + 1}`,
+            description: 'Alfred conversation session',
+            date: Math.floor(Date.now() / 1000), // Unix timestamp
+            language: 'en'
+          },
+          conversationSession: {
+            session_id: sessionId,
+            start_timestamp: Date.now(),
+            last_activity_timestamp: Date.now(),
+            last_modified_timestamp: Date.now(),
+            message_count: 0,
+            messages: [],
+            message_timestamps: [],
+            message_roles: [],
+            model_name: modelName,
+            model_provider: modelProviderDID ? [modelProviderDID] : [], // Reference to model provider
+            total_tokens: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            processing_mode: 'rag',
+            conversation_type: 'voice',
+            is_archived: false,
+            is_private: true,
+            owner_pubkey: this.authManager.user.publisherPubKey,
+            version: '1.0.0'
+          },
+          accessControl: {
+            private: true
+          }
+        };
+
+        try {
+          const response = await fetch(`${this.backendUrl}/api/records/newRecord?recordType=conversationSession&storage=gun&localId=${sessionId}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.authManager.token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(sessionData)
+          });
+
+          const data = await response.json();
+
+          if (data.did) {
+            this.currentSession = {
+              ...sessionData,
+              oip: {
+                did: data.did,
+                storage: 'gun'
+              }
+            };
+
+            this.sessions.unshift(this.currentSession);
+            this.updateHistoryUI();
+            return this.currentSession;
+          }
+        } catch (error) {
+          console.error('Failed to create session:', error);
+        }
+
+        return null;
+      }
+
+      async updateCurrentSession(messages, model, tokens, processingMode = 'rag', conversationType = 'voice') {
+        if (!this.currentSession) return;
+
+        const endTime = Date.now();
+
+        // Extract messages, timestamps, and roles from the conversation
+        const messageTexts = [];
+        const messageTimestamps = [];
+        const messageRoles = [];
+
+        messages.forEach(msg => {
+          if (typeof msg === 'object') {
+            messageTexts.push(msg.content || msg.text || '');
+            messageTimestamps.push(msg.timestamp || Date.now());
+            messageRoles.push(msg.role || 'user');
+          } else {
+            // Handle string messages
+            messageTexts.push(msg);
+            messageTimestamps.push(Date.now());
+            messageRoles.push('user');
+          }
+        });
+
+        // Lookup model provider DID if model changed
+        let modelProviderDID = this.currentSession.conversationSession.model_provider?.[0];
+        if (model !== this.currentSession.conversationSession.model_name) {
+          modelProviderDID = await this.lookupModelProviderDID(model);
+        }
+
+        this.currentSession.conversationSession.last_activity_timestamp = endTime;
+        this.currentSession.conversationSession.last_modified_timestamp = endTime;
+        this.currentSession.conversationSession.message_count = messageTexts.length;
+        this.currentSession.conversationSession.messages = messageTexts;
+        this.currentSession.conversationSession.message_timestamps = messageTimestamps;
+        this.currentSession.conversationSession.message_roles = messageRoles;
+        this.currentSession.conversationSession.model_name = model;
+        this.currentSession.conversationSession.model_provider = modelProviderDID ? [modelProviderDID] : [];
+        this.currentSession.conversationSession.total_tokens = tokens || 0;
+        this.currentSession.conversationSession.processing_mode = processingMode;
+        this.currentSession.conversationSession.conversation_type = conversationType;
+
+        try {
+          const response = await fetch(`${this.backendUrl}/api/records/newRecord?recordType=conversationSession&storage=gun&localId=${this.currentSession.conversationSession.session_id}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.authManager.token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(this.currentSession)
+          });
+
+          const data = await response.json();
+          console.log('Session updated:', data);
+        } catch (error) {
+          console.error('Failed to update session:', error);
+        }
+      }
+
+      async loadSession(sessionDid) {
+        try {
+          const soul = sessionDid.replace('did:gun:', '');
+          const response = await fetch(`${this.backendUrl}/api/records/gun/${soul}`, {
+            headers: {
+              'Authorization': `Bearer ${this.authManager.token}`
+            }
+          });
+
+          const data = await response.json();
+
+          if (data.record) {
+            return data.record;
+          }
+
+          return null;
+        } catch (error) {
+          console.error('Failed to load session:', error);
+          return null;
+        }
+      }
+
+      updateHistoryUI() {
+        const historyList = document.getElementById('historyList');
+        historyList.innerHTML = '';
+
+        this.sessions.forEach((session, index) => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <a href="#" onclick="sessionManager.selectSession('${session.oip.did}')" style="display:block;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);text-decoration:none">
+              <strong>${session.data?.basic?.name || 'Unnamed Session'}</strong><br>
+              <small style="color:var(--muted)">${new Date(session.data?.conversationSession?.start_timestamp || Date.now()).toLocaleDateString()} • ${session.data?.conversationSession?.message_count || 0} messages • ${session.data?.conversationSession?.model_name || 'unknown'}</small>
+            </a>
+          `;
+          historyList.appendChild(li);
+        });
+      }
+
+      async selectSession(sessionDid) {
+        const session = await this.loadSession(sessionDid);
+        if (session) {
+          this.currentSession = session;
+
+          // Reconstruct conversation messages from stored data
+          if (session.data?.conversationSession && session.data.conversationSession.messages) {
+            const messages = [];
+            for (let i = 0; i < session.data.conversationSession.messages.length; i++) {
+              messages.push({
+                role: session.data.conversationSession.message_roles[i] || 'user',
+                content: session.data.conversationSession.messages[i],
+                timestamp: session.data.conversationSession.message_timestamps[i] || Date.now()
+              });
+            }
+
+            // Load messages into Alfred's conversation interface
+            if (window.alfred && window.alfred.loadSessionMessages) {
+              window.alfred.loadSessionMessages(messages);
+            }
+          }
+        }
+      }
+    }
+    
     // Initialize ALFRED interface
     const alfred = new ALFREDInterface();
     
-    // Setup history mock (as requested)
-    (function(){
-      const list = document.getElementById('historyList');
-      for (let i = 1; i <= 8; i++) {
-        const li = document.createElement('li');
-        li.innerHTML = `<a href="#" style="display:block;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);text-decoration:none">Session ${i}</a>`;
-        list.appendChild(li);
-      }
-    })();
+    // Initialize authentication and session management
+    const authManager = new AuthManager();
+    const sessionManager = new SessionManager(authManager);
+    
+    // Connect session manager to ALFRED interface
+    alfred.sessionManager = sessionManager;
+    
+    // Make sessionManager globally available
+    window.sessionManager = sessionManager;
+    
+    // Check authentication on load
+    if (authManager.isAuthenticated()) {
+      // Decode user info from stored token
+      authManager.user = jwt_decode(authManager.token);
+      sessionManager.loadUserSessions();
+    } else {
+      // Show auth modal on page load if not authenticated
+      setTimeout(() => {
+        authManager.showAuthModal();
+      }, 1000);
+    }
     
     // Auto-connect on page load
     window.addEventListener('load', () => {

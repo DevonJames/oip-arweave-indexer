@@ -306,7 +306,48 @@ const authenticateToken = (req, res, next) => {
 
     try {
         const verified = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Add publisherPubKey to the user object for GUN record verification
+        if (!verified.publisherPubKey) {
+            // Extract publisherPubKey from Arweave wallet
+            try {
+                const walletPath = getWalletFilePath();
+                const jwk = JSON.parse(fs.readFileSync(walletPath));
+                verified.publisherPubKey = jwk.n; // Arweave public key
+                
+                // Also add the derived address for compatibility
+                const myAddress = base64url(createHash('sha256').update(Buffer.from(jwk.n, 'base64')).digest());
+                verified.publisherAddress = myAddress;
+                verified.didAddress = `did:arweave:${myAddress}`;
+            } catch (error) {
+                console.error('Error extracting publisher public key:', error);
+                return res.status(500).json({ error: 'Failed to extract publisher credentials' });
+            }
+        }
+        
         req.user = verified;
+        
+        // For GUN record requests, verify user owns the record
+        if (req.params.soul || req.query.soul) {
+            const soul = req.params.soul || req.query.soul;
+            const userPubKey = verified.publisherPubKey;
+
+            if (!userPubKey) {
+                return res.status(403).json({ error: 'Publisher public key not found' });
+            }
+
+            // Create hash of the public key (first 12 chars) to match GUN soul format
+            const pubKeyHash = createHash('sha256')
+                .update(userPubKey)
+                .digest('hex')
+                .slice(0, 12);
+
+            // Verify soul belongs to authenticated user
+            if (!soul.startsWith(pubKeyHash)) {
+                return res.status(403).json({ error: 'Access denied to this record' });
+            }
+        }
+
         next();
     } catch (error) {
         console.error('Invalid token:', error);
