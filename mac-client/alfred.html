@@ -470,7 +470,7 @@
       constructor() {
         this.token = localStorage.getItem('alfred_token');
         this.user = null;
-        this.backendUrl = 'http://localhost:3005'; // Use localhost for mac client
+        this.backendUrl = 'https://api.oip.onl'; // Use localhost for mac client
         this.setupEventListeners();
       }
 
@@ -572,6 +572,10 @@
         // Initialize main Alfred interface
         if (window.alfred) {
           alfred.initializeInterface();
+        }
+        // Load sessions immediately after auth
+        if (window.sessionManager) {
+          window.sessionManager.loadUserSessions();
         }
       }
     }
@@ -1361,12 +1365,13 @@
             throw new Error('No text transcribed from audio');
           }
           
-          this.addMessage('user', transcribedText);
-          
           // Create session if this is the first message and user is authenticated
           if (this.conversationMessages.length === 0 && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
             await this.sessionManager.createNewSession(null, this.settings.selectedModel);
           }
+
+          // Now add the user message
+          this.addMessage('user', transcribedText);
           
           // STT success - confirm good audio quality
           this.performanceMetrics.audioQuality = 'good';
@@ -1600,6 +1605,12 @@
         if (!text) return;
         
         input.value = '';
+        
+        // Ensure session exists before adding the first user message
+        if (this.conversationMessages.length === 0 && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
+          await this.sessionManager.createNewSession(null, this.settings.selectedModel);
+        }
+        
         this.addMessage('user', text);
         
         // Process text directly (no audio)
@@ -2316,7 +2327,7 @@
         this.currentSession = null;
         this.sessions = [];
         this.modelProviderCache = {}; // Cache for model provider lookups
-        this.backendUrl = 'http://localhost:3005'; // Use localhost for mac client
+        this.backendUrl = 'https://api.oip.onl'; // Use localhost for mac client
       }
 
       // Lookup model provider DID by model name
