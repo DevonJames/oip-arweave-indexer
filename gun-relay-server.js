@@ -61,9 +61,14 @@ try {
                                         const list = publisherIndex.get(prefix) || [];
                                         // Upsert by soul
                                         const existingIndex = list.findIndex(r => r.soul === soul);
-                                        const record = { soul, data, storedAt: Date.now() };
+                                        const recordType = data?.oip?.recordType || data?.data?.oip?.recordType || null;
+                                        const record = { soul, data, recordType, storedAt: Date.now() };
                                         if (existingIndex >= 0) list[existingIndex] = record; else list.push(record);
                                         publisherIndex.set(prefix, list);
+
+                                        // Persist minimal index into GUN for restart durability
+                                        // Layout: index:<publisherHash> is a map of soul -> { recordType, storedAt }
+                                        gun.get(`index:${prefix}`).get(soul).put({ recordType, storedAt: record.storedAt });
                                     }
                                 } catch (e) {
                                     console.warn('⚠️ Failed to update in-memory index:', e.message);
@@ -115,14 +120,51 @@ try {
                 }
 
                 console.log(`📃 Listing records for publisherHash=${publisherHash}, limit=${limit}, offset=${offset}, recordType=${recordType || 'any'}`);
-                const list = publisherIndex.get(publisherHash) || [];
-                let records = list;
-                if (recordType) {
-                    records = records.filter(r => r?.data?.oip?.recordType === recordType);
+
+                const respond = (records) => {
+                    let filtered = records;
+                    if (recordType) {
+                        filtered = filtered.filter(r => (r?.recordType || r?.data?.oip?.recordType) === recordType);
+                    }
+                    const paged = filtered.slice(offset, offset + limit);
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, records: paged }));
+                };
+
+                const mem = publisherIndex.get(publisherHash) || [];
+                if (mem.length > 0) {
+                    return respond(mem);
                 }
-                const paged = records.slice(offset, offset + limit);
-                res.writeHead(200);
-                res.end(JSON.stringify({ success: true, records: paged }));
+
+                // Fallback: hydrate from GUN persistent index
+                try {
+                    gun.get(`index:${publisherHash}`).once((idx) => {
+                        if (!idx || typeof idx !== 'object') {
+                            return respond([]);
+                        }
+                        const souls = Object.keys(idx).filter(k => k && k !== '_' );
+                        if (souls.length === 0) {
+                            return respond([]);
+                        }
+                        const collected = [];
+                        let pending = souls.length;
+                        souls.forEach((soul) => {
+                            gun.get(soul).once((data) => {
+                                if (data) {
+                                    collected.push({ soul, data, recordType: data?.oip?.recordType || null, storedAt: idx[soul]?.storedAt || Date.now() });
+                                }
+                                if (--pending === 0) {
+                                    // Cache hydrated results in memory
+                                    publisherIndex.set(publisherHash, collected);
+                                    respond(collected);
+                                }
+                            });
+                        });
+                    });
+                } catch (e) {
+                    console.warn('⚠️ Failed to hydrate index from GUN:', e.message);
+                    respond([]);
+                }
 
             } else {
                 // Handle unknown endpoints
