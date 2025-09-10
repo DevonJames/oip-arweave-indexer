@@ -2470,6 +2470,13 @@
 
         const endTime = Date.now();
 
+        // Normalize shape: support records loaded as { data: {...}, oip: {...} }
+        const sessionContainer = this.currentSession.data ? this.currentSession.data : this.currentSession;
+        if (!sessionContainer.conversationSession) {
+          console.warn('Session update skipped: missing conversationSession payload');
+          return;
+        }
+
         // Extract messages, timestamps, and roles from the conversation
         const messageTexts = [];
         const messageTimestamps = [];
@@ -2481,7 +2488,6 @@
             messageTimestamps.push(msg.timestamp || Date.now());
             messageRoles.push(msg.role || 'user');
           } else {
-            // Handle string messages
             messageTexts.push(msg);
             messageTimestamps.push(Date.now());
             messageRoles.push('user');
@@ -2489,31 +2495,40 @@
         });
 
         // Lookup model provider DID if model changed
-        let modelProviderDID = this.currentSession.conversationSession.model_provider?.[0];
-        if (model !== this.currentSession.conversationSession.model_name) {
+        let modelProviderDID = sessionContainer.conversationSession.model_provider?.[0];
+        if (model && model !== sessionContainer.conversationSession.model_name) {
           modelProviderDID = await this.lookupModelProviderDID(model);
         }
 
-        this.currentSession.conversationSession.last_activity_timestamp = endTime;
-        this.currentSession.conversationSession.last_modified_timestamp = endTime;
-        this.currentSession.conversationSession.message_count = messageTexts.length;
-        this.currentSession.conversationSession.messages = messageTexts;
-        this.currentSession.conversationSession.message_timestamps = messageTimestamps;
-        this.currentSession.conversationSession.message_roles = messageRoles;
-        this.currentSession.conversationSession.model_name = model;
-        this.currentSession.conversationSession.model_provider = modelProviderDID ? [modelProviderDID] : [];
-        this.currentSession.conversationSession.total_tokens = tokens || 0;
-        this.currentSession.conversationSession.processing_mode = processingMode;
-        this.currentSession.conversationSession.conversation_type = conversationType;
+        // Mutate the normalized container
+        sessionContainer.conversationSession.last_activity_timestamp = endTime;
+        sessionContainer.conversationSession.last_modified_timestamp = endTime;
+        sessionContainer.conversationSession.message_count = messageTexts.length;
+        sessionContainer.conversationSession.messages = messageTexts;
+        sessionContainer.conversationSession.message_timestamps = messageTimestamps;
+        sessionContainer.conversationSession.message_roles = messageRoles;
+        if (model) sessionContainer.conversationSession.model_name = model;
+        sessionContainer.conversationSession.model_provider = modelProviderDID ? [modelProviderDID] : [];
+        sessionContainer.conversationSession.total_tokens = tokens || 0;
+        sessionContainer.conversationSession.processing_mode = processingMode;
+        sessionContainer.conversationSession.conversation_type = conversationType;
+
+        // Build clean payload for backend (exclude wrappers/metadata)
+        const payload = {
+          basic: sessionContainer.basic,
+          conversationSession: sessionContainer.conversationSession,
+          accessControl: sessionContainer.accessControl || { private: true }
+        };
 
         try {
-          const response = await fetch(`${this.backendUrl}/api/records/newRecord?recordType=conversationSession&storage=gun&localId=${this.currentSession.conversationSession.session_id}`, {
+          const localId = sessionContainer.conversationSession.session_id;
+          const response = await fetch(`${this.backendUrl}/api/records/newRecord?recordType=conversationSession&storage=gun&localId=${localId}`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${this.authManager.token}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(this.currentSession)
+            body: JSON.stringify(payload)
           });
 
           const data = await response.json();
