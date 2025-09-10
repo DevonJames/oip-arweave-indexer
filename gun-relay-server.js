@@ -10,6 +10,10 @@ require('gun/sea');
 const http = require('http');
 const url = require('url');
 
+// In-memory index for simple listing by publisher hash
+// Structure: { [publisherHash: string]: Array<{ soul: string, data: any, storedAt: number }> }
+const publisherIndex = new Map();
+
 console.log('Starting GUN HTTP API server...');
 
 try {
@@ -49,6 +53,21 @@ try {
                                 res.end(JSON.stringify({ error: ack.err }));
                             } else {
                                 console.log('✅ Data stored successfully');
+                                try {
+                                    // Maintain a simple in-memory index by publisher hash prefix
+                                    // Expected soul format: "<publisherHash>:<rest>"
+                                    const prefix = String(soul).split(':')[0];
+                                    if (prefix && prefix.length > 0) {
+                                        const list = publisherIndex.get(prefix) || [];
+                                        // Upsert by soul
+                                        const existingIndex = list.findIndex(r => r.soul === soul);
+                                        const record = { soul, data, storedAt: Date.now() };
+                                        if (existingIndex >= 0) list[existingIndex] = record; else list.push(record);
+                                        publisherIndex.set(prefix, list);
+                                    }
+                                } catch (e) {
+                                    console.warn('⚠️ Failed to update in-memory index:', e.message);
+                                }
                                 res.writeHead(200);
                                 res.end(JSON.stringify({ success: true, soul }));
                             }
@@ -82,6 +101,29 @@ try {
                     }
                 });
                 
+            } else if (req.method === 'GET' && path === '/list') {
+                // List records by publisher hash prefix
+                const publisherHash = parsedUrl.query.publisherHash;
+                const limit = Math.max(0, parseInt(parsedUrl.query.limit || '50', 10) || 50);
+                const offset = Math.max(0, parseInt(parsedUrl.query.offset || '0', 10) || 0);
+                const recordType = parsedUrl.query.recordType;
+
+                if (!publisherHash) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'publisherHash parameter required' }));
+                    return;
+                }
+
+                console.log(`📃 Listing records for publisherHash=${publisherHash}, limit=${limit}, offset=${offset}, recordType=${recordType || 'any'}`);
+                const list = publisherIndex.get(publisherHash) || [];
+                let records = list;
+                if (recordType) {
+                    records = records.filter(r => r?.data?.oip?.recordType === recordType);
+                }
+                const paged = records.slice(offset, offset + limit);
+                res.writeHead(200);
+                res.end(JSON.stringify({ success: true, records: paged }));
+
             } else {
                 // Handle unknown endpoints
                 res.writeHead(404);
@@ -107,7 +149,7 @@ try {
     server.listen(8765, '0.0.0.0', () => {
         console.log('✅ GUN HTTP API server running on 0.0.0.0:8765');
         console.log('💾 Local GUN database with persistent storage');
-        console.log('🌐 HTTP API endpoints: /put (POST), /get (GET)');
+        console.log('🌐 HTTP API endpoints: /put (POST), /get (GET), /list (GET)');
         
         // Test the local GUN database
         setTimeout(() => {

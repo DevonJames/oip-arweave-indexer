@@ -83,18 +83,20 @@ class GunHelper {
             if (options.encrypt) {
                 console.log('🔒 Encrypting GUN record for private storage');
                 
-                // Modern encryption using crypto module
+                // AES-256-GCM with auth tag persisted
                 const algorithm = 'aes-256-gcm';
                 const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
-                const iv = crypto.randomBytes(16);
+                const iv = crypto.randomBytes(12); // 12-byte IV recommended for GCM
                 const cipher = crypto.createCipheriv(algorithm, key, iv);
-                
-                let encrypted = cipher.update(JSON.stringify(gunRecord.data), 'utf8', 'hex');
-                encrypted += cipher.final('hex');
-                
+
+                const plaintext = Buffer.from(JSON.stringify(gunRecord.data), 'utf8');
+                const encryptedBuf = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+                const authTag = cipher.getAuthTag();
+
                 gunRecord.data = {
-                    encrypted: encrypted,
-                    iv: iv.toString('hex')
+                    encrypted: encryptedBuf.toString('base64'),
+                    iv: iv.toString('base64'),
+                    tag: authTag.toString('base64')
                 };
                 gunRecord.meta.encrypted = true;
                 gunRecord.meta.encryptionMethod = algorithm;
@@ -163,13 +165,14 @@ class GunHelper {
                     console.log('🔓 Decrypting GUN record');
                     
                     const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
-                    const iv = Buffer.from(data.data.iv, 'hex');
+                    const iv = Buffer.from(data.data.iv, 'base64');
+                    const tag = Buffer.from(data.data.tag, 'base64');
+                    const encryptedBuf = Buffer.from(data.data.encrypted, 'base64');
                     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-                    
-                    let decrypted = decipher.update(data.data.encrypted, 'hex', 'utf8');
-                    decrypted += decipher.final('utf8');
-                    
-                    data.data = JSON.parse(decrypted);
+                    decipher.setAuthTag(tag);
+
+                    const dec = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
+                    data.data = JSON.parse(dec.toString('utf8'));
                     data.meta.encrypted = false;
                 }
 
