@@ -9,6 +9,7 @@ const { publishNewRecord} = require('../helpers/templateHelper');
 // const paymentManager = require('../helpers/payment-manager');
 const { decryptContent } = require('../helpers/lit-protocol');
 const arweaveWallet = require('../helpers/arweave-wallet');
+const { GunHelper } = require('../helpers/gun');
 
 // TODO: Implement these payment verification functions
 async function verifyBitcoinPayment(txid, expectedAmount, address) {
@@ -251,5 +252,66 @@ router.post('/decrypt', async (req, res) => {
 //         res.status(500).json({ error: 'Failed to unlock content' });
 //     }
 // });
+
+// GET /api/records/gun/:soul - Get specific GUN record
+router.get('/gun/:soul', authenticateToken, async (req, res) => {
+    try {
+        const { soul } = req.params;
+        const { decrypt = true } = req.query;
+
+        const gunHelper = new GunHelper();
+        const record = await gunHelper.getRecord(soul, { decrypt });
+
+        if (!record) {
+            return res.status(404).json({ error: 'Record not found' });
+        }
+
+        res.status(200).json({
+            message: 'GUN record retrieved successfully',
+            record: {
+                ...record,
+                oip: {
+                    ...record.oip,
+                    did: `did:gun:${soul}`,
+                    storage: 'gun'
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error retrieving GUN record:', error);
+        res.status(500).json({ error: 'Failed to retrieve GUN record' });
+    }
+});
+
+// GET /api/records/gun - List user's GUN records
+router.get('/gun', authenticateToken, async (req, res) => {
+    try {
+        const { limit = 20, offset = 0, recordType } = req.query;
+        const userPubKey = req.user.publisherPubKey;
+
+        if (!userPubKey) {
+            return res.status(400).json({ error: 'Publisher public key not found in token' });
+        }
+
+        const gunHelper = new GunHelper();
+        const records = await gunHelper.listUserRecords(userPubKey, { limit, offset, recordType });
+
+        res.status(200).json({
+            message: 'GUN records retrieved successfully',
+            records: records.map(record => ({
+                ...record,
+                oip: {
+                    ...record.oip,
+                    did: `did:gun:${record.soul}`,
+                    storage: 'gun'
+                }
+            })),
+            pagination: { limit, offset, total: records.length }
+        });
+    } catch (error) {
+        console.error('Error retrieving GUN records:', error);
+        res.status(500).json({ error: 'Failed to retrieve GUN records' });
+    }
+});
 
 module.exports = router;
