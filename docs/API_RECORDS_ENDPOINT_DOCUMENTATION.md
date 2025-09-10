@@ -128,6 +128,37 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Example:** `cuisine=Mediterranean,Italian&sortBy=cuisineScore:desc`
 - **Note:** Only works when `cuisine` parameter is provided
 
+### 🤖 **Model Provider Filtering**
+
+#### `model`
+- **Type:** String (comma-separated)
+- **Description:** Filter model provider records by supported models
+- **Example:** `model=gpt-4,llama3.2,mistral`
+- **Behavior:** 
+  - Only works with `recordType=modelProvider`
+  - Default behavior: Returns providers that support ANY of the specified models (OR behavior)
+  - Searches both `data.modelProvider.supported_models` array and string fields
+  - Uses fuzzy matching for model names
+  - Automatically sorts by model match score (best matches first)
+  - Adds `modelScore` and `modelMatchedCount` fields to matching records
+
+#### `modelMatchMode`
+- **Type:** String
+- **Description:** Controls model matching behavior
+- **Values:** 
+  - `OR` (default) - Providers that support ANY of the specified models
+  - `AND` - Providers that support ALL of the specified models
+- **Example:** `model=gpt-4,claude&modelMatchMode=AND`
+
+#### `sortBy=modelScore`
+- **Type:** String
+- **Description:** Sort results by model matching score
+- **Values:** 
+  - `modelScore:desc` (default) - Best matches first
+  - `modelScore:asc` - Worst matches first
+- **Example:** `model=gpt-4,llama3.2&sortBy=modelScore:desc`
+- **Note:** Only works when `model` parameter is provided
+
 ### 🏋️ **Equipment Filtering (Exercises)**
 
 #### `equipmentRequired`
@@ -227,8 +258,15 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 
 #### `didTx`
 - **Type:** String
-- **Description:** Filter by specific DID transaction ID
+- **Description:** Filter by specific DID transaction ID (legacy parameter)
 - **Example:** `didTx=did:arweave:abc123def456`
+- **Note:** Use `did` parameter for new implementations
+
+#### `did`
+- **Type:** String
+- **Description:** Filter by unified DID identifier (supports all storage types)
+- **Example:** `did=did:arweave:abc123def456` or `did=did:gun:soul123` or `did=did:irys:xyz789`
+- **Note:** Unified parameter that replaces `didTx` and supports multi-blockchain DIDs
 
 #### `didTxRef`
 - **Type:** String
@@ -275,6 +313,26 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `"bad"`: Records with invalid/missing block numbers
 - **Example:** `inArweaveBlock=1234567`
 
+### 🗃️ **Storage Source Filtering**
+
+#### `source`
+- **Type:** String
+- **Description:** Filter records by storage source/backend
+- **Values:**
+  - `"all"` (default): Include records from all storage backends
+  - `"arweave"`: Only Arweave permanent storage records
+  - `"gun"`: Only GUN private/encrypted storage records
+  - `"irys"`: Only Irys permanent storage records
+- **Example:** `source=gun&recordType=conversationSession`
+- **Note:** Filters based on DID prefix detection
+
+#### `storage`
+- **Type:** String
+- **Description:** Alias for `source` parameter (same functionality)
+- **Values:** Same as `source` parameter
+- **Example:** `storage=arweave&limit=20`
+- **Note:** Provided for API consistency and backward compatibility
+
 ### 🎵 **Media Filtering**
 
 #### `hasAudio`
@@ -307,6 +365,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `equipmentScore` - Equipment match score (only works with `equipmentRequired` parameter)
   - `exerciseTypeScore` - Exercise type match score (only works with `exerciseType` parameter)
   - `cuisineScore` - Cuisine match score (only works with `cuisine` parameter)
+  - `modelScore` - Model match score (only works with `model` parameter)
 - **Examples:**
   - `sortBy=date:desc` - Newest first
   - `sortBy=inArweaveBlock:asc` - Oldest block first
@@ -317,6 +376,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `sortBy=equipmentScore:desc` - Best equipment matches first (requires `equipmentRequired` parameter)
   - `sortBy=exerciseTypeScore:desc` - Best exercise type matches first (requires `exerciseType` parameter)
   - `sortBy=cuisineScore:desc` - Best cuisine matches first (requires `cuisine` parameter)
+  - `sortBy=modelScore:desc` - Best model matches first (requires `model` parameter)
 
 ### 📄 **Pagination**
 
@@ -517,6 +577,36 @@ GET /api/records?recordType=recipe&cuisine=Mediterranean,healthy&cuisineMatchMod
 GET /api/records?recordType=recipe&cuisine=Asian,Italian&sortBy=cuisineScore:desc&limit=5
 ```
 
+### Model Provider Search
+```
+GET /api/records?recordType=modelProvider&model=gpt-4,llama3.2&limit=10
+```
+
+### Model Provider Search with AND Behavior
+```
+GET /api/records?recordType=modelProvider&model=gpt-4,openai&modelMatchMode=AND&sortBy=modelScore:desc
+```
+
+### Storage Source Filtering
+```
+GET /api/records?source=gun&recordType=conversationSession&limit=20
+```
+
+### Mixed Storage Query
+```
+GET /api/records?source=all&search=cooking&limit=10
+```
+
+### Unified DID Lookup
+```
+GET /api/records?did=did:gun:oip:records:pubkey123:session_001&limit=1
+```
+
+### Private GUN Records Only
+```
+GET /api/records?storage=gun&creatorHandle=user123&sortBy=date:desc
+```
+
 ### Equipment Search in Exercises (AND behavior)
 ```
 GET /api/records?recordType=exercise&equipmentRequired=dumbbells,barbell&limit=10
@@ -555,6 +645,11 @@ GET /api/records?exactMatch={"data.basic.language":"en","oip.recordType":"post"}
 ### Complex Query with Multiple Filters
 ```
 GET /api/records?search=mediterranean healthy&searchMatchMode=OR&tags=healthy,diet&tagsMatchMode=AND&recordType=recipe&cuisine=Mediterranean,Italian&cuisineMatchMode=OR&hasAudio=false&sortBy=date:desc&limit=25&resolveDepth=3&summarizeRecipe=true
+```
+
+### Multi-Storage Complex Query
+```
+GET /api/records?source=all&search=AI conversation&searchMatchMode=OR&recordType=conversationSession&model=gpt-4,llama3.2&modelMatchMode=OR&sortBy=modelScore:desc&limit=15&resolveDepth=2
 ```
 
 ### Tag Summary for Analytics
@@ -748,6 +843,10 @@ When using `summarizeRecipe=true` with recipe records, the response includes nut
 14. **Recipe nutritional summaries require resolution** - Use `resolveDepth=1` minimum with `summarizeRecipe=true`
 15. **Cuisine search is efficient** - No resolution required, searches existing recipe record data directly
 16. **Cuisine OR mode is more flexible** - Use `cuisineMatchMode=OR` to find recipes with any of the specified cuisines
+17. **Model provider search is efficient** - No resolution required, searches existing model provider record data
+18. **Model OR mode is more flexible** - Use `modelMatchMode=OR` to find providers with any of the specified models
+19. **Storage source filtering is very fast** - Uses DID prefix detection for instant categorization
+20. **Use unified DID parameter** - Prefer `did` over legacy `didTx` for multi-blockchain compatibility
 
 ## Advanced Features
 
@@ -826,6 +925,57 @@ The scoring algorithm:
 **OR Mode (default):** Returns exercises that match ANY of the specified types
 **AND Mode:** Returns exercises that match ALL of the specified types (unusual for enum fields)
 
+### Model Provider Match Scoring
+When using the `model` parameter with model provider records, records receive:
+- **modelScore**: Ratio of matched models to requested models (0-1 scale)
+- **modelMatchedCount**: Number of requested models found in the provider
+
+The scoring algorithm:
+1. Calculates the ratio of matched models to requested models
+2. Uses fuzzy matching to handle partial model name matches
+3. Automatically sorts by best matches first
+4. Supports both AND and OR matching modes via `modelMatchMode`
+5. Searches both `data.modelProvider.supported_models` array and string fields
+
+**OR Mode (default):** Returns providers that support ANY of the specified models
+**AND Mode:** Returns providers that support ALL of the specified models
+
+### Storage Source Filtering
+The `source` and `storage` parameters enable filtering records by their storage backend:
+
+**Available Storage Types:**
+- **Arweave**: Permanent blockchain storage with compression
+- **GUN**: Private encrypted storage for sensitive data
+- **Irys**: Fast-confirmation permanent storage
+
+**DID Detection Logic:**
+- Records are filtered by detecting DID prefixes (`did:arweave:`, `did:gun:`, `did:irys:`)
+- `source=all` includes records from all storage backends
+- Individual backends can be queried separately for specific use cases
+
+**Use Cases:**
+- **Draft Management**: `source=gun` for private work-in-progress content
+- **Public Content**: `source=arweave` for permanent published records
+- **Fast Publishing**: `source=irys` for quick confirmation needs
+
+### Unified DID Parameter
+The `did` parameter provides a unified interface for record identification:
+
+**Backward Compatibility:**
+- Replaces the legacy `didTx` parameter
+- Supports all storage backends through unified DID format
+- Automatically handles both `oip.did` and `oip.didTx` fields for legacy records
+
+**Multi-Blockchain Support:**
+- `did:arweave:txid` - Arweave permanent storage records
+- `did:gun:soul` - GUN private encrypted storage records  
+- `did:irys:txid` - Irys fast-confirmation storage records
+
+**Implementation:**
+- The system normalizes `did` and `didTx` parameters internally
+- Legacy `didTx` calls continue to work for backward compatibility
+- New integrations should use the `did` parameter for future-proofing
+
 ### Cuisine Match Scoring
 When using the `cuisine` parameter with recipe records, records receive:
 - **cuisineScore**: Ratio of matched cuisine terms to requested cuisine terms (0-1 scale)
@@ -870,6 +1020,9 @@ The `resolveDepth` parameter controls how deeply the system follows references (
 - **Equipment filtering** (`equipmentRequired`) - Search exercises by equipment requirements with AND/OR modes
 - **Exercise type filtering** (`exerciseType`) - Search exercises by type (warmup/main/cooldown) with enum code/name support
 - **Cuisine filtering** (`cuisine`) - Search recipes by cuisine type with OR/AND modes
+- **Model provider filtering** (`model`) - Search AI model providers by supported models
+- **Storage source filtering** (`source`/`storage`) - Filter by storage backend (Arweave/GUN/Irys)
+- **Unified DID lookup** (`did`) - Multi-blockchain record identification
 - **Exact field matching** (`exactMatch`) - Precise filtering by field values using JSON notation
 - **Combined approach** - Use multiple parameters for maximum precision
 
