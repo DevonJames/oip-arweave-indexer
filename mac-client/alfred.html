@@ -2159,8 +2159,17 @@
         
         popover.addEventListener('change', (e) => {
           if (e.target.name === 'llm') {
-            this.settings.selectedModel = e.target.value;
-            modelName.textContent = e.target.value;
+            if (e.target.value === 'parallel') {
+              // Set parallel mode - use processing_mode instead of model
+              this.settings.selectedModel = 'parallel';
+              this.settings.processingMode = 'llm'; // This triggers parallel processing on backend
+              modelName.textContent = 'Parallel (All Models)';
+            } else {
+              // Normal model selection
+              this.settings.selectedModel = e.target.value;
+              this.settings.processingMode = 'rag'; // Default to RAG mode
+              modelName.textContent = e.target.value;
+            }
             this.saveSettings();
             this.closeModelPopover();
           }
