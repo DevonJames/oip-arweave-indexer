@@ -1462,7 +1462,7 @@
             this.updateMetrics();
             
             // Update session with new messages and current parameters
-            if (this.sessionManager && this.sessionManager.currentSession && fullResponse) {
+            if (this.sessionManager && this.sessionManager.currentSession) {
               this.sessionManager.updateCurrentSession(
                 this.conversationMessages,
                 this.settings.selectedModel,
@@ -1981,12 +1981,34 @@
           timestamp: Date.now()
         });
         
-        // Add to conversation messages for session tracking
-        this.conversationMessages.push({
-          role: role === 'system' ? 'user' : role,
-          content: text,
-          timestamp: Date.now()
-        });
+        // Add to conversation messages for session tracking (exclude system messages)
+        if (role !== 'system') {
+          this.conversationMessages.push({
+            role: role,
+            content: text,
+            timestamp: Date.now()
+          });
+        }
+
+        // Debounced session persist to ensure updates even if SSE 'complete' is missed
+        try {
+          if (this.sessionManager && this.sessionManager.currentSession) {
+            clearTimeout(this._saveSessionTimeout);
+            this._saveSessionTimeout = setTimeout(() => {
+              try {
+                this.sessionManager.updateCurrentSession(
+                  this.conversationMessages,
+                  this.settings.selectedModel,
+                  0,
+                  this.settings.processingMode,
+                  this.settings.outputMode === 'spoken' ? 'voice' : 'text'
+                );
+              } catch (e) {
+                console.warn('Deferred session save failed:', e?.message || e);
+              }
+            }, 400);
+          }
+        } catch (_) { /* ignore */ }
         
         return message;
       }
@@ -1997,6 +2019,35 @@
           if (streamText) {
             streamText.textContent = newText;
             document.getElementById('conversation').scrollTop = document.getElementById('conversation').scrollHeight;
+
+            // Keep the latest assistant message in session state up-to-date during streaming
+            if (this.conversationMessages && this.conversationMessages.length > 0) {
+              const lastMsg = this.conversationMessages[this.conversationMessages.length - 1];
+              if (lastMsg && lastMsg.role === 'assistant') {
+                lastMsg.content = newText;
+                lastMsg.timestamp = Date.now();
+              }
+            }
+
+            // Debounced session persist to capture streamed assistant updates
+            try {
+              if (this.sessionManager && this.sessionManager.currentSession) {
+                clearTimeout(this._saveSessionTimeout);
+                this._saveSessionTimeout = setTimeout(() => {
+                  try {
+                    this.sessionManager.updateCurrentSession(
+                      this.conversationMessages,
+                      this.settings.selectedModel,
+                      0,
+                      this.settings.processingMode,
+                      this.settings.outputMode === 'spoken' ? 'voice' : 'text'
+                    );
+                  } catch (e) {
+                    console.warn('Deferred session save (stream) failed:', e?.message || e);
+                  }
+                }, 500);
+              }
+            } catch (_) { /* ignore */ }
           }
         }
       }
@@ -2565,11 +2616,21 @@
         historyList.innerHTML = '';
 
         this.sessions.forEach((session, index) => {
+          // Normalize to handle different shapes:
+          // - Newly created (client): payload at top-level
+          // - Listed from GUN: session.data is the GUN wrapper, payload at session.data.data
+          // - Loaded via /gun/:soul: session.data is the payload
+          const payload = (session?.data?.conversationSession)
+            ? session.data
+            : (session?.data?.data?.conversationSession)
+              ? session.data.data
+              : session;
+
           const li = document.createElement('li');
           li.innerHTML = `
             <a href="#" onclick="sessionManager.selectSession('${session.oip.did}')" style="display:block;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);text-decoration:none">
-              <strong>${session.data?.basic?.name || 'Unnamed Session'}</strong><br>
-              <small style="color:var(--muted)">${new Date(session.data?.conversationSession?.start_timestamp || Date.now()).toLocaleDateString()} • ${session.data?.conversationSession?.message_count || 0} messages • ${session.data?.conversationSession?.model_name || 'unknown'}</small>
+              <strong>${payload?.basic?.name || 'Unnamed Session'}</strong><br>
+              <small style="color:var(--muted)">${new Date(payload?.conversationSession?.start_timestamp || Date.now()).toLocaleDateString()} • ${payload?.conversationSession?.message_count || 0} messages • ${payload?.conversationSession?.model_name || 'unknown'}</small>
             </a>
           `;
           historyList.appendChild(li);
