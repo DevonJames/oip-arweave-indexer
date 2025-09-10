@@ -217,6 +217,9 @@ async function handleSelfReferentialQuestion(inputText, model, conversationHisto
         let fullResponse = '';
         const dialogueId = 'voice-self-ref-' + Date.now();
 
+        // Use default model for parallel mode or if model is "parallel"
+        const actualModel = model === 'parallel' ? (process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b') : model;
+
         if (handleTextChunk) {
             // Streaming mode (for /converse endpoint)
             await generateStreamingResponse(
@@ -224,7 +227,7 @@ async function handleSelfReferentialQuestion(inputText, model, conversationHisto
                 String(dialogueId),
                 {
                     temperature: 0.7,
-                    model: model,
+                    model: actualModel,
                     systemPrompt: systemPrompt
                 },
                 (chunk) => {
@@ -239,7 +242,7 @@ async function handleSelfReferentialQuestion(inputText, model, conversationHisto
                 String(dialogueId),
                 {
                     temperature: 0.7,
-                    model: model,
+                    model: actualModel,
                     systemPrompt: systemPrompt
                 },
                 (chunk) => {
