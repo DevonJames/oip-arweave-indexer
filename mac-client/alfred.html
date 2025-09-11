@@ -451,6 +451,52 @@
   </div>
 
   <script>
+    // Helper function for AES-GCM decryption in browser
+    async function decryptSessionData(encryptedData, iv, tag) {
+      try {
+        const keyMaterial = await window.crypto.subtle.importKey(
+          'raw',
+          new TextEncoder().encode('gun-encryption-key'),
+          'PBKDF2',
+          false,
+          ['deriveBits', 'deriveKey']
+        );
+
+        const key = await window.crypto.subtle.deriveKey(
+          {
+            name: 'PBKDF2',
+            salt: new TextEncoder().encode('salt'),
+            iterations: 100000,
+            hash: 'SHA-256'
+          },
+          keyMaterial,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['decrypt']
+        );
+
+        const encryptedBuffer = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
+        const ivBuffer = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+        const tagBuffer = Uint8Array.from(atob(tag), c => c.charCodeAt(0));
+
+        const combinedData = new Uint8Array([...encryptedBuffer, ...tagBuffer]);
+
+        const decrypted = await window.crypto.subtle.decrypt(
+          {
+            name: 'AES-GCM',
+            iv: ivBuffer
+          },
+          key,
+          combinedData
+        );
+
+        return JSON.parse(new TextDecoder().decode(decrypted));
+      } catch (error) {
+        console.error('Failed to decrypt session data:', error);
+        throw error;
+      }
+    }
+
     // Simple JWT decoder for client-side use
     function jwt_decode(token) {
       try {
@@ -1455,14 +1501,22 @@
           });
           
           eventSource.addEventListener('complete', () => {
+            console.log('🏁 SSE complete event fired');
             eventSource.close();
-            
+
             const processingTime = Date.now() - startTime;
             this.performanceMetrics.responseTime = processingTime;
             this.updateMetrics();
-            
+
             // Update session with new messages and current parameters
             if (this.sessionManager && this.sessionManager.currentSession) {
+              console.log('🏁 Saving final session state on complete');
+              // Ensure we persist the final assistant text
+              if (this._saveSessionTimeout) {
+                console.log('🏁 Clearing pending debounced save');
+                clearTimeout(this._saveSessionTimeout);
+                this._saveSessionTimeout = null;
+              }
               this.sessionManager.updateCurrentSession(
                 this.conversationMessages,
                 this.settings.selectedModel,
@@ -1470,6 +1524,8 @@
                 this.settings.processingMode,
                 'voice' // Conversation type
               );
+            } else {
+              console.log('🏁 No session to save on complete');
             }
             
             this.voiceState.currentTurn = 'user';
@@ -1686,6 +1742,7 @@
           
           // Update session with new messages and current parameters
           if (this.sessionManager && this.sessionManager.currentSession) {
+            console.log('💾 Text input: Saving session after assistant response');
             this.sessionManager.updateCurrentSession(
               this.conversationMessages,
               this.settings.selectedModel,
@@ -1693,6 +1750,8 @@
               this.settings.processingMode,
               'text' // Conversation type for text input
             );
+          } else {
+            console.log('💾 Text input: No session to save');
           }
           
           this.voiceState.currentTurn = 'user';
@@ -1956,10 +2015,11 @@
 
       // Message management
       addMessage(role, text) {
+        console.log('💬 Adding message:', role, 'length:', text?.length || 0, 'preview:', text?.substring(0, 50));
         const conversation = document.getElementById('conversation');
         const message = document.createElement('div');
         message.className = `message ${role}`;
-        
+
         if (role === 'assistant') {
           const streamDiv = document.createElement('div');
           streamDiv.className = 'stream-text';
@@ -1990,11 +2050,14 @@
           });
         }
 
-        // Debounced session persist to ensure updates even if SSE 'complete' is missed
+        // Debounced session persist: only trigger on assistant messages
+        // to avoid saving a turn with just the user message
         try {
-          if (this.sessionManager && this.sessionManager.currentSession) {
+          if (role === 'assistant' && this.sessionManager && this.sessionManager.currentSession) {
+            console.log('⏰ Scheduling debounced session save for assistant message');
             clearTimeout(this._saveSessionTimeout);
             this._saveSessionTimeout = setTimeout(() => {
+              console.log('💾 Executing debounced session save');
               try {
                 this.sessionManager.updateCurrentSession(
                   this.conversationMessages,
@@ -2007,6 +2070,8 @@
                 console.warn('Deferred session save failed:', e?.message || e);
               }
             }, 400);
+          } else {
+            console.log('⏰ Skipping session save: role=', role, 'hasSession=', !!this.sessionManager?.currentSession);
           }
         } catch (_) { /* ignore */ }
         
@@ -2014,6 +2079,7 @@
       }
       
       updateMessage(messageElement, newText) {
+        console.log('🔄 Updating message, new length:', newText?.length || 0, 'preview:', newText?.substring(0, 50));
         if (messageElement) {
           const streamText = messageElement.querySelector('.stream-text');
           if (streamText) {
@@ -2024,6 +2090,7 @@
             if (this.conversationMessages && this.conversationMessages.length > 0) {
               const lastMsg = this.conversationMessages[this.conversationMessages.length - 1];
               if (lastMsg && lastMsg.role === 'assistant') {
+                console.log('🔄 Updating last assistant message in conversationMessages');
                 lastMsg.content = newText;
                 lastMsg.timestamp = Date.now();
               }
@@ -2032,8 +2099,10 @@
             // Debounced session persist to capture streamed assistant updates
             try {
               if (this.sessionManager && this.sessionManager.currentSession) {
+                console.log('⏰ Scheduling debounced session save for streaming update');
                 clearTimeout(this._saveSessionTimeout);
                 this._saveSessionTimeout = setTimeout(() => {
+                  console.log('💾 Executing debounced session save (streaming)');
                   try {
                     this.sessionManager.updateCurrentSession(
                       this.conversationMessages,
@@ -2428,6 +2497,7 @@
       async loadUserSessions() {
         if (!this.authManager.isAuthenticated()) return;
 
+        console.log('🔄 Loading user sessions...');
         try {
           const response = await fetch(`${this.backendUrl}/api/records/gun?recordType=conversationSession`, {
             headers: {
@@ -2436,10 +2506,18 @@
           });
 
           const data = await response.json();
+          console.log('📋 Sessions loaded:', data.records?.length || 0, 'sessions found');
+          if (data.records) {
+            console.log('📋 Session details:', data.records.map(s => ({
+              name: s.data?.basic?.name || 'Unnamed',
+              messageCount: s.data?.conversationSession?.message_count || 0,
+              did: s.oip?.did
+            })));
+          }
           this.sessions = data.records || [];
           this.updateHistoryUI();
         } catch (error) {
-          console.error('Failed to load sessions:', error);
+          console.error('❌ Failed to load sessions:', error);
         }
       }
 
@@ -2519,6 +2597,10 @@
       async updateCurrentSession(messages, model, tokens, processingMode = 'rag', conversationType = 'voice') {
         if (!this.currentSession) return;
 
+        console.log('💾 Updating current session with', messages.length, 'messages');
+        console.log('💾 Message roles:', messages.map(m => m.role || 'unknown'));
+        console.log('💾 Last few messages:', messages.slice(-3).map(m => `${m.role}: ${m.content?.substring(0, 50)}...`));
+
         const endTime = Date.now();
 
         // Normalize shape: support records loaded as { data: {...}, oip: {...} }
@@ -2590,8 +2672,10 @@
       }
 
       async loadSession(sessionDid) {
+        console.log('🔍 Loading session:', sessionDid);
         try {
           const soul = sessionDid.replace('did:gun:', '');
+          console.log('🔍 Fetching soul:', soul);
           const response = await fetch(`${this.backendUrl}/api/records/gun/${soul}`, {
             headers: {
               'Authorization': `Bearer ${this.authManager.token}`
@@ -2600,51 +2684,142 @@
 
           const data = await response.json();
 
-          if (data.record) {
-            return data.record;
+          // Decrypt session data if it's encrypted
+          let processedSession = data.record;
+          if (data.record?.data?.data && data.record?.data?.meta?.encrypted) {
+            try {
+              console.log('🔓 Decrypting individual session for loading');
+              const decryptedData = await decryptSessionData(
+                data.record.data.data.encrypted,
+                data.record.data.data.iv,
+                data.record.data.data.tag
+              );
+
+              // Reconstruct session with decrypted data
+              processedSession = {
+                ...data.record,
+                data: {
+                  ...data.record.data,
+                  conversationSession: decryptedData.conversationSession,
+                  basic: decryptedData.basic,
+                  accessControl: decryptedData.accessControl
+                }
+              };
+              console.log('✅ Individual session decrypted successfully');
+            } catch (error) {
+              console.error('❌ Failed to decrypt individual session:', error);
+              // Fall back to original session
+            }
           }
 
+          console.log('🔍 Session data received:', {
+            success: !!processedSession,
+            messageCount: processedSession?.data?.conversationSession?.message_count || 0,
+            messages: processedSession?.data?.conversationSession?.messages?.length || 0
+          });
+
+          if (processedSession) {
+            console.log('🔍 Session messages:', processedSession.data?.conversationSession?.messages);
+            return processedSession;
+          }
+
+          console.log('🔍 No session data found');
           return null;
         } catch (error) {
-          console.error('Failed to load session:', error);
+          console.error('❌ Failed to load session:', error);
           return null;
         }
       }
 
       updateHistoryUI() {
+        console.log('📋 Updating history UI with', this.sessions.length, 'sessions');
         const historyList = document.getElementById('historyList');
         historyList.innerHTML = '';
 
-        this.sessions.forEach((session, index) => {
-          // Normalize to handle different shapes:
-          // - Newly created (client): payload at top-level
-          // - Listed from GUN: session.data is the GUN wrapper, payload at session.data.data
-          // - Loaded via /gun/:soul: session.data is the payload
-          const payload = (session?.data?.conversationSession)
-            ? session.data
-            : (session?.data?.data?.conversationSession)
-              ? session.data.data
-              : session;
+        // Process sessions asynchronously since decryption is async
+        const processSessions = async () => {
+          for (let index = 0; index < this.sessions.length; index++) {
+            const session = this.sessions[index];
 
-          const li = document.createElement('li');
-          li.innerHTML = `
-            <a href="#" onclick="sessionManager.selectSession('${session.oip.did}')" style="display:block;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);text-decoration:none">
-              <strong>${payload?.basic?.name || 'Unnamed Session'}</strong><br>
-              <small style="color:var(--muted)">${new Date(payload?.conversationSession?.start_timestamp || Date.now()).toLocaleDateString()} • ${payload?.conversationSession?.message_count || 0} messages • ${payload?.conversationSession?.model_name || 'unknown'}</small>
-            </a>
-          `;
-          historyList.appendChild(li);
+            // Decrypt session data if it's encrypted
+            let decryptedSession = session;
+            if (session?.data?.data && session?.data?.meta?.encrypted) {
+              try {
+                console.log('🔓 Decrypting session for display:', session.oip?.did);
+                const decryptedData = await decryptSessionData(
+                  session.data.data.encrypted,
+                  session.data.data.iv,
+                  session.data.data.tag
+                );
+
+                // Reconstruct session with decrypted data
+                decryptedSession = {
+                  ...session,
+                  data: {
+                    ...session.data,
+                    conversationSession: decryptedData.conversationSession,
+                    basic: decryptedData.basic,
+                    accessControl: decryptedData.accessControl
+                  }
+                };
+                console.log('✅ Session decrypted successfully');
+              } catch (error) {
+                console.error('❌ Failed to decrypt session:', error);
+                // Fall back to original session
+              }
+            }
+
+            console.log('📋 Processing session', index, ':', {
+              name: decryptedSession?.data?.basic?.name || 'Unnamed',
+              messageCount: decryptedSession?.data?.conversationSession?.message_count || 0,
+              did: decryptedSession?.oip?.did
+            });
+
+            // Normalize to handle different shapes:
+            // - Newly created (client): payload at top-level
+            // - Listed from GUN: session.data is the GUN wrapper, payload at session.data.data
+            // - Loaded via /gun/:soul: session.data is the payload
+            const payload = (decryptedSession?.data?.conversationSession)
+              ? decryptedSession.data
+              : (decryptedSession?.data?.data?.conversationSession)
+                ? decryptedSession.data.data
+                : decryptedSession;
+
+            console.log('📋 Normalized payload:', {
+              name: payload?.basic?.name || 'Unnamed',
+              messageCount: payload?.conversationSession?.message_count || 0,
+              messages: payload?.conversationSession?.messages?.length || 0
+            });
+
+            const li = document.createElement('li');
+            li.innerHTML = `
+              <a href="#" onclick="sessionManager.selectSession('${session.oip.did}')" style="display:block;padding:10px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--text);text-decoration:none">
+                <strong>${payload?.basic?.name || 'Unnamed Session'}</strong><br>
+                <small style="color:var(--muted)">${new Date(payload?.conversationSession?.start_timestamp || Date.now()).toLocaleDateString()} • ${payload?.conversationSession?.message_count || 0} messages • ${payload?.conversationSession?.model_name || 'unknown'}</small>
+              </a>
+            `;
+            historyList.appendChild(li);
+          }
+          console.log('📋 History UI updated, list contains', historyList.children.length, 'items');
+        };
+
+        // Execute the async processing
+        processSessions().catch(error => {
+          console.error('Error processing sessions for history UI:', error);
         });
       }
 
       async selectSession(sessionDid) {
+        console.log('🎯 Selecting session:', sessionDid);
         const session = await this.loadSession(sessionDid);
         if (session) {
+          console.log('✅ Session loaded successfully, setting as current session');
           this.currentSession = session;
 
           // Reconstruct conversation messages from stored data
           if (session.data?.conversationSession && session.data.conversationSession.messages) {
             const messages = [];
+            console.log('📝 Reconstructing', session.data.conversationSession.messages.length, 'messages from session');
             for (let i = 0; i < session.data.conversationSession.messages.length; i++) {
               messages.push({
                 role: session.data.conversationSession.message_roles[i] || 'user',
@@ -2652,12 +2827,20 @@
                 timestamp: session.data.conversationSession.message_timestamps[i] || Date.now()
               });
             }
+            console.log('📝 Reconstructed messages:', messages.map(m => `${m.role}: ${m.content?.substring(0, 50)}...`));
 
             // Load messages into Alfred's conversation interface
             if (window.alfred && window.alfred.loadSessionMessages) {
+              console.log('🎭 Loading messages into Alfred interface');
               window.alfred.loadSessionMessages(messages);
+            } else {
+              console.log('⚠️ Alfred interface not available for loading messages');
             }
+          } else {
+            console.log('⚠️ No conversation messages found in session data');
           }
+        } else {
+          console.log('❌ Failed to load session');
         }
       }
     }

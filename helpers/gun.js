@@ -85,7 +85,8 @@ class GunHelper {
                 
                 // AES-256-GCM with auth tag persisted
                 const algorithm = 'aes-256-gcm';
-                const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
+                // Use PBKDF2 for key derivation (matches frontend Web Crypto API)
+                const key = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
                 const iv = crypto.randomBytes(12); // 12-byte IV recommended for GCM
                 const cipher = crypto.createCipheriv(algorithm, key, iv);
 
@@ -163,8 +164,9 @@ class GunHelper {
                 // Handle encrypted data
                 if (data.meta && data.meta.encrypted && data.meta.encryptionMethod === 'aes-256-gcm') {
                     console.log('🔓 Decrypting GUN record');
-                    
-                    const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
+
+                    // Use PBKDF2 for key derivation (matches frontend Web Crypto API)
+                    const key = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
                     const iv = Buffer.from(data.data.iv, 'base64');
                     const tag = Buffer.from(data.data.tag, 'base64');
                     const encryptedBuf = Buffer.from(data.data.encrypted, 'base64');
