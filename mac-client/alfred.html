@@ -1110,7 +1110,7 @@
             // Debug log occasionally
             if (Math.random() < 0.05) {
               const average = ttsAudioData.reduce((a, b) => a + b) / ttsAudioData.length;
-              console.log(`[TTS Viz] REAL TTS Audio Level: ${(average / 128 * 100).toFixed(1)}%`);
+              // console.log(`[TTS Viz] REAL TTS Audio Level: ${(average / 128 * 100).toFixed(1)}%`);
             }
             
           } catch (analyserError) {
