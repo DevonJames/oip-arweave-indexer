@@ -2687,10 +2687,31 @@
 
           const data = await response.json();
           console.log('🔍 Raw backend response:', data);
+          console.log('🔍 Record data structure:', data.record);
+          console.log('🔍 Record.data structure:', data.record?.data);
+          console.log('🔍 Record.meta structure:', data.record?.meta);
+          console.log('🔍 Record.data type:', typeof data.record?.data);
+          if (data.record?.data && typeof data.record.data === 'object') {
+            console.log('🔍 Record.data keys:', Object.keys(data.record.data));
+            console.log('🔍 Has conversationSession:', !!data.record.data.conversationSession);
+            if (data.record.data.conversationSession) {
+              console.log('🔍 ConversationSession structure:', data.record.data.conversationSession);
+              console.log('🔍 Messages array:', data.record.data.conversationSession.messages);
+              console.log('🔍 Messages length:', data.record.data.conversationSession.messages?.length || 0);
+            }
+          }
 
           // Check if session data is already decrypted by backend
           let processedSession = data.record;
-          if (data.record?.data?.data && data.record?.data?.meta?.encrypted && !data.record?.data?.meta?.wasEncrypted) {
+
+          // If the backend has already decrypted the data (meta.wasEncrypted exists),
+          // or if the data is not encrypted (no encrypted structure), use it directly
+          if (data.record?.data?.meta?.wasEncrypted || !data.record?.data?.meta?.encrypted) {
+            console.log('✅ Using data directly (already decrypted by backend or not encrypted)');
+            console.log('🔍 Direct data:', data.record.data);
+            console.log('🔍 Direct conversationSession:', data.record.data?.conversationSession);
+            processedSession = data.record;
+          } else if (data.record?.data?.data && data.record?.data?.meta?.encrypted && !data.record?.data?.meta?.wasEncrypted) {
             try {
               console.log('🔓 Decrypting individual session for loading (frontend decryption)');
               console.log('🔍 Raw encrypted data structure:', data.record.data.data);
@@ -2719,10 +2740,12 @@
               console.error('❌ Failed to decrypt individual session:', error);
               // Fall back to original session
             }
-          } else if (data.record?.data?.meta?.wasEncrypted) {
-            console.log('✅ Session already decrypted by backend');
-            // Data is already decrypted by backend, use as-is
-            processedSession = data.record;
+          } else {
+            console.log('🔍 Session data structure check:');
+            console.log('🔍 - data.record?.data?.data exists:', !!data.record?.data?.data);
+            console.log('🔍 - data.record?.data?.meta?.encrypted:', data.record?.data?.meta?.encrypted);
+            console.log('🔍 - data.record?.data?.meta?.wasEncrypted:', data.record?.data?.meta?.wasEncrypted);
+            console.log('🔍 - data.record?.data?.conversationSession exists:', !!data.record?.data?.conversationSession);
           }
 
           console.log('🔍 Session data received:', {

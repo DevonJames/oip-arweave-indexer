@@ -176,6 +176,10 @@ class GunHelper {
                     const dec = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
                     const decryptedData = JSON.parse(dec.toString('utf8'));
 
+                    console.log('🔍 Backend decrypted data structure:', decryptedData);
+                    console.log('🔍 Backend decrypted conversationSession:', decryptedData?.conversationSession);
+                    console.log('🔍 Backend decrypted conversationSession messages:', decryptedData?.conversationSession?.messages?.length || 0);
+
                     // Replace the entire data structure with the decrypted content
                     data.data = decryptedData;
                     data.meta.encrypted = false;

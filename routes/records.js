@@ -266,10 +266,29 @@ router.get('/gun/:soul', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Record not found' });
         }
 
+        console.log('🔍 Backend returning GUN record:', {
+            recordStructure: record,
+            dataStructure: record.data,
+            metaStructure: record.meta,
+            hasConversationSession: !!record.data?.conversationSession,
+            messageCount: record.data?.conversationSession?.message_count || 0,
+            messagesLength: record.data?.conversationSession?.messages?.length || 0
+        });
+
+        // Ensure we're returning the actual decrypted data, not GUN references
+        // If data is a GUN reference object, we need to extract the actual content
+        let actualData = record.data;
+        if (record.data && typeof record.data === 'object' && record.data['#']) {
+            // This is a GUN reference, the actual data should be in record.data directly from decryption
+            console.log('🔍 GUN reference detected, using record structure');
+            actualData = record.data;
+        }
+
         res.status(200).json({
             message: 'GUN record retrieved successfully',
             record: {
-                ...record,
+                data: actualData,
+                meta: record.meta,
                 oip: {
                     ...record.oip,
                     did: `did:gun:${soul}`,
