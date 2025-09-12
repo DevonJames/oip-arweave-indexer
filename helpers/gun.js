@@ -174,8 +174,12 @@ class GunHelper {
                     decipher.setAuthTag(tag);
 
                     const dec = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
-                    data.data = JSON.parse(dec.toString('utf8'));
+                    const decryptedData = JSON.parse(dec.toString('utf8'));
+
+                    // Replace the entire data structure with the decrypted content
+                    data.data = decryptedData;
                     data.meta.encrypted = false;
+                    data.meta.wasEncrypted = true; // Mark that it was decrypted
                 }
 
                 console.log('✅ GUN record retrieved successfully via HTTP API');
