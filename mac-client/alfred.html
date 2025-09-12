@@ -12,11 +12,12 @@
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
-      font:normal 16px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans"}
+      font:normal 16px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans";
+      overflow:hidden; /* Prevent any page-level scrolling */}
 
     /* Header */
     .app-header{
-      position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
+      position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
       height:56px;padding:0 12px;background:linear-gradient(180deg, rgba(16,20,26,.8), rgba(16,20,26,.2));
       backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.06)
     }
@@ -28,18 +29,25 @@
     .logo{font-weight:700;letter-spacing:.08em}
     .mode-chip{margin-left:8px;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06)}
 
-    /* Layout */
+    /* Layout - Fixed height containers with independent scrolling */
     .app-main{
       display:grid;grid-template-columns:1fr;gap:12px;padding:12px;
-      padding-bottom:calc(var(--dock-h) + env(safe-area-inset-bottom,16px));
-      min-height:100dvh;transition:grid-template-columns .25s ease;
+      height:calc(100vh - 56px);margin-top:56px; /* Account for fixed header */
+      overflow:hidden; /* Prevent page-level scrolling */
+      transition:grid-template-columns .25s ease;
     }
     .history-pane{
-      display:none;background:var(--glass);border-radius:var(--radius);overflow:auto;padding:10px;
+      display:none;background:var(--glass);border-radius:var(--radius);
+      height:calc(100vh - 112px - var(--dock-h) - 90px); /* Split the difference: 92px gap */
+      overflow-y:auto;overflow-x:hidden; /* Independent scrolling */
+      padding:10px;
       transition:width .25s ease, transform .25s ease, opacity .2s ease;
     }
     .conversation{
-      position:relative;height:calc(100dvh - 56px - var(--dock-h) - 140px);overflow:auto;padding:12px;
+      position:relative;
+      height:calc(100vh - 112px - var(--dock-h) - 90px); /* Split the difference: 92px gap */
+      overflow-y:auto;overflow-x:hidden; /* Independent scrolling */
+      padding:12px;
       background:var(--glass);border-radius:var(--radius);backdrop-filter:blur(20px) saturate(140%);
     }
     .message{max-width:95%;margin:10px 0;padding:12px 14px;border-radius:14px;line-height:1.55}
@@ -211,6 +219,7 @@
       background:var(--glass);border-radius:var(--radius);padding:12px;
       backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,.06);
       z-index:20;
+      max-height:120px;overflow:hidden; /* Prevent feedback box from growing too large */
     }
     .interface-feedback .badges{margin:0 0 8px 0}
     .interface-feedback .metrics{margin:8px 0}
@@ -800,6 +809,9 @@
       drawIdleWaveform() {
         if (!this.waveformCtx) return;
         
+        // Prevent auto-scroll to canvas during drawing
+        const originalScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+        
         const canvas = this.waveformCanvas;
         const ctx = this.waveformCtx;
         
@@ -810,6 +822,16 @@
         ctx.font = `${14 * devicePixelRatio}px Inter, system-ui`;
         ctx.textAlign = 'center';
         ctx.fillText('🎵 Ready for audio...', canvas.width / 2, canvas.height / 2 + 5 * devicePixelRatio);
+        
+        // Restore scroll position if it changed during canvas drawing
+        requestAnimationFrame(() => {
+          if (document.documentElement.scrollTop !== originalScrollTop) {
+            document.documentElement.scrollTop = originalScrollTop;
+          }
+          if (document.body.scrollTop !== originalScrollTop) {
+            document.body.scrollTop = originalScrollTop;
+          }
+        });
       }
       
       async testBackendHealth() {
@@ -987,6 +1009,9 @@
       drawInputWaveform(audioData) {
         if (!this.waveformCtx) return;
         
+        // Prevent auto-scroll to canvas during drawing
+        const originalScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+        
         const canvas = this.waveformCanvas;
         const ctx = this.waveformCtx;
         
@@ -1009,6 +1034,16 @@
           ctx.fillStyle = gradient;
           ctx.fillRect(x, y, barWidth * 0.6, barHeight);
         }
+        
+        // Restore scroll position if it changed during canvas drawing
+        requestAnimationFrame(() => {
+          if (document.documentElement.scrollTop !== originalScrollTop) {
+            document.documentElement.scrollTop = originalScrollTop;
+          }
+          if (document.body.scrollTop !== originalScrollTop) {
+            document.body.scrollTop = originalScrollTop;
+          }
+        });
       }
       
       drawIdleWaveform() {
@@ -1143,6 +1178,9 @@
       drawTTSWaveform(audioData) {
         if (!this.waveformCtx || !audioData) return;
         
+        // Prevent auto-scroll to canvas during drawing
+        const originalScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+        
         const canvas = this.waveformCanvas;
         const ctx = this.waveformCtx;
         
@@ -1165,6 +1203,16 @@
           ctx.fillStyle = gradient;
           ctx.fillRect(x, y, barWidth * 0.6, barHeight);
         }
+        
+        // Restore scroll position if it changed during canvas drawing
+        requestAnimationFrame(() => {
+          if (document.documentElement.scrollTop !== originalScrollTop) {
+            document.documentElement.scrollTop = originalScrollTop;
+          }
+          if (document.body.scrollTop !== originalScrollTop) {
+            document.body.scrollTop = originalScrollTop;
+          }
+        });
       }
 
       startTTSWaveformAnimation() {
@@ -2016,6 +2064,7 @@
       // Message management
       addMessage(role, text) {
         console.log('💬 Adding message:', role, 'length:', text?.length || 0, 'preview:', text?.substring(0, 50));
+        
         const conversation = document.getElementById('conversation');
         const message = document.createElement('div');
         message.className = `message ${role}`;
@@ -2032,7 +2081,11 @@
         // Insert before live-area
         const liveArea = conversation.querySelector('.live-area');
         conversation.insertBefore(message, liveArea);
-        conversation.scrollTop = conversation.scrollHeight;
+        
+        // Only scroll conversation container if not bulk loading
+        if (!this._bulkLoading) {
+          conversation.scrollTop = conversation.scrollHeight;
+        }
         
         // Add to conversation history
         this.conversation.push({
@@ -2084,7 +2137,28 @@
           const streamText = messageElement.querySelector('.stream-text');
           if (streamText) {
             streamText.textContent = newText;
-            document.getElementById('conversation').scrollTop = document.getElementById('conversation').scrollHeight;
+            
+            // Only scroll if not bulk loading
+            if (!this._bulkLoading) {
+              // Temporarily prevent all page scrolling during update
+              const originalScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+              const preventScroll = (e) => {
+                window.scrollTo(0, originalScrollTop);
+              };
+              
+              window.addEventListener('scroll', preventScroll, { passive: false });
+              document.addEventListener('scroll', preventScroll, { passive: false });
+              
+              // Use requestAnimationFrame to ensure smooth scrolling and prevent page jumps
+              requestAnimationFrame(() => {
+                document.getElementById('conversation').scrollTop = document.getElementById('conversation').scrollHeight;
+                // Re-enable page scrolling after a brief delay
+                setTimeout(() => {
+                  window.removeEventListener('scroll', preventScroll);
+                  document.removeEventListener('scroll', preventScroll);
+                }, 50);
+              });
+            }
 
             // Keep the latest assistant message in session state up-to-date during streaming
             if (this.conversationMessages && this.conversationMessages.length > 0) {
@@ -2131,9 +2205,27 @@
         this.conversationMessages = [];
         this.conversation = [];
         
+        // Prevent any page scrolling during bulk loading
+        const originalScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+        this._bulkLoading = true;
+        
         // Load messages into UI and state
         messages.forEach(msg => {
           this.addMessage(msg.role === 'assistant' ? 'assistant' : 'user', msg.content);
+        });
+        
+        // Re-enable auto-scrolling and scroll conversation to bottom once
+        this._bulkLoading = false;
+        requestAnimationFrame(() => {
+          // Ensure page hasn't scrolled
+          if (document.documentElement.scrollTop !== originalScrollTop) {
+            document.documentElement.scrollTop = originalScrollTop;
+          }
+          if (document.body.scrollTop !== originalScrollTop) {
+            document.body.scrollTop = originalScrollTop;
+          }
+          // Scroll conversation container to bottom
+          conversation.scrollTop = conversation.scrollHeight;
         });
         
         console.log(`Loaded ${messages.length} messages from session`);
@@ -2499,7 +2591,7 @@
 
         console.log('🔄 Loading user sessions...');
         try {
-          const response = await fetch(`${this.backendUrl}/api/records/gun?recordType=conversationSession`, {
+          const response = await fetch(`${this.backendUrl}/api/records?source=gun&recordType=conversationSession&limit=15&sortBy=date:desc`, {
             headers: {
               'Authorization': `Bearer ${this.authManager.token}`
             }
@@ -2679,7 +2771,7 @@
         try {
           const soul = sessionDid.replace('did:gun:', '');
           console.log('🔍 Fetching soul:', soul);
-          const response = await fetch(`${this.backendUrl}/api/records/gun/${soul}`, {
+          const response = await fetch(`${this.backendUrl}/api/records?source=gun&did=${sessionDid}&limit=1`, {
             headers: {
               'Authorization': `Bearer ${this.authManager.token}`
             }
@@ -2687,66 +2779,28 @@
 
           const data = await response.json();
           console.log('🔍 Raw backend response:', data);
-          console.log('🔍 Record data structure:', data.record);
-          console.log('🔍 Record.data structure:', data.record?.data);
-          console.log('🔍 Record.meta structure:', data.record?.meta);
-          console.log('🔍 Record.data type:', typeof data.record?.data);
-          if (data.record?.data && typeof data.record.data === 'object') {
-            console.log('🔍 Record.data keys:', Object.keys(data.record.data));
-            console.log('🔍 Has conversationSession:', !!data.record.data.conversationSession);
-            if (data.record.data.conversationSession) {
-              console.log('🔍 ConversationSession structure:', data.record.data.conversationSession);
-              console.log('🔍 Messages array:', data.record.data.conversationSession.messages);
-              console.log('🔍 Messages length:', data.record.data.conversationSession.messages?.length || 0);
-            }
+          
+          // The main API endpoint returns records in data.records array
+          const record = data.records && data.records.length > 0 ? data.records[0] : null;
+          if (!record) {
+            throw new Error('Session not found');
           }
 
-          // Check if session data is already decrypted by backend
-          let processedSession = data.record;
-
-          // If the backend has already decrypted the data (meta.wasEncrypted exists),
-          // or if the data is not encrypted (no encrypted structure), use it directly
-          if (data.record?.data?.meta?.wasEncrypted || !data.record?.data?.meta?.encrypted) {
-            console.log('✅ Using data directly (already decrypted by backend or not encrypted)');
-            console.log('🔍 Direct data:', data.record.data);
-            console.log('🔍 Direct conversationSession:', data.record.data?.conversationSession);
-            processedSession = data.record;
-          } else if (data.record?.data?.data && data.record?.data?.meta?.encrypted && !data.record?.data?.meta?.wasEncrypted) {
-            try {
-              console.log('🔓 Decrypting individual session for loading (frontend decryption)');
-              console.log('🔍 Raw encrypted data structure:', data.record.data.data);
-              const decryptedData = await decryptSessionData(
-                data.record.data.data.encrypted,
-                data.record.data.data.iv,
-                data.record.data.data.tag
-              );
-
-              console.log('🔍 Decrypted data structure:', decryptedData);
-              console.log('🔍 Decrypted conversationSession:', decryptedData?.conversationSession);
-
-              // Reconstruct session with decrypted data
-              processedSession = {
-                ...data.record,
-                data: {
-                  ...data.record.data,
-                  conversationSession: decryptedData.conversationSession,
-                  basic: decryptedData.basic,
-                  accessControl: decryptedData.accessControl
-                }
-              };
-              console.log('✅ Individual session decrypted successfully');
-              console.log('🔍 Final processed session structure:', processedSession);
-            } catch (error) {
-              console.error('❌ Failed to decrypt individual session:', error);
-              // Fall back to original session
-            }
-          } else {
-            console.log('🔍 Session data structure check:');
-            console.log('🔍 - data.record?.data?.data exists:', !!data.record?.data?.data);
-            console.log('🔍 - data.record?.data?.meta?.encrypted:', data.record?.data?.meta?.encrypted);
-            console.log('🔍 - data.record?.data?.meta?.wasEncrypted:', data.record?.data?.meta?.wasEncrypted);
-            console.log('🔍 - data.record?.data?.conversationSession exists:', !!data.record?.data?.conversationSession);
+          console.log('🔍 Record structure:', record);
+          console.log('🔍 Record.data structure:', record.data);
+          console.log('🔍 Has conversationSession:', !!record.data?.conversationSession);
+          if (record.data?.conversationSession) {
+            console.log('🔍 ConversationSession structure:', record.data.conversationSession);
+            console.log('🔍 Messages array:', record.data.conversationSession.messages);
+            console.log('🔍 Messages length:', record.data.conversationSession.messages?.length || 0);
           }
+
+          // The main API endpoint returns already decrypted data
+          let processedSession = record;
+          
+          console.log('✅ Using data directly from main API endpoint (already decrypted)');
+          console.log('🔍 Session data:', processedSession.data);
+          console.log('🔍 ConversationSession:', processedSession.data?.conversationSession);
 
           console.log('🔍 Session data received:', {
             success: !!processedSession,
@@ -2769,8 +2823,14 @@
 
       updateHistoryUI() {
         console.log('📋 Updating history UI with', this.sessions.length, 'sessions');
+        
         const historyList = document.getElementById('historyList');
-        historyList.innerHTML = '';
+        
+        // Store current scroll position to restore it after DOM manipulation
+        const originalScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+        
+        // Use DocumentFragment to build the list off-DOM to prevent reflow issues
+        const fragment = document.createDocumentFragment();
 
         // Process sessions asynchronously since decryption is async
         const processSessions = async () => {
@@ -2834,9 +2894,25 @@
                 <small style="color:var(--muted)">${new Date(payload?.conversationSession?.start_timestamp || Date.now()).toLocaleDateString()} • ${payload?.conversationSession?.message_count || 0} messages • ${payload?.conversationSession?.model_name || 'unknown'}</small>
               </a>
             `;
-            historyList.appendChild(li);
+            // Append to fragment instead of directly to DOM
+            fragment.appendChild(li);
           }
-          console.log('📋 History UI updated, list contains', historyList.children.length, 'items');
+          
+          // Replace entire list content in one operation to minimize reflow
+          historyList.innerHTML = '';
+          historyList.appendChild(fragment);
+          
+          // Restore scroll position immediately after DOM update
+          requestAnimationFrame(() => {
+            if (document.documentElement.scrollTop !== originalScrollTop) {
+              document.documentElement.scrollTop = originalScrollTop;
+            }
+            if (document.body.scrollTop !== originalScrollTop) {
+              document.body.scrollTop = originalScrollTop;
+            }
+          });
+          
+          console.log('📋 History UI updated, list contains', fragment.children.length, 'items');
         };
 
         // Execute the async processing
@@ -2881,6 +2957,8 @@
       }
     }
     
+    // Nuclear option removed - fixed the root cause in drawIdleWaveform()
+
     // Initialize ALFRED interface
     const alfred = new ALFREDInterface();
     
@@ -2891,8 +2969,9 @@
     // Connect session manager to ALFRED interface
     alfred.sessionManager = sessionManager;
     
-    // Make sessionManager globally available
+    // Make sessionManager and alfred globally available
     window.sessionManager = sessionManager;
+    window.alfred = alfred;
     
     // Check authentication on load
     if (authManager.isAuthenticated()) {
