@@ -46,13 +46,36 @@ try {
                         const { soul, data } = JSON.parse(body);
                         console.log(`💾 Storing data for soul: ${soul.substring(0, 50)}...`);
                         
-                        gun.get(soul).put(data, (ack) => {
+                        // Store data and ensure all nested properties are properly saved
+                        const gunNode = gun.get(soul);
+
+                        // Put the main data structure
+                        gunNode.put(data, (ack) => {
                             if (ack.err) {
                                 console.error('❌ GUN put error:', ack.err);
                                 res.writeHead(500);
                                 res.end(JSON.stringify({ error: ack.err }));
                             } else {
                                 console.log('✅ Data stored successfully');
+
+                                // Ensure nested data is also stored by explicitly setting each property
+                                // This helps GUN properly handle complex nested structures
+                                if (data.data && typeof data.data === 'object') {
+                                    Object.keys(data.data).forEach(key => {
+                                        gunNode.get('data').get(key).put(data.data[key]);
+                                    });
+                                }
+                                if (data.meta && typeof data.meta === 'object') {
+                                    Object.keys(data.meta).forEach(key => {
+                                        gunNode.get('meta').get(key).put(data.meta[key]);
+                                    });
+                                }
+                                if (data.oip && typeof data.oip === 'object') {
+                                    Object.keys(data.oip).forEach(key => {
+                                        gunNode.get('oip').get(key).put(data.oip[key]);
+                                    });
+                                }
+
                                 try {
                                     // Maintain a simple in-memory index by publisher hash prefix
                                     // Expected soul format: "<publisherHash>:<rest>"
@@ -73,8 +96,12 @@ try {
                                 } catch (e) {
                                     console.warn('⚠️ Failed to update in-memory index:', e.message);
                                 }
-                                res.writeHead(200);
-                                res.end(JSON.stringify({ success: true, soul }));
+
+                                // Add a small delay to ensure GUN has time to propagate changes
+                                setTimeout(() => {
+                                    res.writeHead(200);
+                                    res.end(JSON.stringify({ success: true, soul }));
+                                }, 100);
                             }
                         });
                     } catch (parseError) {
@@ -94,16 +121,69 @@ try {
                 }
                 
                 console.log(`📖 Getting data for soul: ${soul.substring(0, 50)}...`);
-                gun.get(soul).once((data) => {
-                    if (data) {
-                        console.log('✅ Data retrieved successfully');
-                        res.writeHead(200);
-                        res.end(JSON.stringify({ success: true, data }));
-                    } else {
-                        console.log('❌ No data found');
-                        res.writeHead(404);
-                        res.end(JSON.stringify({ error: 'Not found' }));
+
+                // Retrieve the complete data structure including nested properties
+                const gunNode = gun.get(soul);
+                const result = {};
+
+                // Use a counter to track when all properties are loaded
+                let pending = 3; // data, meta, oip
+                let completed = false;
+
+                const checkComplete = () => {
+                    if (--pending === 0 && !completed) {
+                        completed = true;
+                        if (Object.keys(result).length > 0) {
+                            console.log('✅ Data retrieved successfully');
+                            res.writeHead(200);
+                            res.end(JSON.stringify({ success: true, data: result }));
+                        } else {
+                            console.log('❌ No data found');
+                            res.writeHead(404);
+                            res.end(JSON.stringify({ error: 'Not found' }));
+                        }
                     }
+                };
+
+                // Retrieve main data
+                gunNode.once((mainData) => {
+                    if (mainData) {
+                        result._ = mainData._;
+                        // Remove GUN internal properties
+                        delete mainData._;
+                        Object.assign(result, mainData);
+                    }
+                    checkComplete();
+                });
+
+                // Retrieve nested data if it exists
+                gunNode.get('data').once((dataData) => {
+                    if (dataData) {
+                        result.data = dataData;
+                        // Remove GUN internal properties
+                        delete result.data._;
+                    }
+                    checkComplete();
+                });
+
+                // Retrieve nested meta if it exists
+                gunNode.get('meta').once((metaData) => {
+                    if (metaData) {
+                        result.meta = metaData;
+                        // Remove GUN internal properties
+                        delete result.meta._;
+                    }
+                    checkComplete();
+                });
+
+                // Retrieve nested oip if it exists
+                gunNode.get('oip').once((oipData) => {
+                    if (oipData) {
+                        result.oip = oipData;
+                        // Remove GUN internal properties
+                        delete result.oip._;
+                    }
+                    checkComplete();
                 });
                 
             } else if (req.method === 'GET' && path === '/list') {

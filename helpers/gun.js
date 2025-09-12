@@ -196,11 +196,14 @@ class GunHelper {
 
                 console.log('✅ GUN record retrieved successfully via HTTP API');
 
-                // For non-encrypted data, we still need to extract the actual content from GUN references
-                // The GUN HTTP API returns reference objects like { '#': 'path' } instead of actual data
-                if (data.data && typeof data.data === 'object' && data.data['#'] && data.meta && !data.meta.encrypted) {
-                    console.log('🔍 Non-encrypted data contains GUN references, extracting actual content');
-                    // This shouldn't happen for properly stored data, but handle it just in case
+                // Handle GUN reference objects - GUN sometimes returns { '#': 'path' } instead of actual data
+                // This can happen with nested data structures or when data isn't fully loaded
+                if (data.data && typeof data.data === 'object' && data.data['#'] && !data.meta?.wasEncrypted) {
+                    console.log('🔍 Data contains GUN references, this indicates incomplete data retrieval');
+                    console.log('🔍 Reference path:', data.data['#']);
+
+                    // For now, return the data as-is since we can't easily resolve references via HTTP API
+                    // The frontend will need to handle this case
                     return data;
                 }
 
