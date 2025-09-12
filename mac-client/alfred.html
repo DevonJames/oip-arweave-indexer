@@ -2604,10 +2604,10 @@
         const endTime = Date.now();
 
         // Normalize shape: support records loaded as { data: {...}, oip: {...} }
-        const sessionContainer = this.currentSession.data ? this.currentSession.data : this.currentSession;
-        console.log('🔍 Session container structure:', sessionContainer);
-        console.log('🔍 Session container has conversationSession:', !!sessionContainer.conversationSession);
-        if (!sessionContainer.conversationSession) {
+        const sessionData = this.currentSession.data || this.currentSession;
+        console.log('🔍 Session data structure:', sessionData);
+        console.log('🔍 Session data has conversationSession:', !!sessionData.conversationSession);
+        if (!sessionData.conversationSession) {
           console.warn('Session update skipped: missing conversationSession payload');
           console.log('🔍 Current session structure:', this.currentSession);
           return;
@@ -2631,33 +2631,33 @@
         });
 
         // Lookup model provider DID if model changed
-        let modelProviderDID = sessionContainer.conversationSession.model_provider?.[0];
-        if (model && model !== sessionContainer.conversationSession.model_name) {
+        let modelProviderDID = sessionData.conversationSession.model_provider?.[0];
+        if (model && model !== sessionData.conversationSession.model_name) {
           modelProviderDID = await this.lookupModelProviderDID(model);
         }
 
         // Mutate the normalized container
-        sessionContainer.conversationSession.last_activity_timestamp = endTime;
-        sessionContainer.conversationSession.last_modified_timestamp = endTime;
-        sessionContainer.conversationSession.message_count = messageTexts.length;
-        sessionContainer.conversationSession.messages = messageTexts;
-        sessionContainer.conversationSession.message_timestamps = messageTimestamps;
-        sessionContainer.conversationSession.message_roles = messageRoles;
-        if (model) sessionContainer.conversationSession.model_name = model;
-        sessionContainer.conversationSession.model_provider = modelProviderDID ? [modelProviderDID] : [];
-        sessionContainer.conversationSession.total_tokens = tokens || 0;
-        sessionContainer.conversationSession.processing_mode = processingMode;
-        sessionContainer.conversationSession.conversation_type = conversationType;
+        sessionData.conversationSession.last_activity_timestamp = endTime;
+        sessionData.conversationSession.last_modified_timestamp = endTime;
+        sessionData.conversationSession.message_count = messageTexts.length;
+        sessionData.conversationSession.messages = messageTexts;
+        sessionData.conversationSession.message_timestamps = messageTimestamps;
+        sessionData.conversationSession.message_roles = messageRoles;
+        if (model) sessionData.conversationSession.model_name = model;
+        sessionData.conversationSession.model_provider = modelProviderDID ? [modelProviderDID] : [];
+        sessionData.conversationSession.total_tokens = tokens || 0;
+        sessionData.conversationSession.processing_mode = processingMode;
+        sessionData.conversationSession.conversation_type = conversationType;
 
         // Build clean payload for backend (exclude wrappers/metadata)
         const payload = {
-          basic: sessionContainer.basic,
-          conversationSession: sessionContainer.conversationSession,
-          accessControl: sessionContainer.accessControl || { private: true }
+          basic: sessionData.basic,
+          conversationSession: sessionData.conversationSession,
+          accessControl: sessionData.accessControl || { private: true }
         };
 
         try {
-          const localId = sessionContainer.conversationSession.session_id;
+          const localId = sessionData.conversationSession.session_id;
           const response = await fetch(`${this.backendUrl}/api/records/newRecord?recordType=conversationSession&storage=gun&localId=${localId}`, {
             method: 'POST',
             headers: {
