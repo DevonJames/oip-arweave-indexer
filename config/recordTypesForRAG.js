@@ -88,14 +88,63 @@ const recordTypesForRAG = {
     //     description: 'Images and visual content with metadata',
     //     contextFields: ['name', 'description', 'tags', 'location', 'dateCreated']
     // },
-    
+
     // // Video records - video content
     // video: {
     //     enabled: true,
     //     priority: 4,
     //     description: 'Video content and metadata',
     //     contextFields: ['name', 'description', 'transcript', 'duration', 'tags', 'category']
-    // }
+    // },
+
+    // Productivity Module Records - Task management and planning content
+    task: {
+        enabled: true,
+        priority: 6,
+        description: 'Productivity tasks, goals, and personal productivity content',
+        contextFields: [
+            'title', 'description', 'category', 'priority', 'status',
+            'frequency', 'duration', 'points', 'scheduledTime'
+        ]
+    },
+
+    calendarSession: {
+        enabled: true,
+        priority: 5,
+        description: 'Weekly productivity planning and time allocation sessions',
+        contextFields: [
+            'weekStart', 'totalPoints', 'earnedPoints', 'sleepHours',
+            'workHours', 'exerciseMinutes', 'workDays', 'calendarSynced'
+        ]
+    },
+
+    routine: {
+        enabled: true,
+        priority: 7,
+        description: 'Morning and evening routines with structured steps and timing',
+        contextFields: [
+            'name', 'type', 'totalDuration', 'steps', 'stepDurations', 'enabled'
+        ]
+    },
+
+    rewardPlan: {
+        enabled: true,
+        priority: 5,
+        description: 'Gamification rewards and achievement systems for productivity',
+        contextFields: [
+            'name', 'description', 'threshold', 'rewardType', 'isActive', 'unlockedAt'
+        ]
+    },
+
+    productivitySettings: {
+        enabled: true,
+        priority: 4,
+        description: 'User productivity preferences and configuration settings',
+        contextFields: [
+            'timezone', 'weekStartDay', 'defaultTaskPoints', 'theme',
+            'voiceEnabled', 'calendarSyncEnabled', 'notificationsEnabled'
+        ]
+    }
 };
 
 /**

@@ -14,10 +14,16 @@ NC := \033[0m
 help: ## Show this help message
 	@echo "$(BLUE)OIP Arweave Deployment Management$(NC)"
 	@echo ""
-	@echo "$(YELLOW)Usage:$(NC) make [target] [PROFILE=profile_name]"
+	@echo "$(YELLOW)Usage:$(NC) make [target] [PROFILE=profile_name] [PRODUCTIVITY_MODULE_ENABLED=true/false]"
 	@echo ""
 	@echo "$(YELLOW)Available targets:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ""
+	@echo "$(YELLOW)Productivity Module:$(NC)"
+	@echo "  $(GREEN)PRODUCTIVITY_MODULE_ENABLED$(NC)=true/false - Enable/disable productivity module (default: false)"
+	@echo "  $(BLUE)📋 Examples:$(NC)"
+	@echo "    make build PRODUCTIVITY_MODULE_ENABLED=true     # Build with productivity module"
+	@echo "    make rebuild-standard PRODUCTIVITY_MODULE_ENABLED=true  # Rebuild with productivity"
 	@echo ""
 	@echo "$(YELLOW)Available profiles:$(NC)"
 	@echo "  $(GREEN)minimal$(NC)              - Core only: elasticsearch, kibana, oip (no canvas - fastest build)"
@@ -60,6 +66,9 @@ help: ## Show this help message
 
 # Default profile - now uses Chatterbox as primary TTS
 PROFILE ?= standard
+
+# Productivity Module Configuration
+PRODUCTIVITY_MODULE_ENABLED ?= false
 
 # Check if ngrok is available and configured
 check-ngrok:
@@ -255,7 +264,13 @@ build: validate-profile check-env check-gpu ## Build and start services with spe
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Building with Chatterbox TTS integration...$(NC)"; \
 	fi
-	docker-compose --profile $(PROFILE) up -d --build
+	@if [ "$(PRODUCTIVITY_MODULE_ENABLED)" = "true" ]; then \
+		echo "$(GREEN)📋 Productivity module: ENABLED$(NC)"; \
+		docker-compose --profile $(PROFILE) up -d --build --scale productivity-module=1; \
+	else \
+		echo "$(YELLOW)📋 Productivity module: DISABLED$(NC)"; \
+		docker-compose --profile $(PROFILE) up -d --build --scale productivity-module=0; \
+	fi
 	@echo "$(GREEN)Services built and started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
 	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
@@ -270,6 +285,11 @@ rebuild: validate-profile check-env check-gpu ## Rebuild and start services with
 	@echo "$(BLUE)Rebuilding OIP Arweave with --no-cache and profile: $(PROFILE)$(NC)"
 	@if [ "$(PROFILE)" = "chatterbox" ] || [ "$(PROFILE)" = "chatterbox-gpu" ]; then \
 		echo "$(YELLOW)🎭 Rebuilding with Chatterbox TTS from scratch...$(NC)"; \
+	fi
+	@if [ "$(PRODUCTIVITY_MODULE_ENABLED)" = "true" ]; then \
+		echo "$(GREEN)📋 Productivity module: ENABLED$(NC)"; \
+	else \
+		echo "$(YELLOW)📋 Productivity module: DISABLED$(NC)"; \
 	fi
 	docker-compose --profile $(PROFILE) build --no-cache
 	docker-compose --profile $(PROFILE) up -d
@@ -882,4 +902,86 @@ mac-logs-all: ## Show all Mac STT service logs (multiplexed)
 		echo "$(YELLOW)Some log files missing. Start services with: make mac-stt-services$(NC)"; \
 		echo "$(BLUE)Available logs:$(NC)"; \
 		ls -la logs/*.log 2>/dev/null || echo "  No logs found"; \
+	fi
+
+# Productivity Module Management
+.PHONY: productivity-dev productivity-build productivity-test productivity-status productivity-logs
+
+productivity-dev: ## Start productivity module in development mode
+	@echo "$(BLUE)🚀 Starting ALFRED Productivity Module (Development)...$(NC)"
+	@if [ "$(PRODUCTIVITY_MODULE_ENABLED)" = "true" ]; then \
+		echo "$(GREEN)✅ Productivity module enabled$(NC)"; \
+		cd alfred-modules/productivity && npm run dev; \
+	else \
+		echo "$(YELLOW)⚠️  Productivity module disabled. Enable with: make productivity-dev PRODUCTIVITY_MODULE_ENABLED=true$(NC)"; \
+		exit 1; \
+	fi
+
+productivity-build: ## Build productivity module
+	@echo "$(BLUE)🔨 Building ALFRED Productivity Module...$(NC)"
+	@if [ "$(PRODUCTIVITY_MODULE_ENABLED)" = "true" ]; then \
+		echo "$(GREEN)✅ Productivity module enabled$(NC)"; \
+		cd alfred-modules/productivity && npm run build; \
+	else \
+		echo "$(YELLOW)⚠️  Productivity module disabled. Enable with: make productivity-build PRODUCTIVITY_MODULE_ENABLED=true$(NC)"; \
+		exit 1; \
+	fi
+
+productivity-test: ## Test productivity module
+	@echo "$(BLUE)🧪 Testing ALFRED Productivity Module...$(NC)"
+	@if [ "$(PRODUCTIVITY_MODULE_ENABLED)" = "true" ]; then \
+		echo "$(GREEN)✅ Productivity module enabled$(NC)"; \
+		cd alfred-modules/productivity && npm test; \
+	else \
+		echo "$(YELLOW)⚠️  Productivity module disabled. Enable with: make productivity-test PRODUCTIVITY_MODULE_ENABLED=true$(NC)"; \
+		exit 1; \
+	fi
+
+productivity-status: ## Check productivity module status
+	@echo "$(BLUE)📊 Productivity Module Status:$(NC)"
+	@if [ "$(PRODUCTIVITY_MODULE_ENABLED)" = "true" ]; then \
+		echo "$(GREEN)✅ Productivity module: ENABLED$(NC)"; \
+		if docker ps | grep -q productivity-module; then \
+			echo "$(GREEN)🐳 Docker service: RUNNING$(NC)"; \
+		else \
+			echo "$(RED)🐳 Docker service: NOT RUNNING$(NC)"; \
+		fi; \
+		if [ -d alfred-modules/productivity ]; then \
+			echo "$(GREEN)📁 Module directory: EXISTS$(NC)"; \
+			if [ -f alfred-modules/productivity/package.json ]; then \
+				echo "$(GREEN)📦 Package.json: EXISTS$(NC)"; \
+			else \
+				echo "$(RED)📦 Package.json: MISSING$(NC)"; \
+			fi; \
+		else \
+			echo "$(RED)📁 Module directory: MISSING$(NC)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)⚠️  Productivity module: DISABLED$(NC)"; \
+		echo "$(BLUE)💡 Enable with: make build PRODUCTIVITY_MODULE_ENABLED=true$(NC)"; \
+	fi
+
+productivity-logs: ## Show productivity module logs
+	@echo "$(BLUE)📋 Productivity Module Logs:$(NC)"
+	@if docker ps | grep -q productivity-module; then \
+		docker logs oip-arweave-indexer-productivity-module-1 -f; \
+	else \
+		echo "$(YELLOW)⚠️  Productivity module container not running$(NC)"; \
+		echo "$(BLUE)💡 Start with: make build PRODUCTIVITY_MODULE_ENABLED=true$(NC)"; \
+	fi
+
+# Quick productivity targets
+productivity-full: ## Full productivity workflow: build, test, and start
+	@echo "$(BLUE)🎯 Full Productivity Module Workflow$(NC)"
+	@make productivity-build PRODUCTIVITY_MODULE_ENABLED=true
+	@make productivity-test PRODUCTIVITY_MODULE_ENABLED=true
+	@make productivity-dev PRODUCTIVITY_MODULE_ENABLED=true
+
+productivity-clean: ## Clean productivity module build artifacts
+	@echo "$(BLUE)🧹 Cleaning productivity module...$(NC)"
+	@if [ -d alfred-modules/productivity ]; then \
+		cd alfred-modules/productivity && rm -rf node_modules package-lock.json *.log; \
+		echo "$(GREEN)✅ Productivity module cleaned$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠️  Productivity module directory not found$(NC)"; \
 	fi 

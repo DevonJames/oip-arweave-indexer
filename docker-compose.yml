@@ -480,6 +480,35 @@ services:
       - standard-gpu
       - standard-monolithic
 
+  # ALFRED Productivity Module
+  productivity-module:
+    build:
+      context: ./alfred-modules/productivity
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PRODUCTIVITY_MODULE_ENABLED=true
+      - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
+      - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
+      - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
+    ports:
+      - "3006:3006"
+    volumes:
+      - ./alfred-modules/productivity:/app
+      - ./helpers:/app/helpers:ro
+    depends_on:
+      - elasticsearch
+      - gun-relay
+    networks:
+      - oip-network
+    restart: unless-stopped
+    profiles:
+      - standard
+      - standard-gpu
+      - minimal-with-scrape
+
 networks:
   oip-network:
     driver: bridge
