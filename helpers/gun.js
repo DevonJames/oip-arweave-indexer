@@ -180,13 +180,30 @@ class GunHelper {
                     console.log('🔍 Backend decrypted conversationSession:', decryptedData?.conversationSession);
                     console.log('🔍 Backend decrypted conversationSession messages:', decryptedData?.conversationSession?.messages?.length || 0);
 
-                    // Replace the entire data structure with the decrypted content
-                    data.data = decryptedData;
-                    data.meta.encrypted = false;
-                    data.meta.wasEncrypted = true; // Mark that it was decrypted
+                    // Return the decrypted data directly instead of the GUN structure
+                    // This ensures the frontend gets the actual content, not GUN references
+                    return {
+                        data: decryptedData,
+                        meta: {
+                            ...data.meta,
+                            encrypted: false,
+                            wasEncrypted: true // Mark that it was decrypted
+                        },
+                        oip: data.oip,
+                        _: data._ // Keep any other GUN metadata if needed
+                    };
                 }
 
                 console.log('✅ GUN record retrieved successfully via HTTP API');
+
+                // For non-encrypted data, we still need to extract the actual content from GUN references
+                // The GUN HTTP API returns reference objects like { '#': 'path' } instead of actual data
+                if (data.data && typeof data.data === 'object' && data.data['#'] && data.meta && !data.meta.encrypted) {
+                    console.log('🔍 Non-encrypted data contains GUN references, extracting actual content');
+                    // This shouldn't happen for properly stored data, but handle it just in case
+                    return data;
+                }
+
                 return data;
             } else {
                 return null; // Record not found

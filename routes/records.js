@@ -275,19 +275,14 @@ router.get('/gun/:soul', authenticateToken, async (req, res) => {
             messagesLength: record.data?.conversationSession?.messages?.length || 0
         });
 
-        // Ensure we're returning the actual decrypted data, not GUN references
-        // If data is a GUN reference object, we need to extract the actual content
-        let actualData = record.data;
-        if (record.data && typeof record.data === 'object' && record.data['#']) {
-            // This is a GUN reference, the actual data should be in record.data directly from decryption
-            console.log('🔍 GUN reference detected, using record structure');
-            actualData = record.data;
-        }
+        // The getRecord method should now return the actual decrypted data directly
+        console.log('🔍 Record data to return:', record.data);
+        console.log('🔍 Record meta.wasEncrypted:', record.meta?.wasEncrypted);
 
         res.status(200).json({
             message: 'GUN record retrieved successfully',
             record: {
-                data: actualData,
+                data: record.data,
                 meta: record.meta,
                 oip: {
                     ...record.oip,
