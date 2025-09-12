@@ -2605,8 +2605,11 @@
 
         // Normalize shape: support records loaded as { data: {...}, oip: {...} }
         const sessionContainer = this.currentSession.data ? this.currentSession.data : this.currentSession;
+        console.log('🔍 Session container structure:', sessionContainer);
+        console.log('🔍 Session container has conversationSession:', !!sessionContainer.conversationSession);
         if (!sessionContainer.conversationSession) {
           console.warn('Session update skipped: missing conversationSession payload');
+          console.log('🔍 Current session structure:', this.currentSession);
           return;
         }
 
@@ -2683,17 +2686,22 @@
           });
 
           const data = await response.json();
+          console.log('🔍 Raw backend response:', data);
 
-          // Decrypt session data if it's encrypted
+          // Check if session data is already decrypted by backend
           let processedSession = data.record;
-          if (data.record?.data?.data && data.record?.data?.meta?.encrypted) {
+          if (data.record?.data?.data && data.record?.data?.meta?.encrypted && !data.record?.data?.meta?.wasEncrypted) {
             try {
-              console.log('🔓 Decrypting individual session for loading');
+              console.log('🔓 Decrypting individual session for loading (frontend decryption)');
+              console.log('🔍 Raw encrypted data structure:', data.record.data.data);
               const decryptedData = await decryptSessionData(
                 data.record.data.data.encrypted,
                 data.record.data.data.iv,
                 data.record.data.data.tag
               );
+
+              console.log('🔍 Decrypted data structure:', decryptedData);
+              console.log('🔍 Decrypted conversationSession:', decryptedData?.conversationSession);
 
               // Reconstruct session with decrypted data
               processedSession = {
@@ -2706,10 +2714,15 @@
                 }
               };
               console.log('✅ Individual session decrypted successfully');
+              console.log('🔍 Final processed session structure:', processedSession);
             } catch (error) {
               console.error('❌ Failed to decrypt individual session:', error);
               // Fall back to original session
             }
+          } else if (data.record?.data?.meta?.wasEncrypted) {
+            console.log('✅ Session already decrypted by backend');
+            // Data is already decrypted by backend, use as-is
+            processedSession = data.record;
           }
 
           console.log('🔍 Session data received:', {
