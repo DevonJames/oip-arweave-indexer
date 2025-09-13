@@ -46,6 +46,8 @@ This path generates the user's primary signing key for ALFRED records.
 npm install --save bip39 bip32 tiny-secp256k1
 ```
 
+**Note**: The `tiny-secp256k1` library is required by the modern `bip32` package which uses a factory pattern.
+
 ### User Registration Flow
 
 #### 1. HD Wallet Generation
@@ -68,7 +70,13 @@ const masterKey = bip32.fromSeed(seed);
 
 // Derive user's signing key
 const userKey = masterKey.derivePath("m/44'/0'/0'/0/0");
-const publicKey = userKey.publicKey.toString('hex');
+
+// Ensure public key is properly converted to hex string (handle Buffer/Uint8Array)
+const publicKeyBuffer = userKey.publicKey;
+const publicKey = Buffer.isBuffer(publicKeyBuffer) 
+    ? publicKeyBuffer.toString('hex')
+    : Array.from(publicKeyBuffer).map(b => b.toString(16).padStart(2, '0')).join('');
+
 const privateKey = userKey.privateKey.toString('hex');
 ```
 
@@ -174,35 +182,38 @@ const userDoc = {
 
 ### AccessControl Template Structure
 
-New records created by users include comprehensive access control:
+New records created by users include simplified access control (compatible with GUN limitations):
 
 ```json
 {
   "accessControl": {
     "access_level": "private",
-    "owner_public_key": "02a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
-    "encryption_method": "AES-256-GCM",
-    "created_by": "02a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
-    "created_timestamp": 1757784839759,
-    "last_modified_timestamp": 1757784839759,
-    "version": "1.0.0"
+    "owner_public_key": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+    "created_by": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
   }
 }
 ```
+
+**Note**: The structure is simplified to work with GUN's limitations on complex nested objects. Additional fields like timestamps, encryption_method, and permissions can be added when GUN supports more complex structures.
 
 ### Conversation Session Ownership
 
 ```json
 {
   "conversationSession": {
-    "session_id": "session_1757784839759",
-    "owner_public_key": "02a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
-    "messages": [...],
+    "session_id": "session_1757789557773",
+    "owner_public_key": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+    "messages": "[]",  // JSON string for GUN compatibility
+    "message_timestamps": "[]",  // JSON string for GUN compatibility
+    "message_roles": "[]",  // JSON string for GUN compatibility
+    "model_provider": "did:arweave:...",  // String not array for GUN compatibility
     "is_private": true,
     // ... other fields
   }
 }
 ```
+
+**Note**: Arrays are stored as JSON strings for GUN compatibility, then converted back to arrays for Elasticsearch indexing.
 
 ## Security Features
 
@@ -285,16 +296,18 @@ const sessionData = {
     description: "Alfred conversation session"
   },
   conversationSession: {
-    session_id: "session_1757784839759",
+    session_id: "session_1757789557773",
     owner_public_key: user.publicKey, // User's HD wallet public key
-    is_private: true,
-    messages: [...]
+    messages: '',  // Empty string initially, JSON string when updated
+    message_timestamps: '',  // Empty string initially, JSON string when updated  
+    message_roles: '',  // Empty string initially, JSON string when updated
+    model_provider: 'did:arweave:...',  // String not array
+    is_private: true
   },
   accessControl: {
     access_level: "private",
     owner_public_key: user.publicKey,    // User's HD wallet public key
-    created_by: user.publicKey,          // User's HD wallet public key
-    encryption_method: "AES-256-GCM"
+    created_by: user.publicKey          // User's HD wallet public key
   }
 };
 ```
@@ -317,7 +330,9 @@ const userOwnsRecord = (record, user) => {
 ✅ **Cross-Device Identity**: 12-word mnemonic enables account recovery  
 ✅ **Secure Storage**: Private keys encrypted with user's password  
 ✅ **Standard Compliance**: Uses established BIP standards  
-✅ **Future Extensibility**: Supports message signing, selective sharing  
+✅ **GUN Compatibility**: Data structures optimized for GUN's limitations  
+✅ **Elasticsearch Integration**: JSON strings converted to arrays for proper indexing  
+✅ **Cross-User Privacy**: Users can only access their own private records  
 ✅ **Backward Compatibility**: Legacy records continue to work  
 ✅ **Privacy Protection**: Only record owners can access private data  
 
@@ -335,12 +350,27 @@ Users can restore accounts using their 12-word mnemonic phrase.
 ### Multi-Device Support
 Same HD wallet works across multiple devices with mnemonic import.
 
+## Technical Implementation Notes
+
+### GUN Database Limitations
+- **No Complex Objects**: GUN cannot handle nested objects with arrays
+- **JSON String Workaround**: Arrays stored as JSON strings in GUN
+- **Elasticsearch Conversion**: JSON strings parsed back to arrays for proper indexing
+- **Dual Format Support**: System handles both string and array formats seamlessly
+
+### Data Flow Architecture
+1. **Frontend**: Creates records with user's HD wallet public key
+2. **GUN Storage**: Arrays converted to JSON strings for compatibility
+3. **Elasticsearch Indexing**: JSON strings converted back to arrays
+4. **API Retrieval**: Returns proper array format to clients
+5. **Privacy Filtering**: Uses user's public key for ownership verification
+
 ## Security Considerations
 
 ### Key Storage
 - Private keys never stored in plaintext
-- Mnemonics encrypted with user passwords
-- Public keys safe to expose and index
+- Mnemonics encrypted with user passwords using PBKDF2 (100,000 iterations)
+- Public keys stored as 66-character hex strings (compressed format)
 
 ### Password Security
 - Passwords used for key encryption (not just authentication)
@@ -352,4 +382,9 @@ Same HD wallet works across multiple devices with mnemonic import.
 - JWT tokens include user's public key for ownership verification
 - Private records encrypted before network transmission
 
-This HD wallet system provides the cryptographic foundation for true user ownership in the ALFRED ecosystem.
+### Cross-User Privacy
+- **User Isolation**: Each user can only access their own private records
+- **Ownership Verification**: Multiple fallback methods for checking record ownership
+- **Legacy Support**: Old records using server keys still work during migration
+
+This HD wallet system provides the cryptographic foundation for true user ownership in the ALFRED ecosystem, with practical workarounds for current database limitations.
