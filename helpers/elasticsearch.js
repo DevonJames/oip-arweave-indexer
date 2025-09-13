@@ -1848,17 +1848,8 @@ async function getRecords(queryParams) {
                             return true;
                         }
                         
-                        // Check shared access
-                        if (accessLevel === 'shared' && accessControl?.shared_with?.includes(userPubKey)) {
-                            console.log('Including shared record for user:', record.oip?.did, 'shared_with user:', userPubKey.slice(0, 12));
-                            return true;
-                        }
-                        
-                        // Check permissions-based access
-                        if (accessControl?.permissions?.read?.includes('owner') && recordOwnerPubKey === userPubKey) {
-                            console.log('Including record with read permission for owner:', record.oip?.did);
-                            return true;
-                        }
+                        // Note: Shared access and permissions will be implemented when we have the full accessControl template
+                        // For now, we only support private/public access levels
                     }
                     
                     console.log('Excluding private/shared record (not owner/shared):', record.oip?.did, 'user:', userPubKey?.slice(0, 12), 'owner:', recordOwnerPubKey?.slice(0, 12));

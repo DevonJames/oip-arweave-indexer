@@ -453,18 +453,8 @@ const userOwnsRecord = (record, user) => {
         return true;
     }
     
-    // Priority 3: Check shared access
-    if (accessControl?.access_level === 'shared' && accessControl?.shared_with?.includes(userPubKey)) {
-        console.log('Record shared with user:', userPubKey.slice(0, 12));
-        return true;
-    }
-    
-    // Priority 3.5: Check permissions-based access
-    if (accessControl?.permissions?.read?.includes('owner') && 
-        (accessControl?.owner_public_key === userPubKey || accessControl?.created_by === userPubKey)) {
-        console.log('Record accessible by user (permissions-based):', userPubKey.slice(0, 12));
-        return true;
-    }
+    // Note: Shared access and permissions will be implemented when we have the full accessControl template
+    // For now, we only support private/public access levels
     
     // Priority 4: Check DID-based ownership for GUN records (user's key in soul)
     if (record.oip?.did?.startsWith('did:gun:')) {
