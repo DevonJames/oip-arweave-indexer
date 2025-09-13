@@ -2782,11 +2782,11 @@
             last_activity_timestamp: timestamp,
             last_modified_timestamp: timestamp,
             message_count: 0,
-            messages: [],
-            message_timestamps: [],
-            message_roles: [],
+            messages: '',
+            message_timestamps: '',
+            message_roles: '',
             model_name: modelName,
-            model_provider: modelProviderDID ? [modelProviderDID] : [], // Reference to model provider
+            model_provider: modelProviderDID || '', // Reference to model provider (string not array)
             total_tokens: 0,
             input_tokens: 0,
             output_tokens: 0,
@@ -2797,14 +2797,10 @@
             version: '1.0.0'
           },
           accessControl: {
-            // Simplified access control structure that works with GUN
+            // Minimal structure that works with GUN - no arrays allowed
             access_level: 'private',
             owner_public_key: userPublicKey,
-            encryption_method: 'AES-256-GCM',
-            created_by: userPublicKey,
-            created_timestamp: timestamp,
-            last_modified_timestamp: timestamp,
-            version: '1.0.0'
+            created_by: userPublicKey
           }
         };
 
@@ -2859,38 +2855,46 @@
           return;
         }
 
-        // Extract messages, timestamps, and roles from the conversation
-        const messageTexts = [];
-        const messageTimestamps = [];
-        const messageRoles = [];
-
-        messages.forEach(msg => {
+        // Extract messages, timestamps, and roles as JSON strings (GUN doesn't handle arrays)
+        const messageTexts = messages.map(msg => {
           if (typeof msg === 'object') {
-            messageTexts.push(msg.content || msg.text || '');
-            messageTimestamps.push(msg.timestamp || Date.now());
-            messageRoles.push(msg.role || 'user');
+            return msg.content || msg.text || '';
           } else {
-            messageTexts.push(msg);
-            messageTimestamps.push(Date.now());
-            messageRoles.push('user');
+            return msg;
+          }
+        });
+        
+        const messageTimestamps = messages.map(msg => {
+          if (typeof msg === 'object') {
+            return msg.timestamp || Date.now();
+          } else {
+            return Date.now();
+          }
+        });
+        
+        const messageRoles = messages.map(msg => {
+          if (typeof msg === 'object') {
+            return msg.role || 'user';
+          } else {
+            return 'user';
           }
         });
 
         // Lookup model provider DID if model changed
-        let modelProviderDID = sessionData.conversationSession.model_provider?.[0];
+        let modelProviderDID = sessionData.conversationSession.model_provider;
         if (model && model !== sessionData.conversationSession.model_name) {
           modelProviderDID = await this.lookupModelProviderDID(model);
         }
 
-        // Mutate the normalized container
+        // Mutate the normalized container (use JSON strings for arrays to work with GUN)
         sessionData.conversationSession.last_activity_timestamp = endTime;
         sessionData.conversationSession.last_modified_timestamp = endTime;
         sessionData.conversationSession.message_count = messageTexts.length;
-        sessionData.conversationSession.messages = messageTexts;
-        sessionData.conversationSession.message_timestamps = messageTimestamps;
-        sessionData.conversationSession.message_roles = messageRoles;
+        sessionData.conversationSession.messages = JSON.stringify(messageTexts);
+        sessionData.conversationSession.message_timestamps = JSON.stringify(messageTimestamps);
+        sessionData.conversationSession.message_roles = JSON.stringify(messageRoles);
         if (model) sessionData.conversationSession.model_name = model;
-        sessionData.conversationSession.model_provider = modelProviderDID ? [modelProviderDID] : [];
+        sessionData.conversationSession.model_provider = modelProviderDID || '';
         sessionData.conversationSession.total_tokens = tokens || 0;
         sessionData.conversationSession.processing_mode = processingMode;
         sessionData.conversationSession.conversation_type = conversationType;
@@ -2905,14 +2909,10 @@
           basic: sessionData.basic,
           conversationSession: sessionData.conversationSession,
           accessControl: sessionData.accessControl || {
-            // Fallback to simplified format if missing
+            // Minimal fallback that works with GUN
             access_level: 'private',
             owner_public_key: this.authManager.user.publicKey || this.authManager.user.publisherPubKey,
-            encryption_method: 'AES-256-GCM',
-            created_by: this.authManager.user.publicKey || this.authManager.user.publisherPubKey,
-            created_timestamp: endTime,
-            last_modified_timestamp: endTime,
-            version: '1.0.0'
+            created_by: this.authManager.user.publicKey || this.authManager.user.publisherPubKey
           }
         };
 
@@ -3096,16 +3096,38 @@
           console.log('✅ Session loaded successfully, setting as current session');
           this.currentSession = session;
 
-          // Reconstruct conversation messages from stored data
+          // Reconstruct conversation messages from stored data (handle JSON strings)
           if (session.data?.conversationSession && session.data.conversationSession.messages) {
             const messages = [];
-            console.log('📝 Reconstructing', session.data.conversationSession.messages.length, 'messages from session');
-            for (let i = 0; i < session.data.conversationSession.messages.length; i++) {
-              messages.push({
-                role: session.data.conversationSession.message_roles[i] || 'user',
-                content: session.data.conversationSession.messages[i],
-                timestamp: session.data.conversationSession.message_timestamps[i] || Date.now()
-              });
+            
+            // Parse JSON strings back to arrays
+            let messageTexts, messageTimestamps, messageRoles;
+            try {
+              messageTexts = typeof session.data.conversationSession.messages === 'string' 
+                ? JSON.parse(session.data.conversationSession.messages)
+                : session.data.conversationSession.messages;
+              messageTimestamps = typeof session.data.conversationSession.message_timestamps === 'string'
+                ? JSON.parse(session.data.conversationSession.message_timestamps)
+                : session.data.conversationSession.message_timestamps;
+              messageRoles = typeof session.data.conversationSession.message_roles === 'string'
+                ? JSON.parse(session.data.conversationSession.message_roles)
+                : session.data.conversationSession.message_roles;
+            } catch (e) {
+              console.warn('Failed to parse session messages as JSON, treating as arrays:', e);
+              messageTexts = session.data.conversationSession.messages;
+              messageTimestamps = session.data.conversationSession.message_timestamps;
+              messageRoles = session.data.conversationSession.message_roles;
+            }
+            
+            console.log('📝 Reconstructing', messageTexts?.length || 0, 'messages from session');
+            if (Array.isArray(messageTexts)) {
+              for (let i = 0; i < messageTexts.length; i++) {
+                messages.push({
+                  role: messageRoles[i] || 'user',
+                  content: messageTexts[i],
+                  timestamp: messageTimestamps[i] || Date.now()
+                });
+              }
             }
             console.log('📝 Reconstructed messages:', messages.map(m => `${m.role}: ${m.content?.substring(0, 50)}...`));
 
