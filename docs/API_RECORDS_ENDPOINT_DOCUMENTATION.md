@@ -2,11 +2,46 @@
 
 ## Overview
 
-The `/api/records` endpoint provides powerful search and filtering capabilities for retrieving records from the OIP Arweave Indexer. This endpoint uses the `getRecords()` function and supports a wide variety of query parameters for precise data retrieval.
+The `/api/records` endpoint provides powerful search and filtering capabilities for retrieving records from the OIP Arweave Indexer. This endpoint uses the `getRecords()` function and supports a wide variety of query parameters for precise data retrieval. The endpoint now supports **optional authentication** for accessing private records.
 
 **Base URL:** `/api/records`  
 **Method:** `GET`  
-**Returns:** JSON object containing filtered and paginated records
+**Authentication:** Optional (required for private records)  
+**Returns:** JSON object containing filtered and paginated records with authentication status
+
+## Authentication
+
+### Optional Authentication Header
+```http
+Authorization: Bearer <jwt-token>
+```
+
+### Authentication Behavior
+- **Without Token**: Only public records are returned
+- **With Valid Token**: Public records + user's private records are returned
+- **With Invalid Token**: Treated as unauthenticated (public records only)
+
+### Private Record Access
+- **Private GUN Records**: Accessible only by authenticated record owners
+- **Conversation Sessions**: Private by default, require user authentication
+- **Access Control**: Uses `accessControl.access_level` and `owner_public_key` for filtering
+
+## Storage Sources
+
+### `source` Parameter
+- **Type:** String
+- **Description:** Filter records by storage source
+- **Values:**
+  - `all` (default) - Records from all storage systems
+  - `arweave` - Only Arweave-stored records
+  - `gun` - Only GUN-stored records (includes private conversation sessions)
+- **Example:** `source=gun&recordType=conversationSession`
+
+### GUN Records (Private Storage)
+- **Conversation Sessions**: Private encrypted storage in GUN network
+- **User Ownership**: Records owned by individual HD wallet public keys
+- **Privacy**: Only accessible by authenticated owners
+- **Format**: Arrays stored as JSON strings for GUN compatibility
 
 ## Query Parameters
 
@@ -16,7 +51,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Type:** String
 - **Description:** Filter records by their specific type
 - **Example:** `recordType=post`
-- **Common Values:** `post`, `image`, `audio`, `video`, `text`, `recipe`, `workout`, `exercise`, `deleteMessage`, `creatorRegistration`
+- **Common Values:** `post`, `image`, `audio`, `video`, `text`, `recipe`, `workout`, `exercise`, `deleteMessage`, `creatorRegistration`, `conversationSession`
 
 #### `template`
 - **Type:** String
@@ -567,6 +602,32 @@ GET /api/records?summarizeTags=true&tagCount=100&recordType=post
 GET /api/records?hideNullValues=true&hideDateReadable=false&includeSigs=false&includePubKeys=false&limit=10
 ```
 
+### Private GUN Records (Authenticated)
+```
+GET /api/records?source=gun&recordType=conversationSession&limit=15&sortBy=date:desc
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Private GUN Records (Unauthenticated)
+```
+GET /api/records?source=gun&recordType=conversationSession&limit=15&sortBy=date:desc
+# Returns empty results - private records filtered out
+```
+
+### Specific GUN Record by DID
+```
+GET /api/records?source=gun&did=did:gun:647f79c2a338:session_1757789557773&limit=1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Cross-User Privacy Test
+```
+# User A's token accessing User B's record - should be filtered out
+GET /api/records?source=gun&did=did:gun:647f79c2a338:session_other_user&limit=1
+Authorization: Bearer user_a_token
+# Returns empty results due to ownership filtering
+```
+
 ## Response Format
 
 ### Standard Response Structure
@@ -582,9 +643,24 @@ GET /api/records?hideNullValues=true&hideDateReadable=false&includeSigs=false&in
   "currentPage": 1,
   "totalPages": 8,
   "queryParams": { /* original query parameters */ },
+  "auth": {
+    "authenticated": true,
+    "user": {
+      "email": "user@example.com",
+      "userId": "elasticsearch_user_id", 
+      "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+    }
+  },
   "records": [ /* array of record objects */ ]
 }
 ```
+
+### Authentication Status in Response
+- **`auth.authenticated`**: Boolean indicating if request was authenticated
+- **`auth.user`**: User information (only present if authenticated)
+  - **`email`**: User's email address
+  - **`userId`**: User's database ID
+  - **`publicKey`**: User's HD wallet public key (for ownership verification)
 
 ### Tag Summary Response (when summarizeTags=true)
 
