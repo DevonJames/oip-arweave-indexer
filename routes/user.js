@@ -1,6 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const bip39 = require('bip39');
+const bip32 = require('bip32');
 const { elasticClient, ensureUserIndexExists, verifyAdmin } = require('../helpers/elasticsearch');
 const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
 
@@ -157,6 +160,24 @@ async function completeRegistration(userId, password, email, res) {
     try {
         const saltRounds = 10;
         const passwordHash = await bcrypt.hash(password, saltRounds);
+        
+        // NEW: Generate HD wallet for user
+        console.log('🔑 Generating HD wallet for user:', email);
+        const mnemonic = bip39.generateMnemonic(); // 12-word seed phrase
+        const seed = await bip39.mnemonicToSeed(mnemonic);
+        const masterKey = bip32.fromSeed(seed);
+        
+        // Derive user's signing key (m/44'/0'/0'/0/0)
+        const userKey = masterKey.derivePath("m/44'/0'/0'/0/0");
+        const publicKey = userKey.publicKey.toString('hex');
+        const privateKey = userKey.privateKey.toString('hex');
+        
+        // Encrypt private key and mnemonic with user's password
+        const encryptedPrivateKey = crypto.pbkdf2Sync(privateKey, password, 100000, 32, 'sha256').toString('hex');
+        const encryptedMnemonic = crypto.pbkdf2Sync(mnemonic, password, 100000, 32, 'sha256').toString('hex');
+        
+        console.log('🔑 Generated user public key:', publicKey.slice(0, 20) + '...');
+        
         // If userId is undefined, create a new user document; otherwise, update existing document
         if (userId) {
         // Update user record with registration details
@@ -166,6 +187,11 @@ async function completeRegistration(userId, password, email, res) {
                 body: {
                     doc: {
                         passwordHash: passwordHash,
+                        // NEW: User cryptographic identity
+                        publicKey: publicKey,
+                        encryptedPrivateKey: encryptedPrivateKey, // Encrypted with user's password
+                        encryptedMnemonic: encryptedMnemonic, // Encrypted mnemonic
+                        keyDerivationPath: "m/44'/0'/0'/0/0",
                         createdAt: new Date(),
                         waitlistStatus: 'registered',
                         subscriptionStatus: 'inactive', // Default subscription status
@@ -181,6 +207,11 @@ async function completeRegistration(userId, password, email, res) {
                 body: {
                     email: email,
                     passwordHash: passwordHash,
+                    // NEW: User cryptographic identity
+                    publicKey: publicKey,
+                    encryptedPrivateKey: encryptedPrivateKey, // Encrypted with user's password
+                    encryptedMnemonic: encryptedMnemonic, // Encrypted mnemonic
+                    keyDerivationPath: "m/44'/0'/0'/0/0",
                     createdAt: new Date(),
                     waitlistStatus: 'registered',
                     subscriptionStatus: 'inactive', // Default subscription status
@@ -191,16 +222,19 @@ async function completeRegistration(userId, password, email, res) {
             userId = newUser._id; // Set the new user ID
         }
 
-
-        // Create JWT token for the new user
-        // userId = searchResult.hits.hits[0]._id; // Retrieve the Elasticsearch _id for the user
-
-        const token = jwt.sign({ userId, email, isAdmin: false }, JWT_SECRET, { expiresIn: '45d' });
+        // Create JWT token for the new user - include user's public key
+        const token = jwt.sign({ 
+            userId, 
+            email, 
+            publicKey: publicKey, // NEW: Include user's public key in JWT
+            isAdmin: false 
+        }, JWT_SECRET, { expiresIn: '45d' });
 
         return res.status(201).json({
             success: true,
             message: 'User registered successfully',
-            token // Return the JWT token
+            token, // Return the JWT token
+            publicKey: publicKey // NEW: Return public key for client awareness
         });
     } catch (error) {
         console.error('Error completing registration:', error);
@@ -391,12 +425,18 @@ router.post('/login', async (req, res) => {
         // Authentication successful - Create JWT token
         const userId = searchResult.hits.hits[0]._id; // Retrieve the Elasticsearch _id for the user
 
-        const token = jwt.sign({ userId, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '45d' });
+        const token = jwt.sign({ 
+            userId, 
+            email: user.email, 
+            publicKey: user.publicKey, // NEW: Include user's public key in JWT
+            isAdmin: user.isAdmin 
+        }, JWT_SECRET, { expiresIn: '45d' });
         
         return res.status(200).json({
-            success: true, // Add this line
+            success: true,
             message: 'Login successful',
-            token // Return the JWT token
+            token, // Return the JWT token
+            publicKey: user.publicKey // NEW: Return public key for client awareness
         });
     } catch (error) {
         console.error('Error logging in user:', error);

@@ -375,7 +375,7 @@ const optionalAuthenticateToken = (req, res, next) => {
     try {
         const verified = jwt.verify(token, process.env.JWT_SECRET);
         
-        // For now, use server's Arweave wallet for publisherPubKey (until user HD wallets are implemented)
+        // Add server's Arweave wallet info for backward compatibility (if user doesn't have HD wallet)
         if (!verified.publisherPubKey) {
             try {
                 const walletPath = getWalletFilePath();
@@ -399,7 +399,7 @@ const optionalAuthenticateToken = (req, res, next) => {
         // For GUN record requests, verify user owns the record (only for specific soul requests)
         if (req.params.soul || req.query.soul) {
             const soul = req.params.soul || req.query.soul;
-            const userPubKey = verified.publicKey || verified.publisherPubKey; // Use user's public key when available
+            const userPubKey = verified.publicKey || verified.publisherPubKey; // Prioritize user's HD wallet key
             
             if (!userPubKey) {
                 return res.status(403).json({ error: 'User public key not found' });
@@ -436,7 +436,7 @@ const optionalAuthenticateToken = (req, res, next) => {
 const userOwnsRecord = (record, user) => {
     if (!record || !user) return false;
     
-    const userPubKey = user.publicKey || user.publisherPubKey; // Use user's public key when available
+    const userPubKey = user.publicKey || user.publisherPubKey; // Prioritize user's HD wallet key
     if (!userPubKey) return false;
     
     // Priority 1: Check accessControl ownership (NEW template-based ownership)

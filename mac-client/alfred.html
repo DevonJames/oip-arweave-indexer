@@ -600,6 +600,8 @@
             this.user = jwt_decode(data.token); // Decode JWT to get user info
             localStorage.setItem('alfred_token', this.token);
 
+            // User info now includes publicKey from JWT directly
+
             document.getElementById('auth-modal').close();
             this.onAuthenticated();
           } else {
@@ -609,6 +611,7 @@
           alert('Login failed: ' + error.message);
         }
       }
+
 
       async register() {
         const email = document.getElementById('register-email').value;
@@ -2754,8 +2757,17 @@
         // Lookup the model provider DID for the specified model
         const modelProviderDID = await this.lookupModelProviderDID(modelName);
 
+        // Use the user's HD wallet public key (prioritize over server's key)
         const userPublicKey = this.authManager.user.publicKey || this.authManager.user.publisherPubKey;
         const timestamp = Date.now();
+        
+        console.log('🔑 Creating session with user public key:', userPublicKey ? userPublicKey.slice(0, 20) + '...' : 'UNDEFINED');
+        console.log('🔑 Auth manager user:', this.authManager.user);
+        
+        if (!userPublicKey) {
+          console.error('❌ Cannot create session: No user public key available');
+          throw new Error('User public key not available. Please re-authenticate.');
+        }
         
         const sessionData = {
           basic: {
@@ -3134,6 +3146,7 @@
     if (authManager.isAuthenticated()) {
       // Decode user info from stored token
       authManager.user = jwt_decode(authManager.token);
+      // User info includes publicKey from JWT directly
       sessionManager.loadUserSessions();
     } else {
       // Show auth modal on page load if not authenticated
