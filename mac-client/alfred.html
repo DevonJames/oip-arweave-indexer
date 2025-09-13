@@ -249,6 +249,7 @@
         <span>Disconnected</span>
       </div>
       <button class="btn-icon settings" aria-haspopup="dialog" aria-controls="settings-modal" title="Settings">⚙</button>
+      <button class="btn-icon user-menu" id="userMenuBtn" aria-haspopup="menu" title="User Menu">👤</button>
     </div>
   </header>
 
@@ -459,6 +460,32 @@
     </div>
   </div>
 
+  <!-- User menu popover -->
+  <div id="userMenuPopover" class="popover" role="menu" aria-label="User menu">
+    <div style="padding:8px;min-width:180px">
+      <!-- Authenticated user options -->
+      <div id="userMenuAuthenticated" style="display:none">
+        <div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:8px">
+          <div style="font-weight:600;color:var(--text)" id="userEmail">user@example.com</div>
+          <div style="font-size:12px;color:var(--muted)">Signed in</div>
+        </div>
+        <button class="model-item" id="btnLogout" style="width:100%;border:none;background:none;text-align:left">
+          <span style="color:#ff3b30">🚪 Sign Out</span>
+        </button>
+      </div>
+      
+      <!-- Unauthenticated user options -->
+      <div id="userMenuUnauthenticated" style="display:none">
+        <button class="model-item" id="btnShowLogin" style="width:100%;border:none;background:none;text-align:left">
+          <span style="color:var(--accent-1)">🔑 Sign In</span>
+        </button>
+        <button class="model-item" id="btnShowRegister" style="width:100%;border:none;background:none;text-align:left">
+          <span style="color:var(--accent-2)">✨ Create Account</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Helper function for AES-GCM decryption in browser
     async function decryptSessionData(encryptedData, iv, tag) {
@@ -632,6 +659,10 @@
         if (window.sessionManager) {
           window.sessionManager.loadUserSessions();
         }
+        // Update user menu to show authenticated state
+        if (window.alfred) {
+          window.alfred.closeUserMenu(); // Close menu if open to refresh state
+        }
       }
     }
 
@@ -722,6 +753,7 @@
         // Header controls
         document.querySelector('.nav-toggle').addEventListener('click', () => this.toggleHistory());
         document.querySelector('.settings').addEventListener('click', () => this.openSettings());
+        document.getElementById('userMenuBtn').addEventListener('click', () => this.toggleUserMenu());
         
         // Control dock
         document.getElementById('btnMic').addEventListener('click', () => this.toggleRecording());
@@ -741,6 +773,9 @@
         
         // WPM picker
         this.setupWPMPicker();
+        
+        // User menu
+        this.setupUserMenu();
         
         // Composer
         document.getElementById('composer').addEventListener('submit', (e) => this.handleTextSubmit(e));
@@ -2483,6 +2518,104 @@
         disclosure.setAttribute('aria-expanded', 'false');
       }
       
+      // User menu management
+      toggleUserMenu() {
+        const popover = document.getElementById('userMenuPopover');
+        const isOpen = popover.classList.contains('open');
+        
+        if (isOpen) {
+          this.closeUserMenu();
+        } else {
+          this.openUserMenu();
+        }
+      }
+      
+      openUserMenu() {
+        const popover = document.getElementById('userMenuPopover');
+        const userMenuBtn = document.getElementById('userMenuBtn');
+        const authenticatedSection = document.getElementById('userMenuAuthenticated');
+        const unauthenticatedSection = document.getElementById('userMenuUnauthenticated');
+        
+        // Update menu content based on auth state
+        console.log('🔍 User menu - checking auth state:', {
+          hasAuthManager: !!window.authManager,
+          isAuthenticated: window.authManager?.isAuthenticated(),
+          hasToken: !!window.authManager?.token,
+          hasUser: !!window.authManager?.user,
+          userEmail: window.authManager?.user?.email
+        });
+        
+        if (window.authManager && window.authManager.isAuthenticated()) {
+          authenticatedSection.style.display = 'block';
+          unauthenticatedSection.style.display = 'none';
+          
+          // Update user email display
+          const userEmail = window.authManager.user?.email || 'Unknown User';
+          document.getElementById('userEmail').textContent = userEmail;
+          console.log('👤 Showing authenticated menu for:', userEmail);
+        } else {
+          authenticatedSection.style.display = 'none';
+          unauthenticatedSection.style.display = 'block';
+          console.log('🔓 Showing unauthenticated menu');
+        }
+        
+        popover.classList.add('open');
+        
+        // Position popover
+        const rect = userMenuBtn.getBoundingClientRect();
+        popover.style.left = (rect.right - popover.offsetWidth) + 'px';
+        popover.style.top = (rect.bottom + 8) + 'px';
+      }
+      
+      closeUserMenu() {
+        const popover = document.getElementById('userMenuPopover');
+        popover.classList.remove('open');
+      }
+      
+      setupUserMenu() {
+        // User menu button event listeners
+        document.getElementById('btnLogout').addEventListener('click', () => {
+          if (window.authManager) {
+            window.authManager.logout();
+          }
+          this.closeUserMenu();
+        });
+        
+        document.getElementById('btnShowLogin').addEventListener('click', () => {
+          if (window.authManager) {
+            window.authManager.showAuthModal();
+          }
+          this.closeUserMenu();
+        });
+        
+        document.getElementById('btnShowRegister').addEventListener('click', () => {
+          if (window.authManager) {
+            // Switch to register mode and show modal
+            const loginSection = document.getElementById('login-section');
+            const registerSection = document.getElementById('register-section');
+            const title = document.getElementById('auth-title');
+            const toggleBtn = document.getElementById('toggle-auth-mode');
+            
+            loginSection.style.display = 'none';
+            registerSection.style.display = 'block';
+            title.textContent = 'Create Account';
+            toggleBtn.textContent = 'Already have an account?';
+            
+            window.authManager.showAuthModal();
+          }
+          this.closeUserMenu();
+        });
+        
+        // Close menu when clicking outside
+        window.addEventListener('click', (e) => {
+          const popover = document.getElementById('userMenuPopover');
+          const userMenuBtn = document.getElementById('userMenuBtn');
+          if (!popover.contains(e.target) && e.target !== userMenuBtn) {
+            this.closeUserMenu();
+          }
+        });
+      }
+      
       toggleHistory() {
         const historyPane = document.querySelector('.history-pane');
         const isDesktop = window.matchMedia('(min-width:768px)').matches;
@@ -2969,9 +3102,10 @@
     // Connect session manager to ALFRED interface
     alfred.sessionManager = sessionManager;
     
-    // Make sessionManager and alfred globally available
+    // Make sessionManager, alfred, and authManager globally available
     window.sessionManager = sessionManager;
     window.alfred = alfred;
+    window.authManager = authManager;
     
     // Check authentication on load
     if (authManager.isAuthenticated()) {
