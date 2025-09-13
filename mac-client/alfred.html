@@ -2785,28 +2785,14 @@
             version: '1.0.0'
           },
           accessControl: {
-            // NEW: Comprehensive access control template
+            // Simplified access control structure that works with GUN
             access_level: 'private',
             owner_public_key: userPublicKey,
-            owner_signature: null, // Could be added later for enhanced security
             encryption_method: 'AES-256-GCM',
-            shared_with: [], // Array of public keys for shared access
-            permissions: {
-              read: ['owner'],
-              write: ['owner'],
-              delete: ['owner'],
-              share: ['owner']
-            },
-            expiry_timestamp: null, // No expiration for conversation sessions
             created_by: userPublicKey,
             created_timestamp: timestamp,
             last_modified_timestamp: timestamp,
-            version: '1.0.0',
-            metadata: {
-              record_type: 'conversationSession',
-              privacy_level: 'high',
-              auto_expire: false
-            }
+            version: '1.0.0'
           }
         };
 
@@ -2907,10 +2893,11 @@
           basic: sessionData.basic,
           conversationSession: sessionData.conversationSession,
           accessControl: sessionData.accessControl || {
-            // Fallback to new format if missing
+            // Fallback to simplified format if missing
             access_level: 'private',
             owner_public_key: this.authManager.user.publicKey || this.authManager.user.publisherPubKey,
             encryption_method: 'AES-256-GCM',
+            created_by: this.authManager.user.publicKey || this.authManager.user.publisherPubKey,
             created_timestamp: endTime,
             last_modified_timestamp: endTime,
             version: '1.0.0'
