@@ -526,6 +526,29 @@ async function indexDocument(index, id, body) {
     }
 }
 
+// Process record to convert JSON strings back to arrays for Elasticsearch compatibility
+const processRecordForElasticsearch = (record) => {
+    const processedRecord = JSON.parse(JSON.stringify(record)); // Deep clone
+    
+    // Convert JSON string arrays back to actual arrays for Elasticsearch
+    if (processedRecord.data?.conversationSession) {
+        const cs = processedRecord.data.conversationSession;
+        
+        // Parse JSON strings back to arrays
+        if (typeof cs.messages === 'string' && cs.messages.startsWith('[')) {
+            try { cs.messages = JSON.parse(cs.messages); } catch (e) { /* ignore */ }
+        }
+        if (typeof cs.message_timestamps === 'string' && cs.message_timestamps.startsWith('[')) {
+            try { cs.message_timestamps = JSON.parse(cs.message_timestamps); } catch (e) { /* ignore */ }
+        }
+        if (typeof cs.message_roles === 'string' && cs.message_roles.startsWith('[')) {
+            try { cs.message_roles = JSON.parse(cs.message_roles); } catch (e) { /* ignore */ }
+        }
+    }
+    
+    return processedRecord;
+};
+
 const indexRecord = async (record) => {
     console.log(getFileInfo(), getLineNumber(), 'indexing this record:', record);
     try {
@@ -548,13 +571,15 @@ const indexRecord = async (record) => {
         });
         
         if (existingRecord.body) {
-            // Update existing record
+            // Update existing record - process for Elasticsearch compatibility
+            const processedRecord = processRecordForElasticsearch(record);
+            
             const response = await elasticClient.update({
                 index: 'records',
                 id: recordId,
                 body: {
                     doc: {
-                        ...record,
+                        ...processedRecord,
                         "oip.recordStatus": "original"
                     }
                 },
@@ -562,11 +587,13 @@ const indexRecord = async (record) => {
             });
             console.log(getFileInfo(), getLineNumber(),`Record updated successfully: ${recordId}`, response.result);    
         } else {
-            // Create new record
+            // Create new record - but first process any JSON string arrays for Elasticsearch compatibility
+            const processedRecord = processRecordForElasticsearch(record);
+            
             const response = await elasticClient.index({
                 index: 'records',
                 id: recordId, // Use unified DID as the ID
-                body: record,
+                body: processedRecord,
                 refresh: 'wait_for' // Wait for indexing to be complete before returning
             });
             console.log(getFileInfo(), getLineNumber(), `Record indexed successfully: ${recordId} (storage: ${record.oip?.storage || 'unknown'})`, response.result);
