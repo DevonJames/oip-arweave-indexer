@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../helpers/utils'); // Import the authentication middleware
+const { authenticateToken, optionalAuthenticateToken } = require('../helpers/utils'); // Import authentication middleware
 
 // const path = require('path');
 const { getRecords, searchRecordInDB, getRecordTypesSummary } = require('../helpers/elasticsearch');
@@ -42,9 +42,13 @@ async function getRecordByDidTx(didTx) {
     return records.records && records.records.length > 0 ? records.records[0] : null;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', optionalAuthenticateToken, async (req, res) => {
     try {
-        const queryParams = { ...req.query };
+        const queryParams = { 
+            ...req.query,
+            user: req.user,                    // NEW: Pass user info
+            isAuthenticated: req.isAuthenticated // NEW: Pass auth status
+        };
         
         // Normalize DID parameter (backward compatibility)
         if (queryParams.didTx && !queryParams.did) {
@@ -58,9 +62,21 @@ router.get('/', async (req, res) => {
         
         const records = await getRecords(queryParams);
         console.log('records.js enhanced with GUN support, records:', records);
-        res.status(200).json(
-            records
-        );
+        
+        // NEW: Add authentication status to response for client awareness
+        const response = {
+            ...records,
+            auth: {
+                authenticated: req.isAuthenticated,
+                user: req.isAuthenticated ? {
+                    email: req.user.email,
+                    userId: req.user.userId,
+                    publicKey: req.user.publicKey || req.user.publisherPubKey // Include user's public key
+                } : null
+            }
+        };
+        
+        res.status(200).json(response);
     } catch (error) {
         console.error('Error at /api/records:', error);
         res.status(500).json({ error: 'Failed to retrieve and process records' });

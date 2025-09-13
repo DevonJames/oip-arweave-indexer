@@ -1140,6 +1140,8 @@ async function getRecords(queryParams) {
         inArweaveBlock,
         hasAudio,
         summarizeTags,
+        user,           // NEW: User information from optional auth
+        isAuthenticated, // NEW: Authentication status
         tagCount,
         tagPage,
         dateStart,
@@ -1793,6 +1795,90 @@ async function getRecords(queryParams) {
 
         
         
+        // NEW: Filter by access level based on authentication status
+        if (!isAuthenticated) {
+            // Unauthenticated users only see public records
+            records = records.filter(record => {
+                // Check if record has access control settings
+                const accessControl = record.data?.accessControl;
+                const accessLevel = accessControl?.access_level;
+                
+                // Legacy support: check old private boolean field
+                const legacyPrivate = accessControl?.private === true;
+                const conversationSession = record.data?.conversationSession;
+                const legacySessionPrivate = conversationSession?.is_private === true;
+                
+                // Exclude non-public records for unauthenticated users
+                if (accessLevel && accessLevel !== 'public') {
+                    console.log('Filtering out non-public record for unauthenticated user:', record.oip?.did, 'access_level:', accessLevel);
+                    return false;
+                }
+                
+                // Legacy fallback: exclude private records
+                if (legacyPrivate || legacySessionPrivate) {
+                    console.log('Filtering out legacy private record for unauthenticated user:', record.oip?.did);
+                    return false;
+                }
+                
+                return true;
+            });
+            console.log(`after filtering non-public records for unauthenticated user, there are ${records.length} records`);
+        } else {
+            // Authenticated users see public records + their own private/shared records
+            records = records.filter(record => {
+                const accessControl = record.data?.accessControl;
+                const conversationSession = record.data?.conversationSession;
+                const accessLevel = accessControl?.access_level;
+                
+                // Always include public records
+                if (accessLevel === 'public' || !accessLevel) {
+                    return true;
+                }
+                
+                // For private/shared records, check ownership
+                if (accessLevel === 'private' || accessLevel === 'shared') {
+                    const recordOwnerPubKey = conversationSession?.owner_public_key || accessControl?.owner_public_key;
+                    const userPubKey = user?.publicKey || user?.publisherPubKey;
+                    
+                    if (recordOwnerPubKey && userPubKey) {
+                        // Check direct ownership
+                        if (recordOwnerPubKey === userPubKey) {
+                            console.log('Including owned record for user:', record.oip?.did, 'access_level:', accessLevel);
+                            return true;
+                        }
+                        
+                        // Check shared access
+                        if (accessLevel === 'shared' && accessControl?.shared_with?.includes(userPubKey)) {
+                            console.log('Including shared record for user:', record.oip?.did);
+                            return true;
+                        }
+                    }
+                    
+                    console.log('Excluding private/shared record (not owner/shared):', record.oip?.did);
+                    return false;
+                }
+                
+                // Legacy support: handle old private boolean
+                const legacyPrivate = accessControl?.private === true || conversationSession?.is_private === true;
+                if (legacyPrivate) {
+                    const recordOwnerPubKey = conversationSession?.owner_public_key || accessControl?.owner_public_key;
+                    const userPubKey = user?.publicKey || user?.publisherPubKey;
+                    
+                    if (recordOwnerPubKey === userPubKey) {
+                        console.log('Including legacy private record for owner:', record.oip?.did);
+                        return true;
+                    } else {
+                        console.log('Excluding legacy private record (not owner):', record.oip?.did);
+                        return false;
+                    }
+                }
+                
+                // Default: include record
+                return true;
+            });
+            console.log(`after filtering records for authenticated user ${user?.email}, there are ${records.length} records`);
+        }
+
         console.log('all filters complete, there are', records.length, 'records');
         
         
