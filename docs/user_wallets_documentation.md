@@ -43,7 +43,7 @@ This path generates the user's primary signing key for ALFRED records.
 ### Dependencies
 
 ```bash
-npm install bip39 bip32 secp256k1
+npm install --save bip39 bip32 tiny-secp256k1
 ```
 
 ### User Registration Flow
@@ -51,6 +51,12 @@ npm install bip39 bip32 secp256k1
 #### 1. HD Wallet Generation
 
 ```javascript
+// Import dependencies
+const bip39 = require('bip39');
+const { BIP32Factory } = require('bip32');
+const ecc = require('tiny-secp256k1');
+const bip32 = BIP32Factory(ecc);
+
 // Generate 12-word mnemonic
 const mnemonic = bip39.generateMnemonic();
 
