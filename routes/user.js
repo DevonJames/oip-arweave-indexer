@@ -171,14 +171,21 @@ async function completeRegistration(userId, password, email, res) {
         
         // Derive user's signing key (m/44'/0'/0'/0/0)
         const userKey = masterKey.derivePath("m/44'/0'/0'/0/0");
-        const publicKey = userKey.publicKey.toString('hex');
+        
+        // Ensure public key is properly converted to hex string
+        const publicKeyBuffer = userKey.publicKey;
+        const publicKey = Buffer.isBuffer(publicKeyBuffer) 
+            ? publicKeyBuffer.toString('hex')
+            : Array.from(publicKeyBuffer).map(b => b.toString(16).padStart(2, '0')).join('');
+        
         const privateKey = userKey.privateKey.toString('hex');
         
         // Encrypt private key and mnemonic with user's password
         const encryptedPrivateKey = crypto.pbkdf2Sync(privateKey, password, 100000, 32, 'sha256').toString('hex');
         const encryptedMnemonic = crypto.pbkdf2Sync(mnemonic, password, 100000, 32, 'sha256').toString('hex');
         
-        console.log('🔑 Generated user public key:', publicKey.slice(0, 20) + '...');
+        console.log('🔑 Generated user public key (hex):', publicKey.slice(0, 20) + '...');
+        console.log('🔑 Public key type:', typeof publicKey, 'length:', publicKey.length);
         
         // If userId is undefined, create a new user document; otherwise, update existing document
         if (userId) {
