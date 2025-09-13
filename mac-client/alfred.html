@@ -2754,18 +2754,21 @@
         // Lookup the model provider DID for the specified model
         const modelProviderDID = await this.lookupModelProviderDID(modelName);
 
+        const userPublicKey = this.authManager.user.publicKey || this.authManager.user.publisherPubKey;
+        const timestamp = Date.now();
+        
         const sessionData = {
           basic: {
             name: title || `Session ${this.sessions.length + 1}`,
             description: 'Alfred conversation session',
-            date: Math.floor(Date.now() / 1000), // Unix timestamp
+            date: Math.floor(timestamp / 1000), // Unix timestamp
             language: 'en'
           },
           conversationSession: {
             session_id: sessionId,
-            start_timestamp: Date.now(),
-            last_activity_timestamp: Date.now(),
-            last_modified_timestamp: Date.now(),
+            start_timestamp: timestamp,
+            last_activity_timestamp: timestamp,
+            last_modified_timestamp: timestamp,
             message_count: 0,
             messages: [],
             message_timestamps: [],
@@ -2778,12 +2781,32 @@
             processing_mode: 'rag',
             conversation_type: 'voice',
             is_archived: false,
-            is_private: true,
-            owner_pubkey: this.authManager.user.publisherPubKey,
+            owner_public_key: userPublicKey, // User's public key for ownership
             version: '1.0.0'
           },
           accessControl: {
-            private: true
+            // NEW: Comprehensive access control template
+            access_level: 'private',
+            owner_public_key: userPublicKey,
+            owner_signature: null, // Could be added later for enhanced security
+            encryption_method: 'AES-256-GCM',
+            shared_with: [], // Array of public keys for shared access
+            permissions: {
+              read: ['owner'],
+              write: ['owner'],
+              delete: ['owner'],
+              share: ['owner']
+            },
+            expiry_timestamp: null, // No expiration for conversation sessions
+            created_by: userPublicKey,
+            created_timestamp: timestamp,
+            last_modified_timestamp: timestamp,
+            version: '1.0.0',
+            metadata: {
+              record_type: 'conversationSession',
+              privacy_level: 'high',
+              auto_expire: false
+            }
           }
         };
 
@@ -2874,11 +2897,24 @@
         sessionData.conversationSession.processing_mode = processingMode;
         sessionData.conversationSession.conversation_type = conversationType;
 
+        // Update accessControl timestamps when modifying the session
+        if (sessionData.accessControl) {
+          sessionData.accessControl.last_modified_timestamp = endTime;
+        }
+
         // Build clean payload for backend (exclude wrappers/metadata)
         const payload = {
           basic: sessionData.basic,
           conversationSession: sessionData.conversationSession,
-          accessControl: sessionData.accessControl || { private: true }
+          accessControl: sessionData.accessControl || {
+            // Fallback to new format if missing
+            access_level: 'private',
+            owner_public_key: this.authManager.user.publicKey || this.authManager.user.publisherPubKey,
+            encryption_method: 'AES-256-GCM',
+            created_timestamp: endTime,
+            last_modified_timestamp: endTime,
+            version: '1.0.0'
+          }
         };
 
         try {

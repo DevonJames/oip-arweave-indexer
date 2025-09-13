@@ -441,7 +441,7 @@ const userOwnsRecord = (record, user) => {
     
     // Priority 1: Check accessControl ownership (NEW template-based ownership)
     const accessControl = record.data?.accessControl;
-    if (accessControl?.owner_public_key === userPubKey) {
+    if (accessControl?.owner_public_key === userPubKey || accessControl?.created_by === userPubKey) {
         console.log('Record owned by user (accessControl template):', userPubKey.slice(0, 12));
         return true;
     }
@@ -456,6 +456,13 @@ const userOwnsRecord = (record, user) => {
     // Priority 3: Check shared access
     if (accessControl?.access_level === 'shared' && accessControl?.shared_with?.includes(userPubKey)) {
         console.log('Record shared with user:', userPubKey.slice(0, 12));
+        return true;
+    }
+    
+    // Priority 3.5: Check permissions-based access
+    if (accessControl?.permissions?.read?.includes('owner') && 
+        (accessControl?.owner_public_key === userPubKey || accessControl?.created_by === userPubKey)) {
+        console.log('Record accessible by user (permissions-based):', userPubKey.slice(0, 12));
         return true;
     }
     

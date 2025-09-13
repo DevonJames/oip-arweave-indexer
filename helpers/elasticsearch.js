@@ -1803,8 +1803,7 @@ async function getRecords(queryParams) {
                 const accessControl = record.data?.accessControl;
                 const accessLevel = accessControl?.access_level;
                 
-                // Legacy support: check old private boolean field
-                const legacyPrivate = accessControl?.private === true;
+                // Check conversation session privacy (legacy support for is_private)
                 const conversationSession = record.data?.conversationSession;
                 const legacySessionPrivate = conversationSession?.is_private === true;
                 
@@ -1814,9 +1813,9 @@ async function getRecords(queryParams) {
                     return false;
                 }
                 
-                // Legacy fallback: exclude private records
-                if (legacyPrivate || legacySessionPrivate) {
-                    console.log('Filtering out legacy private record for unauthenticated user:', record.oip?.did);
+                // Legacy fallback: treat old private fields as access_level: 'private'
+                if (legacySessionPrivate) {
+                    console.log('Filtering out legacy private conversation session for unauthenticated user (treating as access_level: private):', record.oip?.did);
                     return false;
                 }
                 
@@ -1837,38 +1836,45 @@ async function getRecords(queryParams) {
                 
                 // For private/shared records, check ownership
                 if (accessLevel === 'private' || accessLevel === 'shared') {
-                    const recordOwnerPubKey = conversationSession?.owner_public_key || accessControl?.owner_public_key;
+                    const recordOwnerPubKey = accessControl?.owner_public_key || 
+                                            accessControl?.created_by || 
+                                            conversationSession?.owner_public_key;
                     const userPubKey = user?.publicKey || user?.publisherPubKey;
                     
                     if (recordOwnerPubKey && userPubKey) {
                         // Check direct ownership
                         if (recordOwnerPubKey === userPubKey) {
-                            console.log('Including owned record for user:', record.oip?.did, 'access_level:', accessLevel);
+                            console.log('Including owned record for user:', record.oip?.did, 'access_level:', accessLevel, 'owner:', recordOwnerPubKey.slice(0, 12));
                             return true;
                         }
                         
                         // Check shared access
                         if (accessLevel === 'shared' && accessControl?.shared_with?.includes(userPubKey)) {
-                            console.log('Including shared record for user:', record.oip?.did);
+                            console.log('Including shared record for user:', record.oip?.did, 'shared_with user:', userPubKey.slice(0, 12));
+                            return true;
+                        }
+                        
+                        // Check permissions-based access
+                        if (accessControl?.permissions?.read?.includes('owner') && recordOwnerPubKey === userPubKey) {
+                            console.log('Including record with read permission for owner:', record.oip?.did);
                             return true;
                         }
                     }
                     
-                    console.log('Excluding private/shared record (not owner/shared):', record.oip?.did);
+                    console.log('Excluding private/shared record (not owner/shared):', record.oip?.did, 'user:', userPubKey?.slice(0, 12), 'owner:', recordOwnerPubKey?.slice(0, 12));
                     return false;
                 }
                 
-                // Legacy support: handle old private boolean
-                const legacyPrivate = accessControl?.private === true || conversationSession?.is_private === true;
-                if (legacyPrivate) {
-                    const recordOwnerPubKey = conversationSession?.owner_public_key || accessControl?.owner_public_key;
+                // Legacy support: treat conversation sessions with is_private as access_level: 'private'
+                if (conversationSession?.is_private === true) {
+                    const recordOwnerPubKey = conversationSession?.owner_public_key;
                     const userPubKey = user?.publicKey || user?.publisherPubKey;
                     
-                    if (recordOwnerPubKey === userPubKey) {
-                        console.log('Including legacy private record for owner:', record.oip?.did);
+                    if (recordOwnerPubKey && userPubKey && recordOwnerPubKey === userPubKey) {
+                        console.log('Including legacy private conversation session for owner (treating as access_level: private):', record.oip?.did, 'owner:', recordOwnerPubKey.slice(0, 12));
                         return true;
                     } else {
-                        console.log('Excluding legacy private record (not owner):', record.oip?.did);
+                        console.log('Excluding legacy private conversation session (treating as access_level: private, not owner):', record.oip?.did, 'user:', userPubKey?.slice(0, 12), 'owner:', recordOwnerPubKey?.slice(0, 12));
                         return false;
                     }
                 }
