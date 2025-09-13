@@ -253,79 +253,80 @@ router.post('/decrypt', async (req, res) => {
 //     }
 // });
 
-// GET /api/records/gun/:soul - Get specific GUN record
-router.get('/gun/:soul', authenticateToken, async (req, res) => {
-    try {
-        const { soul } = req.params;
-        const { decrypt = true } = req.query;
+// // disabling /gun routes for now while we work on adding optionalAuthentication to the main get route
+// // GET /api/records/gun/:soul - Get specific GUN record
+// router.get('/gun/:soul', authenticateToken, async (req, res) => {
+//     try {
+//         const { soul } = req.params;
+//         const { decrypt = true } = req.query;
 
-        const gunHelper = new GunHelper();
-        const record = await gunHelper.getRecord(soul, { decrypt });
+//         const gunHelper = new GunHelper();
+//         const record = await gunHelper.getRecord(soul, { decrypt });
 
-        if (!record) {
-            return res.status(404).json({ error: 'Record not found' });
-        }
+//         if (!record) {
+//             return res.status(404).json({ error: 'Record not found' });
+//         }
 
-        console.log('🔍 Backend returning GUN record:', {
-            recordStructure: record,
-            dataStructure: record.data,
-            metaStructure: record.meta,
-            hasConversationSession: !!record.data?.conversationSession,
-            messageCount: record.data?.conversationSession?.message_count || 0,
-            messagesLength: record.data?.conversationSession?.messages?.length || 0
-        });
+//         console.log('🔍 Backend returning GUN record:', {
+//             recordStructure: record,
+//             dataStructure: record.data,
+//             metaStructure: record.meta,
+//             hasConversationSession: !!record.data?.conversationSession,
+//             messageCount: record.data?.conversationSession?.message_count || 0,
+//             messagesLength: record.data?.conversationSession?.messages?.length || 0
+//         });
 
-        // The getRecord method should now return the actual decrypted data directly
-        console.log('🔍 Record data to return:', record.data);
-        console.log('🔍 Record meta.wasEncrypted:', record.meta?.wasEncrypted);
+//         // The getRecord method should now return the actual decrypted data directly
+//         console.log('🔍 Record data to return:', record.data);
+//         console.log('🔍 Record meta.wasEncrypted:', record.meta?.wasEncrypted);
 
-        res.status(200).json({
-            message: 'GUN record retrieved successfully',
-            record: {
-                data: record.data,
-                meta: record.meta,
-                oip: {
-                    ...record.oip,
-                    did: `did:gun:${soul}`,
-                    storage: 'gun'
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Error retrieving GUN record:', error);
-        res.status(500).json({ error: 'Failed to retrieve GUN record' });
-    }
-});
+//         res.status(200).json({
+//             message: 'GUN record retrieved successfully',
+//             record: {
+//                 data: record.data,
+//                 meta: record.meta,
+//                 oip: {
+//                     ...record.oip,
+//                     did: `did:gun:${soul}`,
+//                     storage: 'gun'
+//                 }
+//             }
+//         });
+//     } catch (error) {
+//         console.error('Error retrieving GUN record:', error);
+//         res.status(500).json({ error: 'Failed to retrieve GUN record' });
+//     }
+// });
 
-// GET /api/records/gun - List user's GUN records
-router.get('/gun', authenticateToken, async (req, res) => {
-    try {
-        const { limit = 20, offset = 0, recordType } = req.query;
-        const userPubKey = req.user.publisherPubKey;
+// // GET /api/records/gun - List user's GUN records
+// router.get('/gun', authenticateToken, async (req, res) => {
+//     try {
+//         const { limit = 20, offset = 0, recordType } = req.query;
+//         const userPubKey = req.user.publisherPubKey;
 
-        if (!userPubKey) {
-            return res.status(400).json({ error: 'Publisher public key not found in token' });
-        }
+//         if (!userPubKey) {
+//             return res.status(400).json({ error: 'Publisher public key not found in token' });
+//         }
 
-        const gunHelper = new GunHelper();
-        const records = await gunHelper.listUserRecords(userPubKey, { limit, offset, recordType });
+//         const gunHelper = new GunHelper();
+//         const records = await gunHelper.listUserRecords(userPubKey, { limit, offset, recordType });
 
-        res.status(200).json({
-            message: 'GUN records retrieved successfully',
-            records: records.map(record => ({
-                ...record,
-                oip: {
-                    ...record.oip,
-                    did: `did:gun:${record.soul}`,
-                    storage: 'gun'
-                }
-            })),
-            pagination: { limit, offset, total: records.length }
-        });
-    } catch (error) {
-        console.error('Error retrieving GUN records:', error);
-        res.status(500).json({ error: 'Failed to retrieve GUN records' });
-    }
-});
+//         res.status(200).json({
+//             message: 'GUN records retrieved successfully',
+//             records: records.map(record => ({
+//                 ...record,
+//                 oip: {
+//                     ...record.oip,
+//                     did: `did:gun:${record.soul}`,
+//                     storage: 'gun'
+//                 }
+//             })),
+//             pagination: { limit, offset, total: records.length }
+//         });
+//     } catch (error) {
+//         console.error('Error retrieving GUN records:', error);
+//         res.status(500).json({ error: 'Failed to retrieve GUN records' });
+//     }
+// });
 
 module.exports = router;
