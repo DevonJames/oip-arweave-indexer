@@ -41,7 +41,65 @@ Authorization: Bearer <jwt-token>
 - **Conversation Sessions**: Private encrypted storage in GUN network
 - **User Ownership**: Records owned by individual HD wallet public keys
 - **Privacy**: Only accessible by authenticated owners
-- **Format**: Arrays stored as JSON strings for GUN compatibility
+- **Array Limitation**: GUN cannot handle complex nested arrays
+- **JSON String Format**: Arrays stored as JSON strings, converted back to arrays in API responses
+
+#### GUN Array Format Handling
+Due to GUN's limitations with arrays, certain fields are stored differently:
+
+**Storage Format (in GUN)**:
+```json
+{
+  "conversationSession": {
+    "messages": "[\"Hello\",\"Hi there\"]",           // JSON string
+    "message_timestamps": "[1757789559348,1757789564040]", // JSON string  
+    "message_roles": "[\"user\",\"assistant\"]",     // JSON string
+    "model_provider": "did:arweave:provider_id"      // String not array
+  }
+}
+```
+
+**API Response Format (converted back)**:
+```json
+{
+  "conversationSession": {
+    "messages": ["Hello", "Hi there"],               // Actual array
+    "message_timestamps": [1757789559348, 1757789564040], // Actual array
+    "message_roles": ["user", "assistant"],          // Actual array
+    "model_provider": "did:arweave:provider_id"      // String maintained
+  }
+}
+```
+
+**Important for Developers**: When consuming GUN records via API, you receive properly formatted arrays. The JSON string conversion is handled automatically by the backend.
+
+#### Publishing GUN Records with Arrays
+When publishing records to GUN storage (e.g., via `/api/records/newRecord?storage=gun`), you must format array data as JSON strings:
+
+**Correct GUN Publishing Format**:
+```json
+{
+  "conversationSession": {
+    "messages": "",                    // Empty string initially
+    "message_timestamps": "",          // Empty string initially
+    "message_roles": "",              // Empty string initially
+    "model_provider": "did:arweave:..." // String, not array
+  }
+}
+```
+
+**When Updating with Data**:
+```json
+{
+  "conversationSession": {
+    "messages": "[\"Hello\",\"Hi there\"]",              // JSON.stringify(array)
+    "message_timestamps": "[1757789559348,1757789564040]", // JSON.stringify(array)
+    "message_roles": "[\"user\",\"assistant\"]"          // JSON.stringify(array)
+  }
+}
+```
+
+**Backend Processing**: The system automatically converts these JSON strings back to proper arrays for Elasticsearch indexing and API responses.
 
 ## Query Parameters
 

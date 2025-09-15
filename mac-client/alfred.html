@@ -2782,9 +2782,9 @@
             last_activity_timestamp: timestamp,
             last_modified_timestamp: timestamp,
             message_count: 0,
-            messages: '',
-            message_timestamps: '',
-            message_roles: '',
+            messages: [],
+            message_timestamps: [],
+            message_roles: [],
             model_name: modelName,
             model_provider: modelProviderDID || '', // Reference to model provider (string not array)
             total_tokens: 0,
@@ -2855,7 +2855,7 @@
           return;
         }
 
-        // Extract messages, timestamps, and roles as JSON strings (GUN doesn't handle arrays)
+        // Extract messages, timestamps, and roles as natural arrays (backend handles GUN conversion)
         const messageTexts = messages.map(msg => {
           if (typeof msg === 'object') {
             return msg.content || msg.text || '';
@@ -2890,9 +2890,9 @@
         sessionData.conversationSession.last_activity_timestamp = endTime;
         sessionData.conversationSession.last_modified_timestamp = endTime;
         sessionData.conversationSession.message_count = messageTexts.length;
-        sessionData.conversationSession.messages = JSON.stringify(messageTexts);
-        sessionData.conversationSession.message_timestamps = JSON.stringify(messageTimestamps);
-        sessionData.conversationSession.message_roles = JSON.stringify(messageRoles);
+        sessionData.conversationSession.messages = messageTexts;
+        sessionData.conversationSession.message_timestamps = messageTimestamps;
+        sessionData.conversationSession.message_roles = messageRoles;
         if (model) sessionData.conversationSession.model_name = model;
         sessionData.conversationSession.model_provider = modelProviderDID || '';
         sessionData.conversationSession.total_tokens = tokens || 0;
@@ -3096,28 +3096,14 @@
           console.log('✅ Session loaded successfully, setting as current session');
           this.currentSession = session;
 
-          // Reconstruct conversation messages from stored data (handle JSON strings)
+          // Reconstruct conversation messages from stored data (backend returns proper arrays)
           if (session.data?.conversationSession && session.data.conversationSession.messages) {
             const messages = [];
             
-            // Parse JSON strings back to arrays
-            let messageTexts, messageTimestamps, messageRoles;
-            try {
-              messageTexts = typeof session.data.conversationSession.messages === 'string' 
-                ? JSON.parse(session.data.conversationSession.messages)
-                : session.data.conversationSession.messages;
-              messageTimestamps = typeof session.data.conversationSession.message_timestamps === 'string'
-                ? JSON.parse(session.data.conversationSession.message_timestamps)
-                : session.data.conversationSession.message_timestamps;
-              messageRoles = typeof session.data.conversationSession.message_roles === 'string'
-                ? JSON.parse(session.data.conversationSession.message_roles)
-                : session.data.conversationSession.message_roles;
-            } catch (e) {
-              console.warn('Failed to parse session messages as JSON, treating as arrays:', e);
-              messageTexts = session.data.conversationSession.messages;
-              messageTimestamps = session.data.conversationSession.message_timestamps;
-              messageRoles = session.data.conversationSession.message_roles;
-            }
+            // Backend automatically converts JSON strings back to arrays
+            const messageTexts = session.data.conversationSession.messages || [];
+            const messageTimestamps = session.data.conversationSession.message_timestamps || [];
+            const messageRoles = session.data.conversationSession.message_roles || [];
             
             console.log('📝 Reconstructing', messageTexts?.length || 0, 'messages from session');
             if (Array.isArray(messageTexts)) {
