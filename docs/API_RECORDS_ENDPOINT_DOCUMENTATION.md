@@ -2,11 +2,93 @@
 
 ## Overview
 
-The `/api/records` endpoint provides powerful search and filtering capabilities for retrieving records from the OIP Arweave Indexer. This endpoint uses the `getRecords()` function and supports a wide variety of query parameters for precise data retrieval.
+The `/api/records` endpoint provides powerful search and filtering capabilities for retrieving records from the OIP Arweave Indexer. This endpoint uses the `getRecords()` function and supports a wide variety of query parameters for precise data retrieval, including **media files with BitTorrent distribution**.
 
 **Base URL:** `/api/records`  
 **Method:** `GET`  
+**Authentication:** Optional (required for private records)  
 **Returns:** JSON object containing filtered and paginated records
+
+## Authentication
+
+### Optional Authentication Header
+```http
+Authorization: Bearer <jwt-token>
+```
+
+### Authentication Behavior
+- **Without Token**: Only public records are returned
+- **With Valid Token**: Public records + user's private records are returned
+- **With Invalid Token**: Treated as unauthenticated (public records only)
+
+### Private Record Access
+- **Private GUN Records**: Accessible only by authenticated record owners
+- **Conversation Sessions**: Private by default, require user authentication
+- **Media Files**: Private media accessible only to owners
+- **Access Control**: Uses `accessControl.access_level` and `owner_public_key` for filtering
+
+## Storage Sources
+
+### `source` Parameter
+- **Type:** String
+- **Description:** Filter records by storage source
+- **Values:**
+  - `all` (default) - Records from all storage systems
+  - `arweave` - Only Arweave-stored records
+  - `gun` - Only GUN-stored records (private/encrypted)
+
+### Arweave Records (Public Storage)
+- **Conversation History**: Public conversations and interactions
+- **Blog Posts**: Articles, news, and written content
+- **Media Content**: Images, videos, audio files
+- **Templates**: Schema definitions and data structures
+
+### GUN Records (Private Storage)
+- **Conversation Sessions**: Private encrypted storage in GUN network
+- **Media Files**: Private media with BitTorrent distribution
+- **User Ownership**: Records owned by individual HD wallet public keys
+- **Privacy**: Only accessible by authenticated owners
+- **Array Limitation**: GUN cannot handle complex nested arrays
+- **JSON String Format**: Arrays stored as JSON strings, converted back to arrays in API responses
+
+#### GUN Array Format Handling
+Due to GUN's limitations with arrays, certain fields are stored differently:
+
+**Storage Format (in GUN)**:
+```json
+{
+  "conversationSession": {
+    "messages": "[\"Hello\",\"World\"]",           // JSON string
+    "message_timestamps": "[1757789559348]",      // JSON string
+    "message_roles": "[\"user\",\"assistant\"]"   // JSON string
+  },
+  "media": {
+    "transport": {
+      "trackers": "[\"wss://tracker1.com\",\"wss://tracker2.com\"]",  // JSON string
+      "http": "[\"https://api.oip.onl/media/abc123\"]"                // JSON string
+    }
+  }
+}
+```
+
+**API Response Format (converted back)**:
+```json
+{
+  "conversationSession": {
+    "messages": ["Hello", "World"],               // Proper array
+    "message_timestamps": [1757789559348],        // Proper array
+    "message_roles": ["user", "assistant"]        // Proper array
+  },
+  "media": {
+    "transport": {
+      "trackers": ["wss://tracker1.com", "wss://tracker2.com"],  // Proper array
+      "http": ["https://api.oip.onl/media/abc123"]                // Proper array
+    }
+  }
+}
+```
+
+**Important for Developers**: When consuming GUN records via API, you receive properly formatted arrays. The JSON string conversion is handled automatically by the backend.
 
 ## Query Parameters
 
@@ -16,7 +98,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Type:** String
 - **Description:** Filter records by their specific type
 - **Example:** `recordType=post`
-- **Common Values:** `post`, `image`, `audio`, `video`, `text`, `recipe`, `workout`, `exercise`, `deleteMessage`, `creatorRegistration`
+- **Common Values:** `post`, `image`, `audio`, `video`, `text`, `recipe`, `workout`, `exercise`, `deleteMessage`, `creatorRegistration`, `conversationSession`, `media`
 
 #### `template`
 - **Type:** String
@@ -285,6 +367,30 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
   - `false`: Only records without audio content
 - **Example:** `hasAudio=true`
 - **Note:** Searches for audio in `audioItems` arrays and `webUrl` fields
+
+### 📁 **Media File Filtering**
+
+#### `recordType=media`
+- **Type:** String
+- **Description:** Filter for media file records with BitTorrent distribution
+- **Example:** `recordType=media`
+- **Features:**
+  - Private media files with HD wallet ownership
+  - BitTorrent magnet URIs for P2P distribution
+  - HTTP streaming with range request support
+  - Seeding status and peer information
+
+#### Media File Properties
+When retrieving media records, additional fields are available:
+- **`media.id`**: SHA256 hash of file content (mediaId)
+- **`media.did`**: GUN DID for the media file
+- **`media.mime`**: MIME type (video/mp4, image/jpeg, etc.)
+- **`media.size`**: File size in bytes
+- **`media.transport.bittorrent.magnetURI`**: BitTorrent magnet link
+- **`media.transport.bittorrent.infoHash`**: BitTorrent info hash
+- **`media.transport.http`**: Array of HTTP download URLs
+- **`accessControl.access_level`**: Privacy level (private/public)
+- **`accessControl.owner_public_key`**: Owner's HD wallet public key
 
 ### 📊 **Sorting**
 
@@ -567,6 +673,39 @@ GET /api/records?summarizeTags=true&tagCount=100&recordType=post
 GET /api/records?hideNullValues=true&hideDateReadable=false&includeSigs=false&includePubKeys=false&limit=10
 ```
 
+### Private Media Files (Authenticated)
+```
+GET /api/records?source=gun&recordType=media&limit=10&sortBy=date:desc
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Private Media Files (Unauthenticated)
+```
+GET /api/records?source=gun&recordType=media&limit=10&sortBy=date:desc
+# Returns empty results - private media filtered out
+```
+
+### Specific Media File by DID
+```
+GET /api/records?source=gun&did=did:gun:media:a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a&limit=1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Cross-User Privacy Test (Media)
+```
+# User A's token trying to access User B's media
+GET /api/records?source=gun&did=did:gun:media:other_user_media_id&limit=1
+Authorization: Bearer USER_A_TOKEN
+# Returns empty results - cross-user privacy enforced
+```
+
+### Media Files with Size Filtering
+```
+# Find large video files (would require custom Elasticsearch query)
+GET /api/records?recordType=media&exactMatch={"data.media.mime":"video/mp4"}&limit=10
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
 ## Response Format
 
 ### Standard Response Structure
@@ -582,7 +721,81 @@ GET /api/records?hideNullValues=true&hideDateReadable=false&includeSigs=false&in
   "currentPage": 1,
   "totalPages": 8,
   "queryParams": { /* original query parameters */ },
+  "auth": {
+    "authenticated": true,
+    "user": {
+      "email": "user@example.com",
+      "userId": "elasticsearch_user_id",
+      "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+    }
+  },
   "records": [ /* array of record objects */ ]
+}
+```
+
+### Media Record Response Format
+
+When retrieving media records (`recordType=media`), the response includes BitTorrent and streaming information:
+
+```json
+{
+  "message": "Records retrieved successfully",
+  "searchResults": 1,
+  "auth": {
+    "authenticated": true,
+    "user": {
+      "email": "user@example.com",
+      "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+    }
+  },
+  "records": [
+    {
+      "data": {
+        "basic": {
+          "name": "My Private Video",
+          "description": "Media file: my_video.mp4",
+          "date": 1757789558,
+          "language": "en"
+        },
+        "media": {
+          "id": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+          "did": "did:gun:media:a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+          "mime": "video/mp4",
+          "size": 1048576,
+          "originalName": "my_video.mp4",
+          "createdAt": "2025-09-13T18:52:38.199Z",
+          "transport": {
+            "bittorrent": {
+              "magnetURI": "magnet:?xt=urn:btih:abc123def456...",
+              "infoHash": "abc123def456789abcdef0123456789abcdef01",
+              "trackers": ["wss://tracker.openwebtorrent.com", "wss://tracker.btorrent.xyz"]
+            },
+            "http": ["https://api.oip.onl/api/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a"]
+          },
+          "version": 1
+        },
+        "accessControl": {
+          "access_level": "private",
+          "owner_public_key": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+          "created_by": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+          "created_timestamp": 1757789558199,
+          "last_modified_timestamp": 1757789558199,
+          "version": "1.0.0"
+        }
+      },
+      "oip": {
+        "did": "did:gun:media:a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+        "recordType": "media",
+        "storage": "gun",
+        "indexedAt": "2025-09-13T18:52:38.413Z",
+        "ver": "0.8.0",
+        "creator": {
+          "didAddress": "did:arweave:u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0",
+          "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+        }
+      }
+    }
+  ]
 }
 ```
 
@@ -748,6 +961,10 @@ When using `summarizeRecipe=true` with recipe records, the response includes nut
 14. **Recipe nutritional summaries require resolution** - Use `resolveDepth=1` minimum with `summarizeRecipe=true`
 15. **Cuisine search is efficient** - No resolution required, searches existing recipe record data directly
 16. **Cuisine OR mode is more flexible** - Use `cuisineMatchMode=OR` to find recipes with any of the specified cuisines
+17. **Media records are lightweight** - Metadata only, actual files served via `/api/media/:mediaId`
+18. **Private media requires authentication** - Always include Authorization header for private media
+19. **Media search by MIME type** - Use `exactMatch` for filtering by file type
+20. **GUN source filtering** - Use `source=gun` to focus on private records only
 
 ## Advanced Features
 
@@ -872,6 +1089,80 @@ The `resolveDepth` parameter controls how deeply the system follows references (
 - **Cuisine filtering** (`cuisine`) - Search recipes by cuisine type with OR/AND modes
 - **Exact field matching** (`exactMatch`) - Precise filtering by field values using JSON notation
 - **Combined approach** - Use multiple parameters for maximum precision
+
+## Media File Access Patterns
+
+### Discovery and Streaming Workflow
+1. **Search for Media**: Use `/api/records?recordType=media` to find media files
+2. **Get Metadata**: Media records contain magnet URIs and HTTP URLs
+3. **Stream Content**: Use `/api/media/:mediaId` for direct HTTP streaming
+4. **P2P Download**: Use `magnetURI` for BitTorrent distribution
+
+### Media Integration Examples
+
+#### Video Player Integration
+```javascript
+// 1. Find user's private videos
+const mediaRecords = await fetch('/api/records?source=gun&recordType=media&exactMatch={"data.media.mime":"video/mp4"}', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+// 2. Create video player with streaming URL
+const video = document.createElement('video');
+video.src = `https://api.oip.onl/api/media/${mediaRecord.data.media.id}`;
+video.controls = true;
+
+// 3. Optional: Use magnet URI for P2P distribution
+const magnetURI = mediaRecord.data.media.transport.bittorrent.magnetURI;
+// Integrate with WebTorrent for P2P streaming
+```
+
+#### Audio Streaming
+```javascript
+// Find audio files and stream
+const audioRecords = await fetch('/api/records?recordType=media&exactMatch={"data.media.mime":"audio/mp3"}', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+// Stream with range requests for seeking
+const audio = new Audio();
+audio.src = `https://api.oip.onl/api/media/${audioRecord.data.media.id}`;
+audio.preload = 'metadata'; // Only load metadata initially
+```
+
+#### Image Gallery
+```javascript
+// Get user's private images
+const imageRecords = await fetch('/api/records?source=gun&recordType=media&search=image', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+
+// Display thumbnails with full-size links
+imageRecords.data.records.forEach(record => {
+  const img = document.createElement('img');
+  img.src = `https://api.oip.onl/api/media/${record.data.media.id}`;
+  img.alt = record.data.basic.name;
+  gallery.appendChild(img);
+});
+```
+
+### BitTorrent Integration
+```javascript
+// Use WebTorrent for P2P distribution
+import WebTorrent from 'webtorrent';
+
+const client = new WebTorrent();
+
+// Download via magnet URI
+const magnetURI = mediaRecord.data.media.transport.bittorrent.magnetURI;
+client.add(magnetURI, (torrent) => {
+  console.log('Downloading:', torrent.name);
+  
+  // Stream while downloading
+  const file = torrent.files[0];
+  file.createReadStream().pipe(videoElement);
+});
+```
 
 ---
 
