@@ -21,9 +21,9 @@
       }
     },
     "backend": {
-      "host": "100.124.42.82",
+      "host": "api.oip.onl",
       "port": 3005,
-      "protocol": "http",
+      "protocol": "https",
       "endpoints": {
         "health": "/api/voice/health",
         "chat": "/api/voice/chat",

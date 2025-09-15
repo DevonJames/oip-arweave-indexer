@@ -526,6 +526,29 @@ async function indexDocument(index, id, body) {
     }
 }
 
+// Process record to convert JSON strings back to arrays for Elasticsearch compatibility
+const processRecordForElasticsearch = (record) => {
+    const processedRecord = JSON.parse(JSON.stringify(record)); // Deep clone
+    
+    // Convert JSON string arrays back to actual arrays for Elasticsearch
+    if (processedRecord.data?.conversationSession) {
+        const cs = processedRecord.data.conversationSession;
+        
+        // Parse JSON strings back to arrays
+        if (typeof cs.messages === 'string' && cs.messages.startsWith('[')) {
+            try { cs.messages = JSON.parse(cs.messages); } catch (e) { /* ignore */ }
+        }
+        if (typeof cs.message_timestamps === 'string' && cs.message_timestamps.startsWith('[')) {
+            try { cs.message_timestamps = JSON.parse(cs.message_timestamps); } catch (e) { /* ignore */ }
+        }
+        if (typeof cs.message_roles === 'string' && cs.message_roles.startsWith('[')) {
+            try { cs.message_roles = JSON.parse(cs.message_roles); } catch (e) { /* ignore */ }
+        }
+    }
+    
+    return processedRecord;
+};
+
 const indexRecord = async (record) => {
     console.log(getFileInfo(), getLineNumber(), 'indexing this record:', record);
     try {
@@ -548,13 +571,15 @@ const indexRecord = async (record) => {
         });
         
         if (existingRecord.body) {
-            // Update existing record
+            // Update existing record - process for Elasticsearch compatibility
+            const processedRecord = processRecordForElasticsearch(record);
+            
             const response = await elasticClient.update({
                 index: 'records',
                 id: recordId,
                 body: {
                     doc: {
-                        ...record,
+                        ...processedRecord,
                         "oip.recordStatus": "original"
                     }
                 },
@@ -562,11 +587,13 @@ const indexRecord = async (record) => {
             });
             console.log(getFileInfo(), getLineNumber(),`Record updated successfully: ${recordId}`, response.result);    
         } else {
-            // Create new record
+            // Create new record - but first process any JSON string arrays for Elasticsearch compatibility
+            const processedRecord = processRecordForElasticsearch(record);
+            
             const response = await elasticClient.index({
                 index: 'records',
                 id: recordId, // Use unified DID as the ID
-                body: record,
+                body: processedRecord,
                 refresh: 'wait_for' // Wait for indexing to be complete before returning
             });
             console.log(getFileInfo(), getLineNumber(), `Record indexed successfully: ${recordId} (storage: ${record.oip?.storage || 'unknown'})`, response.result);
@@ -1140,6 +1167,8 @@ async function getRecords(queryParams) {
         inArweaveBlock,
         hasAudio,
         summarizeTags,
+        user,           // NEW: User information from optional auth
+        isAuthenticated, // NEW: Authentication status
         tagCount,
         tagPage,
         dateStart,
@@ -1793,6 +1822,87 @@ async function getRecords(queryParams) {
 
         
         
+        // NEW: Filter by access level based on authentication status
+        if (!isAuthenticated) {
+            // Unauthenticated users only see public records
+            records = records.filter(record => {
+                // Check if record has access control settings
+                const accessControl = record.data?.accessControl;
+                const accessLevel = accessControl?.access_level;
+                
+                // Check conversation session privacy (legacy support for is_private)
+                const conversationSession = record.data?.conversationSession;
+                const legacySessionPrivate = conversationSession?.is_private === true;
+                
+                // Exclude non-public records for unauthenticated users
+                if (accessLevel && accessLevel !== 'public') {
+                    console.log('Filtering out non-public record for unauthenticated user:', record.oip?.did, 'access_level:', accessLevel);
+                    return false;
+                }
+                
+                // Legacy fallback: treat old private fields as access_level: 'private'
+                if (legacySessionPrivate) {
+                    console.log('Filtering out legacy private conversation session for unauthenticated user (treating as access_level: private):', record.oip?.did);
+                    return false;
+                }
+                
+                return true;
+            });
+            console.log(`after filtering non-public records for unauthenticated user, there are ${records.length} records`);
+        } else {
+            // Authenticated users see public records + their own private/shared records
+            records = records.filter(record => {
+                const accessControl = record.data?.accessControl;
+                const conversationSession = record.data?.conversationSession;
+                const accessLevel = accessControl?.access_level;
+                
+                // Always include public records
+                if (accessLevel === 'public' || !accessLevel) {
+                    return true;
+                }
+                
+                // For private/shared records, check ownership
+                if (accessLevel === 'private' || accessLevel === 'shared') {
+                    const recordOwnerPubKey = accessControl?.owner_public_key || 
+                                            accessControl?.created_by || 
+                                            conversationSession?.owner_public_key;
+                    const userPubKey = user?.publicKey || user?.publisherPubKey;
+                    
+                    if (recordOwnerPubKey && userPubKey) {
+                        // Check direct ownership
+                        if (recordOwnerPubKey === userPubKey) {
+                            console.log('Including owned record for user:', record.oip?.did, 'access_level:', accessLevel, 'owner:', recordOwnerPubKey.slice(0, 12));
+                            return true;
+                        }
+                        
+                        // Note: Shared access and permissions will be implemented when we have the full accessControl template
+                        // For now, we only support private/public access levels
+                    }
+                    
+                    console.log('Excluding private/shared record (not owner/shared):', record.oip?.did, 'user:', userPubKey?.slice(0, 12), 'owner:', recordOwnerPubKey?.slice(0, 12));
+                    return false;
+                }
+                
+                // Legacy support: treat conversation sessions with is_private as access_level: 'private'
+                if (conversationSession?.is_private === true) {
+                    const recordOwnerPubKey = conversationSession?.owner_public_key;
+                    const userPubKey = user?.publicKey || user?.publisherPubKey;
+                    
+                    if (recordOwnerPubKey && userPubKey && recordOwnerPubKey === userPubKey) {
+                        console.log('Including legacy private conversation session for owner (treating as access_level: private):', record.oip?.did, 'owner:', recordOwnerPubKey.slice(0, 12));
+                        return true;
+                    } else {
+                        console.log('Excluding legacy private conversation session (treating as access_level: private, not owner):', record.oip?.did, 'user:', userPubKey?.slice(0, 12), 'owner:', recordOwnerPubKey?.slice(0, 12));
+                        return false;
+                    }
+                }
+                
+                // Default: include record
+                return true;
+            });
+            console.log(`after filtering records for authenticated user ${user?.email}, there are ${records.length} records`);
+        }
+
         console.log('all filters complete, there are', records.length, 'records');
         
         

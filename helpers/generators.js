@@ -2452,7 +2452,7 @@ async function streamAdaptiveTextToSpeech(text, sessionId, voiceConfig = {}, onA
         if (!result.success) {
             console.error(`[Adaptive TTS] Failed to process text for session ${sessionId}:`, result.error);
         } else {
-            console.log(`[Adaptive TTS] Processed ${result.chunksProcessed} chunks, queue size: ${result.queueSize}`);
+            // console.log(`[Adaptive TTS] Processed ${result.chunksProcessed} chunks, queue size: ${result.queueSize}`);
         }
         
     } catch (error) {
