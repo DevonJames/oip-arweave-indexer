@@ -20,6 +20,7 @@ The OIP (Open Index Protocol) publishing system supports multiple storage backen
 - **Cost**: Free
 - **Authentication**: Required for private records
 - **Ownership**: Individual user HD wallets
+- **Array Limitation**: Cannot handle complex nested arrays - use JSON strings instead
 
 ## User Authentication System
 
@@ -167,9 +168,9 @@ Authorization: Bearer <jwt-token>  # Required for private records
     "last_activity_timestamp": 1757789558199,
     "last_modified_timestamp": 1757789558199,
     "message_count": 0,
-    "messages": "",
-    "message_timestamps": "",
-    "message_roles": "",
+    "messages": [],
+    "message_timestamps": [],
+    "message_roles": [],
     "model_name": "grok-4",
     "model_provider": "did:arweave:model_provider_did",
     "total_tokens": 0,
@@ -217,9 +218,9 @@ Authorization: Bearer <jwt-token>  # Required for private records
     "last_activity_timestamp": 1757789564542,
     "last_modified_timestamp": 1757789564542,
     "message_count": 2,
-    "messages": "[\"Hello, who are you?\",\"I am ALFRED, an AI assistant...\"]",
-    "message_timestamps": "[1757789559348,1757789564040]",
-    "message_roles": "[\"user\",\"assistant\"]",
+    "messages": ["Hello, who are you?", "I am ALFRED, an AI assistant..."],
+    "message_timestamps": [1757789559348, 1757789564040],
+    "message_roles": ["user", "assistant"],
     "model_name": "grok-4",
     "model_provider": "did:arweave:fHGJvSZEdxFVLJjzPvA2Lu4892l05siTveFd5hU5xZQ",
     "processing_mode": "llm",
@@ -285,10 +286,38 @@ Records include multiple ownership indicators:
 
 ## GUN Network Integration
 
-### Data Structure Limitations
-- **No Arrays**: GUN cannot handle complex nested arrays
-- **JSON String Workaround**: Arrays stored as JSON strings
-- **Elasticsearch Conversion**: JSON strings converted back to arrays for indexing
+### Array Data Handling (Automatic)
+**GUN cannot handle complex nested arrays**, but the OIP backend automatically handles this conversion for you.
+
+#### ✅ What You Can Send (Natural Format)
+```json
+{
+  "conversationSession": {
+    "messages": ["Hello", "Hi there", "How are you?"],           // ✅ Send natural arrays
+    "message_timestamps": [1757789559348, 1757789564040],        // ✅ Send natural arrays
+    "message_roles": ["user", "assistant", "user"],             // ✅ Send natural arrays
+    "model_provider": "did:arweave:abc123"                       // ✅ Single strings work as-is
+  }
+}
+```
+
+#### 🔄 What Happens Automatically (Backend Processing)
+```json
+{
+  "conversationSession": {
+    "messages": "[\"Hello\",\"Hi there\",\"How are you?\"]",           // 🔄 Auto-converted to JSON string
+    "message_timestamps": "[1757789559348,1757789564040]",            // 🔄 Auto-converted to JSON string
+    "message_roles": "[\"user\",\"assistant\",\"user\"]",           // 🔄 Auto-converted to JSON string
+    "model_provider": "did:arweave:abc123"                           // 🔄 Strings unchanged
+  }
+}
+```
+
+### Data Structure Processing
+- **Automatic Array Conversion**: Backend automatically converts arrays to JSON strings for GUN
+- **Transparent to Developers**: Send natural array data, backend handles GUN compatibility
+- **Elasticsearch Restoration**: JSON strings automatically converted back to arrays for indexing
+- **API Response Consistency**: Retrieved records show natural array format
 
 ### Encryption
 - **Algorithm**: AES-256-GCM
@@ -360,9 +389,9 @@ curl -X POST "https://api.oip.onl/api/records/newRecord?recordType=conversationS
       "session_id": "my_session_123",
       "start_timestamp": 1757789558199,
       "message_count": 0,
-      "messages": "",
-      "message_timestamps": "",
-      "message_roles": "",
+      "messages": [],
+      "message_timestamps": [],
+      "message_roles": [],
       "model_name": "gpt-4o-mini",
       "conversation_type": "text",
       "owner_public_key": "YOUR_PUBLIC_KEY_FROM_JWT"
@@ -488,9 +517,12 @@ class OIPClient {
           last_activity_timestamp: Date.now(),
           last_modified_timestamp: Date.now(),
           message_count: messages.length,
-          messages: JSON.stringify(messages.map(m => m.content || m.text)),
-          message_timestamps: JSON.stringify(messages.map(m => m.timestamp || Date.now())),
-          message_roles: JSON.stringify(messages.map(m => m.role || 'user')),
+          // ✅ Send natural arrays - backend automatically converts for GUN compatibility
+          messages: messages.map(m => m.content || m.text),
+          message_timestamps: messages.map(m => m.timestamp || Date.now()),
+          message_roles: messages.map(m => m.role || 'user'),
+          // ✅ Single strings work as-is
+          model_provider: 'did:arweave:model_provider_did',
           model_name: 'gpt-4o-mini',
           conversation_type: 'text',
           is_archived: false,
@@ -610,8 +642,9 @@ Each user has a unique HD wallet with:
 | **Speed** | Slower | Faster |
 | **Authentication** | Optional | Required for private |
 | **Ownership** | Server-signed | User HD wallets |
-| **Arrays** | Supported | JSON strings only |
+| **Arrays** | ✅ Supported | ❌ JSON strings only |
 | **Search** | Full Elasticsearch | Basic filtering |
+| **Data Complexity** | ✅ Full support | ⚠️ Limited by GUN |
 
 ## Error Handling
 
@@ -649,12 +682,23 @@ Each user has a unique HD wallet with:
 }
 ```
 
+#### GUN Storage Errors
+```json
+{
+  "error": "Failed to store record in GUN network",
+  "details": "Connection timeout to GUN relay",
+  "status": 500
+}
+```
+
 ### Error Handling Best Practices
 1. **Always check response status**
 2. **Handle network timeouts gracefully**
 3. **Validate data before publishing**
-4. **Store JWT tokens securely**
-5. **Implement retry logic for network failures**
+4. **Use natural data formats - backend handles GUN compatibility**
+5. **Store JWT tokens securely**
+6. **Implement retry logic for network failures**
+7. **Test with sample data before production**
 
 ## Advanced Features
 
