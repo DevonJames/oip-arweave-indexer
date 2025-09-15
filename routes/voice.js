@@ -195,6 +195,22 @@ function isSelfReferentialQuestion(text) {
     return selfReferentialPatterns.some(pattern => pattern.test(lowerText));
 }
 
+// Shared function to detect thank you messages
+function isThankYouMessage(text) {
+    const lowerText = text.toLowerCase();
+    const thankYouPatterns = [
+        /\b(thank you|thanks|thankyou|thank u|thx|ty)\b/,
+        /\b(thanks so much|thank you so much|thanks a lot|thank you a lot)\b/,
+        /\b(much appreciated|greatly appreciate|really appreciate)\b/,
+        /\b(appreciate it|appreciate that|appreciate your help)\b/,
+        /\b(cheers|ta)\b/,
+        /\b(awesome|great|fantastic|wonderful)\b.*\b(thanks?|thank you)\b/,
+        /\b(thanks?|thank you)\b.*\b(awesome|great|fantastic|wonderful)\b/
+    ];
+
+    return thankYouPatterns.some(pattern => pattern.test(lowerText));
+}
+
 // Shared function to handle self-referential questions with direct LLM
 async function handleSelfReferentialQuestion(inputText, model, conversationHistory, handleTextChunk) {
     console.log(`Self-referential question detected: "${inputText}" - bypassing RAG`);
@@ -217,6 +233,9 @@ async function handleSelfReferentialQuestion(inputText, model, conversationHisto
         let fullResponse = '';
         const dialogueId = 'voice-self-ref-' + Date.now();
 
+        // Use default model for parallel mode or if model is "parallel"
+        const actualModel = model === 'parallel' ? (process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b') : model;
+
         if (handleTextChunk) {
             // Streaming mode (for /converse endpoint)
             await generateStreamingResponse(
@@ -224,7 +243,7 @@ async function handleSelfReferentialQuestion(inputText, model, conversationHisto
                 String(dialogueId),
                 {
                     temperature: 0.7,
-                    model: model,
+                    model: actualModel,
                     systemPrompt: systemPrompt
                 },
                 (chunk) => {
@@ -239,7 +258,7 @@ async function handleSelfReferentialQuestion(inputText, model, conversationHisto
                 String(dialogueId),
                 {
                     temperature: 0.7,
-                    model: model,
+                    model: actualModel,
                     systemPrompt: systemPrompt
                 },
                 (chunk) => {
@@ -277,6 +296,51 @@ async function handleSelfReferentialQuestion(inputText, model, conversationHisto
             applied_filters: { bypass_reason: "Self-referential question - LLM fallback" }
         };
     }
+}
+
+// Shared function to handle thank you messages with fast response
+async function handleThankYouMessage(inputText, handleTextChunk) {
+    console.log(`Thank you message detected: "${inputText}" - sending fast response`);
+
+    const thankYouResponses = [
+        "You're welcome!",
+        "My pleasure!",
+        "Glad I could help!",
+        "Happy to assist!",
+        "Anytime!",
+        "No problem at all!"
+    ];
+
+    const followUpResponses = [
+        " Let me know if there's anything else you need.",
+        " Feel free to ask if you need help with anything else.",
+        " I'm here if there's anything else I can assist you with.",
+        " Just let me know if there's anything else you need help with.",
+        " Don't hesitate to ask if there's anything else on your mind.",
+        " I'm always here to help with anything else you might need.",
+        " Let me know if there's anything else I can do for you.",
+        " Feel free to reach out anytime for more assistance."
+    ];
+
+    // Randomly select both parts
+    const thankYouText = thankYouResponses[Math.floor(Math.random() * thankYouResponses.length)];
+    const followUpText = followUpResponses[Math.floor(Math.random() * followUpResponses.length)];
+    const responseText = thankYouText + followUpText;
+
+    if (handleTextChunk) {
+        // Streaming mode - send the response immediately
+        handleTextChunk(responseText);
+    }
+
+    // Create a mock ragResponse for compatibility
+    return {
+        answer: responseText,
+        sources: [],
+        context_used: false,
+        search_results_count: 0,
+        search_results: [],
+        applied_filters: { bypass_reason: "Thank you message detected" }
+    };
 }
 
 // Utility function for safe axios calls with error handling
@@ -354,8 +418,9 @@ async function processDirectLLM(inputText, processingMode, model, conversationHi
             }
             
             // Ollama requests
-            requests.push(callOllama(conversationWithSystem, 'mistral:7b'));
-            requests.push(callOllama(conversationWithSystem, 'llama2:7b'));
+            requests.push(callOllama(conversationWithSystem, 'mistral:latest'));
+            const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
+            requests.push(callOllama(conversationWithSystem, defaultModel));
             
             // Wait for first successful response
             const results = await Promise.allSettled(requests);
@@ -557,8 +622,9 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
             }
             
             // Ollama requests
-            requests.push(callOllama(conversationWithSystem, 'mistral:7b'));
-            requests.push(callOllama(conversationWithSystem, 'llama2:7b'));
+            requests.push(callOllama(conversationWithSystem, 'mistral:latest'));
+            const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
+            requests.push(callOllama(conversationWithSystem, defaultModel));
             
             // Wait for first successful response
             const results = await Promise.allSettled(requests);
@@ -1037,7 +1103,14 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         let responseText;
         let ragResponse = null;
 
-        if (isSelfReferentialQuestion(inputText)) {
+        // Check if this is a thank you message - handle with fast response
+        if (isThankYouMessage(inputText)) {
+            console.log(`[Voice Chat] Thank you message detected: "${inputText}" - sending fast response`);
+
+            // Use shared function to handle thank you messages (non-streaming mode)
+            ragResponse = await handleThankYouMessage(inputText, null);
+            responseText = ragResponse.answer;
+        } else if (isSelfReferentialQuestion(inputText)) {
             console.log(`[Voice Chat] Self-referential question detected: "${inputText}" - bypassing RAG`);
             
             // Build conversation history for self-referential handling
@@ -1932,8 +2005,22 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     }
                 };
 
-                // Check if this is a self-referential question about ALFRED
-                if (isSelfReferentialQuestion(inputText)) {
+                // Check if this is a thank you message - handle with fast response
+                if (isThankYouMessage(inputText)) {
+                    console.log(`[Voice Converse] Thank you message detected: "${inputText}" - sending fast response`);
+
+                    // Use shared function to handle thank you messages with streaming
+                    const ragResponse = await handleThankYouMessage(inputText, handleTextChunk);
+
+                    // Store RAG metadata for response
+                    ongoingStream.ragMetadata = {
+                        sources: ragResponse.sources,
+                        context_used: ragResponse.context_used,
+                        search_results_count: ragResponse.search_results_count,
+                        search_results: ragResponse.search_results,
+                        applied_filters: ragResponse.applied_filters || {}
+                    };
+                } else if (isSelfReferentialQuestion(inputText)) {
                     console.log(`[Voice Converse] Self-referential question detected: "${inputText}" - using direct LLM`);
                     
                     // Use shared function to handle self-referential questions with streaming

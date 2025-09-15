@@ -83,18 +83,21 @@ class GunHelper {
             if (options.encrypt) {
                 console.log('🔒 Encrypting GUN record for private storage');
                 
-                // Modern encryption using crypto module
+                // AES-256-GCM with auth tag persisted
                 const algorithm = 'aes-256-gcm';
-                const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
-                const iv = crypto.randomBytes(16);
+                // Use PBKDF2 for key derivation (matches frontend Web Crypto API)
+                const key = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
+                const iv = crypto.randomBytes(12); // 12-byte IV recommended for GCM
                 const cipher = crypto.createCipheriv(algorithm, key, iv);
-                
-                let encrypted = cipher.update(JSON.stringify(gunRecord.data), 'utf8', 'hex');
-                encrypted += cipher.final('hex');
-                
+
+                const plaintext = Buffer.from(JSON.stringify(gunRecord.data), 'utf8');
+                const encryptedBuf = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+                const authTag = cipher.getAuthTag();
+
                 gunRecord.data = {
-                    encrypted: encrypted,
-                    iv: iv.toString('hex')
+                    encrypted: encryptedBuf.toString('base64'),
+                    iv: iv.toString('base64'),
+                    tag: authTag.toString('base64')
                 };
                 gunRecord.meta.encrypted = true;
                 gunRecord.meta.encryptionMethod = algorithm;
@@ -161,19 +164,49 @@ class GunHelper {
                 // Handle encrypted data
                 if (data.meta && data.meta.encrypted && data.meta.encryptionMethod === 'aes-256-gcm') {
                     console.log('🔓 Decrypting GUN record');
-                    
-                    const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
-                    const iv = Buffer.from(data.data.iv, 'hex');
+
+                    // Use PBKDF2 for key derivation (matches frontend Web Crypto API)
+                    const key = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
+                    const iv = Buffer.from(data.data.iv, 'base64');
+                    const tag = Buffer.from(data.data.tag, 'base64');
+                    const encryptedBuf = Buffer.from(data.data.encrypted, 'base64');
                     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-                    
-                    let decrypted = decipher.update(data.data.encrypted, 'hex', 'utf8');
-                    decrypted += decipher.final('utf8');
-                    
-                    data.data = JSON.parse(decrypted);
-                    data.meta.encrypted = false;
+                    decipher.setAuthTag(tag);
+
+                    const dec = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
+                    const decryptedData = JSON.parse(dec.toString('utf8'));
+
+                    console.log('🔍 Backend decrypted data structure:', decryptedData);
+                    console.log('🔍 Backend decrypted conversationSession:', decryptedData?.conversationSession);
+                    console.log('🔍 Backend decrypted conversationSession messages:', decryptedData?.conversationSession?.messages?.length || 0);
+
+                    // Return the decrypted data directly instead of the GUN structure
+                    // This ensures the frontend gets the actual content, not GUN references
+                    return {
+                        data: decryptedData,
+                        meta: {
+                            ...data.meta,
+                            encrypted: false,
+                            wasEncrypted: true // Mark that it was decrypted
+                        },
+                        oip: data.oip,
+                        _: data._ // Keep any other GUN metadata if needed
+                    };
                 }
 
                 console.log('✅ GUN record retrieved successfully via HTTP API');
+
+                // Handle GUN reference objects - GUN sometimes returns { '#': 'path' } instead of actual data
+                // This can happen with nested data structures or when data isn't fully loaded
+                if (data.data && typeof data.data === 'object' && data.data['#'] && !data.meta?.wasEncrypted) {
+                    console.log('🔍 Data contains GUN references, this indicates incomplete data retrieval');
+                    console.log('🔍 Reference path:', data.data['#']);
+
+                    // For now, return the data as-is since we can't easily resolve references via HTTP API
+                    // The frontend will need to handle this case
+                    return data;
+                }
+
                 return data;
             } else {
                 return null; // Record not found
@@ -190,49 +223,97 @@ class GunHelper {
     }
 
     /**
+     * List user records (alias for listRecordsByPublisher for API compatibility)
+     * @param {string} publisherPubKey - Publisher's public key
+     * @param {Object} options - Query options
+     * @param {number} options.limit - Maximum number of records to return
+     * @param {number} options.offset - Offset for pagination
+     * @param {string} options.recordType - Filter by record type
+     * @returns {Promise<Array>} - Array of records
+     */
+    async listUserRecords(publisherPubKey, options = {}) {
+        return this.listRecordsByPublisher(publisherPubKey, options);
+    }
+
+    /**
      * List records by publisher
      * @param {string} publisherPubKey - Publisher's public key
      * @param {Object} options - Query options
      * @param {number} options.limit - Maximum number of records to return
+     * @param {number} options.offset - Offset for pagination
+     * @param {string} options.recordType - Filter by record type
      * @returns {Promise<Array>} - Array of records
      */
     async listRecordsByPublisher(publisherPubKey, options = {}) {
-        const { limit = 50 } = options;
-        const records = [];
+        const { limit = 50, offset = 0, recordType } = options;
         
         try {
-            return new Promise((resolve) => {
-                const timeout = setTimeout(() => {
-                    resolve(records);
-                }, 10000);
+            console.log('📡 Listing user records via HTTP API...');
+            
+            // Create hash of the public key (first 12 chars) to match GUN soul format
+            const pubKeyHash = crypto.createHash('sha256')
+                .update(publisherPubKey)
+                .digest('hex')
+                .slice(0, 12);
 
-                // Query GUN for records matching the publisher pattern
-                const publisherPattern = `oip:records:${publisherPubKey}`;
+            const response = await axios.get(`${this.apiUrl}/list`, {
+                params: { 
+                    publisherHash: pubKeyHash,
+                    limit,
+                    offset,
+                    recordType
+                },
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.data.success) {
+                const records = response.data.records || [];
                 
-                this.gun.get(publisherPattern).map().on((data, key) => {
-                    if (data && records.length < limit) {
-                        records.push({
-                            soul: key,
-                            did: `did:gun:${key}`,
-                            ...data
-                        });
+                // Process and decrypt records as needed
+                const processedRecords = await Promise.all(records.map(async (record) => {
+                    // Handle encrypted data if present
+                    if (record.meta && record.meta.encrypted && record.meta.encryptionMethod === 'aes-256-gcm') {
+                        console.log('🔓 Decrypting GUN record');
+                        
+                        const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
+                        const iv = Buffer.from(record.data.iv, 'hex');
+                        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+                        
+                        let decrypted = decipher.update(record.data.encrypted, 'hex', 'utf8');
+                        decrypted += decipher.final('utf8');
+                        
+                        record.data = JSON.parse(decrypted);
+                        record.meta.encrypted = false;
                     }
                     
-                    if (records.length >= limit) {
-                        clearTimeout(timeout);
-                        resolve(records);
-                    }
-                });
-                
-                // Fallback timeout
-                setTimeout(() => {
-                    clearTimeout(timeout);
-                    resolve(records);
-                }, 8000);
-            });
+                    return {
+                        soul: record.soul,
+                        did: `did:gun:${record.soul}`,
+                        ...record
+                    };
+                }));
+
+                console.log('✅ Retrieved', processedRecords.length, 'GUN records via HTTP API');
+                return processedRecords;
+            } else {
+                console.log('No records found for publisher');
+                return [];
+            }
+
         } catch (error) {
-            console.error('Error listing records by publisher:', error);
-            return [];
+            if (error.code === 'ECONNREFUSED') {
+                console.error('GUN relay not accessible - check if gun-relay service is running');
+                return [];
+            } else if (error.code === 'ETIMEDOUT') {
+                console.error('GUN relay timeout - service may be overloaded');
+                return [];
+            } else {
+                console.error('❌ Error listing records by publisher:', error.message);
+                return [];
+            }
         }
     }
 

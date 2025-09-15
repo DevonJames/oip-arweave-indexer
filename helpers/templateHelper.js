@@ -751,9 +751,33 @@ async function publishNewTemplate(template, blockchain = 'arweave') {
 }
 
 // GUN publishing function for records
+// Convert arrays to JSON strings for GUN compatibility
+function convertArraysForGUN(obj) {
+    if (obj === null || obj === undefined) return obj;
+    
+    if (Array.isArray(obj)) {
+        // Convert array to JSON string
+        return JSON.stringify(obj);
+    }
+    
+    if (typeof obj === 'object') {
+        const converted = {};
+        for (const [key, value] of Object.entries(obj)) {
+            converted[key] = convertArraysForGUN(value);
+        }
+        return converted;
+    }
+    
+    return obj;
+}
+
 async function publishToGun(record, recordType, options = {}) {
     try {
         console.log('Publishing record to GUN:', { recordType, options });
+        
+        // Convert arrays to JSON strings for GUN compatibility
+        const gunCompatibleRecord = convertArraysForGUN(record);
+        console.log('Converted arrays to JSON strings for GUN compatibility');
         
         // Get publisher info (reuse existing logic)
         const fs = require('fs');
@@ -767,12 +791,12 @@ async function publishToGun(record, recordType, options = {}) {
         const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest());
         
         // Create signature envelope (no blockchain tags needed for GUN)
-        const dataForSignature = JSON.stringify(record);
+        const dataForSignature = JSON.stringify(gunCompatibleRecord);
         const creatorSig = await signMessage(dataForSignature);
         
         // Build record for GUN (expanded format, not compressed like Arweave)
         const gunRecordData = {
-            data: record,
+            data: gunCompatibleRecord,
             oip: {
                 did: null, // Will be set after soul generation
                 recordType: recordType,

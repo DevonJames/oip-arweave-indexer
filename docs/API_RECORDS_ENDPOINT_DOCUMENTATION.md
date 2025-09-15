@@ -2,11 +2,104 @@
 
 ## Overview
 
-The `/api/records` endpoint provides powerful search and filtering capabilities for retrieving records from the OIP Arweave Indexer. This endpoint uses the `getRecords()` function and supports a wide variety of query parameters for precise data retrieval.
+The `/api/records` endpoint provides powerful search and filtering capabilities for retrieving records from the OIP Arweave Indexer. This endpoint uses the `getRecords()` function and supports a wide variety of query parameters for precise data retrieval. The endpoint now supports **optional authentication** for accessing private records.
 
 **Base URL:** `/api/records`  
 **Method:** `GET`  
-**Returns:** JSON object containing filtered and paginated records
+**Authentication:** Optional (required for private records)  
+**Returns:** JSON object containing filtered and paginated records with authentication status
+
+## Authentication
+
+### Optional Authentication Header
+```http
+Authorization: Bearer <jwt-token>
+```
+
+### Authentication Behavior
+- **Without Token**: Only public records are returned
+- **With Valid Token**: Public records + user's private records are returned
+- **With Invalid Token**: Treated as unauthenticated (public records only)
+
+### Private Record Access
+- **Private GUN Records**: Accessible only by authenticated record owners
+- **Conversation Sessions**: Private by default, require user authentication
+- **Access Control**: Uses `accessControl.access_level` and `owner_public_key` for filtering
+
+## Storage Sources
+
+### `source` Parameter
+- **Type:** String
+- **Description:** Filter records by storage source
+- **Values:**
+  - `all` (default) - Records from all storage systems
+  - `arweave` - Only Arweave-stored records
+  - `gun` - Only GUN-stored records (includes private conversation sessions)
+- **Example:** `source=gun&recordType=conversationSession`
+
+### GUN Records (Private Storage)
+- **Conversation Sessions**: Private encrypted storage in GUN network
+- **User Ownership**: Records owned by individual HD wallet public keys
+- **Privacy**: Only accessible by authenticated owners
+- **Array Limitation**: GUN cannot handle complex nested arrays
+- **JSON String Format**: Arrays stored as JSON strings, converted back to arrays in API responses
+
+#### GUN Array Format Handling
+Due to GUN's limitations with arrays, certain fields are stored differently:
+
+**Storage Format (in GUN)**:
+```json
+{
+  "conversationSession": {
+    "messages": "[\"Hello\",\"Hi there\"]",           // JSON string
+    "message_timestamps": "[1757789559348,1757789564040]", // JSON string  
+    "message_roles": "[\"user\",\"assistant\"]",     // JSON string
+    "model_provider": "did:arweave:provider_id"      // String not array
+  }
+}
+```
+
+**API Response Format (converted back)**:
+```json
+{
+  "conversationSession": {
+    "messages": ["Hello", "Hi there"],               // Actual array
+    "message_timestamps": [1757789559348, 1757789564040], // Actual array
+    "message_roles": ["user", "assistant"],          // Actual array
+    "model_provider": "did:arweave:provider_id"      // String maintained
+  }
+}
+```
+
+**Important for Developers**: When consuming GUN records via API, you receive properly formatted arrays. The JSON string conversion is handled automatically by the backend.
+
+#### Publishing GUN Records with Arrays
+When publishing records to GUN storage (e.g., via `/api/records/newRecord?storage=gun`), you must format array data as JSON strings:
+
+**Correct GUN Publishing Format**:
+```json
+{
+  "conversationSession": {
+    "messages": "",                    // Empty string initially
+    "message_timestamps": "",          // Empty string initially
+    "message_roles": "",              // Empty string initially
+    "model_provider": "did:arweave:..." // String, not array
+  }
+}
+```
+
+**When Updating with Data**:
+```json
+{
+  "conversationSession": {
+    "messages": "[\"Hello\",\"Hi there\"]",              // JSON.stringify(array)
+    "message_timestamps": "[1757789559348,1757789564040]", // JSON.stringify(array)
+    "message_roles": "[\"user\",\"assistant\"]"          // JSON.stringify(array)
+  }
+}
+```
+
+**Backend Processing**: The system automatically converts these JSON strings back to proper arrays for Elasticsearch indexing and API responses.
 
 ## Query Parameters
 
@@ -16,7 +109,7 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 - **Type:** String
 - **Description:** Filter records by their specific type
 - **Example:** `recordType=post`
-- **Common Values:** `post`, `image`, `audio`, `video`, `text`, `recipe`, `workout`, `exercise`, `deleteMessage`, `creatorRegistration`
+- **Common Values:** `post`, `image`, `audio`, `video`, `text`, `recipe`, `workout`, `exercise`, `deleteMessage`, `creatorRegistration`, `conversationSession`
 
 #### `template`
 - **Type:** String
@@ -567,6 +660,32 @@ GET /api/records?summarizeTags=true&tagCount=100&recordType=post
 GET /api/records?hideNullValues=true&hideDateReadable=false&includeSigs=false&includePubKeys=false&limit=10
 ```
 
+### Private GUN Records (Authenticated)
+```
+GET /api/records?source=gun&recordType=conversationSession&limit=15&sortBy=date:desc
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Private GUN Records (Unauthenticated)
+```
+GET /api/records?source=gun&recordType=conversationSession&limit=15&sortBy=date:desc
+# Returns empty results - private records filtered out
+```
+
+### Specific GUN Record by DID
+```
+GET /api/records?source=gun&did=did:gun:647f79c2a338:session_1757789557773&limit=1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Cross-User Privacy Test
+```
+# User A's token accessing User B's record - should be filtered out
+GET /api/records?source=gun&did=did:gun:647f79c2a338:session_other_user&limit=1
+Authorization: Bearer user_a_token
+# Returns empty results due to ownership filtering
+```
+
 ## Response Format
 
 ### Standard Response Structure
@@ -582,9 +701,24 @@ GET /api/records?hideNullValues=true&hideDateReadable=false&includeSigs=false&in
   "currentPage": 1,
   "totalPages": 8,
   "queryParams": { /* original query parameters */ },
+  "auth": {
+    "authenticated": true,
+    "user": {
+      "email": "user@example.com",
+      "userId": "elasticsearch_user_id", 
+      "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+    }
+  },
   "records": [ /* array of record objects */ ]
 }
 ```
+
+### Authentication Status in Response
+- **`auth.authenticated`**: Boolean indicating if request was authenticated
+- **`auth.user`**: User information (only present if authenticated)
+  - **`email`**: User's email address
+  - **`userId`**: User's database ID
+  - **`publicKey`**: User's HD wallet public key (for ownership verification)
 
 ### Tag Summary Response (when summarizeTags=true)
 
