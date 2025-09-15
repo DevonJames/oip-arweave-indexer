@@ -31,6 +31,8 @@ const litRoutes = require('./routes/lit');
 const jfkRoutes = require('./routes/jfk');
 const voiceRoutes = require('./routes/voice');
 const alfredRoutes = require('./routes/alfred');
+const mediaRoutes = require('./routes/media');
+const { getMediaSeeder } = require('./services/mediaSeeder');
 
 dotenv.config();
 
@@ -174,6 +176,8 @@ app.use('/api/jfk', jfkRoutes);
 app.use('/api/alfred', alfredRoutes);
 // Backward-compatible alias
 app.use('/api/voice', voiceRoutes);
+// Media storage and distribution routes
+app.use('/api/media', mediaRoutes);
 
 // Make io available to routes
 app.set('io', io);
@@ -195,6 +199,15 @@ initializeIndices()
     // Start the server only after indices are initialized
     const serverInstance = server.listen(port, async () => {
       console.log(`Server is running on port ${port}`);
+
+      // Initialize MediaSeeder
+      try {
+        const mediaSeeder = getMediaSeeder();
+        await mediaSeeder.initialize();
+        console.log('🌱 MediaSeeder initialized successfully');
+      } catch (error) {
+        console.error('❌ Failed to initialize MediaSeeder:', error);
+      }
 
       // Parse command-line arguments
       const args = minimist(process.argv.slice(2));
