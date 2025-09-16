@@ -99,6 +99,29 @@
             gap: 12px;
         }
 
+        .jwt-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .jwt-indicator {
+            font-size: 14px;
+        }
+
+        .jwt-user-info {
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .ai-drawer-toggle {
             background: rgba(255,255,255,0.1);
             border: 1px solid rgba(255,255,255,0.2);
@@ -790,6 +813,156 @@
         .btn-small {
             padding: 4px 8px;
             font-size: 12px;
+        }
+
+        /* Upload Progress Styles */
+        .upload-progress {
+            margin: 15px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #45a049);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+
+        /* Media Preview Styles */
+        .media-preview {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+
+        .media-preview h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        /* Info Box Styles */
+        .info-box {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h4 {
+            margin: 0 0 10px 0;
+            color: #1976d2;
+        }
+
+        .info-box ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .info-box li {
+            margin-bottom: 5px;
+        }
+
+        /* GIF Reference Row Styles */
+        .gif-ref-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: end;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+
+        .gif-ref-row:hover {
+            background: #f0f0f0;
+        }
+
+        .gif-ref-row label {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .gif-ref-row input {
+            font-size: 12px;
+            padding: 4px 6px;
+        }
+
+        /* Button Group Styles */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .button-group button {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        /* Status Message Styles */
+        .status-message {
+            margin-top: 15px;
+        }
+
+        .success-message {
+            padding: 10px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .error-message {
+            padding: 10px;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* Responsive adjustments for mobile */
+        @media (max-width: 768px) {
+            .gif-ref-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .gif-ref-row > div {
+                flex: none !important;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .button-group button {
+                min-width: auto;
+            }
+            
+            .jwt-user-info {
+                max-width: 80px;
+            }
         }
 
         .toggle-switch {
@@ -3104,12 +3277,17 @@
                     <img src="alfred.gif" alt="ΛLFRED" style="width: 16px; height: 16px; margin-right: 6px;">
                     ΛLFRED
                 </button>
+                <div id="jwt-status" class="jwt-status">
+                    <span id="jwt-indicator" class="jwt-indicator">🔓</span>
+                    <span id="jwt-user-info" class="jwt-user-info">Not authenticated</span>
+                </div>
                 <div id="user-info" class="hidden">
                     <span id="logged-in-display" class="logged-in-user"></span>
                     <button onclick="logout()" class="btn-secondary btn-small">Logout</button>
                 </div>
                 <div id="auth-buttons">
                     <button onclick="showAuthModal()" class="btn-small">Login / Register</button>
+                    <button onclick="showJWTModal()" class="btn-small btn-secondary">JWT Token</button>
                 </div>
             </div>
         </div>
@@ -3596,6 +3774,10 @@
                             <option value="image">Image</option>
                             <option value="recipe">Recipe</option>
                             <option value="workout">Workout</option>
+                            <option value="exercise">Exercise</option>
+                            <option value="fitnessEquipment">Fitness Equipment</option>
+                            <option value="media">Media File</option>
+                            <option value="multiResolutionGif">Multi-Resolution GIF</option>
                             <option value="text">Text Document</option>
                         </select>
                     </div>
@@ -3681,6 +3863,61 @@
         </div>
     </div>
 
+    <!-- JWT Token Modal -->
+    <div id="jwt-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>JWT Token Authentication</h2>
+            <p style="color: #666; margin-bottom: 20px;">
+                Enter your JWT token to access private GUN records and media uploads.
+                <br><small>Get your token by logging in via the API or registering a new account.</small>
+            </p>
+            
+            <div class="form-group">
+                <label for="jwt-token-input">JWT Token:</label>
+                <textarea id="jwt-token-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." 
+                         style="height: 80px; font-family: monospace; font-size: 12px; resize: vertical;"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="jwt-remember" checked>
+                    Remember token in localStorage
+                </label>
+            </div>
+            
+            <div class="button-group">
+                <button onclick="setJWTToken()" class="btn-primary">Set Token</button>
+                <button onclick="clearJWTToken()" class="btn-secondary">Clear Token</button>
+                <button onclick="hideJWTModal()" class="btn-secondary">Cancel</button>
+            </div>
+            
+            <div id="jwt-token-status" class="status-message" style="margin-top: 15px;"></div>
+            
+            <details style="margin-top: 20px;">
+                <summary style="cursor: pointer; color: #666;">How to get a JWT token</summary>
+                <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 13px;">
+                    <p><strong>Option 1: Register via API</strong></p>
+                    <pre style="background: #fff; padding: 8px; border-radius: 4px; overflow-x: auto;">POST /api/user/completeRegistration
+{
+  "email": "your@email.com",
+  "password": "your_password"
+}</pre>
+                    
+                    <p style="margin-top: 15px;"><strong>Option 2: Login via API</strong></p>
+                    <pre style="background: #fff; padding: 8px; border-radius: 4px; overflow-x: auto;">POST /api/user/login
+{
+  "email": "your@email.com", 
+  "password": "your_password"
+}</pre>
+                    
+                    <p style="margin-top: 10px; color: #666;">
+                        The API will return a JWT token that includes your HD wallet public key for private record access.
+                    </p>
+                </div>
+            </details>
+        </div>
+    </div>
+
     <!-- Master Audio Player -->
     <div id="master-audio-player" class="master-audio-player">
         <div class="audio-player-content">
@@ -3742,6 +3979,9 @@
 
         async function initializeApp() {
             console.log('[App] Starting enhanced initialization with dynamic templates...');
+            
+            // Initialize JWT token from localStorage
+            initializeJWTToken();
             
             // Always load templates first for dynamic rendering
             await loadTemplates();
@@ -4625,6 +4865,112 @@
             document.getElementById('auth-buttons').classList.remove('hidden');
             document.getElementById('publishing-content').classList.add('hidden');
             hideAllPublishingSections();
+        }
+
+        // JWT Token Management Functions
+        function showJWTModal() {
+            document.getElementById('jwt-modal').classList.remove('hidden');
+            // Pre-fill if token exists
+            const existingToken = localStorage.getItem('oip-jwt-token');
+            if (existingToken) {
+                document.getElementById('jwt-token-input').value = existingToken;
+            }
+        }
+
+        function hideJWTModal() {
+            document.getElementById('jwt-modal').classList.add('hidden');
+            document.getElementById('jwt-token-status').innerHTML = '';
+        }
+
+        function setJWTToken() {
+            const tokenInput = document.getElementById('jwt-token-input').value.trim();
+            const rememberToken = document.getElementById('jwt-remember').checked;
+            
+            if (!tokenInput) {
+                showJWTStatus('Please enter a JWT token', 'error');
+                return;
+            }
+
+            try {
+                // Basic JWT validation - check if it has 3 parts
+                const parts = tokenInput.split('.');
+                if (parts.length !== 3) {
+                    throw new Error('Invalid JWT format');
+                }
+
+                // Try to decode the payload (without verification)
+                const payload = JSON.parse(atob(parts[1]));
+                
+                // Set the token
+                authToken = tokenInput;
+                
+                // Store in localStorage if requested
+                if (rememberToken) {
+                    localStorage.setItem('oip-jwt-token', tokenInput);
+                } else {
+                    localStorage.removeItem('oip-jwt-token');
+                }
+
+                // Update UI
+                updateJWTStatus(payload);
+                showJWTStatus(`Token set successfully! User: ${payload.email || 'Unknown'}`, 'success');
+                
+                // Auto-hide modal after success
+                setTimeout(() => {
+                    hideJWTModal();
+                }, 2000);
+                
+            } catch (error) {
+                showJWTStatus('Invalid JWT token format: ' + error.message, 'error');
+            }
+        }
+
+        function clearJWTToken() {
+            authToken = null;
+            localStorage.removeItem('oip-jwt-token');
+            document.getElementById('jwt-token-input').value = '';
+            updateJWTStatus(null);
+            showJWTStatus('Token cleared', 'success');
+        }
+
+        function updateJWTStatus(payload) {
+            const indicator = document.getElementById('jwt-indicator');
+            const userInfo = document.getElementById('jwt-user-info');
+            
+            if (payload && authToken) {
+                indicator.textContent = '🔐';
+                const userEmail = payload.email || 'Unknown';
+                const publicKey = payload.publicKey ? `...${payload.publicKey.slice(-6)}` : 'No key';
+                userInfo.textContent = `${userEmail} (${publicKey})`;
+                userInfo.title = `Email: ${userEmail}\\nPublic Key: ${payload.publicKey || 'None'}`;
+            } else {
+                indicator.textContent = '🔓';
+                userInfo.textContent = 'Not authenticated';
+                userInfo.title = '';
+            }
+        }
+
+        function showJWTStatus(message, type) {
+            const statusElement = document.getElementById('jwt-token-status');
+            statusElement.innerHTML = `<div class="${type === 'success' ? 'success-message' : 'error-message'}">${message}</div>`;
+        }
+
+        // Initialize JWT token from localStorage on page load
+        function initializeJWTToken() {
+            const savedToken = localStorage.getItem('oip-jwt-token');
+            if (savedToken) {
+                try {
+                    const parts = savedToken.split('.');
+                    if (parts.length === 3) {
+                        const payload = JSON.parse(atob(parts[1]));
+                        authToken = savedToken;
+                        updateJWTStatus(payload);
+                    }
+                } catch (error) {
+                    console.warn('Invalid saved JWT token, clearing:', error);
+                    localStorage.removeItem('oip-jwt-token');
+                }
+            }
         }
 
         // Core browsing functionality (DISABLED - redirected to voice version)
@@ -6884,6 +7230,30 @@
                 case 'workout':
                     interfaceContainer.innerHTML = createWorkoutInterface();
                     break;
+                case 'exercise':
+                    interfaceContainer.innerHTML = createExerciseInterface();
+                    setTimeout(() => {
+                        initializeStorageTypeHandler();
+                    }, 100);
+                    break;
+                case 'fitnessEquipment':
+                    interfaceContainer.innerHTML = createFitnessEquipmentInterface();
+                    setTimeout(() => {
+                        initializeStorageTypeHandler();
+                    }, 100);
+                    break;
+                case 'media':
+                    interfaceContainer.innerHTML = createMediaInterface();
+                    setTimeout(() => {
+                        initializeStorageTypeHandler();
+                    }, 100);
+                    break;
+                case 'multiResolutionGif':
+                    interfaceContainer.innerHTML = createMultiResolutionGifInterface();
+                    setTimeout(() => {
+                        initializeStorageTypeHandler();
+                    }, 100);
+                    break;
                 case 'text':
                     interfaceContainer.innerHTML = createTextInterface();
                     break;
@@ -7622,6 +7992,441 @@
 
                     <button onclick="publishText()" class="btn-primary" style="width: 100%; margin-top: 20px;">
                         📄 Publish Text
+                    </button>
+                </div>
+            `;
+        }
+
+        function createExerciseInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🏋️ Exercise Publishing</h3>
+                    
+                    <!-- Exercise Basic Info -->
+                    <div class="form-group">
+                        <label for="exercise-name">Exercise Name:</label>
+                        <input type="text" id="exercise-name" required placeholder="e.g., Barbell Bench Press">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="exercise-description">Description:</label>
+                        <textarea id="exercise-description" placeholder="Brief description of the exercise..." rows="3"></textarea>
+                    </div>
+
+                    <!-- Exercise Category -->
+                    <div class="form-group">
+                        <label for="exercise-category">Category:</label>
+                        <select id="exercise-category">
+                            <option value="strength">Strength</option>
+                            <option value="cardio">Cardio</option>
+                            <option value="flexibility">Flexibility</option>
+                            <option value="balance">Balance</option>
+                            <option value="functional">Functional</option>
+                            <option value="rehabilitation">Rehabilitation</option>
+                        </select>
+                    </div>
+
+                    <!-- Exercise Type -->
+                    <div class="form-group">
+                        <label for="exercise-type">Exercise Type:</label>
+                        <select id="exercise-type">
+                            <option value="main">Main Exercise</option>
+                            <option value="warmup">Warm-up</option>
+                            <option value="cooldown">Cool-down</option>
+                        </select>
+                    </div>
+
+                    <!-- Difficulty Level -->
+                    <div class="form-group">
+                        <label for="exercise-difficulty">Difficulty:</label>
+                        <select id="exercise-difficulty">
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                        </select>
+                    </div>
+
+                    <!-- Muscle Groups -->
+                    <div class="form-group">
+                        <label for="exercise-muscle-groups">Muscle Groups (comma-separated):</label>
+                        <input type="text" id="exercise-muscle-groups" placeholder="chest, shoulders, triceps">
+                        <small>Primary muscle groups targeted by this exercise</small>
+                    </div>
+
+                    <!-- Equipment Required -->
+                    <div class="form-group">
+                        <label for="exercise-equipment">Equipment Required (comma-separated):</label>
+                        <input type="text" id="exercise-equipment" placeholder="barbell, weight-bench, weight-plates">
+                        <small>Equipment needed to perform this exercise</small>
+                    </div>
+
+                    <!-- Alternative Equipment -->
+                    <div class="form-group">
+                        <label for="exercise-alternative-equipment">Alternative Equipment (comma-separated):</label>
+                        <input type="text" id="exercise-alternative-equipment" placeholder="dumbbells, smith-machine">
+                        <small>Alternative equipment that can be used</small>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="form-group">
+                        <label for="exercise-instructions">Instructions (one per line):</label>
+                        <textarea id="exercise-instructions" placeholder="1. Set up on the bench with your eyes under the barbell&#10;2. Grip the bar with hands slightly wider than shoulder-width&#10;3. Lower the bar slowly to your chest..." rows="8"></textarea>
+                        <small>Step-by-step instructions for performing the exercise</small>
+                    </div>
+
+                    <!-- Exercise Settings -->
+                    <div class="form-group">
+                        <label for="exercise-measurement-type">Measurement Type:</label>
+                        <select id="exercise-measurement-type">
+                            <option value="reps">Reps</option>
+                            <option value="time">Time (seconds)</option>
+                            <option value="distance">Distance</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="display: flex; gap: 15px;">
+                        <div style="flex: 1;">
+                            <label for="exercise-recommended-sets">Recommended Sets:</label>
+                            <input type="number" id="exercise-recommended-sets" min="1" max="10" value="3">
+                        </div>
+                        <div style="flex: 1;">
+                            <label for="exercise-recommended-reps">Recommended Reps:</label>
+                            <input type="number" id="exercise-recommended-reps" min="1" max="100" value="10">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="exercise-duration">Estimated Duration (minutes):</label>
+                        <input type="number" id="exercise-duration" min="1" max="60" value="8">
+                    </div>
+
+                    <!-- Media Reference -->
+                    <div class="form-group">
+                        <label for="exercise-avatar">Avatar/Demo Media DID:</label>
+                        <input type="text" id="exercise-avatar" placeholder="did:gun:media:... or did:gun:YOUR_SOUL_HASH:...">
+                        <small>Reference to a media record (GIF, video) demonstrating the exercise</small>
+                    </div>
+
+                    <!-- Exercise Flags -->
+                    <div class="form-group">
+                        <label>Exercise Properties:</label>
+                        <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 15px;">
+                            <label><input type="checkbox" id="exercise-bodyweight"> Bodyweight Exercise</label>
+                        </div>
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="form-group">
+                        <label for="exercise-tags">Tags:</label>
+                        <input type="text" id="exercise-tags" placeholder="chest, strength, compound, barbell">
+                        <small>Tags for categorization and search</small>
+                    </div>
+
+                    <button onclick="publishExercise()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        🏋️ Publish Exercise
+                    </button>
+                </div>
+            `;
+        }
+
+        function createFitnessEquipmentInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🏋️‍♀️ Fitness Equipment Publishing</h3>
+                    
+                    <!-- Equipment Basic Info -->
+                    <div class="form-group">
+                        <label for="equipment-name">Equipment Name:</label>
+                        <input type="text" id="equipment-name" required placeholder="e.g., Dumbbells">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="equipment-description">Description:</label>
+                        <textarea id="equipment-description" placeholder="Brief description of the equipment..." rows="3"></textarea>
+                    </div>
+
+                    <!-- Equipment Category -->
+                    <div class="form-group">
+                        <label for="equipment-category">Category:</label>
+                        <select id="equipment-category">
+                            <option value="weights">Weights</option>
+                            <option value="cardio">Cardio</option>
+                            <option value="strength">Strength Machines</option>
+                            <option value="flexibility">Flexibility/Mobility</option>
+                            <option value="accessories">Accessories</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <!-- Equipment Subcategory -->
+                    <div class="form-group">
+                        <label for="equipment-subcategory">Subcategory:</label>
+                        <input type="text" id="equipment-subcategory" placeholder="e.g., Free Weights, Resistance Bands">
+                    </div>
+
+                    <!-- Muscle Groups -->
+                    <div class="form-group">
+                        <label for="equipment-muscle-groups">Muscle Groups (comma-separated):</label>
+                        <input type="text" id="equipment-muscle-groups" placeholder="chest, back, shoulders, arms, legs">
+                        <small>Muscle groups this equipment can target</small>
+                    </div>
+
+                    <!-- Exercise Types -->
+                    <div class="form-group">
+                        <label for="equipment-exercise-types">Exercise Types (comma-separated):</label>
+                        <input type="text" id="equipment-exercise-types" placeholder="strength, functional, rehabilitation">
+                        <small>Types of exercises this equipment supports</small>
+                    </div>
+
+                    <!-- Equipment Properties -->
+                    <div class="form-group">
+                        <label for="equipment-difficulty">Difficulty Level:</label>
+                        <select id="equipment-difficulty">
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="equipment-space-required">Space Required:</label>
+                        <select id="equipment-space-required">
+                            <option value="small">Small</option>
+                            <option value="medium">Medium</option>
+                            <option value="large">Large</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="equipment-portability">Portability:</label>
+                        <select id="equipment-portability">
+                            <option value="portable">Portable</option>
+                            <option value="semi_portable">Semi-portable</option>
+                            <option value="stationary">Stationary</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="equipment-price-range">Price Range:</label>
+                        <select id="equipment-price-range">
+                            <option value="budget">Budget ($0-50)</option>
+                            <option value="mid_range">Mid-range ($50-200)</option>
+                            <option value="premium">Premium ($200+)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="equipment-maintenance">Maintenance Level:</label>
+                        <select id="equipment-maintenance">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+
+                    <!-- Alternatives -->
+                    <div class="form-group">
+                        <label for="equipment-alternatives">Alternatives (comma-separated):</label>
+                        <input type="text" id="equipment-alternatives" placeholder="Resistance bands, Kettlebells, Cable machine">
+                        <small>Alternative equipment that can provide similar benefits</small>
+                    </div>
+
+                    <!-- Safety -->
+                    <div class="form-group">
+                        <label for="equipment-safety">Safety Considerations:</label>
+                        <textarea id="equipment-safety" placeholder="Safety tips and considerations for using this equipment..." rows="3"></textarea>
+                    </div>
+
+                    <!-- Equipment Flags -->
+                    <div class="form-group">
+                        <label>Equipment Properties:</label>
+                        <div style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 15px;">
+                            <label><input type="checkbox" id="equipment-beginner-friendly"> Beginner Friendly</label>
+                            <label><input type="checkbox" id="equipment-home-gym"> Home Gym Suitable</label>
+                            <label><input type="checkbox" id="equipment-commercial"> Commercial Grade</label>
+                        </div>
+                    </div>
+
+                    <!-- Media Reference -->
+                    <div class="form-group">
+                        <label for="equipment-avatar">Equipment Image DID:</label>
+                        <input type="text" id="equipment-avatar" placeholder="did:gun:media:... or did:gun:YOUR_SOUL_HASH:...">
+                        <small>Reference to a media record showing the equipment</small>
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="form-group">
+                        <label for="equipment-tags">Tags:</label>
+                        <input type="text" id="equipment-tags" placeholder="weights, dumbbells, beginner, home-gym">
+                        <small>Tags for categorization and search</small>
+                    </div>
+
+                    <button onclick="publishFitnessEquipment()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        🏋️‍♀️ Publish Equipment
+                    </button>
+                </div>
+            `;
+        }
+
+        function createMediaInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>📁 Media File Publishing</h3>
+                    
+                    <div class="info-box" style="background: #e3f2fd; border: 1px solid #2196f3; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4>🌐 BitTorrent + GUN Media Distribution</h4>
+                        <p>Upload media files that will be:</p>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>🔒 <strong>Privately stored</strong> in GUN with HD wallet ownership</li>
+                            <li>🌍 <strong>Distributed via BitTorrent</strong> for peer-to-peer sharing</li>
+                            <li>⚡ <strong>Streamable via HTTP</strong> with range request support</li>
+                            <li>🔐 <strong>Access controlled</strong> by your organization settings</li>
+                        </ul>
+                    </div>
+
+                    <!-- File Upload -->
+                    <div class="form-group">
+                        <label for="media-file">Select Media File:</label>
+                        <input type="file" id="media-file" accept="image/*,video/*,audio/*" required>
+                        <small>Supported: Images (JPG, PNG, GIF, SVG), Videos (MP4, WebM), Audio (MP3, WAV, OGG)</small>
+                    </div>
+
+                    <!-- Media Basic Info -->
+                    <div class="form-group">
+                        <label for="media-name">Media Name:</label>
+                        <input type="text" id="media-name" placeholder="Descriptive name for the media file">
+                        <small>If empty, will use the original filename</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="media-description">Description:</label>
+                        <textarea id="media-description" placeholder="Brief description of the media content..." rows="2"></textarea>
+                    </div>
+
+                    <!-- Access Level -->
+                    <div class="form-group">
+                        <label for="media-access-level">Access Level:</label>
+                        <select id="media-access-level">
+                            <option value="private">Private (Only you)</option>
+                            <option value="organization" selected>Organization (Your team/org)</option>
+                            <option value="public">Public (Everyone)</option>
+                        </select>
+                    </div>
+
+                    <!-- Upload Progress -->
+                    <div id="media-upload-progress" class="upload-progress hidden" style="margin: 15px 0;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="progress-text">Ready to upload...</div>
+                    </div>
+
+                    <!-- Media Preview -->
+                    <div id="media-preview" class="media-preview hidden" style="margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                        <h4>Media Preview:</h4>
+                        <div id="media-preview-content"></div>
+                        <div id="media-info" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+                    </div>
+
+                    <button onclick="publishMedia()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        📁 Upload & Publish Media
+                    </button>
+                </div>
+            `;
+        }
+
+        function createMultiResolutionGifInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🎬 Multi-Resolution GIF Collection</h3>
+                    
+                    <div class="info-box" style="background: #fff3e0; border: 1px solid #ff9800; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4>📚 Exercise Demo Collections</h4>
+                        <p>Create a collection of GIF files at different resolutions for exercise demonstrations. Perfect for:</p>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>🎯 <strong>Exercise tutorials</strong> with multiple quality options</li>
+                            <li>📱 <strong>Adaptive streaming</strong> based on device/connection</li>
+                            <li>💾 <strong>Storage optimization</strong> with resolution choices</li>
+                        </ul>
+                        <p><strong>Note:</strong> You must first upload individual GIF files as media records, then reference them here.</p>
+                    </div>
+
+                    <!-- Collection Basic Info -->
+                    <div class="form-group">
+                        <label for="gif-collection-name">Collection Name:</label>
+                        <input type="text" id="gif-collection-name" required placeholder="e.g., Barbell Bench Press GIF Collection">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="gif-collection-description">Description:</label>
+                        <textarea id="gif-collection-description" placeholder="Multi-resolution GIF demonstration set for..." rows="2"></textarea>
+                    </div>
+
+                    <!-- GIF Media References -->
+                    <div class="form-group">
+                        <label>GIF Media References:</label>
+                        <div id="gif-refs-container">
+                            <div class="gif-ref-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: end;">
+                                <div style="flex: 2;">
+                                    <label>Media DID:</label>
+                                    <input type="text" class="gif-media-did" placeholder="did:gun:media:...">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label>Resolution Label:</label>
+                                    <input type="text" class="gif-resolution-label" placeholder="180p">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label>Width (px):</label>
+                                    <input type="number" class="gif-width" placeholder="320">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label>Height (px):</label>
+                                    <input type="number" class="gif-height" placeholder="180">
+                                </div>
+                                <button type="button" onclick="addGifReference()" class="btn-small">+</button>
+                            </div>
+                        </div>
+                        <small>Add references to uploaded GIF media files at different resolutions</small>
+                    </div>
+
+                    <!-- Animation Settings -->
+                    <div class="form-group" style="display: flex; gap: 15px;">
+                        <div style="flex: 1;">
+                            <label for="gif-frame-rate">Frame Rate (fps):</label>
+                            <input type="number" id="gif-frame-rate" min="1" max="60" value="15">
+                        </div>
+                        <div style="flex: 1;">
+                            <label for="gif-duration">Duration (seconds):</label>
+                            <input type="number" id="gif-duration" step="0.1" min="0.1" value="8.5">
+                        </div>
+                        <div style="flex: 1;">
+                            <label for="gif-loop-count">Loop Count:</label>
+                            <input type="number" id="gif-loop-count" min="0" value="0">
+                            <small>0 = infinite</small>
+                        </div>
+                    </div>
+
+                    <!-- Primary Resolution -->
+                    <div class="form-group">
+                        <label for="gif-primary-index">Primary Resolution Index:</label>
+                        <select id="gif-primary-index">
+                            <option value="0">First (0)</option>
+                            <option value="1" selected>Second (1)</option>
+                            <option value="2">Third (2)</option>
+                            <option value="3">Fourth (3)</option>
+                        </select>
+                        <small>Which resolution to use as the default/primary</small>
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="form-group">
+                        <label for="gif-tags">Tags:</label>
+                        <input type="text" id="gif-tags" placeholder="exercise-demo, multi-resolution, barbell-bench-press">
+                        <small>Tags for categorization and search</small>
+                    </div>
+
+                    <button onclick="publishMultiResolutionGif()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        🎬 Publish GIF Collection
                     </button>
                 </div>
             `;
@@ -11463,6 +12268,409 @@
                 }
             } catch (error) {
                 showMessage('publish-status', 'Exercise resolution error: ' + error.message, 'error');
+            }
+        }
+
+        async function publishExercise() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for publishing. Please set your token first.', 'error');
+                    return;
+                }
+
+                const exerciseData = {
+                    basic: {
+                        name: document.getElementById('exercise-name').value,
+                        description: document.getElementById('exercise-description').value,
+                        language: 'en',
+                        date: Math.floor(Date.now() / 1000),
+                        tagItems: document.getElementById('exercise-tags').value.split(',').map(t => t.trim()).filter(t => t),
+                        avatar: document.getElementById('exercise-avatar').value || undefined
+                    },
+                    exercise: {
+                        instructions: document.getElementById('exercise-instructions').value.split('\\n').map(i => i.trim()).filter(i => i),
+                        muscleGroups: document.getElementById('exercise-muscle-groups').value.split(',').map(t => t.trim()).filter(t => t),
+                        difficulty: document.getElementById('exercise-difficulty').value,
+                        category: document.getElementById('exercise-category').value,
+                        equipmentRequired: document.getElementById('exercise-equipment').value.split(',').map(t => t.trim()).filter(t => t),
+                        alternativeEquipment: document.getElementById('exercise-alternative-equipment').value.split(',').map(t => t.trim()).filter(t => t),
+                        isBodyweight: document.getElementById('exercise-bodyweight').checked,
+                        exercise_type: document.getElementById('exercise-type').value,
+                        measurement_type: document.getElementById('exercise-measurement-type').value,
+                        est_duration_minutes: parseInt(document.getElementById('exercise-duration').value) || 8,
+                        recommended_sets: parseInt(document.getElementById('exercise-recommended-sets').value) || 3,
+                        recommended_reps: parseInt(document.getElementById('exercise-recommended-reps').value) || 10,
+                        imageUrl: "",
+                        videoUrl: "",
+                        gitUrl: ""
+                    }
+                };
+
+                if (!exerciseData.basic.name || exerciseData.exercise.instructions.length === 0) {
+                    showMessage('publish-status', 'Please fill in exercise name and instructions', 'error');
+                    return;
+                }
+
+                // Get storage type and build URL
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
+                
+                const endpoint = storageType === 'gun' ? '/api/records/newRecord' : '/api/publish/newExercise';
+                const queryParams = storageType === 'gun' ? `?recordType=exercise${localId ? `&localId=${localId}` : ''}` : '';
+
+                const requestBody = { ...exerciseData };
+                if (storageType === 'gun') {
+                    requestBody.storage = 'gun';
+                    if (localId) requestBody.localId = localId;
+                }
+
+                const response = await fetch(`${endpoint}${queryParams}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    const successMessage = storageType === 'gun' 
+                        ? `Exercise published to GUN! DID: ${result.did}` 
+                        : `Exercise published to Arweave! Transaction ID: ${result.transactionId}`;
+                    showMessage('publish-success', successMessage, 'success');
+                    
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to publish exercise', 'error');
+                }
+            } catch (error) {
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        async function publishFitnessEquipment() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for publishing. Please set your token first.', 'error');
+                    return;
+                }
+
+                const equipmentData = {
+                    basic: {
+                        name: document.getElementById('equipment-name').value,
+                        description: document.getElementById('equipment-description').value,
+                        language: 'en',
+                        date: Math.floor(Date.now() / 1000),
+                        tagItems: document.getElementById('equipment-tags').value.split(',').map(t => t.trim()).filter(t => t),
+                        avatar: document.getElementById('equipment-avatar').value || undefined
+                    },
+                    fitnessEquipment: {
+                        category: document.getElementById('equipment-category').value,
+                        subcategory: document.getElementById('equipment-subcategory').value,
+                        muscle_groups: document.getElementById('equipment-muscle-groups').value.split(',').map(t => t.trim()).filter(t => t),
+                        exercise_types: document.getElementById('equipment-exercise-types').value.split(',').map(t => t.trim()).filter(t => t),
+                        difficulty_level: document.getElementById('equipment-difficulty').value,
+                        space_required: document.getElementById('equipment-space-required').value,
+                        portability: document.getElementById('equipment-portability').value,
+                        price_range: document.getElementById('equipment-price-range').value,
+                        alternatives: document.getElementById('equipment-alternatives').value.split(',').map(t => t.trim()).filter(t => t),
+                        maintenance_level: document.getElementById('equipment-maintenance').value,
+                        safety_considerations: document.getElementById('equipment-safety').value,
+                        beginner_friendly: document.getElementById('equipment-beginner-friendly').checked,
+                        home_gym_suitable: document.getElementById('equipment-home-gym').checked,
+                        commercial_grade: document.getElementById('equipment-commercial').checked
+                    }
+                };
+
+                if (!equipmentData.basic.name) {
+                    showMessage('publish-status', 'Please fill in equipment name', 'error');
+                    return;
+                }
+
+                // Get storage type and build URL
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
+                
+                const endpoint = storageType === 'gun' ? '/api/records/newRecord' : '/api/publish/newFitnessEquipment';
+                const queryParams = storageType === 'gun' ? `?recordType=fitnessEquipment${localId ? `&localId=${localId}` : ''}` : '';
+
+                const requestBody = { ...equipmentData };
+                if (storageType === 'gun') {
+                    requestBody.storage = 'gun';
+                    if (localId) requestBody.localId = localId;
+                }
+
+                const response = await fetch(`${endpoint}${queryParams}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    const successMessage = storageType === 'gun' 
+                        ? `Equipment published to GUN! DID: ${result.did}` 
+                        : `Equipment published to Arweave! Transaction ID: ${result.transactionId}`;
+                    showMessage('publish-success', successMessage, 'success');
+                    
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to publish equipment', 'error');
+                }
+            } catch (error) {
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        async function publishMedia() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for media upload. Please set your token first.', 'error');
+                    return;
+                }
+
+                const fileInput = document.getElementById('media-file');
+                const file = fileInput.files[0];
+                
+                if (!file) {
+                    showMessage('publish-status', 'Please select a media file to upload', 'error');
+                    return;
+                }
+
+                // Show upload progress
+                const progressDiv = document.getElementById('media-upload-progress');
+                const progressFill = progressDiv.querySelector('.progress-fill');
+                const progressText = progressDiv.querySelector('.progress-text');
+                progressDiv.classList.remove('hidden');
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('name', document.getElementById('media-name').value || file.name);
+                formData.append('access_level', document.getElementById('media-access-level').value);
+                
+                // Add description if provided
+                const description = document.getElementById('media-description').value;
+                if (description) {
+                    formData.append('description', description);
+                }
+
+                progressText.textContent = 'Uploading...';
+                progressFill.style.width = '10%';
+
+                const response = await fetch('/api/media/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+
+                progressFill.style.width = '90%';
+                progressText.textContent = 'Processing...';
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    progressFill.style.width = '100%';
+                    progressText.textContent = 'Upload complete!';
+                    
+                    showMessage('publish-success', 
+                        `Media uploaded successfully!\\n` +
+                        `DID: ${result.did}\\n` +
+                        `Size: ${(result.size / 1024).toFixed(1)} KB\\n` +
+                        `BitTorrent: ${result.magnetURI ? 'Enabled' : 'Failed'}`, 'success');
+                    
+                    // Show media preview
+                    showMediaPreview(result);
+                    
+                    // Clear form after delay
+                    setTimeout(() => {
+                        document.getElementById('publish-record-type').value = '';
+                        loadPublishInterface();
+                    }, 3000);
+                } else {
+                    progressFill.style.width = '0%';
+                    progressText.textContent = 'Upload failed';
+                    showMessage('publish-status', result.error || 'Failed to upload media', 'error');
+                }
+            } catch (error) {
+                const progressDiv = document.getElementById('media-upload-progress');
+                const progressFill = progressDiv.querySelector('.progress-fill');
+                const progressText = progressDiv.querySelector('.progress-text');
+                progressFill.style.width = '0%';
+                progressText.textContent = 'Upload failed';
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        function showMediaPreview(mediaResult) {
+            const previewDiv = document.getElementById('media-preview');
+            const previewContent = document.getElementById('media-preview-content');
+            const mediaInfo = document.getElementById('media-info');
+            
+            previewDiv.classList.remove('hidden');
+            
+            // Create preview based on MIME type
+            if (mediaResult.mime.startsWith('image/')) {
+                previewContent.innerHTML = `<img src="${mediaResult.transport.http[0]}" style="max-width: 100%; max-height: 200px; border-radius: 4px;">`;
+            } else if (mediaResult.mime.startsWith('video/')) {
+                previewContent.innerHTML = `<video controls style="max-width: 100%; max-height: 200px; border-radius: 4px;">
+                    <source src="${mediaResult.transport.http[0]}" type="${mediaResult.mime}">
+                </video>`;
+            } else if (mediaResult.mime.startsWith('audio/')) {
+                previewContent.innerHTML = `<audio controls style="width: 100%;">
+                    <source src="${mediaResult.transport.http[0]}" type="${mediaResult.mime}">
+                </audio>`;
+            } else {
+                previewContent.innerHTML = `<div style="padding: 20px; text-align: center; background: #f0f0f0; border-radius: 4px;">
+                    📄 ${mediaResult.originalName}
+                </div>`;
+            }
+            
+            mediaInfo.innerHTML = `
+                <strong>DID:</strong> ${mediaResult.did}<br>
+                <strong>Size:</strong> ${(mediaResult.size / 1024).toFixed(1)} KB<br>
+                <strong>MIME:</strong> ${mediaResult.mime}<br>
+                <strong>Access:</strong> ${mediaResult.access_level}<br>
+                <strong>BitTorrent:</strong> ${mediaResult.magnetURI ? 'Available' : 'Not available'}
+            `;
+        }
+
+        async function publishMultiResolutionGif() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for publishing. Please set your token first.', 'error');
+                    return;
+                }
+
+                // Collect GIF references
+                const gifRefs = [];
+                const resolutionLabels = [];
+                const fileSizes = [];
+                const widths = [];
+                const heights = [];
+                
+                const refRows = document.querySelectorAll('.gif-ref-row');
+                refRows.forEach(row => {
+                    const did = row.querySelector('.gif-media-did').value.trim();
+                    const label = row.querySelector('.gif-resolution-label').value.trim();
+                    const width = parseInt(row.querySelector('.gif-width').value) || 0;
+                    const height = parseInt(row.querySelector('.gif-height').value) || 0;
+                    
+                    if (did && label) {
+                        gifRefs.push(did);
+                        resolutionLabels.push(label);
+                        widths.push(width);
+                        heights.push(height);
+                        fileSizes.push(0); // We don't know the file size, will be filled by backend
+                    }
+                });
+
+                if (gifRefs.length === 0) {
+                    showMessage('publish-status', 'Please add at least one GIF media reference', 'error');
+                    return;
+                }
+
+                const gifData = {
+                    basic: {
+                        name: document.getElementById('gif-collection-name').value,
+                        description: document.getElementById('gif-collection-description').value,
+                        language: 'en',
+                        date: Math.floor(Date.now() / 1000),
+                        tagItems: document.getElementById('gif-tags').value.split(',').map(t => t.trim()).filter(t => t)
+                    },
+                    multiResolutionGif: {
+                        gif_media_refs: gifRefs,
+                        resolution_labels: resolutionLabels,
+                        file_sizes: fileSizes,
+                        resolution_widths: widths,
+                        resolution_heights: heights,
+                        primary_resolution_index: parseInt(document.getElementById('gif-primary-index').value) || 1,
+                        loop_count: parseInt(document.getElementById('gif-loop-count').value) || 0,
+                        frame_rate: parseInt(document.getElementById('gif-frame-rate').value) || 15,
+                        duration_seconds: parseFloat(document.getElementById('gif-duration').value) || 8.5
+                    }
+                };
+
+                if (!gifData.basic.name) {
+                    showMessage('publish-status', 'Please fill in collection name', 'error');
+                    return;
+                }
+
+                // Always publish to GUN for multi-resolution GIF collections
+                const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
+                const queryParams = `?recordType=multiResolutionGif${localId ? `&localId=${localId}` : ''}`;
+
+                const requestBody = { ...gifData };
+                requestBody.storage = 'gun';
+                if (localId) requestBody.localId = localId;
+
+                const response = await fetch(`/api/records/newRecord${queryParams}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage('publish-success', `GIF collection published to GUN! DID: ${result.did}`, 'success');
+                    
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to publish GIF collection', 'error');
+                }
+            } catch (error) {
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        // Helper function to add GIF references dynamically
+        function addGifReference() {
+            const container = document.getElementById('gif-refs-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'gif-ref-row';
+            newRow.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px; align-items: end;';
+            
+            newRow.innerHTML = `
+                <div style="flex: 2;">
+                    <input type="text" class="gif-media-did" placeholder="did:gun:media:...">
+                </div>
+                <div style="flex: 1;">
+                    <input type="text" class="gif-resolution-label" placeholder="360p">
+                </div>
+                <div style="flex: 1;">
+                    <input type="number" class="gif-width" placeholder="640">
+                </div>
+                <div style="flex: 1;">
+                    <input type="number" class="gif-height" placeholder="360">
+                </div>
+                <button type="button" onclick="removeGifReference(this)" class="btn-small btn-secondary">-</button>
+            `;
+            
+            container.appendChild(newRow);
+        }
+
+        function removeGifReference(button) {
+            const row = button.closest('.gif-ref-row');
+            if (document.querySelectorAll('.gif-ref-row').length > 1) {
+                row.remove();
             }
         }
 

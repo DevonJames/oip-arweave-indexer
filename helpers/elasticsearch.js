@@ -337,6 +337,11 @@ const ensureIndexExists = async () => {
                 await elasticClient.indices.create({
                     index: 'templates',
                     body: {
+                        settings: {
+                            'mapping.total_fields.limit': 5000,  // Increase field limit from 1000 to 5000
+                            'mapping.nested_fields.limit': 100,  // Increase nested field limit
+                            'mapping.nested_objects.limit': 10000  // Increase nested objects limit
+                        },
                         mappings: {
                             properties: {
                                 data: {
@@ -400,6 +405,11 @@ const ensureIndexExists = async () => {
                 await elasticClient.indices.create({
                     index: 'records',
                     body: {
+                        settings: {
+                            'mapping.total_fields.limit': 5000,  // Increase field limit from 1000 to 5000
+                            'mapping.nested_fields.limit': 100,  // Increase nested field limit
+                            'mapping.nested_objects.limit': 10000  // Increase nested objects limit
+                        },
                         mappings: {
                             properties: {
                                 data: { type: 'nested' },
@@ -2391,6 +2401,46 @@ async function getRecords(queryParams) {
     }
 }
 
+const getOrganizationsInDB = async () => {
+    try {
+        const response = await elasticClient.search({
+            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            body: {
+                query: {
+                    term: {
+                        "oip.recordType": "organization"
+                    }
+                },
+                size: 10000, // Adjust as needed
+                sort: [
+                    {
+                        "oip.inArweaveBlock": {
+                            order: "desc"
+                        }
+                    }
+                ]
+            }
+        });
+
+        const organizations = response.hits.hits.map(hit => hit._source);
+        const qtyOrganizationsInDB = organizations.length;
+        const maxArweaveOrgBlockInDB = organizations.length > 0 ? organizations[0].oip.inArweaveBlock : 0;
+
+        return {
+            qtyOrganizationsInDB,
+            maxArweaveOrgBlockInDB,
+            organizationsInDB: organizations
+        };
+    } catch (error) {
+        console.error(getFileInfo(), getLineNumber(), 'Error getting organizations from DB:', error);
+        return {
+            qtyOrganizationsInDB: 0,
+            maxArweaveOrgBlockInDB: 0,
+            organizationsInDB: []
+        };
+    }
+};
+
 const getCreatorsInDB = async () => {
     try {
         const searchResponse = await elasticClient.search({
@@ -2568,6 +2618,122 @@ const convertToCreatorHandle = async (txId, handle) => {
     console.log(getFileInfo(), getLineNumber(), 'Final handle:', finalHandle);
     return finalHandle;
 };
+
+const findOrganizationsByHandle = async (orgHandle) => {
+    try {
+        console.log(getFileInfo(), getLineNumber(), 'Searching for organizations with handle:', orgHandle);
+        const response = await elasticClient.search({
+            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            body: {
+                query: {
+                    bool: {
+                        must: [
+                            {
+                                term: {
+                                    "oip.recordType": "organization"
+                                }
+                            },
+                            {
+                                term: {
+                                    "oip.organization.orgHandle.keyword": orgHandle
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        });
+        return response.hits.hits.map(hit => hit._source);
+    } catch (error) {
+        console.error(getFileInfo(), getLineNumber(), 'Error searching for organizations by handle:', error);
+        throw error;
+    }
+};
+
+const convertToOrgHandle = async (txId, handle) => {
+    const decimalNumber = parseInt(txId.replace(/[^0-9a-fA-F]/g, ''), 16);
+    
+    // Start with one digit
+    let digitsCount = 1;
+    let uniqueHandleFound = false;
+    let finalHandle = '';
+    
+    while (!uniqueHandleFound) {
+        const currentDigits = decimalNumber.toString().substring(0, digitsCount);
+        const possibleHandle = `${handle}${currentDigits}`;
+        console.log(getFileInfo(), getLineNumber(), 'checking org handle and id:', handle, decimalNumber);
+
+        // Check for existing organizations with the possible handle
+        const organizations = await findOrganizationsByHandle(possibleHandle);
+
+        if (organizations.length === 0) {
+            uniqueHandleFound = true;
+            finalHandle = possibleHandle;
+        } else {
+            // Increase the number of digits and check again
+            digitsCount++;
+        }
+    }
+    console.log(getFileInfo(), getLineNumber(), 'Final org handle:', finalHandle);
+    return finalHandle;
+};
+
+// add some kind of history of registrations for organizations
+async function indexNewOrganizationRegistration(organizationRegistrationParams) {
+    let { transaction, organizationInfo, organizationHandle, block } = organizationRegistrationParams;
+    
+    let organization;
+    
+    // Check if this is a delete message
+    if (transaction.data.includes('delete')) {
+        console.log(getFileInfo(), getLineNumber(), 'Delete message detected for organization registration:', transaction.transactionId);
+        return  // Return early if it's a delete message
+    }
+    
+    organizationHandle = (organizationHandle !== undefined) ? organizationHandle : await convertToOrgHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["0"]);
+    block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
+    
+    console.log('Organization transaction:', transaction);
+    organization = {
+        data: {
+            orgHandle: organizationHandle,
+            orgPublicKey: JSON.parse(transaction.data)[0]["1"],
+            adminPublicKeys: JSON.parse(transaction.data)[0]["2"],
+            membershipPolicy: JSON.parse(transaction.data)[0]["3"],
+            metadata: JSON.parse(transaction.data)[0]["4"]
+        },
+        oip: {
+            recordType: 'organization',
+            didTx: organizationInfo.data.didTx,
+            inArweaveBlock: block,
+            indexedAt: new Date(),
+            ver: transaction.ver,
+            signature: transaction.creatorSig,
+            organization: {
+                orgHandle: organizationHandle,
+                didAddress: organizationInfo.data.didAddress,
+                didTx: organizationInfo.data.didTx,
+                orgPublicKey: organizationInfo.data.orgPublicKey,
+                adminPublicKeys: organizationInfo.data.adminPublicKeys,
+                membershipPolicy: organizationInfo.data.membershipPolicy,
+                metadata: organizationInfo.data.metadata
+            }
+        },
+    }
+    
+    console.log(getFileInfo(), getLineNumber(), 'Organization to index:', organization);
+    
+    try {
+        const response = await elasticClient.index({
+            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            id: organization.oip.didTx,
+            body: organization
+        });
+        console.log(getFileInfo(), getLineNumber(), 'Organization indexed:', response);
+    } catch (error) {
+        console.error(getFileInfo(), getLineNumber(), 'Error indexing organization:', error);
+    }
+}
 
 // add some kind of history of registrations
 async function indexNewCreatorRegistration(creatorRegistrationParams) {
@@ -3324,6 +3490,31 @@ async function processNewRecord(transaction, remapTemplates = []) {
         }
         await indexNewCreatorRegistration(creatorRegistrationParams)
     }
+    // handle organization registration
+    else if (recordType && recordType === 'organization') {
+        console.log(getFileInfo(), getLineNumber(), 'Processing organization registration:', transactionId, transaction);
+        
+        const orgHandle = await convertToOrgHandle(transactionId, JSON.parse(transaction.data)[0]["0"]);
+        const data = {
+            orgHandle: orgHandle,
+            orgPublicKey: JSON.parse(transaction.data)[0]["1"],
+            adminPublicKeys: JSON.parse(transaction.data)[0]["2"],
+            membershipPolicy: JSON.parse(transaction.data)[0]["3"],
+            metadata: JSON.parse(transaction.data)[0]["4"],
+            didAddress: 'did:arweave:' + transaction.owner,
+            didTx: 'did:arweave:' + transactionId,
+        }
+        console.log(getFileInfo(), getLineNumber(), 'Organization data:', data);
+        const organizationInfo = {
+            data,
+        } 
+        console.log(getFileInfo(), getLineNumber(), 'Organization info:', organizationInfo);
+        const organizationRegistrationParams = {
+            transaction,
+            organizationInfo
+        }
+        await indexNewOrganizationRegistration(organizationRegistrationParams)
+    }
     else {
     // handle records
     dataForSignature = JSON.stringify(tags) + transaction.data;
@@ -3694,6 +3885,9 @@ module.exports = {
     deleteRecordsByIndexedAt,
     deleteRecordsByIndex,
     getCreatorsInDB,
+    getOrganizationsInDB,
+    convertToOrgHandle,
+    findOrganizationsByHandle,
     getRecordTypesSummary,
     elasticClient
 };
