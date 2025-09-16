@@ -40,6 +40,7 @@ COPY helpers ./helpers
 COPY lib ./lib
 COPY remapTemplates ./remapTemplates
 COPY routes ./routes
+COPY services ./services
 COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
