@@ -3,7 +3,8 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { authenticateToken, optionalAuthenticateToken, userOwnsRecord } = require('../helpers/utils');
+const { authenticateToken } = require('../helpers/utils');
+const { optionalAuth } = require('../middleware/auth');
 const { getMediaSeeder } = require('../services/mediaSeeder');
 const { publishToGun } = require('../helpers/templateHelper');
 const { indexRecord } = require('../helpers/elasticsearch');
@@ -223,7 +224,7 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
  * GET /api/media/:mediaId
  * Serve media file with authentication and range support
  */
-router.get('/:mediaId', optionalAuthenticateToken, async (req, res) => {
+router.get('/:mediaId', optionalAuth, async (req, res) => {
   try {
     const { mediaId } = req.params;
     const mediaIdDir = path.join(MEDIA_DIR, mediaId);
@@ -232,7 +233,7 @@ router.get('/:mediaId', optionalAuthenticateToken, async (req, res) => {
 
     console.log('📥 Media request:', {
       mediaId,
-      authenticated: req.isAuthenticated,
+      authenticated: !!req.user,
       user: req.user?.email
     });
 
@@ -256,7 +257,7 @@ router.get('/:mediaId', optionalAuthenticateToken, async (req, res) => {
       const accessLevel = manifest.accessControl.access_level;
       
       if (accessLevel === 'private') {
-        if (!req.isAuthenticated) {
+        if (!req.user) {
           return res.status(401).json({ error: 'Authentication required for private media' });
         }
 
@@ -320,7 +321,7 @@ router.get('/:mediaId', optionalAuthenticateToken, async (req, res) => {
  * GET /api/media/:mediaId/info
  * Get media information and manifest
  */
-router.get('/:mediaId/info', optionalAuthenticateToken, async (req, res) => {
+router.get('/:mediaId/info', optionalAuth, async (req, res) => {
   try {
     const { mediaId } = req.params;
     const mediaIdDir = path.join(MEDIA_DIR, mediaId);
@@ -334,7 +335,7 @@ router.get('/:mediaId/info', optionalAuthenticateToken, async (req, res) => {
 
     // Check access control
     if (manifest.accessControl && manifest.accessControl.access_level === 'private') {
-      if (!req.isAuthenticated) {
+      if (!req.user) {
         return res.status(401).json({ error: 'Authentication required' });
       }
 
