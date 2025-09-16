@@ -16,6 +16,7 @@ const rootRoute = require('./routes/api');
 const recordRoutes = require('./routes/records');
 const templateRoutes = require('./routes/templates');
 const creatorRoutes = require('./routes/creators');
+const organizationRoutes = require('./routes/organizations');
 const scrapeRoutes = require('./routes/scrape');
 const healthRoutes = require('./routes/health');
 const generateRoutes = require('./routes/generate');
@@ -32,6 +33,7 @@ const jfkRoutes = require('./routes/jfk');
 const voiceRoutes = require('./routes/voice');
 const alfredRoutes = require('./routes/alfred');
 const mediaRoutes = require('./routes/media');
+const cleanupRoutes = require('./routes/cleanup');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 
 dotenv.config();
@@ -163,6 +165,7 @@ app.use('/api/records', recordRoutes);
 app.use('/api/publish', publishRecords);
 app.use('/api/templates', templateRoutes);
 app.use('/api/creators', creatorRoutes);
+app.use('/api/organizations', organizationRoutes);
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/generate', generateRoutes);
@@ -178,6 +181,8 @@ app.use('/api/alfred', alfredRoutes);
 app.use('/api/voice', voiceRoutes);
 // Media storage and distribution routes
 app.use('/api/media', mediaRoutes);
+// Template cleanup routes
+app.use('/api/cleanup', cleanupRoutes);
 
 // Make io available to routes
 app.set('io', io);
