@@ -3674,8 +3674,13 @@ function shouldIndexRecordType(recordType) {
         const mode = (recordTypeIndexConfig.mode || 'all').toLowerCase();
         const typeNorm = String(recordType).trim();
 
-        // Always index delete messages regardless of config
+        // Always index delete messages regardless of config, but skip old-format template deletes
         if (typeNorm === 'deleteMessage') return true;
+        if (typeNorm === 'delete') {
+            // Only process delete messages that use the new deleteTemplate format
+            // This prevents old delete messages from being processed
+            return false; // Skip all old-format delete messages for safety
+        }
 
         if (mode === 'all') return true;
 
