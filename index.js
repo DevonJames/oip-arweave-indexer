@@ -33,6 +33,7 @@ const jfkRoutes = require('./routes/jfk');
 const voiceRoutes = require('./routes/voice');
 const alfredRoutes = require('./routes/alfred');
 const mediaRoutes = require('./routes/media');
+const cleanupRoutes = require('./routes/cleanup');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 
 dotenv.config();
@@ -180,6 +181,8 @@ app.use('/api/alfred', alfredRoutes);
 app.use('/api/voice', voiceRoutes);
 // Media storage and distribution routes
 app.use('/api/media', mediaRoutes);
+// Template cleanup routes
+app.use('/api/cleanup', cleanupRoutes);
 
 // Make io available to routes
 app.set('io', io);
