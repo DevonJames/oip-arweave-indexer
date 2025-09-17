@@ -2508,8 +2508,8 @@ const getRecordsInDB = async () => {
         //     // console.log(record.oip.creator);
         // });
         if (records.length === 0) {
-            'no records found in DB'
-            return { qtyRecordsInDB: 0, maxArweaveBlockInDB: 0, records: [] };
+            console.log(getFileInfo(), getLineNumber(), 'no records found in DB');
+            return { qtyRecordsInDB: 0, finalMaxRecordArweaveBlock: 0, records: [] };
         } else {
             for (const record of records) {
                 const creatorHandle = record.oip.creator.creatorHandle || '';
