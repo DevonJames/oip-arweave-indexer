@@ -1,4 +1,3 @@
-const WebTorrent = require('webtorrent');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -6,6 +5,7 @@ const crypto = require('crypto');
 class MediaSeeder {
   constructor() {
     this.client = null;
+    this.WebTorrent = null; // Will be loaded when needed
     this.mediaDir = process.env.MEDIA_DIR || '/usr/src/app/data/media';
     this.stateFile = path.join(this.mediaDir, 'seeder.json');
     this.seedingState = new Map(); // mediaId -> { infoHash, magnetURI, filePath }
@@ -18,8 +18,23 @@ class MediaSeeder {
     console.log('🔗 Trackers:', this.trackers);
   }
 
+  async loadWebTorrent() {
+    if (!this.WebTorrent) {
+      try {
+        this.WebTorrent = require('webtorrent');
+      } catch (error) {
+        console.warn('⚠️ WebTorrent not available:', error.message);
+        throw error;
+      }
+    }
+    return this.WebTorrent;
+  }
+
   async initialize() {
     try {
+      // Load WebTorrent when needed
+      const WebTorrent = await this.loadWebTorrent();
+      
       // Initialize WebTorrent client
       this.client = new WebTorrent({
         tracker: {
@@ -44,7 +59,7 @@ class MediaSeeder {
 
       return true;
     } catch (error) {
-      console.error('❌ Failed to initialize MediaSeeder:', error);
+      console.warn('⚠️ MediaSeeder initialization failed, media features will be disabled:', error.message);
       return false;
     }
   }

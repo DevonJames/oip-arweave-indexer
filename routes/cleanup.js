@@ -145,8 +145,9 @@ router.post('/delete-unused-templates', authenticateToken, async (req, res) => {
                 console.log(`🗑️  Deleting template: ${template.name} (${template.fieldCount} fields)`);
                 
                 const deleteMessage = {
-                    delete: {
-                        didTx: template.did
+                    deleteTemplate: {
+                        didTx: template.did,
+                        version: "1.0.0"
                     }
                 };
                 
@@ -246,8 +247,9 @@ router.post('/delete-template', authenticateToken, async (req, res) => {
         console.log(`🗑️  Deleting specific template: ${templateDid}`);
         
         const deleteMessage = {
-            delete: {
-                didTx: templateDid
+            deleteTemplate: {
+                didTx: templateDid,
+                version: "1.0.0"
             }
         };
         
