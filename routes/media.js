@@ -14,16 +14,20 @@ const router = express.Router();
 // Media directory configuration
 const MEDIA_DIR = process.env.MEDIA_DIR || '/usr/src/app/data/media';
 
-// Ensure media directory exists
-if (!fs.existsSync(MEDIA_DIR)) {
-  fs.mkdirSync(MEDIA_DIR, { recursive: true });
-  console.log('📁 Created media directory:', MEDIA_DIR);
+// Function to ensure media directory exists (called when needed)
+function ensureMediaDir() {
+  if (!fs.existsSync(MEDIA_DIR)) {
+    fs.mkdirSync(MEDIA_DIR, { recursive: true });
+    console.log('📁 Created media directory:', MEDIA_DIR);
+  }
 }
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(MEDIA_DIR, 'temp'));
+    ensureMediaDir();
+    const tempDir = ensureTempDir();
+    cb(null, tempDir);
   },
   filename: (req, file, cb) => {
     // Generate temporary filename
@@ -39,10 +43,13 @@ const upload = multer({
   }
 });
 
-// Ensure temp directory exists
-const tempDir = path.join(MEDIA_DIR, 'temp');
-if (!fs.existsSync(tempDir)) {
-  fs.mkdirSync(tempDir, { recursive: true });
+// Function to ensure temp directory exists (called when needed)
+function ensureTempDir() {
+  const tempDir = path.join(MEDIA_DIR, 'temp');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  return tempDir;
 }
 
 /**
@@ -53,6 +60,8 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
   let tempFilePath = null;
   
   try {
+    // Ensure media directory exists
+    ensureMediaDir();
     console.log('📤 Media upload request:', {
       user: req.user.email,
       file: req.file ? req.file.originalname : 'none',

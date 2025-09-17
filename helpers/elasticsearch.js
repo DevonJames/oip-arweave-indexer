@@ -660,9 +660,11 @@ async function deleteRecordFromDB(creatorDid, transaction) {
     console.log(getFileInfo(), getLineNumber(), 'deleteRecordFromDB:', creatorDid)
     try {
 
-        didTxToDelete = typeof transaction.data === 'string' 
-            ? JSON.parse(transaction.data).delete.didTx 
-            : transaction.data.delete.didTx;
+        const parsedData = typeof transaction.data === 'string' 
+            ? JSON.parse(transaction.data) 
+            : transaction.data;
+        
+        didTxToDelete = parsedData.deleteTemplate?.didTx;
         console.log(getFileInfo(), getLineNumber(), 'didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete })
         if (creatorDid === 'did:arweave:' + transaction.creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
@@ -706,35 +708,19 @@ async function deleteRecordFromDB(creatorDid, transaction) {
 async function checkTemplateUsage(templateTxId) {
     console.log(getFileInfo(), getLineNumber(), 'checkTemplateUsage:', templateTxId);
     try {
-        // Get all records and templates once to avoid repeated calls
+        // Get all records to check template usage
         const result = await getRecordsInDB();
-        const templatesData = await getTemplatesInDB();
         let records = result.records;
-        let templates = templatesData.templatesInDB;
         
-        // Find the template by TxId to get its name
-        const targetTemplate = templates.find(t => t.data.TxId === templateTxId);
-        if (!targetTemplate) {
-            console.log(getFileInfo(), getLineNumber(), 'Template not found:', templateTxId);
-            return false;
-        }
-        
-        const templateName = targetTemplate.data.template;
-        console.log(getFileInfo(), getLineNumber(), 'Checking usage for template:', templateName);
-        
-        // Filter records that use the specified template
+        // Filter records that use the specified template transaction ID
         const recordsUsingTemplate = records.filter(record => {
-            // Check if record.data contains the template name as a key
-            if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
-                // For records where data is an object, check if any key matches the template name
-                return Object.keys(record.data).includes(templateName);
+            // Check if record.oip.templates contains the templateTxId
+            if (record.oip && record.oip.templates && typeof record.oip.templates === 'object') {
+                // Check if any template in the templates object matches the templateTxId
+                return Object.values(record.oip.templates).includes(templateTxId);
             }
-            // If record.data is an array, check each object in the array
-            else if (Array.isArray(record.data)) {
-                return record.data.some(dataItem => 
-                    Object.keys(dataItem).includes(templateName)
-                );
-            }
+            
+            // No fallback logic - all records will be re-indexed with the new templates array
             return false;
         });
         
@@ -749,9 +735,11 @@ async function checkTemplateUsage(templateTxId) {
 async function deleteTemplateFromDB(creatorDid, transaction) {
     console.log(getFileInfo(), getLineNumber(), 'deleteTemplateFromDB:', creatorDid);
     try {
-        const didTxToDelete = typeof transaction.data === 'string' 
-            ? JSON.parse(transaction.data).delete.didTx 
-            : transaction.data.delete.didTx;
+        const parsedData = typeof transaction.data === 'string' 
+            ? JSON.parse(transaction.data) 
+            : transaction.data;
+        
+        const didTxToDelete = parsedData.deleteTemplate?.didTx;
         
         console.log(getFileInfo(), getLineNumber(), 'template didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete });
         
@@ -2810,7 +2798,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         console.log(getFileInfo(), getLineNumber());
 
     // Check if the parsed JSON contains a delete property
-    if (transactionData.hasOwnProperty('delete')) {
+    if (transactionData.hasOwnProperty('deleteTemplate')) {
         console.log(getFileInfo(), getLineNumber(), 'getNewCreatorRegistrations DELETE MESSAGE FOUND, skipping', transactionId);
         return  // Return early if it's a delete message
     }
@@ -3535,7 +3523,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
     if (typeof transaction.data === 'string') {
         try {
             transactionData = JSON.parse(transaction.data);
-            if (transactionData.hasOwnProperty('delete')) {
+            if (transactionData.hasOwnProperty('deleteTemplate')) {
                 console.log(getFileInfo(), getLineNumber(), 'DELETE MESSAGE FOUND, processing', transaction.transactionId);
                 isDeleteMessageFound = true;
             }
@@ -3623,6 +3611,18 @@ async function processNewRecord(transaction, remapTemplates = []) {
         const expandedRecord = await Promise.all(expandedRecordPromises);
         console.log(getFileInfo(), getLineNumber(), expandedRecord, creatorInfo, transaction, inArweaveBlock );
         const combinedRecords = {};
+        
+        // Build templates array mapping template names to their transaction IDs
+        const templatesUsed = {};
+        const rawRecords = JSON.parse(transaction.data);
+        rawRecords.forEach(rawRecord => {
+            const templateTxId = rawRecord.t;
+            const template = findTemplateByTxId(templateTxId, templates.templatesInDB);
+            if (template && template.data && template.data.template) {
+                templatesUsed[template.data.template] = templateTxId;
+            }
+        });
+        
         expandedRecord.forEach(record => {
             Object.keys(record).forEach(key => {
             combinedRecords[key] = record[key];
@@ -3640,6 +3640,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                     indexedAt: new Date().toISOString(),
                     ver: transaction.ver,
                     signature: transaction.creatorSig,
+                    templates: templatesUsed,
                     creator: {
                         creatorHandle: creatorInfo.data.creatorHandle,
                         didAddress: creatorInfo.data.didAddress,
