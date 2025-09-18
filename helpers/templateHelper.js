@@ -796,8 +796,8 @@ async function publishToGun(record, recordType, options = {}) {
         });
         
         // Update with final DID
-        gunRecordData.oip.did = publishResult.did;
-        gunRecordData.oip.didTx = publishResult.did; // For backward compatibility
+        gunRecordData.oip.did = publishResult.did; // Primary field
+        gunRecordData.oip.didTx = publishResult.did; // Backward compatibility
         
         // Index to Elasticsearch (reuse existing function!)
         await indexRecord(gunRecordData);
@@ -824,36 +824,36 @@ async function publishToGun(record, recordType, options = {}) {
  */
 async function indexTemplate(templateToIndex) {
     try {
-        console.log('Indexing template with pending status:', templateToIndex.oip.didTx);
+        console.log('Indexing template with pending status:', templateToIndex.oip.did || templateToIndex.oip.didTx);
         
         const existingTemplate = await elasticClient.exists({
             index: 'templates',
-            id: templateToIndex.oip.didTx
+            id: templateToIndex.oip.did || templateToIndex.oip.didTx
         });
         
         if (existingTemplate.body) {
             // Update existing template
             const response = await elasticClient.update({
                 index: 'templates',
-                id: templateToIndex.oip.didTx,
+                id: templateToIndex.oip.did || templateToIndex.oip.didTx,
                 body: {
                     doc: templateToIndex
                 },
                 refresh: 'wait_for'
             });
-            console.log(`Template updated successfully: ${templateToIndex.oip.didTx}`, response.result);
+            console.log(`Template updated successfully: ${templateToIndex.oip.did || templateToIndex.oip.didTx}`, response.result);
         } else {
             // Create new template
             const response = await elasticClient.index({
                 index: 'templates',
-                id: templateToIndex.oip.didTx,
+                id: templateToIndex.oip.did || templateToIndex.oip.didTx,
                 body: templateToIndex,
                 refresh: 'wait_for'
             });
-            console.log(`Template indexed successfully: ${templateToIndex.oip.didTx}`, response.result);
+            console.log(`Template indexed successfully: ${templateToIndex.oip.did || templateToIndex.oip.didTx}`, response.result);
         }
     } catch (error) {
-        console.error(`Error indexing template ${templateToIndex.oip.didTx}:`, error);
+        console.error(`Error indexing template ${templateToIndex.oip.did || templateToIndex.oip.didTx}:`, error);
         throw error;
     }
 }

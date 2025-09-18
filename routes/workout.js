@@ -40,7 +40,7 @@ router.post('/resolve-exercises', authenticateToken, async (req, res) => {
       const match = findBestExerciseMatch(normalizedName, recordMap);
       
       if (match) {
-        exerciseDidRefs[normalizedName] = match.oip.didTx;
+        exerciseDidRefs[normalizedName] = match.oip.did || match.oip.didTx;
       } else {
         exerciseDidRefs[normalizedName] = null;
         missingExercises.push(normalizedName);
@@ -55,7 +55,7 @@ router.post('/resolve-exercises', authenticateToken, async (req, res) => {
         try {
           const newExerciseRecord = await createNewExerciseRecord(exerciseName);
           if (newExerciseRecord) {
-            exerciseDidRefs[exerciseName] = newExerciseRecord.oip.didTx;
+            exerciseDidRefs[exerciseName] = newExerciseRecord.oip.did || newExerciseRecord.oip.didTx;
           }
         } catch (error) {
           console.error(`Failed to create exercise record for ${exerciseName}:`, error);
@@ -157,7 +157,7 @@ async function createNewExerciseRecord(exerciseName, blockchain = 'arweave') {
     };
 
     const result = await publishNewRecord(exerciseData, "exercise", false, false, false, null, blockchain);
-    console.log(`Created exercise record for ${exerciseName}:`, result.didTx);
+    console.log(`Created exercise record for ${exerciseName}:`, result.did || result.didTx);
     
     return result.recordToIndex;
 
