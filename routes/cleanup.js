@@ -3,6 +3,9 @@ const router = express.Router();
 const { checkTemplateUsage, getTemplatesInDB } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
 const { authenticateToken } = require('../helpers/utils');
+
+// Clear cache and reload config to ensure we get the latest version
+delete require.cache[require.resolve('../config/templates.config')];
 const templatesConfig = require('../config/templates.config');
 
 /**
@@ -25,8 +28,38 @@ router.get('/analyze-templates', authenticateToken, async (req, res) => {
         let unusedFields = 0;
         
         // Get list of default template transaction IDs to protect
+        console.log(`🔍 Config file path:`, require.resolve('../config/templates.config'));
+        console.log(`🔍 Config exists:`, require('fs').existsSync(require.resolve('../config/templates.config')));
+        
+        // Test direct require
+        const testConfig = require('../config/templates.config');
+        console.log(`🔍 Test config load:`, JSON.stringify(testConfig, null, 2));
+        
+        // Test file system directly
+        const fs = require('fs');
+        const path = require('path');
+        const configPath = path.join(__dirname, '../config/templates.config.js');
+        console.log(`🔍 Config file exists:`, fs.existsSync(configPath));
+        if (fs.existsSync(configPath)) {
+            const fileContent = fs.readFileSync(configPath, 'utf8');
+            console.log(`🔍 Config file content:`, fileContent);
+            console.log(`🔍 File contains "organization":`, fileContent.includes('organization'));
+            console.log(`🔍 File contains "multiResolutionGif":`, fileContent.includes('multiResolutionGif'));
+        }
+        
+        console.log(`🔍 Full templates config:`, JSON.stringify(templatesConfig, null, 2));
+        console.log(`🔍 Default templates object:`, JSON.stringify(templatesConfig.defaultTemplates, null, 2));
+        console.log(`🔍 Config keys:`, Object.keys(templatesConfig.defaultTemplates || {}));
+        console.log(`🔍 Config values:`, Object.values(templatesConfig.defaultTemplates || {}));
         const defaultTemplateTxIds = Object.values(templatesConfig.defaultTemplates || {});
         console.log(`🔒 Protecting ${defaultTemplateTxIds.length} default templates from deletion`);
+        console.log(`🔍 Full default template IDs array:`, defaultTemplateTxIds);
+        
+        // Manual check for the specific organization template
+        const orgTxId = "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM";
+        console.log(`🔍 Manual check - organization in config:`, templatesConfig.defaultTemplates.organization);
+        console.log(`🔍 Manual check - organization matches:`, templatesConfig.defaultTemplates.organization === orgTxId);
+        console.log(`🔍 Manual check - includes org:`, defaultTemplateTxIds.includes(orgTxId));
         
         // Check usage for each template
         for (const template of templates) {
