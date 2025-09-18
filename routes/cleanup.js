@@ -3,6 +3,7 @@ const router = express.Router();
 const { checkTemplateUsage, getTemplatesInDB } = require('../helpers/elasticsearch');
 const { publishNewRecord } = require('../helpers/templateHelper');
 const { authenticateToken } = require('../helpers/utils');
+const templatesConfig = require('../config/templates.config');
 
 /**
  * GET /api/cleanup/analyze-templates
@@ -23,6 +24,10 @@ router.get('/analyze-templates', authenticateToken, async (req, res) => {
         let totalFields = 0;
         let unusedFields = 0;
         
+        // Get list of default template transaction IDs to protect
+        const defaultTemplateTxIds = Object.values(templatesConfig.defaultTemplates || {});
+        console.log(`🔒 Protecting ${defaultTemplateTxIds.length} default templates from deletion`);
+        
         // Check usage for each template
         for (const template of templates) {
             const templateTxId = template.data.TxId;
@@ -34,7 +39,9 @@ router.get('/analyze-templates', authenticateToken, async (req, res) => {
             
             console.log(`🔍 Checking template: ${templateName} (${fieldCount} fields)`);
             
-            const isInUse = await checkTemplateUsage(templateTxId);
+            // Check if this is a default template (always consider as "in use")
+            const isDefaultTemplate = defaultTemplateTxIds.includes(templateTxId);
+            const isInUse = isDefaultTemplate || await checkTemplateUsage(templateTxId);
             
             const templateInfo = {
                 name: templateName,
@@ -43,12 +50,17 @@ router.get('/analyze-templates', authenticateToken, async (req, res) => {
                 creator: template.oip.creator?.creatorHandle || 'Unknown',
                 createdAt: template.oip.indexedAt,
                 fieldCount: fieldCount,
-                blockHeight: template.oip.inArweaveBlock
+                blockHeight: template.oip.inArweaveBlock,
+                isDefault: isDefaultTemplate
             };
             
             if (isInUse) {
                 usedTemplates.push(templateInfo);
-                console.log(`✅ Template "${templateName}" is in use`);
+                if (isDefaultTemplate) {
+                    console.log(`🔒 Template "${templateName}" is a DEFAULT template (protected)`);
+                } else {
+                    console.log(`✅ Template "${templateName}" is in use`);
+                }
             } else {
                 unusedTemplates.push(templateInfo);
                 unusedFields += fieldCount;
@@ -109,6 +121,10 @@ router.post('/delete-unused-templates', authenticateToken, async (req, res) => {
         const templatesData = await getTemplatesInDB();
         const templates = templatesData.templatesInDB;
         
+        // Get list of default template transaction IDs to protect
+        const defaultTemplateTxIds = Object.values(templatesConfig.defaultTemplates || {});
+        console.log(`🔒 Protecting ${defaultTemplateTxIds.length} default templates from deletion`);
+        
         const unusedTemplates = [];
         
         for (const template of templates) {
@@ -117,7 +133,9 @@ router.post('/delete-unused-templates', authenticateToken, async (req, res) => {
             const templateDid = template.oip.didTx;
             const fieldCount = template.data.fieldsInTemplateCount || 0;
             
-            const isInUse = await checkTemplateUsage(templateTxId);
+            // Check if this is a default template (always consider as "in use")
+            const isDefaultTemplate = defaultTemplateTxIds.includes(templateTxId);
+            const isInUse = isDefaultTemplate || await checkTemplateUsage(templateTxId);
             
             if (!isInUse) {
                 unusedTemplates.push({
@@ -125,8 +143,11 @@ router.post('/delete-unused-templates', authenticateToken, async (req, res) => {
                     txId: templateTxId,
                     did: templateDid,
                     fieldCount: fieldCount,
-                    creator: template.oip.creator?.creatorHandle || 'Unknown'
+                    creator: template.oip.creator?.creatorHandle || 'Unknown',
+                    isDefault: false // These are confirmed not default since they passed the filter
                 });
+            } else if (isDefaultTemplate) {
+                console.log(`🔒 Skipping default template: ${templateName} (${templateTxId})`);
             }
         }
         
