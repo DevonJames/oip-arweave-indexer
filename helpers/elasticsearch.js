@@ -35,8 +35,8 @@ function createDIDQuery(targetDid) {
     return {
         bool: {
             should: [
-                { match: { "oip.did": targetDid } },
-                { match: { "oip.didTx": targetDid } }
+                { term: { "oip.did": targetDid } },
+                { term: { "oip.didTx": targetDid } }
             ]
         }
     };
@@ -3566,8 +3566,14 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 });
                 
                 if (templateSearch.hits.hits.length > 0) {
-                    console.log(getFileInfo(), getLineNumber(), 'SAFETY: Skipping old-format template deletion:', targetDid);
-                    return { records: newRecords, recordsToDelete };
+                    // Double-check that it's actually a template record type
+                    const foundTemplate = templateSearch.hits.hits[0]._source;
+                    if (foundTemplate.oip && foundTemplate.oip.recordType === 'template') {
+                        console.log(getFileInfo(), getLineNumber(), 'SAFETY: Skipping old-format template deletion:', targetDid);
+                        return { records: newRecords, recordsToDelete };
+                    } else {
+                        console.log(getFileInfo(), getLineNumber(), 'Found in templates index but not a template record type, proceeding:', targetDid, 'recordType:', foundTemplate.oip?.recordType);
+                    }
                 } else {
                     console.log(getFileInfo(), getLineNumber(), 'Target is not a template, proceeding with record deletion:', targetDid);
                 }
