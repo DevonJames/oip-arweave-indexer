@@ -38,6 +38,9 @@ router.get('/analyze-templates', authenticateToken, async (req, res) => {
             totalFields += fieldCount;
             
             console.log(`🔍 Checking template: ${templateName} (${fieldCount} fields)`);
+            console.log(`🔍 Template TxId: "${templateTxId}" | Type: ${typeof templateTxId}`);
+            console.log(`🔍 Default templates array:`, defaultTemplateTxIds);
+            console.log(`🔍 Includes check: ${defaultTemplateTxIds.includes(templateTxId)}`);
             
             // Check if this is a default template (always consider as "in use")
             const isDefaultTemplate = defaultTemplateTxIds.includes(templateTxId);
