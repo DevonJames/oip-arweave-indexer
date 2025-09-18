@@ -30,6 +30,7 @@ module.exports = {
         workoutCompletion: "C3BEhAF0_4Cbblo4CRp8585v6oyaPcgkpiKBp4jWQyw",
         weightEntry: "yXFy2izo1ALbAQOvl8qEQP2XpmMzZoUGXri72I-SKFY",
         shoppingList: "pBI0qarLBP6zPIxBPsl7-ZhzPo0VBqoQ0OFEwZQCUxQ",
-        userFitnessAchievment: "-sC601MieajKTLtJfe0ZyT8zxC9SiDrOa8HTP9aOiU0"
+        userFitnessAchievment: "-sC601MieajKTLtJfe0ZyT8zxC9SiDrOa8HTP9aOiU0",
+        accessControl: "vV9Nj6o-p0_LR321_PD9OLiDkS2fkxH8NUVWsuVEusA"
     },
 };
