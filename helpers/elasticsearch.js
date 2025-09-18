@@ -3523,7 +3523,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
     if (typeof transaction.data === 'string') {
         try {
             transactionData = JSON.parse(transaction.data);
-            if (transactionData.hasOwnProperty('deleteTemplate')) {
+            if (transactionData.hasOwnProperty('deleteTemplate') || transactionData.hasOwnProperty('delete')) {
                 console.log(getFileInfo(), getLineNumber(), 'DELETE MESSAGE FOUND, processing', transaction.transactionId);
                 isDeleteMessageFound = true;
             }
@@ -3549,6 +3549,34 @@ async function processNewRecord(transaction, remapTemplates = []) {
     // handle delete message
     if (isDeleteMessageFound) {
         console.log(getFileInfo(), getLineNumber(), 'Delete message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
+        
+        // Safety check: Skip old-format template deletions
+        if (transactionData.hasOwnProperty('delete') && !transactionData.hasOwnProperty('deleteTemplate')) {
+            const targetDid = transactionData.delete.didTx;
+            console.log(getFileInfo(), getLineNumber(), 'Checking if delete target is a template:', targetDid);
+            
+            // Check if the target is a template by searching the templates index
+            try {
+                const templateSearch = await elasticClient.search({
+                    index: 'templates',
+                    body: {
+                        query: {
+                            match: { "oip.didTx": targetDid }
+                        }
+                    }
+                });
+                
+                if (templateSearch.hits.hits.length > 0) {
+                    console.log(getFileInfo(), getLineNumber(), 'SAFETY: Skipping old-format template deletion:', targetDid);
+                    return { records: newRecords, recordsToDelete };
+                } else {
+                    console.log(getFileInfo(), getLineNumber(), 'Target is not a template, proceeding with record deletion:', targetDid);
+                }
+            } catch (error) {
+                console.warn(getFileInfo(), getLineNumber(), 'Error checking if target is template:', error.message);
+            }
+        }
+        
         record = {
             data: {...transactionData},
             oip: {
@@ -3674,13 +3702,8 @@ function shouldIndexRecordType(recordType) {
         const mode = (recordTypeIndexConfig.mode || 'all').toLowerCase();
         const typeNorm = String(recordType).trim();
 
-        // Always index delete messages regardless of config, but skip old-format template deletes
-        if (typeNorm === 'deleteMessage') return true;
-        if (typeNorm === 'delete') {
-            // Only process delete messages that use the new deleteTemplate format
-            // This prevents old delete messages from being processed
-            return false; // Skip all old-format delete messages for safety
-        }
+        // Always index delete messages regardless of config
+        if (typeNorm === 'deleteMessage' || typeNorm === 'delete') return true;
 
         if (mode === 'all') return true;
 
