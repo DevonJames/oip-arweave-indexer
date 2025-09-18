@@ -20,5 +20,7 @@ module.exports = {
         podcastShow: "JQ_gsZucnD5aM9V9ue748R5COGFyOZYstGVSm1iX7rU",
         modelProvider: "KiINbVeLPhF795ADmX7LM9oUuI7oAdBm1QtH5Ncj32I",
         conversationSession: "eb6irolDympa5_XENtWMIp_bvQ6CLI9q5arRIBTe2sk",
+        multiResolutionGif: "5lqxoSI7DLsl9Q5nqCIsH53r2TUz_Eg6Z56nXc5pk4I",
+        organization: "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM"
     },
 };
