@@ -21,6 +21,15 @@ module.exports = {
         modelProvider: "KiINbVeLPhF795ADmX7LM9oUuI7oAdBm1QtH5Ncj32I",
         conversationSession: "eb6irolDympa5_XENtWMIp_bvQ6CLI9q5arRIBTe2sk",
         multiResolutionGif: "5lqxoSI7DLsl9Q5nqCIsH53r2TUz_Eg6Z56nXc5pk4I",
-        organization: "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM"
+        organization: "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM",
+        fitnessEquipment: "VEz6iYZ8XpsOHQCOriv7gxyvY0OqyBXrNANCVHEgIsk",
+        userFitnessProfile: "2_Jb98EGbZAtZRNrXXCQMTzg-_iYdGjh2qbnI-k-osE",
+        workoutSchedule: "ACgUZxpsxhvy1TaXoOBMBgduje3-d8__gs9nPFSGXWM",
+        mealPlan: "-roCasok1eDw_sjBec9KrGtzuCN5WqpKE15GNfYqsJ8",
+        exerciseResult: "eZFqXh4O5zVqCEs2oNvhi5K3fi8VrTJ9kROVjYmEuxc",
+        workoutCompletion: "C3BEhAF0_4Cbblo4CRp8585v6oyaPcgkpiKBp4jWQyw",
+        weightEntry: "yXFy2izo1ALbAQOvl8qEQP2XpmMzZoUGXri72I-SKFY",
+        shoppingList: "pBI0qarLBP6zPIxBPsl7-ZhzPo0VBqoQ0OFEwZQCUxQ",
+        userFitnessAchievment: "-sC601MieajKTLtJfe0ZyT8zxC9SiDrOa8HTP9aOiU0"
     },
 };
