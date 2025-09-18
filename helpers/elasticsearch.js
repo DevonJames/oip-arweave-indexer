@@ -30,6 +30,18 @@ const elasticClient = new Client({
     }
 });
 
+// Helper function for backward-compatible DID queries
+function createDIDQuery(targetDid) {
+    return {
+        bool: {
+            should: [
+                { match: { "oip.did": targetDid } },
+                { match: { "oip.didTx": targetDid } }
+            ]
+        }
+    };
+}
+
 function getFileInfo() {
     const filename = path.basename(__filename);
     const directory = path.basename(__dirname);
@@ -188,11 +200,7 @@ const searchRecordByTxId = async (txid) => {
         const searchResponse = await elasticClient.search({
             index: 'records',
             body: {
-                query: {
-                    match: {
-                        "oip.didTx": "did:arweave:" + txid
-                    }
-                }
+                query: createDIDQuery("did:arweave:" + txid)
             }
         });
 
@@ -664,7 +672,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             ? JSON.parse(transaction.data) 
             : transaction.data;
         
-        didTxToDelete = parsedData.deleteTemplate?.didTx;
+        didTxToDelete = parsedData.deleteTemplate?.didTx || parsedData.delete?.didTx;
         console.log(getFileInfo(), getLineNumber(), 'didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete })
         if (creatorDid === 'did:arweave:' + transaction.creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
@@ -672,11 +680,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             const searchResponse = await elasticClient.search({
                 index: 'records',
                 body: {
-                    query: {
-                        match: {
-                            "oip.didTx": didTxToDelete
-                        }
-                    }
+                    query: createDIDQuery(didTxToDelete)
                 }
             });
 
@@ -750,11 +754,7 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
             const searchResponse = await elasticClient.search({
                 index: 'templates',
                 body: {
-                    query: {
-                        match: {
-                            "oip.didTx": didTxToDelete
-                        }
-                    }
+                    query: createDIDQuery(didTxToDelete)
                 }
             });
 
@@ -1278,9 +1278,10 @@ async function getRecords(queryParams) {
 
         // Update DID filtering to use normalized field and support both did and didTx
         if (normalizedDid != undefined) {
-            records = records.filter(record => 
-                record.oip?.did === normalizedDid || record.oip?.didTx === normalizedDid
-            );
+            records = records.filter(record => {
+                const recordDid = record.oip?.did || record.oip?.didTx;
+                return recordDid === normalizedDid;
+            });
             console.log(`after filtering by DID=${normalizedDid}, there are`, records.length, 'records');
         }
 
@@ -2471,16 +2472,12 @@ const getCreatorsInDB = async () => {
 
 async function searchRecordInDB(didTx) {
     // console.log(getFileInfo(), getLineNumber(), 'Searching record in DB for didTx:', didTx);
-    const searchResponse = await elasticClient.search({
-        index: 'records',
-        body: {
-            query: {
-                match: {
-                    "oip.didTx": didTx
-                }
+        const searchResponse = await elasticClient.search({
+            index: 'records',
+            body: {
+                query: createDIDQuery(didTx)
             }
-        }
-    });
+        });
     // console.log(getFileInfo(), getLineNumber(), 'Search response:', JSON.stringify(searchResponse, null, 2));
     if (searchResponse.hits.hits.length > 0) {
         return searchResponse.hits.hits[0]._source;
@@ -2692,7 +2689,8 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
         },
         oip: {
             recordType: 'organization',
-            didTx: organizationInfo.data.didTx,
+            did: organizationInfo.data.didTx,
+            didTx: organizationInfo.data.didTx, // Backward compatibility
             inArweaveBlock: block,
             indexedAt: new Date(),
             ver: transaction.ver,
@@ -2714,7 +2712,7 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
     try {
         const response = await elasticClient.index({
             index: process.env.ELASTICSEARCHINDEX || 'oip',
-            id: organization.oip.didTx,
+            id: organization.oip.did,
             body: organization
         });
         console.log(getFileInfo(), getLineNumber(), 'Organization indexed:', response);
@@ -2822,7 +2820,8 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             },
             oip: {
                 recordType: 'creatorRegistration',
-                didTx: creatorInfo.data.didTx,
+                did: creatorInfo.data.didTx,
+                didTx: creatorInfo.data.didTx, // Backward compatibility
                 inArweaveBlock: block,
                 indexedAt: new Date(),
                 ver: transaction.ver,
@@ -2925,7 +2924,8 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                     },
                     oip: {
                         recordType: 'creatorRegistration',
-                        didTx: result.didTx,
+                        did: result.didTx,
+                        didTx: result.didTx, // Backward compatibility
                         inArweaveBlock: inArweaveBlock,
                         indexedAt: new Date(),
                         ver: transaction.ver,
@@ -2987,7 +2987,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
     newCreators.forEach(async (creator) => {
         const existingCreator = await elasticClient.exists({
             index: 'creatorregistrations',
-            id: creator.oip.didTx
+            id: creator.oip.did || creator.oip.didTx
         });
         console.log(getFileInfo(), getLineNumber(), { existingCreator });
 
@@ -2995,7 +2995,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             try {
                 await elasticClient.index({
                     index: 'creatorregistrations',
-                    id: creator.oip.didTx,
+                    id: creator.oip.did || creator.oip.didTx,
                     body: creator,
                 });
                 console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creator.oip.didTx}`);
@@ -3010,7 +3010,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             try {
                 await elasticClient.delete({
                     index: 'creatorregistrations',
-                    id: creator.oip.didTx
+                    id: creator.oip.did || creator.oip.didTx
                 });
                 console.log(getFileInfo(), getLineNumber());
 
@@ -3025,7 +3025,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             await elasticClient.index({
                 index: 'creatorregistrations',
                 body: creator,
-                id: creator.oip.didTx,
+                id: creator.oip.did || creator.oip.didTx,
             });
             console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creator.oip.didTx}`);
         } catch (error) {
@@ -3332,7 +3332,8 @@ async function processNewTemplate(transaction) {
         const fieldsObject = JSON.parse(fieldsString);
         
         const oip = {
-            didTx: 'did:arweave:' + transaction.transactionId,
+            did: 'did:arweave:' + transaction.transactionId,
+            didTx: 'did:arweave:' + transaction.transactionId, // Backward compatibility
             inArweaveBlock: inArweaveBlock,
             indexedAt: new Date().toISOString(),
             recordStatus: "original",
@@ -3348,7 +3349,7 @@ async function processNewTemplate(transaction) {
         try {
             const existingTemplate = await elasticClient.exists({
                 index: 'templates',
-                id: oip.didTx
+                id: oip.did
             });
             
             // Create both formats - simple fields string AND complex fieldsInTemplate
@@ -3404,12 +3405,12 @@ async function processNewTemplate(transaction) {
                     },
                     refresh: 'wait_for'
                 });
-                console.log(getFileInfo(), getLineNumber(), `✅ Template updated successfully: ${oip.didTx}`, response.result);
+                console.log(getFileInfo(), getLineNumber(), `✅ Template updated successfully: ${oip.did}`, response.result);
             } else {
                 // Create new template
                 const indexResult = await elasticClient.index({
                     index: 'templates',
-                    id: oip.didTx,
+                    id: oip.did,
                     body: finalTemplate,
                     refresh: 'wait_for'  // Ensure immediate availability
                 });
@@ -3560,9 +3561,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 const templateSearch = await elasticClient.search({
                     index: 'templates',
                     body: {
-                        query: {
-                            match: { "oip.didTx": targetDid }
-                        }
+                        query: createDIDQuery(targetDid)
                     }
                 });
                 
@@ -3581,7 +3580,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
             data: {...transactionData},
             oip: {
                 recordType: 'deleteMessage',
-                didTx: 'did:arweave:' + transaction.transactionId,
+                did: 'did:arweave:' + transaction.transactionId,
+                didTx: 'did:arweave:' + transaction.transactionId, // Backward compatibility
                 inArweaveBlock: inArweaveBlock,
                 indexedAt: new Date().toISOString(),
                 ver: transaction.ver,
@@ -3663,7 +3663,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 oip: {
                     recordType: recordType,
                     recordStatus: "original",
-                    didTx: 'did:arweave:' + transaction.transactionId,
+                    did: 'did:arweave:' + transaction.transactionId,
+                    didTx: 'did:arweave:' + transaction.transactionId, // Backward compatibility
                     inArweaveBlock: inArweaveBlock,
                     indexedAt: new Date().toISOString(),
                     ver: transaction.ver,

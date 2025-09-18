@@ -32,7 +32,7 @@ router.get('/analyze-templates', authenticateToken, async (req, res) => {
         for (const template of templates) {
             const templateTxId = template.data.TxId;
             const templateName = template.data.template;
-            const templateDid = template.oip.didTx;
+            const templateDid = template.oip.did || template.oip.didTx;
             const fieldCount = template.data.fieldsInTemplateCount || 0;
             
             totalFields += fieldCount;
@@ -130,7 +130,7 @@ router.post('/delete-unused-templates', authenticateToken, async (req, res) => {
         for (const template of templates) {
             const templateTxId = template.data.TxId;
             const templateName = template.data.template;
-            const templateDid = template.oip.didTx;
+            const templateDid = template.oip.did || template.oip.didTx;
             const fieldCount = template.data.fieldsInTemplateCount || 0;
             
             // Check if this is a default template (always consider as "in use")

@@ -42,7 +42,9 @@ router.get('/', async (req, res) => {
 
         // Filter by didTx
         if (didTx) {
-            templates = templates.filter(template => template.oip.didTx === didTx);
+            templates = templates.filter(template => 
+                (template.oip.did || template.oip.didTx) === didTx
+            );
             console.log('after filtering by didTx, there are', templates.length, 'templates');
         }
 
@@ -59,7 +61,7 @@ router.get('/', async (req, res) => {
                 const selectedTxIds = new Set(Object.values(defaultTemplates || {})); // raw txids from config
                 templates = templates.filter(template => {
                     const txId = template?.data?.TxId;
-                    const didTx = template?.oip?.didTx; // format: did:arweave:<txid>
+                    const didTx = template?.oip?.did || template?.oip?.didTx; // format: did:arweave:<txid>
                     if (txId && selectedTxIds.has(txId)) return true;
                     if (didTx && typeof didTx === 'string' && didTx.startsWith('did:arweave:')) {
                         const plain = didTx.replace('did:arweave:', '');
@@ -294,13 +296,14 @@ router.post('/newTemplate', authenticateToken, async (req, res) => {
         // Index template to Elasticsearch with pending status
         if (newTemplate.templateToIndex) {
             await indexTemplate(newTemplate.templateToIndex);
-            console.log('Template indexed with pending status:', newTemplate.didTx);
+            console.log('Template indexed with pending status:', newTemplate.did || newTemplate.didTx);
         }
         
         res.status(200).json({ 
             newTemplate: {
                 transactionId: newTemplate.transactionId,
-                didTx: newTemplate.didTx,
+                did: newTemplate.did || newTemplate.didTx,
+                didTx: newTemplate.didTx, // Backward compatibility
                 blockchain: newTemplate.blockchain,
                 provider: newTemplate.provider,
                 url: newTemplate.url,

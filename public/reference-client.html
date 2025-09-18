@@ -4270,7 +4270,7 @@
             
             // First try to find the record in current records
             const foundRecord = currentRecords.find(record => {
-                const didTx = record.oip?.didTx || '';
+                const didTx = record.oip?.did || record.oip?.didTx || '';
                 const recordTruncated = didTx.replace('did:arweave:', '').substring(0, 7);
                 return recordTruncated === truncatedDidTx;
             });
@@ -4287,7 +4287,7 @@
                     
                     if (data.records) {
                         const matchingRecord = data.records.find(record => {
-                            const didTx = record.oip?.didTx || '';
+                            const didTx = record.oip?.did || record.oip?.didTx || '';
                             const recordTruncated = didTx.replace('did:arweave:', '').substring(0, 7);
                             return recordTruncated === truncatedDidTx;
                         });
@@ -5637,7 +5637,7 @@
             card.className = isListView ? 'record-card list-view' : 'record-card';
             
             // Store record data for clickable elements (removed whole-card click handler)
-            const didTx = record.oip?.didTx;
+            const didTx = record.oip?.did || record.oip?.didTx;
             
             const recordType = record.oip?.recordType || 'unknown';
             const basicData = record.data?.basic || {};
@@ -5713,7 +5713,7 @@
                         <button class="show-structure-btn" onclick="toggleRecordStructure(${recordIndex})" title="Show technical record structure">
                             <span class="structure-icon">🔧</span> Show Record Structure
                         </button>
-                        <div class="record-did">DID: ${truncateText(record.oip?.didTx || 'Unknown', 20)}</div>
+                        <div class="record-did">DID: ${truncateText(record.oip?.did || record.oip?.didTx || 'Unknown', 20)}</div>
                     </div>
                     
                     <div id="structure-${recordIndex}" class="record-structure hidden">
@@ -6300,7 +6300,7 @@
                                 </div>
                             ` : ''}
                             <div style="font-size: 11px; color: #999; margin-top: 5px;">
-                                DID: ${citation.oip?.didTx || 'Unknown'}
+                                DID: ${citation.oip?.did || citation.oip?.didTx || 'Unknown'}
                             </div>
                         </div>
                     `;
@@ -6589,7 +6589,7 @@
             });
             
             if (showDebugInfo) {
-                html += `<div class="field-debug">Resolved: ${resolvedRecord.oip?.didTx}</div>`;
+                html += `<div class="field-debug">Resolved: ${resolvedRecord.oip?.did || resolvedRecord.oip?.didTx}</div>`;
             }
             
             html += '</div>';
@@ -6766,7 +6766,7 @@
                     
                     data.templates.forEach(template => {
                         const templateName = template.data.template || template.data.recordType || 'unknown';
-                        const templateTxId = template.oip.didTx;
+                        const templateTxId = template.oip.did || template.oip.didTx;
                         const recordType = template.data.recordType || template.data.template || 'unknown';
                         
                         // Store in legacy format for compatibility
@@ -9413,6 +9413,7 @@
                 currentFilters.recordType ||
                 currentFilters.dateStart ||
                 currentFilters.dateEnd ||
+                currentFilters.did ||
                 currentFilters.didTx ||
                 currentFilters.tags ||
                 currentFilters.tag ||
@@ -9660,8 +9661,8 @@
             if (filters.sortBy) {
                 document.getElementById('voice-sort-by').value = filters.sortBy;
             }
-            if (filters.didTx) {
-                document.getElementById('voice-did-tx').value = filters.didTx;
+            if (filters.did || filters.didTx) {
+                document.getElementById('voice-did-tx').value = filters.did || filters.didTx;
             }
             
             // Handle enhanced multi-tag filtering from AI
@@ -9713,11 +9714,12 @@
                 addFilterChip(container, 'Content', 'Has Audio');
                 hasFilters = true;
             }
-            if (currentFilters.didTx) {
-                const shortDid = currentFilters.didTx.length > 25 ? 
-                    currentFilters.didTx.substring(0, 25) + '...' : 
-                    currentFilters.didTx;
-                addFilterChip(container, 'DID TX', shortDid);
+            if (currentFilters.did || currentFilters.didTx) {
+                const didValue = currentFilters.did || currentFilters.didTx;
+                const shortDid = didValue.length > 25 ? 
+                    didValue.substring(0, 25) + '...' : 
+                    didValue;
+                addFilterChip(container, 'DID', shortDid);
                 hasFilters = true;
             }
             if (filters.sortBy && filters.sortBy !== 'inArweaveBlock:desc') {
@@ -10432,7 +10434,7 @@
                             <button class="show-structure-btn" onclick="toggleRecordStructure(${recordIndex})" title="Show technical record structure">
                                 <span class="structure-icon">🔧</span> Show Record Structure
                             </button>
-                            <div class="record-did">DID: ${truncateText(record.oip?.didTx || 'Unknown', 20)}</div>
+                            <div class="record-did">DID: ${truncateText(record.oip?.did || record.oip?.didTx || 'Unknown', 20)}</div>
                         </div>
                         
                         <div id="structure-${recordIndex}" class="record-structure hidden">
@@ -10676,7 +10678,9 @@
             currentFilters.resolveDepth = parseInt(document.getElementById('voice-resolve-depth').value) || 2;
             currentFilters.dateStart = document.getElementById('voice-date-start').value;
             currentFilters.dateEnd = document.getElementById('voice-date-end').value;
-            currentFilters.didTx = document.getElementById('voice-did-tx').value.trim();
+            const didValue = document.getElementById('voice-did-tx').value.trim();
+            currentFilters.did = didValue;
+            currentFilters.didTx = didValue; // Backward compatibility
             currentFilters.includeSigs = document.getElementById('voice-include-sigs-toggle').classList.contains('active');
             currentFilters.includePubKeys = document.getElementById('voice-include-pubkeys-toggle').classList.contains('active');
             currentFilters.hasAudio = document.getElementById('voice-includes-audio-toggle').classList.contains('active');
@@ -10777,7 +10781,8 @@
             delete currentFilters.tagsMatchMode;
             delete currentFilters.tag;
             
-            // Clear didTx filter
+            // Clear DID filters
+            delete currentFilters.did;
             delete currentFilters.didTx;
             
             // Clear hasAudio filter
@@ -10880,7 +10885,10 @@
                 params.append('dateEnd', dateToUnixTime(currentFilters.dateEnd));
             }
             
-            if (currentFilters.didTx) {
+            if (currentFilters.did) {
+                params.append('did', currentFilters.did);
+                console.log('[Enhanced API] Using did filter:', currentFilters.did);
+            } else if (currentFilters.didTx) {
                 params.append('didTx', currentFilters.didTx);
                 console.log('[Enhanced API] Using didTx filter:', currentFilters.didTx);
             }
@@ -11984,8 +11992,9 @@
                 }
 
                 // For archived content, the article may already be published, so just show success
-                if (postSource === 'archive-web' && window.scrapedWebArticleData?.didTx) {
-                    showMessage('publish-success', `Article already archived! DID: ${window.scrapedWebArticleData.didTx}`, 'success');
+                if (postSource === 'archive-web' && (window.scrapedWebArticleData?.did || window.scrapedWebArticleData?.didTx)) {
+                    const did = window.scrapedWebArticleData.did || window.scrapedWebArticleData.didTx;
+                    showMessage('publish-success', `Article already archived! DID: ${did}`, 'success');
                     return;
                 }
 
