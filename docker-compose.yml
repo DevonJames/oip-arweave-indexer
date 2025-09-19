@@ -21,6 +21,7 @@ services:
     profiles:
       - standard-monolithic
       - standard
+      - standard-macMseries
       - minimal
       - minimal-with-scrape
       - gpu
@@ -40,6 +41,7 @@ services:
     profiles:
       - standard-monolithic
       - standard
+      - standard-macMseries
       - minimal
       - minimal-with-scrape
       - gpu
@@ -60,6 +62,7 @@ services:
     profiles:
       - standard-monolithic
       - standard
+      - standard-macMseries
       - standard-gpu
 
   # Standard OIP service (for distributed deployments with AI features)
@@ -96,6 +99,7 @@ services:
     restart: unless-stopped
     profiles:
       - standard
+      - standard-macMseries
 
   # Minimal OIP service (core functionality only, no AI dependencies, no canvas)
   oip-minimal:
@@ -234,6 +238,7 @@ services:
     restart: unless-stopped
     profiles:
       - standard
+      - standard-macMseries
 
   # GPU-accelerated TTS Service (Neural Models with CUDA)
   tts-service-gpu:
@@ -274,6 +279,7 @@ services:
       - 8.8.4.4
     profiles:
       - standard
+      - standard-macMseries
       - standard-monolithic
 
   # Ollama LLM service for GPU deployments (NVIDIA CUDA)
@@ -317,6 +323,7 @@ services:
     restart: unless-stopped
     profiles:
       - standard
+      - standard-macMseries
       - standard-monolithic
 
   # Text generator for GPU deployments - uses GPU Ollama API
@@ -355,6 +362,7 @@ services:
     profiles:
       - standard-monolithic
       - standard
+      - standard-macMseries
 
   # GPU-accelerated Speech-to-Text Service (Whisper with CUDA)
   stt-service-gpu:
@@ -388,13 +396,14 @@ services:
   tts-service:
     build: ./text-to-speech
     ports:
-      - "8006:8005"  # Different port to avoid conflict with GPU service
+      - "8005:8005"  # Standard port for TTS service
     networks:
       - oip-network
     restart: unless-stopped
     profiles:
       - standard-monolithic
       - standard
+      - standard-macMseries
 
   # Ngrok for public access - DISABLED: Using Makefile ngrok with custom domain instead
   # ngrok:
@@ -427,6 +436,7 @@ services:
     restart: unless-stopped
     profiles:
       - standard
+      - standard-macMseries
 
   # Ngrok for minimal profile
   ngrok-minimal:
@@ -477,6 +487,7 @@ services:
       - minimal
       - minimal-with-scrape
       - standard
+      - standard-macMseries
       - standard-gpu
       - standard-monolithic
 
