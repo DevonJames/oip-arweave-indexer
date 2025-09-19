@@ -10,6 +10,10 @@ require('gun/sea');
 const http = require('http');
 const url = require('url');
 
+// In-memory index for simple listing by publisher hash
+// Structure: { [publisherHash: string]: Array<{ soul: string, data: any, storedAt: number }> }
+const publisherIndex = new Map();
+
 console.log('Starting GUN HTTP API server...');
 
 try {
@@ -42,15 +46,62 @@ try {
                         const { soul, data } = JSON.parse(body);
                         console.log(`💾 Storing data for soul: ${soul.substring(0, 50)}...`);
                         
-                        gun.get(soul).put(data, (ack) => {
+                        // Store data and ensure all nested properties are properly saved
+                        const gunNode = gun.get(soul);
+
+                        // Put the main data structure
+                        gunNode.put(data, (ack) => {
                             if (ack.err) {
                                 console.error('❌ GUN put error:', ack.err);
                                 res.writeHead(500);
                                 res.end(JSON.stringify({ error: ack.err }));
                             } else {
                                 console.log('✅ Data stored successfully');
-                                res.writeHead(200);
-                                res.end(JSON.stringify({ success: true, soul }));
+
+                                // Ensure nested data is also stored by explicitly setting each property
+                                // This helps GUN properly handle complex nested structures
+                                if (data.data && typeof data.data === 'object') {
+                                    Object.keys(data.data).forEach(key => {
+                                        gunNode.get('data').get(key).put(data.data[key]);
+                                    });
+                                }
+                                if (data.meta && typeof data.meta === 'object') {
+                                    Object.keys(data.meta).forEach(key => {
+                                        gunNode.get('meta').get(key).put(data.meta[key]);
+                                    });
+                                }
+                                if (data.oip && typeof data.oip === 'object') {
+                                    Object.keys(data.oip).forEach(key => {
+                                        gunNode.get('oip').get(key).put(data.oip[key]);
+                                    });
+                                }
+
+                                try {
+                                    // Maintain a simple in-memory index by publisher hash prefix
+                                    // Expected soul format: "<publisherHash>:<rest>"
+                                    const prefix = String(soul).split(':')[0];
+                                    if (prefix && prefix.length > 0) {
+                                        const list = publisherIndex.get(prefix) || [];
+                                        // Upsert by soul
+                                        const existingIndex = list.findIndex(r => r.soul === soul);
+                                        const recordType = data?.oip?.recordType || data?.data?.oip?.recordType || null;
+                                        const record = { soul, data, recordType, storedAt: Date.now() };
+                                        if (existingIndex >= 0) list[existingIndex] = record; else list.push(record);
+                                        publisherIndex.set(prefix, list);
+
+                                        // Persist minimal index into GUN for restart durability
+                                        // Layout: index:<publisherHash> is a map of soul -> { recordType, storedAt }
+                                        gun.get(`index:${prefix}`).get(soul).put({ recordType, storedAt: record.storedAt });
+                                    }
+                                } catch (e) {
+                                    console.warn('⚠️ Failed to update in-memory index:', e.message);
+                                }
+
+                                // Add a small delay to ensure GUN has time to propagate changes
+                                setTimeout(() => {
+                                    res.writeHead(200);
+                                    res.end(JSON.stringify({ success: true, soul }));
+                                }, 100);
                             }
                         });
                     } catch (parseError) {
@@ -180,18 +231,131 @@ try {
                 }
                 
                 console.log(`📖 Getting data for soul: ${soul.substring(0, 50)}...`);
-                gun.get(soul).once((data) => {
-                    if (data) {
-                        console.log('✅ Data retrieved successfully');
-                        res.writeHead(200);
-                        res.end(JSON.stringify({ success: true, data }));
-                    } else {
-                        console.log('❌ No data found');
-                        res.writeHead(404);
-                        res.end(JSON.stringify({ error: 'Not found' }));
+
+                // Retrieve the complete data structure including nested properties
+                const gunNode = gun.get(soul);
+                const result = {};
+
+                // Use a counter to track when all properties are loaded
+                let pending = 3; // data, meta, oip
+                let completed = false;
+
+                const checkComplete = () => {
+                    if (--pending === 0 && !completed) {
+                        completed = true;
+                        if (Object.keys(result).length > 0) {
+                            console.log('✅ Data retrieved successfully');
+                            res.writeHead(200);
+                            res.end(JSON.stringify({ success: true, data: result }));
+                        } else {
+                            console.log('❌ No data found');
+                            res.writeHead(404);
+                            res.end(JSON.stringify({ error: 'Not found' }));
+                        }
                     }
+                };
+
+                // Retrieve main data
+                gunNode.once((mainData) => {
+                    if (mainData) {
+                        result._ = mainData._;
+                        // Remove GUN internal properties
+                        delete mainData._;
+                        Object.assign(result, mainData);
+                    }
+                    checkComplete();
+                });
+
+                // Retrieve nested data if it exists
+                gunNode.get('data').once((dataData) => {
+                    if (dataData) {
+                        result.data = dataData;
+                        // Remove GUN internal properties
+                        delete result.data._;
+                    }
+                    checkComplete();
+                });
+
+                // Retrieve nested meta if it exists
+                gunNode.get('meta').once((metaData) => {
+                    if (metaData) {
+                        result.meta = metaData;
+                        // Remove GUN internal properties
+                        delete result.meta._;
+                    }
+                    checkComplete();
+                });
+
+                // Retrieve nested oip if it exists
+                gunNode.get('oip').once((oipData) => {
+                    if (oipData) {
+                        result.oip = oipData;
+                        // Remove GUN internal properties
+                        delete result.oip._;
+                    }
+                    checkComplete();
                 });
                 
+            } else if (req.method === 'GET' && path === '/list') {
+                // List records by publisher hash prefix
+                const publisherHash = parsedUrl.query.publisherHash;
+                const limit = Math.max(0, parseInt(parsedUrl.query.limit || '50', 10) || 50);
+                const offset = Math.max(0, parseInt(parsedUrl.query.offset || '0', 10) || 0);
+                const recordType = parsedUrl.query.recordType;
+
+                if (!publisherHash) {
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'publisherHash parameter required' }));
+                    return;
+                }
+
+                console.log(`📃 Listing records for publisherHash=${publisherHash}, limit=${limit}, offset=${offset}, recordType=${recordType || 'any'}`);
+
+                const respond = (records) => {
+                    let filtered = records;
+                    if (recordType) {
+                        filtered = filtered.filter(r => (r?.recordType || r?.data?.oip?.recordType) === recordType);
+                    }
+                    const paged = filtered.slice(offset, offset + limit);
+                    res.writeHead(200);
+                    res.end(JSON.stringify({ success: true, records: paged }));
+                };
+
+                const mem = publisherIndex.get(publisherHash) || [];
+                if (mem.length > 0) {
+                    return respond(mem);
+                }
+
+                // Fallback: hydrate from GUN persistent index
+                try {
+                    gun.get(`index:${publisherHash}`).once((idx) => {
+                        if (!idx || typeof idx !== 'object') {
+                            return respond([]);
+                        }
+                        const souls = Object.keys(idx).filter(k => k && k !== '_' );
+                        if (souls.length === 0) {
+                            return respond([]);
+                        }
+                        const collected = [];
+                        let pending = souls.length;
+                        souls.forEach((soul) => {
+                            gun.get(soul).once((data) => {
+                                if (data) {
+                                    collected.push({ soul, data, recordType: data?.oip?.recordType || null, storedAt: idx[soul]?.storedAt || Date.now() });
+                                }
+                                if (--pending === 0) {
+                                    // Cache hydrated results in memory
+                                    publisherIndex.set(publisherHash, collected);
+                                    respond(collected);
+                                }
+                            });
+                        });
+                    });
+                } catch (e) {
+                    console.warn('⚠️ Failed to hydrate index from GUN:', e.message);
+                    respond([]);
+                }
+
             } else {
                 // Handle unknown endpoints
                 res.writeHead(404);

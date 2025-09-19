@@ -168,9 +168,9 @@ Authorization: Bearer <jwt-token>  # Required for private records
     "last_activity_timestamp": 1757789558199,
     "last_modified_timestamp": 1757789558199,
     "message_count": 0,
-    "messages": "",
-    "message_timestamps": "",
-    "message_roles": "",
+    "messages": [],
+    "message_timestamps": [],
+    "message_roles": [],
     "model_name": "grok-4",
     "model_provider": "did:arweave:model_provider_did",
     "total_tokens": 0,
@@ -218,9 +218,9 @@ Authorization: Bearer <jwt-token>  # Required for private records
     "last_activity_timestamp": 1757789564542,
     "last_modified_timestamp": 1757789564542,
     "message_count": 2,
-    "messages": "[\"Hello, who are you?\",\"I am ALFRED, an AI assistant...\"]",
-    "message_timestamps": "[1757789559348,1757789564040]",
-    "message_roles": "[\"user\",\"assistant\"]",
+    "messages": ["Hello, who are you?", "I am ALFRED, an AI assistant..."],
+    "message_timestamps": [1757789559348, 1757789564040],
+    "message_roles": ["user", "assistant"],
     "model_name": "grok-4",
     "model_provider": "did:arweave:fHGJvSZEdxFVLJjzPvA2Lu4892l05siTveFd5hU5xZQ",
     "processing_mode": "llm",
@@ -377,6 +377,7 @@ Authorization: Bearer <jwt-token>  # Required for private media
 #### Private Records (GUN)
 - **`conversationSession`**: Private AI conversation history
 - **`media`**: Private media files with torrent distribution
+
 - **`note`**: Private user notes (future)
 - **`calendar`**: Private calendar events (future)
 - **`webHistory`**: Private browsing history (future)
@@ -412,38 +413,39 @@ Records include multiple ownership indicators:
 
 ## GUN Network Integration
 
-### Critical: Array Data Limitations
-**GUN cannot handle complex nested arrays.** This is a fundamental limitation that affects how you structure your data when publishing to GUN storage.
 
-#### ❌ What Doesn't Work (Will Cause Publishing Errors)
+### Array Data Handling (Automatic)
+**GUN cannot handle complex nested arrays**, but the OIP backend automatically handles this conversion for you.
+
+#### ✅ What You Can Send (Natural Format)
 ```json
 {
   "conversationSession": {
-    "messages": ["Hello", "Hi there", "How are you?"],           // ❌ Array - will fail
-    "message_timestamps": [1757789559348, 1757789564040],        // ❌ Array - will fail  
-    "message_roles": ["user", "assistant", "user"],             // ❌ Array - will fail
-    "model_provider": ["did:arweave:abc123", "did:arweave:def456"] // ❌ Array - will fail
+    "messages": ["Hello", "Hi there", "How are you?"],           // ✅ Send natural arrays
+    "message_timestamps": [1757789559348, 1757789564040],        // ✅ Send natural arrays
+    "message_roles": ["user", "assistant", "user"],             // ✅ Send natural arrays
+    "model_provider": "did:arweave:abc123"                       // ✅ Single strings work as-is
   }
 }
 ```
 
-#### ✅ What Works (Correct GUN Format)
+#### 🔄 What Happens Automatically (Backend Processing)
 ```json
 {
   "conversationSession": {
-    "messages": "[\"Hello\",\"Hi there\",\"How are you?\"]",           // ✅ JSON string
-    "message_timestamps": "[1757789559348,1757789564040]",            // ✅ JSON string
-    "message_roles": "[\"user\",\"assistant\",\"user\"]",           // ✅ JSON string
-    "model_provider": "did:arweave:abc123"                           // ✅ Single string, not array
+    "messages": "[\"Hello\",\"Hi there\",\"How are you?\"]",           // 🔄 Auto-converted to JSON string
+    "message_timestamps": "[1757789559348,1757789564040]",            // 🔄 Auto-converted to JSON string
+    "message_roles": "[\"user\",\"assistant\",\"user\"]",           // 🔄 Auto-converted to JSON string
+    "model_provider": "did:arweave:abc123"                           // 🔄 Strings unchanged
   }
 }
 ```
 
-### Data Structure Limitations
-- **No Arrays**: GUN cannot handle complex nested arrays
-- **JSON String Workaround**: Arrays stored as JSON strings
-- **Elasticsearch Conversion**: JSON strings converted back to arrays for indexing and API responses
-- **Automatic Processing**: Backend handles conversion transparently
+### Data Structure Processing
+- **Automatic Array Conversion**: Backend automatically converts arrays to JSON strings for GUN
+- **Transparent to Developers**: Send natural array data, backend handles GUN compatibility
+- **Elasticsearch Restoration**: JSON strings automatically converted back to arrays for indexing
+- **API Response Consistency**: Retrieved records show natural array format
 
 ### Encryption
 - **Algorithm**: AES-256-GCM
@@ -515,9 +517,9 @@ curl -X POST "https://api.oip.onl/api/records/newRecord?recordType=conversationS
       "session_id": "my_session_123",
       "start_timestamp": 1757789558199,
       "message_count": 0,
-      "messages": "",
-      "message_timestamps": "",
-      "message_roles": "",
+      "messages": [],
+      "message_timestamps": [],
+      "message_roles": [],
       "model_name": "gpt-4o-mini",
       "conversation_type": "text",
       "owner_public_key": "YOUR_PUBLIC_KEY_FROM_JWT"
@@ -670,12 +672,12 @@ class OIPClient {
           last_activity_timestamp: Date.now(),
           last_modified_timestamp: Date.now(),
           message_count: messages.length,
-          // ✅ CRITICAL: Convert arrays to JSON strings for GUN compatibility
-          messages: JSON.stringify(messages.map(m => m.content || m.text)),
-          message_timestamps: JSON.stringify(messages.map(m => m.timestamp || Date.now())),
-          message_roles: JSON.stringify(messages.map(m => m.role || 'user')),
-          // ✅ CRITICAL: Use string, not array for model_provider
-          model_provider: 'did:arweave:model_provider_did', // Single string, not array
+          // ✅ Send natural arrays - backend automatically converts for GUN compatibility
+          messages: messages.map(m => m.content || m.text),
+          message_timestamps: messages.map(m => m.timestamp || Date.now()),
+          message_roles: messages.map(m => m.role || 'user'),
+          // ✅ Single strings work as-is
+          model_provider: 'did:arweave:model_provider_did',
           model_name: 'gpt-4o-mini',
           conversation_type: 'text',
           is_archived: false,
@@ -731,7 +733,7 @@ class OIPClient {
       throw error;
     }
   }
-
+  
   // Upload private media file
   async uploadMedia(filePath, options = {}) {
     if (!this.token) {
@@ -972,6 +974,7 @@ Each user has a unique HD wallet with:
 {
   "error": "Failed to create torrent",
   "details": "WebTorrent initialization failed",
+
   "status": 500
 }
 ```
@@ -989,7 +992,7 @@ Each user has a unique HD wallet with:
 1. **Always check response status**
 2. **Handle network timeouts gracefully**
 3. **Validate data before publishing**
-4. **Convert arrays to JSON strings for GUN storage**
+4. **Use natural data formats - backend handles GUN compatibility**
 5. **Store JWT tokens securely**
 6. **Implement retry logic for network failures**
 7. **Test with sample data before production**
