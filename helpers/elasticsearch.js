@@ -2503,7 +2503,7 @@ async function getRecords(queryParams) {
 const getOrganizationsInDB = async () => {
     try {
         const response = await elasticClient.search({
-            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            index: 'records', // Use the correct records index, not 'oip'
             body: {
                 query: {
                     term: {
@@ -2524,6 +2524,8 @@ const getOrganizationsInDB = async () => {
         const organizations = response.hits.hits.map(hit => hit._source);
         const qtyOrganizationsInDB = organizations.length;
         const maxArweaveOrgBlockInDB = organizations.length > 0 ? organizations[0].oip.inArweaveBlock : 0;
+
+        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in DB`);
 
         return {
             qtyOrganizationsInDB,
@@ -2718,7 +2720,7 @@ const findOrganizationsByHandle = async (orgHandle) => {
     try {
         console.log(getFileInfo(), getLineNumber(), 'Searching for organizations with handle:', orgHandle);
         const response = await elasticClient.search({
-            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            index: 'records', // Use the correct records index
             body: {
                 query: {
                     bool: {
@@ -2730,7 +2732,7 @@ const findOrganizationsByHandle = async (orgHandle) => {
                             },
                             {
                                 term: {
-                                    "oip.organization.orgHandle.keyword": orgHandle
+                                    "data.organization.org_handle.keyword": orgHandle
                                 }
                             }
                         ]
@@ -2738,6 +2740,7 @@ const findOrganizationsByHandle = async (orgHandle) => {
                 }
             }
         });
+        console.log(getFileInfo(), getLineNumber(), 'Found', response.hits.hits.length, 'organizations with handle:', orgHandle);
         return response.hits.hits.map(hit => hit._source);
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error searching for organizations by handle:', error);
