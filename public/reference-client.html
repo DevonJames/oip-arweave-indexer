@@ -4797,6 +4797,21 @@
                     currentUser = email;
                     localStorage.setItem('oip-auth-token', authToken);
                     localStorage.setItem('oip-user-email', currentUser);
+                    
+                    // Also store in the JWT token localStorage for consistency
+                    localStorage.setItem('oip-jwt-token', authToken);
+                    
+                    // Update JWT status display
+                    try {
+                        const parts = authToken.split('.');
+                        if (parts.length === 3) {
+                            const payload = JSON.parse(atob(parts[1]));
+                            updateJWTStatus(payload);
+                        }
+                    } catch (error) {
+                        console.error('Error updating JWT status after login:', error);
+                    }
+                    
                     showLoggedInState();
                     await loadTemplates();
                     showMessage('auth-success', 'Login successful!', 'success');
@@ -4834,6 +4849,21 @@
                     currentUser = email;
                     localStorage.setItem('oip-auth-token', authToken);
                     localStorage.setItem('oip-user-email', currentUser);
+                    
+                    // Also store in the JWT token localStorage for consistency
+                    localStorage.setItem('oip-jwt-token', authToken);
+                    
+                    // Update JWT status display
+                    try {
+                        const parts = authToken.split('.');
+                        if (parts.length === 3) {
+                            const payload = JSON.parse(atob(parts[1]));
+                            updateJWTStatus(payload);
+                        }
+                    } catch (error) {
+                        console.error('Error updating JWT status after registration:', error);
+                    }
+                    
                     showLoggedInState();
                     await loadTemplates();
                     showMessage('auth-success', 'Registration successful!', 'success');
@@ -4851,6 +4881,11 @@
             currentUser = null;
             localStorage.removeItem('oip-auth-token');
             localStorage.removeItem('oip-user-email');
+            localStorage.removeItem('oip-jwt-token');
+            
+            // Update JWT status display
+            updateJWTStatus(null);
+            
             showLoginState();
         }
 
@@ -4958,18 +4993,26 @@
 
         // Initialize JWT token from localStorage on page load
         function initializeJWTToken() {
-            const savedToken = localStorage.getItem('oip-jwt-token');
+            // Check both token storage locations for consistency
+            const savedToken = localStorage.getItem('oip-jwt-token') || localStorage.getItem('oip-auth-token');
             if (savedToken) {
                 try {
                     const parts = savedToken.split('.');
                     if (parts.length === 3) {
                         const payload = JSON.parse(atob(parts[1]));
                         authToken = savedToken;
+                        
+                        // Ensure both storage locations are synchronized
+                        localStorage.setItem('oip-jwt-token', savedToken);
+                        localStorage.setItem('oip-auth-token', savedToken);
+                        
                         updateJWTStatus(payload);
+                        console.log('JWT token initialized from localStorage:', payload.email);
                     }
                 } catch (error) {
                     console.warn('Invalid saved JWT token, clearing:', error);
                     localStorage.removeItem('oip-jwt-token');
+                    localStorage.removeItem('oip-auth-token');
                 }
             }
         }
@@ -12984,7 +13027,10 @@
 
         async function publishOrganization() {
             try {
-                if (!authToken) {
+                // Check for token in either location
+                const token = authToken || localStorage.getItem('oip-jwt-token') || localStorage.getItem('oip-auth-token');
+                
+                if (!token) {
                     showMessage('publish-status', 'JWT token required for organization registration. Please log in first.', 'error');
                     return;
                 }
@@ -12992,7 +13038,7 @@
                 // Extract user public key from JWT token
                 let userPublicKey;
                 try {
-                    const parts = authToken.split('.');
+                    const parts = token.split('.');
                     if (parts.length === 3) {
                         const payload = JSON.parse(atob(parts[1]));
                         userPublicKey = payload.publicKey;
@@ -13000,6 +13046,9 @@
                         if (!userPublicKey) {
                             throw new Error('Public key not found in JWT token');
                         }
+                        
+                        // Ensure authToken is set for the API call
+                        authToken = token;
                     } else {
                         throw new Error('Invalid JWT format');
                     }
@@ -13161,10 +13210,13 @@
             const orgAdminKeyDisplay = document.getElementById('org-admin-key-display');
             
             if (orgPubKeyDisplay && orgAdminKeyDisplay) {
-                if (authToken) {
+                // Check for token in either location
+                const token = authToken || localStorage.getItem('oip-jwt-token') || localStorage.getItem('oip-auth-token');
+                
+                if (token) {
                     try {
                         // Decode JWT to get user's public key
-                        const parts = authToken.split('.');
+                        const parts = token.split('.');
                         if (parts.length === 3) {
                             const payload = JSON.parse(atob(parts[1]));
                             const userPublicKey = payload.publicKey;
@@ -13172,9 +13224,11 @@
                             if (userPublicKey) {
                                 orgPubKeyDisplay.textContent = userPublicKey;
                                 orgAdminKeyDisplay.textContent = userPublicKey;
+                                console.log('[Organization] Populated public keys from JWT:', userPublicKey.slice(0, 20) + '...');
                             } else {
                                 orgPubKeyDisplay.textContent = 'Public key not found in JWT';
                                 orgAdminKeyDisplay.textContent = 'Public key not found in JWT';
+                                console.error('[Organization] No publicKey field in JWT payload:', payload);
                             }
                         } else {
                             orgPubKeyDisplay.textContent = 'Invalid JWT format';
