@@ -87,6 +87,7 @@ const corsOptions = {
       'http://localhost:3000',
       'http://localhost:3001',  // Added for ALFRED voice interface
       'http://localhost:3005',
+      'http://localhost:5173',
       'http://localhost:8080',
       'https://api.oip.onl',
       'https://api.elevenlabs.io',
