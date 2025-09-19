@@ -2796,7 +2796,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         console.log(getFileInfo(), getLineNumber());
 
     // Check if the parsed JSON contains a delete property
-    if (transactionData.hasOwnProperty('deleteTemplate')) {
+    if (transactionData.hasOwnProperty('deleteTemplate') || transactionData.hasOwnProperty('delete')) {
         console.log(getFileInfo(), getLineNumber(), 'getNewCreatorRegistrations DELETE MESSAGE FOUND, skipping', transactionId);
         return  // Return early if it's a delete message
     }
@@ -3525,7 +3525,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         try {
             transactionData = JSON.parse(transaction.data);
             if (transactionData.hasOwnProperty('deleteTemplate') || transactionData.hasOwnProperty('delete')) {
-                console.log(getFileInfo(), getLineNumber(), 'DELETE MESSAGE FOUND, processing', transaction.transactionId);
+                console.log(getFileInfo(), getLineNumber(), 'DELETE TEMPLATE MESSAGE FOUND, processing', transaction.transactionId);
                 isDeleteMessageFound = true;
             }
         } catch (error) {
@@ -3549,7 +3549,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
     // dataArray.push(transactionData);
     // handle delete message
     if (isDeleteMessageFound) {
-        console.log(getFileInfo(), getLineNumber(), 'Delete message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
+        console.log(getFileInfo(), getLineNumber(), 'Delete template message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
         
         // Safety check: Skip old-format template deletions
         if (transactionData.hasOwnProperty('delete') && !transactionData.hasOwnProperty('deleteTemplate')) {
@@ -3585,7 +3585,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         record = {
             data: {...transactionData},
             oip: {
-                recordType: 'deleteMessage',
+                recordType: 'deleteTemplate',
                 did: 'did:arweave:' + transaction.transactionId,
                 didTx: 'did:arweave:' + transaction.transactionId, // Backward compatibility
                 inArweaveBlock: inArweaveBlock,
@@ -3616,7 +3616,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         }
         console.log(getFileInfo(), getLineNumber(), creatorDid, transaction);
         await deleteRecordFromDB(creatorDid, transaction);
-        console.log(getFileInfo(), getLineNumber(), 'Delete message indexed:', transaction.transactionId, 'and referenced record deleted', record.data.didTx);
+        console.log(getFileInfo(), getLineNumber(), 'Delete template message indexed:', transaction.transactionId, 'and referenced template deleted', record.data.deleteTemplate?.didTx || record.data.delete?.didTx);
 
     } else {
         // handle new records
@@ -3710,7 +3710,7 @@ function shouldIndexRecordType(recordType) {
         const typeNorm = String(recordType).trim();
 
         // Always index delete messages regardless of config
-        if (typeNorm === 'deleteMessage' || typeNorm === 'delete') return true;
+        if (typeNorm === 'deleteMessage' || typeNorm === 'deleteTemplate' || typeNorm === 'delete') return true;
 
         if (mode === 'all') return true;
 

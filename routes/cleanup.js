@@ -208,10 +208,10 @@ router.post('/delete-unused-templates', authenticateToken, async (req, res) => {
                     }
                 };
                 
-                // Publish delete message to Arweave
+                // Publish delete template message to Arweave
                 const result = await publishNewRecord(
                     deleteMessage, 
-                    'deleteMessage', 
+                    'deleteTemplate', 
                     false, // publishFiles
                     true,  // addMediaToArweave
                     false, // addMediaToIPFS
@@ -325,10 +325,10 @@ router.post('/delete-template', authenticateToken, async (req, res) => {
             }
         };
         
-        // Publish delete message to Arweave
+        // Publish delete template message to Arweave
         const result = await publishNewRecord(
             deleteMessage, 
-            'deleteMessage', 
+            'deleteTemplate', 
             false, // publishFiles
             true,  // addMediaToArweave
             false, // addMediaToIPFS

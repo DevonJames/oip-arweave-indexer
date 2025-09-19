@@ -339,10 +339,33 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
         if (record.delete !== undefined && typeof record.delete === 'object' && record.delete.didTx) {
             recordType = 'delete';
             const didTx = record.delete.didTx;
+        } else if (record.deleteTemplate !== undefined && typeof record.deleteTemplate === 'object' && record.deleteTemplate.didTx) {
+            recordType = 'deleteTemplate';
+            const didTx = record.deleteTemplate.didTx;
             let transaction = {
                 data: record,
                 transactionId: didTx
-            }
+            };
+            
+            // Skip template processing for deleteTemplate messages, handle directly
+            recordData = JSON.stringify([record]);
+            
+            return {
+                transactionId: null, // Will be set after publishing to Arweave
+                didTx: null, // Will be set after publishing to Arweave
+                recordType: recordType,
+                blockchain: blockchain,
+                recordToIndex: {
+                    data: record,
+                    oip: {
+                        recordType: recordType,
+                        recordStatus: "pending confirmation in Arweave",
+                        indexedAt: new Date().toISOString(),
+                        ver: "0.8.0"
+                    }
+                },
+                rawData: recordData
+            };
             
             const jwk = JSON.parse(fs.readFileSync(getWalletFilePath()));
             
