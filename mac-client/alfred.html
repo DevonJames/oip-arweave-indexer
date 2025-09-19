@@ -394,9 +394,10 @@
   <script>
     class ALFREDInterface {
       constructor() {
-        // Configuration
+        // Configuration - will be loaded from server
         this.localProcessorUrl = 'http://localhost:8015';
-        this.backendUrl = 'https://api.oip.onl';
+        this.backendUrl = 'https://api.oip.onl'; // Default fallback
+        this.configLoaded = false;
         
         // Audio components (from hybrid_voice_interface.html)
         this.localStream = null;
@@ -475,6 +476,31 @@
         this.initializeInterface();
       }
       
+      async loadConfiguration() {
+        try {
+          console.log('[ALFRED] Loading configuration from server...');
+          const response = await fetch('/config');
+          
+          if (response.ok) {
+            const config = await response.json();
+            this.backendUrl = config.backendUrl;
+            this.localProcessorUrl = config.localProcessorUrl;
+            this.configLoaded = true;
+            
+            console.log(`[ALFRED] Configuration loaded successfully:`);
+            console.log(`  Backend URL: ${this.backendUrl}`);
+            console.log(`  Local Processor URL: ${this.localProcessorUrl}`);
+          } else {
+            throw new Error(`Config request failed: ${response.status}`);
+          }
+        } catch (error) {
+          console.warn('[ALFRED] Failed to load configuration from server, using defaults:', error.message);
+          console.log(`[ALFRED] Using fallback configuration:`);
+          console.log(`  Backend URL: ${this.backendUrl}`);
+          console.log(`  Local Processor URL: ${this.localProcessorUrl}`);
+        }
+      }
+      
       setupEventListeners() {
         // Header controls
         document.querySelector('.nav-toggle').addEventListener('click', () => this.toggleHistory());
@@ -513,7 +539,8 @@
       
       handleKeyboard(e) {
         if (e.code === 'Space' && !e.repeat && !this.spaceKeyDown && 
-            !document.getElementById('inputText').matches(':focus')) {
+            !document.getElementById('inputText').matches(':focus') &&
+            !this.isPhotoDialogFocused()) {
           e.preventDefault();
           this.spaceKeyDown = true;
           
@@ -531,6 +558,24 @@
         }
       }
       
+      isPhotoDialogFocused() {
+        // Check if photo dialog is open and any input is focused
+        if (!this.photoUploadDialog) return false;
+        
+        const dialog = this.photoUploadDialog;
+        const isDialogOpen = dialog.hasAttribute('open') || dialog.open;
+        
+        if (!isDialogOpen) return false;
+        
+        // Check if any form element in the photo dialog has focus
+        const activeElement = document.activeElement;
+        const photoTextarea = dialog.querySelector('#photoQuestion');
+        const photoInput = dialog.querySelector('#photoInput');
+        
+        return activeElement === photoTextarea || activeElement === photoInput || 
+               dialog.contains(activeElement);
+      }
+      
       handleKeyboardUp(e) {
         if (e.code === 'Space' && this.spaceKeyDown) {
           e.preventDefault();
@@ -543,6 +588,9 @@
       }
       
       async initializeInterface() {
+        // Load configuration first
+        await this.loadConfiguration();
+        
         this.updateUI();
         this.setupWaveform();
         this.loadSettings();
@@ -2185,14 +2233,31 @@
           const formData = new FormData();
           formData.append('photo', file);
           
+          console.log(`[Photo] Uploading to: ${this.backendUrl}/api/photo/upload`);
+          
           const uploadResponse = await fetch(`${this.backendUrl}/api/photo/upload`, {
             method: 'POST',
             body: formData
           });
           
+          console.log(`[Photo] Upload response status: ${uploadResponse.status}`);
+          
           if (!uploadResponse.ok) {
-            const error = await uploadResponse.json();
-            throw new Error(error.message || 'Upload failed');
+            let errorMessage = `Upload failed with status ${uploadResponse.status}`;
+            try {
+              const error = await uploadResponse.json();
+              errorMessage = error.message || errorMessage;
+            } catch (parseError) {
+              // If response isn't JSON, get text
+              try {
+                const errorText = await uploadResponse.text();
+                console.error(`[Photo] Upload error response: ${errorText.substring(0, 200)}`);
+                errorMessage = `Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`;
+              } catch (textError) {
+                console.error(`[Photo] Could not parse error response`);
+              }
+            }
+            throw new Error(errorMessage);
           }
           
           const uploadResult = await uploadResponse.json();
