@@ -34,6 +34,7 @@ const voiceRoutes = require('./routes/voice');
 const alfredRoutes = require('./routes/alfred');
 const mediaRoutes = require('./routes/media');
 const cleanupRoutes = require('./routes/cleanup');
+const photoRoutes = require('./routes/photo');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 
 dotenv.config();
@@ -179,6 +180,8 @@ app.use('/api/jfk', jfkRoutes);
 app.use('/api/alfred', alfredRoutes);
 // Backward-compatible alias
 app.use('/api/voice', voiceRoutes);
+// Photo upload and analysis routes
+app.use('/api/photo', photoRoutes);
 // Media storage and distribution routes
 app.use('/api/media', mediaRoutes);
 // Template cleanup routes

@@ -220,6 +220,21 @@ router.post('/delete-unused-templates', authenticateToken, async (req, res) => {
                 );
                 
                 if (result && result.transactionId) {
+                    // Also immediately delete the template from Elasticsearch
+                    try {
+                        const { deleteTemplateFromDB } = require('../helpers/elasticsearch');
+                        const creatorDid = `did:arweave:${req.user.publisherPubKey || req.user.creatorAddress}`;
+                        const mockTransaction = {
+                            transactionId: result.transactionId,
+                            creator: req.user.publisherPubKey || req.user.creatorAddress,
+                            data: deleteMessage
+                        };
+                        await deleteTemplateFromDB(creatorDid, mockTransaction);
+                        console.log(`✅ Template immediately deleted from Elasticsearch: ${template.name}`);
+                    } catch (deleteError) {
+                        console.warn(`⚠️ Delete message published but failed to immediately delete template ${template.name}:`, deleteError.message);
+                    }
+                    
                     deletionResults.push({
                         template: template.name,
                         did: template.did,
@@ -322,6 +337,21 @@ router.post('/delete-template', authenticateToken, async (req, res) => {
         );
         
         if (result && result.transactionId) {
+            // Also immediately delete the template from Elasticsearch
+            try {
+                const { deleteTemplateFromDB } = require('../helpers/elasticsearch');
+                const creatorDid = `did:arweave:${req.user.publisherPubKey || req.user.creatorAddress}`;
+                const mockTransaction = {
+                    transactionId: result.transactionId,
+                    creator: req.user.publisherPubKey || req.user.creatorAddress,
+                    data: deleteMessage
+                };
+                await deleteTemplateFromDB(creatorDid, mockTransaction);
+                console.log(`✅ Template immediately deleted from Elasticsearch: ${templateDid}`);
+            } catch (deleteError) {
+                console.warn(`⚠️ Delete message published but failed to immediately delete template ${templateDid}:`, deleteError.message);
+            }
+            
             res.json({
                 success: true,
                 message: 'Template deletion message published successfully',
