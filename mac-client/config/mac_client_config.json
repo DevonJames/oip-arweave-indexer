@@ -21,7 +21,7 @@
       }
     },
     "backend": {
-      "host": "api.oip.onl",
+      "host": "oip.fitnessally.io",
       "port": 3005,
       "protocol": "https",
       "endpoints": {

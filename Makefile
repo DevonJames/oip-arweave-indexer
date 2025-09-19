@@ -23,6 +23,7 @@ help: ## Show this help message
 	@echo "  $(GREEN)minimal$(NC)              - Core only: elasticsearch, kibana, oip (no canvas - fastest build)"
 	@echo "  $(GREEN)minimal-with-scrape$(NC)  - Core + scraping: elasticsearch, kibana, oip with canvas support"
 	@echo "  $(GREEN)standard$(NC)             - Distributed: Full stack with Chatterbox TTS + AI chat (recommended)"
+	@echo "  $(GREEN)standard-macMseries$(NC)  - Distributed: Full stack optimized for Apple Silicon Macs (CPU-based AI)"
 	@echo "  $(GREEN)standard-monolithic$(NC)  - Monolithic: Core services in one container (lacks modern AI features)"
 	@echo "  $(GREEN)gpu$(NC)                  - GPU-optimized deployment with Chatterbox TTS"
 	@echo "  $(GREEN)oip-gpu-only$(NC)         - Only GPU OIP service"
@@ -143,7 +144,7 @@ start-ngrok: check-ngrok
 	echo "$(BLUE)🔗 Starting ngrok tunnel for $$DOMAIN...$(NC)"; \
 	echo "$(YELLOW)🚀 Starting: $$NGROK_CMD http --domain=$$DOMAIN 3005$(NC)"; \
 	"$$NGROK_CMD" http --domain="$$DOMAIN" 3005 > /tmp/ngrok.log 2>&1 & \
-	&& sleep 5; \
+	sleep 5; \
 	if curl -s --max-time 5 http://localhost:4040/api/tunnels | grep -q "$$DOMAIN"; then \
 		echo "$(GREEN)✅ Tunnel verified: https://$$DOMAIN$(NC)"; \
 	else \
@@ -166,8 +167,8 @@ stop-ngrok:
 # Validate profile
 validate-profile:
 	@case "$(PROFILE)" in \
-		minimal|minimal-with-scrape|standard|standard-monolithic|gpu|oip-gpu-only|standard-gpu|chatterbox|chatterbox-gpu|backend-only) ;; \
-		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-monolithic, gpu, oip-gpu-only, standard-gpu, chatterbox, chatterbox-gpu, or backend-only$(NC)"; exit 1 ;; \
+		minimal|minimal-with-scrape|standard|standard-macMseries|standard-monolithic|gpu|oip-gpu-only|standard-gpu|chatterbox|chatterbox-gpu|backend-only) ;; \
+		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-macMseries, standard-monolithic, gpu, oip-gpu-only, standard-gpu, chatterbox, chatterbox-gpu, or backend-only$(NC)"; exit 1 ;; \
 	esac
 
 # Check if .env file exists
@@ -230,8 +231,15 @@ up: validate-profile check-env check-gpu ## Start services with specified profil
 	docker-compose --profile $(PROFILE) up -d
 	@echo "$(GREEN)Services started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
-	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
-	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ]; then \
+	@for i in {1..30}; do \
+		if curl -s --max-time 2 http://localhost:3005/health >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for OIP service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
 		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
 		$(MAKE) start-ngrok; \
@@ -246,7 +254,14 @@ up-no-makefile-ngrok: validate-profile check-env check-gpu ## Start services wit
 	docker-compose --profile $(PROFILE) up -d
 	@echo "$(GREEN)Services started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
-	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	@for i in {1..30}; do \
+		if curl -s --max-time 2 http://localhost:3005/health >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for OIP service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)OIP service may still be starting...$(NC)"
 	@echo "$(BLUE)ngrok tunnel will be managed by Docker Compose using NGROK_DOMAIN from .env$(NC)"
 	@make status
 
@@ -258,8 +273,15 @@ build: validate-profile check-env check-gpu ## Build and start services with spe
 	docker-compose --profile $(PROFILE) up -d --build
 	@echo "$(GREEN)Services built and started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
-	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
-	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ]; then \
+	@for i in {1..30}; do \
+		if curl -s --max-time 2 http://localhost:3005/health >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for OIP service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
 		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
 		$(MAKE) start-ngrok; \
@@ -275,8 +297,15 @@ rebuild: validate-profile check-env check-gpu ## Rebuild and start services with
 	docker-compose --profile $(PROFILE) up -d
 	@echo "$(GREEN)Services rebuilt and started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
-	@./wait-for-it.sh localhost:3005 -t 60 || echo "$(YELLOW)OIP service may still be starting...$(NC)"
-	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ]; then \
+	@for i in {1..30}; do \
+		if curl -s --max-time 2 http://localhost:3005/health >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for OIP service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
 		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
 		$(MAKE) start-ngrok; \
@@ -358,6 +387,13 @@ standard: ## Quick deploy: Distributed full stack with Chatterbox TTS (recommend
 	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
 	@make install-chatterbox
 
+standard-macMseries: ## Quick deploy: Distributed full stack optimized for Apple Silicon Macs (CPU-based AI) + ngrok
+	@make up PROFILE=standard-macMseries
+	@echo "$(YELLOW)🍎 Installing LLM models for Apple Silicon...$(NC)"
+	@make install-models
+	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
+	@make install-chatterbox
+
 standard-monolithic: ## Quick deploy: Monolithic (all services in one container + separate AI services) + ngrok
 	@make up PROFILE=standard-monolithic
 	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
@@ -403,14 +439,52 @@ rebuild-minimal-with-scrape: ## Quick rebuild: Core services + scraping (elastic
 rebuild-standard: ## Quick rebuild: Distributed full stack with Chatterbox TTS + ngrok
 	@make rebuild PROFILE=standard
 	@echo "$(YELLOW)⏳ Waiting for TTS service to be ready...$(NC)"
-	@timeout 60 bash -c 'until docker ps | grep -E "tts-service.*Up|oip-arweave-indexer-tts-service.*Up" | grep -q Up; do echo "Waiting for TTS service..."; sleep 2; done' || echo "$(YELLOW)⚠️ TTS service didn't start in time, trying anyway...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -E "tts-service.*Up|oip-arweave-indexer-tts-service.*Up" | grep -q Up; then \
+			echo "$(GREEN)✅ TTS service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for TTS service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ TTS service didn't start in time, trying anyway...$(NC)"
+	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
+	@make install-chatterbox
+
+rebuild-standard-macMseries: ## Quick rebuild: Distributed full stack optimized for Apple Silicon Macs (CPU-based AI) + ngrok
+	@make rebuild PROFILE=standard-macMseries
+	@echo "$(YELLOW)⏳ Waiting for services to be ready...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -E "ollama.*Up|oip-arweave-indexer-ollama.*Up" | grep -q Up; then \
+			echo "$(GREEN)✅ Ollama service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for Ollama service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ Ollama service didn't start in time, trying anyway...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -E "tts-service.*Up|oip-arweave-indexer-tts-service.*Up" | grep -q Up; then \
+			echo "$(GREEN)✅ TTS service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for TTS service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ TTS service didn't start in time, trying anyway...$(NC)"
+	@echo "$(YELLOW)🍎 Installing LLM models for Apple Silicon...$(NC)"
+	@make install-models
 	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
 	@make install-chatterbox
 
 rebuild-standard-monolithic: ## Quick rebuild: Monolithic (all services in one container + separate AI services) + ngrok
 	@make rebuild PROFILE=standard-monolithic
 	@echo "$(YELLOW)⏳ Waiting for TTS service to be ready...$(NC)"
-	@timeout 60 bash -c 'until docker ps | grep -E "tts-service.*Up|oip-full.*Up|oip-arweave-indexer-tts-service.*Up|oip-arweave-indexer-oip-full.*Up" | grep -q Up; do echo "Waiting for TTS service..."; sleep 2; done' || echo "$(YELLOW)⚠️ TTS service didn't start in time, trying anyway...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -E "tts-service.*Up|oip-full.*Up|oip-arweave-indexer-tts-service.*Up|oip-arweave-indexer-oip-full.*Up" | grep -q Up; then \
+			echo "$(GREEN)✅ TTS service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for TTS service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ TTS service didn't start in time, trying anyway...$(NC)"
 	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
 	@make install-chatterbox
 
@@ -425,10 +499,31 @@ rebuild-oip-gpu-only: ## Quick rebuild: GPU OIP service only + ngrok
 rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + install models + ngrok (Chatterbox installed during Docker build)
 	@make rebuild PROFILE=standard-gpu
 	@echo "$(YELLOW)⏳ Waiting for GPU services to be ready...$(NC)"
-	@timeout 60 bash -c 'until docker ps | grep -q -E "ollama-gpu.*(Up|Running)"; do echo "Waiting for Ollama GPU service..."; sleep 2; done' || echo "$(YELLOW)⚠️ Ollama GPU service didn't start in time, trying anyway...$(NC)"
-	@timeout 60 bash -c 'until docker ps | grep -q -E "tts-service-gpu.*(Up|Running)"; do echo "Waiting for TTS GPU service..."; sleep 2; done' || echo "$(YELLOW)⚠️ TTS GPU service didn't start in time, trying anyway...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -q -E "ollama-gpu.*(Up|Running)"; then \
+			echo "$(GREEN)✅ Ollama GPU service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for Ollama GPU service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ Ollama GPU service didn't start in time, trying anyway...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -q -E "tts-service-gpu.*(Up|Running)"; then \
+			echo "$(GREEN)✅ TTS GPU service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for TTS GPU service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ TTS GPU service didn't start in time, trying anyway...$(NC)"
 	@echo "$(YELLOW)⏳ Waiting for Ollama API to be ready...$(NC)"
-	@timeout 60 bash -c 'until curl -s http://localhost:11434/api/tags >/dev/null; do echo "Waiting for Ollama API..."; sleep 3; done' || echo "$(YELLOW)⚠️ Ollama API didn't respond in time, trying anyway...$(NC)"
+	@for i in {1..20}; do \
+		if curl -s http://localhost:11434/api/tags >/dev/null; then \
+			echo "$(GREEN)✅ Ollama API is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for Ollama API... ($$i/20)"; \
+		sleep 3; \
+	done || echo "$(YELLOW)⚠️ Ollama API didn't respond in time, trying anyway...$(NC)"
 	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
 	@make install-models
 	@echo "$(GREEN)🎭 Chatterbox TTS installed during Docker build - GPU profile ready!$(NC)"
