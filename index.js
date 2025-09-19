@@ -16,6 +16,7 @@ const rootRoute = require('./routes/api');
 const recordRoutes = require('./routes/records');
 const templateRoutes = require('./routes/templates');
 const creatorRoutes = require('./routes/creators');
+const organizationRoutes = require('./routes/organizations');
 const scrapeRoutes = require('./routes/scrape');
 const healthRoutes = require('./routes/health');
 const generateRoutes = require('./routes/generate');
@@ -31,6 +32,10 @@ const litRoutes = require('./routes/lit');
 const jfkRoutes = require('./routes/jfk');
 const voiceRoutes = require('./routes/voice');
 const alfredRoutes = require('./routes/alfred');
+const mediaRoutes = require('./routes/media');
+const cleanupRoutes = require('./routes/cleanup');
+const photoRoutes = require('./routes/photo');
+const { getMediaSeeder } = require('./services/mediaSeeder');
 
 dotenv.config();
 
@@ -161,6 +166,7 @@ app.use('/api/records', recordRoutes);
 app.use('/api/publish', publishRecords);
 app.use('/api/templates', templateRoutes);
 app.use('/api/creators', creatorRoutes);
+app.use('/api/organizations', organizationRoutes);
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/generate', generateRoutes);
@@ -174,6 +180,12 @@ app.use('/api/jfk', jfkRoutes);
 app.use('/api/alfred', alfredRoutes);
 // Backward-compatible alias
 app.use('/api/voice', voiceRoutes);
+// Photo upload and analysis routes
+app.use('/api/photo', photoRoutes);
+// Media storage and distribution routes
+app.use('/api/media', mediaRoutes);
+// Template cleanup routes
+app.use('/api/cleanup', cleanupRoutes);
 
 // Make io available to routes
 app.set('io', io);
@@ -189,72 +201,81 @@ io.on('connection', (socket) => {
 
 let isProcessing = false; // Flag to indicate if the process is running
 
-// Initialize indices first, then start the server
+// Initialize indices first, then check for CLI operations or start server
 initializeIndices()
-  .then(() => {
-    // Start the server only after indices are initialized
+  .then(async () => {
+    // Parse command-line arguments first
+    const args = minimist(process.argv.slice(2));
+    
+    // CLI functionality for deleting records by block
+    if (args.deleteRecords && args.index && args.blockThreshold) {
+        const index = args.index;
+        const blockThreshold = parseInt(args.blockThreshold, 10);
+
+        if (isNaN(blockThreshold)) {
+            console.error('Invalid blockThreshold value. Please provide a valid number.');
+            process.exit(1);
+        }
+
+        try {
+            console.log(`Deleting records from index '${index}' with inArweaveBlock >= ${blockThreshold}...`);
+            const response = await deleteRecordsByBlock(index, blockThreshold);
+            console.log('Deletion completed successfully:', response);
+            process.exit(0);
+        } catch (error) {
+            console.error('Error occurred during deletion:', error);
+            process.exit(1);
+        }
+    }
+
+    // CLI functionality for deleting records by indexedAt timestamp
+    if (args.deleteRecords && args.index && args.indexedAt) {
+        const index = args.index;
+        const indexedAt = args.indexedAt;
+
+        if (isNaN(Date.parse(indexedAt))) {
+            console.error('Invalid indexedAt value. Please provide a valid timestamp.');
+            process.exit(1);
+        }
+
+        try {
+            console.log(`Deleting records from index '${index}' with indexedAt >= ${indexedAt}...`);
+            const response = await deleteRecordsByIndexedAt(index, indexedAt);
+            console.log('Deletion completed successfully:', response);
+            process.exit(0);
+        } catch (error) {
+            console.error('Error occurred during deletion:', error);
+            process.exit(1);
+        }
+    }
+
+    // CLI functionality for deleting all records from a specified index
+    if (args.deleteAllRecords && args.index) {
+        const index = args.index;
+        console.log(`Deleting all records from index '${index}'...`);
+
+        try {
+            console.log(`Deleting all records from index '${index}'...`);
+            const response = await deleteRecordsByIndex(index); 
+            console.log('Deletion of all records completed successfully:', response);
+            process.exit(0);
+        } catch (error) {
+            console.error('Error occurred during deletion of all records:', error);
+            process.exit(1);
+        }
+    }
+    
+    // If we reach here, it's not a CLI operation, so start the server
     const serverInstance = server.listen(port, async () => {
       console.log(`Server is running on port ${port}`);
 
-      // Parse command-line arguments
-      const args = minimist(process.argv.slice(2));
-
-      // CLI functionality for deleting records by block
-      if (args.deleteRecords && args.index && args.blockThreshold) {
-          const index = args.index;
-          const blockThreshold = parseInt(args.blockThreshold, 10);
-
-          if (isNaN(blockThreshold)) {
-              console.error('Invalid blockThreshold value. Please provide a valid number.');
-              process.exit(1);
-          }
-
-          try {
-              console.log(`Deleting records from index '${index}' with inArweaveBlock >= ${blockThreshold}...`);
-              const response = await deleteRecordsByBlock(index, blockThreshold);
-              console.log('Deletion completed successfully:', response);
-              process.exit(0);
-          } catch (error) {
-              console.error('Error occurred during deletion:', error);
-              process.exit(1);
-          }
-      }
-
-      // CLI functionality for deleting records by indexedAt timestamp
-      if (args.deleteRecords && args.index && args.indexedAt) {
-          const index = args.index;
-          const indexedAt = args.indexedAt;
-
-          if (isNaN(Date.parse(indexedAt))) {
-              console.error('Invalid indexedAt value. Please provide a valid timestamp.');
-              process.exit(1);
-          }
-
-          try {
-              console.log(`Deleting records from index '${index}' with indexedAt >= ${indexedAt}...`);
-              const response = await deleteRecordsByIndexedAt(index, indexedAt);
-              console.log('Deletion completed successfully:', response);
-              process.exit(0);
-          } catch (error) {
-              console.error('Error occurred during deletion:', error);
-              process.exit(1);
-          }
-      }
-
-      // CLI functionality for deleting all records from a specified index
-      if (args.deleteAllRecords && args.index) {
-          const index = args.index;
-          console.log(`Deleting all records from index '${index}'...`);
-
-          try {
-              console.log(`Deleting all records from index '${index}'...`);
-              const response = await deleteRecordsByIndex(index); 
-              console.log('Deletion of all records completed successfully:', response);
-              process.exit(0);
-          } catch (error) {
-              console.error('Error occurred during deletion of all records:', error);
-              process.exit(1);
-          }
+      // Initialize MediaSeeder for server mode
+      try {
+        const mediaSeeder = getMediaSeeder();
+        await mediaSeeder.initialize();
+        console.log('🌱 MediaSeeder initialized successfully');
+      } catch (error) {
+        console.error('❌ Failed to initialize MediaSeeder:', error);
       }
 
       // Initialize remapTemplates

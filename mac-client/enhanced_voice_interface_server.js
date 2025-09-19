@@ -113,6 +113,23 @@ class EnhancedVoiceInterfaceServer {
             res.sendFile(path.join(__dirname, 'alfred.html'));
         });
         
+        // Serve client configuration
+        this.app.get('/config', (req, res) => {
+            try {
+                const backendUrl = this.coordinator.backendUrl.replace('/api', ''); // Remove /api suffix
+                console.log(`[Interface] Serving config with backend URL: ${backendUrl}`);
+                res.json({
+                    backendUrl: backendUrl,
+                    localProcessorUrl: 'http://localhost:8015',
+                    sttUrl: this.coordinator.sttUrl,
+                    smartTurnUrl: this.coordinator.smartTurnUrl
+                });
+            } catch (error) {
+                console.error('[Interface] Failed to load config:', error);
+                res.status(500).json({ error: 'Failed to load configuration' });
+            }
+        });
+        
         // Serve Phase 3 interruption test interface
         this.app.get('/interruption', (req, res) => {
             res.sendFile(path.join(__dirname, 'interruption_test_client.html'));

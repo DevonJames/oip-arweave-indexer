@@ -20,7 +20,9 @@ module.exports = {
         podcastShow: "JQ_gsZucnD5aM9V9ue748R5COGFyOZYstGVSm1iX7rU",
         modelProvider: "KiINbVeLPhF795ADmX7LM9oUuI7oAdBm1QtH5Ncj32I",
         conversationSession: "eb6irolDympa5_XENtWMIp_bvQ6CLI9q5arRIBTe2sk",
-        accessControl: "vV9Nj6o-p0_LR321_PD9OLiDkS2fkxH8NUVWsuVEusA",
+        multiResolutionGif: "5lqxoSI7DLsl9Q5nqCIsH53r2TUz_Eg6Z56nXc5pk4I",
+        organization: "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM",
+        fitnessEquipment: "VEz6iYZ8XpsOHQCOriv7gxyvY0OqyBXrNANCVHEgIsk",
         userFitnessProfile: "2_Jb98EGbZAtZRNrXXCQMTzg-_iYdGjh2qbnI-k-osE",
         workoutSchedule: "ACgUZxpsxhvy1TaXoOBMBgduje3-d8__gs9nPFSGXWM",
         mealPlan: "-roCasok1eDw_sjBec9KrGtzuCN5WqpKE15GNfYqsJ8",
@@ -29,6 +31,6 @@ module.exports = {
         weightEntry: "yXFy2izo1ALbAQOvl8qEQP2XpmMzZoUGXri72I-SKFY",
         shoppingList: "pBI0qarLBP6zPIxBPsl7-ZhzPo0VBqoQ0OFEwZQCUxQ",
         userFitnessAchievment: "-sC601MieajKTLtJfe0ZyT8zxC9SiDrOa8HTP9aOiU0",
-        fitnessEquipment: "VEz6iYZ8XpsOHQCOriv7gxyvY0OqyBXrNANCVHEgIsk"      
+        accessControl: "vV9Nj6o-p0_LR321_PD9OLiDkS2fkxH8NUVWsuVEusA"
     },
 };

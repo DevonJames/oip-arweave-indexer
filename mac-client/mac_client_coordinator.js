@@ -22,7 +22,15 @@ class MacClientCoordinator {
         
         // Backend configuration
         const backendConfig = this.config.client.backend;
-        const port = backendConfig.port === 443 || backendConfig.port === 80 ? '' : `:${backendConfig.port}`;
+        
+        // Only include port for localhost, ignore port for domain names
+        let port = '';
+        if (backendConfig.host === 'localhost' || backendConfig.host === '127.0.0.1') {
+            // Always include port for localhost
+            port = `:${backendConfig.port}`;
+        }
+        // For domain names, never include port
+        
         this.backendUrl = `${backendConfig.protocol}://${backendConfig.host}${port}/api`;
         
         console.log('🍎 Mac Client Coordinator initialized');

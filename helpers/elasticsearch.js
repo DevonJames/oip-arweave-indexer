@@ -30,6 +30,18 @@ const elasticClient = new Client({
     }
 });
 
+// Helper function for backward-compatible DID queries
+function createDIDQuery(targetDid) {
+    return {
+        bool: {
+            should: [
+                { term: { "oip.did": targetDid } },
+                { term: { "oip.didTx": targetDid } }
+            ]
+        }
+    };
+}
+
 function getFileInfo() {
     const filename = path.basename(__filename);
     const directory = path.basename(__dirname);
@@ -188,11 +200,7 @@ const searchRecordByTxId = async (txid) => {
         const searchResponse = await elasticClient.search({
             index: 'records',
             body: {
-                query: {
-                    match: {
-                        "oip.didTx": "did:arweave:" + txid
-                    }
-                }
+                query: createDIDQuery("did:arweave:" + txid)
             }
         });
 
@@ -337,6 +345,11 @@ const ensureIndexExists = async () => {
                 await elasticClient.indices.create({
                     index: 'templates',
                     body: {
+                        settings: {
+                            'mapping.total_fields.limit': 5000,  // Increase field limit from 1000 to 5000
+                            'mapping.nested_fields.limit': 100,  // Increase nested field limit
+                            'mapping.nested_objects.limit': 10000  // Increase nested objects limit
+                        },
                         mappings: {
                             properties: {
                                 data: {
@@ -400,6 +413,11 @@ const ensureIndexExists = async () => {
                 await elasticClient.indices.create({
                     index: 'records',
                     body: {
+                        settings: {
+                            'mapping.total_fields.limit': 5000,  // Increase field limit from 1000 to 5000
+                            'mapping.nested_fields.limit': 100,  // Increase nested field limit
+                            'mapping.nested_objects.limit': 10000  // Increase nested objects limit
+                        },
                         mappings: {
                             properties: {
                                 data: { type: 'nested' },
@@ -677,9 +695,11 @@ async function deleteRecordFromDB(creatorDid, transaction) {
     console.log(getFileInfo(), getLineNumber(), 'deleteRecordFromDB:', creatorDid)
     try {
 
-        didTxToDelete = typeof transaction.data === 'string' 
-            ? JSON.parse(transaction.data).delete.didTx 
-            : transaction.data.delete.didTx;
+        const parsedData = typeof transaction.data === 'string' 
+            ? JSON.parse(transaction.data) 
+            : transaction.data;
+        
+        didTxToDelete = parsedData.deleteTemplate?.didTx || parsedData.delete?.didTx;
         console.log(getFileInfo(), getLineNumber(), 'didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete })
         if (creatorDid === 'did:arweave:' + transaction.creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
@@ -687,11 +707,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             const searchResponse = await elasticClient.search({
                 index: 'records',
                 body: {
-                    query: {
-                        match: {
-                            "oip.didTx": didTxToDelete
-                        }
-                    }
+                    query: createDIDQuery(didTxToDelete)
                 }
             });
 
@@ -723,35 +739,19 @@ async function deleteRecordFromDB(creatorDid, transaction) {
 async function checkTemplateUsage(templateTxId) {
     console.log(getFileInfo(), getLineNumber(), 'checkTemplateUsage:', templateTxId);
     try {
-        // Get all records and templates once to avoid repeated calls
+        // Get all records to check template usage
         const result = await getRecordsInDB();
-        const templatesData = await getTemplatesInDB();
         let records = result.records;
-        let templates = templatesData.templatesInDB;
         
-        // Find the template by TxId to get its name
-        const targetTemplate = templates.find(t => t.data.TxId === templateTxId);
-        if (!targetTemplate) {
-            console.log(getFileInfo(), getLineNumber(), 'Template not found:', templateTxId);
-            return false;
-        }
-        
-        const templateName = targetTemplate.data.template;
-        console.log(getFileInfo(), getLineNumber(), 'Checking usage for template:', templateName);
-        
-        // Filter records that use the specified template
+        // Filter records that use the specified template transaction ID
         const recordsUsingTemplate = records.filter(record => {
-            // Check if record.data contains the template name as a key
-            if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
-                // For records where data is an object, check if any key matches the template name
-                return Object.keys(record.data).includes(templateName);
+            // Check if record.oip.templates contains the templateTxId
+            if (record.oip && record.oip.templates && typeof record.oip.templates === 'object') {
+                // Check if any template in the templates object matches the templateTxId
+                return Object.values(record.oip.templates).includes(templateTxId);
             }
-            // If record.data is an array, check each object in the array
-            else if (Array.isArray(record.data)) {
-                return record.data.some(dataItem => 
-                    Object.keys(dataItem).includes(templateName)
-                );
-            }
+            
+            // No fallback logic - all records will be re-indexed with the new templates array
             return false;
         });
         
@@ -766,9 +766,11 @@ async function checkTemplateUsage(templateTxId) {
 async function deleteTemplateFromDB(creatorDid, transaction) {
     console.log(getFileInfo(), getLineNumber(), 'deleteTemplateFromDB:', creatorDid);
     try {
-        const didTxToDelete = typeof transaction.data === 'string' 
-            ? JSON.parse(transaction.data).delete.didTx 
-            : transaction.data.delete.didTx;
+        const parsedData = typeof transaction.data === 'string' 
+            ? JSON.parse(transaction.data) 
+            : transaction.data;
+        
+        const didTxToDelete = parsedData.deleteTemplate?.didTx;
         
         console.log(getFileInfo(), getLineNumber(), 'template didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete });
         
@@ -779,11 +781,7 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
             const searchResponse = await elasticClient.search({
                 index: 'templates',
                 body: {
-                    query: {
-                        match: {
-                            "oip.didTx": didTxToDelete
-                        }
-                    }
+                    query: createDIDQuery(didTxToDelete)
                 }
             });
 
@@ -1309,9 +1307,10 @@ async function getRecords(queryParams) {
 
         // Update DID filtering to use normalized field and support both did and didTx
         if (normalizedDid != undefined) {
-            records = records.filter(record => 
-                record.oip?.did === normalizedDid || record.oip?.didTx === normalizedDid
-            );
+            records = records.filter(record => {
+                const recordDid = record.oip?.did || record.oip?.didTx;
+                return recordDid === normalizedDid;
+            });
             console.log(`after filtering by DID=${normalizedDid}, there are`, records.length, 'records');
         }
 
@@ -2501,6 +2500,46 @@ async function getRecords(queryParams) {
     }
 }
 
+const getOrganizationsInDB = async () => {
+    try {
+        const response = await elasticClient.search({
+            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            body: {
+                query: {
+                    term: {
+                        "oip.recordType": "organization"
+                    }
+                },
+                size: 10000, // Adjust as needed
+                sort: [
+                    {
+                        "oip.inArweaveBlock": {
+                            order: "desc"
+                        }
+                    }
+                ]
+            }
+        });
+
+        const organizations = response.hits.hits.map(hit => hit._source);
+        const qtyOrganizationsInDB = organizations.length;
+        const maxArweaveOrgBlockInDB = organizations.length > 0 ? organizations[0].oip.inArweaveBlock : 0;
+
+        return {
+            qtyOrganizationsInDB,
+            maxArweaveOrgBlockInDB,
+            organizationsInDB: organizations
+        };
+    } catch (error) {
+        console.error(getFileInfo(), getLineNumber(), 'Error getting organizations from DB:', error);
+        return {
+            qtyOrganizationsInDB: 0,
+            maxArweaveOrgBlockInDB: 0,
+            organizationsInDB: []
+        };
+    }
+};
+
 const getCreatorsInDB = async () => {
     try {
         const searchResponse = await elasticClient.search({
@@ -2543,16 +2582,12 @@ const getCreatorsInDB = async () => {
 
 async function searchRecordInDB(didTx) {
     // console.log(getFileInfo(), getLineNumber(), 'Searching record in DB for didTx:', didTx);
-    const searchResponse = await elasticClient.search({
-        index: 'records',
-        body: {
-            query: {
-                match: {
-                    "oip.didTx": didTx
-                }
+        const searchResponse = await elasticClient.search({
+            index: 'records',
+            body: {
+                query: createDIDQuery(didTx)
             }
-        }
-    });
+        });
     // console.log(getFileInfo(), getLineNumber(), 'Search response:', JSON.stringify(searchResponse, null, 2));
     if (searchResponse.hits.hits.length > 0) {
         return searchResponse.hits.hits[0]._source;
@@ -2580,8 +2615,8 @@ const getRecordsInDB = async () => {
         //     // console.log(record.oip.creator);
         // });
         if (records.length === 0) {
-            'no records found in DB'
-            return { qtyRecordsInDB: 0, maxArweaveBlockInDB: 0, records: [] };
+            console.log(getFileInfo(), getLineNumber(), 'no records found in DB');
+            return { qtyRecordsInDB: 0, finalMaxRecordArweaveBlock: 0, records: [] };
         } else {
             for (const record of records) {
                 const creatorHandle = record.oip.creator.creatorHandle || '';
@@ -2679,6 +2714,123 @@ const convertToCreatorHandle = async (txId, handle) => {
     return finalHandle;
 };
 
+const findOrganizationsByHandle = async (orgHandle) => {
+    try {
+        console.log(getFileInfo(), getLineNumber(), 'Searching for organizations with handle:', orgHandle);
+        const response = await elasticClient.search({
+            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            body: {
+                query: {
+                    bool: {
+                        must: [
+                            {
+                                term: {
+                                    "oip.recordType": "organization"
+                                }
+                            },
+                            {
+                                term: {
+                                    "oip.organization.orgHandle.keyword": orgHandle
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        });
+        return response.hits.hits.map(hit => hit._source);
+    } catch (error) {
+        console.error(getFileInfo(), getLineNumber(), 'Error searching for organizations by handle:', error);
+        throw error;
+    }
+};
+
+const convertToOrgHandle = async (txId, handle) => {
+    const decimalNumber = parseInt(txId.replace(/[^0-9a-fA-F]/g, ''), 16);
+    
+    // Start with one digit
+    let digitsCount = 1;
+    let uniqueHandleFound = false;
+    let finalHandle = '';
+    
+    while (!uniqueHandleFound) {
+        const currentDigits = decimalNumber.toString().substring(0, digitsCount);
+        const possibleHandle = `${handle}${currentDigits}`;
+        console.log(getFileInfo(), getLineNumber(), 'checking org handle and id:', handle, decimalNumber);
+
+        // Check for existing organizations with the possible handle
+        const organizations = await findOrganizationsByHandle(possibleHandle);
+
+        if (organizations.length === 0) {
+            uniqueHandleFound = true;
+            finalHandle = possibleHandle;
+        } else {
+            // Increase the number of digits and check again
+            digitsCount++;
+        }
+    }
+    console.log(getFileInfo(), getLineNumber(), 'Final org handle:', finalHandle);
+    return finalHandle;
+};
+
+// add some kind of history of registrations for organizations
+async function indexNewOrganizationRegistration(organizationRegistrationParams) {
+    let { transaction, organizationInfo, organizationHandle, block } = organizationRegistrationParams;
+    
+    let organization;
+    
+    // Check if this is a delete message
+    if (transaction.data.includes('delete')) {
+        console.log(getFileInfo(), getLineNumber(), 'Delete message detected for organization registration:', transaction.transactionId);
+        return  // Return early if it's a delete message
+    }
+    
+    organizationHandle = (organizationHandle !== undefined) ? organizationHandle : await convertToOrgHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["0"]);
+    block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
+    
+    console.log('Organization transaction:', transaction);
+    organization = {
+        data: {
+            orgHandle: organizationHandle,
+            orgPublicKey: JSON.parse(transaction.data)[0]["1"],
+            adminPublicKeys: JSON.parse(transaction.data)[0]["2"],
+            membershipPolicy: JSON.parse(transaction.data)[0]["3"],
+            metadata: JSON.parse(transaction.data)[0]["4"]
+        },
+        oip: {
+            recordType: 'organization',
+            did: organizationInfo.data.didTx,
+            didTx: organizationInfo.data.didTx, // Backward compatibility
+            inArweaveBlock: block,
+            indexedAt: new Date(),
+            ver: transaction.ver,
+            signature: transaction.creatorSig,
+            organization: {
+                orgHandle: organizationHandle,
+                didAddress: organizationInfo.data.didAddress,
+                didTx: organizationInfo.data.didTx,
+                orgPublicKey: organizationInfo.data.orgPublicKey,
+                adminPublicKeys: organizationInfo.data.adminPublicKeys,
+                membershipPolicy: organizationInfo.data.membershipPolicy,
+                metadata: organizationInfo.data.metadata
+            }
+        },
+    }
+    
+    console.log(getFileInfo(), getLineNumber(), 'Organization to index:', organization);
+    
+    try {
+        const response = await elasticClient.index({
+            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            id: organization.oip.did,
+            body: organization
+        });
+        console.log(getFileInfo(), getLineNumber(), 'Organization indexed:', response);
+    } catch (error) {
+        console.error(getFileInfo(), getLineNumber(), 'Error indexing organization:', error);
+    }
+}
+
 // add some kind of history of registrations
 async function indexNewCreatorRegistration(creatorRegistrationParams) {
     let { transaction, creatorInfo, creatorHandle, block } = creatorRegistrationParams;
@@ -2754,7 +2906,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         console.log(getFileInfo(), getLineNumber());
 
     // Check if the parsed JSON contains a delete property
-    if (transactionData.hasOwnProperty('delete')) {
+    if (transactionData.hasOwnProperty('deleteTemplate') || transactionData.hasOwnProperty('delete')) {
         console.log(getFileInfo(), getLineNumber(), 'getNewCreatorRegistrations DELETE MESSAGE FOUND, skipping', transactionId);
         return  // Return early if it's a delete message
     }
@@ -2778,7 +2930,8 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             },
             oip: {
                 recordType: 'creatorRegistration',
-                didTx: creatorInfo.data.didTx,
+                did: creatorInfo.data.didTx,
+                didTx: creatorInfo.data.didTx, // Backward compatibility
                 inArweaveBlock: block,
                 indexedAt: new Date(),
                 ver: transaction.ver,
@@ -2881,7 +3034,8 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                     },
                     oip: {
                         recordType: 'creatorRegistration',
-                        didTx: result.didTx,
+                        did: result.didTx,
+                        didTx: result.didTx, // Backward compatibility
                         inArweaveBlock: inArweaveBlock,
                         indexedAt: new Date(),
                         ver: transaction.ver,
@@ -2943,7 +3097,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
     newCreators.forEach(async (creator) => {
         const existingCreator = await elasticClient.exists({
             index: 'creatorregistrations',
-            id: creator.oip.didTx
+            id: creator.oip.did || creator.oip.didTx
         });
         console.log(getFileInfo(), getLineNumber(), { existingCreator });
 
@@ -2951,7 +3105,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             try {
                 await elasticClient.index({
                     index: 'creatorregistrations',
-                    id: creator.oip.didTx,
+                    id: creator.oip.did || creator.oip.didTx,
                     body: creator,
                 });
                 console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creator.oip.didTx}`);
@@ -2966,7 +3120,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             try {
                 await elasticClient.delete({
                     index: 'creatorregistrations',
-                    id: creator.oip.didTx
+                    id: creator.oip.did || creator.oip.didTx
                 });
                 console.log(getFileInfo(), getLineNumber());
 
@@ -2981,7 +3135,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             await elasticClient.index({
                 index: 'creatorregistrations',
                 body: creator,
-                id: creator.oip.didTx,
+                id: creator.oip.did || creator.oip.didTx,
             });
             console.log(getFileInfo(), getLineNumber(), `Creator indexed successfully: ${creator.oip.didTx}`);
         } catch (error) {
@@ -3288,7 +3442,8 @@ async function processNewTemplate(transaction) {
         const fieldsObject = JSON.parse(fieldsString);
         
         const oip = {
-            didTx: 'did:arweave:' + transaction.transactionId,
+            did: 'did:arweave:' + transaction.transactionId,
+            didTx: 'did:arweave:' + transaction.transactionId, // Backward compatibility
             inArweaveBlock: inArweaveBlock,
             indexedAt: new Date().toISOString(),
             recordStatus: "original",
@@ -3304,7 +3459,7 @@ async function processNewTemplate(transaction) {
         try {
             const existingTemplate = await elasticClient.exists({
                 index: 'templates',
-                id: oip.didTx
+                id: oip.did
             });
             
             // Create both formats - simple fields string AND complex fieldsInTemplate
@@ -3360,12 +3515,12 @@ async function processNewTemplate(transaction) {
                     },
                     refresh: 'wait_for'
                 });
-                console.log(getFileInfo(), getLineNumber(), `✅ Template updated successfully: ${oip.didTx}`, response.result);
+                console.log(getFileInfo(), getLineNumber(), `✅ Template updated successfully: ${oip.did}`, response.result);
             } else {
                 // Create new template
                 const indexResult = await elasticClient.index({
                     index: 'templates',
-                    id: oip.didTx,
+                    id: oip.did,
                     body: finalTemplate,
                     refresh: 'wait_for'  // Ensure immediate availability
                 });
@@ -3434,6 +3589,31 @@ async function processNewRecord(transaction, remapTemplates = []) {
         }
         await indexNewCreatorRegistration(creatorRegistrationParams)
     }
+    // handle organization registration
+    else if (recordType && recordType === 'organization') {
+        console.log(getFileInfo(), getLineNumber(), 'Processing organization registration:', transactionId, transaction);
+        
+        const orgHandle = await convertToOrgHandle(transactionId, JSON.parse(transaction.data)[0]["0"]);
+        const data = {
+            orgHandle: orgHandle,
+            orgPublicKey: JSON.parse(transaction.data)[0]["1"],
+            adminPublicKeys: JSON.parse(transaction.data)[0]["2"],
+            membershipPolicy: JSON.parse(transaction.data)[0]["3"],
+            metadata: JSON.parse(transaction.data)[0]["4"],
+            didAddress: 'did:arweave:' + transaction.owner,
+            didTx: 'did:arweave:' + transactionId,
+        }
+        console.log(getFileInfo(), getLineNumber(), 'Organization data:', data);
+        const organizationInfo = {
+            data,
+        } 
+        console.log(getFileInfo(), getLineNumber(), 'Organization info:', organizationInfo);
+        const organizationRegistrationParams = {
+            transaction,
+            organizationInfo
+        }
+        await indexNewOrganizationRegistration(organizationRegistrationParams)
+    }
     else {
     // handle records
     dataForSignature = JSON.stringify(tags) + transaction.data;
@@ -3454,8 +3634,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
     if (typeof transaction.data === 'string') {
         try {
             transactionData = JSON.parse(transaction.data);
-            if (transactionData.hasOwnProperty('delete')) {
-                console.log(getFileInfo(), getLineNumber(), 'DELETE MESSAGE FOUND, processing', transaction.transactionId);
+            if (transactionData.hasOwnProperty('deleteTemplate') || transactionData.hasOwnProperty('delete')) {
+                console.log(getFileInfo(), getLineNumber(), 'DELETE TEMPLATE MESSAGE FOUND, processing', transaction.transactionId);
                 isDeleteMessageFound = true;
             }
         } catch (error) {
@@ -3479,12 +3659,45 @@ async function processNewRecord(transaction, remapTemplates = []) {
     // dataArray.push(transactionData);
     // handle delete message
     if (isDeleteMessageFound) {
-        console.log(getFileInfo(), getLineNumber(), 'Delete message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
+        console.log(getFileInfo(), getLineNumber(), 'Delete template message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
+        
+        // Safety check: Skip old-format template deletions
+        if (transactionData.hasOwnProperty('delete') && !transactionData.hasOwnProperty('deleteTemplate')) {
+            const targetDid = transactionData.delete.didTx;
+            console.log(getFileInfo(), getLineNumber(), 'Checking if delete target is a template:', targetDid);
+            
+            // Check if the target is a template by searching the templates index
+            try {
+                const templateSearch = await elasticClient.search({
+                    index: 'templates',
+                    body: {
+                        query: createDIDQuery(targetDid)
+                    }
+                });
+                
+                if (templateSearch.hits.hits.length > 0) {
+                    // Double-check that it's actually a template record type
+                    const foundTemplate = templateSearch.hits.hits[0]._source;
+                    if (foundTemplate.oip && foundTemplate.oip.recordType === 'template') {
+                        console.log(getFileInfo(), getLineNumber(), 'SAFETY: Skipping old-format template deletion:', targetDid);
+                        return { records: newRecords, recordsToDelete };
+                    } else {
+                        console.log(getFileInfo(), getLineNumber(), 'Found in templates index but not a template record type, proceeding:', targetDid, 'recordType:', foundTemplate.oip?.recordType);
+                    }
+                } else {
+                    console.log(getFileInfo(), getLineNumber(), 'Target is not a template, proceeding with record deletion:', targetDid);
+                }
+            } catch (error) {
+                console.warn(getFileInfo(), getLineNumber(), 'Error checking if target is template:', error.message);
+            }
+        }
+        
         record = {
             data: {...transactionData},
             oip: {
-                recordType: 'deleteMessage',
-                didTx: 'did:arweave:' + transaction.transactionId,
+                recordType: 'deleteTemplate',
+                did: 'did:arweave:' + transaction.transactionId,
+                didTx: 'did:arweave:' + transaction.transactionId, // Backward compatibility
                 inArweaveBlock: inArweaveBlock,
                 indexedAt: new Date().toISOString(),
                 ver: transaction.ver,
@@ -3513,7 +3726,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         }
         console.log(getFileInfo(), getLineNumber(), creatorDid, transaction);
         await deleteRecordFromDB(creatorDid, transaction);
-        console.log(getFileInfo(), getLineNumber(), 'Delete message indexed:', transaction.transactionId, 'and referenced record deleted', record.data.didTx);
+        console.log(getFileInfo(), getLineNumber(), 'Delete template message indexed:', transaction.transactionId, 'and referenced template deleted', record.data.deleteTemplate?.didTx || record.data.delete?.didTx);
 
     } else {
         // handle new records
@@ -3542,6 +3755,18 @@ async function processNewRecord(transaction, remapTemplates = []) {
         const expandedRecord = await Promise.all(expandedRecordPromises);
         console.log(getFileInfo(), getLineNumber(), expandedRecord, creatorInfo, transaction, inArweaveBlock );
         const combinedRecords = {};
+        
+        // Build templates array mapping template names to their transaction IDs
+        const templatesUsed = {};
+        const rawRecords = JSON.parse(transaction.data);
+        rawRecords.forEach(rawRecord => {
+            const templateTxId = rawRecord.t;
+            const template = findTemplateByTxId(templateTxId, templates.templatesInDB);
+            if (template && template.data && template.data.template) {
+                templatesUsed[template.data.template] = templateTxId;
+            }
+        });
+        
         expandedRecord.forEach(record => {
             Object.keys(record).forEach(key => {
             combinedRecords[key] = record[key];
@@ -3554,11 +3779,13 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 oip: {
                     recordType: recordType,
                     recordStatus: "original",
-                    didTx: 'did:arweave:' + transaction.transactionId,
+                    did: 'did:arweave:' + transaction.transactionId,
+                    didTx: 'did:arweave:' + transaction.transactionId, // Backward compatibility
                     inArweaveBlock: inArweaveBlock,
                     indexedAt: new Date().toISOString(),
                     ver: transaction.ver,
                     signature: transaction.creatorSig,
+                    templates: templatesUsed,
                     creator: {
                         creatorHandle: creatorInfo.data.creatorHandle,
                         didAddress: creatorInfo.data.didAddress,
@@ -3593,7 +3820,7 @@ function shouldIndexRecordType(recordType) {
         const typeNorm = String(recordType).trim();
 
         // Always index delete messages regardless of config
-        if (typeNorm === 'deleteMessage') return true;
+        if (typeNorm === 'deleteMessage' || typeNorm === 'deleteTemplate' || typeNorm === 'delete') return true;
 
         if (mode === 'all') return true;
 
@@ -3804,6 +4031,9 @@ module.exports = {
     deleteRecordsByIndexedAt,
     deleteRecordsByIndex,
     getCreatorsInDB,
+    getOrganizationsInDB,
+    convertToOrgHandle,
+    findOrganizationsByHandle,
     getRecordTypesSummary,
     elasticClient
 };

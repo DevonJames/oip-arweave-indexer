@@ -235,6 +235,131 @@ Authorization: Bearer <jwt-token>  # Required for private records
 }
 ```
 
+## Publishing Media Files (GUN + BitTorrent)
+
+### Media Upload and Distribution
+
+**Endpoint**: `POST /api/media/upload`
+
+**Headers**:
+```http
+Content-Type: multipart/form-data
+Authorization: Bearer <jwt-token>  # Required
+```
+
+**Form Fields**:
+```
+file: <binary_file>                    # Required: The media file to upload
+name: "My Video File"                  # Optional: Human-readable name
+access_level: "private"                # Optional: "private" (default) or "public"
+encrypt: false                         # Optional: Enable file encryption
+publishTo[ipfs]: true                  # Optional: Also publish to IPFS
+publishTo[arweave]: false              # Optional: Also publish to Arweave
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "mediaId": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+  "did": "did:gun:media:a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+  "magnetURI": "magnet:?xt=urn:btih:abc123def456...",
+  "infoHash": "abc123def456789abcdef0123456789abcdef01",
+  "transport": {
+    "bittorrent": {
+      "magnetURI": "magnet:?xt=urn:btih:abc123def456...",
+      "infoHash": "abc123def456789abcdef0123456789abcdef01",
+      "trackers": ["wss://tracker.openwebtorrent.com", "wss://tracker.btorrent.xyz"]
+    },
+    "http": ["https://api.oip.onl/api/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a"]
+  },
+  "encrypted": false,
+  "access_level": "private",
+  "owner": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+  "size": 1048576,
+  "mime": "video/mp4",
+  "originalName": "my_video.mp4"
+}
+```
+
+### Media File Streaming
+
+**Endpoint**: `GET /api/media/:mediaId`
+
+**Headers**:
+```http
+Authorization: Bearer <jwt-token>  # Required for private media
+Range: bytes=0-1023                # Optional: For range requests
+```
+
+**Response**:
+- **Content-Type**: Original file MIME type
+- **Content-Length**: File size in bytes
+- **Accept-Ranges**: bytes (supports video streaming)
+- **Content-Range**: bytes start-end/total (for range requests)
+
+**Status Codes**:
+- `200`: Full file served
+- `206`: Partial content (range request)
+- `401`: Authentication required for private media
+- `403`: Access denied (not the owner)
+- `404`: Media file not found
+
+### Media Information
+
+**Endpoint**: `GET /api/media/:mediaId/info`
+
+**Headers**:
+```http
+Authorization: Bearer <jwt-token>  # Required for private media
+```
+
+**Response**:
+```json
+{
+  "basic": {
+    "name": "My Video File",
+    "description": "Media file: my_video.mp4",
+    "date": 1757789558,
+    "language": "en"
+  },
+  "media": {
+    "id": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+    "did": "did:gun:media:a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+    "mime": "video/mp4",
+    "size": 1048576,
+    "originalName": "my_video.mp4",
+    "createdAt": "2025-09-13T18:52:38.199Z",
+    "transport": {
+      "bittorrent": {
+        "magnetURI": "magnet:?xt=urn:btih:abc123def456...",
+        "infoHash": "abc123def456789abcdef0123456789abcdef01",
+        "trackers": ["wss://tracker.openwebtorrent.com", "wss://tracker.btorrent.xyz"]
+      },
+      "http": ["https://api.oip.onl/api/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a"]
+    },
+    "version": 1
+  },
+  "accessControl": {
+    "access_level": "private",
+    "owner_public_key": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+    "created_by": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+    "created_timestamp": 1757789558199,
+    "last_modified_timestamp": 1757789558199,
+    "version": "1.0.0"
+  },
+  "seeding": true,
+  "seedingInfo": {
+    "mediaId": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+    "infoHash": "abc123def456789abcdef0123456789abcdef01",
+    "magnetURI": "magnet:?xt=urn:btih:abc123def456...",
+    "filePath": "/usr/src/app/data/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a/original",
+    "createdAt": "2025-09-13T18:52:38.199Z",
+    "fileSize": 1048576
+  }
+}
+```
+
 ## Record Types and Templates
 
 ### Supported Record Types
@@ -251,6 +376,8 @@ Authorization: Bearer <jwt-token>  # Required for private records
 
 #### Private Records (GUN)
 - **`conversationSession`**: Private AI conversation history
+- **`media`**: Private media files with torrent distribution
+
 - **`note`**: Private user notes (future)
 - **`calendar`**: Private calendar events (future)
 - **`webHistory`**: Private browsing history (future)
@@ -285,6 +412,7 @@ Records include multiple ownership indicators:
 - **Cross-User**: Users cannot access other users' private records
 
 ## GUN Network Integration
+
 
 ### Array Data Handling (Automatic)
 **GUN cannot handle complex nested arrays**, but the OIP backend automatically handles this conversion for you.
@@ -402,6 +530,33 @@ curl -X POST "https://api.oip.onl/api/records/newRecord?recordType=conversationS
       "created_by": "YOUR_PUBLIC_KEY_FROM_JWT"
     }
   }'
+```
+
+#### Upload Private Media (GUN + BitTorrent)
+```bash
+curl -X POST https://api.oip.onl/api/media/upload \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -F "file=@/path/to/your/video.mp4" \
+  -F "name=My Private Video" \
+  -F "access_level=private"
+```
+
+#### Stream Media File
+```bash
+# Get full file
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  https://api.oip.onl/api/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a
+
+# Get range (for video streaming)
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Range: bytes=0-1048575" \
+  https://api.oip.onl/api/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a
+```
+
+#### Get Media Information
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  https://api.oip.onl/api/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a/info
 ```
 
 ### JavaScript/Node.js Examples
@@ -578,6 +733,101 @@ class OIPClient {
       throw error;
     }
   }
+  
+  // Upload private media file
+  async uploadMedia(filePath, options = {}) {
+    if (!this.token) {
+      throw new Error('Authentication required for media upload');
+    }
+
+    try {
+      const FormData = require('form-data');
+      const fs = require('fs');
+      
+      const form = new FormData();
+      form.append('file', fs.createReadStream(filePath));
+      
+      if (options.name) form.append('name', options.name);
+      if (options.access_level) form.append('access_level', options.access_level);
+      if (options.encrypt) form.append('encrypt', options.encrypt);
+
+      const response = await axios.post(
+        `${this.baseUrl}/api/media/upload`,
+        form,
+        {
+          headers: {
+            ...form.getHeaders(),
+            'Authorization': `Bearer ${this.token}`
+          }
+        }
+      );
+
+      if (response.data.success) {
+        console.log('✅ Media uploaded successfully');
+        console.log('🆔 Media ID:', response.data.mediaId);
+        console.log('🧲 Magnet URI:', response.data.magnetURI.slice(0, 50) + '...');
+        console.log('📊 Size:', (response.data.size / 1024 / 1024).toFixed(2), 'MB');
+        return response.data;
+      }
+    } catch (error) {
+      console.error('❌ Failed to upload media:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  // Get media information
+  async getMediaInfo(mediaId) {
+    if (!this.token) {
+      throw new Error('Authentication required for private media');
+    }
+
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/api/media/${mediaId}/info`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.token}`
+          }
+        }
+      );
+
+      console.log('✅ Media info retrieved:', response.data.media?.originalName);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Failed to get media info:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  // Stream media file
+  async streamMedia(mediaId, options = {}) {
+    if (!this.token) {
+      throw new Error('Authentication required for private media');
+    }
+
+    try {
+      const headers = { 'Authorization': `Bearer ${this.token}` };
+      
+      // Add range header if specified
+      if (options.range) {
+        headers['Range'] = `bytes=${options.range}`;
+      }
+
+      const response = await axios.get(
+        `${this.baseUrl}/api/media/${mediaId}`,
+        {
+          headers,
+          responseType: 'stream'
+        }
+      );
+
+      console.log('✅ Media stream started:', mediaId);
+      return response.data; // Returns readable stream
+    } catch (error) {
+      console.error('❌ Failed to stream media:', error.response?.data || error.message);
+      throw error;
+    }
+  }
 }
 
 // Usage Example
@@ -601,9 +851,27 @@ async function example() {
     { role: 'assistant', content: 'Blockchain is a distributed ledger...', timestamp: Date.now() }
   ]);
 
+  // Upload private media
+  const mediaResult = await client.uploadMedia('./my_video.mp4', {
+    name: 'Development Tutorial Video',
+    access_level: 'private'
+  });
+
+  // Get media info
+  const mediaInfo = await client.getMediaInfo(mediaResult.mediaId);
+  console.log('Media seeding status:', mediaInfo.seeding);
+
+  // Stream media (for video playback)
+  const mediaStream = await client.streamMedia(mediaResult.mediaId);
+  // Use mediaStream for video player or file download
+
   // Retrieve private records
   const privateRecords = await client.getPrivateRecords();
   console.log('My private sessions:', privateRecords.records.length);
+  
+  // Retrieve private media
+  const privateMedia = await client.getPrivateRecords('media');
+  console.log('My private media files:', privateMedia.records.length);
 }
 ```
 
@@ -645,6 +913,10 @@ Each user has a unique HD wallet with:
 | **Arrays** | ✅ Supported | ❌ JSON strings only |
 | **Search** | Full Elasticsearch | Basic filtering |
 | **Data Complexity** | ✅ Full support | ⚠️ Limited by GUN |
+| **Media Files** | ✅ Via IPFS/HTTP | ✅ BitTorrent + HTTP |
+| **Video Streaming** | ⚠️ Basic | ✅ Range requests |
+| **P2P Distribution** | ❌ No | ✅ WebTorrent |
+| **File Seeding** | ❌ No | ✅ Persistent |
 
 ## Error Handling
 
@@ -682,12 +954,37 @@ Each user has a unique HD wallet with:
 }
 ```
 
-#### GUN Storage Errors
+#### Media Upload Errors
 ```json
 {
-  "error": "Failed to store record in GUN network",
-  "details": "Connection timeout to GUN relay",
+  "error": "No file provided",
+  "status": 400
+}
+```
+
+```json
+{
+  "error": "File too large",
+  "details": "Maximum file size is 500MB",
+  "status": 413
+}
+```
+
+```json
+{
+  "error": "Failed to create torrent",
+  "details": "WebTorrent initialization failed",
+
   "status": 500
+}
+```
+
+#### GUN Array Errors
+```json
+{
+  "error": "Invalid data: Array at 647f79c2a338:session_123.data.conversationSession.messages",
+  "details": "GUN cannot handle arrays - use JSON strings",
+  "status": 400
 }
 ```
 
@@ -699,6 +996,37 @@ Each user has a unique HD wallet with:
 5. **Store JWT tokens securely**
 6. **Implement retry logic for network failures**
 7. **Test with sample data before production**
+
+## Media Distribution Features
+
+### BitTorrent Integration
+- **Persistent Seeding**: Server continuously seeds uploaded files
+- **WebTorrent**: Browser-compatible P2P file sharing
+- **Magnet URIs**: Decentralized file discovery and downloading
+- **Tracker Network**: Public WebSocket trackers for peer discovery
+
+### Media Streaming
+- **HTTP Range Requests**: Optimized for video/audio streaming
+- **Immediate Playback**: Stream while downloading via BitTorrent
+- **Bandwidth Efficiency**: P2P distribution reduces server load
+- **Cross-Platform**: Works in browsers and native applications
+
+### File Organization
+```
+/data/media/
+├── <mediaId>/
+│   ├── original          # Original uploaded file
+│   └── manifest.json     # Media manifest with metadata
+└── seeder.json          # Seeding state persistence
+```
+
+### Supported Media Types
+- **Video**: MP4, WebM, AVI, MOV (with range request streaming)
+- **Audio**: MP3, WAV, FLAC, OGG (with range request streaming)
+- **Images**: JPEG, PNG, GIF, WebP
+- **Documents**: PDF, TXT, MD
+- **Archives**: ZIP, TAR, GZ
+- **Any Binary**: Generic file support with MIME detection
 
 ## Advanced Features
 
@@ -740,6 +1068,29 @@ const records = await clientB.getPrivateRecords();
 // Will include session created on Device A
 ```
 
+### Media Distribution and Streaming
+Handle large media files with BitTorrent distribution:
+
+```javascript
+// Upload and start seeding
+const media = await client.uploadMedia('./large_video.mp4', {
+  name: 'Training Video',
+  access_level: 'private'
+});
+
+// Share magnet URI with authorized users
+console.log('Magnet URI:', media.magnetURI);
+
+// Stream for video player (supports range requests)
+const videoStream = await client.streamMedia(media.mediaId, {
+  range: '0-1048575' // First 1MB for preview
+});
+
+// Check seeding status
+const info = await client.getMediaInfo(media.mediaId);
+console.log('Seeders active:', info.seeding);
+```
+
 ## Migration and Compatibility
 
 ### Legacy Records
@@ -775,7 +1126,14 @@ const records = await clientB.getPrivateRecords();
 ### Publishing Speed
 - **Arweave**: Slower due to blockchain confirmation
 - **GUN**: Faster, immediate availability
+- **Media Upload**: Depends on file size and torrent creation
 - **Batch Operations**: Process sequentially to avoid rate limits
+
+### Media Performance
+- **Upload Time**: ~1-5 seconds for torrent creation + file processing
+- **Streaming**: Immediate via HTTP, BitTorrent for P2P distribution
+- **Range Requests**: Optimized for video/audio streaming
+- **File Size Limit**: 500MB per file (configurable)
 
 ### Storage Costs
 - **Arweave**: Paid storage (one-time fee)

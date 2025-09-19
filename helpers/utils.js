@@ -216,7 +216,9 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
         const properties = record.data[category];
         for (const key of Object.keys(properties)) {
             if (typeof properties[key] === 'string' && properties[key].startsWith('did:')) {
-                const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key]);
+                const refRecord = recordsInDB.find(record => 
+                    (record.oip.did || record.oip.didTx) === properties[key]
+                );
                 if (refRecord) {
                     if (resolveNamesOnly) {
                         // Only return the name from the basic data
@@ -229,7 +231,9 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
             } else if (Array.isArray(properties[key])) {
                 for (let i = 0; i < properties[key].length; i++) {
                     if (typeof properties[key][i] === 'string' && properties[key][i].startsWith('did:')) {
-                        const refRecord = recordsInDB.find(record => record.oip.didTx === properties[key][i]);
+                        const refRecord = recordsInDB.find(record => 
+                            (record.oip.did || record.oip.didTx) === properties[key][i]
+                        );
                         if (refRecord) {
                             if (resolveNamesOnly) {
                                 // Only return the name from the basic data

@@ -682,12 +682,12 @@ router.post('/newRecipe', async (req, res) => {
         
         const bestMatch = findBestMatch(cleanedName);
         if (bestMatch) {
-            ingredientDidRefs[originalName] = bestMatch.oip.didTx;
+            ingredientDidRefs[originalName] = bestMatch.oip.did || bestMatch.oip.didTx;
             nutritionalInfo.push({
                 ingredientName: bestMatch.data.basic.name,
                 nutritionalInfo: bestMatch.data.nutritionalInfo || {},
                 ingredientSource: bestMatch.data.basic.webUrl,
-                ingredientDidRef: bestMatch.oip.didTx
+                ingredientDidRef: bestMatch.oip.did || bestMatch.oip.didTx
             });
             console.log(`  ✅ Match found: "${bestMatch.data.basic.name}" (${bestMatch.oip.didTx})`);
         } else {
@@ -926,12 +926,12 @@ router.post('/newRecipe', async (req, res) => {
     bestMatches.forEach((match, index) => {
       if (match) {
         const originalName = missingIngredientNames[index];
-        ingredientRecords.ingredientDidRefs[originalName] = match.oip.didTx;
+        ingredientRecords.ingredientDidRefs[originalName] = match.oip.did || match.oip.didTx;
         ingredientRecords.nutritionalInfo.push({
           ingredientName: match.data.basic.name,
           nutritionalInfo: match.data.nutritionalInfo || {},
           ingredientSource: match.data.basic.webUrl,
-          ingredientDidRef: match.oip.didTx
+          ingredientDidRef: match.oip.did || match.oip.didTx
         });
       }
     });
