@@ -60,8 +60,8 @@
     /* Control dock (responsive) */
     .control-dock{
       position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;
-      /* mic | mute | connect | processing-toggle | output-toggle | composer */
-      grid-template-columns:auto auto auto auto auto 1fr;
+      /* mic | mute | photo | connect | processing-toggle | output-toggle | composer */
+      grid-template-columns:auto auto auto auto auto auto 1fr;
       gap:8px;align-items:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom,8px));
       background:linear-gradient(180deg, rgba(16,20,26,.4), rgba(16,20,26,.85));
       backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,.06);height:var(--dock-h)
@@ -274,6 +274,7 @@
   <footer class="control-dock">
     <button class="btn" id="btnMic" aria-pressed="false" title="Start/stop voice recording">🎤</button>
     <button class="btn" id="btnMute" aria-pressed="false" title="Mute TTS audio">🔇</button>
+    <button class="btn" id="btnPhoto" aria-pressed="false" title="Upload and analyze photo">📷</button>
     <button class="btn" id="btnConnect" aria-pressed="false" title="Connect to ALFRED">🔌</button>
 
     <div class="seg-toggle" role="group" aria-label="Processing mode">
@@ -414,6 +415,10 @@
         this.isMuted = false;
         this.conversationTurns = 0;
         
+        // Photo analysis state
+        this.currentPhotoId = null;
+        this.photoUploadDialog = null;
+        
         // Voice processing state
         this.voiceState = {
           currentTurn: 'user',
@@ -478,6 +483,7 @@
         // Control dock
         document.getElementById('btnMic').addEventListener('click', () => this.toggleRecording());
         document.getElementById('btnMute').addEventListener('click', () => this.toggleMute());
+        document.getElementById('btnPhoto').addEventListener('click', () => this.openPhotoUpload());
         document.getElementById('btnConnect').addEventListener('click', () => this.toggleConnection());
         
         // Mode toggle
@@ -2061,6 +2067,224 @@
         this.updateUI();
         this.updateBadges();
         this.drawIdleWaveform();
+      }
+      
+      // Photo Upload and Analysis Methods
+      openPhotoUpload() {
+        if (!this.photoUploadDialog) {
+          this.createPhotoUploadDialog();
+        }
+        this.photoUploadDialog.showModal();
+      }
+      
+      createPhotoUploadDialog() {
+        // Create photo upload dialog
+        const dialog = document.createElement('dialog');
+        dialog.className = 'settings-modal';
+        dialog.innerHTML = `
+          <form method="dialog">
+            <h2>📷 Photo Analysis</h2>
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; color: var(--text);">
+                Select Photo to Analyze
+              </label>
+              <input type="file" id="photoInput" accept="image/*" 
+                     style="width: 100%; padding: 12px; border-radius: 12px; 
+                            background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); 
+                            color: var(--text);">
+            </div>
+            <div id="photoPreview" style="display: none; margin-bottom: 16px; text-align: center;">
+              <img id="previewImage" style="max-width: 100%; max-height: 200px; border-radius: 12px; 
+                                           border: 1px solid rgba(255,255,255,.16);">
+              <div id="photoInfo" style="margin-top: 8px; font-size: 12px; color: var(--muted);"></div>
+            </div>
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; margin-bottom: 8px; color: var(--text);">
+                What would you like to know about this photo?
+              </label>
+              <textarea id="photoQuestion" placeholder="e.g., What do you see in this image? Describe the scene. What's happening here?"
+                        style="width: 100%; height: 80px; padding: 12px; border-radius: 12px; resize: vertical;
+                               background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); 
+                               color: var(--text); font-family: inherit;"></textarea>
+            </div>
+            <div id="uploadStatus" style="margin-bottom: 16px; padding: 8px; border-radius: 8px; display: none;"></div>
+            <menu style="display: flex; justify-content: space-between; gap: 8px; margin: 16px 0 0;">
+              <button type="button" class="btn" id="uploadBtn" disabled>Upload & Analyze</button>
+              <button type="button" class="btn" value="cancel">Close</button>
+            </menu>
+          </form>
+        `;
+        
+        document.body.appendChild(dialog);
+        this.photoUploadDialog = dialog;
+        
+        // Setup event listeners
+        const photoInput = dialog.querySelector('#photoInput');
+        const uploadBtn = dialog.querySelector('#uploadBtn');
+        const closeBtn = dialog.querySelector('[value="cancel"]');
+        const photoQuestion = dialog.querySelector('#photoQuestion');
+        
+        photoInput.addEventListener('change', (e) => this.handlePhotoSelection(e));
+        uploadBtn.addEventListener('click', () => this.handlePhotoAnalysis());
+        closeBtn.addEventListener('click', () => dialog.close());
+        
+        // Enable upload button when both photo and question are provided
+        const checkReady = () => {
+          uploadBtn.disabled = !photoInput.files.length || !photoQuestion.value.trim();
+        };
+        
+        photoInput.addEventListener('change', checkReady);
+        photoQuestion.addEventListener('input', checkReady);
+        
+        // Close on backdrop click
+        dialog.addEventListener('click', (e) => {
+          if (e.target === dialog) dialog.close();
+        });
+      }
+      
+      handlePhotoSelection(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const preview = this.photoUploadDialog.querySelector('#photoPreview');
+        const previewImage = this.photoUploadDialog.querySelector('#previewImage');
+        const photoInfo = this.photoUploadDialog.querySelector('#photoInfo');
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          previewImage.src = e.target.result;
+          preview.style.display = 'block';
+          
+          // Show file info
+          const sizeKB = (file.size / 1024).toFixed(1);
+          photoInfo.textContent = `${file.name} (${sizeKB} KB, ${file.type})`;
+        };
+        reader.readAsDataURL(file);
+      }
+      
+      async handlePhotoAnalysis() {
+        const photoInput = this.photoUploadDialog.querySelector('#photoInput');
+        const photoQuestion = this.photoUploadDialog.querySelector('#photoQuestion');
+        const uploadStatus = this.photoUploadDialog.querySelector('#uploadStatus');
+        const uploadBtn = this.photoUploadDialog.querySelector('#uploadBtn');
+        
+        const file = photoInput.files[0];
+        const question = photoQuestion.value.trim();
+        
+        if (!file || !question) {
+          this.showUploadStatus('Please select a photo and enter a question', 'error');
+          return;
+        }
+        
+        try {
+          uploadBtn.disabled = true;
+          this.showUploadStatus('Uploading photo...', 'info');
+          
+          // Step 1: Upload photo
+          const formData = new FormData();
+          formData.append('photo', file);
+          
+          const uploadResponse = await fetch(`${this.backendUrl}/api/photo/upload`, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (!uploadResponse.ok) {
+            const error = await uploadResponse.json();
+            throw new Error(error.message || 'Upload failed');
+          }
+          
+          const uploadResult = await uploadResponse.json();
+          this.currentPhotoId = uploadResult.photoId;
+          
+          this.showUploadStatus('Analyzing with Grok-4...', 'info');
+          
+          // Step 2: Analyze with integrated chat
+          const analysisResponse = await fetch(`${this.backendUrl}/api/photo/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              photoId: this.currentPhotoId,
+              question: question,
+              model: 'grok-4',
+              processing_mode: this.settings.processingMode,
+              return_audio: this.settings.outputMode === 'spoken',
+              voiceConfig: JSON.stringify({
+                engine: this.settings.ttsEngine,
+                voice_id: this.settings.voiceId,
+                speed: this.settings.speechSpeed
+              }),
+              conversationHistory: this.getConversationHistory()
+            })
+          });
+          
+          if (!analysisResponse.ok) {
+            const error = await analysisResponse.json();
+            throw new Error(error.message || 'Analysis failed');
+          }
+          
+          const result = await analysisResponse.json();
+          
+          this.showUploadStatus('Analysis complete!', 'success');
+          
+          // Close dialog after short delay
+          setTimeout(() => {
+            this.photoUploadDialog.close();
+          }, 1500);
+          
+          // Add messages to conversation
+          this.addMessage('user', `📷 ${question} [Photo: ${file.name}]`);
+          this.addMessage('assistant', result.response);
+          
+          // Handle audio if available
+          if (result.audio_data && this.settings.outputMode === 'spoken') {
+            await this.playTTSAudio(result.audio_data);
+          } else if (this.settings.outputMode === 'onscreen') {
+            this.startSpritzDisplay(result.response);
+            setTimeout(() => {
+              this.stopSpritzDisplay();
+            }, Math.max(3000, result.response.split(' ').length * (60 / this.settings.spritzWPM) * 1000));
+          }
+          
+          // Update metrics
+          this.conversationTurns++;
+          this.performanceMetrics.conversationTurns = this.conversationTurns;
+          this.performanceMetrics.responseTime = result.processingTimeMs || 0;
+          this.updateMetrics();
+          
+        } catch (error) {
+          console.error('Photo analysis error:', error);
+          this.showUploadStatus(`Error: ${error.message}`, 'error');
+          this.addMessage('system', `❌ Photo analysis failed: ${error.message}`);
+        } finally {
+          uploadBtn.disabled = false;
+        }
+      }
+      
+      showUploadStatus(message, type) {
+        const uploadStatus = this.photoUploadDialog.querySelector('#uploadStatus');
+        uploadStatus.style.display = 'block';
+        uploadStatus.textContent = message;
+        
+        // Style based on type
+        uploadStatus.style.background = {
+          'info': 'rgba(21,230,255,.08)',
+          'success': 'rgba(52,199,89,.08)',
+          'error': 'rgba(255,59,48,.08)'
+        }[type] || 'rgba(255,255,255,.08)';
+        
+        uploadStatus.style.borderColor = {
+          'info': 'rgba(21,230,255,.35)',
+          'success': 'rgba(52,199,89,.35)',
+          'error': 'rgba(255,59,48,.35)'
+        }[type] || 'rgba(255,255,255,.16)';
+        
+        uploadStatus.style.color = {
+          'info': '#15e6ff',
+          'success': '#34c759',
+          'error': '#ff3b30'
+        }[type] || 'var(--text)';
       }
     }
     
