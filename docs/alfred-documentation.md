@@ -779,8 +779,446 @@ curl http://ollama:11434/api/tags  # Ollama models
 🎉 Adaptive streaming completed           # Streaming success
 ```
 
+## Conversation Session History
+
+### Overview
+
+ALFRED now includes a comprehensive conversation session history system that automatically saves all conversations as encrypted, private records in GUN database. This allows users to:
+
+- **Automatically save** all voice and text conversations
+- **Browse conversation history** in the sidebar
+- **Resume previous conversations** by clicking on any session
+- **Secure encryption** ensures privacy using AES-256-GCM
+- **JWT authentication** protects access to user's private sessions
+
+### Session Management API
+
+#### Session Creation
+
+Sessions are automatically created when users start new conversations:
+
+```javascript
+// Automatic session creation (triggered before first user message)
+const sessionData = {
+  basic: {
+    name: "Session 1", // Auto-numbered
+    description: "Alfred conversation session",
+    date: Math.floor(Date.now() / 1000), // Unix timestamp
+    language: "en"
+  },
+  conversationSession: {
+    session_id: "session_1757701093397",
+    start_timestamp: 1757701093397,
+    last_activity_timestamp: 1757701093397,
+    last_modified_timestamp: 1757701093397,
+    message_count: 0,
+    messages: [],
+    message_timestamps: [],
+    message_roles: [],
+    model_name: "llama3.2:3b",
+    model_provider: ["did:arweave:model_provider_did"],
+    total_tokens: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    processing_mode: "rag",
+    conversation_type: "voice", // or "text"
+    is_archived: false,
+    is_private: true,
+    owner_pubkey: "user_public_key",
+    version: "1.0.0"
+  },
+  accessControl: {
+    private: true
+  }
+}
+```
+
+#### Session Storage Endpoint
+
+**POST** `/api/records/newRecord?recordType=conversationSession&storage=gun&localId={sessionId}`
+
+```javascript
+// Headers
+{
+  'Authorization': 'Bearer JWT_TOKEN',
+  'Content-Type': 'application/json'
+}
+
+// Body: sessionData (as shown above)
+```
+
+**Response:**
+```javascript
+{
+  recordToIndex: { /* session data */ },
+  storage: "gun",
+  did: "did:gun:647f79c2a338:session_1757701093397",
+  soul: "647f79c2a338:session_1757701093397", 
+  encrypted: true
+}
+```
+
+#### Session Retrieval
+
+**GET** `/api/records?source=gun&recordType=conversationSession&limit=15&sortBy=date:desc`
+
+Lists user's conversation sessions (most recent first):
+
+```javascript
+// Headers
+{
+  'Authorization': 'Bearer JWT_TOKEN'
+}
+
+// Response
+{
+  message: "Records retrieved successfully",
+  records: [
+    {
+      data: {
+        basic: { name: "Session 1", description: "...", date: 1757701093, language: "en" },
+        conversationSession: {
+          session_id: "session_1757701093397",
+          message_count: 6,
+          messages: ["Hello, who are you?", "I am ALFRED...", "..."],
+          message_roles: ["user", "assistant", "user", "assistant", "..."],
+          message_timestamps: [1757701093493, 1757701093524, "..."],
+          model_name: "llama3.2:3b",
+          conversation_type: "voice",
+          // ... other fields
+        },
+        accessControl: { private: true }
+      },
+      oip: {
+        did: "did:gun:647f79c2a338:session_1757701093397",
+        recordType: "conversationSession",
+        storage: "gun",
+        indexedAt: "2025-09-12T18:18:06.909Z"
+      }
+    }
+    // ... more sessions
+  ]
+}
+```
+
+#### Individual Session Loading
+
+**GET** `/api/records?source=gun&did={sessionDid}&limit=1`
+
+Loads a specific conversation session with full message history:
+
+```javascript
+// Example: GET /api/records?source=gun&did=did:gun:647f79c2a338:session_1757701093397&limit=1
+
+// Response: Same structure as above, but with single record containing full conversation
+```
+
+### Frontend Session Management
+
+#### SessionManager Class
+
+The `SessionManager` class handles all session operations:
+
+```javascript
+class SessionManager {
+  constructor(authManager) {
+    this.authManager = authManager;
+    this.currentSession = null;
+    this.sessions = [];
+    this.modelProviderCache = {}; // Cache for model provider lookups
+    this.backendUrl = 'https://api.oip.onl';
+  }
+
+  // Create new session automatically before first message
+  async createNewSession(title = null, modelName = 'llama3.2:3b')
+  
+  // Update session with new messages (debounced during streaming)
+  async updateCurrentSession(messages, model, tokens, processingMode, conversationType)
+  
+  // Load user's session list
+  async loadUserSessions()
+  
+  // Load specific session and display messages
+  async selectSession(sessionDid)
+  
+  // Load session data from backend
+  async loadSession(sessionDid)
+}
+```
+
+#### Automatic Session Creation
+
+Sessions are created automatically when users start conversations:
+
+```javascript
+// Triggered before first user message in both voice and text input
+if (!this.sessionManager.currentSession && this.sessionManager && this.sessionManager.authManager.isAuthenticated()) {
+  await this.sessionManager.createNewSession(null, this.settings.selectedModel);
+}
+```
+
+#### Message Persistence
+
+Messages are saved automatically with debouncing to handle streaming responses:
+
+```javascript
+// Debounced save triggered on assistant messages
+if (role === 'assistant' && this.sessionManager && this.sessionManager.currentSession) {
+  clearTimeout(this._saveSessionTimeout);
+  this._saveSessionTimeout = setTimeout(() => {
+    this.sessionManager.updateCurrentSession(
+      this.conversationMessages,
+      this.settings.selectedModel,
+      0,
+      this.settings.processingMode,
+      this.settings.outputMode === 'spoken' ? 'voice' : 'text'
+    );
+  }, 400);
+}
+```
+
+### Security & Encryption
+
+#### AES-256-GCM Encryption
+
+All conversation sessions are encrypted before storage using AES-256-GCM:
+
+**Backend Encryption** (`helpers/gun.js`):
+```javascript
+// Key derivation using PBKDF2 (matches frontend)
+const key = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
+const iv = crypto.randomBytes(12); // 12-byte IV for GCM
+const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+// Encrypt and store auth tag
+const encryptedBuf = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+const authTag = cipher.getAuthTag();
+
+const encryptedData = {
+  encrypted: encryptedBuf.toString('base64'),
+  iv: iv.toString('base64'),
+  tag: authTag.toString('base64')
+};
+```
+
+**Frontend Decryption** (Web Crypto API):
+```javascript
+async function decryptSessionData(encryptedData, iv, tag) {
+  // Derive key using PBKDF2
+  const keyMaterial = await window.crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode('gun-encryption-key'),
+    'PBKDF2',
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+
+  const key = await window.crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: new TextEncoder().encode('salt'),
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+
+  // Decrypt data
+  const decrypted = await window.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: ivBuffer },
+    key,
+    combinedData
+  );
+
+  return JSON.parse(new TextDecoder().decode(decrypted));
+}
+```
+
+#### Authentication & Authorization
+
+**JWT Token Verification**:
+- All session operations require valid JWT token
+- Backend verifies user ownership of sessions
+- Sessions are tied to user's `publisherPubKey` from JWT
+
+**Soul Generation**:
+```javascript
+// GUN soul format: {publisherHash}:{sessionId}
+const soul = `647f79c2a338:session_1757701093397`;
+```
+
+### User Interface Features
+
+#### History Sidebar
+
+- **Independent scrolling**: History scrolls separately from conversation
+- **Session metadata**: Shows date, message count, and model used
+- **Click to load**: Instantly loads full conversation history
+- **Real-time updates**: New sessions appear immediately
+
+#### Conversation Loading
+
+```javascript
+// When user clicks a session
+async selectSession(sessionDid) {
+  const session = await this.loadSession(sessionDid);
+  
+  // Reconstruct messages from stored data
+  const messages = [];
+  for (let i = 0; i < session.data.conversationSession.messages.length; i++) {
+    messages.push({
+      role: session.data.conversationSession.message_roles[i],
+      content: session.data.conversationSession.messages[i],
+      timestamp: session.data.conversationSession.message_timestamps[i]
+    });
+  }
+  
+  // Load into conversation interface
+  window.alfred.loadSessionMessages(messages);
+}
+```
+
+#### Bulk Message Loading
+
+```javascript
+loadSessionMessages(messages) {
+  // Clear current conversation
+  this.conversationMessages = [];
+  this.conversation = [];
+  
+  // Disable auto-scrolling during bulk load
+  this._bulkLoading = true;
+  
+  // Load all messages
+  messages.forEach(msg => {
+    this.addMessage(msg.role, msg.content);
+  });
+  
+  // Re-enable scrolling and scroll to bottom
+  this._bulkLoading = false;
+  conversation.scrollTop = conversation.scrollHeight;
+}
+```
+
+### Performance Optimizations
+
+#### Debounced Saves
+
+- **Streaming responses**: Messages saved every 500ms during streaming
+- **Final save**: Triggered on SSE completion
+- **User messages**: No save until assistant responds (avoids incomplete turns)
+
+#### Efficient UI Updates
+
+- **DocumentFragment**: History UI built off-DOM to prevent reflow
+- **Independent scrolling**: Each area scrolls separately
+- **Canvas scroll prevention**: Waveform drawing doesn't trigger page scroll
+
+#### Limited History
+
+- **15 sessions max**: Prevents UI performance issues
+- **Sorted by date**: Most recent conversations first
+- **Lazy loading**: Sessions loaded on demand when clicked
+
+### Data Flow
+
+```
+User Input (Voice/Text)
+     ↓
+[Session Creation] (if first message)
+     ↓
+[Message Addition] → conversationMessages[]
+     ↓
+[Assistant Response] (streaming)
+     ↓
+[Debounced Save] → updateCurrentSession()
+     ↓
+[Backend Storage] → /api/records/newRecord
+     ↓
+[GUN Encryption] → AES-256-GCM
+     ↓
+[GUN Database] → Persistent storage
+     ↓
+[History UI Update] → Real-time sidebar refresh
+```
+
+### Configuration
+
+#### Environment Variables
+
+```bash
+# GUN Database
+GUN_RELAY_URL=http://gun-relay:8765
+
+# Session encryption
+GUN_ENCRYPTION_KEY=gun-encryption-key  # Used for PBKDF2 key derivation
+```
+
+#### Frontend Settings
+
+```javascript
+// Session limits
+const SESSION_LIMIT = 15; // Max sessions to load in history
+
+// Debounce timing
+const SAVE_DEBOUNCE_MS = 400; // Assistant message save delay
+const STREAM_SAVE_DEBOUNCE_MS = 500; // Streaming update save delay
+```
+
+### Usage Examples
+
+#### Automatic Session Management
+
+```javascript
+// User starts conversation (automatic)
+user: "Hello, who are you?"
+// → Creates new session automatically
+// → Saves user message + assistant response
+// → Updates history sidebar
+
+// User continues conversation
+user: "What's an LLM?"
+// → Updates existing session
+// → Saves to same session record
+// → Updates message count in sidebar
+
+// User loads previous conversation
+// → Clicks session in sidebar
+// → Loads full message history
+// → Can continue conversation seamlessly
+```
+
+#### Manual Session Operations
+
+```javascript
+// Create new session
+const session = await sessionManager.createNewSession("Custom Title", "gpt-4o-mini");
+
+// Update session with messages
+await sessionManager.updateCurrentSession(
+  conversationMessages,    // Array of {role, content, timestamp}
+  "llama3.2:3b",          // Model name
+  150,                     // Token count
+  "rag",                   // Processing mode
+  "voice"                  // Conversation type
+);
+
+// Load session history
+await sessionManager.loadUserSessions();
+
+// Load specific session
+const session = await sessionManager.loadSession("did:gun:647f79c2a338:session_123");
+```
+
 ## Future Enhancements
 
+- **Session Search**: Full-text search across conversation history
+- **Session Export**: Download conversations as text/JSON
+- **Session Sharing**: Share specific conversations with others
+- **Session Analytics**: Conversation insights and statistics
 - **True Streaming RAG**: Real-time content retrieval and generation
 - **Voice Cloning**: Custom voice training for personalized TTS
 - **Multi-language Support**: Expanded language detection and synthesis
@@ -789,4 +1227,4 @@ curl http://ollama:11434/api/tags  # Ollama models
 
 ---
 
-*This documentation covers ALFRED v2.0 with enhanced processing modes and parallel LLM support. For implementation details, see the source code in `routes/voice.js` and `helpers/alfred.js`.*
+*This documentation covers ALFRED v2.1 with conversation session history, enhanced processing modes, and parallel LLM support. For implementation details, see the source code in `routes/voice.js`, `helpers/alfred.js`, `helpers/gun.js`, and `mac-client/alfred.html`.*

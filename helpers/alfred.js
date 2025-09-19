@@ -320,7 +320,7 @@ class ALFRED {
             // Handle special cases and invalid model names
             if (modelToUse === 'parallel') {
                 // For question analysis, use a reliable local model instead of parallel processing
-                modelToUse = 'llama2:7b'; // Use LLaMA 2 7B as requested
+                modelToUse = this.defaultModel; // Use default model instead of hardcoded llama2:7b
                 console.log(`[ALFRED] 🔄 'parallel' model detected, using ${modelToUse} for question analysis`);
             } else if (modelToUse === 'grok-2') {
                 // Handle invalid grok-2 model name, use grok-4 instead

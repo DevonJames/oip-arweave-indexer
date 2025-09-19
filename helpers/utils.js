@@ -310,12 +310,179 @@ const authenticateToken = (req, res, next) => {
 
     try {
         const verified = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Add publisherPubKey to the user object for GUN record verification
+        if (!verified.publisherPubKey) {
+            // Extract publisherPubKey from Arweave wallet
+            try {
+                const walletPath = getWalletFilePath();
+                const jwk = JSON.parse(fs.readFileSync(walletPath));
+                verified.publisherPubKey = jwk.n; // Arweave public key
+                
+                // Also add the derived address for compatibility
+                const myAddress = base64url(createHash('sha256').update(Buffer.from(jwk.n, 'base64')).digest());
+                verified.publisherAddress = myAddress;
+                verified.didAddress = `did:arweave:${myAddress}`;
+            } catch (error) {
+                console.error('Error extracting publisher public key:', error);
+                return res.status(500).json({ error: 'Failed to extract publisher credentials' });
+            }
+        }
+        
         req.user = verified;
+        
+        // For GUN record requests, verify user owns the record
+        if (req.params.soul || req.query.soul) {
+            const soul = req.params.soul || req.query.soul;
+            const userPubKey = verified.publisherPubKey;
+
+            if (!userPubKey) {
+                return res.status(403).json({ error: 'Publisher public key not found' });
+            }
+
+            // Create hash of the public key (first 12 chars) to match GUN soul format
+            const pubKeyHash = createHash('sha256')
+                .update(userPubKey)
+                .digest('hex')
+                .slice(0, 12);
+
+            // Verify soul belongs to authenticated user
+            if (!soul.startsWith(pubKeyHash)) {
+                return res.status(403).json({ error: 'Access denied to this record' });
+            }
+        }
+
         next();
     } catch (error) {
         console.error('Invalid token:', error);
         return res.status(403).json({ error: 'Invalid token' });
     }
+};
+
+/**
+ * Optional authentication middleware - allows both authenticated and unauthenticated access
+ * Adds user info to req.user if token is valid, otherwise req.user remains undefined
+ */
+const optionalAuthenticateToken = (req, res, next) => {
+    console.log('Optional authentication check...', req.headers.authorization ? 'Token provided' : 'No token');
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        // No token provided - continue as unauthenticated user
+        console.log('No token provided - proceeding as unauthenticated user');
+        req.isAuthenticated = false;
+        req.user = null;
+        return next();
+    }
+
+    try {
+        const verified = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Add server's Arweave wallet info for backward compatibility (if user doesn't have HD wallet)
+        if (!verified.publisherPubKey) {
+            try {
+                const walletPath = getWalletFilePath();
+                const jwk = JSON.parse(fs.readFileSync(walletPath));
+                verified.publisherPubKey = jwk.n; // Arweave public key
+                
+                // Also add the derived address for compatibility
+                const myAddress = base64url(createHash('sha256').update(Buffer.from(jwk.n, 'base64')).digest());
+                verified.publisherAddress = myAddress;
+                verified.didAddress = `did:arweave:${myAddress}`;
+            } catch (error) {
+                console.error('Error extracting publisher public key:', error);
+                return res.status(500).json({ error: 'Failed to extract publisher credentials' });
+            }
+        }
+        
+        req.user = verified;
+        req.isAuthenticated = true;
+        console.log('Token verified - proceeding as authenticated user:', verified.email);
+        
+        // For GUN record requests, verify user owns the record (only for specific soul requests)
+        if (req.params.soul || req.query.soul) {
+            const soul = req.params.soul || req.query.soul;
+            const userPubKey = verified.publicKey || verified.publisherPubKey; // Prioritize user's HD wallet key
+            
+            if (!userPubKey) {
+                return res.status(403).json({ error: 'User public key not found' });
+            }
+
+            // Create hash of the user's public key (first 12 chars) to match GUN soul format
+            const pubKeyHash = createHash('sha256')
+                .update(userPubKey)
+                .digest('hex')
+                .slice(0, 12);
+
+            // Verify soul belongs to authenticated user
+            if (!soul.startsWith(pubKeyHash)) {
+                return res.status(403).json({ error: 'Access denied to this record' });
+            }
+        }
+
+        next();
+    } catch (error) {
+        console.error('Invalid token in optional auth:', error);
+        // Invalid token - continue as unauthenticated user
+        req.isAuthenticated = false;
+        req.user = null;
+        next();
+    }
+};
+
+/**
+ * Check if a user owns a record based on various ownership indicators
+ * @param {Object} record - The record to check
+ * @param {Object} user - The authenticated user
+ * @returns {boolean} - True if user owns the record
+ */
+const userOwnsRecord = (record, user) => {
+    if (!record || !user) return false;
+    
+    const userPubKey = user.publicKey || user.publisherPubKey; // Prioritize user's HD wallet key
+    if (!userPubKey) return false;
+    
+    // Priority 1: Check accessControl ownership (NEW template-based ownership)
+    const accessControl = record.data?.accessControl;
+    if (accessControl?.owner_public_key === userPubKey || accessControl?.created_by === userPubKey) {
+        console.log('Record owned by user (accessControl template):', userPubKey.slice(0, 12));
+        return true;
+    }
+    
+    // Priority 2: Check conversation session ownership (NEW user-based ownership)
+    const conversationSession = record.data?.conversationSession;
+    if (conversationSession?.owner_public_key === userPubKey) {
+        console.log('Record owned by user (conversation session):', userPubKey.slice(0, 12));
+        return true;
+    }
+    
+    // Note: Shared access and permissions will be implemented when we have the full accessControl template
+    // For now, we only support private/public access levels
+    
+    // Priority 4: Check DID-based ownership for GUN records (user's key in soul)
+    if (record.oip?.did?.startsWith('did:gun:')) {
+        const soul = record.oip.did.replace('did:gun:', '');
+        const pubKeyHash = createHash('sha256')
+            .update(userPubKey)
+            .digest('hex')
+            .slice(0, 12);
+        
+        if (soul.startsWith(pubKeyHash)) {
+            console.log('Record owned by user (GUN soul):', pubKeyHash);
+            return true;
+        }
+    }
+    
+    // Priority 5: Check creator ownership (fallback for server-signed records)
+    const creatorPubKey = record.oip?.creator?.publicKey;
+    if (creatorPubKey === userPubKey) {
+        console.log('Record owned by user (creator fallback):', userPubKey.slice(0, 12));
+        return true;
+    }
+    
+    console.log('Record not owned by user - filtering out');
+    return false;
 };
 
 let remapTemplatesPromise = loadRemapTemplates();
@@ -336,6 +503,8 @@ module.exports = {
     getFileInfo,
     loadRemapTemplates,
     authenticateToken,
+    optionalAuthenticateToken, // NEW: Add optional authentication
+    userOwnsRecord, // NEW: Add ownership check utility
     isValidDid,
     isValidTxId,
     getWalletFilePath
