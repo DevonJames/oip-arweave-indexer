@@ -3779,6 +3779,7 @@
                             <option value="media">Media File</option>
                             <option value="multiResolutionGif">Multi-Resolution GIF</option>
                             <option value="text">Text Document</option>
+                            <option value="organization">Organization</option>
                         </select>
                     </div>
 
@@ -7257,6 +7258,12 @@
                 case 'text':
                     interfaceContainer.innerHTML = createTextInterface();
                     break;
+                case 'organization':
+                    interfaceContainer.innerHTML = createOrganizationInterface();
+                    setTimeout(() => {
+                        initializeStorageTypeHandler();
+                    }, 100);
+                    break;
                 default:
                     interfaceContainer.innerHTML = '<div class="loading">Unknown record type</div>';
             }
@@ -7992,6 +7999,298 @@
 
                     <button onclick="publishText()" class="btn-primary" style="width: 100%; margin-top: 20px;">
                         📄 Publish Text
+                    </button>
+                </div>
+            `;
+        }
+
+        function createOrganizationInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🏢 Organization Registration</h3>
+                    
+                    <div class="info-box" style="background: #e3f2fd; border: 1px solid #2196f3; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4>🔐 Organization Ownership</h4>
+                        <p>Organizations are created using your HD wallet identity:</p>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>🔑 <strong>Your public key</strong> will be set as the organization public key</li>
+                            <li>👑 <strong>You will be the admin</strong> with full management rights</li>
+                            <li>🏢 <strong>Organization handle</strong> must be unique across the network</li>
+                            <li>📋 <strong>Membership policy</strong> controls how users can join</li>
+                        </ul>
+                    </div>
+
+                    <!-- Organization Basic Info -->
+                    <div class="form-group">
+                        <label for="org-name">Organization Name:</label>
+                        <input type="text" id="org-name" required placeholder="e.g., ALEXANDRIA Research Foundation">
+                        <small>The full, human-readable name of your organization</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="org-description">Description:</label>
+                        <textarea id="org-description" required placeholder="Brief description of your organization's mission and activities..." rows="4"></textarea>
+                        <small>Describe what your organization does and its goals</small>
+                    </div>
+
+                    <!-- Organization Handle -->
+                    <div class="form-group">
+                        <label for="org-handle">Organization Handle:</label>
+                        <input type="text" id="org-handle" required placeholder="e.g., alexandria-research" pattern="[a-z0-9-]+" style="font-family: monospace;">
+                        <small>Unique identifier (lowercase letters, numbers, and hyphens only). This cannot be changed later.</small>
+                    </div>
+
+                    <!-- Language -->
+                    <div class="form-group">
+                        <label for="org-language">Primary Language:</label>
+                        <select id="org-language">
+                            <option value="en">English</option>
+                            <option value="es">Spanish; Castilian</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="zh">Chinese</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ar">Arabic</option>
+                            <option value="hi">Hindi</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="ru">Russian</option>
+                            <option value="it">Italian</option>
+                            <option value="ko">Korean</option>
+                            <option value="tr">Turkish</option>
+                            <option value="pl">Polish</option>
+                            <option value="nl">Dutch; Flemish</option>
+                            <option value="sv">Swedish</option>
+                            <option value="da">Danish</option>
+                            <option value="no">Norwegian</option>
+                            <option value="fi">Finnish</option>
+                            <option value="el">Greek, Modern (1453-)</option>
+                            <option value="he">Hebrew</option>
+                            <option value="th">Thai</option>
+                            <option value="vi">Vietnamese</option>
+                            <option value="cs">Czech</option>
+                            <option value="hu">Hungarian</option>
+                            <option value="ro">Romanian; Moldavian; Moldovan</option>
+                            <option value="bg">Bulgarian</option>
+                            <option value="hr">Croatian</option>
+                            <option value="sk">Slovak</option>
+                            <option value="sl">Slovenian</option>
+                            <option value="et">Estonian</option>
+                            <option value="lv">Latvian</option>
+                            <option value="lt">Lithuanian</option>
+                            <option value="uk">Ukrainian</option>
+                            <option value="be">Belarusian</option>
+                            <option value="mk">Macedonian</option>
+                            <option value="sq">Albanian</option>
+                            <option value="sr">Serbian</option>
+                            <option value="bs">Bosnian</option>
+                            <option value="mt">Maltese</option>
+                            <option value="ga">Irish</option>
+                            <option value="cy">Welsh</option>
+                            <option value="is">Icelandic</option>
+                            <option value="fo">Faroese</option>
+                            <option value="eu">Basque</option>
+                            <option value="ca">Catalan; Valencian</option>
+                            <option value="gl">Galician</option>
+                            <option value="oc">Occitan (post 1500)</option>
+                            <option value="br">Breton</option>
+                            <option value="gd">Gaelic; Scomttish Gaelic</option>
+                            <option value="gv">Manx</option>
+                            <option value="kw">Cornish</option>
+                            <option value="cy">Welsh</option>
+                            <option value="af">Afrikaans</option>
+                            <option value="zu">Zulu</option>
+                            <option value="xh">Xhosa</option>
+                            <option value="sw">Swahili</option>
+                            <option value="am">Amharic</option>
+                            <option value="ti">Tigrinya</option>
+                            <option value="so">Somali</option>
+                            <option value="om">Oromo</option>
+                            <option value="ha">Hausa</option>
+                            <option value="yo">Yoruba</option>
+                            <option value="ig">Igbo</option>
+                            <option value="aa">Afar</option>
+                            <option value="ab">Abkhazian</option>
+                            <option value="ae">Avestan</option>
+                            <option value="ak">Akan</option>
+                            <option value="an">Aragonese</option>
+                            <option value="as">Assamese</option>
+                            <option value="av">Avaric</option>
+                            <option value="ay">Aymara</option>
+                            <option value="az">Azerbaijani</option>
+                            <option value="ba">Bashkir</option>
+                            <option value="bh">Bihari languages</option>
+                            <option value="bi">Bislama</option>
+                            <option value="bm">Bambara</option>
+                            <option value="bn">Bengali</option>
+                            <option value="bo">Tibetan</option>
+                            <option value="ce">Chechen</option>
+                            <option value="ch">Chamorro</option>
+                            <option value="co">Corsican</option>
+                            <option value="cr">Cree</option>
+                            <option value="cu">Church Slavic; Old Slavonic; Church Slavonic; Old Bulgarian; Old Church Slavonic</option>
+                            <option value="cv">Chuvash</option>
+                            <option value="dv">Divehi; Dhivehi; Maldivian</option>
+                            <option value="dz">Dzongkha</option>
+                            <option value="ee">Ewe</option>
+                            <option value="eo">Esperanto</option>
+                            <option value="et">Estonian</option>
+                            <option value="fa">Persian</option>
+                            <option value="ff">Fulah</option>
+                            <option value="fj">Fijian</option>
+                            <option value="fy">Western Frisian</option>
+                            <option value="gn">Guarani</option>
+                            <option value="gu">Gujarati</option>
+                            <option value="ht">Haitian; Haitian Creole</option>
+                            <option value="hy">Armenian</option>
+                            <option value="hz">Herero</option>
+                            <option value="ia">Interlingua (International Auxiliary Language Association)</option>
+                            <option value="id">Indonesian</option>
+                            <option value="ie">Interlingue; Occidental</option>
+                            <option value="ii">Sichuan Yi; Nuosu</option>
+                            <option value="ik">Inupiaq</option>
+                            <option value="io">Ido</option>
+                            <option value="iu">Inuktitut</option>
+                            <option value="jv">Javanese</option>
+                            <option value="ka">Georgian</option>
+                            <option value="kg">Kongo</option>
+                            <option value="ki">Kikuyu; Gikuyu</option>
+                            <option value="kj">Kuanyama; Kwanyama</option>
+                            <option value="kk">Kazakh</option>
+                            <option value="kl">Kalaallisut; Greenlandic</option>
+                            <option value="km">Central Khmer</option>
+                            <option value="kn">Kannada</option>
+                            <option value="kr">Kanuri</option>
+                            <option value="ks">Kashmiri</option>
+                            <option value="ku">Kurdish</option>
+                            <option value="kv">Komi</option>
+                            <option value="ky">Kirghiz; Kyrgyz</option>
+                            <option value="la">Latin</option>
+                            <option value="lb">Luxembourgish; Letzeburgesch</option>
+                            <option value="lg">Ganda</option>
+                            <option value="li">Limburgan; Limburger; Limburgish</option>
+                            <option value="ln">Lingala</option>
+                            <option value="lo">Lao</option>
+                            <option value="lu">Luba-Katanga</option>
+                            <option value="mg">Malagasy</option>
+                            <option value="mh">Marshallese</option>
+                            <option value="mi">Maori</option>
+                            <option value="ml">Malayalam</option>
+                            <option value="mn">Mongolian</option>
+                            <option value="mr">Marathi</option>
+                            <option value="ms">Malay</option>
+                            <option value="my">Burmese</option>
+                            <option value="na">Nauru</option>
+                            <option value="nb">Bokmål, Norwegian; Norwegian Bokmål</option>
+                            <option value="nd">Ndebele, North; North Ndebele</option>
+                            <option value="ne">Nepali</option>
+                            <option value="ng">Ndonga</option>
+                            <option value="nn">Norwegian Nynorsk; Nynorsk, Norwegian</option>
+                            <option value="nr">Ndebele, South; South Ndebele</option>
+                            <option value="nv">Navajo; Navaho</option>
+                            <option value="ny">Chichewa; Chewa; Nyanja</option>
+                            <option value="oj">Ojibwa</option>
+                            <option value="or">Oriya</option>
+                            <option value="os">Ossetian; Ossetic</option>
+                            <option value="pa">Panjabi; Punjabi</option>
+                            <option value="pi">Pali</option>
+                            <option value="ps">Pushto; Pashto</option>
+                            <option value="qu">Quechua</option>
+                            <option value="rm">Romansh</option>
+                            <option value="rn">Rundi</option>
+                            <option value="rw">Kinyarwanda</option>
+                            <option value="sa">Sanskrit</option>
+                            <option value="sc">Sardinian</option>
+                            <option value="sd">Sindhi</option>
+                            <option value="se">Northern Sami</option>
+                            <option value="sg">Sango</option>
+                            <option value="si">Sinhala; Sinhalese</option>
+                            <option value="sm">Samoan</option>
+                            <option value="sn">Shona</option>
+                            <option value="ss">Swati</option>
+                            <option value="st">Sotho, Southern</option>
+                            <option value="su">Sundanese</option>
+                            <option value="ta">Tamil</option>
+                            <option value="te">Telugu</option>
+                            <option value="tg">Tajik</option>
+                            <option value="ti">Tigrinya</option>
+                            <option value="tk">Turkmen</option>
+                            <option value="tl">Tagalog</option>
+                            <option value="tn">Tswana</option>
+                            <option value="to">Tonga (Tonga Islands)</option>
+                            <option value="ts">Tsonga</option>
+                            <option value="tt">Tatar</option>
+                            <option value="tw">Twi</option>
+                            <option value="ty">Tahitian</option>
+                            <option value="ug">Uighur; Uyghur</option>
+                            <option value="ur">Urdu</option>
+                            <option value="uz">Uzbek</option>
+                            <option value="ve">Venda</option>
+                            <option value="vo">Volapük</option>
+                            <option value="wa">Walloon</option>
+                            <option value="wo">Wolof</option>
+                            <option value="yi">Yiddish</option>
+                            <option value="za">Zhuang; Chuang</option>
+                        </select>
+                        <small>Primary language for organization communications</small>
+                    </div>
+
+                    <!-- Website URL -->
+                    <div class="form-group">
+                        <label for="org-web-url">Website URL:</label>
+                        <input type="url" id="org-web-url" placeholder="https://example.com">
+                        <small>Official website or main online presence</small>
+                    </div>
+
+                    <!-- Organization Handle -->
+                    <div class="form-group">
+                        <label for="org-handle">Organization Handle:</label>
+                        <input type="text" id="org-handle" required placeholder="e.g., alexandria-research" pattern="[a-z0-9-]+" style="font-family: monospace;">
+                        <small>Unique identifier (lowercase letters, numbers, and hyphens only). This cannot be changed later.</small>
+                    </div>
+
+                    <!-- Membership Policy -->
+                    <div class="form-group">
+                        <label for="org-membership-policy">Membership Policy:</label>
+                        <select id="org-membership-policy" required>
+                            <option value="">Select membership policy</option>
+                            <option value="invite-only">Invite Only - Members must be invited by admins</option>
+                            <option value="app-user-auto">Auto-Enroll App Users - All app users automatically join</option>
+                            <option value="token-gated">Token-Gated Membership - Requires specific tokens/NFTs</option>
+                            <option value="open-join">Open Join - Anyone can join freely</option>
+                        </select>
+                        <small>Controls how users can become members of your organization</small>
+                    </div>
+
+                    <!-- Ownership Information (Read-Only) -->
+                    <div class="form-group" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+                        <h4 style="margin: 0 0 10px 0; color: #28a745;">🔐 Ownership Details</h4>
+                        <div style="font-family: monospace; font-size: 12px; color: #666;">
+                            <div><strong>Organization Public Key:</strong> <span id="org-public-key-display">Loading from JWT...</span></div>
+                            <div><strong>Admin Public Key:</strong> <span id="org-admin-key-display">Loading from JWT...</span></div>
+                        </div>
+                        <small>These are automatically derived from your authenticated HD wallet</small>
+                    </div>
+
+                    <!-- GUN-specific options -->
+                    <div id="gun-options" class="form-group" style="display: none; background: #f0f4ff; padding: 15px; border-radius: 8px; border: 1px solid #c7d2fe;">
+                        <h4 style="margin: 0 0 10px 0; color: #3730a3;">🔒 GUN Private Storage Options</h4>
+                        
+                        <div class="form-group">
+                            <label for="gun-local-id">Local ID (optional):</label>
+                            <input type="text" id="gun-local-id" placeholder="my-org-001, foundation-draft, etc.">
+                            <small>Provide a custom identifier for this organization. If empty, the org handle will be used.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="gun-private"> Private Organization (Encrypted)
+                            </label>
+                            <small>Check to encrypt this organization record. Only you will be able to read it.</small>
+                        </div>
+                    </div>
+
+                    <button onclick="publishOrganization()" class="btn-primary" style="width: 100%; margin-top: 20px;">
+                        🏢 Register Organization
                     </button>
                 </div>
             `;
@@ -12683,6 +12982,153 @@
             }
         }
 
+        async function publishOrganization() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for organization registration. Please log in first.', 'error');
+                    return;
+                }
+
+                // Extract user public key from JWT token
+                let userPublicKey;
+                try {
+                    const parts = authToken.split('.');
+                    if (parts.length === 3) {
+                        const payload = JSON.parse(atob(parts[1]));
+                        userPublicKey = payload.publicKey;
+                        
+                        if (!userPublicKey) {
+                            throw new Error('Public key not found in JWT token');
+                        }
+                    } else {
+                        throw new Error('Invalid JWT format');
+                    }
+                } catch (jwtError) {
+                    showMessage('publish-status', 'Error reading authentication token: ' + jwtError.message, 'error');
+                    return;
+                }
+
+                // Collect form data
+                const orgName = document.getElementById('org-name').value.trim();
+                const orgDescription = document.getElementById('org-description').value.trim();
+                const orgHandle = document.getElementById('org-handle').value.trim();
+                const orgLanguage = document.getElementById('org-language').value;
+                const orgWebUrl = document.getElementById('org-web-url').value.trim();
+                const membershipPolicy = document.getElementById('org-membership-policy').value;
+
+                // Validation
+                if (!orgName) {
+                    showMessage('publish-status', 'Please fill in organization name', 'error');
+                    return;
+                }
+                if (!orgDescription) {
+                    showMessage('publish-status', 'Please fill in organization description', 'error');
+                    return;
+                }
+                if (!orgHandle) {
+                    showMessage('publish-status', 'Please fill in organization handle', 'error');
+                    return;
+                }
+                if (!membershipPolicy) {
+                    showMessage('publish-status', 'Please select a membership policy', 'error');
+                    return;
+                }
+
+                // Validate handle format (lowercase, numbers, hyphens only)
+                const handleRegex = /^[a-z0-9-]+$/;
+                if (!handleRegex.test(orgHandle)) {
+                    showMessage('publish-status', 'Organization handle must contain only lowercase letters, numbers, and hyphens', 'error');
+                    return;
+                }
+
+                // Build organization record data
+                const organizationData = {
+                    basic: {
+                        name: orgName,
+                        description: orgDescription,
+                        language: orgLanguage,
+                        date: Math.floor(Date.now() / 1000),
+                        nsfw: false,
+                        webUrl: orgWebUrl || undefined
+                    },
+                    organization: {
+                        org_handle: orgHandle,
+                        org_public_key: userPublicKey,
+                        admin_public_keys: userPublicKey, // Initially, creator is the only admin
+                        membership_policy: membershipPolicy
+                    }
+                };
+
+                // Get storage type and GUN-specific options
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                const localId = document.getElementById('gun-local-id')?.value?.trim() || orgHandle; // Use org handle as default localId
+                const isPrivate = document.getElementById('gun-private')?.checked || false;
+
+                // Build request body with storage options
+                const requestBody = { ...organizationData };
+                
+                if (storageType === 'gun') {
+                    requestBody.storage = 'gun';
+                    if (localId) {
+                        requestBody.localId = localId;
+                    }
+                    if (isPrivate) {
+                        requestBody.accessControl = { 
+                            access_level: 'private',
+                            owner_public_key: userPublicKey,
+                            created_by: userPublicKey
+                        };
+                    } else {
+                        requestBody.accessControl = { 
+                            access_level: 'organization',
+                            owner_public_key: userPublicKey,
+                            created_by: userPublicKey
+                        };
+                    }
+                } else {
+                    requestBody.blockchain = storageType;
+                }
+
+                // Determine endpoint based on storage type
+                const endpoint = storageType === 'gun' ? '/api/records/newRecord' : '/api/organizations/newOrganization';
+                const queryParams = storageType === 'gun' ? `?recordType=organization${localId ? `&localId=${localId}` : ''}` : '';
+
+                console.log('[Organization] Publishing with data:', requestBody);
+                console.log('[Organization] Using endpoint:', endpoint + queryParams);
+
+                const response = await fetch(`${endpoint}${queryParams}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Handle different response formats for different storage types
+                    let successMessage;
+                    if (storageType === 'gun') {
+                        successMessage = `Organization registered in GUN! DID: ${result.did}${result.encrypted ? ' (Encrypted)' : ''}`;
+                    } else {
+                        successMessage = `Organization registered successfully! Transaction ID: ${result.transactionId}`;
+                    }
+                    showMessage('publish-success', successMessage, 'success');
+                    
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to register organization', 'error');
+                }
+            } catch (error) {
+                console.error('[Organization] Publishing error:', error);
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
         // Initialize storage type handler for GUN options
         function initializeStorageTypeHandler() {
             const storageSelect = document.getElementById('publish-storage-type');
@@ -12703,6 +13149,46 @@
                 // Initialize visibility based on current selection
                 const currentStorage = storageSelect.value;
                 gunOptions.style.display = currentStorage === 'gun' ? 'block' : 'none';
+            }
+            
+            // If organization interface is loaded, populate public key fields
+            populateOrganizationPublicKeys();
+        }
+
+        // Populate organization public key fields from JWT token
+        function populateOrganizationPublicKeys() {
+            const orgPubKeyDisplay = document.getElementById('org-public-key-display');
+            const orgAdminKeyDisplay = document.getElementById('org-admin-key-display');
+            
+            if (orgPubKeyDisplay && orgAdminKeyDisplay) {
+                if (authToken) {
+                    try {
+                        // Decode JWT to get user's public key
+                        const parts = authToken.split('.');
+                        if (parts.length === 3) {
+                            const payload = JSON.parse(atob(parts[1]));
+                            const userPublicKey = payload.publicKey;
+                            
+                            if (userPublicKey) {
+                                orgPubKeyDisplay.textContent = userPublicKey;
+                                orgAdminKeyDisplay.textContent = userPublicKey;
+                            } else {
+                                orgPubKeyDisplay.textContent = 'Public key not found in JWT';
+                                orgAdminKeyDisplay.textContent = 'Public key not found in JWT';
+                            }
+                        } else {
+                            orgPubKeyDisplay.textContent = 'Invalid JWT format';
+                            orgAdminKeyDisplay.textContent = 'Invalid JWT format';
+                        }
+                    } catch (error) {
+                        console.error('Error parsing JWT for organization keys:', error);
+                        orgPubKeyDisplay.textContent = 'Error parsing JWT';
+                        orgAdminKeyDisplay.textContent = 'Error parsing JWT';
+                    }
+                } else {
+                    orgPubKeyDisplay.textContent = 'Please log in to see your public key';
+                    orgAdminKeyDisplay.textContent = 'Please log in to see your public key';
+                }
             }
         }
 
