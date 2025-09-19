@@ -93,7 +93,8 @@ const corsOptions = {
       'wss://api.elevenlabs.io',
       'https://api.fitnessally.io',
       'https://librairian.net',
-      'https://oip.fitnessally.io'
+      'https://oip.fitnessally.io',
+      'https://app.fitnessally.io'
     ];
     
     // Allow any localhost origin in development
