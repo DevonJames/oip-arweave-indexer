@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template Cleanup Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #005a99;
+        }
+        .button.danger {
+            background: #dc3545;
+        }
+        .button.danger:hover {
+            background: #c82333;
+        }
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .results {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .auth-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .template-list {
+            display: grid;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .template-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+        .template-info {
+            flex-grow: 1;
+        }
+        .template-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .template-details {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .field-count {
+            background: #007acc;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        .status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.unused {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.used {
+            background: #d4edda;
+            color: #155724;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007acc;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Template Cleanup Tool</h1>
+        
+        <div class="auth-section">
+            <h3>🔐 Authentication Required</h3>
+            <p>Enter your JWT token to access template cleanup features:</p>
+            <input type="password" id="jwt-token" placeholder="Enter JWT token..." style="width: 70%; padding: 8px;">
+            <button class="button" onclick="setAuthToken()">Set Token</button>
+            <div id="auth-status" style="margin-top: 10px; font-size: 14px;"></div>
+        </div>
+
+        <div class="section">
+            <h2>📊 Template Analysis</h2>
+            <p>Analyze your templates to identify unused ones that can be safely deleted.</p>
+            <button class="button" onclick="analyzeTemplates()" id="analyze-btn">🔍 Analyze Templates</button>
+            
+            <div id="analysis-results" style="display: none;">
+                <div class="stats" id="stats-container"></div>
+                <div id="templates-container"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🗑️ Bulk Cleanup</h2>
+            <p>Delete all unused templates to free up Elasticsearch field space.</p>
+            <button class="button danger" onclick="deleteAllUnused()" id="bulk-delete-btn" disabled>🗑️ Delete All Unused Templates</button>
+            <label style="margin-left: 15px;">
+                <input type="number" id="max-delete" placeholder="Max to delete" min="1" style="width: 120px; padding: 4px;">
+                <small>Limit deletions (optional)</small>
+            </label>
+        </div>
+
+        <div class="section">
+            <h2>🎯 Individual Template Deletion</h2>
+            <p>Delete a specific template by its DID:</p>
+            <input type="text" id="template-did" placeholder="did:arweave:..." style="width: 60%; padding: 8px;">
+            <button class="button danger" onclick="deleteSpecificTemplate()">🗑️ Delete Template</button>
+        </div>
+
+        <div class="results" id="results" style="display: none;"></div>
+    </div>
+
+    <script>
+        let authToken = '';
+        let analysisData = null;
+
+        function setAuthToken() {
+            const token = document.getElementById('jwt-token').value.trim();
+            if (!token) {
+                showAuthStatus('Please enter a JWT token', 'error');
+                return;
+            }
+
+            authToken = token;
+            showAuthStatus('Token set successfully! You can now use cleanup features.', 'success');
+            
+            // Enable buttons
+            document.getElementById('analyze-btn').disabled = false;
+        }
+
+        function showAuthStatus(message, type) {
+            const statusEl = document.getElementById('auth-status');
+            statusEl.innerHTML = message;
+            statusEl.style.color = type === 'success' ? 'green' : 'red';
+        }
+
+        function showResults(content) {
+            const resultsEl = document.getElementById('results');
+            resultsEl.innerHTML = content;
+            resultsEl.style.display = 'block';
+            resultsEl.scrollTop = resultsEl.scrollHeight;
+        }
+
+        function appendResults(content) {
+            const resultsEl = document.getElementById('results');
+            resultsEl.innerHTML += content + '\\n';
+            resultsEl.scrollTop = resultsEl.scrollHeight;
+        }
+
+        async function analyzeTemplates() {
+            if (!authToken) {
+                alert('Please set your JWT token first');
+                return;
+            }
+
+            const analyzeBtn = document.getElementById('analyze-btn');
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = '🔍 Analyzing...';
+
+            showResults('🔍 Starting template analysis...\\n');
+
+            try {
+                const response = await fetch('/api/cleanup/analyze-templates', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    analysisData = data.analysis;
+                    displayAnalysisResults(data.analysis);
+                    appendResults('✅ Analysis completed successfully!');
+                    
+                    // Enable bulk delete if there are unused templates
+                    if (data.analysis.unusedTemplates > 0) {
+                        document.getElementById('bulk-delete-btn').disabled = false;
+                    }
+                } else {
+                    appendResults(`❌ Analysis failed: ${data.error}`);
+                }
+
+            } catch (error) {
+                appendResults(`❌ Network error: ${error.message}`);
+            }
+
+            analyzeBtn.disabled = false;
+            analyzeBtn.textContent = '🔍 Analyze Templates';
+        }
+
+        function displayAnalysisResults(analysis) {
+            // Update stats
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-number">${analysis.totalTemplates}</div>
+                    <div class="stat-label">Total Templates</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${analysis.unusedTemplates}</div>
+                    <div class="stat-label">Unused Templates</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${analysis.unusedFields}</div>
+                    <div class="stat-label">Unused Fields</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${Math.round(analysis.unusedFields/analysis.totalFields*100)}%</div>
+                    <div class="stat-label">Potential Savings</div>
+                </div>
+            `;
+            document.getElementById('stats-container').innerHTML = statsHtml;
+
+            // Display template lists
+            let templatesHtml = '<h3>🗑️ Unused Templates:</h3><div class="template-list">';
+            
+            if (analysis.templates.unused.length === 0) {
+                templatesHtml += '<p>🎉 No unused templates found!</p>';
+            } else {
+                analysis.templates.unused.forEach(template => {
+                    templatesHtml += `
+                        <div class="template-item">
+                            <div class="template-info">
+                                <div class="template-name">${template.name}</div>
+                                <div class="template-details">
+                                    Creator: ${template.creator} | 
+                                    Created: ${new Date(template.createdAt).toLocaleDateString()} |
+                                    DID: ${template.did}
+                                </div>
+                            </div>
+                            <div class="field-count">${template.fieldCount} fields</div>
+                            <div class="status unused">UNUSED</div>
+                        </div>
+                    `;
+                });
+            }
+            
+            templatesHtml += '</div>';
+
+            if (analysis.templates.used.length > 0) {
+                templatesHtml += '<h3>✅ Used Templates:</h3><div class="template-list">';
+                analysis.templates.used.forEach(template => {
+                    templatesHtml += `
+                        <div class="template-item">
+                            <div class="template-info">
+                                <div class="template-name">${template.name}</div>
+                                <div class="template-details">
+                                    Creator: ${template.creator} | 
+                                    Created: ${new Date(template.createdAt).toLocaleDateString()}
+                                </div>
+                            </div>
+                            <div class="field-count">${template.fieldCount} fields</div>
+                            <div class="status used">IN USE</div>
+                        </div>
+                    `;
+                });
+                templatesHtml += '</div>';
+            }
+
+            document.getElementById('templates-container').innerHTML = templatesHtml;
+            document.getElementById('analysis-results').style.display = 'block';
+        }
+
+        async function deleteAllUnused() {
+            if (!authToken) {
+                alert('Please set your JWT token first');
+                return;
+            }
+
+            if (!analysisData || analysisData.unusedTemplates === 0) {
+                alert('No unused templates to delete. Run analysis first.');
+                return;
+            }
+
+            const maxDelete = document.getElementById('max-delete').value;
+            const confirmMsg = maxDelete ? 
+                `Delete up to ${maxDelete} unused templates?` : 
+                `Delete ALL ${analysisData.unusedTemplates} unused templates?`;
+                
+            if (!confirm(confirmMsg + '\\n\\nThis action cannot be undone!')) {
+                return;
+            }
+
+            const bulkBtn = document.getElementById('bulk-delete-btn');
+            bulkBtn.disabled = true;
+            bulkBtn.textContent = '🗑️ Deleting...';
+
+            showResults('🗑️ Starting bulk template deletion...\\n');
+
+            try {
+                const requestBody = { 
+                    confirm: true 
+                };
+                if (maxDelete) {
+                    requestBody.maxToDelete = parseInt(maxDelete);
+                }
+
+                const response = await fetch('/api/cleanup/delete-unused-templates', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    appendResults(`✅ ${data.message}`);
+                    appendResults(`📊 Results: ${data.results.successful}/${data.results.attempted} templates deleted`);
+                    appendResults(`💾 Fields freed: ${data.results.totalFieldsFreed}`);
+                    
+                    // Show individual results
+                    data.results.deletions.forEach(result => {
+                        if (result.status === 'success') {
+                            appendResults(`  ✅ ${result.template} (${result.fieldCount} fields) - TX: ${result.deleteTransactionId}`);
+                        } else {
+                            appendResults(`  ❌ ${result.template} - ${result.error || 'Failed'}`);
+                        }
+                    });
+                    
+                    // Refresh analysis
+                    setTimeout(() => {
+                        analyzeTemplates();
+                    }, 2000);
+                } else {
+                    appendResults(`❌ Bulk deletion failed: ${data.error}`);
+                }
+
+            } catch (error) {
+                appendResults(`❌ Network error: ${error.message}`);
+            }
+
+            bulkBtn.disabled = false;
+            bulkBtn.textContent = '🗑️ Delete All Unused Templates';
+        }
+
+        async function deleteSpecificTemplate() {
+            if (!authToken) {
+                alert('Please set your JWT token first');
+                return;
+            }
+
+            const templateDid = document.getElementById('template-did').value.trim();
+            if (!templateDid) {
+                alert('Please enter a template DID');
+                return;
+            }
+
+            if (!confirm(`Delete template: ${templateDid}?\\n\\nThis action cannot be undone!`)) {
+                return;
+            }
+
+            showResults(`🗑️ Deleting template: ${templateDid}\\n`);
+
+            try {
+                const response = await fetch('/api/cleanup/delete-template', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateDid: templateDid,
+                        confirm: true
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    appendResults(`✅ Template deletion message published!`);
+                    appendResults(`🔗 Transaction ID: ${data.deleteTransactionId}`);
+                    document.getElementById('template-did').value = '';
+                } else {
+                    appendResults(`❌ Deletion failed: ${data.error}`);
+                }
+
+            } catch (error) {
+                appendResults(`❌ Network error: ${error.message}`);
+            }
+        }
+
+        // Auto-focus on page load
+        window.onload = function() {
+            document.getElementById('jwt-token').focus();
+        };
+    </script>
+</body>
+</html>

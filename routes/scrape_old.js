@@ -1099,7 +1099,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
     if (records.searchResults > 0) {
 
       console.log('OIP data from first record found in archive:', records.records[0]);
-      const didTx = records.records[0].oip.didTx;
+      const didTx = records.records[0].oip.did || records.records[0].oip.didTx;
 
       txId = didTx.split(':')[2];
 
@@ -1378,7 +1378,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
       console.log('Sent finalData:', articleData);
       let article = await publishArticleAndAttachedMedia(articleData, $, articleData.url,html, res, blockchain);
       let articleTxid = article.transactionId;
-      let articleDidTx = article.didTx;
+      let articleDidTx = article.did || article.didTx;
       // this is the audio url
       let didTxRefs = article.didTxRefs;
       let subRecords = article.subRecords;
@@ -1443,7 +1443,8 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
             if (recordType === 'audio') {
               audioUrlRecord = audioUrlRecord || { oip: {} };
               audioUrlRecord.data = { ...record };
-              audioUrlRecord.oip.didTx = didTxRef;
+              audioUrlRecord.oip.did = didTxRef;
+              audioUrlRecord.oip.didTx = didTxRef; // Backward compatibility
               // audioUrlRecord.data = audioUrlRecord.data || '';
               // audioUrlRecord.data.push(record);
               audioDidTxRef = didTxRefs[index];
@@ -1460,7 +1461,8 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
               console.log('Image record found:', imageRecord);
               imageRecord = imageRecord || { oip: {} };
               imageRecord.data = { ...record };
-              imageRecord.oip.didTx = didTxRef;
+              imageRecord.oip.did = didTxRef;
+              imageRecord.oip.didTx = didTxRef; // Backward compatibility
               // imageRecord.data = imageRecord.data || [];
               // imageRecord.data.push(record);
               imageDidTxRef = didTxRefs[index];
@@ -1476,7 +1478,8 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
             } else if (recordType === 'text') {
               textRecord = textRecord || { oip: {} };
               textRecord.data = { ...record };
-              textRecord.oip.didTx = didTxRef;
+              textRecord.oip.did = didTxRef;
+              textRecord.oip.didTx = didTxRef; // Backward compatibility
               // textRecord.data = textRecord.data || [];
               // textRecord.data.push(record);
               textDidTxRef = didTxRefs[index];
@@ -2380,12 +2383,12 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     for (const name of ingredientNames) {
         const bestMatch = findBestMatch(name);
         if (bestMatch) {
-            ingredientDidRefs[name] = bestMatch.oip.didTx;
+            ingredientDidRefs[name] = bestMatch.oip.did || bestMatch.oip.didTx;
             nutritionalInfo.push({
                 ingredientName: bestMatch.data.basic.name,
                 nutritionalInfo: bestMatch.data.nutritionalInfo || {},
                 ingredientSource: bestMatch.data.basic.webUrl,
-                ingredientDidRef: bestMatch.oip.didTx
+                ingredientDidRef: bestMatch.oip.did || bestMatch.oip.didTx
             });
             console.log(`Match found for ${name}:`, nutritionalInfo[nutritionalInfo.length - 1]);
         } else {
@@ -2477,12 +2480,12 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     bestMatches.forEach((match, index) => {
       if (match) {
         const name = missingIngredientNames[index];
-        ingredientDidRefs[name] = match.oip.didTx;
+        ingredientDidRefs[name] = match.oip.did || match.oip.didTx;
         nutritionalInfo.push({
           ingredientName: match.data.basic.name,
           nutritionalInfo: match.data.nutritionalInfo || {},
           ingredientSource: match.data.basic.webUrl,
-          ingredientDidRef: match.oip.didTx
+          ingredientDidRef: match.oip.did || match.oip.didTx
         });
       }
     });

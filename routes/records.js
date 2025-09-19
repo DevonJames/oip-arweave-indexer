@@ -54,6 +54,10 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
         if (queryParams.didTx && !queryParams.did) {
             queryParams.did = queryParams.didTx;
         }
+        // Also support legacy didTx parameter
+        if (queryParams.did && !queryParams.didTx) {
+            queryParams.didTx = queryParams.did;
+        }
         
         // Add storage filtering if source parameter provided
         if (queryParams.source && queryParams.source !== 'all') {
