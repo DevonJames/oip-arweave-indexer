@@ -31,6 +31,6 @@ module.exports = {
         weightEntry: "yXFy2izo1ALbAQOvl8qEQP2XpmMzZoUGXri72I-SKFY",
         shoppingList: "pBI0qarLBP6zPIxBPsl7-ZhzPo0VBqoQ0OFEwZQCUxQ",
         userFitnessAchievment: "-sC601MieajKTLtJfe0ZyT8zxC9SiDrOa8HTP9aOiU0",
-        accessControl: "j8Nws9k82kBmZeMbpjKzHfeCv-whsSnE8dTq6P1l5R0"
+        accessControl: "aaZpleo8blkm72kL96UYjTyBPp4F4Wux-Yo3Lu6luvQ"
     },
 };
