@@ -25,7 +25,7 @@ const walletRoutes = require('./routes/wallet');
 const publishRecords = require('./routes/publish');
 const workoutRoutes = require('./routes/workout');
 const { getIsProcessing, setIsProcessing } = require('./helpers/processingState');
-const { keepDBUpToDate, remapExistingRecords, deleteRecordsByBlock, deleteRecordsByIndexedAt, deleteRecordsByIndex } = require('./helpers/elasticsearch');
+const { keepDBUpToDate, remapExistingRecords, deleteRecordsByBlock, deleteRecordsByIndexedAt, deleteRecordsByIndex, deleteIndex } = require('./helpers/elasticsearch');
 const minimist = require('minimist');
 const socket = require('./socket');
 const litRoutes = require('./routes/lit');
@@ -263,6 +263,26 @@ initializeIndices()
             process.exit(0);
         } catch (error) {
             console.error('Error occurred during deletion of all records:', error);
+            process.exit(1);
+        }
+    }
+
+    // CLI functionality for deleting an entire index
+    if (args.deleteIndex) {
+        const indexName = args.deleteIndex;
+        
+        if (!indexName || typeof indexName !== 'string') {
+            console.error('Invalid index name. Please provide a valid index name with --deleteIndex.');
+            process.exit(1);
+        }
+
+        try {
+            console.log(`Deleting entire index '${indexName}'...`);
+            const response = await deleteIndex(indexName);
+            console.log('Index deletion completed successfully:', response);
+            process.exit(0);
+        } catch (error) {
+            console.error('Error occurred during index deletion:', error);
             process.exit(1);
         }
     }
