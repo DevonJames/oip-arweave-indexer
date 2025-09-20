@@ -2544,12 +2544,10 @@ async function getRecords(queryParams) {
 const getOrganizationsInDB = async () => {
     try {
         const response = await elasticClient.search({
-            index: 'records', // Organizations are stored in the main records index
+            index: 'organizations', // Use dedicated organizations index like creators use creatorregistrations
             body: {
                 query: {
-                    term: {
-                        "oip.recordType": "organization"
-                    }
+                    match_all: {}
                 },
                 size: 10000, // Adjust as needed
                 sort: [
@@ -2566,7 +2564,7 @@ const getOrganizationsInDB = async () => {
         const qtyOrganizationsInDB = organizations.length;
         const maxArweaveOrgBlockInDB = organizations.length > 0 ? organizations[0].oip.inArweaveBlock : 0;
 
-        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in records index`);
+        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in organizations index`);
 
         return {
             qtyOrganizationsInDB,
@@ -3632,32 +3630,47 @@ async function processNewRecord(transaction, remapTemplates = []) {
         }
         await indexNewCreatorRegistration(creatorRegistrationParams)
     }
-    // handle organization registration
-    else if (recordType && recordType === 'organization') {
+    
+    // handle organization registration (use if, not else if, so it continues to normal record processing)
+    if (recordType && recordType === 'organization') {
         console.log(getFileInfo(), getLineNumber(), 'Processing organization registration:', transactionId, transaction);
         
-        const orgHandle = await convertToOrgHandle(transactionId, JSON.parse(transaction.data)[0]["0"]);
-        const data = {
-            orgHandle: orgHandle,
-            orgPublicKey: JSON.parse(transaction.data)[0]["1"],
-            adminPublicKeys: JSON.parse(transaction.data)[0]["2"],
-            membershipPolicy: JSON.parse(transaction.data)[0]["3"],
-            metadata: JSON.parse(transaction.data)[0]["4"],
-            didAddress: 'did:arweave:' + transaction.owner,
-            didTx: 'did:arweave:' + transactionId,
-        }
-        console.log(getFileInfo(), getLineNumber(), 'Organization data:', data);
+        const parsedData = JSON.parse(transaction.data);
+        const basicData = parsedData.find(obj => obj.t === "-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk");
+        const orgData = parsedData.find(obj => obj.t === "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM");
+        
+        const orgHandle = await convertToOrgHandle(transactionId, orgData["0"]);
         const organizationInfo = {
-            data,
+            data: {
+                orgHandle: orgHandle,
+                name: basicData["0"],
+                description: basicData["1"],
+                date: basicData["2"],
+                language: basicData["3"],
+                nsfw: basicData["6"],
+                webUrl: basicData["12"],
+                orgPublicKey: orgData["1"],
+                adminPublicKeys: orgData["2"],
+                membershipPolicy: orgData["3"],
+                metadata: orgData["4"] || null,
+                didAddress: 'did:arweave:' + transaction.owner,
+                didTx: 'did:arweave:' + transactionId,
+            }
         } 
         console.log(getFileInfo(), getLineNumber(), 'Organization info:', organizationInfo);
         const organizationRegistrationParams = {
             transaction,
-            organizationInfo
+            organizationInfo,
+            organizationHandle: orgHandle
         }
         await indexNewOrganizationRegistration(organizationRegistrationParams)
     }
-    else {
+    
+    // Continue with normal record processing (for both creators, organizations, and other records)
+    if (recordType && (recordType === 'creatorRegistration' || recordType === 'organization')) {
+        // Skip normal record processing for these special types since they're handled above
+        return { records: newRecords, recordsToDelete };
+    } else {
     // handle records
     dataForSignature = JSON.stringify(tags) + transaction.data;
     let creatorDid = txidToDid(transaction.creator);
