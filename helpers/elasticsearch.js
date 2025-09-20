@@ -3205,6 +3205,7 @@ async function keepDBUpToDate(remapTemplates) {
     try {
         await ensureIndexExists();
         let { qtyCreatorsInDB, maxArweaveCreatorRegBlockInDB, creatorsInDB } = await getCreatorsInDB();
+        let { qtyOrganizationsInDB, maxArweaveOrgBlockInDB, organizationsInDB } = await getOrganizationsInDB();
         foundInDB = {
             qtyRecordsInDB: qtyCreatorsInDB,
             maxArweaveBlockInDB: maxArweaveCreatorRegBlockInDB
@@ -3254,26 +3255,31 @@ async function keepDBUpToDate(remapTemplates) {
         // console.log(getFileInfo(), getLineNumber(), 'Records:', { finalMaxRecordArweaveBlock, qtyRecordsInDB });
         foundInDB.maxArweaveBlockInDB = Math.max(
             maxArweaveCreatorRegBlockInDB || 0,
+            maxArweaveOrgBlockInDB || 0,  // Include organizations in max block calculation
             finalMaxArweaveBlock || 0,
             finalMaxRecordArweaveBlock || 0
         );
         foundInDB.arweaveBlockHeights = {
             creators: maxArweaveCreatorRegBlockInDB,
+            organizations: maxArweaveOrgBlockInDB,  // Include organizations
             templates: finalMaxArweaveBlock,
             records: finalMaxRecordArweaveBlock
         };
         foundInDB.qtyRecordsInDB = Math.max(
             qtyCreatorsInDB || 0,
+            qtyOrganizationsInDB || 0,  // Include organizations
             qtyTemplatesInDB || 0,
             qtyRecordsInDB || 0
         );
         foundInDB.qtys = {
             creators: qtyCreatorsInDB,
+            organizations: qtyOrganizationsInDB,  // Include organizations
             templates: qtyTemplatesInDB,
             records: qtyRecordsInDB
         };
         foundInDB.recordsInDB = {
             creators: creatorsInDB,
+            organizations: organizationsInDB,  // Include organizations
             templates: templatesInDB,
             records: records
         };
@@ -4012,6 +4018,26 @@ const deleteRecordsByIndex = async (index) => {
     }
 };
 
+const deleteIndex = async (indexName) => {
+    try {
+        // Check if index exists first
+        const exists = await elasticClient.indices.exists({ index: indexName });
+        
+        if (!exists) {
+            console.log(`Index '${indexName}' does not exist.`);
+            return { acknowledged: false, message: `Index '${indexName}' does not exist.` };
+        }
+
+        // Delete the entire index
+        const response = await elasticClient.indices.delete({ index: indexName });
+        console.log(`Successfully deleted index '${indexName}'.`);
+        return response;
+    } catch (error) {
+        console.error(`Error deleting index '${indexName}':`, error);
+        throw error;
+    }
+};
+
 const getRecordTypesSummary = async () => {
     try {
         // Since the recordType field is mapped as 'text', we need to use a different approach
@@ -4086,6 +4112,7 @@ module.exports = {
     deleteRecordsByBlock,
     deleteRecordsByIndexedAt,
     deleteRecordsByIndex,
+    deleteIndex,
     getCreatorsInDB,
     getOrganizationsInDB,
     convertToOrgHandle,
