@@ -7298,6 +7298,8 @@
                     interfaceContainer.innerHTML = createMultiResolutionGifInterface();
                     setTimeout(() => {
                         initializeStorageTypeHandler();
+                        // Initialize GIF input method
+                        updateGifInputMethod();
                     }, 100);
                     break;
                 case 'text':
@@ -8758,8 +8760,46 @@
                         <textarea id="gif-collection-description" placeholder="Multi-resolution GIF demonstration set for..." rows="2"></textarea>
                     </div>
 
-                    <!-- GIF Media References -->
+                    <!-- Input Method Selection -->
                     <div class="form-group">
+                        <label for="gif-input-method">Input Method:</label>
+                        <select id="gif-input-method" onchange="updateGifInputMethod()">
+                            <option value="upload">Upload GIF Files</option>
+                            <option value="manual">Manual DID Entry</option>
+                        </select>
+                        <small>Choose whether to upload files or enter existing media DIDs</small>
+                    </div>
+
+                    <!-- File Upload Interface -->
+                    <div id="gif-upload-interface" class="form-group">
+                        <label>GIF Files (Different Resolutions):</label>
+                        <div id="gif-files-container">
+                            <div class="gif-file-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 40px; gap: 10px; margin-bottom: 10px; align-items: end; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                                <div>
+                                    <label>GIF File:</label>
+                                    <input type="file" class="gif-file-input" accept="image/gif" onchange="updateGifFileInfo(this)">
+                                </div>
+                                <div>
+                                    <label>Resolution Label:</label>
+                                    <input type="text" class="gif-resolution-label" placeholder="180p">
+                                </div>
+                                <div>
+                                    <label>Width (px):</label>
+                                    <input type="number" class="gif-width" placeholder="320">
+                                </div>
+                                <div>
+                                    <label>Height (px):</label>
+                                    <input type="number" class="gif-height" placeholder="180">
+                                </div>
+                                <button type="button" onclick="addGifFileRow()" class="btn-small" title="Add another resolution">+</button>
+                            </div>
+                        </div>
+                        <button type="button" onclick="addGifFileRow()" style="margin-top: 10px;">+ Add Another Resolution</button>
+                        <small>Upload GIF files at different resolutions. Dimensions will be auto-detected.</small>
+                    </div>
+
+                    <!-- Manual DID Interface -->
+                    <div id="gif-manual-interface" class="form-group hidden">
                         <label>GIF Media References:</label>
                         <div id="gif-refs-container">
                             <div class="gif-ref-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: end;">
@@ -8822,7 +8862,7 @@
                     </div>
 
                     <button onclick="publishMultiResolutionGif()" class="btn-primary" style="width: 100%; margin-top: 20px;">
-                        🎬 Publish GIF Collection
+                        <span id="gif-publish-text">🎬 Publish GIF Collection</span>
                     </button>
                 </div>
             `;
@@ -13224,37 +13264,162 @@
                     return;
                 }
 
-                // Collect GIF references
-                const gifRefs = [];
-                const resolutionLabels = [];
-                const fileSizes = [];
-                const widths = [];
-                const heights = [];
-                
-                const refRows = document.querySelectorAll('.gif-ref-row');
-                refRows.forEach(row => {
-                    const did = row.querySelector('.gif-media-did').value.trim();
-                    const label = row.querySelector('.gif-resolution-label').value.trim();
-                    const width = parseInt(row.querySelector('.gif-width').value) || 0;
-                    const height = parseInt(row.querySelector('.gif-height').value) || 0;
-                    
-                    if (did && label) {
-                        gifRefs.push(did);
-                        resolutionLabels.push(label);
-                        widths.push(width);
-                        heights.push(height);
-                        fileSizes.push(0); // We don't know the file size, will be filled by backend
-                    }
-                });
-
-                if (gifRefs.length === 0) {
-                    showMessage('publish-status', 'Please add at least one GIF media reference', 'error');
+                const collectionName = document.getElementById('gif-collection-name').value;
+                if (!collectionName) {
+                    showMessage('publish-status', 'Please fill in collection name', 'error');
                     return;
                 }
 
+                const inputMethod = document.getElementById('gif-input-method').value;
+                let gifRefs = [];
+                let resolutionLabels = [];
+                let fileSizes = [];
+                let widths = [];
+                let heights = [];
+
+                // Update button text
+                const publishBtn = document.getElementById('gif-publish-text');
+                const originalBtnText = publishBtn.textContent;
+
+                if (inputMethod === 'upload') {
+                    // Upload mode: Upload files and create image records first
+                    publishBtn.textContent = '📤 Uploading GIF Files...';
+                    showMessage('publish-status', 'Uploading GIF files and creating image records...', 'info');
+                    
+                    const fileRows = document.querySelectorAll('.gif-file-row');
+                    const uploadTasks = [];
+                    
+                    for (const row of fileRows) {
+                        const fileInput = row.querySelector('.gif-file-input');
+                        const file = fileInput.files[0];
+                        const label = row.querySelector('.gif-resolution-label').value.trim();
+                        const width = parseInt(row.querySelector('.gif-width').value) || 0;
+                        const height = parseInt(row.querySelector('.gif-height').value) || 0;
+                        
+                        if (file && label) {
+                            uploadTasks.push({
+                                file: file,
+                                label: label,
+                                width: width,
+                                height: height,
+                                row: row
+                            });
+                        }
+                    }
+
+                    if (uploadTasks.length === 0) {
+                        showMessage('publish-status', 'Please select at least one GIF file', 'error');
+                        return;
+                    }
+
+                    // Upload each GIF file and create image records
+                    for (let i = 0; i < uploadTasks.length; i++) {
+                        const task = uploadTasks[i];
+                        const progress = Math.floor((i / uploadTasks.length) * 50); // First 50% for uploads
+                        
+                        publishBtn.textContent = `📤 Uploading ${task.file.name} (${i + 1}/${uploadTasks.length})...`;
+                        showMessage('publish-status', `Uploading ${task.file.name} (${i + 1}/${uploadTasks.length})...`, 'info');
+                        
+                        try {
+                            // Step 1: Upload file
+                            const formData = new FormData();
+                            formData.append('file', task.file);
+                            formData.append('name', `${collectionName} - ${task.label}`);
+                            formData.append('access_level', 'private');
+                            formData.append('description', `GIF resolution: ${task.label}`);
+
+                            const uploadResponse = await fetch('/api/media/upload', {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${authToken}`
+                                },
+                                body: formData
+                            });
+
+                            const uploadResult = await uploadResponse.json();
+                            if (!uploadResponse.ok) {
+                                throw new Error(`Upload failed: ${uploadResult.error}`);
+                            }
+
+                            // Step 2: Create image record
+                            const recordData = {
+                                mediaId: uploadResult.mediaId,
+                                recordType: 'image',
+                                basicInfo: {
+                                    name: `${collectionName} - ${task.label}`,
+                                    description: `GIF resolution: ${task.label}`,
+                                    language: 'en',
+                                    nsfw: false,
+                                    tagItems: ['gif', 'multi-resolution', task.label]
+                                },
+                                accessControl: {
+                                    access_level: 'private'
+                                },
+                                width: task.width,
+                                height: task.height,
+                                duration: 0
+                            };
+
+                            const recordResponse = await fetch('/api/media/createRecord', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${authToken}`
+                                },
+                                body: JSON.stringify(recordData)
+                            });
+
+                            const recordResult = await recordResponse.json();
+                            if (!recordResponse.ok) {
+                                throw new Error(`Record creation failed: ${recordResult.error}`);
+                            }
+
+                            // Store the results
+                            gifRefs.push(recordResult.did);
+                            resolutionLabels.push(task.label);
+                            fileSizes.push(task.file.size);
+                            widths.push(task.width);
+                            heights.push(task.height);
+
+                            console.log(`✅ Created image record for ${task.label}: ${recordResult.did}`);
+                            
+                        } catch (error) {
+                            showMessage('publish-status', `Error uploading ${task.file.name}: ${error.message}`, 'error');
+                            return;
+                        }
+                    }
+                    
+                } else {
+                    // Manual mode: Collect existing DIDs
+                    const refRows = document.querySelectorAll('.gif-ref-row');
+                    refRows.forEach(row => {
+                        const did = row.querySelector('.gif-media-did').value.trim();
+                        const label = row.querySelector('.gif-resolution-label').value.trim();
+                        const width = parseInt(row.querySelector('.gif-width').value) || 0;
+                        const height = parseInt(row.querySelector('.gif-height').value) || 0;
+                        
+                        if (did && label) {
+                            gifRefs.push(did);
+                            resolutionLabels.push(label);
+                            widths.push(width);
+                            heights.push(height);
+                            fileSizes.push(0); // Unknown for manual DIDs
+                        }
+                    });
+
+                    if (gifRefs.length === 0) {
+                        showMessage('publish-status', 'Please add at least one GIF media reference', 'error');
+                        return;
+                    }
+                }
+
+                // Create the multiResolutionGif record
+                publishBtn.textContent = '📋 Creating Collection Record...';
+                showMessage('publish-status', 'Creating multi-resolution GIF collection record...', 'info');
+
                 const gifData = {
                     basic: {
-                        name: document.getElementById('gif-collection-name').value,
+                        name: collectionName,
                         description: document.getElementById('gif-collection-description').value,
                         language: 'en',
                         date: Math.floor(Date.now() / 1000),
@@ -13272,11 +13437,6 @@
                         duration_seconds: parseFloat(document.getElementById('gif-duration').value) || 8.5
                     }
                 };
-
-                if (!gifData.basic.name) {
-                    showMessage('publish-status', 'Please fill in collection name', 'error');
-                    return;
-                }
 
                 // Always publish to GUN for multi-resolution GIF collections
                 const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
@@ -13298,16 +13458,103 @@
                 const result = await response.json();
                 
                 if (response.ok) {
-                    showMessage('publish-success', `GIF collection published to GUN! DID: ${result.did}`, 'success');
+                    publishBtn.textContent = '✅ Published Successfully!';
+                    showMessage('publish-success', 
+                        `GIF collection published successfully!\\n` +
+                        `Collection DID: ${result.did}\\n` +
+                        `Image Records: ${gifRefs.length}\\n` +
+                        `Method: ${inputMethod === 'upload' ? 'File Upload' : 'Manual DID Entry'}`, 'success');
                     
-                    // Clear form
-                    document.getElementById('publish-record-type').value = '';
-                    loadPublishInterface();
+                    // Clear form after delay
+                    setTimeout(() => {
+                        document.getElementById('publish-record-type').value = '';
+                        loadPublishInterface();
+                    }, 3000);
                 } else {
+                    publishBtn.textContent = originalBtnText;
                     showMessage('publish-status', result.error || 'Failed to publish GIF collection', 'error');
                 }
             } catch (error) {
+                publishBtn.textContent = originalBtnText;
                 showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        // Multi-Resolution GIF management functions
+        function updateGifInputMethod() {
+            const method = document.getElementById('gif-input-method').value;
+            const uploadInterface = document.getElementById('gif-upload-interface');
+            const manualInterface = document.getElementById('gif-manual-interface');
+            
+            if (method === 'upload') {
+                uploadInterface.classList.remove('hidden');
+                manualInterface.classList.add('hidden');
+            } else {
+                uploadInterface.classList.add('hidden');
+                manualInterface.classList.remove('hidden');
+            }
+        }
+
+        function addGifFileRow() {
+            const container = document.getElementById('gif-files-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'gif-file-row';
+            newRow.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 40px; gap: 10px; margin-bottom: 10px; align-items: end; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;';
+            
+            newRow.innerHTML = `
+                <div>
+                    <input type="file" class="gif-file-input" accept="image/gif" onchange="updateGifFileInfo(this)">
+                </div>
+                <div>
+                    <input type="text" class="gif-resolution-label" placeholder="360p">
+                </div>
+                <div>
+                    <input type="number" class="gif-width" placeholder="640">
+                </div>
+                <div>
+                    <input type="number" class="gif-height" placeholder="360">
+                </div>
+                <button type="button" onclick="removeGifFileRow(this)" class="btn-small btn-secondary" title="Remove this resolution">-</button>
+            `;
+            
+            container.appendChild(newRow);
+        }
+
+        function removeGifFileRow(button) {
+            const row = button.closest('.gif-file-row');
+            if (document.querySelectorAll('.gif-file-row').length > 1) {
+                row.remove();
+            }
+        }
+
+        async function updateGifFileInfo(fileInput) {
+            const row = fileInput.closest('.gif-file-row');
+            const file = fileInput.files[0];
+            
+            if (file && file.type === 'image/gif') {
+                try {
+                    // Auto-detect dimensions
+                    const dimensions = await getMediaDimensions(file, 'image');
+                    
+                    // Auto-populate fields
+                    const widthInput = row.querySelector('.gif-width');
+                    const heightInput = row.querySelector('.gif-height');
+                    const labelInput = row.querySelector('.gif-resolution-label');
+                    
+                    if (dimensions.width && dimensions.height) {
+                        widthInput.value = dimensions.width;
+                        heightInput.value = dimensions.height;
+                        
+                        // Auto-generate resolution label if empty
+                        if (!labelInput.value) {
+                            labelInput.value = `${dimensions.height}p`;
+                        }
+                    }
+                    
+                    console.log(`📐 Auto-detected GIF dimensions: ${dimensions.width}x${dimensions.height}`);
+                } catch (error) {
+                    console.warn('Could not auto-detect GIF dimensions:', error);
+                }
             }
         }
 
