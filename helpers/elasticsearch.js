@@ -2544,10 +2544,12 @@ async function getRecords(queryParams) {
 const getOrganizationsInDB = async () => {
     try {
         const response = await elasticClient.search({
-            index: 'organizations', // Use dedicated organizations index like creators
+            index: 'records', // Organizations are stored in the main records index
             body: {
                 query: {
-                    match_all: {}
+                    term: {
+                        "oip.recordType": "organization"
+                    }
                 },
                 size: 10000, // Adjust as needed
                 sort: [
@@ -2564,7 +2566,7 @@ const getOrganizationsInDB = async () => {
         const qtyOrganizationsInDB = organizations.length;
         const maxArweaveOrgBlockInDB = organizations.length > 0 ? organizations[0].oip.inArweaveBlock : 0;
 
-        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in DB`);
+        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in records index`);
 
         return {
             qtyOrganizationsInDB,
