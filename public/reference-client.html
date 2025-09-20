@@ -7278,6 +7278,8 @@
                     interfaceContainer.innerHTML = createExerciseInterface();
                     setTimeout(() => {
                         initializeStorageTypeHandler();
+                        // Initialize exercise access level
+                        updateExerciseAccessLevel();
                     }, 100);
                     break;
                 case 'fitnessEquipment':
@@ -8362,75 +8364,99 @@
                         <textarea id="exercise-description" placeholder="Brief description of the exercise..." rows="3"></textarea>
                     </div>
 
-                    <!-- Exercise Category -->
+                    <!-- Language -->
                     <div class="form-group">
-                        <label for="exercise-category">Category:</label>
-                        <select id="exercise-category">
-                            <option value="strength">Strength</option>
-                            <option value="cardio">Cardio</option>
-                            <option value="flexibility">Flexibility</option>
-                            <option value="balance">Balance</option>
-                            <option value="functional">Functional</option>
-                            <option value="rehabilitation">Rehabilitation</option>
+                        <label for="exercise-language">Language:</label>
+                        <select id="exercise-language">
+                            <option value="en">English</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="it">Italian</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="zh">Chinese</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="ar">Arabic</option>
+                            <option value="hi">Hindi</option>
+                            <option value="ru">Russian</option>
                         </select>
                     </div>
 
-                    <!-- Exercise Type -->
+                    <!-- Exercise Avatar (DID reference) -->
                     <div class="form-group">
-                        <label for="exercise-type">Exercise Type:</label>
-                        <select id="exercise-type">
-                            <option value="main">Main Exercise</option>
-                            <option value="warmup">Warm-up</option>
-                            <option value="cooldown">Cool-down</option>
-                        </select>
+                        <label for="exercise-avatar">Avatar/Demo Media DID:</label>
+                        <input type="text" id="exercise-avatar" placeholder="did:gun:media:... or did:arweave:...">
+                        <small>Reference to a media record (GIF, video) demonstrating the exercise</small>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="form-group">
+                        <label for="exercise-instructions">Instructions (one per line):</label>
+                        <textarea id="exercise-instructions" placeholder="Lie flat on bench with feet on the floor&#10;Grip bar slightly wider than shoulder-width&#10;Lower bar to mid-chest with control&#10;Press bar back up to starting position" rows="8"></textarea>
+                        <small>Step-by-step instructions for performing the exercise</small>
+                    </div>
+
+                    <!-- Muscle Groups -->
+                    <div class="form-group">
+                        <label for="exercise-muscle-groups">Muscle Groups (comma-separated):</label>
+                        <input type="text" id="exercise-muscle-groups" placeholder="chest, triceps, shoulders">
+                        <small>Primary muscle groups targeted by this exercise</small>
                     </div>
 
                     <!-- Difficulty Level -->
                     <div class="form-group">
                         <label for="exercise-difficulty">Difficulty:</label>
                         <select id="exercise-difficulty">
-                            <option value="beginner">Beginner</option>
-                            <option value="intermediate">Intermediate</option>
-                            <option value="advanced">Advanced</option>
+                            <option value="Beginner">Beginner</option>
+                            <option value="Intermediate" selected>Intermediate</option>
+                            <option value="Advanced">Advanced</option>
                         </select>
                     </div>
 
-                    <!-- Muscle Groups -->
+                    <!-- Exercise Category -->
                     <div class="form-group">
-                        <label for="exercise-muscle-groups">Muscle Groups (comma-separated):</label>
-                        <input type="text" id="exercise-muscle-groups" placeholder="chest, shoulders, triceps">
-                        <small>Primary muscle groups targeted by this exercise</small>
+                        <label for="exercise-category">Category:</label>
+                        <select id="exercise-category">
+                            <option value="Strength" selected>Strength</option>
+                            <option value="Cardio">Cardio</option>
+                            <option value="Flexibility">Flexibility</option>
+                            <option value="Balance">Balance</option>
+                            <option value="Functional">Functional</option>
+                            <option value="Rehabilitation">Rehabilitation</option>
+                        </select>
                     </div>
 
                     <!-- Equipment Required -->
                     <div class="form-group">
                         <label for="exercise-equipment">Equipment Required (comma-separated):</label>
-                        <input type="text" id="exercise-equipment" placeholder="barbell, weight-bench, weight-plates">
+                        <input type="text" id="exercise-equipment" placeholder="barbell, weight bench">
                         <small>Equipment needed to perform this exercise</small>
                     </div>
 
-                    <!-- Alternative Equipment -->
+                    <!-- Exercise Type -->
                     <div class="form-group">
-                        <label for="exercise-alternative-equipment">Alternative Equipment (comma-separated):</label>
-                        <input type="text" id="exercise-alternative-equipment" placeholder="dumbbells, smith-machine">
-                        <small>Alternative equipment that can be used</small>
-                    </div>
-
-                    <!-- Instructions -->
-                    <div class="form-group">
-                        <label for="exercise-instructions">Instructions (one per line):</label>
-                        <textarea id="exercise-instructions" placeholder="1. Set up on the bench with your eyes under the barbell&#10;2. Grip the bar with hands slightly wider than shoulder-width&#10;3. Lower the bar slowly to your chest..." rows="8"></textarea>
-                        <small>Step-by-step instructions for performing the exercise</small>
+                        <label for="exercise-type">Exercise Type:</label>
+                        <select id="exercise-type">
+                            <option value="Main" selected>Main</option>
+                            <option value="Warmup">Warmup</option>
+                            <option value="Cooldown">Cooldown</option>
+                        </select>
                     </div>
 
                     <!-- Exercise Settings -->
                     <div class="form-group">
                         <label for="exercise-measurement-type">Measurement Type:</label>
                         <select id="exercise-measurement-type">
-                            <option value="reps">Reps</option>
-                            <option value="time">Time (seconds)</option>
-                            <option value="distance">Distance</option>
+                            <option value="Reps" selected>Reps</option>
+                            <option value="Time">Time (seconds)</option>
+                            <option value="Distance">Distance</option>
                         </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="exercise-duration">Estimated Duration (minutes):</label>
+                        <input type="number" id="exercise-duration" min="1" max="60" value="5">
                     </div>
 
                     <div class="form-group" style="display: flex; gap: 15px;">
@@ -8440,20 +8466,8 @@
                         </div>
                         <div style="flex: 1;">
                             <label for="exercise-recommended-reps">Recommended Reps:</label>
-                            <input type="number" id="exercise-recommended-reps" min="1" max="100" value="10">
+                            <input type="number" id="exercise-recommended-reps" min="1" max="100" value="8">
                         </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="exercise-duration">Estimated Duration (minutes):</label>
-                        <input type="number" id="exercise-duration" min="1" max="60" value="8">
-                    </div>
-
-                    <!-- Media Reference -->
-                    <div class="form-group">
-                        <label for="exercise-avatar">Avatar/Demo Media DID:</label>
-                        <input type="text" id="exercise-avatar" placeholder="did:gun:media:... or did:gun:YOUR_SOUL_HASH:...">
-                        <small>Reference to a media record (GIF, video) demonstrating the exercise</small>
                     </div>
 
                     <!-- Exercise Flags -->
@@ -8464,10 +8478,30 @@
                         </div>
                     </div>
 
+                    <!-- Access Level -->
+                    <div class="form-group">
+                        <label for="exercise-access-level">Access Level:</label>
+                        <select id="exercise-access-level" onchange="updateExerciseAccessLevel()">
+                            <option value="private">Private (Only you)</option>
+                            <option value="organization" selected>Organization (Your team/org)</option>
+                            <option value="public">Public (Everyone)</option>
+                        </select>
+                        <small>Controls who can access this exercise record</small>
+                    </div>
+
+                    <!-- Organization Selection (shown when Organization access level is selected) -->
+                    <div id="exercise-organization-selection" class="form-group" style="background: #f0f4ff; padding: 15px; border-radius: 8px; border: 1px solid #c7d2fe;">
+                        <label for="exercise-organization">Select Organization:</label>
+                        <select id="exercise-organization" required>
+                            <option value="">Loading organizations...</option>
+                        </select>
+                        <small>Choose which organization this exercise belongs to</small>
+                    </div>
+
                     <!-- Tags -->
                     <div class="form-group">
                         <label for="exercise-tags">Tags:</label>
-                        <input type="text" id="exercise-tags" placeholder="chest, strength, compound, barbell">
+                        <input type="text" id="exercise-tags" placeholder="gain muscle, get stronger, general fitness">
                         <small>Tags for categorization and search</small>
                     </div>
 
@@ -12788,14 +12822,34 @@
                     return;
                 }
 
+                // Get storage type to determine if access control should be included
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                
+                let accessLevel = 'public'; // Default for Arweave
+                let selectedOrganizationDid = null;
+                
+                // Only get access level and organization for GUN storage
+                if (storageType === 'gun') {
+                    accessLevel = document.getElementById('exercise-access-level').value;
+                    
+                    // Get organization selection if needed
+                    if (accessLevel === 'organization') {
+                        selectedOrganizationDid = document.getElementById('exercise-organization').value;
+                        if (!selectedOrganizationDid) {
+                            showMessage('publish-status', 'Please select an organization when using Organization access level', 'error');
+                            return;
+                        }
+                    }
+                }
+
                 const exerciseData = {
                     basic: {
                         name: document.getElementById('exercise-name').value,
                         description: document.getElementById('exercise-description').value,
-                        language: 'en',
-                        date: Math.floor(Date.now() / 1000),
-                        tagItems: document.getElementById('exercise-tags').value.split(',').map(t => t.trim()).filter(t => t),
-                        avatar: document.getElementById('exercise-avatar').value || undefined
+                        language: document.getElementById('exercise-language').value,
+                        nsfw: false,
+                        avatar: document.getElementById('exercise-avatar').value || undefined,
+                        tagItems: document.getElementById('exercise-tags').value.split(',').map(t => t.trim()).filter(t => t)
                     },
                     exercise: {
                         instructions: document.getElementById('exercise-instructions').value.split('\\n').map(i => i.trim()).filter(i => i),
@@ -12803,18 +12857,22 @@
                         difficulty: document.getElementById('exercise-difficulty').value,
                         category: document.getElementById('exercise-category').value,
                         equipmentRequired: document.getElementById('exercise-equipment').value.split(',').map(t => t.trim()).filter(t => t),
-                        alternativeEquipment: document.getElementById('exercise-alternative-equipment').value.split(',').map(t => t.trim()).filter(t => t),
                         isBodyweight: document.getElementById('exercise-bodyweight').checked,
                         exercise_type: document.getElementById('exercise-type').value,
                         measurement_type: document.getElementById('exercise-measurement-type').value,
-                        est_duration_minutes: parseInt(document.getElementById('exercise-duration').value) || 8,
+                        est_duration_minutes: parseInt(document.getElementById('exercise-duration').value) || 5,
                         recommended_sets: parseInt(document.getElementById('exercise-recommended-sets').value) || 3,
-                        recommended_reps: parseInt(document.getElementById('exercise-recommended-reps').value) || 10,
-                        imageUrl: "",
-                        videoUrl: "",
-                        gitUrl: ""
+                        recommended_reps: parseInt(document.getElementById('exercise-recommended-reps').value) || 8
                     }
                 };
+
+                // Only add accessControl for GUN storage (private records)
+                if (storageType === 'gun') {
+                    exerciseData.accessControl = {
+                        access_level: accessLevel,
+                        shared_with: selectedOrganizationDid // Organization's DID if selected
+                    };
+                }
 
                 if (!exerciseData.basic.name || exerciseData.exercise.instructions.length === 0) {
                     showMessage('publish-status', 'Please fill in exercise name and instructions', 'error');
@@ -12869,15 +12927,23 @@
                     return;
                 }
 
-                const accessLevel = document.getElementById('equipment-access-level').value;
+                // Get storage type to determine if access control should be included
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
                 
-                // Get organization selection if needed
+                let accessLevel = 'public'; // Default for Arweave
                 let selectedOrganizationDid = null;
-                if (accessLevel === 'organization') {
-                    selectedOrganizationDid = document.getElementById('equipment-organization').value;
-                    if (!selectedOrganizationDid) {
-                        showMessage('publish-status', 'Please select an organization when using Organization access level', 'error');
-                        return;
+                
+                // Only get access level and organization for GUN storage
+                if (storageType === 'gun') {
+                    accessLevel = document.getElementById('equipment-access-level').value;
+                    
+                    // Get organization selection if needed
+                    if (accessLevel === 'organization') {
+                        selectedOrganizationDid = document.getElementById('equipment-organization').value;
+                        if (!selectedOrganizationDid) {
+                            showMessage('publish-status', 'Please select an organization when using Organization access level', 'error');
+                            return;
+                        }
                     }
                 }
 
@@ -12905,20 +12971,21 @@
                         beginner_friendly: document.getElementById('equipment-beginner-friendly').checked,
                         home_gym_suitable: document.getElementById('equipment-home-gym').checked,
                         commercial_grade: document.getElementById('equipment-commercial').checked
-                    },
-                    accessControl: {
-                        access_level: accessLevel,
-                        shared_with: selectedOrganizationDid // Organization's DID if selected
                     }
                 };
+
+                // Only add accessControl for GUN storage (private records)
+                if (storageType === 'gun') {
+                    equipmentData.accessControl = {
+                        access_level: accessLevel,
+                        shared_with: selectedOrganizationDid // Organization's DID if selected
+                    };
+                }
 
                 if (!equipmentData.basic.name) {
                     showMessage('publish-status', 'Please fill in equipment name', 'error');
                     return;
                 }
-
-                // Get storage type and build URL
-                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
                 const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
                 
                 const endpoint = storageType === 'gun' ? '/api/records/newRecord' : '/api/publish/newFitnessEquipment';
@@ -13033,9 +13100,27 @@
                 const mediaTitle = document.getElementById('media-name').value || file.name;
                 const mediaDescription = document.getElementById('media-description').value || `${recordType.charAt(0).toUpperCase() + recordType.slice(1)} file: ${file.name}`;
                 const language = document.getElementById('media-language').value;
-                const accessLevel = document.getElementById('media-access-level').value;
                 const tags = document.getElementById('media-tags').value.split(',').map(t => t.trim()).filter(t => t);
                 const nsfw = document.getElementById('media-nsfw').checked;
+
+                // Get storage type to determine if access control should be included
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                
+                let accessLevel = 'public'; // Default for Arweave
+                let selectedOrganizationDid = null;
+                
+                // Only get access level and organization for GUN storage
+                if (storageType === 'gun') {
+                    accessLevel = document.getElementById('media-access-level').value;
+                    
+                    // Get organization selection if needed
+                    if (accessLevel === 'organization') {
+                        selectedOrganizationDid = document.getElementById('media-organization').value;
+                        if (!selectedOrganizationDid) {
+                            throw new Error('Please select an organization when using Organization access level');
+                        }
+                    }
+                }
 
                 // Get file dimensions for images/videos (we'll need to extract these)
                 let width = 0;
@@ -13079,15 +13164,21 @@
                         language: language,
                         nsfw: nsfw,
                         tagItems: tags
-                    },
-                    accessControl: {
+                    }
+                };
+
+                // Only add accessControl for GUN storage (private records)
+                if (storageType === 'gun') {
+                    recordData.accessControl = {
                         access_level: accessLevel,
                         shared_with: selectedOrganizationDid // Organization's DID goes in shared_with field
-                    },
-                    width: width,
-                    height: height,
-                    duration: duration
-                };
+                    };
+                }
+
+                // Add dimensions to recordData
+                recordData.width = width;
+                recordData.height = height;
+                recordData.duration = duration;
 
                 const recordResponse = await fetch('/api/media/createRecord', {
                     method: 'POST',
@@ -13190,17 +13281,20 @@
                     updateOrganizationDropdown();
                     updateGifOrganizationDropdown(); // Also update GIF dropdown
                     updateEquipmentOrganizationDropdown(); // Also update Equipment dropdown
+                    updateExerciseOrganizationDropdown(); // Also update Exercise dropdown
                 } else {
                     console.warn('⚠️ Failed to load organizations:', response.status);
                     updateOrganizationDropdown(); // Show empty state
                     updateGifOrganizationDropdown(); // Show empty state
                     updateEquipmentOrganizationDropdown(); // Show empty state
+                    updateExerciseOrganizationDropdown(); // Show empty state
                 }
             } catch (error) {
                 console.error('❌ Error loading organizations:', error);
                 updateOrganizationDropdown(); // Show error state
                 updateGifOrganizationDropdown(); // Show error state
                 updateEquipmentOrganizationDropdown(); // Show error state
+                updateExerciseOrganizationDropdown(); // Show error state
             }
         }
 
@@ -13358,15 +13452,24 @@
                 }
 
                 const inputMethod = document.getElementById('gif-input-method').value;
-                const accessLevel = document.getElementById('gif-access-level').value;
                 
-                // Get organization selection if needed
+                // Get storage type to determine if access control should be included
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                
+                let accessLevel = 'public'; // Default for Arweave
                 let selectedOrganizationDid = null;
-                if (accessLevel === 'organization') {
-                    selectedOrganizationDid = document.getElementById('gif-organization').value;
-                    if (!selectedOrganizationDid) {
-                        showMessage('publish-status', 'Please select an organization when using Organization access level', 'error');
-                        return;
+                
+                // Only get access level and organization for GUN storage
+                if (storageType === 'gun') {
+                    accessLevel = document.getElementById('gif-access-level').value;
+                    
+                    // Get organization selection if needed
+                    if (accessLevel === 'organization') {
+                        selectedOrganizationDid = document.getElementById('gif-organization').value;
+                        if (!selectedOrganizationDid) {
+                            showMessage('publish-status', 'Please select an organization when using Organization access level', 'error');
+                            return;
+                        }
                     }
                 }
 
@@ -13451,10 +13554,10 @@
                                     nsfw: false,
                                     tagItems: ['gif', 'multi-resolution', task.label]
                                 },
-                                accessControl: {
+                                accessControl: storageType === 'gun' ? {
                                     access_level: accessLevel,
                                     shared_with: selectedOrganizationDid // Organization's DID if selected
-                                },
+                                } : undefined,
                                 width: task.width,
                                 height: task.height,
                                 duration: 0
@@ -13535,12 +13638,16 @@
                         loop_count: parseInt(document.getElementById('gif-loop-count').value) || 0,
                         frame_rate: parseInt(document.getElementById('gif-frame-rate').value) || 15,
                         duration_seconds: parseFloat(document.getElementById('gif-duration').value) || 8.5
-                    },
-                    accessControl: {
-                        access_level: accessLevel,
-                        shared_with: selectedOrganizationDid // Organization's DID if selected
                     }
                 };
+
+                // Only add accessControl for GUN storage (private records)
+                if (storageType === 'gun') {
+                    gifData.accessControl = {
+                        access_level: accessLevel,
+                        shared_with: selectedOrganizationDid // Organization's DID if selected
+                    };
+                }
 
                 // Always publish to GUN for multi-resolution GIF collections
                 const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
@@ -13661,6 +13768,49 @@
 
         function updateEquipmentOrganizationDropdown() {
             const orgSelect = document.getElementById('equipment-organization');
+            if (!orgSelect) return;
+
+            orgSelect.innerHTML = '';
+
+            if (availableOrganizations.length === 0) {
+                orgSelect.innerHTML = '<option value="">No organizations available</option>';
+                orgSelect.disabled = true;
+            } else {
+                orgSelect.innerHTML = '<option value="">Select an organization...</option>';
+                availableOrganizations.forEach(org => {
+                    const option = document.createElement('option');
+                    // Store the organization's DID as the value (from oip.did)
+                    option.value = org.oip.did;
+                    // Display as handle (name) format
+                    option.textContent = `${org.data.orgHandle} (${org.data.name})`;
+                    // Store additional data as data attributes for reference
+                    option.setAttribute('data-handle', org.data.orgHandle);
+                    option.setAttribute('data-name', org.data.name);
+                    orgSelect.appendChild(option);
+                });
+                orgSelect.disabled = false;
+            }
+        }
+
+        function updateExerciseAccessLevel() {
+            const accessLevel = document.getElementById('exercise-access-level').value;
+            const orgSelection = document.getElementById('exercise-organization-selection');
+            
+            if (accessLevel === 'organization') {
+                orgSelection.style.display = 'block';
+                // Load organizations if not already loaded
+                if (availableOrganizations.length === 0) {
+                    loadOrganizations();
+                }
+                // Update the exercise organization dropdown
+                updateExerciseOrganizationDropdown();
+            } else {
+                orgSelection.style.display = 'none';
+            }
+        }
+
+        function updateExerciseOrganizationDropdown() {
+            const orgSelect = document.getElementById('exercise-organization');
             if (!orgSelect) return;
 
             orgSelect.innerHTML = '';
@@ -13934,30 +14084,71 @@
             }
         }
 
-        // Initialize storage type handler for GUN options
+        // Initialize storage type handler for GUN options and access control
         function initializeStorageTypeHandler() {
             const storageSelect = document.getElementById('publish-storage-type');
             const gunOptions = document.getElementById('gun-options');
             
-            if (storageSelect && gunOptions) {
+            if (storageSelect) {
                 // Add event listener for storage type changes
                 storageSelect.addEventListener('change', function() {
                     const selectedStorage = this.value;
                     
-                    if (selectedStorage === 'gun') {
-                        gunOptions.style.display = 'block';
-                    } else {
-                        gunOptions.style.display = 'none';
+                    // Show/hide GUN-specific options
+                    if (gunOptions) {
+                        gunOptions.style.display = selectedStorage === 'gun' ? 'block' : 'none';
                     }
+                    
+                    // Show/hide access control fields based on storage type
+                    updateAccessControlVisibility(selectedStorage);
                 });
                 
                 // Initialize visibility based on current selection
                 const currentStorage = storageSelect.value;
-                gunOptions.style.display = currentStorage === 'gun' ? 'block' : 'none';
+                if (gunOptions) {
+                    gunOptions.style.display = currentStorage === 'gun' ? 'block' : 'none';
+                }
+                updateAccessControlVisibility(currentStorage);
             }
             
             // If organization interface is loaded, populate public key fields
             populateOrganizationPublicKeys();
+        }
+
+        function updateAccessControlVisibility(storageType) {
+            // Access control fields should only be visible for GUN storage
+            const showAccessControl = storageType === 'gun';
+            
+            // Media interface access control
+            const mediaAccessLevel = document.getElementById('media-access-level')?.closest('.form-group');
+            const mediaOrgSelection = document.getElementById('media-organization-selection');
+            
+            // Exercise interface access control
+            const exerciseAccessLevel = document.getElementById('exercise-access-level')?.closest('.form-group');
+            const exerciseOrgSelection = document.getElementById('exercise-organization-selection');
+            
+            // Equipment interface access control
+            const equipmentAccessLevel = document.getElementById('equipment-access-level')?.closest('.form-group');
+            const equipmentOrgSelection = document.getElementById('equipment-organization-selection');
+            
+            // GIF interface access control
+            const gifAccessLevel = document.getElementById('gif-access-level')?.closest('.form-group');
+            const gifOrgSelection = document.getElementById('gif-organization-selection');
+            
+            // Update visibility for all interfaces
+            [mediaAccessLevel, exerciseAccessLevel, equipmentAccessLevel, gifAccessLevel].forEach(element => {
+                if (element) {
+                    element.style.display = showAccessControl ? 'block' : 'none';
+                }
+            });
+            
+            [mediaOrgSelection, exerciseOrgSelection, equipmentOrgSelection, gifOrgSelection].forEach(element => {
+                if (element) {
+                    element.style.display = showAccessControl ? 'block' : 'none';
+                }
+            });
+            
+            console.log(`🔒 Access control fields ${showAccessControl ? 'shown' : 'hidden'} for storage type: ${storageType}`);
         }
 
         // Populate organization public key fields from JWT token
