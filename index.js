@@ -268,8 +268,8 @@ initializeIndices()
     }
 
     // CLI functionality for deleting an entire index
-    if (args.deleteIndex) {
-        const indexName = args.deleteIndex;
+    if (args.deleteIndex && args.index) {
+        const indexName = args.index;
         
         if (!indexName || typeof indexName !== 'string') {
             console.error('Invalid index name. Please provide a valid index name with --deleteIndex.');
