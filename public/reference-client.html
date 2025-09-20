@@ -7298,8 +7298,9 @@
                     interfaceContainer.innerHTML = createMultiResolutionGifInterface();
                     setTimeout(() => {
                         initializeStorageTypeHandler();
-                        // Initialize GIF input method
+                        // Initialize GIF input method and access level
                         updateGifInputMethod();
+                        updateGifAccessLevel();
                     }, 100);
                     break;
                 case 'text':
@@ -8852,6 +8853,26 @@
                             <option value="3">Fourth (3)</option>
                         </select>
                         <small>Which resolution to use as the default/primary</small>
+                    </div>
+
+                    <!-- Access Level -->
+                    <div class="form-group">
+                        <label for="gif-access-level">Access Level:</label>
+                        <select id="gif-access-level" onchange="updateGifAccessLevel()">
+                            <option value="private">Private (Only you)</option>
+                            <option value="organization" selected>Organization (Your team/org)</option>
+                            <option value="public">Public (Everyone)</option>
+                        </select>
+                        <small>Controls who can access this GIF collection</small>
+                    </div>
+
+                    <!-- Organization Selection (shown when Organization access level is selected) -->
+                    <div id="gif-organization-selection" class="form-group" style="background: #f0f4ff; padding: 15px; border-radius: 8px; border: 1px solid #c7d2fe;">
+                        <label for="gif-organization">Select Organization:</label>
+                        <select id="gif-organization" required>
+                            <option value="">Loading organizations...</option>
+                        </select>
+                        <small>Choose which organization this GIF collection belongs to</small>
                     </div>
 
                     <!-- Tags -->
@@ -13107,13 +13128,16 @@
                     availableOrganizations = data.organizationsInDB || [];
                     console.log(`✅ Loaded ${availableOrganizations.length} organizations`);
                     updateOrganizationDropdown();
+                    updateGifOrganizationDropdown(); // Also update GIF dropdown
                 } else {
                     console.warn('⚠️ Failed to load organizations:', response.status);
                     updateOrganizationDropdown(); // Show empty state
+                    updateGifOrganizationDropdown(); // Show empty state
                 }
             } catch (error) {
                 console.error('❌ Error loading organizations:', error);
                 updateOrganizationDropdown(); // Show error state
+                updateGifOrganizationDropdown(); // Show error state
             }
         }
 
@@ -13271,6 +13295,18 @@
                 }
 
                 const inputMethod = document.getElementById('gif-input-method').value;
+                const accessLevel = document.getElementById('gif-access-level').value;
+                
+                // Get organization selection if needed
+                let selectedOrganizationDid = null;
+                if (accessLevel === 'organization') {
+                    selectedOrganizationDid = document.getElementById('gif-organization').value;
+                    if (!selectedOrganizationDid) {
+                        showMessage('publish-status', 'Please select an organization when using Organization access level', 'error');
+                        return;
+                    }
+                }
+
                 let gifRefs = [];
                 let resolutionLabels = [];
                 let fileSizes = [];
@@ -13353,7 +13389,8 @@
                                     tagItems: ['gif', 'multi-resolution', task.label]
                                 },
                                 accessControl: {
-                                    access_level: 'private'
+                                    access_level: accessLevel,
+                                    shared_with: selectedOrganizationDid // Organization's DID if selected
                                 },
                                 width: task.width,
                                 height: task.height,
@@ -13435,6 +13472,10 @@
                         loop_count: parseInt(document.getElementById('gif-loop-count').value) || 0,
                         frame_rate: parseInt(document.getElementById('gif-frame-rate').value) || 15,
                         duration_seconds: parseFloat(document.getElementById('gif-duration').value) || 8.5
+                    },
+                    accessControl: {
+                        access_level: accessLevel,
+                        shared_with: selectedOrganizationDid // Organization's DID if selected
                     }
                 };
 
@@ -13492,6 +13533,49 @@
             } else {
                 uploadInterface.classList.add('hidden');
                 manualInterface.classList.remove('hidden');
+            }
+        }
+
+        function updateGifAccessLevel() {
+            const accessLevel = document.getElementById('gif-access-level').value;
+            const orgSelection = document.getElementById('gif-organization-selection');
+            
+            if (accessLevel === 'organization') {
+                orgSelection.style.display = 'block';
+                // Load organizations if not already loaded
+                if (availableOrganizations.length === 0) {
+                    loadOrganizations();
+                }
+                // Update the GIF organization dropdown
+                updateGifOrganizationDropdown();
+            } else {
+                orgSelection.style.display = 'none';
+            }
+        }
+
+        function updateGifOrganizationDropdown() {
+            const orgSelect = document.getElementById('gif-organization');
+            if (!orgSelect) return;
+
+            orgSelect.innerHTML = '';
+
+            if (availableOrganizations.length === 0) {
+                orgSelect.innerHTML = '<option value="">No organizations available</option>';
+                orgSelect.disabled = true;
+            } else {
+                orgSelect.innerHTML = '<option value="">Select an organization...</option>';
+                availableOrganizations.forEach(org => {
+                    const option = document.createElement('option');
+                    // Store the organization's DID as the value (from oip.did)
+                    option.value = org.oip.did;
+                    // Display as handle (name) format
+                    option.textContent = `${org.data.orgHandle} (${org.data.name})`;
+                    // Store additional data as data attributes for reference
+                    option.setAttribute('data-handle', org.data.orgHandle);
+                    option.setAttribute('data-name', org.data.name);
+                    orgSelect.appendChild(option);
+                });
+                orgSelect.disabled = false;
             }
         }
 
