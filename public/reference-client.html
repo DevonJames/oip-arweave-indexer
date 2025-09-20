@@ -6834,8 +6834,7 @@
                         }
                     });
                     
-                    // Load default templates from config/templates.config.js
-                    const defaultTemplates = require('../config/templates.config.js');
+                    // Note: Default templates are defined in config/templates.config.js on the server
 
                     // defaultTemplates = {
                     //     basic: "did:arweave:-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk",
@@ -12882,13 +12881,16 @@
                 // Get local ID for GUN storage
                 const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
                 
-                const endpoint = storageType === 'gun' ? '/api/records/newRecord' : '/api/publish/newExercise';
-                const queryParams = storageType === 'gun' ? `?recordType=exercise${localId ? `&localId=${localId}` : ''}` : '';
+                // Always use /api/records/newRecord for exercise publishing
+                const endpoint = '/api/records/newRecord';
+                const queryParams = `?recordType=exercise${localId ? `&localId=${localId}` : ''}`;
 
                 const requestBody = { ...exerciseData };
                 if (storageType === 'gun') {
                     requestBody.storage = 'gun';
                     if (localId) requestBody.localId = localId;
+                } else {
+                    requestBody.blockchain = storageType;
                 }
 
                 const response = await fetch(`${endpoint}${queryParams}`, {
@@ -12987,13 +12989,16 @@
                 }
                 const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
                 
-                const endpoint = storageType === 'gun' ? '/api/records/newRecord' : '/api/publish/newFitnessEquipment';
-                const queryParams = storageType === 'gun' ? `?recordType=fitnessEquipment${localId ? `&localId=${localId}` : ''}` : '';
+                // Always use /api/records/newRecord for fitness equipment publishing
+                const endpoint = '/api/records/newRecord';
+                const queryParams = `?recordType=fitnessEquipment${localId ? `&localId=${localId}` : ''}`;
 
                 const requestBody = { ...equipmentData };
                 if (storageType === 'gun') {
                     requestBody.storage = 'gun';
                     if (localId) requestBody.localId = localId;
+                } else {
+                    requestBody.blockchain = storageType;
                 }
 
                 const response = await fetch(`${endpoint}${queryParams}`, {
@@ -14144,7 +14149,7 @@
             
             [mediaOrgSelection, exerciseOrgSelection, equipmentOrgSelection, gifOrgSelection].forEach(element => {
                 if (element) {
-                    element.style.display = showAccessControl ? 'block' : 'none';
+                    element.style.display = 'none'; // Always hide organization selection when storage type changes
                 }
             });
             
