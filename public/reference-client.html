@@ -12879,8 +12879,7 @@
                     return;
                 }
 
-                // Get storage type and build URL
-                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                // Get local ID for GUN storage
                 const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
                 
                 const endpoint = storageType === 'gun' ? '/api/records/newRecord' : '/api/publish/newExercise';
@@ -13145,15 +13144,6 @@
                 progressFill.style.width = '80%';
                 progressText.textContent = 'Creating OIP record...';
 
-                // Get organization selection if needed
-                let selectedOrganizationDid = null;
-                if (accessLevel === 'organization') {
-                    selectedOrganizationDid = document.getElementById('media-organization').value;
-                    if (!selectedOrganizationDid) {
-                        throw new Error('Please select an organization when using Organization access level');
-                    }
-                }
-
                 // Step 3: Create proper OIP record using the new media endpoint
                 const recordData = {
                     mediaId: uploadResult.mediaId,
@@ -13268,6 +13258,16 @@
         async function loadOrganizations() {
             try {
                 console.log('📋 Loading organizations...');
+                
+                if (!authToken) {
+                    console.log('⚠️ No auth token available for organization loading');
+                    updateOrganizationDropdown();
+                    updateGifOrganizationDropdown();
+                    updateEquipmentOrganizationDropdown();
+                    updateExerciseOrganizationDropdown();
+                    return;
+                }
+                
                 const response = await fetch('/api/organizations', {
                     headers: {
                         'Authorization': `Bearer ${authToken}`
