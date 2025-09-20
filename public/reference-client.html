@@ -7290,6 +7290,8 @@
                     interfaceContainer.innerHTML = createMediaInterface();
                     setTimeout(() => {
                         initializeStorageTypeHandler();
+                        // Initialize organization field visibility
+                        updateMediaAccessLevel();
                     }, 100);
                     break;
                 case 'multiResolutionGif':
@@ -8676,12 +8678,21 @@
                     <!-- Access Level -->
                     <div class="form-group">
                         <label for="media-access-level">Access Level:</label>
-                        <select id="media-access-level">
+                        <select id="media-access-level" onchange="updateMediaAccessLevel()">
                             <option value="private">Private (Only you)</option>
                             <option value="organization" selected>Organization (Your team/org)</option>
                             <option value="public">Public (Everyone)</option>
                         </select>
                         <small>Controls who can access this media file</small>
+                    </div>
+
+                    <!-- Organization Selection (shown when Organization access level is selected) -->
+                    <div id="media-organization-selection" class="form-group" style="background: #f0f4ff; padding: 15px; border-radius: 8px; border: 1px solid #c7d2fe;">
+                        <label for="media-organization">Select Organization:</label>
+                        <select id="media-organization" required>
+                            <option value="">Loading organizations...</option>
+                        </select>
+                        <small>Choose which organization this media belongs to</small>
                     </div>
 
                     <!-- Tags -->
@@ -12928,6 +12939,15 @@
                 progressFill.style.width = '80%';
                 progressText.textContent = 'Creating OIP record...';
 
+                // Get organization selection if needed
+                let selectedOrganizationDid = null;
+                if (accessLevel === 'organization') {
+                    selectedOrganizationDid = document.getElementById('media-organization').value;
+                    if (!selectedOrganizationDid) {
+                        throw new Error('Please select an organization when using Organization access level');
+                    }
+                }
+
                 // Step 3: Create proper OIP record using the new media endpoint
                 const recordData = {
                     mediaId: uploadResult.mediaId,
@@ -12940,7 +12960,8 @@
                         tagItems: tags
                     },
                     accessControl: {
-                        access_level: accessLevel
+                        access_level: accessLevel,
+                        shared_with: selectedOrganizationDid // Organization's DID goes in shared_with field
                     },
                     width: width,
                     height: height,
@@ -13027,6 +13048,74 @@
                     resolve({ width: 0, height: 0, duration: 0 });
                 }
             });
+        }
+
+        // Organization management for media publishing
+        let availableOrganizations = [];
+
+        async function loadOrganizations() {
+            try {
+                console.log('📋 Loading organizations...');
+                const response = await fetch('/api/organizations', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    availableOrganizations = data.organizationsInDB || [];
+                    console.log(`✅ Loaded ${availableOrganizations.length} organizations`);
+                    updateOrganizationDropdown();
+                } else {
+                    console.warn('⚠️ Failed to load organizations:', response.status);
+                    updateOrganizationDropdown(); // Show empty state
+                }
+            } catch (error) {
+                console.error('❌ Error loading organizations:', error);
+                updateOrganizationDropdown(); // Show error state
+            }
+        }
+
+        function updateOrganizationDropdown() {
+            const orgSelect = document.getElementById('media-organization');
+            if (!orgSelect) return;
+
+            orgSelect.innerHTML = '';
+
+            if (availableOrganizations.length === 0) {
+                orgSelect.innerHTML = '<option value="">No organizations available</option>';
+                orgSelect.disabled = true;
+            } else {
+                orgSelect.innerHTML = '<option value="">Select an organization...</option>';
+                availableOrganizations.forEach(org => {
+                    const option = document.createElement('option');
+                    // Store the organization's DID as the value (from oip.did)
+                    option.value = org.oip.did;
+                    // Display as handle (name) format
+                    option.textContent = `${org.data.orgHandle} (${org.data.name})`;
+                    // Store additional data as data attributes for reference
+                    option.setAttribute('data-handle', org.data.orgHandle);
+                    option.setAttribute('data-name', org.data.name);
+                    orgSelect.appendChild(option);
+                });
+                orgSelect.disabled = false;
+            }
+        }
+
+        function updateMediaAccessLevel() {
+            const accessLevel = document.getElementById('media-access-level').value;
+            const orgSelection = document.getElementById('media-organization-selection');
+            
+            if (accessLevel === 'organization') {
+                orgSelection.style.display = 'block';
+                // Load organizations if not already loaded
+                if (availableOrganizations.length === 0) {
+                    loadOrganizations();
+                }
+            } else {
+                orgSelection.style.display = 'none';
+            }
         }
 
         // Helper function to detect file type and update UI

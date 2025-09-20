@@ -376,10 +376,15 @@ router.post('/createRecord', authenticateToken, async (req, res) => {
       },
       accessControl: {
         access_level: accessControl.access_level || manifest.accessLevel || 'private',
-        owner_public_key: userPublicKey,
-        created_by: userPublicKey
+        owner_public_key: userPublicKey
       }
     };
+
+    // Add shared_with field if organization access level is selected
+    if (accessControl.access_level === 'organization' && accessControl.shared_with) {
+      oipRecord.accessControl.shared_with = accessControl.shared_with;
+      console.log('📋 Added organization DID to shared_with field:', accessControl.shared_with);
+    }
 
     // Add type-specific fields with BitTorrent address
     if (recordType === 'image') {
