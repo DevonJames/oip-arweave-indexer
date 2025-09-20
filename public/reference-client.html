@@ -7284,6 +7284,8 @@
                     interfaceContainer.innerHTML = createFitnessEquipmentInterface();
                     setTimeout(() => {
                         initializeStorageTypeHandler();
+                        // Initialize equipment access level
+                        updateEquipmentAccessLevel();
                     }, 100);
                     break;
                 case 'media':
@@ -8492,16 +8494,42 @@
                         <textarea id="equipment-description" placeholder="Brief description of the equipment..." rows="3"></textarea>
                     </div>
 
+                    <!-- Language -->
+                    <div class="form-group">
+                        <label for="equipment-language">Language:</label>
+                        <select id="equipment-language">
+                            <option value="en">English</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="it">Italian</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="zh">Chinese</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="ar">Arabic</option>
+                            <option value="hi">Hindi</option>
+                            <option value="ru">Russian</option>
+                        </select>
+                    </div>
+
+                    <!-- Equipment Avatar (DID reference) -->
+                    <div class="form-group">
+                        <label for="equipment-avatar">Equipment Image DID:</label>
+                        <input type="text" id="equipment-avatar" placeholder="did:gun:media:... or did:arweave:...">
+                        <small>Reference to a media record showing the equipment</small>
+                    </div>
+
                     <!-- Equipment Category -->
                     <div class="form-group">
                         <label for="equipment-category">Category:</label>
                         <select id="equipment-category">
                             <option value="weights">Weights</option>
                             <option value="cardio">Cardio</option>
-                            <option value="strength">Strength Machines</option>
-                            <option value="flexibility">Flexibility/Mobility</option>
+                            <option value="bodyweight">Bodyweight</option>
+                            <option value="flexibility">Flexibility</option>
+                            <option value="functional">Functional</option>
                             <option value="accessories">Accessories</option>
-                            <option value="other">Other</option>
                         </select>
                     </div>
 
@@ -8538,9 +8566,10 @@
                     <div class="form-group">
                         <label for="equipment-space-required">Space Required:</label>
                         <select id="equipment-space-required">
-                            <option value="small">Small</option>
-                            <option value="medium">Medium</option>
-                            <option value="large">Large</option>
+                            <option value="minimal">Minimal Space</option>
+                            <option value="small">Small Space</option>
+                            <option value="medium">Medium Space</option>
+                            <option value="large">Large Space</option>
                         </select>
                     </div>
 
@@ -8548,7 +8577,7 @@
                         <label for="equipment-portability">Portability:</label>
                         <select id="equipment-portability">
                             <option value="portable">Portable</option>
-                            <option value="semi_portable">Semi-portable</option>
+                            <option value="semi_portable">Semi-Portable</option>
                             <option value="stationary">Stationary</option>
                         </select>
                     </div>
@@ -8557,17 +8586,19 @@
                         <label for="equipment-price-range">Price Range:</label>
                         <select id="equipment-price-range">
                             <option value="budget">Budget ($0-50)</option>
-                            <option value="mid_range">Mid-range ($50-200)</option>
-                            <option value="premium">Premium ($200+)</option>
+                            <option value="mid_range">Mid-Range ($50-200)</option>
+                            <option value="premium">Premium ($200-500)</option>
+                            <option value="professional">Professional ($500+)</option>
                         </select>
                     </div>
 
                     <div class="form-group">
                         <label for="equipment-maintenance">Maintenance Level:</label>
                         <select id="equipment-maintenance">
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
+                            <option value="none">No Maintenance</option>
+                            <option value="low">Low Maintenance</option>
+                            <option value="medium">Medium Maintenance</option>
+                            <option value="high">High Maintenance</option>
                         </select>
                     </div>
 
@@ -8594,11 +8625,24 @@
                         </div>
                     </div>
 
-                    <!-- Media Reference -->
+                    <!-- Access Level -->
                     <div class="form-group">
-                        <label for="equipment-avatar">Equipment Image DID:</label>
-                        <input type="text" id="equipment-avatar" placeholder="did:gun:media:... or did:gun:YOUR_SOUL_HASH:...">
-                        <small>Reference to a media record showing the equipment</small>
+                        <label for="equipment-access-level">Access Level:</label>
+                        <select id="equipment-access-level" onchange="updateEquipmentAccessLevel()">
+                            <option value="private">Private (Only you)</option>
+                            <option value="organization" selected>Organization (Your team/org)</option>
+                            <option value="public">Public (Everyone)</option>
+                        </select>
+                        <small>Controls who can access this equipment record</small>
+                    </div>
+
+                    <!-- Organization Selection (shown when Organization access level is selected) -->
+                    <div id="equipment-organization-selection" class="form-group" style="background: #f0f4ff; padding: 15px; border-radius: 8px; border: 1px solid #c7d2fe;">
+                        <label for="equipment-organization">Select Organization:</label>
+                        <select id="equipment-organization" required>
+                            <option value="">Loading organizations...</option>
+                        </select>
+                        <small>Choose which organization this equipment belongs to</small>
                     </div>
 
                     <!-- Tags -->
@@ -12825,11 +12869,23 @@
                     return;
                 }
 
+                const accessLevel = document.getElementById('equipment-access-level').value;
+                
+                // Get organization selection if needed
+                let selectedOrganizationDid = null;
+                if (accessLevel === 'organization') {
+                    selectedOrganizationDid = document.getElementById('equipment-organization').value;
+                    if (!selectedOrganizationDid) {
+                        showMessage('publish-status', 'Please select an organization when using Organization access level', 'error');
+                        return;
+                    }
+                }
+
                 const equipmentData = {
                     basic: {
                         name: document.getElementById('equipment-name').value,
                         description: document.getElementById('equipment-description').value,
-                        language: 'en',
+                        language: document.getElementById('equipment-language').value,
                         date: Math.floor(Date.now() / 1000),
                         tagItems: document.getElementById('equipment-tags').value.split(',').map(t => t.trim()).filter(t => t),
                         avatar: document.getElementById('equipment-avatar').value || undefined
@@ -12849,6 +12905,10 @@
                         beginner_friendly: document.getElementById('equipment-beginner-friendly').checked,
                         home_gym_suitable: document.getElementById('equipment-home-gym').checked,
                         commercial_grade: document.getElementById('equipment-commercial').checked
+                    },
+                    accessControl: {
+                        access_level: accessLevel,
+                        shared_with: selectedOrganizationDid // Organization's DID if selected
                     }
                 };
 
@@ -13129,15 +13189,18 @@
                     console.log(`✅ Loaded ${availableOrganizations.length} organizations`);
                     updateOrganizationDropdown();
                     updateGifOrganizationDropdown(); // Also update GIF dropdown
+                    updateEquipmentOrganizationDropdown(); // Also update Equipment dropdown
                 } else {
                     console.warn('⚠️ Failed to load organizations:', response.status);
                     updateOrganizationDropdown(); // Show empty state
                     updateGifOrganizationDropdown(); // Show empty state
+                    updateEquipmentOrganizationDropdown(); // Show empty state
                 }
             } catch (error) {
                 console.error('❌ Error loading organizations:', error);
                 updateOrganizationDropdown(); // Show error state
                 updateGifOrganizationDropdown(); // Show error state
+                updateEquipmentOrganizationDropdown(); // Show error state
             }
         }
 
@@ -13555,6 +13618,49 @@
 
         function updateGifOrganizationDropdown() {
             const orgSelect = document.getElementById('gif-organization');
+            if (!orgSelect) return;
+
+            orgSelect.innerHTML = '';
+
+            if (availableOrganizations.length === 0) {
+                orgSelect.innerHTML = '<option value="">No organizations available</option>';
+                orgSelect.disabled = true;
+            } else {
+                orgSelect.innerHTML = '<option value="">Select an organization...</option>';
+                availableOrganizations.forEach(org => {
+                    const option = document.createElement('option');
+                    // Store the organization's DID as the value (from oip.did)
+                    option.value = org.oip.did;
+                    // Display as handle (name) format
+                    option.textContent = `${org.data.orgHandle} (${org.data.name})`;
+                    // Store additional data as data attributes for reference
+                    option.setAttribute('data-handle', org.data.orgHandle);
+                    option.setAttribute('data-name', org.data.name);
+                    orgSelect.appendChild(option);
+                });
+                orgSelect.disabled = false;
+            }
+        }
+
+        function updateEquipmentAccessLevel() {
+            const accessLevel = document.getElementById('equipment-access-level').value;
+            const orgSelection = document.getElementById('equipment-organization-selection');
+            
+            if (accessLevel === 'organization') {
+                orgSelection.style.display = 'block';
+                // Load organizations if not already loaded
+                if (availableOrganizations.length === 0) {
+                    loadOrganizations();
+                }
+                // Update the equipment organization dropdown
+                updateEquipmentOrganizationDropdown();
+            } else {
+                orgSelection.style.display = 'none';
+            }
+        }
+
+        function updateEquipmentOrganizationDropdown() {
+            const orgSelect = document.getElementById('equipment-organization');
             if (!orgSelect) return;
 
             orgSelect.innerHTML = '';
