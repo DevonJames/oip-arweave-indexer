@@ -43,7 +43,7 @@ This implementation fixes the media publishing system to create proper OIP recor
   "accessControl": {
     "access_level": "enum",
     "owner_public_key": "string",
-    "created_by": "string"
+    "shared_with": "string"  // Organization DID when access_level is "organization"
   }
 }
 ```
@@ -62,7 +62,11 @@ This implementation fixes the media publishing system to create proper OIP recor
     "contentType": "string",
     "thumbnails": "repeated string" // Future: dref to image records
   },
-  "accessControl": { /* same as image */ }
+  "accessControl": {
+    "access_level": "enum",
+    "owner_public_key": "string", 
+    "shared_with": "string"  // Organization DID when access_level is "organization"
+  }
 }
 ```
 
@@ -77,7 +81,11 @@ This implementation fixes the media publishing system to create proper OIP recor
     "duration": "uint64",           // seconds
     "contentType": "string"
   },
-  "accessControl": { /* same as image */ }
+  "accessControl": {
+    "access_level": "enum",
+    "owner_public_key": "string",
+    "shared_with": "string"  // Organization DID when access_level is "organization"
+  }
 }
 ```
 
@@ -121,7 +129,8 @@ This implementation fixes the media publishing system to create proper OIP recor
     "tagItems": ["tag1", "tag2"]
   },
   "accessControl": {
-    "access_level": "private|organization|public"
+    "access_level": "private|organization|public",
+    "shared_with": "did:gun:orgHash:orgHandle"  // Organization DID (only when access_level is "organization")
   },
   "width": 1920,
   "height": 1080,
@@ -145,10 +154,12 @@ This implementation fixes the media publishing system to create proper OIP recor
 ### Frontend Process
 1. **File Selection**: User selects media file
 2. **Type Detection**: JavaScript detects file type and shows expected record type
-3. **Dimension Extraction**: Extract width/height/duration from file
-4. **Upload**: Send file to `/api/media/upload`
-5. **Record Creation**: Send metadata to `/api/media/createRecord`
-6. **Success**: Display results with BitTorrent and OIP information
+3. **Access Level Selection**: User chooses private/organization/public
+4. **Organization Selection**: If "organization" is selected, load and display available organizations
+5. **Dimension Extraction**: Extract width/height/duration from file
+6. **Upload**: Send file to `/api/media/upload`
+7. **Record Creation**: Send metadata to `/api/media/createRecord` with organization DID in `shared_with`
+8. **Success**: Display results with BitTorrent and OIP information
 
 ### Backend Process
 1. **File Storage**: Store file with SHA256 hash as mediaId

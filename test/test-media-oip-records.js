@@ -30,6 +30,32 @@ async function testMediaRecordCreation() {
       recordsFound: recordsResult.records?.length || 0
     });
     
+    // Test organization loading if available
+    console.log('\n🏢 Testing organization loading...');
+    try {
+      const orgResponse = await fetch(`${BASE_URL}/api/organizations`, {
+        headers: {
+          'Authorization': `Bearer ${TEST_JWT_TOKEN}`
+        }
+      });
+      
+      if (orgResponse.ok) {
+        const orgData = await orgResponse.json();
+        console.log('✅ Organizations endpoint working:', {
+          totalOrgs: orgData.qtyOrganizationsInDB || 0,
+          sampleOrg: orgData.organizationsInDB?.[0] ? {
+            handle: orgData.organizationsInDB[0].data?.orgHandle,
+            name: orgData.organizationsInDB[0].data?.name,
+            did: orgData.organizationsInDB[0].oip?.did
+          } : 'None'
+        });
+      } else {
+        console.log('ℹ️ Organizations endpoint not available yet (expected)');
+      }
+    } catch (error) {
+      console.log('ℹ️ Organizations endpoint not available yet (expected)');
+    }
+    
     if (recordsResult.records && recordsResult.records.length > 0) {
       const sampleRecord = recordsResult.records[0];
       console.log('✅ Sample media record structure:', {
