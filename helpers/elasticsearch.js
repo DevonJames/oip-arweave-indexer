@@ -495,6 +495,47 @@ const ensureIndexExists = async () => {
                 }
             }
         }
+        
+        const organizationsExists = await elasticClient.indices.exists({ index: 'organizations' });
+        if (!organizationsExists.body) {
+            try {
+                await elasticClient.indices.create({
+                    index: 'organizations',
+                    body: {
+                        mappings: {
+                            properties: {
+                                data: {
+                                    type: 'object',
+                                    properties: {
+                                        orgHandle: { type: 'text' },
+                                        orgPublicKey: { type: 'text' },
+                                        adminPublicKeys: { type: 'text' },
+                                        membershipPolicy: { type: 'text' },
+                                        metadata: { type: 'text' },
+                                        didAddress: { type: 'text' },
+                                        didTx: { type: 'text' }
+                                    }
+                                },
+                                oip: {
+                                    type: 'object',
+                                    properties: {
+                                        didTx: { type: 'keyword' },
+                                        inArweaveBlock: { type: 'long' },
+                                        indexedAt: { type: 'date' },
+                                        ver: { type: 'text' },
+                                        organization: { type: 'object' }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                if (error.meta.body.error.type !== "resource_already_exists_exception") {
+                    throw error;
+                }
+            }
+        }
     } catch (error) {
         console.error("Error checking or creating index:", error);
         throw error;
@@ -2503,12 +2544,10 @@ async function getRecords(queryParams) {
 const getOrganizationsInDB = async () => {
     try {
         const response = await elasticClient.search({
-            index: 'records', // Use the correct records index, not 'oip'
+            index: 'organizations', // Use dedicated organizations index like creators
             body: {
                 query: {
-                    term: {
-                        "oip.recordType": "organization"
-                    }
+                    match_all: {}
                 },
                 size: 10000, // Adjust as needed
                 sort: [
@@ -2720,22 +2759,11 @@ const findOrganizationsByHandle = async (orgHandle) => {
     try {
         console.log(getFileInfo(), getLineNumber(), 'Searching for organizations with handle:', orgHandle);
         const response = await elasticClient.search({
-            index: 'records', // Use the correct records index
+            index: 'organizations', // Use dedicated organizations index
             body: {
                 query: {
-                    bool: {
-                        must: [
-                            {
-                                term: {
-                                    "oip.recordType": "organization"
-                                }
-                            },
-                            {
-                                term: {
-                                    "data.organization.org_handle.keyword": orgHandle
-                                }
-                            }
-                        ]
+                    term: {
+                        "data.orgHandle.keyword": orgHandle
                     }
                 }
             }
@@ -2788,17 +2816,29 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
         return  // Return early if it's a delete message
     }
     
-    organizationHandle = (organizationHandle !== undefined) ? organizationHandle : await convertToOrgHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["0"]);
     block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
     
     console.log('Organization transaction:', transaction);
+    
+    // Parse organization data correctly from the second object in the data array
+    const parsedData = JSON.parse(transaction.data);
+    const basicData = parsedData.find(obj => obj.t === "-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk");
+    const orgData = parsedData.find(obj => obj.t === "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM");
+    
+    organizationHandle = (organizationHandle !== undefined) ? organizationHandle : await convertToOrgHandle(transaction.transactionId, JSON.parse(orgData)["0"]); // Use second object for org data
     organization = {
         data: {
             orgHandle: organizationHandle,
-            orgPublicKey: JSON.parse(transaction.data)[0]["1"],
-            adminPublicKeys: JSON.parse(transaction.data)[0]["2"],
-            membershipPolicy: JSON.parse(transaction.data)[0]["3"],
-            metadata: JSON.parse(transaction.data)[0]["4"]
+            name: basicData["0"],
+            description: basicData["1"],
+            date: basicData["2"],
+            language: basicData["3"],
+            nsfw: basicData["6"],
+            webUrl: basicData["12"],
+            orgPublicKey: orgData["1"],        // org_public_key
+            adminPublicKeys: orgData["2"],     // admin_public_keys  
+            membershipPolicy: orgData["3"],    // membership_policy
+            metadata: orgData["4"] || null     // metadata (if exists)
         },
         oip: {
             recordType: 'organization',
@@ -2810,12 +2850,10 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
             signature: transaction.creatorSig,
             organization: {
                 orgHandle: organizationHandle,
-                didAddress: organizationInfo.data.didAddress,
-                didTx: organizationInfo.data.didTx,
-                orgPublicKey: organizationInfo.data.orgPublicKey,
-                adminPublicKeys: organizationInfo.data.adminPublicKeys,
-                membershipPolicy: organizationInfo.data.membershipPolicy,
-                metadata: organizationInfo.data.metadata
+                orgPublicKey: orgData["1"],
+                adminPublicKeys: orgData["2"],
+                membershipPolicy: orgData["3"],
+                metadata: orgData["4"] || null
             }
         },
     }
@@ -2824,7 +2862,7 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
     
     try {
         const response = await elasticClient.index({
-            index: process.env.ELASTICSEARCHINDEX || 'oip',
+            index: 'organizations', // Use dedicated organizations index
             id: organization.oip.did,
             body: organization
         });
