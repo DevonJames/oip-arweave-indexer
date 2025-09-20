@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { authenticateToken } = require('../helpers/utils');
 const { optionalAuth } = require('../middleware/auth');
 const { getMediaSeeder } = require('../services/mediaSeeder');
-const { publishToGun } = require('../helpers/templateHelper');
+const { publishToGun, publishNewRecord } = require('../helpers/templateHelper');
 const { indexRecord } = require('../helpers/elasticsearch');
 
 const router = express.Router();
@@ -54,7 +54,9 @@ function ensureTempDir() {
 
 /**
  * POST /api/media/upload
- * Upload media file and create torrent
+ * Upload media file, create torrent, and return file info for OIP record creation
+ * This endpoint only handles file storage and BitTorrent creation.
+ * The actual OIP record creation is handled by /api/records/newRecord
  */
 router.post('/upload', authenticateToken, upload.single('file'), async (req, res) => {
   let tempFilePath = null;
@@ -113,101 +115,39 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       throw new Error('User public key not available');
     }
 
-    // Create media manifest
+    // Create basic manifest for file tracking (not the final OIP record)
     const mediaManifest = {
-      basic: {
-        name: req.body.name || originalName,
-        description: `Media file: ${originalName}`,
-        date: Math.floor(Date.now() / 1000),
-        language: 'en'
-      },
-      media: {
-        id: mediaId,
-        did: `did:gun:media:${mediaId}`,
-        mime: mimeType,
-        size: fileSize,
-        originalName: originalName,
-        createdAt: new Date().toISOString(),
-        transport: {
-          bittorrent: {
-            magnetURI: seedInfo.magnetURI,
-            infoHash: seedInfo.infoHash,
-            trackers: process.env.WEBTORRENT_TRACKERS ? 
-              process.env.WEBTORRENT_TRACKERS.split(',') : 
-              ['wss://tracker.openwebtorrent.com', 'wss://tracker.btorrent.xyz']
-          },
-          http: [`${req.protocol}://${req.get('host')}/api/media/${mediaId}`]
-        },
-        version: 1
-      },
-      accessControl: {
-        access_level: accessLevel,
-        owner_public_key: userPublicKey,
-        created_by: userPublicKey,
-        created_timestamp: Date.now(),
-        last_modified_timestamp: Date.now(),
-        version: '1.0.0'
-      }
+      mediaId: mediaId,
+      originalName: originalName,
+      mimeType: mimeType,
+      fileSize: fileSize,
+      magnetURI: seedInfo.magnetURI,
+      infoHash: seedInfo.infoHash,
+      httpUrl: `${req.protocol}://${req.get('host')}/api/media/${mediaId}`,
+      createdAt: new Date().toISOString(),
+      userPublicKey: userPublicKey,
+      accessLevel: accessLevel
     };
 
-    // Save manifest to disk
+    // Save manifest to disk for file tracking
     const manifestPath = path.join(mediaIdDir, 'manifest.json');
     fs.writeFileSync(manifestPath, JSON.stringify(mediaManifest, null, 2));
 
-    console.log('💾 Saved manifest:', manifestPath);
+    console.log('💾 Saved file manifest:', manifestPath);
 
-    // Publish manifest to GUN if private, or handle public differently
-    let gunResult = null;
-    if (accessLevel === 'private') {
-      try {
-        gunResult = await publishToGun(mediaManifest, 'media', {
-          storage: 'gun',
-          localId: `media_${mediaId}`,
-          accessControl: mediaManifest.accessControl
-        });
-        console.log('📡 Published manifest to GUN:', gunResult.did);
-      } catch (error) {
-        console.warn('⚠️ Failed to publish to GUN:', error.message);
-      }
-    }
-
-    // Index to Elasticsearch
-    try {
-      const indexDocument = {
-        data: mediaManifest,
-        oip: {
-          did: gunResult ? gunResult.did : `did:gun:media:${mediaId}`,
-          recordType: 'media',
-          storage: 'gun',
-          indexedAt: new Date().toISOString(),
-          ver: '0.8.0',
-          creator: {
-            didAddress: req.user.didAddress,
-            publicKey: userPublicKey
-          }
-        }
-      };
-
-      await indexRecord(indexDocument);
-      console.log('🔍 Indexed to Elasticsearch');
-    } catch (error) {
-      console.warn('⚠️ Failed to index to Elasticsearch:', error.message);
-    }
-
-    // Return response
+    // Return response with BitTorrent info for OIP record creation
     res.json({
       success: true,
       mediaId,
-      did: gunResult ? gunResult.did : `did:gun:media:${mediaId}`,
       magnetURI: seedInfo.magnetURI,
       infoHash: seedInfo.infoHash,
-      transport: mediaManifest.media.transport,
-      encrypted: false,
-      access_level: accessLevel,
-      owner: userPublicKey,
+      httpUrl: `${req.protocol}://${req.get('host')}/api/media/${mediaId}`,
       size: fileSize,
       mime: mimeType,
-      originalName
+      originalName: originalName,
+      access_level: accessLevel,
+      owner: userPublicKey,
+      message: 'File uploaded and BitTorrent created. Use /api/records/newRecord to create proper OIP record.'
     });
 
   } catch (error) {
@@ -262,8 +202,8 @@ router.get('/:mediaId', optionalAuth, async (req, res) => {
     }
 
     // Check access control
-    if (manifest && manifest.accessControl) {
-      const accessLevel = manifest.accessControl.access_level;
+    if (manifest) {
+      const accessLevel = manifest.accessLevel || 'private';
       
       if (accessLevel === 'private') {
         if (!req.user) {
@@ -272,7 +212,7 @@ router.get('/:mediaId', optionalAuth, async (req, res) => {
 
         // Check ownership
         const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
-        const ownerPublicKey = manifest.accessControl.owner_public_key;
+        const ownerPublicKey = manifest.userPublicKey;
 
         if (userPublicKey !== ownerPublicKey) {
           return res.status(403).json({ error: 'Access denied: not the owner' });
@@ -283,7 +223,7 @@ router.get('/:mediaId', optionalAuth, async (req, res) => {
     // Get file stats
     const stats = fs.statSync(filePath);
     const fileSize = stats.size;
-    const mimeType = manifest?.media?.mime || 'application/octet-stream';
+    const mimeType = manifest?.mimeType || 'application/octet-stream';
 
     // Handle range requests for video streaming
     const range = req.headers.range;
@@ -343,13 +283,13 @@ router.get('/:mediaId/info', optionalAuth, async (req, res) => {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
     // Check access control
-    if (manifest.accessControl && manifest.accessControl.access_level === 'private') {
+    if (manifest && manifest.accessLevel === 'private') {
       if (!req.user) {
         return res.status(401).json({ error: 'Authentication required' });
       }
 
       const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
-      const ownerPublicKey = manifest.accessControl.owner_public_key;
+      const ownerPublicKey = manifest.userPublicKey;
 
       if (userPublicKey !== ownerPublicKey) {
         return res.status(403).json({ error: 'Access denied' });
@@ -371,6 +311,141 @@ router.get('/:mediaId/info', optionalAuth, async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to get media info',
       details: error.message 
+    });
+  }
+});
+
+/**
+ * POST /api/media/createRecord
+ * Create proper OIP record (image/video/audio) from uploaded media file
+ */
+router.post('/createRecord', authenticateToken, async (req, res) => {
+  try {
+    const { 
+      mediaId, 
+      recordType, 
+      basicInfo, 
+      mediaInfo, 
+      accessControl,
+      width,
+      height,
+      duration 
+    } = req.body;
+
+    console.log('📋 Creating OIP record for media:', {
+      mediaId,
+      recordType,
+      user: req.user.email
+    });
+
+    if (!mediaId || !recordType) {
+      return res.status(400).json({ error: 'mediaId and recordType are required' });
+    }
+
+    // Validate record type
+    if (!['image', 'video', 'audio'].includes(recordType)) {
+      return res.status(400).json({ error: 'recordType must be image, video, or audio' });
+    }
+
+    // Check if media file exists
+    const mediaIdDir = path.join(MEDIA_DIR, mediaId);
+    const manifestPath = path.join(mediaIdDir, 'manifest.json');
+    
+    if (!fs.existsSync(manifestPath)) {
+      return res.status(404).json({ error: 'Media file not found. Upload file first.' });
+    }
+
+    // Load media manifest
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    
+    // Verify ownership
+    const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+    if (manifest.userPublicKey !== userPublicKey) {
+      return res.status(403).json({ error: 'Access denied: not the owner of this media file' });
+    }
+
+    // Build proper OIP record structure
+    const oipRecord = {
+      basic: {
+        name: basicInfo.name || manifest.originalName,
+        description: basicInfo.description || `${recordType.charAt(0).toUpperCase() + recordType.slice(1)} file: ${manifest.originalName}`,
+        language: basicInfo.language || 'en',
+        date: Math.floor(Date.now() / 1000),
+        nsfw: basicInfo.nsfw || false,
+        tagItems: basicInfo.tagItems || []
+      },
+      accessControl: {
+        access_level: accessControl.access_level || manifest.accessLevel || 'private',
+        owner_public_key: userPublicKey,
+        created_by: userPublicKey
+      }
+    };
+
+    // Add type-specific fields with BitTorrent address
+    if (recordType === 'image') {
+      oipRecord.image = {
+        bittorrentAddress: manifest.magnetURI,
+        filename: manifest.originalName,
+        width: width || 0,
+        height: height || 0,
+        size: manifest.fileSize,
+        contentType: manifest.mimeType
+      };
+    } else if (recordType === 'video') {
+      oipRecord.video = {
+        bittorrentAddress: manifest.magnetURI,
+        filename: manifest.originalName,
+        width: width || 0,
+        height: height || 0,
+        size: manifest.fileSize,
+        duration: duration || 0,
+        contentType: manifest.mimeType,
+        thumbnails: [] // Could be populated later
+      };
+    } else if (recordType === 'audio') {
+      oipRecord.audio = {
+        bittorrentAddress: manifest.magnetURI,
+        filename: manifest.originalName,
+        size: manifest.fileSize,
+        duration: duration || 0,
+        contentType: manifest.mimeType
+      };
+    }
+
+    // Publish to GUN with proper options
+    const result = await publishNewRecord(
+      oipRecord,
+      recordType,
+      false, // publishFiles
+      false, // addMediaToArweave
+      false, // addMediaToIPFS
+      null,  // youtubeUrl
+      'gun', // blockchain (will be treated as storage type)
+      false, // addMediaToArFleet
+      {
+        storage: 'gun',
+        localId: `media_${mediaId}`,
+        accessControl: oipRecord.accessControl
+      }
+    );
+
+    console.log('✅ Created OIP media record:', result.did);
+
+    res.json({
+      success: true,
+      did: result.did,
+      recordType: recordType,
+      mediaId: mediaId,
+      storage: 'gun',
+      encrypted: result.encrypted,
+      message: `${recordType.charAt(0).toUpperCase() + recordType.slice(1)} record created successfully`
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to create media record:', error);
+    res.status(500).json({
+      error: 'Failed to create media record',
+      details: error.message
     });
   }
 });
