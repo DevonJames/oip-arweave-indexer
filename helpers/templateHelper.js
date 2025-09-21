@@ -163,6 +163,14 @@ const translateJSONtoOIPData = async (record, recordType) => {
                 if (json[key] === null || json[key] === undefined) {
                     continue;
                 }
+                
+                // Skip processing if the field is already a valid DID string (including GUN DIDs)
+                if (typeof json[key] === 'string' && json[key].startsWith('did:')) {
+                    console.log(`Preserving existing DID for ${key}:`, json[key]);
+                    converted[fields[indexKey]] = json[key];
+                    continue;
+                }
+                
                 const subRecord = (json[key][0] !== undefined) ? json[key][0] : json[key];
                 const templatesArray = (json[key][0] !== undefined) ? Object.keys(json[key][0]) : Object.keys(json[key]);
                 recordType = findMatchingString(JSON.stringify(key), templatesArray)

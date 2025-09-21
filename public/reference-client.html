@@ -12841,13 +12841,16 @@
                     }
                 }
 
+                const avatarValue = document.getElementById('exercise-avatar').value.trim();
+                console.log('🔍 Avatar value entered:', avatarValue);
+                
                 const exerciseData = {
                     basic: {
                         name: document.getElementById('exercise-name').value,
                         description: document.getElementById('exercise-description').value,
                         language: document.getElementById('exercise-language').value,
                         nsfw: false,
-                        avatar: document.getElementById('exercise-avatar').value || undefined,
+                        avatar: avatarValue || undefined,
                         tagItems: document.getElementById('exercise-tags').value.split(',').map(t => t.trim()).filter(t => t)
                     },
                     exercise: {
@@ -12892,6 +12895,8 @@
                 } else {
                     requestBody.blockchain = storageType;
                 }
+
+                console.log('🚀 Publishing exercise record:', JSON.stringify(requestBody, null, 2));
 
                 const response = await fetch(`${endpoint}${queryParams}`, {
                     method: 'POST',
