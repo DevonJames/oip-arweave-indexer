@@ -1226,6 +1226,7 @@ async function getRecords(queryParams) {
         cuisineMatchMode = 'OR', // New parameter for cuisine match behavior (AND/OR, default OR)
         model, // New parameter for model provider filtering
         modelMatchMode = 'OR', // New parameter for model match behavior (AND/OR, default OR)
+        noDuplicates = false, // New parameter: filter out duplicate names (default: false)
     } = queryParams;
 
     // Normalize DID parameter for backward compatibility
@@ -1944,6 +1945,48 @@ async function getRecords(queryParams) {
         }
 
         console.log('all filters complete, there are', records.length, 'records');
+        
+        // Apply noDuplicates filtering if requested
+        if (noDuplicates === true || noDuplicates === 'true') {
+            console.log('Applying noDuplicates filtering...');
+            
+            // If no sortBy is specified, use default for duplicate resolution
+            const duplicateSortBy = sortBy || 'inArweaveBlock:desc';
+            
+            // Group records by their basic.name field
+            const recordsByName = {};
+            records.forEach(record => {
+                const name = record.data?.basic?.name;
+                if (name) {
+                    if (!recordsByName[name]) {
+                        recordsByName[name] = [];
+                    }
+                    recordsByName[name].push(record);
+                }
+            });
+            
+            // For each name group, keep only the best record based on sorting criteria
+            const uniqueRecords = [];
+            Object.entries(recordsByName).forEach(([name, duplicateRecords]) => {
+                if (duplicateRecords.length === 1) {
+                    // No duplicates, keep the single record
+                    uniqueRecords.push(duplicateRecords[0]);
+                } else {
+                    // Multiple records with same name, sort and keep the best one
+                    const sortedDuplicates = [...duplicateRecords];
+                    applySorting(sortedDuplicates, duplicateSortBy);
+                    uniqueRecords.push(sortedDuplicates[0]);
+                    console.log(`Filtered ${duplicateRecords.length - 1} duplicate(s) for name "${name}", kept record with DID: ${sortedDuplicates[0].oip?.did || sortedDuplicates[0].oip?.didTx}`);
+                }
+            });
+            
+            // Also include records that don't have a basic.name field
+            const recordsWithoutName = records.filter(record => !record.data?.basic?.name);
+            uniqueRecords.push(...recordsWithoutName);
+            
+            records = uniqueRecords;
+            console.log(`After noDuplicates filtering, ${records.length} unique records remain`);
+        }
         
         
     // remove the signature and public key hash data if requested        
