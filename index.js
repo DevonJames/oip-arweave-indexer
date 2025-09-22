@@ -25,7 +25,7 @@ const walletRoutes = require('./routes/wallet');
 const publishRecords = require('./routes/publish');
 const workoutRoutes = require('./routes/workout');
 const { getIsProcessing, setIsProcessing } = require('./helpers/processingState');
-const { keepDBUpToDate, remapExistingRecords, deleteRecordsByBlock, deleteRecordsByIndexedAt, deleteRecordsByIndex, deleteIndex } = require('./helpers/elasticsearch');
+const { keepDBUpToDate, remapExistingRecords, deleteRecordsByBlock, deleteRecordsByDID, deleteRecordsByIndexedAt, deleteRecordsByIndex, deleteIndex } = require('./helpers/elasticsearch');
 const minimist = require('minimist');
 const socket = require('./socket');
 const litRoutes = require('./routes/lit');
@@ -222,6 +222,27 @@ initializeIndices()
         try {
             console.log(`Deleting records from index '${index}' with inArweaveBlock >= ${blockThreshold}...`);
             const response = await deleteRecordsByBlock(index, blockThreshold);
+            console.log('Deletion completed successfully:', response);
+            process.exit(0);
+        } catch (error) {
+            console.error('Error occurred during deletion:', error);
+            process.exit(1);
+        }
+    }
+
+    // CLI functionality for deleting records by DID
+    if (args.deleteRecords && args.index && args.did) {
+        const index = args.index;
+        const did = args.did;
+
+        if (!did || typeof did !== 'string') {
+            console.error('Invalid DID value. Please provide a valid DID string.');
+            process.exit(1);
+        }
+
+        try {
+            console.log(`Deleting records from index '${index}' with DID '${did}'...`);
+            const response = await deleteRecordsByDID(index, did);
             console.log('Deletion completed successfully:', response);
             process.exit(0);
         } catch (error) {
