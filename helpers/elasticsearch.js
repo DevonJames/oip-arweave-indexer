@@ -589,20 +589,41 @@ async function indexDocument(index, id, body) {
 const processRecordForElasticsearch = (record) => {
     const processedRecord = JSON.parse(JSON.stringify(record)); // Deep clone
     
-    // Convert JSON string arrays back to actual arrays for Elasticsearch
-    if (processedRecord.data?.conversationSession) {
-        const cs = processedRecord.data.conversationSession;
+    // Recursively convert JSON string arrays back to actual arrays for Elasticsearch
+    const convertJSONStringsToArrays = (obj) => {
+        if (obj === null || obj === undefined) return obj;
         
-        // Parse JSON strings back to arrays
-        if (typeof cs.messages === 'string' && cs.messages.startsWith('[')) {
-            try { cs.messages = JSON.parse(cs.messages); } catch (e) { /* ignore */ }
+        if (typeof obj === 'string' && obj.startsWith('[') && obj.endsWith(']')) {
+            try {
+                // Try to parse as JSON array
+                const parsed = JSON.parse(obj);
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            } catch (e) { 
+                // If parsing fails, return original string
+                return obj;
+            }
         }
-        if (typeof cs.message_timestamps === 'string' && cs.message_timestamps.startsWith('[')) {
-            try { cs.message_timestamps = JSON.parse(cs.message_timestamps); } catch (e) { /* ignore */ }
+        
+        if (typeof obj === 'object' && !Array.isArray(obj)) {
+            const converted = {};
+            for (const [key, value] of Object.entries(obj)) {
+                converted[key] = convertJSONStringsToArrays(value);
+            }
+            return converted;
         }
-        if (typeof cs.message_roles === 'string' && cs.message_roles.startsWith('[')) {
-            try { cs.message_roles = JSON.parse(cs.message_roles); } catch (e) { /* ignore */ }
+        
+        if (Array.isArray(obj)) {
+            return obj.map(item => convertJSONStringsToArrays(item));
         }
+        
+        return obj;
+    };
+    
+    // Apply conversion to the entire record data
+    if (processedRecord.data) {
+        processedRecord.data = convertJSONStringsToArrays(processedRecord.data);
     }
     
     return processedRecord;
@@ -4161,5 +4182,6 @@ module.exports = {
     convertToOrgHandle,
     findOrganizationsByHandle,
     getRecordTypesSummary,
+    processRecordForElasticsearch,
     elasticClient
 };
