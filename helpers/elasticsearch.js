@@ -4063,6 +4063,23 @@ const deleteRecordsByBlock = async (index, blockThreshold) => {
     }
 };
 
+const deleteRecordsByDID = async (index, did) => {
+    try {
+        const response = await elasticClient.deleteByQuery({
+            index,
+            body: {
+                query: createDIDQuery(did)
+            },
+            refresh: true // Ensure changes are immediately visible
+        });
+        console.log(`Deleted ${response.deleted} records from index '${index}' with DID '${did}'.`);
+        return response;
+    } catch (error) {
+        console.error(`Error deleting records from index '${index}' with DID '${did}':`, error);
+        throw error;
+    }
+};
+
 const deleteRecordsByIndex = async (index) => {
     try {
         const response = await elasticClient.deleteByQuery({
@@ -4174,6 +4191,7 @@ module.exports = {
     deleteTemplateFromDB,
     checkTemplateUsage,
     deleteRecordsByBlock,
+    deleteRecordsByDID,
     deleteRecordsByIndexedAt,
     deleteRecordsByIndex,
     deleteIndex,
