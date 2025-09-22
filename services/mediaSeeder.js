@@ -6,7 +6,7 @@ class MediaSeeder {
   constructor() {
     this.client = null;
     this.WebTorrent = null; // Will be loaded when needed
-    this.mediaDir = process.env.MEDIA_DIR || '/usr/src/app/data/media';
+    this.mediaDir = process.env.MEDIA_DIR || path.join(__dirname, '../data/media');
     this.stateFile = path.join(this.mediaDir, 'seeder.json');
     this.seedingState = new Map(); // mediaId -> { infoHash, magnetURI, filePath }
     this.trackers = (process.env.WEBTORRENT_TRACKERS || 
@@ -21,7 +21,9 @@ class MediaSeeder {
   async loadWebTorrent() {
     if (!this.WebTorrent) {
       try {
-        this.WebTorrent = require('webtorrent');
+        // Use dynamic import for ESM module
+        const WebTorrentModule = await import('webtorrent');
+        this.WebTorrent = WebTorrentModule.default;
       } catch (error) {
         console.warn('⚠️ WebTorrent not available:', error.message);
         throw error;
