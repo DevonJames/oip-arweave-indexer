@@ -424,9 +424,18 @@ router.get('/newPost/schema', async (req, res) => {
 // Add general schema endpoint that lists all available schemas
 router.get('/schemas', (req, res) => {
     try {
+        const templatesConfig = require('../config/templates.config.js');
+        const availableTemplates = Object.keys(templatesConfig.defaultTemplates);
+        
         const availableSchemas = {
             "description": "Available JSON schemas for OIP publishing endpoints",
-            "schemas": {
+            "dynamic_schema_endpoint": {
+                "url": "GET /api/publish/schema?recordType={recordType}",
+                "description": "Dynamic schema generator that works with any record type from templates.config.js",
+                "usage": "GET /api/publish/schema?recordType=mealPlan",
+                "supported_record_types": availableTemplates
+            },
+            "specific_schemas": {
                 "recipe": {
                     "endpoint": "POST /api/publish/newRecipe",
                     "schema_url": "GET /api/publish/newRecipe/schema",
@@ -469,6 +478,15 @@ router.get('/schemas', (req, res) => {
                 "addMediaToArweave": "Boolean to store media on Arweave (default: true)",
                 "addMediaToIPFS": "Boolean to store media on IPFS (default: false)",
                 "addMediaToArFleet": "Boolean to store media on ArFleet (default: false)"
+            },
+            "examples": {
+                "dynamic_schema_examples": [
+                    "GET /api/publish/schema?recordType=mealPlan",
+                    "GET /api/publish/schema?recordType=workoutSchedule",
+                    "GET /api/publish/schema?recordType=fitnessEquipment",
+                    "GET /api/publish/schema?recordType=organization",
+                    "GET /api/publish/schema?recordType=conversationSession"
+                ]
             }
         };
 
@@ -1750,6 +1768,56 @@ function generateExampleDataByType(fieldType, fieldName, enumValues = null) {
             if (fieldName === 'textContent') return 'Sample text content for the document...';
             if (fieldName === 'textFormat') return 'markdown';
             
+            // Audio/Podcast fields
+            if (fieldName === 'audioUrl') return 'https://example.com/audio.mp3';
+            if (fieldName === 'showName') return 'Weekly Tech Talk';
+            if (fieldName === 'episodeNumber') return '42';
+            if (fieldName === 'seasonNumber') return '2';
+            if (fieldName === 'hostName') return 'John Smith';
+            
+            // Recipe fields
+            if (fieldName === 'instructions') return 'Step-by-step cooking instructions...';
+            if (fieldName === 'cuisine') return 'Mediterranean';
+            if (fieldName === 'course') return 'Main Course';
+            if (fieldName === 'author') return 'Chef Example';
+            if (fieldName === 'notes') return 'Additional cooking tips and notes...';
+            
+            // Workout/Exercise fields
+            if (fieldName === 'muscleGroups') return 'Chest, Shoulders, Triceps';
+            if (fieldName === 'difficulty') return 'Intermediate';
+            if (fieldName === 'category') return 'Strength Training';
+            if (fieldName === 'equipment') return 'Dumbbells, Bench';
+            if (fieldName === 'goalTags') return 'Muscle Building, Strength';
+            
+            // Fitness fields
+            if (fieldName === 'fitnessLevel') return 'Intermediate';
+            if (fieldName === 'primaryGoal') return 'Weight Loss';
+            if (fieldName === 'preferredWorkoutTime') return 'Morning';
+            if (fieldName === 'availableEquipment') return 'Home Gym Setup';
+            
+            // Organization fields
+            if (fieldName === 'organizationName') return 'Fitness First Gym';
+            if (fieldName === 'address') return '123 Main St, City, State';
+            if (fieldName === 'phoneNumber') return '+1-555-0123';
+            if (fieldName === 'email') return 'contact@example.com';
+            if (fieldName === 'website') return 'https://example.com';
+            
+            // Model Provider fields
+            if (fieldName === 'providerName') return 'OpenAI';
+            if (fieldName === 'modelName') return 'GPT-4';
+            if (fieldName === 'apiEndpoint') return 'https://api.openai.com/v1';
+            if (fieldName === 'version') return '1.0.0';
+            
+            // Shopping List fields
+            if (fieldName === 'storeName') return 'Whole Foods Market';
+            if (fieldName === 'category') return 'Produce';
+            if (fieldName === 'brand') return 'Organic Valley';
+            
+            // Document fields
+            if (fieldName === 'documentType') return 'Analysis Report';
+            if (fieldName === 'pageNumber') return '1';
+            if (fieldName === 'classification') return 'Declassified';
+            
             return `Sample ${fieldName}`;
         
         case 'long':
@@ -1760,6 +1828,23 @@ function generateExampleDataByType(fieldType, fieldName, enumValues = null) {
             if (fieldName === 'height') return 1080;
             if (fieldName === 'duration') return 225; // 3:45 in seconds
             if (fieldName === 'views') return 1000;
+            if (fieldName === 'calories') return 300;
+            if (fieldName === 'servings') return 4;
+            if (fieldName === 'prep_time_mins') return 15;
+            if (fieldName === 'cook_time_mins') return 30;
+            if (fieldName === 'total_time_mins') return 45;
+            if (fieldName === 'total_duration_minutes') return 45;
+            if (fieldName === 'estimated_calories_burned') return 300;
+            if (fieldName === 'recommended_sets') return 3;
+            if (fieldName === 'recommended_reps') return 12;
+            if (fieldName === 'target_duration_seconds') return 30;
+            if (fieldName === 'weight_lbs') return 150;
+            if (fieldName === 'height_inches') return 68;
+            if (fieldName === 'age') return 30;
+            if (fieldName === 'experience_years') return 2;
+            if (fieldName === 'price_cents') return 1999; // $19.99
+            if (fieldName === 'quantity') return 2;
+            if (fieldName === 'pageCount') return 25;
             return 12345;
         
         case 'enum':
@@ -1777,17 +1862,41 @@ function generateExampleDataByType(fieldType, fieldName, enumValues = null) {
             if (fieldName === 'quality') return 'HD';
             if (fieldName === 'format') return 'MP4';
             if (fieldName === 'category') return 'general';
+            if (fieldName === 'difficulty') return 'intermediate';
+            if (fieldName === 'exercise_type') return 'main';
+            if (fieldName === 'measurement_type') return 'reps';
+            if (fieldName === 'gender') return 'other';
+            if (fieldName === 'unit') return 'lbs';
+            if (fieldName === 'access_level') return 'private';
+            if (fieldName === 'status') return 'active';
             return 'option1';
         
         case 'bool':
             if (fieldName === 'nsfw') return false;
             if (fieldName === 'isPublic') return true;
             if (fieldName === 'featured') return false;
+            if (fieldName === 'isBodyweight') return true;
+            if (fieldName === 'includesWarmup') return true;
+            if (fieldName === 'includesMain') return true;
+            if (fieldName === 'includesCooldown') return true;
+            if (fieldName === 'nonStandardWorkout') return false;
+            if (fieldName === 'glutenFree') return false;
+            if (fieldName === 'organic') return true;
+            if (fieldName === 'isActive') return true;
+            if (fieldName === 'isCompleted') return false;
+            if (fieldName === 'isPublished') return true;
             return false;
         
         case 'float':
             if (fieldName === 'aspectRatio') return 1.777; // 16:9
             if (fieldName === 'rating') return 4.5;
+            if (fieldName === 'weight') return 150.5;
+            if (fieldName === 'bodyFat') return 15.2;
+            if (fieldName === 'price') return 19.99;
+            if (fieldName === 'standardAmount') return 1.0;
+            if (fieldName === 'proteinG') return 25.5;
+            if (fieldName === 'fatG') return 8.2;
+            if (fieldName === 'carbohydratesG') return 12.3;
             return 0.0;
         
         case 'dref':
@@ -1795,19 +1904,56 @@ function generateExampleDataByType(fieldType, fieldName, enumValues = null) {
             if (fieldName === 'thumbnail') return 'did:arweave:thumb123...';
             if (fieldName === 'author') return 'did:arweave:author123...';
             if (fieldName === 'replyTo') return 'did:arweave:parent123...';
+            if (fieldName === 'recipe') return 'did:arweave:recipe123...';
+            if (fieldName === 'exercise') return 'did:arweave:exercise123...';
+            if (fieldName === 'workout') return 'did:arweave:workout123...';
+            if (fieldName === 'nutritionalInfo') return 'did:arweave:nutrition123...';
+            if (fieldName === 'organization') return 'did:arweave:org123...';
+            if (fieldName === 'user') return 'did:arweave:user123...';
+            if (fieldName === 'parent') return 'did:arweave:parent123...';
+            if (fieldName === 'equipment') return 'did:arweave:equipment123...';
             return 'did:arweave:abc123...';
         
         case 'repeated string':
             if (fieldName === 'tagItems') return ['sample', 'content', 'demo'];
             if (fieldName === 'keywords') return ['keyword1', 'keyword2', 'keyword3'];
             if (fieldName === 'categories') return ['category1', 'category2'];
+            if (fieldName === 'instructions') return ['Step 1: Prepare ingredients', 'Step 2: Mix together', 'Step 3: Cook until done'];
+            if (fieldName === 'muscleGroups') return ['chest', 'shoulders', 'triceps'];
+            if (fieldName === 'equipmentRequired') return ['dumbbells', 'bench'];
+            if (fieldName === 'alternativeEquipment') return ['resistance bands', 'bodyweight'];
+            if (fieldName === 'goalTags') return ['strength', 'muscle building', 'upper body'];
+            if (fieldName === 'allergens') return ['dairy', 'nuts'];
+            if (fieldName === 'ingredient_unit') return ['cups', 'tbsp', 'lbs'];
+            if (fieldName === 'exercise_unit') return ['sets', 'reps', 'minutes'];
+            if (fieldName === 'ingredient_comment') return ['chopped', 'organic', 'room temperature'];
+            if (fieldName === 'exercise_comment') return ['slow tempo', 'full range of motion', 'rest 60 seconds'];
             return [`${fieldName}1`, `${fieldName}2`];
         
         case 'repeated dref':
             if (fieldName === 'imageItems') return ['did:arweave:img1...', 'did:arweave:img2...'];
             if (fieldName === 'videoItems') return ['did:arweave:vid1...', 'did:arweave:vid2...'];
             if (fieldName === 'relatedContent') return ['did:arweave:related1...', 'did:arweave:related2...'];
+            if (fieldName === 'ingredient') return ['did:arweave:chicken123...', 'did:arweave:garlic456...'];
+            if (fieldName === 'exercise') return ['did:arweave:pushups123...', 'did:arweave:squats456...'];
+            if (fieldName === 'meals') return ['did:arweave:breakfast123...', 'did:arweave:lunch456...'];
+            if (fieldName === 'workouts') return ['did:arweave:workout1...', 'did:arweave:workout2...'];
+            if (fieldName === 'equipment') return ['did:arweave:dumbbells123...', 'did:arweave:bench456...'];
+            if (fieldName === 'items') return ['did:arweave:item1...', 'did:arweave:item2...'];
+            if (fieldName === 'citations') return ['did:arweave:citation1...', 'did:arweave:citation2...'];
+            if (fieldName === 'references') return ['did:arweave:ref1...', 'did:arweave:ref2...'];
             return ['did:arweave:ref1...', 'did:arweave:ref2...'];
+        
+        case 'repeated long':
+            if (fieldName === 'ingredient_amount') return [2, 1, 0.5];
+            if (fieldName === 'exercise_amount') return [3, 12, 45];
+            if (fieldName === 'quantities') return [1, 2, 3];
+            return [1, 2, 3];
+        
+        case 'repeated float':
+            if (fieldName === 'weights') return [10.5, 15.0, 20.5];
+            if (fieldName === 'measurements') return [1.5, 2.0, 0.75];
+            return [1.0, 2.0, 3.0];
         
         default:
             return `Sample ${fieldName}`;
@@ -1968,6 +2114,31 @@ async function generateDynamicSchema(templateName, endpointPath, templateDescrip
                 'image': 'Beautiful Sunset Photography',
                 'video': 'Tutorial: Getting Started with OIP',
                 'text': 'Sample Text Document',
+                'audio': 'Podcast Episode: The Future of AI',
+                'recipe': 'Mediterranean Grilled Chicken',
+                'workout': 'Upper Body Strength Training',
+                'exercise': 'Push-ups',
+                'nutritionalInfo': 'Organic Grass-Fed Beef',
+                'podcast': 'The Tech Talk Show',
+                'podcastShow': 'Weekly Tech Insights',
+                'mealPlan': 'Healthy Weekly Meal Plan',
+                'workoutSchedule': 'Monthly Fitness Schedule',
+                'fitnessEquipment': 'Adjustable Dumbbells',
+                'userFitnessProfile': 'John\'s Fitness Profile',
+                'exerciseResult': 'Morning Run Results',
+                'workoutCompletion': 'Upper Body Workout Completed',
+                'weightEntry': 'Weekly Weight Check',
+                'shoppingList': 'Grocery Shopping List',
+                'userFitnessAchievment': '10K Run Achievement',
+                'organization': 'Fitness First Gym',
+                'creatorRegistration': 'Fitness Coach Registration',
+                'modelProvider': 'OpenAI GPT-4 Provider',
+                'conversationSession': 'AI Assistant Chat Session',
+                'multiResolutionGif': 'Animated Exercise Demo',
+                'jfkFilesDocument': 'JFK Document Analysis',
+                'jfkFilesPageOfDocument': 'JFK Document Page 1',
+                'associatedURLOnWeb': 'Related Web Resource',
+                'accessControl': 'Private Content Access',
                 'default': 'Sample Content'
             },
             'description': {
@@ -1975,6 +2146,31 @@ async function generateDynamicSchema(templateName, endpointPath, templateDescrip
                 'image': 'A stunning photograph captured during golden hour',
                 'video': 'Learn the basics of publishing content on the OIP network',
                 'text': 'A sample text document demonstrating the text template structure',
+                'audio': 'An engaging discussion about artificial intelligence and its impact on society',
+                'recipe': 'Juicy grilled chicken thighs marinated in Mediterranean herbs and spices',
+                'workout': 'A comprehensive upper body workout focusing on strength and muscle building',
+                'exercise': 'A classic bodyweight exercise targeting chest, shoulders, and triceps',
+                'nutritionalInfo': 'High-quality grass-fed beef with complete nutritional breakdown',
+                'podcast': 'Weekly technology podcast covering the latest trends and innovations',
+                'podcastShow': 'A show dedicated to exploring cutting-edge technology topics',
+                'mealPlan': 'A balanced weekly meal plan designed for optimal nutrition and health',
+                'workoutSchedule': 'A structured monthly fitness schedule for progressive training',
+                'fitnessEquipment': 'Versatile adjustable dumbbells for home workouts',
+                'userFitnessProfile': 'Comprehensive fitness profile tracking goals and progress',
+                'exerciseResult': 'Detailed results from morning cardio session',
+                'workoutCompletion': 'Summary of completed upper body strength training session',
+                'weightEntry': 'Weekly body weight measurement and tracking',
+                'shoppingList': 'Organized grocery list for healthy meal preparation',
+                'userFitnessAchievment': 'Milestone achievement for completing first 10K run',
+                'organization': 'Professional fitness organization providing training services',
+                'creatorRegistration': 'Registration profile for certified fitness professionals',
+                'modelProvider': 'AI model provider offering advanced language processing capabilities',
+                'conversationSession': 'Interactive chat session with AI assistant for fitness guidance',
+                'multiResolutionGif': 'Animated demonstration showing proper exercise form and technique',
+                'jfkFilesDocument': 'Historical document analysis from JFK assassination files',
+                'jfkFilesPageOfDocument': 'Individual page from JFK historical document archive',
+                'associatedURLOnWeb': 'Related web resource providing additional context and information',
+                'accessControl': 'Access control configuration for private content management',
                 'default': 'A sample description demonstrating the template structure'
             },
             'tagItems': {
@@ -1982,6 +2178,31 @@ async function generateDynamicSchema(templateName, endpointPath, templateDescrip
                 'image': ['photography', 'sunset', 'nature', 'beautiful'],
                 'video': ['tutorial', 'education', 'beginner', 'guide'],
                 'text': ['document', 'text', 'sample', 'demo'],
+                'audio': ['podcast', 'AI', 'technology', 'discussion'],
+                'recipe': ['mediterranean', 'chicken', 'healthy', 'grilled'],
+                'workout': ['strength', 'upper body', 'muscle building', 'fitness'],
+                'exercise': ['bodyweight', 'chest', 'push', 'strength'],
+                'nutritionalInfo': ['beef', 'protein', 'grass-fed', 'nutrition'],
+                'podcast': ['technology', 'innovation', 'weekly', 'trends'],
+                'podcastShow': ['tech', 'education', 'weekly', 'insights'],
+                'mealPlan': ['healthy', 'nutrition', 'balanced', 'weekly'],
+                'workoutSchedule': ['fitness', 'schedule', 'training', 'progressive'],
+                'fitnessEquipment': ['dumbbells', 'home gym', 'adjustable', 'strength'],
+                'userFitnessProfile': ['profile', 'goals', 'tracking', 'fitness'],
+                'exerciseResult': ['cardio', 'running', 'results', 'performance'],
+                'workoutCompletion': ['strength', 'completed', 'upper body', 'training'],
+                'weightEntry': ['weight', 'tracking', 'measurement', 'health'],
+                'shoppingList': ['grocery', 'healthy', 'meal prep', 'nutrition'],
+                'userFitnessAchievment': ['achievement', '10K', 'running', 'milestone'],
+                'organization': ['fitness', 'gym', 'training', 'professional'],
+                'creatorRegistration': ['coach', 'certification', 'fitness', 'professional'],
+                'modelProvider': ['AI', 'GPT-4', 'language model', 'provider'],
+                'conversationSession': ['AI', 'chat', 'assistant', 'fitness'],
+                'multiResolutionGif': ['animation', 'exercise', 'demo', 'technique'],
+                'jfkFilesDocument': ['JFK', 'historical', 'document', 'analysis'],
+                'jfkFilesPageOfDocument': ['JFK', 'document', 'page', 'historical'],
+                'associatedURLOnWeb': ['web', 'resource', 'reference', 'link'],
+                'accessControl': ['private', 'access', 'security', 'control'],
                 'default': ['sample', 'content', 'demo']
             }
         };
@@ -2318,6 +2539,79 @@ router.post('/newPost', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error publishing post:', error);
         res.status(500).json({ error: 'Failed to publish post' });
+    }
+});
+
+// Dynamic schema endpoint that accepts recordType as parameter
+router.get('/schema', async (req, res) => {
+    try {
+        const { recordType } = req.query;
+        
+        if (!recordType) {
+            return res.status(400).json({
+                error: 'Missing required parameter: recordType',
+                usage: 'GET /api/publish/schema?recordType=mealPlan',
+                available_record_types: Object.keys(require('../config/templates.config.js').defaultTemplates)
+            });
+        }
+
+        // Check if the recordType exists in our templates config
+        const templatesConfig = require('../config/templates.config.js');
+        const availableTemplates = Object.keys(templatesConfig.defaultTemplates);
+        
+        if (!availableTemplates.includes(recordType)) {
+            return res.status(404).json({
+                error: `Record type '${recordType}' not found`,
+                available_record_types: availableTemplates,
+                usage: 'GET /api/publish/schema?recordType=mealPlan'
+            });
+        }
+
+        // Generate the dynamic schema
+        const endpointPath = `POST /api/records/newRecord?recordType=${recordType}`;
+        const templateDescription = `${recordType} record`;
+        
+        const dynamicSchema = await generateDynamicSchema(recordType, endpointPath, templateDescription);
+        
+        // Add additional metadata for the dynamic endpoint
+        dynamicSchema.endpoint_info = {
+            publishing_endpoint: `/api/records/newRecord?recordType=${recordType}&storage=arweave`,
+            publishing_endpoint_gun: `/api/records/newRecord?recordType=${recordType}&storage=gun`,
+            method: 'POST',
+            authentication: 'Optional for Arweave, Required for GUN storage',
+            content_type: 'application/json'
+        };
+        
+        dynamicSchema.usage_examples = {
+            arweave_publishing: {
+                url: `/api/records/newRecord?recordType=${recordType}&storage=arweave`,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer <jwt-token> (optional)'
+                },
+                body: dynamicSchema.example
+            },
+            gun_publishing: {
+                url: `/api/records/newRecord?recordType=${recordType}&storage=gun`,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer <jwt-token> (required)'
+                },
+                body: dynamicSchema.example
+            }
+        };
+
+        res.status(200).json(dynamicSchema);
+
+    } catch (error) {
+        console.error(`Error generating dynamic schema for recordType '${req.query.recordType}':`, error);
+        res.status(500).json({ 
+            error: 'Failed to generate dynamic schema',
+            details: error.message,
+            recordType: req.query.recordType
+        });
     }
 });
 

@@ -12,7 +12,7 @@ const { indexRecord } = require('../helpers/elasticsearch');
 const router = express.Router();
 
 // Media directory configuration
-const MEDIA_DIR = process.env.MEDIA_DIR || '/usr/src/app/data/media';
+const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, '../data/media');
 
 // Function to ensure media directory exists (called when needed)
 function ensureMediaDir() {
