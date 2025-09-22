@@ -426,6 +426,22 @@ Due to GUN's limitations with arrays, certain fields are stored differently:
 - **Example:** `exactMatch={"data.basic.language":"en","oip.recordType":"post"}`
 - **Note:** Uses dot notation to navigate nested object structures
 
+#### `noDuplicates`
+- **Type:** Boolean
+- **Description:** Filter out duplicate records based on their `data.basic.name` field, keeping only one record per unique name
+- **Default:** `false`
+- **Values:**
+  - `true` - Remove duplicates, keep only one record per unique name
+  - `false` - Return all records including duplicates (default behavior)
+- **Example:** `noDuplicates=true&recordType=fitnessEquipment`
+- **Behavior:**
+  - Groups records by their `data.basic.name` field
+  - For each group with multiple records, keeps only the best record based on sorting criteria
+  - Uses the `sortBy` parameter to determine which duplicate to keep
+  - If no `sortBy` is specified, defaults to `sortBy=inArweaveBlock:desc` for duplicate resolution
+  - Records without a `data.basic.name` field are always included
+  - Useful for getting a list of unique items by name within a record type
+
 ### 📅 **Date Filtering**
 
 #### `dateStart`
@@ -768,6 +784,21 @@ GET /api/records?summarizeTags=true&tagCount=100&recordType=post
 GET /api/records?hideNullValues=true&hideDateReadable=false&includeSigs=false&includePubKeys=false&limit=10
 ```
 
+### Unique Fitness Equipment Records
+```
+GET /api/records?recordType=fitnessEquipment&noDuplicates=true&limit=50
+```
+
+### Unique Fitness Equipment with Custom Sorting
+```
+GET /api/records?recordType=fitnessEquipment&noDuplicates=true&sortBy=date:desc&limit=50
+```
+
+### Unique Records by Name (All Types)
+```
+GET /api/records?noDuplicates=true&sortBy=inArweaveBlock:desc&limit=100
+```
+
 ### Private Media Files (Authenticated)
 ```
 GET /api/records?source=gun&recordType=media&limit=10&sortBy=date:desc
@@ -1092,6 +1123,8 @@ When using `summarizeRecipe=true` with recipe records, the response includes nut
 18. **Private media requires authentication** - Always include Authorization header for private media
 19. **Media search by MIME type** - Use `exactMatch` for filtering by file type
 20. **GUN source filtering** - Use `source=gun` to focus on private records only
+21. **Duplicate filtering is efficient** - `noDuplicates=true` processes records in-memory after all other filters
+22. **Combine noDuplicates with recordType** - Most effective when used with specific record types for unique item lists
 
 ## Advanced Features
 
