@@ -2205,6 +2205,39 @@ async function getRecords(queryParams) {
                         console.log('Warning: sortBy=matchCount specified but no search parameter provided - skipping matchCount sort');
                     }
                 }
+
+                if (fieldToSortBy === 'scheduledDate') {
+                    // Only allow 'scheduledDate' sorting when recordType is mealPlan or workoutSchedule
+                    if (recordType === 'mealPlan' || recordType === 'workoutSchedule') {
+                        recordsToSort.sort((a, b) => {
+                            let aDate, bDate;
+                            
+                            // Get the appropriate date field based on record type
+                            if (recordType === 'mealPlan') {
+                                aDate = a.data?.mealPlan?.meal_date;
+                                bDate = b.data?.mealPlan?.meal_date;
+                            } else if (recordType === 'workoutSchedule') {
+                                aDate = a.data?.workoutSchedule?.scheduled_date;
+                                bDate = b.data?.workoutSchedule?.scheduled_date;
+                            }
+                            
+                            // Handle missing dates (put them at the end)
+                            if (!aDate && !bDate) return 0;
+                            if (!aDate) return 1;
+                            if (!bDate) return -1;
+                            
+                            // Sort by unix timestamp values
+                            if (order === 'asc') {
+                                return aDate - bDate;
+                            } else {
+                                return bDate - aDate;
+                            }
+                        });
+                        console.log(`sorted by scheduled date (${order}) for recordType=${recordType}`);
+                    } else {
+                        console.log(`Warning: sortBy=scheduledDate specified but recordType is '${recordType}' (must be 'mealPlan' or 'workoutSchedule') - skipping scheduledDate sort`);
+                    }
+                }
             }
         };
 
