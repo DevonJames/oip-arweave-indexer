@@ -201,7 +201,7 @@ const getTemplateTxidByName = (templateName) => {
     return templateConfigTxid ? templateConfigTxid : null;
 };
 
-const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnly = false) => {
+const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnly = false, summarizeRecipe = false, addRecipeNutritionalSummary = null) => {
     if (resolveDepth === 0 || !record) {
         return record;
     }
@@ -225,7 +225,14 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         const name = refRecord.data?.basic?.name || properties[key]; // fallback to DID if no name found
                         properties[key] = name;
                     } else {
-                        properties[key] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly);
+                        let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary);
+                        
+                        // Apply recipe summary if this is a recipe record and summarizeRecipe is enabled
+                        if (summarizeRecipe && addRecipeNutritionalSummary && resolvedRef.oip?.recordType === 'recipe' && resolvedRef.data?.recipe) {
+                            resolvedRef = await addRecipeNutritionalSummary(resolvedRef, recordsInDB);
+                        }
+                        
+                        properties[key] = resolvedRef;
                     }
                 }
             } else if (Array.isArray(properties[key])) {
@@ -240,7 +247,14 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                                 const name = refRecord.data?.basic?.name || properties[key][i]; // fallback to DID if no name found
                                 properties[key][i] = name;
                             } else {
-                                properties[key][i] = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly);
+                                let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary);
+                                
+                                // Apply recipe summary if this is a recipe record and summarizeRecipe is enabled
+                                if (summarizeRecipe && addRecipeNutritionalSummary && resolvedRef.oip?.recordType === 'recipe' && resolvedRef.data?.recipe) {
+                                    resolvedRef = await addRecipeNutritionalSummary(resolvedRef, recordsInDB);
+                                }
+                                
+                                properties[key][i] = resolvedRef;
                             }
                         }
                     }
