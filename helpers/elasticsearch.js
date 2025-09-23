@@ -1384,6 +1384,7 @@ async function getRecords(queryParams) {
         model, // New parameter for model provider filtering
         modelMatchMode = 'OR', // New parameter for model match behavior (AND/OR, default OR)
         noDuplicates = false, // New parameter: filter out duplicate names (default: false)
+        scheduledOn, // New parameter for filtering workoutSchedule by specific date (YYYY-MM-DD format)
     } = queryParams;
 
     // Normalize DID parameter for backward compatibility
@@ -1458,6 +1459,55 @@ async function getRecords(queryParams) {
             return false;
             });
             // console.log('after filtering by dateEnd, there are', records.length, 'records');
+        }
+
+        // Filter by scheduledOn date for workoutSchedule records
+        if (scheduledOn != undefined) {
+            console.log('Filtering by scheduledOn:', scheduledOn);
+            
+            // Parse the YYYY-MM-DD format and create start/end of day timestamps
+            const dateMatch = scheduledOn.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!dateMatch) {
+                console.warn('Invalid scheduledOn date format. Expected YYYY-MM-DD, got:', scheduledOn);
+            } else {
+                const [, year, month, day] = dateMatch;
+                
+                // Create start of day (midnight) and end of day timestamps
+                // Using local time to match how workout schedules are typically stored
+                const startOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+                const endOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999);
+                
+                const startTimestamp = Math.floor(startOfDay.getTime() / 1000);
+                const endTimestamp = Math.floor(endOfDay.getTime() / 1000);
+                
+                console.log(`Filtering workoutSchedule records for date ${scheduledOn}`);
+                console.log(`Start timestamp: ${startTimestamp} (${startOfDay.toISOString()})`);
+                console.log(`End timestamp: ${endTimestamp} (${endOfDay.toISOString()})`);
+                
+                records = records.filter(record => {
+                    // Only apply this filter to workoutSchedule records
+                    if (record.oip.recordType !== 'workoutSchedule') {
+                        return true; // Keep non-workoutSchedule records
+                    }
+                    
+                    const scheduledDate = record.data?.workoutSchedule?.scheduled_date;
+                    if (!scheduledDate) {
+                        console.warn(`WorkoutSchedule record ${record.oip?.did || record.oip?.didTx} missing scheduled_date`);
+                        return false;
+                    }
+                    
+                    // Check if the scheduled_date falls within the specified day
+                    const isMatch = scheduledDate >= startTimestamp && scheduledDate <= endTimestamp;
+                    
+                    if (isMatch) {
+                        console.log(`✅ Match found: ${record.oip?.did || record.oip?.didTx} scheduled for ${new Date(scheduledDate * 1000).toISOString()}`);
+                    }
+                    
+                    return isMatch;
+                });
+                
+                console.log(`After filtering by scheduledOn=${scheduledOn}, there are ${records.length} records`);
+            }
         }
 
         if (inArweaveBlock != undefined) {
