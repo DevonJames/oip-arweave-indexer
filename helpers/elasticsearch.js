@@ -2206,8 +2206,8 @@ async function getRecords(queryParams) {
                     }
                 }
 
-                if (fieldToSortBy === 'scheduledDate') {
-                    // Only allow 'scheduledDate' sorting when recordType is mealPlan or workoutSchedule
+                if (fieldToSortBy === 'scheduleDate') {
+                    // Only allow 'scheduleDate' sorting when recordType is mealPlan or workoutSchedule
                     if (recordType === 'mealPlan' || recordType === 'workoutSchedule') {
                         recordsToSort.sort((a, b) => {
                             let aDate, bDate;
@@ -2288,7 +2288,14 @@ async function getRecords(queryParams) {
 
         // Resolve records if resolveDepth is specified
         let resolvedRecords = await Promise.all(records.map(async (record) => {
-            let resolvedRecord = await resolveRecords(record, parseInt(resolveDepth), recordsInDB, resolveNamesOnly === 'true' || resolveNamesOnly === true);
+            let resolvedRecord = await resolveRecords(
+                record, 
+                parseInt(resolveDepth), 
+                recordsInDB, 
+                resolveNamesOnly === 'true' || resolveNamesOnly === true,
+                summarizeRecipe === 'true' || summarizeRecipe === true,
+                addRecipeNutritionalSummary
+            );
             return resolvedRecord;
         }));
 
