@@ -1071,9 +1071,42 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
         return fromAmount;
     }
     
-    // Try converting both to grams and compare
-    const fromGrams = convertToGrams(fromAmount, aliasedFromUnit);
-    const toGramsPerUnit = convertToGrams(1, aliasedToUnit);
+    // Handle complex standard units (like "cup spaghetti not packed")
+    // Extract the actual unit from complex descriptions
+    const extractBaseUnit = (unitString) => {
+        const baseUnits = ['cup', 'tbsp', 'tsp', 'g', 'kg', 'lb', 'oz', 'ml', 'l'];
+        for (const baseUnit of baseUnits) {
+            if (unitString.includes(baseUnit)) {
+                return baseUnit;
+            }
+        }
+        return unitString;
+    };
+    
+    const baseFromUnit = extractBaseUnit(aliasedFromUnit);
+    const baseToUnit = extractBaseUnit(aliasedToUnit);
+    
+    // Check if base units are the same
+    if (baseFromUnit === baseToUnit) {
+        return fromAmount;
+    }
+    
+    // Direct volume conversions (more accurate than going through grams)
+    const volumeConversions = {
+        'tsp': { 'tbsp': 1/3, 'cup': 1/48, 'ml': 5 },
+        'tbsp': { 'tsp': 3, 'cup': 1/16, 'ml': 15 },
+        'cup': { 'tsp': 48, 'tbsp': 16, 'ml': 240 },
+        'ml': { 'tsp': 1/5, 'tbsp': 1/15, 'cup': 1/240 }
+    };
+    
+    // Try direct volume conversion first
+    if (volumeConversions[baseFromUnit] && volumeConversions[baseFromUnit][baseToUnit]) {
+        return fromAmount * volumeConversions[baseFromUnit][baseToUnit];
+    }
+    
+    // Try converting both to grams and compare (for weight conversions)
+    const fromGrams = convertToGrams(fromAmount, baseFromUnit);
+    const toGramsPerUnit = convertToGrams(1, baseToUnit);
     
     // If both can be converted to grams, do the conversion
     if (fromGrams !== null && toGramsPerUnit !== null) {
@@ -1137,7 +1170,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                 }
                 
                 if (!ingredientRecord || !ingredientRecord.data || !ingredientRecord.data.nutritionalInfo) {
-                    console.warn(`No nutritional info found for ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'}`);
+                    console.warn(`No nutritional info found for ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'} - skipping ingredient`);
                     continue;
                 }
                 
@@ -1154,32 +1187,46 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                 // Following the IFERROR logic from the spreadsheet formula
                 let multiplier;
                 
+                const ingredientName = ingredientRecord.data.basic?.name || `ingredient ${i}`;
+                console.log(`\n=== Processing ${ingredientName} ===`);
+                console.log(`Recipe: ${recipeAmount} ${recipeUnit}`);
+                console.log(`Standard: ${standardAmount} ${standardUnit}`);
+                
                 // First, try direct unit conversion using enhanced convertUnits function
                 const convertedAmount = convertUnits(recipeAmount, recipeUnit, standardUnit);
+                console.log(`Direct conversion result: ${convertedAmount}`);
                 
                 if (convertedAmount !== null) {
                     // Direct conversion successful
                     multiplier = convertedAmount / standardAmount;
+                    console.log(`✅ Direct conversion: ${convertedAmount} / ${standardAmount} = ${multiplier}`);
                 } else {
                     // Direct conversion failed, use fallback logic
+                    console.log(`❌ Direct conversion failed, trying fallback logic...`);
+                    
                     if (recipeUnit.toLowerCase().trim() === 'unit') {
                         // If recipe unit is "unit", use recipe amount directly
                         multiplier = recipeAmount / standardAmount;
+                        console.log(`📦 Unit fallback: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
                     } else if (recipeUnit.toLowerCase().trim() === standardUnit.toLowerCase().trim()) {
                         // If units are the same (after normalization), use 1:1 ratio
                         multiplier = recipeAmount / standardAmount;
+                        console.log(`🔄 Same unit fallback: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
                     } else {
                         // Try the old logic as final fallback
+                        console.log(`🔧 Using old conversion logic...`);
                         if (isCountUnit(recipeUnit)) {
                             // Recipe uses count-based units (pieces, units, etc.)
                             if (isCountUnit(standardUnit)) {
                                 // Both are count-based: direct comparison
                                 multiplier = recipeAmount / standardAmount;
+                                console.log(`📊 Both count units: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
                             } else {
                                 // Recipe is count-based, standard is weight/volume
                                 // The standardAmount tells us what 1 unit weighs
                                 // So recipeAmount units = recipeAmount * standardAmount weight
                                 multiplier = recipeAmount;
+                                console.log(`📈 Count to weight: multiplier = ${recipeAmount}`);
                             }
                         } else {
                             // Recipe uses weight/volume units
@@ -1203,10 +1250,16 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                                     continue;
                                 }
                                 multiplier = recipeAmountInGrams / standardAmountInGrams;
+                                console.log(`⚖️ Gram conversion: ${recipeAmountInGrams}g / ${standardAmountInGrams}g = ${multiplier}`);
                             }
                         }
                     }
                 }
+                
+                console.log(`📝 Final multiplier for ${ingredientName}: ${multiplier}`);
+                console.log(`🍽️ Calories contribution: ${nutritionalInfo.calories} × ${multiplier} = ${(nutritionalInfo.calories || 0) * multiplier}`);
+                console.log(`🥩 Protein contribution: ${nutritionalInfo.proteinG} × ${multiplier} = ${(nutritionalInfo.proteinG || 0) * multiplier}`);
+                console.log(`=================================\n`);
                 
                 // Step 2: Calculate multiplier per serving = multiplier / ServingsFromRecipe
                 const multiplierPerServing = multiplier / servings;
