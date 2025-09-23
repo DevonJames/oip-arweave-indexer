@@ -965,7 +965,7 @@ async function searchCreatorByAddress(didAddress) {
     }
 };
 
-// Unit conversion utility functions
+// Enhanced unit conversion utility functions
 const convertToGrams = (amount, unit) => {
     const conversions = {
         // Weight conversions to grams
@@ -1017,7 +1017,7 @@ const convertToGrams = (amount, unit) => {
     }
     
     // For count-based units, return null to indicate special handling needed
-    const countUnits = ['unit', 'units', 'piece', 'pieces', 'item', 'items', 'large', 'medium', 'small', 'whole', 'clove', 'cloves'];
+    const countUnits = ['unit', 'units', 'piece', 'pieces', 'item', 'items', 'large', 'medium', 'small', 'whole', 'clove', 'cloves', 'slice', 'slices'];
     if (countUnits.includes(normalizedUnit)) {
         return null; // Special handling required
     }
@@ -1027,9 +1027,66 @@ const convertToGrams = (amount, unit) => {
     return amount;
 };
 
+// Enhanced unit conversion function that attempts direct unit matching first
+const convertUnits = (fromAmount, fromUnit, toUnit) => {
+    // Normalize units
+    const normalizedFromUnit = fromUnit.toLowerCase().trim();
+    const normalizedToUnit = toUnit.toLowerCase().trim();
+    
+    // If units are identical, return 1:1 ratio
+    if (normalizedFromUnit === normalizedToUnit) {
+        return fromAmount;
+    }
+    
+    // Handle common unit aliases
+    const unitAliases = {
+        'tablespoon': 'tbsp',
+        'tablespoons': 'tbsp',
+        'teaspoon': 'tsp',
+        'teaspoons': 'tsp',
+        'cups': 'cup',
+        'grams': 'g',
+        'gram': 'g',
+        'kilograms': 'kg',
+        'kilogram': 'kg',
+        'pounds': 'lb',
+        'pound': 'lb',
+        'ounces': 'oz',
+        'ounce': 'oz',
+        'milliliters': 'ml',
+        'milliliter': 'ml',
+        'liters': 'l',
+        'liter': 'l',
+        'slices': 'slice',
+        'units': 'unit',
+        'pieces': 'piece',
+        'items': 'item'
+    };
+    
+    const aliasedFromUnit = unitAliases[normalizedFromUnit] || normalizedFromUnit;
+    const aliasedToUnit = unitAliases[normalizedToUnit] || normalizedToUnit;
+    
+    // Check again after alias resolution
+    if (aliasedFromUnit === aliasedToUnit) {
+        return fromAmount;
+    }
+    
+    // Try converting both to grams and compare
+    const fromGrams = convertToGrams(fromAmount, aliasedFromUnit);
+    const toGramsPerUnit = convertToGrams(1, aliasedToUnit);
+    
+    // If both can be converted to grams, do the conversion
+    if (fromGrams !== null && toGramsPerUnit !== null) {
+        return fromGrams / toGramsPerUnit;
+    }
+    
+    // Return null if conversion is not possible
+    return null;
+};
+
 // Check if a unit is count-based (pieces, units, etc.)
 const isCountUnit = (unit) => {
-    const countUnits = ['unit', 'units', 'piece', 'pieces', 'item', 'items', 'large', 'medium', 'small', 'whole', 'clove', 'cloves'];
+    const countUnits = ['unit', 'units', 'piece', 'pieces', 'item', 'items', 'large', 'medium', 'small', 'whole', 'clove', 'cloves', 'slice', 'slices'];
     return countUnits.includes(unit.toLowerCase().trim());
 };
 
@@ -1055,6 +1112,9 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
         
         let processedIngredients = 0;
         let totalIngredients = recipe.ingredient.length;
+        
+        // Get servings for per-serving calculations
+        const servings = recipe.servings || 1;
         
         // Process each ingredient
         for (let i = 0; i < recipe.ingredient.length; i++) {
@@ -1090,52 +1150,74 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                     continue;
                 }
                 
-                // Handle different unit type combinations
-                let scalingFactor;
+                // Step 1: Calculate multiplier = AmountOfIngredientInRecipe / NutritionalInfoStandardAmount
+                // Following the IFERROR logic from the spreadsheet formula
+                let multiplier;
                 
-                if (isCountUnit(recipeUnit)) {
-                    // Recipe uses count-based units (pieces, units, etc.)
-                    if (isCountUnit(standardUnit)) {
-                        // Both are count-based: direct comparison
-                        scalingFactor = recipeAmount / standardAmount;
-                    } else {
-                        // Recipe is count-based, standard is weight/volume
-                        // The standardAmount tells us what 1 unit weighs
-                        // So recipeAmount units = recipeAmount * standardAmount weight
-                        scalingFactor = recipeAmount;
-                    }
+                // First, try direct unit conversion using enhanced convertUnits function
+                const convertedAmount = convertUnits(recipeAmount, recipeUnit, standardUnit);
+                
+                if (convertedAmount !== null) {
+                    // Direct conversion successful
+                    multiplier = convertedAmount / standardAmount;
                 } else {
-                    // Recipe uses weight/volume units
-                    const recipeAmountInGrams = convertToGrams(recipeAmount, recipeUnit);
-                    
-                    if (recipeAmountInGrams === null) {
-                        console.warn(`Could not convert recipe unit: ${recipeUnit} for ingredient ${i}`);
-                        continue;
-                    }
-                    
-                    if (isCountUnit(standardUnit)) {
-                        // Recipe is weight/volume, standard is count-based
-                        // This is unusual - can't easily convert
-                        console.warn(`Cannot convert ${recipeUnit} to ${standardUnit} for ingredient ${i}`);
-                        continue;
+                    // Direct conversion failed, use fallback logic
+                    if (recipeUnit.toLowerCase().trim() === 'unit') {
+                        // If recipe unit is "unit", use recipe amount directly
+                        multiplier = recipeAmount / standardAmount;
+                    } else if (recipeUnit.toLowerCase().trim() === standardUnit.toLowerCase().trim()) {
+                        // If units are the same (after normalization), use 1:1 ratio
+                        multiplier = recipeAmount / standardAmount;
                     } else {
-                        // Both are weight/volume: convert both to grams and compare
-                        const standardAmountInGrams = convertToGrams(standardAmount, standardUnit);
-                        if (standardAmountInGrams === null) {
-                            console.warn(`Could not convert standard unit: ${standardUnit} for ingredient ${i}`);
-                            continue;
+                        // Try the old logic as final fallback
+                        if (isCountUnit(recipeUnit)) {
+                            // Recipe uses count-based units (pieces, units, etc.)
+                            if (isCountUnit(standardUnit)) {
+                                // Both are count-based: direct comparison
+                                multiplier = recipeAmount / standardAmount;
+                            } else {
+                                // Recipe is count-based, standard is weight/volume
+                                // The standardAmount tells us what 1 unit weighs
+                                // So recipeAmount units = recipeAmount * standardAmount weight
+                                multiplier = recipeAmount;
+                            }
+                        } else {
+                            // Recipe uses weight/volume units
+                            const recipeAmountInGrams = convertToGrams(recipeAmount, recipeUnit);
+                            
+                            if (recipeAmountInGrams === null) {
+                                console.warn(`Could not convert recipe unit: ${recipeUnit} for ingredient ${i}`);
+                                continue;
+                            }
+                            
+                            if (isCountUnit(standardUnit)) {
+                                // Recipe is weight/volume, standard is count-based
+                                // This is unusual - can't easily convert
+                                console.warn(`Cannot convert ${recipeUnit} to ${standardUnit} for ingredient ${i}`);
+                                continue;
+                            } else {
+                                // Both are weight/volume: convert both to grams and compare
+                                const standardAmountInGrams = convertToGrams(standardAmount, standardUnit);
+                                if (standardAmountInGrams === null) {
+                                    console.warn(`Could not convert standard unit: ${standardUnit} for ingredient ${i}`);
+                                    continue;
+                                }
+                                multiplier = recipeAmountInGrams / standardAmountInGrams;
+                            }
                         }
-                        scalingFactor = recipeAmountInGrams / standardAmountInGrams;
                     }
                 }
                 
-                // Scale nutritional values and add to totals
-                totals.calories += (nutritionalInfo.calories || 0) * scalingFactor;
-                totals.proteinG += (nutritionalInfo.proteinG || 0) * scalingFactor;
-                totals.fatG += (nutritionalInfo.fatG || 0) * scalingFactor;
-                totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * scalingFactor;
-                totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * scalingFactor;
-                totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * scalingFactor;
+                // Step 2: Calculate multiplier per serving = multiplier / ServingsFromRecipe
+                const multiplierPerServing = multiplier / servings;
+                
+                // Add to totals using the full multiplier (for total recipe nutritional info)
+                totals.calories += (nutritionalInfo.calories || 0) * multiplier;
+                totals.proteinG += (nutritionalInfo.proteinG || 0) * multiplier;
+                totals.fatG += (nutritionalInfo.fatG || 0) * multiplier;
+                totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * multiplier;
+                totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * multiplier;
+                totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * multiplier;
                 
                 processedIngredients++;
                 
@@ -1166,8 +1248,9 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
             totalIngredients: totalIngredients
         };
         
-        // Calculate per-serving values
-        const servings = recipe.servings || 1;
+        // Calculate per-serving values using the correct formula
+        // Per-serving values are already calculated correctly by dividing totals by servings
+        // since totals represent the entire recipe's nutritional content
         const summaryNutritionalInfoPerServing = {
             calories: roundToDecimal(totals.calories / servings, 0),
             proteinG: roundToDecimal(totals.proteinG / servings),
