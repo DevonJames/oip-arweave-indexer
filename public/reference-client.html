@@ -5505,6 +5505,9 @@
          * Copy data from the latest matching record
          */
         async function copyFromLatestRecord(recordType) {
+            let button = null;
+            let originalText = '';
+            
             try {
                 const nameField = getNameFieldForRecordType(recordType);
                 const nameValue = nameField ? nameField.value.trim() : '';
@@ -5514,11 +5517,13 @@
                     return;
                 }
 
-                // Show loading state
-                const button = event.target;
-                const originalText = button.textContent;
-                button.textContent = '🔄 Searching...';
-                button.disabled = true;
+                // Find the button that was clicked
+                button = document.querySelector(`#${recordType}-smart-buttons .btn-secondary`);
+                if (button) {
+                    originalText = button.textContent;
+                    button.textContent = '🔄 Searching...';
+                    button.disabled = true;
+                }
 
                 // Build API parameters
                 const params = new URLSearchParams({
@@ -5538,6 +5543,19 @@
 
                 console.log(`[Smart Copy] Searching for latest ${recordType} matching: "${nameValue}"`);
 
+                // Also fetch schema data for proper enum mapping
+                const schemaResponse = await fetch(`/api/publish/schema?recordType=${recordType}`);
+                const schemaData = await schemaResponse.json();
+                
+                // Get basic schema for language field
+                const basicSchemaResponse = await fetch(`/api/publish/schema?recordType=basic`);
+                const basicSchemaData = await basicSchemaResponse.json();
+                
+                if (schemaResponse.ok && basicSchemaResponse.ok && basicSchemaData.template_fields_info) {
+                    schemaData.basic_template_fields_info = basicSchemaData.template_fields_info;
+                    window.currentSchemaData = schemaData;
+                }
+
                 const response = await fetch(`/api/records?${params}`, { headers });
                 const data = await response.json();
 
@@ -5549,19 +5567,32 @@
                     await populateFormFromRecord(recordType, latestRecord);
                     
                     // Show success message
-                    showMessage('publish-success', `✅ Copied data from latest "${latestRecord.data?.basic?.name || 'record'}"`, 'success');
+                    try {
+                        showMessage('publish-success', `✅ Copied data from latest "${latestRecord.data?.basic?.name || 'record'}"`, 'success');
+                    } catch (msgError) {
+                        console.warn('[Smart Copy] Message display error:', msgError);
+                    }
                 } else {
-                    showMessage('publish-status', `No matching ${recordType} records found for "${nameValue}"`, 'error');
+                    try {
+                        showMessage('publish-status', `No matching ${recordType} records found for "${nameValue}"`, 'error');
+                    } catch (msgError) {
+                        console.warn('[Smart Copy] Error message display error:', msgError);
+                    }
                 }
 
             } catch (error) {
                 console.error('[Smart Copy] Error:', error);
-                showMessage('publish-status', 'Error searching for records: ' + error.message, 'error');
+                try {
+                    showMessage('publish-status', 'Error searching for records: ' + error.message, 'error');
+                } catch (msgError) {
+                    console.warn('[Smart Copy] Error displaying error message:', msgError);
+                }
             } finally {
                 // Reset button state
-                const button = event.target;
-                button.textContent = originalText;
-                button.disabled = false;
+                if (button) {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }
             }
         }
 
@@ -5569,6 +5600,9 @@
          * Fill in form fields using AI
          */
         async function fillInWithAI(recordType) {
+            let button = null;
+            let originalText = '';
+            
             try {
                 const nameField = getNameFieldForRecordType(recordType);
                 const nameValue = nameField ? nameField.value.trim() : '';
@@ -5578,11 +5612,13 @@
                     return;
                 }
 
-                // Show loading state
-                const button = event.target;
-                const originalText = button.textContent;
-                button.textContent = '🤖 AI Working...';
-                button.disabled = true;
+                // Find the AI button that was clicked
+                button = document.querySelector(`#${recordType}-smart-buttons .btn-small:not(.btn-secondary)`);
+                if (button) {
+                    originalText = button.textContent;
+                    button.textContent = '🤖 AI Working...';
+                    button.disabled = true;
+                }
 
                 console.log(`[Smart AI] Filling in ${recordType} fields for: "${nameValue}"`);
 
@@ -5593,6 +5629,18 @@
                 if (!schemaResponse.ok) {
                     throw new Error(schemaData.error || 'Failed to get schema');
                 }
+
+                // Step 1.5: Also get basic template schema for language and other basic fields
+                const basicSchemaResponse = await fetch(`/api/publish/schema?recordType=basic`);
+                const basicSchemaData = await basicSchemaResponse.json();
+                
+                // Merge basic schema fields into main schema for comprehensive enum mapping
+                if (basicSchemaResponse.ok && basicSchemaData.template_fields_info) {
+                    schemaData.basic_template_fields_info = basicSchemaData.template_fields_info;
+                }
+
+                // Store schema data globally for use in setFieldValue
+                window.currentSchemaData = schemaData;
 
                 // Step 2: Collect current form data
                 const currentFormData = collectCurrentFormData(recordType);
@@ -5606,16 +5654,25 @@
                 // Step 5: Parse AI response and fill form
                 await populateFormFromAIResponse(recordType, aiResponse, schemaData);
 
-                showMessage('publish-success', `✅ AI has filled in the ${recordType} fields based on "${nameValue}"`, 'success');
+                try {
+                    showMessage('publish-success', `✅ AI has filled in the ${recordType} fields based on "${nameValue}"`, 'success');
+                } catch (msgError) {
+                    console.warn('[Smart AI] Success message display error:', msgError);
+                }
 
             } catch (error) {
                 console.error('[Smart AI] Error:', error);
-                showMessage('publish-status', 'AI fill-in failed: ' + error.message, 'error');
+                try {
+                    showMessage('publish-status', 'AI fill-in failed: ' + error.message, 'error');
+                } catch (msgError) {
+                    console.warn('[Smart AI] Error message display error:', msgError);
+                }
             } finally {
                 // Reset button state
-                const button = event.target;
-                button.textContent = originalText;
-                button.disabled = false;
+                if (button) {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }
             }
         }
 
@@ -5714,6 +5771,12 @@
          * Build AI prompt for field filling
          */
         function buildAIPrompt(recordType, nameValue, currentFormData, schemaData) {
+            // Get available dropdown options for better AI suggestions
+            const dropdownOptions = getDropdownOptionsForRecordType(recordType);
+            
+            // Extract enum field information for better AI guidance
+            const enumFieldsInfo = extractEnumFieldsFromSchema(schemaData);
+            
             const prompt = `You are an expert assistant helping to fill out a ${recordType} record form. 
 
 Given this information:
@@ -5722,18 +5785,334 @@ Given this information:
 - Current form data: ${JSON.stringify(currentFormData, null, 2)}
 - Schema information: ${JSON.stringify(schemaData.field_descriptions, null, 2)}
 - Example data: ${JSON.stringify(schemaData.example, null, 2)}
+- Available dropdown options: ${JSON.stringify(dropdownOptions, null, 2)}
+- Enum field mappings: ${JSON.stringify(enumFieldsInfo, null, 2)}
 
 Please provide a JSON response with suggested values for ALL the empty fields in the form. Base your suggestions on the name "${nameValue}" and any existing form data.
 
-For enum fields, use the exact enum codes from the schema.
-For DID references, use placeholder values like "did:arweave:placeholder123...".
-For arrays, provide realistic arrays with 2-3 items.
-For numeric fields, provide realistic numbers.
-For text fields, provide helpful content.
+CRITICAL ENUM/DROPDOWN RULES:
+- For enum fields, you MUST use the exact enum CODES from the "Enum field mappings" section
+- For example, if language enum has code "en" for "English", use "en", not "English"
+- For dropdown/select fields, use the exact values from "Available dropdown options"
+- For language field, use language codes like "en", "es", "fr" (from basic template enum)
+- For difficulty fields, use lowercase values like "beginner", "intermediate", "advanced"
+- For category fields, check if they use codes or display names in the enum mappings
+
+OTHER FIELD RULES:
+- For DID references, use placeholder values like "did:arweave:placeholder123..."
+- For arrays, provide realistic arrays with 2-3 items
+- For numeric fields, provide realistic numbers
+- For text fields, provide helpful content
 
 Return ONLY a valid JSON object with the field values, no additional text or explanation.`;
 
             return prompt;
+        }
+
+        /**
+         * Extract enum field information from schema for AI guidance
+         */
+        function extractEnumFieldsFromSchema(schemaData) {
+            const enumFields = {};
+            
+            // Extract from main template fields
+            if (schemaData.template_fields_info) {
+                Object.keys(schemaData.template_fields_info).forEach(fieldName => {
+                    const fieldDef = schemaData.template_fields_info[fieldName];
+                    if (fieldDef.type === 'enum' && fieldDef.enumValues) {
+                        enumFields[fieldName] = {
+                            type: 'enum',
+                            codes: fieldDef.enumValues.map(ev => ev.code),
+                            options: fieldDef.enumValues.map(ev => `${ev.code} = "${ev.name}"`),
+                            note: `Use enum codes like: ${fieldDef.enumValues.slice(0, 3).map(ev => ev.code).join(', ')}`
+                        };
+                    }
+                });
+            }
+            
+            // Extract from basic template fields (for language, etc.)
+            if (schemaData.basic_template_fields_info) {
+                Object.keys(schemaData.basic_template_fields_info).forEach(fieldName => {
+                    const fieldDef = schemaData.basic_template_fields_info[fieldName];
+                    if (fieldDef.type === 'enum' && fieldDef.enumValues) {
+                        enumFields[`basic_${fieldName}`] = {
+                            type: 'enum',
+                            codes: fieldDef.enumValues.map(ev => ev.code),
+                            options: fieldDef.enumValues.slice(0, 10).map(ev => `${ev.code} = "${ev.name}"`), // Limit to first 10 for readability
+                            note: `Use enum codes like: ${fieldDef.enumValues.slice(0, 5).map(ev => ev.code).join(', ')}`
+                        };
+                    }
+                });
+            }
+            
+            return enumFields;
+        }
+
+        /**
+         * Get dropdown options for a record type to help AI make better choices
+         */
+        function getDropdownOptionsForRecordType(recordType) {
+            const options = {};
+            
+            // Get all select elements in the current form
+            const form = document.querySelector('.publish-form');
+            if (form) {
+                const selects = form.querySelectorAll('select');
+                selects.forEach(select => {
+                    if (select.id && select.options.length > 1) {
+                        const selectOptions = Array.from(select.options)
+                            .filter(opt => opt.value) // Exclude empty options
+                            .map(opt => opt.value);
+                        
+                        if (selectOptions.length > 0) {
+                            options[select.id] = selectOptions;
+                        }
+                    }
+                });
+            }
+            
+            // Also get template enum values from the dynamic template system
+            const templateEnumOptions = getTemplateEnumOptions(recordType);
+            Object.assign(options, templateEnumOptions);
+            
+            return options;
+        }
+
+        /**
+         * Get enum options from template field definitions
+         */
+        function getTemplateEnumOptions(recordType) {
+            const enumOptions = {};
+            
+            // Get template field mapping for this record type
+            const fieldsMap = templateFieldMap[recordType];
+            if (fieldsMap) {
+                Object.keys(fieldsMap).forEach(fieldName => {
+                    const fieldDef = fieldsMap[fieldName];
+                    if (fieldDef.type === 'enum' && fieldDef.enumValues) {
+                        // Convert enum values to code -> name mapping
+                        const enumCodes = fieldDef.enumValues.map(enumValue => {
+                            if (typeof enumValue === 'object' && enumValue.code) {
+                                return enumValue.code;
+                            }
+                            return enumValue;
+                        });
+                        
+                        enumOptions[`template_${fieldName}_enum`] = enumCodes;
+                        console.log(`[Template Schema] Found enum for ${fieldName}:`, enumCodes);
+                    }
+                });
+            }
+            
+            return enumOptions;
+        }
+
+        // ========================================================================
+        // DROPDOWN VALUE MAPPING FUNCTIONS
+        // ========================================================================
+
+        /**
+         * Map equipment category values to dropdown options
+         */
+        function mapEquipmentCategory(value) {
+            const mappings = {
+                'weight': 'weights',
+                'weights': 'weights',
+                'cardio': 'cardio',
+                'bodyweight': 'bodyweight',
+                'flexibility': 'flexibility',
+                'functional': 'functional',
+                'accessories': 'accessories',
+                'free weights': 'weights',
+                'strength': 'weights',
+                'strength training': 'weights'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || lowerValue; // Return lowercase version as fallback
+        }
+
+        /**
+         * Map language names to language codes
+         */
+        function mapLanguageCode(value) {
+            const mappings = {
+                'english': 'en',
+                'spanish': 'es',
+                'french': 'fr',
+                'german': 'de',
+                'italian': 'it',
+                'portuguese': 'pt',
+                'chinese': 'zh',
+                'japanese': 'ja',
+                'korean': 'ko',
+                'arabic': 'ar',
+                'hindi': 'hi',
+                'russian': 'ru',
+                'en': 'en',
+                'es': 'es',
+                'fr': 'fr',
+                'de': 'de',
+                'it': 'it',
+                'pt': 'pt',
+                'zh': 'zh',
+                'ja': 'ja',
+                'ko': 'ko',
+                'ar': 'ar',
+                'hi': 'hi',
+                'ru': 'ru'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || 'en'; // Default to English
+        }
+
+        /**
+         * Map difficulty level values to dropdown options
+         */
+        function mapDifficultyLevel(value) {
+            const mappings = {
+                'easy': 'beginner',
+                'beginner': 'beginner',
+                'medium': 'intermediate', 
+                'intermediate': 'intermediate',
+                'hard': 'advanced',
+                'advanced': 'advanced'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || lowerValue; // Return lowercase version as fallback
+        }
+
+        /**
+         * Map space required values to dropdown options
+         */
+        function mapSpaceRequired(value) {
+            const mappings = {
+                'minimal': 'minimal',
+                'minimal space': 'minimal',
+                'small': 'small',
+                'small space': 'small',
+                'medium': 'medium',
+                'medium space': 'medium',
+                'large': 'large',
+                'large space': 'large'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || lowerValue;
+        }
+
+        /**
+         * Map portability values to dropdown options
+         */
+        function mapPortability(value) {
+            const mappings = {
+                'portable': 'portable',
+                'semi-portable': 'semi_portable',
+                'semi portable': 'semi_portable',
+                'stationary': 'stationary',
+                'fixed': 'stationary'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || lowerValue;
+        }
+
+        /**
+         * Map price range values to dropdown options
+         */
+        function mapPriceRange(value) {
+            const mappings = {
+                'budget': 'budget',
+                'cheap': 'budget',
+                'low': 'budget',
+                'mid-range': 'mid_range',
+                'mid range': 'mid_range',
+                'medium': 'mid_range',
+                'premium': 'premium',
+                'expensive': 'premium',
+                'professional': 'professional',
+                'high-end': 'professional'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || lowerValue;
+        }
+
+        /**
+         * Map maintenance level values to dropdown options
+         */
+        function mapMaintenanceLevel(value) {
+            const mappings = {
+                'none': 'none',
+                'no maintenance': 'none',
+                'low': 'low',
+                'low maintenance': 'low',
+                'medium': 'medium',
+                'medium maintenance': 'medium',
+                'high': 'high',
+                'high maintenance': 'high'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || lowerValue;
+        }
+
+        /**
+         * Map exercise category values to dropdown options
+         */
+        function mapExerciseCategory(value) {
+            const mappings = {
+                'strength': 'Strength',
+                'cardio': 'Cardio',
+                'flexibility': 'Flexibility',
+                'balance': 'Balance',
+                'functional': 'Functional',
+                'rehabilitation': 'Rehabilitation',
+                'strength training': 'Strength',
+                'cardiovascular': 'Cardio'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            // For exercise category, we need capitalized values, so use original mapping logic
+            return mappings[lowerValue] || value;
+        }
+
+        /**
+         * Map exercise type values to dropdown options
+         */
+        function mapExerciseType(value) {
+            const mappings = {
+                'main': 'Main',
+                'warmup': 'Warmup',
+                'warm-up': 'Warmup',
+                'cooldown': 'Cooldown',
+                'cool-down': 'Cooldown',
+                'primary': 'Main',
+                'warm up': 'Warmup',
+                'cool down': 'Cooldown'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || lowerValue;
+        }
+
+        /**
+         * Map measurement type values to dropdown options
+         */
+        function mapMeasurementType(value) {
+            const mappings = {
+                'reps': 'Reps',
+                'repetitions': 'Reps',
+                'time': 'Time',
+                'seconds': 'Time',
+                'duration': 'Time',
+                'distance': 'Distance'
+            };
+            
+            const lowerValue = String(value).toLowerCase();
+            return mappings[lowerValue] || lowerValue;
         }
 
         /**
@@ -6060,7 +6439,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 setFieldValue('equipment-avatar', basicData.avatar);
             }
 
-            // Equipment-specific fields
+            // Equipment-specific fields with smart mapping
             if (equipmentData.category) {
                 setFieldValue('equipment-category', equipmentData.category);
             }
@@ -6073,8 +6452,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             if (equipmentData.exercise_types && Array.isArray(equipmentData.exercise_types)) {
                 setFieldValue('equipment-exercise-types', equipmentData.exercise_types.join(', '));
             }
-            if (equipmentData.difficulty_level) {
-                setFieldValue('equipment-difficulty', equipmentData.difficulty_level);
+            if (equipmentData.difficulty_level || equipmentData.difficulty) {
+                setFieldValue('equipment-difficulty', equipmentData.difficulty_level || equipmentData.difficulty);
             }
             if (equipmentData.space_required) {
                 setFieldValue('equipment-space-required', equipmentData.space_required);
@@ -6085,8 +6464,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             if (equipmentData.price_range) {
                 setFieldValue('equipment-price-range', equipmentData.price_range);
             }
-            if (equipmentData.maintenance_level) {
-                setFieldValue('equipment-maintenance', equipmentData.maintenance_level);
+            if (equipmentData.maintenance_level || equipmentData.maintenance) {
+                setFieldValue('equipment-maintenance', equipmentData.maintenance_level || equipmentData.maintenance);
             }
             if (equipmentData.alternatives && Array.isArray(equipmentData.alternatives)) {
                 setFieldValue('equipment-alternatives', equipmentData.alternatives.join(', '));
@@ -6111,10 +6490,154 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         function setFieldValue(fieldId, value) {
             const field = document.getElementById(fieldId);
             if (field && value !== null && value !== undefined) {
-                field.value = value;
-                console.log(`[Smart Copy] Set ${fieldId} = "${value}"`);
+                const stringValue = String(value);
+                
+                if (field.tagName.toLowerCase() === 'select') {
+                    // For select elements, try to find a matching option
+                    const options = Array.from(field.options);
+                    
+                    // First try exact match
+                    let matchingOption = options.find(opt => opt.value === stringValue);
+                    
+                    // If no exact match, try case-insensitive match
+                    if (!matchingOption) {
+                        matchingOption = options.find(opt => 
+                            opt.value.toLowerCase() === stringValue.toLowerCase()
+                        );
+                    }
+                    
+                    // If still no match, try partial match on option text
+                    if (!matchingOption) {
+                        matchingOption = options.find(opt => 
+                            opt.textContent.toLowerCase().includes(stringValue.toLowerCase())
+                        );
+                    }
+                    
+                    // If still no match, try to find by the display text
+                    if (!matchingOption) {
+                        matchingOption = options.find(opt => 
+                            stringValue.toLowerCase().includes(opt.textContent.toLowerCase())
+                        );
+                    }
+                    
+                    // If still no match, try template-based enum mapping
+                    if (!matchingOption) {
+                        const templateMappedValue = mapValueUsingTemplateSchema(fieldId, stringValue, window.currentSchemaData);
+                        if (templateMappedValue !== stringValue) {
+                            matchingOption = options.find(opt => opt.value === templateMappedValue);
+                        }
+                    }
+                    
+                    if (matchingOption) {
+                        field.value = matchingOption.value;
+                        console.log(`[Smart Copy] ✅ Set select ${fieldId} = "${matchingOption.value}" (matched "${stringValue}")`);
+                    } else {
+                        console.warn(`[Smart Copy] ❌ No matching option found for ${fieldId} = "${stringValue}". Available options:`, options.map(opt => `"${opt.value}"`));
+                        // Try to set it anyway in case the browser can handle it
+                        field.value = stringValue;
+                    }
+                } else {
+                    // For regular input/textarea elements
+                    field.value = stringValue;
+                    console.log(`[Smart Copy] Set ${fieldId} = "${stringValue}"`);
+                }
             }
         }
+
+        /**
+         * Map value using template schema for enum fields
+         */
+        function mapValueUsingTemplateSchema(fieldId, value, schemaData = null) {
+            // Extract record type and field name from field ID
+            const recordType = getCurrentRecordType();
+            if (!recordType) return value;
+            
+            // Get field name from field ID (e.g., "equipment-category" -> "category")
+            let fieldName = fieldId.replace(`${recordType}-`, '').replace('equipment-', '');
+            
+            // Special handling for basic template fields (language is in basic template)
+            let isBasicField = false;
+            if (fieldId.includes('-language')) {
+                fieldName = 'language';
+                isBasicField = true;
+            }
+            
+            // Use schema data if provided, otherwise try template field mapping
+            let fieldDef = null;
+            if (schemaData) {
+                if (isBasicField && schemaData.basic_template_fields_info && schemaData.basic_template_fields_info[fieldName]) {
+                    fieldDef = schemaData.basic_template_fields_info[fieldName];
+                } else if (schemaData.template_fields_info && schemaData.template_fields_info[fieldName]) {
+                    fieldDef = schemaData.template_fields_info[fieldName];
+                }
+            } else {
+                // Fallback to template field mapping
+                const templateName = isBasicField ? 'basic' : recordType;
+                const fieldsMap = templateFieldMap[templateName];
+                if (fieldsMap && fieldsMap[fieldName]) {
+                    fieldDef = fieldsMap[fieldName];
+                }
+            }
+            
+            if (fieldDef && fieldDef.type === 'enum' && fieldDef.enumValues) {
+                // Try to find matching enum value
+                const enumValue = fieldDef.enumValues.find(enumVal => {
+                    if (typeof enumVal === 'object' && enumVal.name && enumVal.code) {
+                        // Check if value matches the display name (case-insensitive)
+                        return enumVal.name.toLowerCase() === value.toLowerCase();
+                    }
+                    return false;
+                });
+                
+                if (enumValue) {
+                    console.log(`[Template Schema] Mapped "${value}" to enum code "${enumValue.code}" for field ${fieldName}`);
+                    return enumValue.code;
+                }
+                
+                // Also try reverse mapping - if value is already a code, find the name
+                const enumByCode = fieldDef.enumValues.find(enumVal => {
+                    if (typeof enumVal === 'object' && enumVal.code) {
+                        return enumVal.code.toLowerCase() === value.toLowerCase();
+                    }
+                    return false;
+                });
+                
+                if (enumByCode) {
+                    console.log(`[Template Schema] Value "${value}" is already a valid enum code for field ${fieldName}`);
+                    return enumByCode.code;
+                }
+            }
+            
+            return value;
+        }
+
+        /**
+         * Get current record type from the publish interface
+         */
+        function getCurrentRecordType() {
+            const recordTypeSelect = document.getElementById('publish-record-type');
+            return recordTypeSelect ? recordTypeSelect.value : null;
+        }
+
+        /**
+         * Debug function to test enum mapping for a field
+         */
+        function debugEnumMapping(fieldId, testValue) {
+            console.log(`[Debug] Testing enum mapping for ${fieldId} with value "${testValue}"`);
+            const mappedValue = mapValueUsingTemplateSchema(fieldId, testValue, window.currentSchemaData);
+            console.log(`[Debug] Mapped value: "${mappedValue}"`);
+            
+            const field = document.getElementById(fieldId);
+            if (field && field.tagName.toLowerCase() === 'select') {
+                const options = Array.from(field.options).map(opt => `"${opt.value}"`);
+                console.log(`[Debug] Available options for ${fieldId}:`, options);
+            }
+            
+            return mappedValue;
+        }
+
+        // Make debug function available globally
+        window.debugEnumMapping = debugEnumMapping;
 
         /**
          * Helper function to set checkbox value safely
