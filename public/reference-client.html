@@ -2759,6 +2759,53 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
+        /* Smart Buttons Styles */
+        .smart-buttons {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .smart-buttons button {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            margin: 0;
+        }
+
+        .smart-buttons .btn-secondary {
+            background: #6c757d;
+            color: white;
+            border: 1px solid #6c757d;
+        }
+
+        .smart-buttons .btn-secondary:hover {
+            background: #5a6268;
+            border-color: #545b62;
+        }
+
+        .smart-buttons .btn-small {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 1px solid #667eea;
+        }
+
+        .smart-buttons .btn-small:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .smart-buttons .btn-small:disabled,
+        .smart-buttons .btn-secondary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .publish-form h3 {
             color: #333;
             margin-bottom: 25px;
@@ -5434,6 +5481,946 @@
         // Make test function available globally for console testing
         window.testTemplateSystem = testTemplateSystem;
 
+        // ========================================================================
+        // SMART PUBLISHING FEATURES
+        // ========================================================================
+
+        /**
+         * Handle name field changes to show/hide smart buttons
+         */
+        function onNameFieldChange(recordType, nameValue) {
+            const trimmedValue = nameValue.trim();
+            const buttonsContainer = document.getElementById(`${recordType}-smart-buttons`);
+            
+            if (buttonsContainer) {
+                if (trimmedValue.length > 2) {
+                    buttonsContainer.style.display = 'flex';
+                } else {
+                    buttonsContainer.style.display = 'none';
+                }
+            }
+        }
+
+        /**
+         * Copy data from the latest matching record
+         */
+        async function copyFromLatestRecord(recordType) {
+            try {
+                const nameField = getNameFieldForRecordType(recordType);
+                const nameValue = nameField ? nameField.value.trim() : '';
+                
+                if (!nameValue) {
+                    alert('Please enter a name first to search for matching records');
+                    return;
+                }
+
+                // Show loading state
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = '🔄 Searching...';
+                button.disabled = true;
+
+                // Build API parameters
+                const params = new URLSearchParams({
+                    recordType: recordType,
+                    search: nameValue,
+                    noDuplicates: 'true',
+                    limit: '1',
+                    sortBy: 'date:desc',
+                    resolveDepth: '2'
+                });
+
+                // Add authentication header if available
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                console.log(`[Smart Copy] Searching for latest ${recordType} matching: "${nameValue}"`);
+
+                const response = await fetch(`/api/records?${params}`, { headers });
+                const data = await response.json();
+
+                if (data.records && data.records.length > 0) {
+                    const latestRecord = data.records[0];
+                    console.log(`[Smart Copy] Found matching record:`, latestRecord);
+                    
+                    // Copy the data to the form
+                    await populateFormFromRecord(recordType, latestRecord);
+                    
+                    // Show success message
+                    showMessage('publish-success', `✅ Copied data from latest "${latestRecord.data?.basic?.name || 'record'}"`, 'success');
+                } else {
+                    showMessage('publish-status', `No matching ${recordType} records found for "${nameValue}"`, 'error');
+                }
+
+            } catch (error) {
+                console.error('[Smart Copy] Error:', error);
+                showMessage('publish-status', 'Error searching for records: ' + error.message, 'error');
+            } finally {
+                // Reset button state
+                const button = event.target;
+                button.textContent = originalText;
+                button.disabled = false;
+            }
+        }
+
+        /**
+         * Fill in form fields using AI
+         */
+        async function fillInWithAI(recordType) {
+            try {
+                const nameField = getNameFieldForRecordType(recordType);
+                const nameValue = nameField ? nameField.value.trim() : '';
+                
+                if (!nameValue) {
+                    alert('Please enter a name first to provide context for AI');
+                    return;
+                }
+
+                // Show loading state
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = '🤖 AI Working...';
+                button.disabled = true;
+
+                console.log(`[Smart AI] Filling in ${recordType} fields for: "${nameValue}"`);
+
+                // Step 1: Get the schema for this record type
+                const schemaResponse = await fetch(`/api/publish/schema?recordType=${recordType}`);
+                const schemaData = await schemaResponse.json();
+
+                if (!schemaResponse.ok) {
+                    throw new Error(schemaData.error || 'Failed to get schema');
+                }
+
+                // Step 2: Collect current form data
+                const currentFormData = collectCurrentFormData(recordType);
+                
+                // Step 3: Build AI prompt
+                const aiPrompt = buildAIPrompt(recordType, nameValue, currentFormData, schemaData);
+
+                // Step 4: Call OpenAI via existing endpoint
+                const aiResponse = await callOpenAIForFieldFilling(aiPrompt);
+
+                // Step 5: Parse AI response and fill form
+                await populateFormFromAIResponse(recordType, aiResponse, schemaData);
+
+                showMessage('publish-success', `✅ AI has filled in the ${recordType} fields based on "${nameValue}"`, 'success');
+
+            } catch (error) {
+                console.error('[Smart AI] Error:', error);
+                showMessage('publish-status', 'AI fill-in failed: ' + error.message, 'error');
+            } finally {
+                // Reset button state
+                const button = event.target;
+                button.textContent = originalText;
+                button.disabled = false;
+            }
+        }
+
+        /**
+         * Get the name field element for a given record type
+         */
+        function getNameFieldForRecordType(recordType) {
+            const fieldMap = {
+                'post': 'post-title',
+                'recipe': 'recipe-title', 
+                'exercise': 'exercise-name',
+                'workout': 'workout-title',
+                'fitnessEquipment': 'equipment-name',
+                'video': 'video-title',
+                'audio': 'audio-title',
+                'image': 'image-title',
+                'text': 'text-title',
+                'organization': 'org-name',
+                'media': 'media-name'
+            };
+            
+            const fieldId = fieldMap[recordType];
+            return fieldId ? document.getElementById(fieldId) : null;
+        }
+
+        /**
+         * Populate form from a record object
+         */
+        async function populateFormFromRecord(recordType, record) {
+            console.log(`[Smart Copy] Populating ${recordType} form from record:`, record);
+            
+            const basicData = record.data?.basic || {};
+            const specificData = record.data?.[recordType] || {};
+
+            switch (recordType) {
+                case 'recipe':
+                    await populateRecipeForm(basicData, specificData);
+                    break;
+                case 'exercise':
+                    await populateExerciseForm(basicData, specificData);
+                    break;
+                case 'workout':
+                    await populateWorkoutForm(basicData, specificData);
+                    break;
+                case 'post':
+                    await populatePostForm(basicData, specificData);
+                    break;
+                case 'fitnessEquipment':
+                    await populateFitnessEquipmentForm(basicData, specificData);
+                    break;
+                case 'video':
+                    await populateVideoForm(basicData, specificData);
+                    break;
+                case 'audio':
+                    await populateAudioForm(basicData, specificData);
+                    break;
+                case 'image':
+                    await populateImageForm(basicData, specificData);
+                    break;
+                case 'text':
+                    await populateTextForm(basicData, specificData);
+                    break;
+                case 'organization':
+                    await populateOrganizationForm(basicData, specificData);
+                    break;
+                case 'media':
+                    await populateMediaForm(basicData, specificData);
+                    break;
+                default:
+                    console.warn(`[Smart Copy] No populate function for record type: ${recordType}`);
+            }
+        }
+
+        /**
+         * Collect current form data for AI context
+         */
+        function collectCurrentFormData(recordType) {
+            const formData = {};
+            
+            // Get all form inputs for this record type
+            const form = document.querySelector('.publish-form');
+            if (!form) return formData;
+
+            // Collect all input values
+            const inputs = form.querySelectorAll('input, textarea, select');
+            inputs.forEach(input => {
+                if (input.value && input.value.trim()) {
+                    formData[input.id] = input.value.trim();
+                }
+            });
+
+            return formData;
+        }
+
+        /**
+         * Build AI prompt for field filling
+         */
+        function buildAIPrompt(recordType, nameValue, currentFormData, schemaData) {
+            const prompt = `You are an expert assistant helping to fill out a ${recordType} record form. 
+
+Given this information:
+- Record Type: ${recordType}
+- Name/Title: "${nameValue}"
+- Current form data: ${JSON.stringify(currentFormData, null, 2)}
+- Schema information: ${JSON.stringify(schemaData.field_descriptions, null, 2)}
+- Example data: ${JSON.stringify(schemaData.example, null, 2)}
+
+Please provide a JSON response with suggested values for ALL the empty fields in the form. Base your suggestions on the name "${nameValue}" and any existing form data.
+
+For enum fields, use the exact enum codes from the schema.
+For DID references, use placeholder values like "did:arweave:placeholder123...".
+For arrays, provide realistic arrays with 2-3 items.
+For numeric fields, provide realistic numbers.
+For text fields, provide helpful content.
+
+Return ONLY a valid JSON object with the field values, no additional text or explanation.`;
+
+            return prompt;
+        }
+
+        /**
+         * Call OpenAI for field filling
+         */
+        async function callOpenAIForFieldFilling(prompt) {
+            // Use the existing OpenAI integration pattern from voice.js
+            const conversation = [
+                {
+                    role: "system",
+                    content: "You are a helpful assistant that fills out forms based on context. Return only valid JSON responses."
+                },
+                {
+                    role: "user", 
+                    content: prompt
+                }
+            ];
+
+            try {
+                // Try to use the existing voice chat endpoint for OpenAI
+                const response = await fetch('/api/voice/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                    },
+                    body: JSON.stringify({
+                        text: prompt,
+                        model: 'gpt-4o-mini',
+                        processing_mode: 'llm-gpt-4o-mini',
+                        return_audio: false,
+                        conversation_history: []
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.response_text) {
+                    return data.response_text;
+                } else {
+                    throw new Error('No response from AI');
+                }
+            } catch (error) {
+                console.error('[Smart AI] OpenAI call failed:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Parse AI response and populate form
+         */
+        async function populateFormFromAIResponse(recordType, aiResponse, schemaData) {
+            try {
+                // Try to extract JSON from AI response
+                let jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) {
+                    throw new Error('AI did not return valid JSON');
+                }
+
+                const aiData = JSON.parse(jsonMatch[0]);
+                console.log(`[Smart AI] Parsed AI data:`, aiData);
+
+                // Map AI response to form fields
+                await populateFormFromAIData(recordType, aiData);
+
+            } catch (error) {
+                console.error('[Smart AI] Error parsing AI response:', error);
+                throw new Error('Failed to parse AI response');
+            }
+        }
+
+        /**
+         * Populate form from AI-generated data
+         */
+        async function populateFormFromAIData(recordType, aiData) {
+            // Extract basic and specific data
+            const basicData = aiData.basic || {};
+            const specificData = aiData[recordType] || {};
+
+            // Use the same populate functions as copy from record
+            switch (recordType) {
+                case 'recipe':
+                    await populateRecipeForm(basicData, specificData);
+                    break;
+                case 'exercise':
+                    await populateExerciseForm(basicData, specificData);
+                    break;
+                case 'workout':
+                    await populateWorkoutForm(basicData, specificData);
+                    break;
+                case 'post':
+                    await populatePostForm(basicData, specificData);
+                    break;
+                case 'fitnessEquipment':
+                    await populateFitnessEquipmentForm(basicData, specificData);
+                    break;
+                case 'video':
+                    await populateVideoForm(basicData, specificData);
+                    break;
+                case 'audio':
+                    await populateAudioForm(basicData, specificData);
+                    break;
+                case 'image':
+                    await populateImageForm(basicData, specificData);
+                    break;
+                case 'text':
+                    await populateTextForm(basicData, specificData);
+                    break;
+                case 'organization':
+                    await populateOrganizationForm(basicData, specificData);
+                    break;
+                case 'media':
+                    await populateMediaForm(basicData, specificData);
+                    break;
+                default:
+                    console.warn(`[Smart AI] No populate function for record type: ${recordType}`);
+            }
+        }
+
+        // ========================================================================
+        // FORM POPULATION FUNCTIONS
+        // ========================================================================
+
+        /**
+         * Populate recipe form with data
+         */
+        async function populateRecipeForm(basicData, recipeData) {
+            console.log('[Smart Copy] Populating recipe form:', { basicData, recipeData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('recipe-description', basicData.description);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('recipe-tags', basicData.tagItems.join(', '));
+            }
+
+            // Recipe-specific fields
+            if (recipeData.prep_time_mins) {
+                setFieldValue('recipe-prep-time', recipeData.prep_time_mins);
+            }
+            if (recipeData.cook_time_mins) {
+                setFieldValue('recipe-cook-time', recipeData.cook_time_mins);
+            }
+            if (recipeData.servings) {
+                setFieldValue('recipe-servings', recipeData.servings);
+            }
+            if (recipeData.cuisine) {
+                setFieldValue('recipe-cuisine', recipeData.cuisine);
+            }
+            if (recipeData.course) {
+                setFieldValue('recipe-course', recipeData.course);
+            }
+            if (recipeData.instructions) {
+                setFieldValue('recipe-instructions', recipeData.instructions);
+            }
+            if (recipeData.notes) {
+                setFieldValue('recipe-notes', recipeData.notes);
+            }
+
+            // Handle ingredients if they exist
+            if (recipeData.ingredient && Array.isArray(recipeData.ingredient)) {
+                await populateIngredientsFromData(recipeData);
+            }
+        }
+
+        /**
+         * Populate exercise form with data
+         */
+        async function populateExerciseForm(basicData, exerciseData) {
+            console.log('[Smart Copy] Populating exercise form:', { basicData, exerciseData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('exercise-description', basicData.description);
+            }
+            if (basicData.language) {
+                setFieldValue('exercise-language', basicData.language);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('exercise-tags', basicData.tagItems.join(', '));
+            }
+            if (basicData.avatar) {
+                setFieldValue('exercise-avatar', basicData.avatar);
+            }
+
+            // Exercise-specific fields
+            if (exerciseData.instructions && Array.isArray(exerciseData.instructions)) {
+                setFieldValue('exercise-instructions', exerciseData.instructions.join('\n'));
+            }
+            if (exerciseData.muscleGroups && Array.isArray(exerciseData.muscleGroups)) {
+                setFieldValue('exercise-muscle-groups', exerciseData.muscleGroups.join(', '));
+            }
+            if (exerciseData.difficulty) {
+                setFieldValue('exercise-difficulty', exerciseData.difficulty);
+            }
+            if (exerciseData.category) {
+                setFieldValue('exercise-category', exerciseData.category);
+            }
+            if (exerciseData.equipmentRequired && Array.isArray(exerciseData.equipmentRequired)) {
+                setFieldValue('exercise-equipment', exerciseData.equipmentRequired.join(', '));
+            }
+            if (exerciseData.exercise_type) {
+                setFieldValue('exercise-type', exerciseData.exercise_type);
+            }
+            if (exerciseData.measurement_type) {
+                setFieldValue('exercise-measurement-type', exerciseData.measurement_type);
+            }
+            if (exerciseData.est_duration_minutes) {
+                setFieldValue('exercise-duration', exerciseData.est_duration_minutes);
+            }
+            if (exerciseData.recommended_sets) {
+                setFieldValue('exercise-recommended-sets', exerciseData.recommended_sets);
+            }
+            if (exerciseData.recommended_reps) {
+                setFieldValue('exercise-recommended-reps', exerciseData.recommended_reps);
+            }
+            if (exerciseData.isBodyweight) {
+                setCheckboxValue('exercise-bodyweight', exerciseData.isBodyweight);
+            }
+        }
+
+        /**
+         * Populate workout form with data
+         */
+        async function populateWorkoutForm(basicData, workoutData) {
+            console.log('[Smart Copy] Populating workout form:', { basicData, workoutData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('workout-description', basicData.description);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('workout-goals', basicData.tagItems.join(', '));
+            }
+
+            // Workout-specific fields
+            if (workoutData.duration_mins) {
+                setFieldValue('workout-duration', workoutData.duration_mins);
+            }
+            if (workoutData.difficulty) {
+                setFieldValue('workout-difficulty', workoutData.difficulty);
+            }
+            if (workoutData.category) {
+                setFieldValue('workout-category', workoutData.category);
+            }
+            if (workoutData.equipment_required && Array.isArray(workoutData.equipment_required)) {
+                setFieldValue('workout-equipment', workoutData.equipment_required.join(', '));
+            }
+            if (workoutData.target_muscle_groups && Array.isArray(workoutData.target_muscle_groups)) {
+                setFieldValue('workout-muscles', workoutData.target_muscle_groups.join(', '));
+            }
+            if (workoutData.notes) {
+                setFieldValue('workout-notes', workoutData.notes);
+            }
+            if (workoutData.non_standard) {
+                setCheckboxValue('workout-non-standard', workoutData.non_standard);
+            }
+
+            // Handle exercises if they exist
+            if (workoutData.exercise && Array.isArray(workoutData.exercise)) {
+                await populateExercisesFromData(workoutData);
+            }
+        }
+
+        /**
+         * Populate post form with data
+         */
+        async function populatePostForm(basicData, postData) {
+            console.log('[Smart Copy] Populating post form:', { basicData, postData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('post-description', basicData.description);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('post-tags', basicData.tagItems.join(', '));
+            }
+            if (basicData.nsfw) {
+                setCheckboxValue('post-nsfw', basicData.nsfw);
+            }
+
+            // Post-specific fields
+            if (postData.articleText) {
+                setFieldValue('post-content', postData.articleText);
+            }
+            if (postData.bylineWriter) {
+                setFieldValue('post-author', postData.bylineWriter);
+            }
+            if (postData.bylineWritersTitle) {
+                setFieldValue('post-author-title', postData.bylineWritersTitle);
+            }
+            if (postData.bylineWritersLocation) {
+                setFieldValue('post-author-location', postData.bylineWritersLocation);
+            }
+            if (postData.webUrl) {
+                setFieldValue('post-web-url', postData.webUrl);
+            }
+            if (postData.featuredImage) {
+                setFieldValue('post-featured-image', postData.featuredImage);
+            }
+            if (postData.replyTo) {
+                setFieldValue('post-reply-to', postData.replyTo);
+            }
+        }
+
+        /**
+         * Populate fitness equipment form with data
+         */
+        async function populateFitnessEquipmentForm(basicData, equipmentData) {
+            console.log('[Smart Copy] Populating fitness equipment form:', { basicData, equipmentData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('equipment-description', basicData.description);
+            }
+            if (basicData.language) {
+                setFieldValue('equipment-language', basicData.language);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('equipment-tags', basicData.tagItems.join(', '));
+            }
+            if (basicData.avatar) {
+                setFieldValue('equipment-avatar', basicData.avatar);
+            }
+
+            // Equipment-specific fields
+            if (equipmentData.category) {
+                setFieldValue('equipment-category', equipmentData.category);
+            }
+            if (equipmentData.subcategory) {
+                setFieldValue('equipment-subcategory', equipmentData.subcategory);
+            }
+            if (equipmentData.muscle_groups && Array.isArray(equipmentData.muscle_groups)) {
+                setFieldValue('equipment-muscle-groups', equipmentData.muscle_groups.join(', '));
+            }
+            if (equipmentData.exercise_types && Array.isArray(equipmentData.exercise_types)) {
+                setFieldValue('equipment-exercise-types', equipmentData.exercise_types.join(', '));
+            }
+            if (equipmentData.difficulty_level) {
+                setFieldValue('equipment-difficulty', equipmentData.difficulty_level);
+            }
+            if (equipmentData.space_required) {
+                setFieldValue('equipment-space-required', equipmentData.space_required);
+            }
+            if (equipmentData.portability) {
+                setFieldValue('equipment-portability', equipmentData.portability);
+            }
+            if (equipmentData.price_range) {
+                setFieldValue('equipment-price-range', equipmentData.price_range);
+            }
+            if (equipmentData.maintenance_level) {
+                setFieldValue('equipment-maintenance', equipmentData.maintenance_level);
+            }
+            if (equipmentData.alternatives && Array.isArray(equipmentData.alternatives)) {
+                setFieldValue('equipment-alternatives', equipmentData.alternatives.join(', '));
+            }
+            if (equipmentData.safety_considerations) {
+                setFieldValue('equipment-safety', equipmentData.safety_considerations);
+            }
+            if (equipmentData.beginner_friendly) {
+                setCheckboxValue('equipment-beginner-friendly', equipmentData.beginner_friendly);
+            }
+            if (equipmentData.home_gym_suitable) {
+                setCheckboxValue('equipment-home-gym', equipmentData.home_gym_suitable);
+            }
+            if (equipmentData.commercial_grade) {
+                setCheckboxValue('equipment-commercial', equipmentData.commercial_grade);
+            }
+        }
+
+        /**
+         * Helper function to set field value safely
+         */
+        function setFieldValue(fieldId, value) {
+            const field = document.getElementById(fieldId);
+            if (field && value !== null && value !== undefined) {
+                field.value = value;
+                console.log(`[Smart Copy] Set ${fieldId} = "${value}"`);
+            }
+        }
+
+        /**
+         * Helper function to set checkbox value safely
+         */
+        function setCheckboxValue(fieldId, value) {
+            const field = document.getElementById(fieldId);
+            if (field && typeof value === 'boolean') {
+                field.checked = value;
+                console.log(`[Smart Copy] Set ${fieldId} = ${value}`);
+            }
+        }
+
+        /**
+         * Populate ingredients from recipe data
+         */
+        async function populateIngredientsFromData(recipeData) {
+            const container = document.getElementById('ingredients-container');
+            if (!container) return;
+
+            // Clear existing ingredients except the first row
+            const existingRows = container.querySelectorAll('.ingredient-row');
+            for (let i = 1; i < existingRows.length; i++) {
+                existingRows[i].remove();
+            }
+
+            const ingredients = recipeData.ingredient || [];
+            const amounts = recipeData.ingredient_amount || [];
+            const units = recipeData.ingredient_unit || [];
+
+            for (let i = 0; i < ingredients.length; i++) {
+                // Use existing row or create new one
+                let row;
+                if (i === 0) {
+                    row = existingRows[0];
+                } else {
+                    addIngredient();
+                    row = container.lastElementChild;
+                }
+
+                // Populate the row
+                const amountInput = row.querySelector('.ingredient-amount');
+                const unitInput = row.querySelector('.ingredient-unit');
+                const nameInput = row.querySelector('.ingredient-name');
+
+                if (amountInput && amounts[i]) {
+                    amountInput.value = amounts[i];
+                }
+                if (unitInput && units[i]) {
+                    unitInput.value = units[i];
+                }
+                if (nameInput && ingredients[i]) {
+                    // Handle both string names and DID references
+                    const ingredientName = typeof ingredients[i] === 'string' 
+                        ? ingredients[i].replace(/^did:arweave:/, '').substring(0, 20) + '...'
+                        : ingredients[i];
+                    nameInput.value = ingredientName;
+                }
+            }
+        }
+
+        /**
+         * Populate exercises from workout data
+         */
+        async function populateExercisesFromData(workoutData) {
+            const container = document.getElementById('exercises-container');
+            if (!container) return;
+
+            // Clear existing exercises except the first row
+            const existingRows = container.querySelectorAll('.exercise-row');
+            for (let i = 1; i < existingRows.length; i++) {
+                existingRows[i].remove();
+            }
+
+            const exercises = workoutData.exercise || [];
+            const sets = workoutData.exercise_sets || [];
+            const reps = workoutData.exercise_reps || [];
+            const rest = workoutData.exercise_rest_seconds || [];
+
+            for (let i = 0; i < exercises.length; i++) {
+                // Use existing row or create new one
+                let row;
+                if (i === 0) {
+                    row = existingRows[0];
+                } else {
+                    addExercise();
+                    row = container.lastElementChild;
+                }
+
+                // Populate the row
+                const nameInput = row.querySelector('.exercise-name');
+                const setsInput = row.querySelector('.exercise-sets');
+                const repsInput = row.querySelector('.exercise-reps');
+                const restInput = row.querySelector('.exercise-rest');
+
+                if (nameInput && exercises[i]) {
+                    // Handle both string names and DID references
+                    const exerciseName = typeof exercises[i] === 'string'
+                        ? exercises[i].replace(/^did:arweave:/, '').substring(0, 30)
+                        : exercises[i];
+                    nameInput.value = exerciseName;
+                }
+                if (setsInput && sets[i]) {
+                    setsInput.value = sets[i];
+                }
+                if (repsInput && reps[i]) {
+                    repsInput.value = reps[i];
+                }
+                if (restInput && rest[i]) {
+                    restInput.value = rest[i];
+                }
+            }
+        }
+
+        /**
+         * Populate video form with data
+         */
+        async function populateVideoForm(basicData, videoData) {
+            console.log('[Smart Copy] Populating video form:', { basicData, videoData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('video-description', basicData.description);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('video-tags', basicData.tagItems.join(', '));
+            }
+            if (basicData.nsfw) {
+                setCheckboxValue('video-nsfw', basicData.nsfw);
+            }
+
+            // Video-specific fields
+            if (videoData.webUrl) {
+                setFieldValue('video-url', videoData.webUrl);
+            }
+            if (videoData.duration) {
+                setFieldValue('video-duration', Math.ceil(videoData.duration / 60)); // Convert seconds to minutes
+            }
+            if (videoData.uploader) {
+                setFieldValue('video-channel', videoData.uploader);
+            }
+            if (videoData.thumbnail || videoData.thumbnailUrl) {
+                setFieldValue('video-thumbnail', videoData.thumbnail || videoData.thumbnailUrl);
+            }
+            if (videoData.category) {
+                setFieldValue('video-category', videoData.category);
+            }
+        }
+
+        /**
+         * Populate audio form with data
+         */
+        async function populateAudioForm(basicData, audioData) {
+            console.log('[Smart Copy] Populating audio form:', { basicData, audioData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('audio-description', basicData.description);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('audio-tags', basicData.tagItems.join(', '));
+            }
+            if (basicData.nsfw) {
+                setCheckboxValue('audio-nsfw', basicData.nsfw);
+            }
+
+            // Audio-specific fields
+            if (audioData.webUrl) {
+                setFieldValue('audio-url', audioData.webUrl);
+            }
+            if (audioData.duration) {
+                setFieldValue('audio-duration', Math.ceil(audioData.duration / 60)); // Convert seconds to minutes
+            }
+            if (audioData.artist) {
+                setFieldValue('audio-artist', audioData.artist);
+            }
+            if (audioData.album) {
+                setFieldValue('audio-album', audioData.album);
+            }
+            if (audioData.genre) {
+                setFieldValue('audio-genre', audioData.genre);
+            }
+            if (audioData.coverArt) {
+                setFieldValue('audio-cover', audioData.coverArt);
+            }
+        }
+
+        /**
+         * Populate image form with data
+         */
+        async function populateImageForm(basicData, imageData) {
+            console.log('[Smart Copy] Populating image form:', { basicData, imageData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('image-description', basicData.description);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('image-tags', basicData.tagItems.join(', '));
+            }
+            if (basicData.nsfw) {
+                setCheckboxValue('image-nsfw', basicData.nsfw);
+            }
+
+            // Image-specific fields
+            if (imageData.webUrl) {
+                setFieldValue('image-url', imageData.webUrl);
+            }
+            if (imageData.altText) {
+                setFieldValue('image-alt-text', imageData.altText);
+            }
+            if (imageData.photographer) {
+                setFieldValue('image-photographer', imageData.photographer);
+            }
+            if (imageData.location) {
+                setFieldValue('image-location', imageData.location);
+            }
+            if (imageData.category) {
+                setFieldValue('image-category', imageData.category);
+            }
+        }
+
+        /**
+         * Populate text form with data
+         */
+        async function populateTextForm(basicData, textData) {
+            console.log('[Smart Copy] Populating text form:', { basicData, textData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('text-description', basicData.description);
+            }
+            if (basicData.language) {
+                setFieldValue('text-language', basicData.language);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('text-tags', basicData.tagItems.join(', '));
+            }
+            if (basicData.nsfw) {
+                setCheckboxValue('text-nsfw', basicData.nsfw);
+            }
+
+            // Text-specific fields
+            if (textData.content) {
+                setFieldValue('text-content', textData.content);
+            }
+            if (textData.type) {
+                setFieldValue('text-type', textData.type);
+            }
+            if (textData.author) {
+                setFieldValue('text-author', textData.author);
+            }
+        }
+
+        /**
+         * Populate organization form with data
+         */
+        async function populateOrganizationForm(basicData, orgData) {
+            console.log('[Smart Copy] Populating organization form:', { basicData, orgData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('org-description', basicData.description);
+            }
+            if (basicData.language) {
+                setFieldValue('org-language', basicData.language);
+            }
+            if (basicData.webUrl) {
+                setFieldValue('org-web-url', basicData.webUrl);
+            }
+
+            // Organization-specific fields
+            if (orgData.org_handle) {
+                setFieldValue('org-handle', orgData.org_handle);
+            }
+            if (orgData.membership_policy) {
+                setFieldValue('org-membership-policy', orgData.membership_policy);
+            }
+        }
+
+        /**
+         * Populate media form with data
+         */
+        async function populateMediaForm(basicData, mediaData) {
+            console.log('[Smart Copy] Populating media form:', { basicData, mediaData });
+            
+            // Basic fields
+            if (basicData.description) {
+                setFieldValue('media-description', basicData.description);
+            }
+            if (basicData.language) {
+                setFieldValue('media-language', basicData.language);
+            }
+            if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
+                setFieldValue('media-tags', basicData.tagItems.join(', '));
+            }
+            if (basicData.nsfw) {
+                setCheckboxValue('media-nsfw', basicData.nsfw);
+            }
+
+            // Media-specific fields - these are mostly handled by file upload
+            // but we can set access level if available
+            if (mediaData.access_level) {
+                setFieldValue('media-access-level', mediaData.access_level);
+            }
+        }
+
         // Header Search and Filters Drawer Functions
         function handleHeaderSearch(event) {
             if (event.key === 'Enter') {
@@ -7350,7 +8337,17 @@
                         <!-- Basic Information -->
                         <div class="form-group">
                             <label for="post-title">Title:</label>
-                            <input type="text" id="post-title" required placeholder="Enter post title...">
+                            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                                <input type="text" id="post-title" required placeholder="Enter post title..." style="flex: 1;" oninput="onNameFieldChange('post', this.value)">
+                                <div id="post-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                    <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('post')" title="Copy data from the most recent matching record">
+                                        📋 Copy From Latest
+                                    </button>
+                                    <button type="button" class="btn-small" onclick="fillInWithAI('post')" title="Use AI to fill in remaining fields">
+                                        🤖 Fill In With AI
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group">
@@ -7520,7 +8517,17 @@
                     <!-- Video Information -->
                     <div class="form-group">
                         <label for="video-title">Title:</label>
-                        <input type="text" id="video-title" required placeholder="Video title">
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <input type="text" id="video-title" required placeholder="Video title" style="flex: 1;" oninput="onNameFieldChange('video', this.value)">
+                            <div id="video-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('video')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('video')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -7607,7 +8614,17 @@
                     <!-- Audio Information -->
                     <div class="form-group">
                         <label for="audio-title">Title:</label>
-                        <input type="text" id="audio-title" required placeholder="Audio title">
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <input type="text" id="audio-title" required placeholder="Audio title" style="flex: 1;" oninput="onNameFieldChange('audio', this.value)">
+                            <div id="audio-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('audio')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('audio')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -7705,7 +8722,17 @@
                     <!-- Image Information -->
                     <div class="form-group">
                         <label for="image-title">Title:</label>
-                        <input type="text" id="image-title" required placeholder="Image title">
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <input type="text" id="image-title" required placeholder="Image title" style="flex: 1;" oninput="onNameFieldChange('image', this.value)">
+                            <div id="image-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('image')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('image')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -7775,7 +8802,17 @@
                     <!-- Recipe Basic Info -->
                     <div class="form-group">
                         <label for="recipe-title">Recipe Name:</label>
-                        <input type="text" id="recipe-title" required placeholder="e.g., Mediterranean Grilled Chicken">
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <input type="text" id="recipe-title" required placeholder="e.g., Mediterranean Grilled Chicken" style="flex: 1;" oninput="onNameFieldChange('recipe', this.value)">
+                            <div id="recipe-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('recipe')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('recipe')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -7883,7 +8920,17 @@
                     <!-- Workout Basic Info -->
                     <div class="form-group">
                         <label for="workout-title">Workout Name:</label>
-                        <input type="text" id="workout-title" required placeholder="e.g., Full Body HIIT Workout">
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <input type="text" id="workout-title" required placeholder="e.g., Full Body HIIT Workout" style="flex: 1;" oninput="onNameFieldChange('workout', this.value)">
+                            <div id="workout-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('workout')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('workout')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -7985,7 +9032,17 @@
                     <!-- Text Document Info -->
                     <div class="form-group">
                         <label for="text-title">Document Title:</label>
-                        <input type="text" id="text-title" required placeholder="Document title">
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <input type="text" id="text-title" required placeholder="Document title" style="flex: 1;" oninput="onNameFieldChange('text', this.value)">
+                            <div id="text-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('text')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('text')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -8074,8 +9131,20 @@
                     <!-- Organization Basic Info -->
                     <div class="form-group">
                         <label for="org-name">Organization Name:</label>
-                        <input type="text" id="org-name" required placeholder="e.g., ALEXANDRIA Research Foundation">
-                        <small>The full, human-readable name of your organization</small>
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <input type="text" id="org-name" required placeholder="e.g., ALEXANDRIA Research Foundation" style="width: 100%;" oninput="onNameFieldChange('organization', this.value)">
+                                <small>The full, human-readable name of your organization</small>
+                            </div>
+                            <div id="organization-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('organization')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('organization')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -8355,7 +9424,17 @@
                     <!-- Exercise Basic Info -->
                     <div class="form-group">
                         <label for="exercise-name">Exercise Name:</label>
-                        <input type="text" id="exercise-name" required placeholder="e.g., Barbell Bench Press">
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <input type="text" id="exercise-name" required placeholder="e.g., Barbell Bench Press" style="flex: 1;" oninput="onNameFieldChange('exercise', this.value)">
+                            <div id="exercise-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('exercise')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('exercise')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -8519,7 +9598,17 @@
                     <!-- Equipment Basic Info -->
                     <div class="form-group">
                         <label for="equipment-name">Equipment Name:</label>
-                        <input type="text" id="equipment-name" required placeholder="e.g., Dumbbells">
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <input type="text" id="equipment-name" required placeholder="e.g., Dumbbells" style="flex: 1;" oninput="onNameFieldChange('fitnessEquipment', this.value)">
+                            <div id="fitnessEquipment-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('fitnessEquipment')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('fitnessEquipment')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -8727,8 +9816,20 @@
                     <!-- Media Basic Info -->
                     <div class="form-group">
                         <label for="media-name">Media Title:</label>
-                        <input type="text" id="media-name" placeholder="Descriptive title for the media file">
-                        <small>If empty, will use the original filename</small>
+                        <div style="display: flex; gap: 10px; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <input type="text" id="media-name" placeholder="Descriptive title for the media file" style="width: 100%;" oninput="onNameFieldChange('media', this.value)">
+                                <small>If empty, will use the original filename</small>
+                            </div>
+                            <div id="media-smart-buttons" class="smart-buttons" style="display: none; gap: 8px;">
+                                <button type="button" class="btn-small btn-secondary" onclick="copyFromLatestRecord('media')" title="Copy data from the most recent matching record">
+                                    📋 Copy From Latest
+                                </button>
+                                <button type="button" class="btn-small" onclick="fillInWithAI('media')" title="Use AI to fill in remaining fields">
+                                    🤖 Fill In With AI
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
