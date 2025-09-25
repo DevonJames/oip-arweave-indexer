@@ -86,6 +86,8 @@ COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
 COPY public ./public
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY frontend ./frontend
 COPY middleware ./middleware
 COPY socket ./socket
@@ -130,6 +132,7 @@ COPY start-services.sh ./start-services.sh
 RUN sed -i 's/\r$//' start-services.sh && chmod +x start-services.sh
 
 # Command to run all services (API + Next.js frontend)
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["./start-services.sh"]
 
 # Add healthcheck for the app

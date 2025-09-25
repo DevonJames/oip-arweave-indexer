@@ -80,6 +80,7 @@ services:
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
+      - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
@@ -116,6 +117,7 @@ services:
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
+      - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
@@ -144,6 +146,7 @@ services:
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
+      - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
@@ -174,6 +177,7 @@ services:
       - ./media:/usr/src/app/media
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
+      - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
@@ -197,13 +201,14 @@ services:
       - .env
     ports:
       - "3000:3000"  # Next.js frontend
-      - "3005:3005"  # Express API
+      - "${PORT:-3005}:${PORT:-3005}"  # Express API
       - "9229:9229"
     volumes:
       - ./media:/usr/src/app/media
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
+      - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}

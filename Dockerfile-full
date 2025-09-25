@@ -33,6 +33,8 @@ RUN chmod +x wait-for-it.sh
 
 # Copy all application code including services
 COPY . .
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Include all necessary directories
 COPY config ./config
@@ -64,6 +66,7 @@ USER node
 RUN npm rebuild
 
 # Command to run all services
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["sh", "-c", "\
   ./wait-for-it.sh elasticsearch:9200 --timeout=90 --strict -- \
   ./wait-for-it.sh speech-synthesizer:8082 --timeout=600 --strict -- \
