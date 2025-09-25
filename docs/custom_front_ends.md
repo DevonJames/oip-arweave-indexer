@@ -294,6 +294,11 @@ git clone https://github.com/your-org/oip-arweave-indexer.git
 
 # Create your custom public directory
 mkdir public
+
+# Your structure should look like:
+# RockHoppersGame/
+# ├── oip-arweave-indexer/    # OIP backend
+# └── public/                 # Your custom frontend
 ```
 
 ### 2. Configure Environment Variables
