@@ -3818,6 +3818,7 @@
                             <option value="post">Post / Article</option>
                             <option value="video">Video</option>
                             <option value="audio">Audio / Podcast</option>
+                            <option value="music">Music</option>
                             <option value="image">Image</option>
                             <option value="recipe">Recipe</option>
                             <option value="workout">Workout</option>
@@ -5688,6 +5689,7 @@
                 'fitnessEquipment': 'equipment-name',
                 'video': 'video-title',
                 'audio': 'audio-title',
+                'music': 'audio-title',
                 'image': 'image-title',
                 'text': 'text-title',
                 'organization': 'org-name',
@@ -5728,6 +5730,9 @@
                     break;
                 case 'audio':
                     await populateAudioForm(basicData, specificData);
+                    break;
+                case 'music':
+                    await populateAudioForm(basicData, record.data?.audio, record.data?.music);
                     break;
                 case 'image':
                     await populateImageForm(basicData, specificData);
@@ -6214,6 +6219,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     break;
                 case 'audio':
                     await populateAudioForm(basicData, specificData);
+                    break;
+                case 'music':
+                    await populateAudioForm(basicData, aiData.audio, aiData.music);
                     break;
                 case 'image':
                     await populateImageForm(basicData, specificData);
@@ -6789,12 +6797,15 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         /**
          * Populate audio form with data
          */
-        async function populateAudioForm(basicData, audioData) {
-            console.log('[Smart Copy] Populating audio form:', { basicData, audioData });
+        async function populateAudioForm(basicData, audioData, musicData = null) {
+            console.log('[Smart Copy] Populating audio form:', { basicData, audioData, musicData });
             
             // Basic fields
             if (basicData.description) {
                 setFieldValue('audio-description', basicData.description);
+            }
+            if (basicData.language) {
+                setFieldValue('audio-language', basicData.language);
             }
             if (basicData.tagItems && Array.isArray(basicData.tagItems)) {
                 setFieldValue('audio-tags', basicData.tagItems.join(', '));
@@ -6808,19 +6819,57 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 setFieldValue('audio-url', audioData.webUrl);
             }
             if (audioData.duration) {
-                setFieldValue('audio-duration', Math.ceil(audioData.duration / 60)); // Convert seconds to minutes
+                setFieldValue('audio-duration', audioData.duration); // Keep as seconds
             }
-            if (audioData.artist) {
-                setFieldValue('audio-artist', audioData.artist);
+            if (audioData.creator) {
+                setFieldValue('audio-creator', audioData.creator);
             }
-            if (audioData.album) {
-                setFieldValue('audio-album', audioData.album);
-            }
-            if (audioData.genre) {
-                setFieldValue('audio-genre', audioData.genre);
-            }
-            if (audioData.coverArt) {
-                setFieldValue('audio-cover', audioData.coverArt);
+
+            // If music data is present, populate music fields and set audio type
+            if (musicData) {
+                setFieldValue('audio-type', 'music');
+                updateAudioTypeInterface(); // Show music fields
+                
+                if (musicData.genre) {
+                    setFieldValue('music-genre', musicData.genre);
+                }
+                if (musicData.subGenre) {
+                    setFieldValue('music-sub-genre', musicData.subGenre);
+                }
+                if (musicData.bpm) {
+                    setFieldValue('music-bpm', musicData.bpm);
+                }
+                if (musicData.key) {
+                    setFieldValue('music-key', musicData.key);
+                }
+                if (musicData.sampleRateHz) {
+                    setFieldValue('music-sample-rate', musicData.sampleRateHz);
+                }
+                if (musicData.bitDepth) {
+                    setFieldValue('music-bit-depth', musicData.bitDepth);
+                }
+                if (musicData.album) {
+                    setFieldValue('music-album', musicData.album);
+                }
+                if (musicData.trackNumber) {
+                    setFieldValue('music-track-number', musicData.trackNumber);
+                }
+                if (musicData.isrc) {
+                    setFieldValue('music-isrc', musicData.isrc);
+                }
+                if (musicData.lyrics) {
+                    setFieldValue('music-lyrics', musicData.lyrics);
+                }
+                if (musicData.composerItems && Array.isArray(musicData.composerItems)) {
+                    setFieldValue('music-composers', musicData.composerItems.join(', '));
+                }
+                if (musicData.performerItems && Array.isArray(musicData.performerItems)) {
+                    setFieldValue('music-performers', musicData.performerItems.join(', '));
+                }
+            } else {
+                // Regular audio record, hide music fields
+                setFieldValue('audio-type', 'podcast');
+                updateAudioTypeInterface();
             }
         }
 
@@ -8774,6 +8823,14 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 case 'audio':
                     interfaceContainer.innerHTML = createAudioInterface();
                     break;
+                case 'music':
+                    interfaceContainer.innerHTML = createAudioInterface();
+                    // Set audio type to music after interface is loaded
+                    setTimeout(() => {
+                        document.getElementById('audio-type').value = 'music';
+                        updateAudioTypeInterface();
+                    }, 100);
+                    break;
                 case 'image':
                     interfaceContainer.innerHTML = createImageInterface();
                     break;
@@ -9118,6 +9175,16 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 <div class="publish-form">
                     <h3>🎵 Audio / Podcast Publishing</h3>
                     
+                    <!-- Audio Type Selection -->
+                    <div class="form-group">
+                        <label for="audio-type">Audio Type:</label>
+                        <select id="audio-type" onchange="updateAudioTypeInterface()">
+                            <option value="music">Music</option>
+                            <option value="podcast" disabled style="color: #999;">Podcast (Not yet supported)</option>
+                        </select>
+                        <small>Select the type of audio content you're publishing</small>
+                    </div>
+                    
                     <!-- Audio Source -->
                     <div class="form-group">
                         <label for="audio-source">Audio Source:</label>
@@ -9155,44 +9222,136 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <textarea id="audio-description" placeholder="Audio description..." rows="4"></textarea>
                     </div>
 
-                    <!-- Audio Metadata -->
+                    <!-- Language Selection -->
                     <div class="form-group">
-                        <label for="audio-duration">Duration (minutes):</label>
-                        <input type="number" id="audio-duration" placeholder="e.g., 45">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="audio-artist">Artist/Creator:</label>
-                        <input type="text" id="audio-artist" placeholder="Artist or creator name">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="audio-album">Album/Series:</label>
-                        <input type="text" id="audio-album" placeholder="Album or podcast series name">
-                    </div>
-
-                    <!-- Cover Art -->
-                    <div class="form-group">
-                        <label for="audio-cover">Cover Art URL:</label>
-                        <input type="url" id="audio-cover" placeholder="https://example.com/cover.jpg">
-                    </div>
-
-                    <!-- Genre and Tags -->
-                    <div class="form-group">
-                        <label for="audio-genre">Genre:</label>
-                        <select id="audio-genre">
-                            <option value="">Select genre</option>
-                            <option value="podcast">Podcast</option>
-                            <option value="music">Music</option>
-                            <option value="audiobook">Audiobook</option>
-                            <option value="interview">Interview</option>
-                            <option value="education">Education</option>
-                            <option value="comedy">Comedy</option>
-                            <option value="news">News</option>
-                            <option value="other">Other</option>
+                        <label for="audio-language">Language:</label>
+                        <select id="audio-language">
+                            <option value="en">English</option>
+                            <option value="es">Spanish; Castilian</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="it">Italian</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="zh">Chinese</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="ar">Arabic</option>
+                            <option value="hi">Hindi</option>
+                            <option value="ru">Russian</option>
                         </select>
                     </div>
 
+                    <!-- Audio Metadata -->
+                    <div class="form-group">
+                        <label for="audio-duration">Duration (seconds):</label>
+                        <input type="number" id="audio-duration" placeholder="e.g., 225 (3:45)">
+                        <small>Duration in seconds (will be auto-detected for uploaded files)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="audio-creator">Creator/Artist:</label>
+                        <input type="text" id="audio-creator" placeholder="Artist or creator name">
+                    </div>
+
+                    <!-- Music-specific fields (shown when audio type is music) -->
+                    <div id="music-fields" style="display: block;">
+                        <div class="form-group">
+                            <label for="music-genre">Genre:</label>
+                            <select id="music-genre">
+                                <option value="">Select genre</option>
+                                <option value="Classical">Classical</option>
+                                <option value="Rock">Rock</option>
+                                <option value="Pop">Pop</option>
+                                <option value="Hip-Hop">Hip-Hop</option>
+                                <option value="Jazz">Jazz</option>
+                                <option value="Blues">Blues</option>
+                                <option value="Country">Country</option>
+                                <option value="Electronic">Electronic</option>
+                                <option value="Folk">Folk</option>
+                                <option value="R&B">R&B</option>
+                                <option value="Reggae">Reggae</option>
+                                <option value="Metal">Metal</option>
+                                <option value="Punk">Punk</option>
+                                <option value="Alternative">Alternative</option>
+                                <option value="Indie">Indie</option>
+                                <option value="World">World</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="music-sub-genre">Sub-Genre:</label>
+                            <input type="text" id="music-sub-genre" placeholder="e.g., Progressive Rock, Romantic">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label for="music-bpm">BPM (Beats Per Minute):</label>
+                                <input type="number" id="music-bpm" placeholder="e.g., 120" min="40" max="200">
+                            </div>
+                            <div class="form-group">
+                                <label for="music-key">Musical Key:</label>
+                                <input type="text" id="music-key" placeholder="e.g., C Major, A Minor">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label for="music-sample-rate">Sample Rate (Hz):</label>
+                                <select id="music-sample-rate">
+                                    <option value="44100" selected>44,100 Hz (CD Quality)</option>
+                                    <option value="48000">48,000 Hz (Professional)</option>
+                                    <option value="96000">96,000 Hz (High-Res)</option>
+                                    <option value="192000">192,000 Hz (Ultra High-Res)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="music-bit-depth">Bit Depth:</label>
+                                <select id="music-bit-depth">
+                                    <option value="16" selected>16-bit (CD Quality)</option>
+                                    <option value="24">24-bit (Professional)</option>
+                                    <option value="32">32-bit (Ultra High-Res)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="music-album">Album:</label>
+                            <input type="text" id="music-album" placeholder="Album or collection name">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label for="music-track-number">Track Number:</label>
+                                <input type="number" id="music-track-number" placeholder="e.g., 1" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="music-isrc">ISRC Code:</label>
+                                <input type="text" id="music-isrc" placeholder="e.g., US-ABC-12-34567">
+                                <small>International Standard Recording Code</small>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="music-composers">Composers (comma-separated):</label>
+                            <input type="text" id="music-composers" placeholder="Ludwig van Beethoven, Wolfgang Amadeus Mozart">
+                            <small>Names of composers or songwriters</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="music-performers">Performers (comma-separated):</label>
+                            <input type="text" id="music-performers" placeholder="Vienna Philharmonic, John Doe">
+                            <small>Names of performers, bands, or orchestras</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="music-lyrics">Lyrics DID Reference:</label>
+                            <input type="text" id="music-lyrics" placeholder="did:arweave:... (optional)">
+                            <small>Reference to a text record containing the lyrics</small>
+                        </div>
+                    </div>
+
+                    <!-- Tags -->
                     <div class="form-group">
                         <label for="audio-tags">Tags:</label>
                         <input type="text" id="audio-tags" placeholder="tag1, tag2, tag3">
@@ -9202,14 +9361,27 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     <div class="form-group">
                         <label>Publishing Options:</label>
                         <div style="margin-top: 10px;">
-                            <label><input type="checkbox" id="audio-arweave" checked> Store on Arweave</label><br>
-                            <label><input type="checkbox" id="audio-ipfs"> Store on IPFS</label><br>
                             <label><input type="checkbox" id="audio-nsfw"> NSFW Content</label>
                         </div>
                     </div>
 
+                    <!-- File Upload Progress -->
+                    <div id="audio-upload-progress" class="upload-progress hidden" style="margin: 15px 0;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="progress-text">Ready to upload...</div>
+                    </div>
+
+                    <!-- Audio Preview -->
+                    <div id="audio-preview" class="media-preview hidden" style="margin: 15px 0; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                        <h4>Audio Preview:</h4>
+                        <div id="audio-preview-content"></div>
+                        <div id="audio-info" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+                    </div>
+
                     <button onclick="publishAudio()" class="btn-primary" style="width: 100%; margin-top: 20px;">
-                        🎵 Publish Audio
+                        <span id="audio-publish-text">🎵 Publish Audio</span>
                     </button>
                 </div>
             `;
@@ -13450,6 +13622,112 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             }
         }
 
+        function updateAudioTypeInterface() {
+            const audioType = document.getElementById('audio-type').value;
+            const musicFields = document.getElementById('music-fields');
+            
+            if (audioType === 'music') {
+                musicFields.style.display = 'block';
+            } else {
+                musicFields.style.display = 'none';
+            }
+        }
+
+        function updateAudioInterface() {
+            const source = document.getElementById('audio-source').value;
+            const inputSection = document.getElementById('audio-input-section');
+            
+            switch (source) {
+                case 'url':
+                    inputSection.innerHTML = `
+                        <div class="form-group">
+                            <label for="audio-url">Audio URL:</label>
+                            <input type="url" id="audio-url" placeholder="https://example.com/audio.mp3">
+                        </div>
+                    `;
+                    break;
+                case 'upload':
+                    inputSection.innerHTML = `
+                        <div class="form-group">
+                            <label for="audio-file">Upload Audio File:</label>
+                            <input type="file" id="audio-file" accept="audio/*" onchange="updateAudioFilePreview()">
+                            <small>Supported: MP3, WAV, FLAC, OGG, AAC, M4A</small>
+                        </div>
+                        
+                        <!-- Detected File Type Display -->
+                        <div id="detected-audio-type" class="form-group hidden" style="background: #f0f4ff; padding: 10px; border-radius: 6px; border: 1px solid #c7d2fe;">
+                            <label>Detected Audio Type:</label>
+                            <div id="detected-audio-display" style="font-weight: bold; color: #3730a3;"></div>
+                            <small id="detected-audio-description"></small>
+                        </div>
+                    `;
+                    break;
+            }
+        }
+
+        function updateAudioFilePreview() {
+            const fileInput = document.getElementById('audio-file');
+            const detectedTypeDiv = document.getElementById('detected-audio-type');
+            const typeDisplay = document.getElementById('detected-audio-display');
+            const typeDescription = document.getElementById('detected-audio-description');
+            
+            if (fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                const mimeType = file.type;
+                let description = '';
+                
+                if (mimeType.startsWith('audio/')) {
+                    description = 'Will create an OIP audio record with BitTorrent distribution and streaming support';
+                } else {
+                    description = 'Unsupported file type - please select an audio file';
+                }
+                
+                typeDisplay.textContent = 'AUDIO Record';
+                typeDescription.textContent = description;
+                detectedTypeDiv.classList.remove('hidden');
+                
+                // Auto-populate name if empty
+                const nameInput = document.getElementById('audio-title');
+                if (!nameInput.value) {
+                    // Use filename without extension as default name
+                    const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+                    nameInput.value = nameWithoutExt;
+                }
+
+                // Try to extract audio duration and other metadata
+                extractAudioMetadata(file);
+            } else {
+                detectedTypeDiv.classList.add('hidden');
+            }
+        }
+
+        async function extractAudioMetadata(file) {
+            try {
+                const audio = document.createElement('audio');
+                audio.preload = 'metadata';
+                
+                audio.onloadedmetadata = () => {
+                    const duration = Math.floor(audio.duration) || 0;
+                    const durationInput = document.getElementById('audio-duration');
+                    if (durationInput && !durationInput.value && duration > 0) {
+                        durationInput.value = duration;
+                    }
+                    
+                    console.log(`🎵 Auto-detected audio duration: ${duration} seconds`);
+                    URL.revokeObjectURL(audio.src);
+                };
+                
+                audio.onerror = () => {
+                    console.warn('Could not extract audio metadata');
+                    URL.revokeObjectURL(audio.src);
+                };
+                
+                audio.src = URL.createObjectURL(file);
+            } catch (error) {
+                console.warn('Could not extract audio metadata:', error);
+            }
+        }
+
         // Dynamic ingredient/exercise management
         function addIngredient() {
             const container = document.getElementById('ingredients-container');
@@ -14299,6 +14577,316 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             } catch (error) {
                 showMessage('publish-status', 'Network error: ' + error.message, 'error');
             }
+        }
+
+        async function publishAudio() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for audio publishing. Please set your token first.', 'error');
+                    return;
+                }
+
+                const audioType = document.getElementById('audio-type').value;
+                const audioSource = document.getElementById('audio-source').value;
+                
+                // Get basic form data
+                const audioTitle = document.getElementById('audio-title').value.trim();
+                const audioDescription = document.getElementById('audio-description').value.trim();
+                const audioLanguage = document.getElementById('audio-language').value;
+                const audioTags = document.getElementById('audio-tags').value.split(',').map(t => t.trim()).filter(t => t);
+                const audioNsfw = document.getElementById('audio-nsfw').checked;
+                const audioDuration = parseInt(document.getElementById('audio-duration').value) || 0;
+                const audioCreator = document.getElementById('audio-creator').value.trim();
+
+                if (!audioTitle) {
+                    showMessage('publish-status', 'Please fill in audio title', 'error');
+                    return;
+                }
+
+                // Get storage type
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                
+                let audioUrl = '';
+                let uploadedMediaId = null;
+                let fileSize = 0;
+                let contentType = '';
+                let filename = '';
+
+                // Handle file upload vs URL
+                if (audioSource === 'upload') {
+                    const fileInput = document.getElementById('audio-file');
+                    const file = fileInput.files[0];
+                    
+                    if (!file) {
+                        showMessage('publish-status', 'Please select an audio file to upload', 'error');
+                        return;
+                    }
+
+                    // Show upload progress
+                    const progressDiv = document.getElementById('audio-upload-progress');
+                    const progressFill = progressDiv.querySelector('.progress-fill');
+                    const progressText = progressDiv.querySelector('.progress-text');
+                    progressDiv.classList.remove('hidden');
+                    
+                    progressText.textContent = 'Uploading audio file...';
+                    progressFill.style.width = '10%';
+
+                    // Step 1: Upload file to media system
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('name', audioTitle);
+                    formData.append('access_level', 'private');
+                    
+                    if (audioDescription) {
+                        formData.append('description', audioDescription);
+                    }
+
+                    const uploadResponse = await fetch('/api/media/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: formData
+                    });
+
+                    progressFill.style.width = '50%';
+                    progressText.textContent = 'Creating BitTorrent...';
+
+                    const uploadResult = await uploadResponse.json();
+                    
+                    if (!uploadResponse.ok) {
+                        throw new Error(uploadResult.error || 'File upload failed');
+                    }
+
+                    // Use the uploaded file info
+                    uploadedMediaId = uploadResult.mediaId;
+                    audioUrl = uploadResult.httpUrl;
+                    fileSize = uploadResult.size;
+                    contentType = uploadResult.mime;
+                    filename = uploadResult.originalName;
+
+                    progressFill.style.width = '70%';
+                    progressText.textContent = 'Creating audio record...';
+                } else {
+                    // Use provided URL
+                    audioUrl = document.getElementById('audio-url').value.trim();
+                    if (!audioUrl) {
+                        showMessage('publish-status', 'Please provide an audio URL', 'error');
+                        return;
+                    }
+                    
+                    // Extract filename from URL
+                    try {
+                        const urlObj = new URL(audioUrl);
+                        filename = urlObj.pathname.split('/').pop() || 'audio_file';
+                        // Try to guess content type from extension
+                        const ext = filename.split('.').pop()?.toLowerCase();
+                        const mimeMap = {
+                            'mp3': 'audio/mpeg',
+                            'wav': 'audio/wav',
+                            'flac': 'audio/flac',
+                            'ogg': 'audio/ogg',
+                            'aac': 'audio/aac',
+                            'm4a': 'audio/mp4'
+                        };
+                        contentType = mimeMap[ext] || 'audio/mpeg';
+                    } catch (error) {
+                        filename = 'audio_file';
+                        contentType = 'audio/mpeg';
+                    }
+                }
+
+                // Build record data based on audio type
+                let recordData;
+                
+                if (audioType === 'music') {
+                    // Build music record with basic, audio, and music templates
+                    recordData = {
+                        basic: {
+                            name: audioTitle,
+                            description: audioDescription || `Music: ${audioTitle}`,
+                            language: audioLanguage,
+                            date: Math.floor(Date.now() / 1000),
+                            nsfw: audioNsfw,
+                            tagItems: audioTags,
+                            webUrl: audioUrl
+                        },
+                        audio: {
+                            webUrl: audioUrl,
+                            filename: filename,
+                            size: fileSize,
+                            duration: audioDuration,
+                            contentType: contentType,
+                            creator: audioCreator
+                        },
+                        music: {
+                            genre: document.getElementById('music-genre').value || '',
+                            subGenre: document.getElementById('music-sub-genre').value || '',
+                            bpm: parseInt(document.getElementById('music-bpm').value) || 0,
+                            key: document.getElementById('music-key').value || '',
+                            sampleRateHz: parseInt(document.getElementById('music-sample-rate').value) || 44100,
+                            bitDepth: parseInt(document.getElementById('music-bit-depth').value) || 16,
+                            album: document.getElementById('music-album').value || '',
+                            trackNumber: parseInt(document.getElementById('music-track-number').value) || 0,
+                            isrc: document.getElementById('music-isrc').value || '',
+                            lyrics: document.getElementById('music-lyrics').value || '',
+                            composerItems: document.getElementById('music-composers').value.split(',').map(t => t.trim()).filter(t => t),
+                            performerItems: document.getElementById('music-performers').value.split(',').map(t => t.trim()).filter(t => t)
+                        }
+                    };
+
+                    // Add BitTorrent address if file was uploaded
+                    if (uploadedMediaId) {
+                        recordData.audio.bittorrentAddress = uploadResult.magnetURI;
+                    }
+                } else {
+                    // Regular audio record (for future podcast support)
+                    recordData = {
+                        basic: {
+                            name: audioTitle,
+                            description: audioDescription || `Audio: ${audioTitle}`,
+                            language: audioLanguage,
+                            date: Math.floor(Date.now() / 1000),
+                            nsfw: audioNsfw,
+                            tagItems: audioTags,
+                            webUrl: audioUrl
+                        },
+                        audio: {
+                            webUrl: audioUrl,
+                            filename: filename,
+                            size: fileSize,
+                            duration: audioDuration,
+                            contentType: contentType,
+                            creator: audioCreator
+                        }
+                    };
+
+                    // Add BitTorrent address if file was uploaded
+                    if (uploadedMediaId) {
+                        recordData.audio.bittorrentAddress = uploadResult.magnetURI;
+                    }
+                }
+
+                // Determine endpoint and storage type
+                let endpoint, queryParams;
+                
+                if (storageType === 'gun') {
+                    endpoint = '/api/records/newRecord';
+                    queryParams = `?recordType=${audioType}&storage=gun`;
+                    if (uploadedMediaId) {
+                        queryParams += `&localId=audio_${uploadedMediaId}`;
+                    }
+                } else {
+                    endpoint = '/api/records/newRecord';
+                    queryParams = `?recordType=${audioType}&storage=arweave`;
+                }
+
+                // Add storage info to record data
+                recordData.storage = storageType;
+                if (storageType !== 'gun') {
+                    recordData.blockchain = storageType;
+                }
+
+                console.log('🎵 Publishing audio record:', {
+                    audioType,
+                    audioSource,
+                    storageType,
+                    endpoint: endpoint + queryParams,
+                    hasUploadedFile: !!uploadedMediaId
+                });
+
+                const response = await fetch(endpoint + queryParams, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(recordData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Update progress if uploading
+                    if (audioSource === 'upload') {
+                        const progressDiv = document.getElementById('audio-upload-progress');
+                        const progressFill = progressDiv.querySelector('.progress-fill');
+                        const progressText = progressDiv.querySelector('.progress-text');
+                        progressFill.style.width = '100%';
+                        progressText.textContent = 'Audio published successfully!';
+                    }
+
+                    const successMessage = storageType === 'gun' 
+                        ? `${audioType.charAt(0).toUpperCase() + audioType.slice(1)} published to GUN! DID: ${result.did}` 
+                        : `${audioType.charAt(0).toUpperCase() + audioType.slice(1)} published successfully! Transaction ID: ${result.transactionId}`;
+                    
+                    showMessage('publish-success', successMessage, 'success');
+                    
+                    // Show audio preview if file was uploaded
+                    if (uploadedMediaId && uploadResult) {
+                        showAudioPreview({
+                            ...uploadResult,
+                            recordType: audioType,
+                            recordDid: result.did
+                        });
+                    }
+                    
+                    // Clear form after delay
+                    setTimeout(() => {
+                        document.getElementById('publish-record-type').value = '';
+                        loadPublishInterface();
+                    }, 3000);
+                } else {
+                    showMessage('publish-status', result.error || `Failed to publish ${audioType}`, 'error');
+                }
+            } catch (error) {
+                console.error('Audio publishing error:', error);
+                showMessage('publish-status', 'Error: ' + error.message, 'error');
+                
+                // Reset progress bar on error
+                const progressDiv = document.getElementById('audio-upload-progress');
+                if (progressDiv && !progressDiv.classList.contains('hidden')) {
+                    const progressFill = progressDiv.querySelector('.progress-fill');
+                    const progressText = progressDiv.querySelector('.progress-text');
+                    progressFill.style.width = '0%';
+                    progressText.textContent = 'Upload failed';
+                }
+            }
+        }
+
+        function showAudioPreview(audioResult) {
+            const previewDiv = document.getElementById('audio-preview');
+            const previewContent = document.getElementById('audio-preview-content');
+            const audioInfo = document.getElementById('audio-info');
+            
+            previewDiv.classList.remove('hidden');
+            
+            // Create audio preview
+            const httpUrl = audioResult.httpUrl || (audioResult.transport && audioResult.transport.http && audioResult.transport.http[0]);
+            
+            previewContent.innerHTML = `
+                <audio controls style="width: 100%;">
+                    <source src="${httpUrl}" type="${audioResult.mime}">
+                    Your browser does not support audio playback.
+                </audio>
+            `;
+            
+            // Build info display
+            let infoHtml = `
+                <strong>Media ID:</strong> ${audioResult.mediaId}<br>
+                <strong>Size:</strong> ${(audioResult.size / 1024).toFixed(1)} KB<br>
+                <strong>MIME:</strong> ${audioResult.mime}<br>
+                <strong>Access:</strong> ${audioResult.access_level}<br>
+                <strong>BitTorrent:</strong> ${audioResult.magnetURI ? 'Available' : 'Not available'}
+            `;
+            
+            // Add record-specific info if available
+            if (audioResult.recordType && audioResult.recordDid) {
+                infoHtml += `<br><strong>Record Type:</strong> ${audioResult.recordType}`;
+                infoHtml += `<br><strong>OIP DID:</strong> ${audioResult.recordDid}`;
+            }
+            
+            audioInfo.innerHTML = infoHtml;
         }
 
         async function publishRecipe() {
