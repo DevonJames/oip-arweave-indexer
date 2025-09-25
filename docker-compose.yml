@@ -13,8 +13,8 @@ services:
     volumes:
       - esdata:/usr/share/elasticsearch/data
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+      - "${ELASTICSEARCH_TRANSPORT_PORT:-9300}:9300"
     networks:
       - oip-network
     restart: unless-stopped
@@ -32,7 +32,7 @@ services:
     depends_on:
       - elasticsearch
     ports:
-      - "5601:5601"
+      - "${KIBANA_PORT:-5601}:5601"
     environment:
       - ELASTICCLIENTHOST=http://elasticsearch:9200
     networks:
@@ -52,9 +52,9 @@ services:
     environment:
       - IPFS_PROFILE=server
     ports:
-      - "4001:4001"
-      - "5001:5001"
-      - "8080:8080"
+      - "${IPFS_SWARM_PORT:-4001}:4001"
+      - "${IPFS_API_PORT:-5001}:5001"
+      - "${IPFS_GATEWAY_PORT:-8080}:8080"
     volumes:
       - ipfsdata:/data/ipfs
     networks:
@@ -74,7 +74,7 @@ services:
       - .env
     ports:
       - "${PORT:-3005}:${PORT:-3005}"
-      - "9229:9229"
+      - "${DEBUG_PORT:-9229}:9229"
     volumes:
       - ./media:/usr/src/app/media
       - ./helpers:/usr/src/app/helpers
@@ -111,7 +111,7 @@ services:
       - .env
     ports:
       - "${PORT:-3005}:${PORT:-3005}"
-      - "9229:9229"
+      - "${DEBUG_PORT:-9229}:9229"
     volumes:
       - ./media:/usr/src/app/media
       - ./helpers:/usr/src/app/helpers
@@ -140,7 +140,7 @@ services:
       - .env
     ports:
       - "${PORT:-3005}:${PORT:-3005}"
-      - "9229:9229"
+      - "${DEBUG_PORT:-9229}:9229"
     volumes:
       - ./media:/usr/src/app/media
       - ./helpers:/usr/src/app/helpers
@@ -169,7 +169,7 @@ services:
       - .env
     ports:
       - "${PORT:-3005}:${PORT:-3005}"
-      - "9229:9229"
+      - "${DEBUG_PORT:-9229}:9229"
       - "8081:8081"  # Text generator
       - "8082:8082"  # Speech synthesizer
       - "4040:4040"  # Ngrok dashboard
@@ -200,9 +200,9 @@ services:
     env_file:
       - .env
     ports:
-      - "3000:3000"  # Next.js frontend
+      - "${NEXT_FRONTEND_PORT:-3000}:3000"  # Next.js frontend
       - "${PORT:-3005}:${PORT:-3005}"  # Express API
-      - "9229:9229"
+      - "${DEBUG_PORT:-9229}:9229"
     volumes:
       - ./media:/usr/src/app/media
       - ./helpers:/usr/src/app/helpers
@@ -237,7 +237,7 @@ services:
       context: ./speech-synthesizer
       dockerfile: Dockerfile
     ports:
-      - "8082:8082"
+      - "${SPEECH_SYNTHESIZER_PORT:-8082}:8082"
     networks:
       - oip-network
     restart: unless-stopped
@@ -251,7 +251,7 @@ services:
       context: ./text-to-speech
       dockerfile: Dockerfile.gpu
     ports:
-      - "5002:5002"
+      - "${TTS_SERVICE_PORT:-5002}:5002"
     environment:
       - CUDA_VISIBLE_DEVICES=0
       - TTS_GPU_ENABLED=true
@@ -273,7 +273,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ./ollama_data:/root/.ollama  # Persistent model storage
     networks:
@@ -291,7 +291,7 @@ services:
   ollama-gpu:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ./ollama_data:/root/.ollama  # Persistent model storage
     networks:
@@ -320,7 +320,7 @@ services:
       - OLLAMA_HOST=http://ollama:11434
       - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
     ports:
-      - "8081:8081"
+      - "${TEXT_GENERATOR_PORT:-8081}:8081"
     depends_on:
       - ollama
     networks:
@@ -340,7 +340,7 @@ services:
       - OLLAMA_HOST=http://ollama-gpu:11434
       - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
     ports:
-      - "8081:8081"
+      - "${TEXT_GENERATOR_PORT:-8081}:8081"
     depends_on:
       - ollama-gpu
     networks:
@@ -358,7 +358,7 @@ services:
       - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
       - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
     ports:
-      - "8003:8003"
+      - "${STT_SERVICE_PORT:-8003}:8003"
     volumes:
       - whisper_models:/app/models
     networks:
@@ -380,7 +380,7 @@ services:
       - WHISPER_COMPUTE_TYPE=int8
       - CUDA_VISIBLE_DEVICES=0
     ports:
-      - "8003:8003"
+      - "${STT_SERVICE_PORT:-8003}:8003"
     volumes:
       - whisper_models:/app/models
     networks:
@@ -401,7 +401,7 @@ services:
   tts-service:
     build: ./text-to-speech
     ports:
-      - "8005:8005"  # Standard port for TTS service
+      - "${TTS_SERVICE_PORT:-8005}:8005"  # Standard port for TTS service
     networks:
       - oip-network
     restart: unless-stopped
@@ -435,7 +435,7 @@ services:
     depends_on:
       - oip
     ports:
-      - "4040:4040"
+      - "${NGROK_DASHBOARD_PORT:-4040}:4040"
     networks:
       - oip-network
     restart: unless-stopped
@@ -452,7 +452,7 @@ services:
     depends_on:
       - oip-minimal
     ports:
-      - "4040:4040"
+      - "${NGROK_DASHBOARD_PORT:-4040}:4040"
     networks:
       - oip-network
     restart: unless-stopped
@@ -481,7 +481,7 @@ services:
     working_dir: /app
     command: sh -c "npm init -y >/dev/null 2>&1 && npm i gun && node gun-relay-server.js"
     ports:
-      - "8765:8765"
+      - "${GUN_RELAY_PORT:-8765}:8765"
     volumes:
       - gundata:/app/data
       - ./gun-relay-server.js:/app/gun-relay-server.js:ro
@@ -498,10 +498,15 @@ services:
 
 networks:
   oip-network:
+    name: ${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_oip-network
     driver: bridge
 
 volumes:
   esdata:
+    name: ${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_esdata
   ipfsdata:
+    name: ${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_ipfsdata
   whisper_models:
+    name: ${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_whisper_models
   gundata:
+    name: ${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_gundata
