@@ -170,9 +170,9 @@ services:
     ports:
       - "${PORT:-3005}:${PORT:-3005}"
       - "${DEBUG_PORT:-9229}:9229"
-      - "8081:8081"  # Text generator
-      - "8082:8082"  # Speech synthesizer
-      - "4040:4040"  # Ngrok dashboard
+      - "${TEXT_GENERATOR_PORT:-8081}:8081"  # Text generator
+      - "${SPEECH_SYNTHESIZER_PORT:-8082}:8082"  # Speech synthesizer
+      - "${NGROK_DASHBOARD_PORT:-4040}:4040"  # Ngrok dashboard
     volumes:
       - ./media:/usr/src/app/media
       - ./helpers:/usr/src/app/helpers
@@ -468,7 +468,7 @@ services:
     depends_on:
       - oip-gpu
     ports:
-      - "4042:4040"  # Use port 4042 to avoid conflicts with other ngrok instances
+      - "${NGROK_DASHBOARD_PORT:-4040}:4040"  # Use configurable port to avoid conflicts
     networks:
       - oip-network
     restart: unless-stopped
