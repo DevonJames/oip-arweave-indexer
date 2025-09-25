@@ -73,7 +73,7 @@ services:
     env_file:
       - .env
     ports:
-      - "3005:3005"
+      - "${PORT:-3005}:${PORT:-3005}"
       - "9229:9229"
     volumes:
       - ./media:/usr/src/app/media
@@ -109,7 +109,7 @@ services:
     env_file:
       - .env
     ports:
-      - "3005:3005"
+      - "${PORT:-3005}:${PORT:-3005}"
       - "9229:9229"
     volumes:
       - ./media:/usr/src/app/media
@@ -137,7 +137,7 @@ services:
     env_file:
       - .env
     ports:
-      - "3005:3005"
+      - "${PORT:-3005}:${PORT:-3005}"
       - "9229:9229"
     volumes:
       - ./media:/usr/src/app/media
@@ -165,7 +165,7 @@ services:
     env_file:
       - .env
     ports:
-      - "3005:3005"
+      - "${PORT:-3005}:${PORT:-3005}"
       - "9229:9229"
       - "8081:8081"  # Text generator
       - "8082:8082"  # Speech synthesizer
@@ -424,7 +424,7 @@ services:
   # Ngrok for public access
   ngrok:
     image: ngrok/ngrok
-    command: http --domain=${NGROK_DOMAIN} oip:3005
+    command: http --domain=${NGROK_DOMAIN} oip:${PORT:-3005}
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
@@ -441,7 +441,7 @@ services:
   # Ngrok for minimal profile
   ngrok-minimal:
     image: ngrok/ngrok
-    command: http --domain=${NGROK_DOMAIN} oip-minimal:3005
+    command: http --domain=${NGROK_DOMAIN} oip-minimal:${PORT:-3005}
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
@@ -457,7 +457,7 @@ services:
   # Ngrok for GPU deployments - Fixed for RTX 4090 server deployments
   ngrok-gpu:
     image: ngrok/ngrok:latest
-    command: http --domain=api.oip.onl oip-gpu:3005
+    command: http --domain=api.oip.onl oip-gpu:${PORT:-3005}
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
