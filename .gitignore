@@ -20,6 +20,5 @@ ollama_data
 mac-client/mac-client-env/
 mac-client/logs/
 *.log
-scripts/
 examples/
 docs/archive/
