@@ -4,6 +4,8 @@
 
 The OIP stack now supports multiple frontend deployments using a single backend infrastructure. This allows you to create project-specific public folders while sharing the same OIP services, databases, and APIs.
 
+This guide covers different development workflows for your custom frontends with OIP backend, including the `npx serve .` pattern for rapid frontend development.
+
 ## Architecture Pattern
 
 ```
@@ -20,6 +22,262 @@ RockHoppersGame/                    # Your project directory
     ├── styles.css                 # Your project's styles
     └── ...                        # Your project's assets
 ```
+
+## Development Patterns
+
+### Pattern 1: Frontend-First Development (npx serve .)
+
+**Best for**: Rapid frontend development, UI/UX iteration, when you want hot reloading
+
+```bash
+RockHoppersGame/
+├── oip-arweave-indexer/    # OIP backend running on :3005
+└── public/                 # Frontend running on :3000 via npx serve
+    ├── index.html
+    ├── app.js
+    └── package.json        # Optional: for dependencies
+```
+
+#### Frontend-First Setup
+
+1. **Start OIP Backend**:
+```bash
+cd RockHoppersGame/oip-arweave-indexer
+# Keep CUSTOM_PUBLIC_PATH=false (or remove it entirely)
+make standard  # Backend runs on :3005
+```
+
+2. **Start Frontend Development Server**:
+```bash
+cd RockHoppersGame/public
+npx serve . -p 3000  # Frontend runs on :3000
+# OR with custom port: npx serve . -p 8080
+```
+
+3. **Configure API Proxy** in your frontend JavaScript:
+
+Create `RockHoppersGame/public/config.js`:
+```javascript
+// Development configuration
+const isDevelopment = window.location.port === '3000' || window.location.port === '8080';
+
+const API_CONFIG = {
+    // In development: proxy to OIP backend
+    // In production: same origin (served by OIP)
+    baseURL: isDevelopment ? 'http://localhost:3005' : '',
+    
+    // Helper function for API calls
+    apiUrl: (endpoint) => {
+        const base = API_CONFIG.baseURL;
+        return `${base}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    }
+};
+
+// Make it globally available
+window.API_CONFIG = API_CONFIG;
+```
+
+4. **Update your app.js** to use the proxy:
+
+```javascript
+// API helper function
+async function apiCall(endpoint, options = {}) {
+    const url = window.API_CONFIG.apiUrl(endpoint);
+    
+    const defaultOptions = {
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    };
+    
+    const finalOptions = { ...defaultOptions, ...options };
+    
+    try {
+        const response = await fetch(url, finalOptions);
+        return await response.json();
+    } catch (error) {
+        console.error(`API call failed for ${endpoint}:`, error);
+        throw error;
+    }
+}
+
+// Example usage
+async function testConnection() {
+    try {
+        const health = await apiCall('/api/health');
+        console.log('OIP Health:', health);
+        alert('Connected to OIP: ' + health.message);
+    } catch (error) {
+        alert('Failed to connect to OIP backend');
+    }
+}
+
+async function loadRecords() {
+    try {
+        const data = await apiCall('/api/records?limit=5');
+        console.log('Records:', data);
+        displayRecords(data.records);
+    } catch (error) {
+        console.error('Failed to load records:', error);
+    }
+}
+```
+
+#### Benefits of Frontend-First Development:
+- ✅ **Hot Reloading**: Changes reflect immediately
+- ✅ **Familiar Workflow**: Keep using `npx serve .`
+- ✅ **Independent Development**: Frontend and backend can be developed separately
+- ✅ **Easy Testing**: Test frontend without affecting backend
+- ✅ **CORS Handled**: Explicit API calls handle cross-origin requests
+
+### Pattern 2: Integrated Development (OIP serves frontend)
+
+**Best for**: Production-like testing, when you want single-origin behavior
+
+```bash
+RockHoppersGame/
+├── oip-arweave-indexer/
+│   └── .env              # CUSTOM_PUBLIC_PATH=true
+└── public/               # Served directly by OIP backend
+    ├── index.html
+    └── app.js
+```
+
+#### Integrated Development Setup
+
+1. **Configure OIP to serve your frontend**:
+```bash
+cd RockHoppersGame/oip-arweave-indexer
+echo "CUSTOM_PUBLIC_PATH=true" >> .env
+make standard  # Everything runs on :3005
+```
+
+2. **Access your app**: `http://localhost:3005` or your ngrok domain
+
+3. **Simpler JavaScript** (no proxy needed):
+```javascript
+// Simple API calls - same origin
+async function testConnection() {
+    const response = await fetch('/api/health');
+    const health = await response.json();
+    console.log('OIP Health:', health);
+}
+
+async function loadRecords() {
+    const response = await fetch('/api/records?limit=5');
+    const data = await response.json();
+    displayRecords(data.records);
+}
+```
+
+#### Benefits of Integrated Development:
+- ✅ **Production-like**: Same as final deployment
+- ✅ **No CORS Issues**: Same origin for all requests
+- ✅ **Single Port**: Everything on one port
+- ✅ **Ngrok Ready**: External access works immediately
+
+### Pattern 3: Hybrid Development (Best of Both)
+
+**Best for**: Professional development workflow with both rapid iteration and production testing
+
+#### Directory Structure:
+```bash
+RockHoppersGame/
+├── oip-arweave-indexer/
+│   ├── .env.development     # CUSTOM_PUBLIC_PATH=false
+│   ├── .env.production      # CUSTOM_PUBLIC_PATH=true
+│   └── Makefile
+├── public/                  # Production frontend
+└── dev/                     # Development frontend (with build tools)
+    ├── src/
+    ├── package.json
+    ├── webpack.config.js    # Optional
+    └── build/               # Builds to ../public/
+```
+
+#### Setup Scripts:
+
+Create `RockHoppersGame/scripts/dev.sh`:
+```bash
+#!/bin/bash
+echo "🚀 Starting development environment..."
+
+# Start OIP backend
+cd oip-arweave-indexer
+cp .env.development .env
+make standard &
+BACKEND_PID=$!
+
+# Wait for backend to be ready
+sleep 10
+
+# Start frontend dev server
+cd ../dev
+npm run dev &  # or npx serve . -p 3000
+FRONTEND_PID=$!
+
+echo "✅ Development servers started:"
+echo "   Backend: http://localhost:3005"
+echo "   Frontend: http://localhost:3000"
+echo "   Press Ctrl+C to stop both servers"
+
+# Wait for interrupt
+trap "kill $BACKEND_PID $FRONTEND_PID" EXIT
+wait
+```
+
+Create `RockHoppersGame/scripts/build.sh`:
+```bash
+#!/bin/bash
+echo "🏗️ Building for production..."
+
+# Build frontend
+cd dev
+npm run build  # Outputs to ../public/
+
+# Configure for production
+cd ../oip-arweave-indexer
+cp .env.production .env
+
+echo "✅ Ready for production deployment with: make standard"
+```
+
+## Package.json for Development
+
+Create `RockHoppersGame/public/package.json` for dependencies:
+
+```json
+{
+  "name": "rockhoppers-game",
+  "version": "1.0.0",
+  "description": "Rock Hoppers Game Frontend",
+  "scripts": {
+    "dev": "npx serve . -p 3000",
+    "dev-hot": "npx live-server --port=3000 --host=localhost",
+    "build": "echo 'No build step needed for static files'",
+    "start": "npx serve . -p 3000"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
+```
+
+Then you can use:
+```bash
+cd RockHoppersGame/public
+npm run dev        # Start development server
+npm run dev-hot    # Start with live reload
+```
+
+## CORS Configuration
+
+OIP backend already includes CORS support for development! The backend allows:
+- `localhost` on any port (perfect for `npx serve`)
+- Browser extensions (Chrome, Firefox, Safari)
+- Ngrok domains
+
+No additional configuration needed for the `npx serve .` workflow.
 
 ## Setup Instructions
 
@@ -53,10 +311,43 @@ ELASTICSEARCHHOST=http://elasticsearch:9200
 # ... etc
 ```
 
-### 3. Create Your Frontend
+## Complete Example: Rock Hoppers Game
 
-Create `RockHoppersGame/public/index.html`:
+Here's a complete example using the frontend-first development pattern:
 
+### 1. Project Structure
+```bash
+RockHoppersGame/
+├── oip-arweave-indexer/     # OIP backend
+│   ├── .env                 # CUSTOM_PUBLIC_PATH=false (for dev)
+│   └── ...
+└── public/                  # Your game frontend
+    ├── index.html
+    ├── app.js
+    ├── config.js
+    ├── game.js
+    └── styles.css
+```
+
+### 2. Start Development Servers
+
+**Terminal 1 - Backend:**
+```bash
+cd RockHoppersGame/oip-arweave-indexer
+make standard
+# Backend runs on :3005
+```
+
+**Terminal 2 - Frontend:**
+```bash
+cd RockHoppersGame/public  
+npx serve . -p 3000
+# Frontend runs on :3000
+```
+
+### 3. Complete Frontend Code
+
+`RockHoppersGame/public/index.html`:
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -68,87 +359,276 @@ Create `RockHoppersGame/public/index.html`:
 </head>
 <body>
     <div id="app">
-        <h1>Welcome to Rock Hoppers Game</h1>
-        <p>Powered by OIP (Open Index Protocol)</p>
+        <header>
+            <h1>🦘 Rock Hoppers Game</h1>
+            <p>Powered by OIP (Open Index Protocol)</p>
+        </header>
         
-        <!-- Your game interface here -->
-        <div id="game-container">
-            <!-- Game content -->
-        </div>
-        
-        <!-- OIP Integration -->
-        <div id="oip-features">
-            <button onclick="testOIPConnection()">Test OIP Connection</button>
-            <button onclick="loadRecords()">Load Game Records</button>
-        </div>
+        <main>
+            <div id="connection-status">
+                <button onclick="testOIPConnection()">Test OIP Connection</button>
+                <span id="status-indicator">⚪</span>
+            </div>
+            
+            <div id="game-area">
+                <h2>Game Area</h2>
+                <button onclick="startGame()">Start Game</button>
+                <button onclick="saveScore()">Save High Score</button>
+                <button onclick="loadLeaderboard()">Load Leaderboard</button>
+            </div>
+            
+            <div id="leaderboard">
+                <h3>Leaderboard</h3>
+                <div id="scores"></div>
+            </div>
+        </main>
     </div>
 
-    <!-- Load API base URL (automatically configured by OIP) -->
-    <script src="/api-config"></script>
+    <script src="config.js"></script>
     <script src="app.js"></script>
+    <script src="game.js"></script>
 </body>
 </html>
 ```
 
-Create `RockHoppersGame/public/app.js`:
-
+`RockHoppersGame/public/config.js`:
 ```javascript
-// Your game's main JavaScript file
-console.log('Rock Hoppers Game initializing...');
-console.log('API Base URL:', window.API_BASE_URL);
+// Auto-detect development vs production
+const isDevelopment = window.location.port === '3000' || 
+                     window.location.hostname === 'localhost' && 
+                     window.location.port !== '3005';
+
+const API_CONFIG = {
+    baseURL: isDevelopment ? 'http://localhost:3005' : '',
+    
+    apiUrl: (endpoint) => {
+        const base = API_CONFIG.baseURL;
+        return `${base}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    },
+    
+    // Game-specific configuration
+    gameConfig: {
+        recordType: 'rockHoppersScore',
+        maxScores: 10
+    }
+};
+
+window.API_CONFIG = API_CONFIG;
+console.log('🔧 API Config loaded:', { isDevelopment, baseURL: API_CONFIG.baseURL });
+```
+
+`RockHoppersGame/public/app.js`:
+```javascript
+// Global app state
+let gameState = {
+    connected: false,
+    playerName: 'Player1',
+    currentScore: 0
+};
+
+// API helper function
+async function apiCall(endpoint, options = {}) {
+    const url = window.API_CONFIG.apiUrl(endpoint);
+    console.log(`🌐 API Call: ${url}`);
+    
+    const defaultOptions = {
+        headers: { 'Content-Type': 'application/json' }
+    };
+    
+    try {
+        const response = await fetch(url, { ...defaultOptions, ...options });
+        const data = await response.json();
+        console.log(`✅ API Response:`, data);
+        return data;
+    } catch (error) {
+        console.error(`❌ API Error for ${endpoint}:`, error);
+        throw error;
+    }
+}
 
 // Test OIP connection
 async function testOIPConnection() {
-    try {
-        const response = await fetch('/api/health');
-        const health = await response.json();
-        console.log('OIP Health:', health);
-        alert('OIP Connection: ' + health.message);
-    } catch (error) {
-        console.error('OIP Connection failed:', error);
-        alert('OIP Connection failed: ' + error.message);
-    }
-}
-
-// Load game records from OIP
-async function loadRecords() {
-    try {
-        const response = await fetch('/api/records?recordType=gameData&limit=10');
-        const data = await response.json();
-        console.log('Game Records:', data);
-        
-        // Process your game records here
-        displayRecords(data.records);
-    } catch (error) {
-        console.error('Failed to load records:', error);
-    }
-}
-
-function displayRecords(records) {
-    const container = document.getElementById('game-container');
-    container.innerHTML = '<h3>Game Records:</h3>';
+    const indicator = document.getElementById('status-indicator');
     
-    records.forEach(record => {
-        const div = document.createElement('div');
-        div.innerHTML = `
-            <p><strong>${record.data.basic.name}</strong></p>
-            <p>${record.data.basic.description}</p>
-        `;
-        container.appendChild(div);
-    });
+    try {
+        indicator.textContent = '🟡';
+        const health = await apiCall('/api/health');
+        
+        gameState.connected = true;
+        indicator.textContent = '🟢';
+        alert(`✅ Connected to OIP!\n\nStatus: ${health.message}\nUptime: ${health.uptime}`);
+    } catch (error) {
+        gameState.connected = false;
+        indicator.textContent = '🔴';
+        alert('❌ Failed to connect to OIP backend\n\nMake sure the backend is running on :3005');
+    }
 }
 
-// Initialize your game
+// Save game score to OIP
+async function saveScore() {
+    if (!gameState.connected) {
+        alert('Please test connection first!');
+        return;
+    }
+    
+    const score = gameState.currentScore || Math.floor(Math.random() * 1000);
+    
+    const scoreRecord = {
+        basic: {
+            name: `${gameState.playerName} - Score: ${score}`,
+            description: `Rock Hoppers game score by ${gameState.playerName}`,
+            date: Math.floor(Date.now() / 1000),
+            tagItems: ['rockhoppers', 'game', 'score']
+        },
+        gameData: {
+            playerName: gameState.playerName,
+            score: score,
+            level: 1,
+            timestamp: Date.now(),
+            gameVersion: '1.0.0'
+        }
+    };
+    
+    try {
+        const result = await apiCall('/api/publish/newRecord', {
+            method: 'POST',
+            body: JSON.stringify(scoreRecord)
+        });
+        
+        alert(`🎉 Score saved to blockchain!\n\nScore: ${score}\nTransaction: ${result.transactionId?.slice(0, 12)}...`);
+        loadLeaderboard(); // Refresh leaderboard
+    } catch (error) {
+        alert('❌ Failed to save score: ' + error.message);
+    }
+}
+
+// Load leaderboard from OIP
+async function loadLeaderboard() {
+    if (!gameState.connected) {
+        alert('Please test connection first!');
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/api/records?recordType=${API_CONFIG.gameConfig.recordType}&limit=${API_CONFIG.gameConfig.maxScores}&sortBy=date:desc`);
+        
+        const scoresContainer = document.getElementById('scores');
+        
+        if (data.records && data.records.length > 0) {
+            scoresContainer.innerHTML = data.records.map((record, index) => {
+                const gameData = record.data.gameData;
+                const date = new Date(gameData.timestamp).toLocaleDateString();
+                
+                return `
+                    <div class="score-entry">
+                        <span class="rank">#${index + 1}</span>
+                        <span class="player">${gameData.playerName}</span>
+                        <span class="score">${gameData.score}</span>
+                        <span class="date">${date}</span>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            scoresContainer.innerHTML = '<p>No scores yet! Be the first to play!</p>';
+        }
+    } catch (error) {
+        alert('❌ Failed to load leaderboard: ' + error.message);
+    }
+}
+
+// Initialize app
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing Rock Hoppers Game...');
-    // Your game initialization code here
+    console.log('🦘 Rock Hoppers Game initializing...');
+    console.log('🔧 Development mode:', window.location.port === '3000');
+    
+    // Auto-test connection
+    setTimeout(testOIPConnection, 1000);
 });
 ```
 
-Create `RockHoppersGame/public/styles.css`:
+`RockHoppersGame/public/game.js`:
+```javascript
+// Game logic
+function startGame() {
+    console.log('🎮 Starting Rock Hoppers Game...');
+    
+    // Simulate gameplay
+    gameState.currentScore = 0;
+    const gameInterval = setInterval(() => {
+        gameState.currentScore += Math.floor(Math.random() * 10);
+        console.log(`Score: ${gameState.currentScore}`);
+        
+        // End game after 5 seconds
+        if (gameState.currentScore > 100) {
+            clearInterval(gameInterval);
+            alert(`🎉 Game Over! Final Score: ${gameState.currentScore}`);
+        }
+    }, 500);
+}
+```
 
+### 4. Development Workflow
+
+1. **Start both servers** (backend on :3005, frontend on :3000)
+2. **Develop your frontend** with live reloading via `npx serve`
+3. **Test API integration** using the proxy configuration
+4. **When ready for production**, set `CUSTOM_PUBLIC_PATH=true` and redeploy
+
+### 5. Production Deployment
+
+When ready to deploy:
+
+```bash
+# Switch to production mode
+cd RockHoppersGame/oip-arweave-indexer
+echo "CUSTOM_PUBLIC_PATH=true" > .env.production
+cp .env.production .env
+
+# Deploy
+make standard
+
+# Your app is now served by OIP on :3005 (or ngrok domain)
+```
+
+## Development Tips
+
+### Hot Reloading
+Use `live-server` for automatic page refresh:
+```bash
+cd RockHoppersGame/public
+npx live-server --port=3000 --host=localhost
+```
+
+### Debug API Calls
+Add this to your browser console:
+```javascript
+// Enable detailed API logging
+localStorage.setItem('debug-api', 'true');
+```
+
+### Environment Detection
+Your frontend automatically detects development vs production:
+- **Development**: `localhost:3000` → API calls go to `localhost:3005`
+- **Production**: Same origin → API calls are relative
+
+### Multiple Projects
+Run multiple frontends simultaneously:
+```bash
+# Project 1
+cd RockHoppersGame/public && npx serve . -p 3000
+
+# Project 2  
+cd SpaceGame/public && npx serve . -p 3001
+
+# Project 3
+cd PuzzleGame/public && npx serve . -p 3002
+
+# All use the same OIP backend on :3005
+```
+
+`RockHoppersGame/public/styles.css`:
 ```css
-/* Your game's styles */
+/* Game-specific styles */
 body {
     font-family: Arial, sans-serif;
     margin: 0;
@@ -162,8 +642,8 @@ body {
     margin: 0 auto;
 }
 
-h1 {
-    color: #16213e;
+header h1 {
+    color: #fff;
     text-align: center;
     background: linear-gradient(45deg, #0f3460, #16213e);
     padding: 20px;
@@ -171,16 +651,39 @@ h1 {
     margin-bottom: 30px;
 }
 
-#game-container {
+#connection-status {
+    text-align: center;
+    margin: 20px 0;
+    padding: 15px;
+    background: #0f3460;
+    border-radius: 10px;
+}
+
+#status-indicator {
+    font-size: 24px;
+    margin-left: 10px;
+}
+
+#game-area, #leaderboard {
     background: #0f3460;
     padding: 20px;
     border-radius: 10px;
     margin: 20px 0;
 }
 
-#oip-features {
-    text-align: center;
-    margin: 20px 0;
+.score-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin: 5px 0;
+    background: #16213e;
+    border-radius: 5px;
+}
+
+.rank {
+    font-weight: bold;
+    color: #e94560;
 }
 
 button {
@@ -188,16 +691,49 @@ button {
     color: white;
     border: none;
     padding: 10px 20px;
-    margin: 0 10px;
+    margin: 5px;
     border-radius: 5px;
     cursor: pointer;
     font-size: 16px;
+    transition: background 0.3s;
 }
 
 button:hover {
     background: #c73650;
 }
+
+button:disabled {
+    background: #666;
+    cursor: not-allowed;
+}
 ```
+
+## Quick Start Commands
+
+### Option 1: Frontend Development (npx serve)
+```bash
+# Terminal 1: Start OIP backend
+cd RockHoppersGame/oip-arweave-indexer
+make standard
+
+# Terminal 2: Start frontend dev server  
+cd RockHoppersGame/public
+npx serve . -p 3000
+
+# OR use the helper script:
+cd RockHoppersGame/oip-arweave-indexer
+make dev-frontend
+```
+
+### Option 2: Integrated Development
+```bash
+cd RockHoppersGame/oip-arweave-indexer
+echo "CUSTOM_PUBLIC_PATH=true" >> .env
+make standard
+# Access at http://localhost:3005
+```
+
+## Setup Instructions (Alternative Integrated Approach)
 
 ### 4. Deploy Your Project
 
@@ -375,4 +911,38 @@ async function loadLeaderboard() {
 - Leverage OIP's media system for game assets and user-generated content
 - Implement real-time features using OIP's WebSocket support
 
+## Summary
+
+This multi-deployment system gives you **three powerful development patterns**:
+
+### 🚀 **Pattern 1: Frontend-First Development (`npx serve`)**
+- **Perfect for**: Rapid development, hot reloading, familiar workflow
+- **Setup**: Backend on :3005, Frontend on :3000 via `npx serve`
+- **Benefits**: Keep your existing development workflow, instant updates
+
+### 🔧 **Pattern 2: Integrated Development (OIP serves frontend)**
+- **Perfect for**: Production-like testing, single-origin behavior
+- **Setup**: Set `CUSTOM_PUBLIC_PATH=true`, everything on :3005
+- **Benefits**: No CORS issues, production-ready immediately
+
+### ⚡ **Pattern 3: Hybrid Development (Professional workflow)**
+- **Perfect for**: Teams, build processes, multiple environments
+- **Setup**: Development and production configurations
+- **Benefits**: Best of both worlds, automated workflows
+
+### 🎯 **Key Features**
+✅ **Your familiar `npx serve .` workflow works perfectly**  
+✅ **CORS already configured** - no additional setup needed  
+✅ **Automatic environment detection** - dev vs production  
+✅ **Complete OIP API access** - records, authentication, media, AI  
+✅ **Multiple projects** can share the same backend  
+✅ **Easy transition** from development to production  
+
+### 🛠️ **Helper Tools**
+- **`make dev-frontend`**: Start frontend development server automatically
+- **`./scripts/dev-frontend.sh`**: Flexible frontend development helper
+- **Auto-proxy configuration**: Seamless API calls in development
+- **Environment detection**: Automatic dev/production switching
+
 This pattern gives you the full power of OIP's backend infrastructure while maintaining complete control over your frontend presentation and user experience.
+
