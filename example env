@@ -74,3 +74,8 @@ WHISPER_COMPUTE_TYPE=int8
 GUN_PEERS=http://gun-relay:8765
 GUN_ENABLE_ENCRYPTION=true
 GUN_DEFAULT_PRIVACY=false
+
+# Custom Public Directory Configuration
+# Set to 'true' to serve static files from parent directory's public/ folder
+# Useful for multi-deployment scenarios like RockHoppersGame/public/
+CUSTOM_PUBLIC_PATH=false
