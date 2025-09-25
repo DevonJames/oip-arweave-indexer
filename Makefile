@@ -237,14 +237,19 @@ up: validate-profile check-env check-gpu ## Start services with specified profil
 	docker-compose --profile $(PROFILE) up -d
 	@echo "$(GREEN)Services started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
-	@for i in {1..30}; do \
-		if curl -s --max-time 2 "http://localhost:$${PORT:-3005}/health" >/dev/null 2>&1; then \
-			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
+	@if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep -E "^PORT=" | xargs); \
+	fi; \
+	OIP_PORT=$${PORT:-3005}; \
+	echo "$(BLUE)🔍 Checking OIP health on port $$OIP_PORT...$(NC)"; \
+	for i in {1..30}; do \
+		if curl -s --max-time 2 "http://localhost:$$OIP_PORT/health" >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ OIP service is ready on port $$OIP_PORT$(NC)"; \
 			break; \
 		fi; \
-		echo "Waiting for OIP service... ($$i/30)"; \
+		echo "Waiting for OIP service on port $$OIP_PORT... ($$i/30)"; \
 		sleep 2; \
-	done || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	done || echo "$(YELLOW)OIP service may still be starting on port $$OIP_PORT...$(NC)"
 	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
 		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
@@ -260,14 +265,19 @@ up-no-makefile-ngrok: validate-profile check-env check-gpu ## Start services wit
 	docker-compose --profile $(PROFILE) up -d
 	@echo "$(GREEN)Services started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
-	@for i in {1..30}; do \
-		if curl -s --max-time 2 "http://localhost:$${PORT:-3005}/health" >/dev/null 2>&1; then \
-			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
+	@if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep -E "^PORT=" | xargs); \
+	fi; \
+	OIP_PORT=$${PORT:-3005}; \
+	echo "$(BLUE)🔍 Checking OIP health on port $$OIP_PORT...$(NC)"; \
+	for i in {1..30}; do \
+		if curl -s --max-time 2 "http://localhost:$$OIP_PORT/health" >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ OIP service is ready on port $$OIP_PORT$(NC)"; \
 			break; \
 		fi; \
-		echo "Waiting for OIP service... ($$i/30)"; \
+		echo "Waiting for OIP service on port $$OIP_PORT... ($$i/30)"; \
 		sleep 2; \
-	done || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	done || echo "$(YELLOW)OIP service may still be starting on port $$OIP_PORT...$(NC)"
 	@echo "$(BLUE)ngrok tunnel will be managed by Docker Compose using NGROK_DOMAIN from .env$(NC)"
 	@make status
 
@@ -279,14 +289,19 @@ build: validate-profile check-env check-gpu ## Build and start services with spe
 	docker-compose --profile $(PROFILE) up -d --build
 	@echo "$(GREEN)Services built and started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
-	@for i in {1..30}; do \
-		if curl -s --max-time 2 "http://localhost:$${PORT:-3005}/health" >/dev/null 2>&1; then \
-			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
+	@if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep -E "^PORT=" | xargs); \
+	fi; \
+	OIP_PORT=$${PORT:-3005}; \
+	echo "$(BLUE)🔍 Checking OIP health on port $$OIP_PORT...$(NC)"; \
+	for i in {1..30}; do \
+		if curl -s --max-time 2 "http://localhost:$$OIP_PORT/health" >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ OIP service is ready on port $$OIP_PORT$(NC)"; \
 			break; \
 		fi; \
-		echo "Waiting for OIP service... ($$i/30)"; \
+		echo "Waiting for OIP service on port $$OIP_PORT... ($$i/30)"; \
 		sleep 2; \
-	done || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	done || echo "$(YELLOW)OIP service may still be starting on port $$OIP_PORT...$(NC)"
 	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
 		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
@@ -303,14 +318,19 @@ rebuild: validate-profile check-env check-gpu ## Rebuild and start services with
 	docker-compose --profile $(PROFILE) up -d
 	@echo "$(GREEN)Services rebuilt and started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
-	@for i in {1..30}; do \
-		if curl -s --max-time 2 "http://localhost:$${PORT:-3005}/health" >/dev/null 2>&1; then \
-			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
+	@if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep -E "^PORT=" | xargs); \
+	fi; \
+	OIP_PORT=$${PORT:-3005}; \
+	echo "$(BLUE)🔍 Checking OIP health on port $$OIP_PORT...$(NC)"; \
+	for i in {1..30}; do \
+		if curl -s --max-time 2 "http://localhost:$$OIP_PORT/health" >/dev/null 2>&1; then \
+			echo "$(GREEN)✅ OIP service is ready on port $$OIP_PORT$(NC)"; \
 			break; \
 		fi; \
-		echo "Waiting for OIP service... ($$i/30)"; \
+		echo "Waiting for OIP service on port $$OIP_PORT... ($$i/30)"; \
 		sleep 2; \
-	done || echo "$(YELLOW)OIP service may still be starting...$(NC)"
+	done || echo "$(YELLOW)OIP service may still be starting on port $$OIP_PORT...$(NC)"
 	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
 		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
