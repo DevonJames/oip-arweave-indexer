@@ -47,6 +47,7 @@ help: ## Show this help message
 	@echo "  📁 Structure: ProjectName/oip-arweave-indexer/ + ProjectName/public/"
 	@echo "  ⚙️  Set CUSTOM_PUBLIC_PATH=true in .env to use parent directory's public/ folder"
 	@echo "  🎯 Perfect for multiple frontends sharing the same OIP backend infrastructure"
+	@echo "  🚀 Frontend dev: ./scripts/dev-frontend.sh [port] [path]"
 	@echo ""
 	@echo "$(YELLOW)Mac Client Services:$(NC)"
 	@echo "  make mac-stt-services          # Start all Mac STT services with logging"
@@ -804,6 +805,10 @@ dev-logs-oip: ## Development: Show only OIP logs
 	else \
 		docker-compose logs -f oip; \
 	fi
+
+dev-frontend: ## Development: Start frontend development server (npx serve)
+	@echo "$(BLUE)🚀 Starting frontend development server...$(NC)"
+	@./scripts/dev-frontend.sh
 
 dev-logs-chatterbox: ## Development: Show logs for container with Chatterbox TTS
 	@LOGS_FOUND=false; \
