@@ -9,7 +9,7 @@ const path = require('path');
 const FormData = require('form-data');
 
 // Configuration
-const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3005';
+const BASE_URL = process.env.TEST_BASE_URL || `http://localhost:${process.env.PORT || 3005}`;
 const TEST_IMAGE_PATH = path.join(__dirname, '..', 'test_data', 'test-image.jpg');
 
 // Test utilities

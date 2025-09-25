@@ -15,7 +15,7 @@ function initSocketServer(server) {
     const wss = new WebSocket.Server({ server });
     
     wss.on('connection', (ws, req) => {
-        const base = process.env.PUBLIC_API_BASE_URL || 'http://localhost:3005';
+        const base = process.env.PUBLIC_API_BASE_URL || `http://localhost:${process.env.PORT || 3005}`;
         const url = new URL(req.url, `${base}/api/open-stream`);
         const id = url.searchParams.get('id');
         

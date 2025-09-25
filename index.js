@@ -86,7 +86,8 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3001',  // Added for ALFRED voice interface
-      'http://localhost:3005',
+      'http://localhost:3005',  // Keep hardcoded as requested
+      `http://localhost:${process.env.PORT || 3005}`,  // Also allow env PORT
       'http://localhost:5173',
       'http://localhost:8080',
       'https://api.oip.onl',
@@ -141,12 +142,13 @@ app.use((req, res, next) => {
 });
 
 // Public runtime config for static clients (e.g., reference-client.html)
-// Exposes window.API_BASE_URL derived from env var PUBLIC_API_BASE_URL
+// Exposes window.API_BASE_URL derived from env var PUBLIC_API_BASE_URL and PORT
 app.get('/config.js', (req, res) => {
   const apiBase = process.env.PUBLIC_API_BASE_URL || '';
+  const port = process.env.PORT || 3005;
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
   const safeApiBase = String(apiBase).replace(/'/g, "\\'");
-  res.send(`window.API_BASE_URL = '${safeApiBase}';`);
+  res.send(`window.API_BASE_URL = '${safeApiBase}'; window.OIP_PORT = ${port};`);
 });
 
 // Serve static files from the 'public' directory (or custom path if specified)

@@ -61,7 +61,7 @@ help: ## Show this help message
 	@echo "$(YELLOW)ngrok Integration (Simplified v3 Command):$(NC)"
 	@echo "  🌐 API available at: $(GREEN)https://api.oip.onl$(NC)"
 	@echo "  🔧 Setup: Add NGROK_AUTH_TOKEN=your_token to .env file"
-	@echo "  ⚡ Simple command: $(GREEN)ngrok http --domain=api.oip.onl 3005$(NC)"
+	@echo "  ⚡ Simple command: $(GREEN)ngrok http --domain=api.oip.onl $${PORT:-3005}$(NC)"
 	@echo "  💰 Requires: Paid ngrok plan for custom domain api.oip.onl"
 	@echo "  🧪 Test setup: $(GREEN)make ngrok-test$(NC)"
 
@@ -114,7 +114,7 @@ check-ngrok:
 			echo "$(GREEN)Get your authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken$(NC)"; \
 			echo ""; \
 			echo "$(BLUE)Then simply run: make start-ngrok$(NC)"; \
-			echo "$(BLUE)Or manually: ngrok http --domain=api.oip.onl 3005$(NC)"; \
+			echo "$(BLUE)Or manually: ngrok http --domain=api.oip.onl $${PORT:-3005}$(NC)"; \
 			exit 1; \
 		fi; \
 	else \
@@ -148,8 +148,8 @@ start-ngrok: check-ngrok
 	fi; \
 	if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
 	echo "$(BLUE)🔗 Starting ngrok tunnel for $$DOMAIN...$(NC)"; \
-	echo "$(YELLOW)🚀 Starting: $$NGROK_CMD http --domain=$$DOMAIN 3005$(NC)"; \
-	"$$NGROK_CMD" http --domain="$$DOMAIN" 3005 > /tmp/ngrok.log 2>&1 & \
+	echo "$(YELLOW)🚀 Starting: $$NGROK_CMD http --domain=$$DOMAIN $${PORT:-3005}$(NC)"; \
+	"$$NGROK_CMD" http --domain="$$DOMAIN" "$${PORT:-3005}" > /tmp/ngrok.log 2>&1 & \
 	sleep 5; \
 	if curl -s --max-time 5 http://localhost:4040/api/tunnels | grep -q "$$DOMAIN"; then \
 		echo "$(GREEN)✅ Tunnel verified: https://$$DOMAIN$(NC)"; \
@@ -238,7 +238,7 @@ up: validate-profile check-env check-gpu ## Start services with specified profil
 	@echo "$(GREEN)Services started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
 	@for i in {1..30}; do \
-		if curl -s --max-time 2 http://localhost:3005/health >/dev/null 2>&1; then \
+		if curl -s --max-time 2 "http://localhost:$${PORT:-3005}/health" >/dev/null 2>&1; then \
 			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
 			break; \
 		fi; \
@@ -261,7 +261,7 @@ up-no-makefile-ngrok: validate-profile check-env check-gpu ## Start services wit
 	@echo "$(GREEN)Services started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
 	@for i in {1..30}; do \
-		if curl -s --max-time 2 http://localhost:3005/health >/dev/null 2>&1; then \
+		if curl -s --max-time 2 "http://localhost:$${PORT:-3005}/health" >/dev/null 2>&1; then \
 			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
 			break; \
 		fi; \
@@ -280,7 +280,7 @@ build: validate-profile check-env check-gpu ## Build and start services with spe
 	@echo "$(GREEN)Services built and started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
 	@for i in {1..30}; do \
-		if curl -s --max-time 2 http://localhost:3005/health >/dev/null 2>&1; then \
+		if curl -s --max-time 2 "http://localhost:$${PORT:-3005}/health" >/dev/null 2>&1; then \
 			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
 			break; \
 		fi; \
@@ -304,7 +304,7 @@ rebuild: validate-profile check-env check-gpu ## Rebuild and start services with
 	@echo "$(GREEN)Services rebuilt and started successfully$(NC)"
 	@echo "$(BLUE)⏳ Waiting for OIP service to be ready...$(NC)"
 	@for i in {1..30}; do \
-		if curl -s --max-time 2 http://localhost:3005/health >/dev/null 2>&1; then \
+		if curl -s --max-time 2 "http://localhost:$${PORT:-3005}/health" >/dev/null 2>&1; then \
 			echo "$(GREEN)✅ OIP service is ready$(NC)"; \
 			break; \
 		fi; \
@@ -700,7 +700,7 @@ ngrok-debug: ## Debug ngrok setup (simple v3 command)
 		DOMAIN=$$(grep -v '^#' .env | grep -E "^NGROK_DOMAIN=" | cut -d'=' -f2-); \
 	fi; \
 	if [ -z "$$DOMAIN" ]; then DOMAIN="api.oip.onl"; fi; \
-	echo "  📋 Full command: $(GREEN)ngrok http --domain=$$DOMAIN 3005$(NC)";
+	echo "  📋 Full command: $(GREEN)ngrok http --domain=$$DOMAIN $${PORT:-3005}$(NC)";
 	@echo "  🎯 This requires your paid plan with custom domain access"
 	@echo "  💡 No config files needed with ngrok v3!"
 

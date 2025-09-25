@@ -64,7 +64,7 @@ const isDevelopment = window.location.port === '3000' || window.location.port ==
 const API_CONFIG = {
     // In development: proxy to OIP backend
     // In production: same origin (served by OIP)
-    baseURL: isDevelopment ? 'http://localhost:3005' : '',
+    baseURL: isDevelopment ? `http://localhost:${window.OIP_PORT || 3005}` : '',
     
     // Helper function for API calls
     apiUrl: (endpoint) => {
@@ -384,6 +384,7 @@ npx serve . -p 3000
         </main>
     </div>
 
+    <script src="/config.js"></script>  <!-- Load OIP runtime config (PORT, API_BASE_URL) -->
     <script src="config.js"></script>
     <script src="app.js"></script>
     <script src="game.js"></script>
@@ -396,10 +397,10 @@ npx serve . -p 3000
 // Auto-detect development vs production
 const isDevelopment = window.location.port === '3000' || 
                      window.location.hostname === 'localhost' && 
-                     window.location.port !== '3005';
+                     window.location.port !== (window.OIP_PORT || 3005).toString();
 
 const API_CONFIG = {
-    baseURL: isDevelopment ? 'http://localhost:3005' : '',
+    baseURL: isDevelopment ? `http://localhost:${window.OIP_PORT || 3005}` : '',
     
     apiUrl: (endpoint) => {
         const base = API_CONFIG.baseURL;
@@ -460,7 +461,7 @@ async function testOIPConnection() {
     } catch (error) {
         gameState.connected = false;
         indicator.textContent = '🔴';
-        alert('❌ Failed to connect to OIP backend\n\nMake sure the backend is running on :3005');
+        alert(`❌ Failed to connect to OIP backend\n\nMake sure the backend is running on :${window.OIP_PORT || 3005}`);
     }
 }
 
