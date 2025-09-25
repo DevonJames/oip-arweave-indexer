@@ -462,7 +462,7 @@ services:
   # Ngrok for GPU deployments - Fixed for RTX 4090 server deployments
   ngrok-gpu:
     image: ngrok/ngrok:latest
-    command: http --domain=api.oip.onl oip-gpu:${PORT:-3005}
+    command: http --domain=${NGROK_DOMAIN} oip-gpu:${PORT:-3005}
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTH_TOKEN}
     depends_on:
