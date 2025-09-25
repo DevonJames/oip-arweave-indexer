@@ -7,6 +7,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const { Client } = require('@elastic/elasticsearch');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const socketIo = require('socket.io');
 const { createSwapsIndex, initializeIndices } = require('./config/createIndices');
@@ -152,11 +153,22 @@ app.get('/config.js', (req, res) => {
 });
 
 // Serve static files from the 'public' directory (or custom path if specified)
-const publicPath = process.env.CUSTOM_PUBLIC_PATH === 'true' 
-  ? path.join(__dirname, '..', 'public')  // Parent directory public folder
-  : path.join(__dirname, 'public');       // Default OIP public folder
+// In Docker, the entrypoint script handles symlinking, so we always use ./public
+// In non-Docker, we check for parent directory when CUSTOM_PUBLIC_PATH=true
+const isDocker = fs.existsSync('/.dockerenv');
+let publicPath;
+
+if (process.env.CUSTOM_PUBLIC_PATH === 'true' && !isDocker) {
+  // Non-Docker: Use parent directory
+  publicPath = path.join(__dirname, '..', 'public');
+} else {
+  // Docker or default: Use local public (symlinked by entrypoint if needed)
+  publicPath = path.join(__dirname, 'public');
+}
 
 console.log(`📁 Serving static files from: ${publicPath}`);
+console.log(`🐳 Docker environment: ${isDocker}`);
+console.log(`🔧 CUSTOM_PUBLIC_PATH: ${process.env.CUSTOM_PUBLIC_PATH}`);
 app.use(express.static(publicPath));
 
 // Define routes for static admin pages

@@ -19,6 +19,12 @@ if [ "$CUSTOM_PUBLIC_PATH" = "true" ]; then
         rm -rf /usr/src/app/public
         ln -sf /usr/src/parent-public /usr/src/app/public
         echo "📂 Using custom public directory from parent folder"
+        echo "🔍 Symlink created:"
+        ls -la /usr/src/app/public
+        echo "🔍 Parent public directory contents:"
+        ls -la /usr/src/parent-public/ | head -10
+        echo "🔍 Final resolved path:"
+        readlink -f /usr/src/app/public
     else
         echo "⚠️  Parent public directory not found or empty"
         echo "📋 Expected: Parent directory should be mounted to /usr/src/parent-public"
