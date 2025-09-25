@@ -79,3 +79,26 @@ GUN_DEFAULT_PRIVACY=false
 # Set to 'true' to serve static files from parent directory's public/ folder
 # Useful for multi-deployment scenarios like RockHoppersGame/public/
 CUSTOM_PUBLIC_PATH=false
+
+# Multi-Stack Deployment Configuration
+# Unique project name to avoid Docker conflicts when running multiple OIP stacks
+# This affects container names, network names, and volume names
+COMPOSE_PROJECT_NAME=oip-arweave-indexer
+
+# Service Port Configuration (for running multiple OIP stacks)
+# Main OIP API port (already configured above as PORT)
+ELASTICSEARCH_PORT=9200
+ELASTICSEARCH_TRANSPORT_PORT=9300
+KIBANA_PORT=5601
+IPFS_SWARM_PORT=4001
+IPFS_API_PORT=5001
+IPFS_GATEWAY_PORT=8080
+OLLAMA_PORT=11434
+TEXT_GENERATOR_PORT=8081
+STT_SERVICE_PORT=8003
+TTS_SERVICE_PORT=8005
+SPEECH_SYNTHESIZER_PORT=8082
+GUN_RELAY_PORT=8765
+NGROK_DASHBOARD_PORT=4040
+DEBUG_PORT=9229
+NEXT_FRONTEND_PORT=3000
