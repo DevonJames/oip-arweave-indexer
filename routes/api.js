@@ -10,10 +10,15 @@ const mediaDirectory = path.join(__dirname, '../media');
 const { ongoingScrapes } = require('../helpers/sharedState.js'); // Adjust the path to store.js
 
 // Serve static files from the public directory
-router.use(express.static(path.join(__dirname, '../public')));
+// Use custom public path if specified, otherwise default to OIP's public folder
+const publicPath = process.env.CUSTOM_PUBLIC_PATH === 'true' 
+  ? path.join(__dirname, '..', '..', 'public')  // Parent directory public folder
+  : path.join(__dirname, '..', 'public');       // Default OIP public folder
+
+router.use(express.static(publicPath));
 
 router.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/index.html'));
+    res.sendFile(path.join(publicPath, 'index.html'));
 });
 
 // Simple RAG test endpoint

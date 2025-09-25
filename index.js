@@ -149,15 +149,20 @@ app.get('/config.js', (req, res) => {
   res.send(`window.API_BASE_URL = '${safeApiBase}';`);
 });
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from the 'public' directory (or custom path if specified)
+const publicPath = process.env.CUSTOM_PUBLIC_PATH === 'true' 
+  ? path.join(__dirname, '..', 'public')  // Parent directory public folder
+  : path.join(__dirname, 'public');       // Default OIP public folder
+
+console.log(`📁 Serving static files from: ${publicPath}`);
+app.use(express.static(publicPath));
 
 // Define routes for static admin pages
 app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    res.sendFile(path.join(publicPath, 'admin.html'));
 });
 app.get('/admin_login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin_login.html'));
+    res.sendFile(path.join(publicPath, 'admin_login.html'));
 });
 
 app.use(bodyParser.json());
