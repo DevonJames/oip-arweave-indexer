@@ -344,12 +344,34 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
         let recordData = '';
         // console.log(getFileInfo(), getLineNumber(), 'Publishing new record:', { recordType }, record);
         // handle new delete record or template
-        if (record.delete !== undefined && typeof record.delete === 'object' && record.delete.didTx) {
+        if (record.delete !== undefined && typeof record.delete === 'object' && (record.delete.didTx || record.delete.did)) {
             recordType = 'delete';
-            const didTx = record.delete.didTx;
-        } else if (record.deleteTemplate !== undefined && typeof record.deleteTemplate === 'object' && record.deleteTemplate.didTx) {
+            const didTx = record.delete.didTx || record.delete.did;
+            
+            // Skip template processing for delete messages, handle directly
+            recordData = JSON.stringify([record]);
+            
+            const jwk = JSON.parse(fs.readFileSync(getWalletFilePath()));
+            
+            const myPublicKey = jwk.n;
+            const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
+            const creatorDid = `did:arweave:${myAddress}`;
+            
+            // Perform immediate deletion on local node
+            try {
+                console.log('Processing delete message for:', didTx);
+                await deleteRecordFromDB(creatorDid, { creator: myAddress, data: record });
+                console.log('Local deletion processed for:', didTx);
+            } catch (error) {
+                console.error('Error processing local delete message:', error);
+                // Continue with blockchain publishing even if local deletion fails
+            }
+            
+            let stringValue = JSON.stringify(record);
+            recordData += stringValue;
+        } else if (record.deleteTemplate !== undefined && typeof record.deleteTemplate === 'object' && (record.deleteTemplate.didTx || record.deleteTemplate.did)) {
             recordType = 'deleteTemplate';
-            const didTx = record.deleteTemplate.didTx;
+            const didTx = record.deleteTemplate.didTx || record.deleteTemplate.did;
             
             // Skip template processing for deleteTemplate messages, handle directly
             recordData = JSON.stringify([record]);
@@ -359,7 +381,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
             const myPublicKey = jwk.n;
             const myAddress = base64url(createHash('sha256').update(Buffer.from(myPublicKey, 'base64')).digest()); 
             const creatorDid = `did:arweave:${myAddress}`;
-            transaction.creator = myAddress;
+            const transaction = { creator: myAddress, data: record };
             
             // Check if this is a template deletion by searching in templates index
             try {
