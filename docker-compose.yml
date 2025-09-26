@@ -459,7 +459,7 @@ services:
     profiles:
       - minimal
 
-  # Ngrok for GPU deployments - Fixed for RTX 4090 server deployments
+  # Ngrok for GPU deployments - Uses configurable domain from .env
   ngrok-gpu:
     image: ngrok/ngrok:latest
     command: http --domain=${NGROK_DOMAIN} oip-gpu:${PORT:-3005}
