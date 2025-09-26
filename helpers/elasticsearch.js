@@ -788,8 +788,14 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             ? JSON.parse(transaction.data) 
             : transaction.data;
         
-        didTxToDelete = parsedData.deleteTemplate?.didTx || parsedData.delete?.didTx;
+        didTxToDelete = parsedData.deleteTemplate?.didTx || parsedData.deleteTemplate?.did || parsedData.delete?.didTx || parsedData.delete?.did;
         console.log(getFileInfo(), getLineNumber(), 'didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete })
+        
+        if (!didTxToDelete) {
+            console.log(getFileInfo(), getLineNumber(), 'No target DID found in delete message:', parsedData);
+            return;
+        }
+        
         if (creatorDid === 'did:arweave:' + transaction.creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
 
