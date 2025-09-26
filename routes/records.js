@@ -47,7 +47,13 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
         const queryParams = { 
             ...req.query,
             user: req.user,                    // NEW: Pass user info
-            isAuthenticated: req.isAuthenticated // NEW: Pass auth status
+            isAuthenticated: req.isAuthenticated, // NEW: Pass auth status
+            requestInfo: {                     // NEW: Pass request info for domain validation
+                origin: req.headers.origin,
+                referer: req.headers.referer,
+                host: req.headers.host,
+                headers: req.headers
+            }
         };
         
         // Normalize DID parameter (backward compatibility)

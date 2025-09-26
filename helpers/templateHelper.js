@@ -823,13 +823,23 @@ async function publishToGun(record, recordType, options = {}) {
             }
         };
         
+        // Determine if encryption is needed based on access control
+        const accessControl = gunCompatibleRecord.accessControl || options.accessControl;
+        const shouldEncrypt = accessControl && 
+                            (accessControl.access_level === 'private' || 
+                             accessControl.access_level === 'organization' ||
+                             accessControl.access_level === 'shared');
+        
         // Publish to GUN using publisher manager
         const publishResult = await publisherManager.publish(gunRecordData, {
             storage: 'gun',
             publisherPubKey: myPublicKey,
             localId: options.localId,
-            accessControl: options.accessControl,
-            writerKeys: options.writerKeys
+            accessControl: accessControl,
+            writerKeys: options.writerKeys,
+            encrypt: shouldEncrypt,
+            userPublicKey: myPublicKey,
+            userPassword: options.userPassword // May not be available during publishing
         });
         
         // Update with final DID
@@ -839,6 +849,22 @@ async function publishToGun(record, recordType, options = {}) {
         // Index to Elasticsearch (reuse existing function!)
         await indexRecord(gunRecordData);
         console.log('GUN record indexed to Elasticsearch:', publishResult.did);
+        
+        // Register in GUN registry for other nodes to discover
+        try {
+            const { GunSyncService } = require('./gunSyncService');
+            const gunSyncService = new GunSyncService();
+            await gunSyncService.registerLocalRecord(
+                publishResult.did,
+                publishResult.soul,
+                recordType,
+                myPublicKey
+            );
+            console.log('📝 Record registered in GUN registry for sync:', publishResult.did);
+        } catch (registryError) {
+            console.error('⚠️ Failed to register record in GUN registry (sync may be affected):', registryError);
+            // Don't fail the entire publish operation for registry issues
+        }
         
         return {
             transactionId: publishResult.id, // Use soul as transaction ID for GUN

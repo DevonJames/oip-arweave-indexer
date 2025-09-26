@@ -75,6 +75,15 @@ GUN_PEERS=http://gun-relay:8765
 GUN_ENABLE_ENCRYPTION=true
 GUN_DEFAULT_PRIVACY=false
 
+# GUN Sync Configuration (for multi-node synchronization)
+GUN_SYNC_ENABLED=true
+GUN_SYNC_INTERVAL=30000
+GUN_REGISTRY_ROOT=oip:registry
+GUN_NODE_ID_OVERRIDE=
+GUN_SYNC_PRIVATE_RECORDS=true
+GUN_SYNC_TRUSTED_NODES=
+GUN_EXTERNAL_PEERS=
+
 # Custom Public Directory Configuration
 # Set to 'true' to serve static files from parent directory's public/ folder
 # Useful for multi-deployment scenarios like RockHoppersGame/public/

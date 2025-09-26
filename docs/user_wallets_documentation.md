@@ -112,6 +112,7 @@ const userDoc = {
   publicKey: publicKey,                    // Hex-encoded public key
   encryptedPrivateKey: encryptedPrivateKey, // PBKDF2-encrypted private key
   encryptedMnemonic: encryptedMnemonic,     // PBKDF2-encrypted mnemonic
+  encryptedGunSalt: encryptedGunSalt,       // AES-256-GCM encrypted GUN salt
   keyDerivationPath: "m/44'/0'/0'/0/0",     // BIP-32 derivation path
   createdAt: new Date(),
   waitlistStatus: 'registered',
@@ -221,6 +222,7 @@ New records created by users include simplified access control (compatible with 
 
 - **Private Keys**: Encrypted with user's password using PBKDF2 (100,000 iterations)
 - **Mnemonics**: Encrypted with user's password using PBKDF2 (100,000 iterations)
+- **GUN Encryption Salt**: User-specific salt encrypted with password using AES-256-GCM
 - **Public Keys**: Stored in plaintext (safe to expose)
 
 ### Key Derivation Security
@@ -233,7 +235,7 @@ New records created by users include simplified access control (compatible with 
 
 - **Ownership Verification**: Records include `owner_public_key` for cryptographic ownership
 - **Access Control**: `access_level` field controls visibility (public/private/shared)
-- **GUN Encryption**: Private records encrypted with AES-256-GCM before GUN storage
+- **Per-User GUN Encryption**: Private records encrypted with user-specific keys derived from HD wallet + unique salt
 
 ## Authentication Flow
 
@@ -387,4 +389,239 @@ Same HD wallet works across multiple devices with mnemonic import.
 - **Ownership Verification**: Multiple fallback methods for checking record ownership
 - **Legacy Support**: Old records using server keys still work during migration
 
-This HD wallet system provides the cryptographic foundation for true user ownership in the ALFRED ecosystem, with practical workarounds for current database limitations.
+## Per-User GUN Encryption System
+
+### Overview
+
+The ALFRED system implements per-user encryption for GUN records, ensuring that private records can only be decrypted by their original creator. This provides true privacy and security for sensitive data like conversation sessions.
+
+### Encryption Key Generation
+
+#### 1. User-Specific Salt Generation
+During registration, each user gets a unique 32-byte encryption salt:
+
+```javascript
+// Generate unique salt for each user
+const gunEncryptionSalt = crypto.randomBytes(32).toString('hex');
+
+// Encrypt salt with user's password using AES-256-GCM
+const encryptedGunSalt = encryptSaltWithPassword(gunEncryptionSalt, password);
+```
+
+#### 2. Per-User Encryption Key Derivation
+For each GUN record encryption/decryption:
+
+```javascript
+// Combine user's public key with their unique salt
+const keyMaterial = userPublicKey + ':' + gunSalt;
+const encryptionKey = crypto.pbkdf2Sync(keyMaterial, 'oip-gun-encryption', 100000, 32, 'sha256');
+```
+
+### Encryption Process
+
+#### 1. Record Encryption (Publishing)
+```javascript
+// User publishes private record
+const recordData = { /* user's private data */ };
+
+// Get user's encryption key
+const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
+const encryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
+
+// Encrypt with AES-256-GCM
+const encrypted = encryptWithUserKey(recordData, encryptionKey);
+
+// Store with ownership metadata
+const gunRecord = {
+  data: encrypted,
+  meta: {
+    encrypted: true,
+    encryptionMethod: 'aes-256-gcm',
+    encryptedBy: userPublicKey  // Track who encrypted it
+  },
+  oip: { /* record metadata */ }
+};
+```
+
+#### 2. Record Decryption (Retrieval)
+```javascript
+// User retrieves their private record
+const encryptedRecord = await gunHelper.getRecord(soul, {
+  userPublicKey: userPublicKey,
+  userPassword: userPassword
+});
+
+// System checks ownership
+if (encryptedRecord.meta.encryptedBy !== userPublicKey) {
+  throw new Error('Cannot decrypt: not your record');
+}
+
+// Decrypt with user's key
+const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
+const decryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
+const decryptedData = decryptWithUserKey(encryptedRecord, decryptionKey);
+```
+
+### Security Benefits
+
+✅ **True Privacy**: Only the record creator can decrypt their private records  
+✅ **Unique Keys**: Each user has different encryption keys derived from their HD wallet  
+✅ **Salt Security**: User-specific salts prevent rainbow table attacks  
+✅ **Cross-User Isolation**: Users cannot decrypt each other's private records  
+✅ **Password Protection**: Encryption salt is protected by user's password  
+✅ **Key Rotation**: New users get fresh salts, existing users can regenerate  
+
+### Migration and Compatibility
+
+#### Legacy Record Support
+The system maintains backward compatibility with existing records:
+
+```javascript
+// Legacy records (encrypted with shared key)
+if (!encryptedRecord.meta.encryptedBy) {
+  // Use old shared key for decryption
+  const legacyKey = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
+  return decryptLegacyRecord(encryptedRecord, legacyKey);
+}
+
+// New records (per-user encryption)
+const userKey = generateUserEncryptionKey(userPublicKey, userSalt);
+return decryptUserRecord(encryptedRecord, userKey);
+```
+
+#### Existing User Migration
+When existing users log in, the system automatically:
+
+1. **Detects Missing Salt**: Checks if user has `encryptedGunSalt` field
+2. **Generates Salt**: Creates new 32-byte salt if missing
+3. **Encrypts Salt**: Encrypts salt with user's password using AES-256-GCM
+4. **Updates Database**: Stores encrypted salt in user record
+5. **Enables Per-User Encryption**: Future records use user-specific keys
+
+#### Migration Script
+For bulk migration of existing users:
+
+```bash
+# Check what users need salt migration
+node scripts/migrate-users-gun-salt.js --dry-run
+
+# Perform migration (creates placeholder salts)
+node scripts/migrate-users-gun-salt.js
+
+# Users must re-authenticate to properly encrypt their salts
+```
+
+### Encryption Metadata
+
+#### Record Structure with Per-User Encryption
+```javascript
+{
+  data: {
+    encrypted: "base64_encrypted_content",  // 🔒 User's private data
+    iv: "base64_iv",                       // 🔓 Initialization vector
+    tag: "base64_auth_tag"                 // 🔓 Authentication tag
+  },
+  meta: {
+    encrypted: true,                       // 🔓 Encryption flag
+    encryptionMethod: "aes-256-gcm",       // 🔓 Encryption algorithm
+    encryptedBy: "user_public_key_hex"     // 🔓 NEW: Owner identification
+  },
+  oip: {
+    did: "did:gun:soul",                   // 🔓 Record identifier
+    recordType: "conversationSession",     // 🔓 Record type
+    creator: { publicKey: "..." }          // 🔓 Creator info
+  }
+}
+```
+
+### User Database Schema Updates
+
+#### New Fields Added to Users Index
+```javascript
+{
+  // Existing fields
+  email: "user@example.com",
+  passwordHash: "bcrypt_hash",
+  publicKey: "hex_public_key",
+  encryptedPrivateKey: "pbkdf2_encrypted_private_key",
+  encryptedMnemonic: "pbkdf2_encrypted_mnemonic",
+  
+  // NEW: GUN encryption fields
+  encryptedGunSalt: "aes_256_gcm_encrypted_salt",     // User's unique encryption salt
+  gunSaltGeneratedAt: "2025-01-13T...",               // When salt was created
+  gunSaltUpgradedAt: "2025-01-13T...",                // When migrated from placeholder
+  
+  // Existing fields
+  keyDerivationPath: "m/44'/0'/0'/0/0",
+  createdAt: "2025-01-13T...",
+  waitlistStatus: "registered"
+}
+```
+
+### API Integration
+
+#### Publishing Private Records
+```javascript
+// Frontend publishes private record
+const response = await fetch('/api/records/newRecord?recordType=conversationSession&storage=gun', {
+  headers: {
+    'Authorization': `Bearer ${jwtToken}`,  // Contains user's public key
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    basic: { name: "My Private Session" },
+    conversationSession: { messages: ["Hello", "World"] },
+    accessControl: { 
+      access_level: "private",
+      owner_public_key: userPublicKey 
+    }
+  })
+});
+
+// Backend extracts user info from JWT and encrypts with user's key
+const userPublicKey = req.user.publicKey;  // From JWT
+const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
+const encryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
+```
+
+#### Retrieving Private Records
+```javascript
+// Frontend requests private records
+const response = await fetch('/api/records?source=gun&recordType=conversationSession', {
+  headers: {
+    'Authorization': `Bearer ${jwtToken}`  // System uses this to decrypt user's records
+  }
+});
+
+// Backend automatically decrypts records owned by the authenticated user
+// Returns decrypted data for user's records, encrypted data remains encrypted for others
+```
+
+### Cross-Node Synchronization
+
+#### Per-User Encryption in Sync
+The GUN sync system handles per-user encryption intelligently:
+
+1. **Legacy Records**: Synced and decrypted with shared key (backward compatibility)
+2. **Per-User Records**: Synced but remain encrypted unless user authenticates
+3. **Ownership Tracking**: `encryptedBy` field identifies record owner
+4. **Selective Decryption**: Only decrypt records when user provides credentials
+
+#### Sync Behavior
+```javascript
+// During sync discovery
+if (encryptedRecord.meta.encryptedBy) {
+  // Per-user encrypted - store encrypted, mark as needing user decryption
+  syncRecord({
+    ...record,
+    needsUserDecryption: true,
+    encryptedBy: encryptedRecord.meta.encryptedBy
+  });
+} else {
+  // Legacy encrypted - attempt shared key decryption
+  const decrypted = await decryptLegacyRecord(encryptedRecord);
+  syncRecord(decrypted);
+}
+```
+
+This enhanced encryption system provides true privacy for GUN records while maintaining backward compatibility and enabling secure cross-node synchronization.

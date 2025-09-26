@@ -79,16 +79,68 @@ class GunHelper {
                 }
             };
 
-            // Handle encryption for private records (simplified for HTTP API)
+            // Handle encryption for private records with smart encryption strategy
             if (options.encrypt) {
-                console.log('🔒 Encrypting GUN record for private storage');
+                console.log('🔒 Encrypting GUN record with smart encryption strategy');
                 
-                // AES-256-GCM with auth tag persisted
+                const userPublicKey = options.userPublicKey || options.publisherPubKey;
+                const userPassword = options.userPassword;
+                const accessControl = options.accessControl;
+                
+                if (!userPublicKey) {
+                    throw new Error('User public key required for encryption');
+                }
+                
+                // Determine encryption strategy based on access control
+                const { OrganizationEncryption } = require('./organizationEncryption');
+                const orgEncryption = new OrganizationEncryption();
+                
+                const encryptionStrategy = await orgEncryption.determineEncryptionStrategy(accessControl, userPublicKey);
+                
+                if (!encryptionStrategy.encrypt) {
+                    console.log('🔓 No encryption needed for public record');
+                    return; // Don't encrypt public records
+                }
+                
+                let encryptionKey;
+                let encryptionMetadata = {
+                    encrypted: true,
+                    encryptionMethod: 'aes-256-gcm'
+                };
+                
+                if (encryptionStrategy.encryptionType === 'organization') {
+                    // Use organization encryption key
+                    encryptionKey = encryptionStrategy.encryptionKey;
+                    encryptionMetadata.encryptionType = 'organization';
+                    encryptionMetadata.encryptedForOrganization = encryptionStrategy.organizationDid;
+                    encryptionMetadata.sharedWith = encryptionStrategy.sharedWith;
+                    console.log(`🏢 Using organization encryption for: ${encryptionStrategy.organizationDid}`);
+                    
+                } else {
+                    // Use per-user encryption (default for private records)
+                    if (userPassword) {
+                        try {
+                            const { getUserGunEncryptionSalt, generateUserEncryptionKey } = require('../routes/user');
+                            const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
+                            encryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
+                            console.log('🔑 Using user-specific encryption key with personal salt');
+                        } catch (error) {
+                            console.warn('🔑 Failed to get user salt, falling back to public key only:', error.message);
+                            encryptionKey = crypto.pbkdf2Sync(userPublicKey, 'oip-gun-fallback', 100000, 32, 'sha256');
+                        }
+                    } else {
+                        encryptionKey = crypto.pbkdf2Sync(userPublicKey, 'oip-gun-fallback', 100000, 32, 'sha256');
+                        console.log('🔑 Using public key only encryption (no password available)');
+                    }
+                    
+                    encryptionMetadata.encryptionType = 'per-user';
+                    encryptionMetadata.encryptedBy = userPublicKey;
+                }
+                
+                // Perform AES-256-GCM encryption
                 const algorithm = 'aes-256-gcm';
-                // Use PBKDF2 for key derivation (matches frontend Web Crypto API)
-                const key = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
-                const iv = crypto.randomBytes(12); // 12-byte IV recommended for GCM
-                const cipher = crypto.createCipheriv(algorithm, key, iv);
+                const iv = crypto.randomBytes(12);
+                const cipher = crypto.createCipheriv(algorithm, encryptionKey, iv);
 
                 const plaintext = Buffer.from(JSON.stringify(gunRecord.data), 'utf8');
                 const encryptedBuf = Buffer.concat([cipher.update(plaintext), cipher.final()]);
@@ -99,8 +151,11 @@ class GunHelper {
                     iv: iv.toString('base64'),
                     tag: authTag.toString('base64')
                 };
-                gunRecord.meta.encrypted = true;
-                gunRecord.meta.encryptionMethod = algorithm;
+                
+                // Apply encryption metadata
+                Object.assign(gunRecord.meta, encryptionMetadata);
+                
+                console.log(`✅ Encrypted record using ${encryptionStrategy.encryptionType} encryption`);
             }
 
             console.log('📡 Sending HTTP PUT request to GUN API...');
@@ -161,35 +216,112 @@ class GunHelper {
             if (response.data.success) {
                 let data = response.data.data;
                 
-                // Handle encrypted data
+                // Handle encrypted data with smart decryption strategy
                 if (data.meta && data.meta.encrypted && data.meta.encryptionMethod === 'aes-256-gcm') {
-                    console.log('🔓 Decrypting GUN record');
+                    console.log('🔓 Decrypting GUN record with smart decryption strategy');
 
-                    // Use PBKDF2 for key derivation (matches frontend Web Crypto API)
-                    const key = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
-                    const iv = Buffer.from(data.data.iv, 'base64');
-                    const tag = Buffer.from(data.data.tag, 'base64');
-                    const encryptedBuf = Buffer.from(data.data.encrypted, 'base64');
-                    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-                    decipher.setAuthTag(tag);
+                    const userPublicKey = options.userPublicKey;
+                    const userPassword = options.userPassword;
+                    const encryptionType = data.meta.encryptionType;
+                    
+                    if (!userPublicKey) {
+                        throw new Error('User public key required for decryption');
+                    }
+                    
+                    let decryptionResult;
+                    
+                    if (encryptionType === 'organization') {
+                        // Use organization decryption
+                        console.log('🏢 Attempting organization decryption');
+                        const { OrganizationEncryption } = require('./organizationEncryption');
+                        const orgEncryption = new OrganizationEncryption();
+                        
+                        try {
+                            // For organization decryption, we need to pass request info for membership validation
+                            decryptionResult = await orgEncryption.decryptWithOrganizationKey(data, userPublicKey);
+                        } catch (orgError) {
+                            console.warn('🏢 Organization decryption failed:', orgError.message);
+                            throw new Error(`Organization decryption failed: ${orgError.message}`);
+                        }
+                        
+                    } else if (encryptionType === 'per-user' || data.meta.encryptedBy) {
+                        // Use per-user decryption
+                        console.log('👤 Attempting per-user decryption');
+                        const encryptedBy = data.meta.encryptedBy;
+                        
+                        if (encryptedBy && encryptedBy !== userPublicKey) {
+                            throw new Error(`Cannot decrypt record: encrypted by ${encryptedBy.slice(0, 12)}..., but you are ${userPublicKey.slice(0, 12)}...`);
+                        }
+                        
+                        let decryptionKey;
+                        
+                        if (userPassword) {
+                            try {
+                                const { getUserGunEncryptionSalt, generateUserEncryptionKey } = require('../routes/user');
+                                const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
+                                decryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
+                                console.log('🔑 Using user-specific decryption key with personal salt');
+                            } catch (error) {
+                                console.warn('🔑 Failed to get user salt for decryption, falling back to public key only:', error.message);
+                                decryptionKey = crypto.pbkdf2Sync(userPublicKey, 'oip-gun-fallback', 100000, 32, 'sha256');
+                            }
+                        } else {
+                            decryptionKey = crypto.pbkdf2Sync(userPublicKey, 'oip-gun-fallback', 100000, 32, 'sha256');
+                            console.log('🔑 Using public key only decryption (no password available)');
+                        }
 
-                    const dec = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
-                    const decryptedData = JSON.parse(dec.toString('utf8'));
+                        const iv = Buffer.from(data.data.iv, 'base64');
+                        const tag = Buffer.from(data.data.tag, 'base64');
+                        const encryptedBuf = Buffer.from(data.data.encrypted, 'base64');
+                        const decipher = crypto.createDecipheriv('aes-256-gcm', decryptionKey, iv);
+                        decipher.setAuthTag(tag);
 
-                    console.log('🔍 Backend decrypted data structure:', decryptedData);
-                    console.log('🔍 Backend decrypted conversationSession:', decryptedData?.conversationSession);
-                    console.log('🔍 Backend decrypted conversationSession messages:', decryptedData?.conversationSession?.messages?.length || 0);
+                        const dec = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
+                        const decryptedData = JSON.parse(dec.toString('utf8'));
+                        
+                        decryptionResult = {
+                            data: decryptedData,
+                            meta: {
+                                ...data.meta,
+                                encrypted: false,
+                                wasEncrypted: true,
+                                decryptedBy: userPublicKey
+                            },
+                            oip: data.oip
+                        };
+                        
+                    } else {
+                        // Legacy encryption without type metadata
+                        console.log('🔄 Attempting legacy decryption');
+                        const legacyKey = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
+                        
+                        const iv = Buffer.from(data.data.iv, 'base64');
+                        const tag = Buffer.from(data.data.tag, 'base64');
+                        const encryptedBuf = Buffer.from(data.data.encrypted, 'base64');
+                        const decipher = crypto.createDecipheriv('aes-256-gcm', legacyKey, iv);
+                        decipher.setAuthTag(tag);
 
-                    // Return the decrypted data directly instead of the GUN structure
-                    // This ensures the frontend gets the actual content, not GUN references
+                        const dec = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
+                        const decryptedData = JSON.parse(dec.toString('utf8'));
+                        
+                        decryptionResult = {
+                            data: decryptedData,
+                            meta: {
+                                ...data.meta,
+                                encrypted: false,
+                                wasEncrypted: true,
+                                isLegacyEncryption: true
+                            },
+                            oip: data.oip
+                        };
+                    }
+
+                    console.log('🔍 Backend decrypted data structure:', decryptionResult.data);
+                    console.log('🔍 Backend decrypted conversationSession:', decryptionResult.data?.conversationSession);
+
+                    // Return the decrypted data with metadata
                     return {
-                        data: decryptedData,
-                        meta: {
-                            ...data.meta,
-                            encrypted: false,
-                            wasEncrypted: true // Mark that it was decrypted
-                        },
-                        oip: data.oip,
+                        ...decryptionResult,
                         _: data._ // Keep any other GUN metadata if needed
                     };
                 }
