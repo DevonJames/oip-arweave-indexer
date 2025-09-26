@@ -146,6 +146,197 @@
             border-color: #3b82f6;
         }
 
+        .gun-sync-status {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 8px;
+        }
+
+        .gun-sync-status:hover {
+            background: rgba(255,255,255,0.15);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        .gun-sync-status.healthy {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.4);
+        }
+
+        .gun-sync-status.unhealthy {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .gun-sync-status.disabled {
+            background: rgba(156, 163, 175, 0.2);
+            border-color: rgba(156, 163, 175, 0.4);
+            opacity: 0.7;
+        }
+
+        /* User Menu Styles */
+        .user-menu {
+            position: relative;
+        }
+
+        .user-menu-button {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 100px;
+        }
+
+        .user-menu-button:hover {
+            background: rgba(255,255,255,0.15);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        .user-menu-button.authenticated {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.4);
+        }
+
+        .user-menu-indicator {
+            font-size: 16px;
+        }
+
+        .user-menu-text {
+            flex: 1;
+            text-align: left;
+        }
+
+        .user-menu-arrow {
+            font-size: 12px;
+            transition: transform 0.2s ease;
+        }
+
+        .user-menu-button.open .user-menu-arrow {
+            transform: rotate(180deg);
+        }
+
+        .user-menu-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 280px;
+            margin-top: 8px;
+            border: 1px solid #e5e7eb;
+            backdrop-filter: blur(10px);
+        }
+
+        .user-menu-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+        }
+
+        .user-details {
+            flex: 1;
+        }
+
+        .user-email {
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 14px;
+        }
+
+        .user-key {
+            font-size: 12px;
+            color: #6b7280;
+            font-family: monospace;
+        }
+
+        .user-menu-section {
+            padding: 12px 0;
+        }
+
+        .menu-section-title {
+            padding: 0 16px 8px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .user-menu-item {
+            width: 100%;
+            padding: 12px 16px;
+            background: none;
+            border: none;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .user-menu-item:hover {
+            background: #f3f4f6;
+        }
+
+        .user-menu-item.logout-item {
+            color: #dc2626;
+        }
+
+        .user-menu-item.logout-item:hover {
+            background: #fef2f2;
+        }
+
+        .user-menu-divider {
+            height: 1px;
+            background: #e5e7eb;
+            margin: 8px 0;
+        }
+
+        .jwt-status-inline {
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
         /* Header Search Styles */
         .header-search {
             display: flex;
@@ -3320,21 +3511,91 @@
             </div>
             
             <div class="auth-section">
+                <button id="gun-sync-status" class="gun-sync-status" onclick="showGunSyncModal()" title="Check GUN sync status">
+                    <span id="gun-sync-indicator">🔄</span>
+                    <span>Sync</span>
+                </button>
                 <button id="ai-drawer-toggle" class="ai-drawer-toggle" onclick="toggleAIDrawer()">
                     <img src="alfred.gif" alt="ΛLFRED" style="width: 16px; height: 16px; margin-right: 6px;">
                     ΛLFRED
                 </button>
-                <div id="jwt-status" class="jwt-status">
-                    <span id="jwt-indicator" class="jwt-indicator">🔓</span>
-                    <span id="jwt-user-info" class="jwt-user-info">Not authenticated</span>
-                </div>
-                <div id="user-info" class="hidden">
-                    <span id="logged-in-display" class="logged-in-user"></span>
-                    <button onclick="logout()" class="btn-secondary btn-small">Logout</button>
-                </div>
-                <div id="auth-buttons">
-                    <button onclick="showAuthModal()" class="btn-small">Login / Register</button>
-                    <button onclick="showJWTModal()" class="btn-small btn-secondary">JWT Token</button>
+                
+                <!-- Unified User Menu -->
+                <div id="user-menu" class="user-menu">
+                    <button id="user-menu-button" class="user-menu-button" onclick="toggleUserMenu()">
+                        <span id="user-menu-indicator" class="user-menu-indicator">🔓</span>
+                        <span id="user-menu-text" class="user-menu-text">Account</span>
+                        <span class="user-menu-arrow">▼</span>
+                    </button>
+                    
+                    <div id="user-menu-dropdown" class="user-menu-dropdown hidden">
+                        <!-- Authenticated User Menu -->
+                        <div id="authenticated-menu" class="hidden">
+                            <div class="user-menu-header">
+                                <div class="user-avatar">👤</div>
+                                <div class="user-details">
+                                    <div id="user-email-display" class="user-email">user@example.com</div>
+                                    <div id="user-key-display" class="user-key">...abc123</div>
+                                </div>
+                            </div>
+                            
+                            <div class="user-menu-section">
+                                <div class="menu-section-title">🔑 Wallet Management</div>
+                                <button onclick="showMnemonicModal()" class="user-menu-item">
+                                    <span>📝</span>
+                                    <span>View Recovery Phrase</span>
+                                </button>
+                            </div>
+                            
+                            <div class="user-menu-section">
+                                <div class="menu-section-title">🔐 Authentication</div>
+                                <button onclick="showJWTModal()" class="user-menu-item">
+                                    <span>🎫</span>
+                                    <span>JWT Token</span>
+                                </button>
+                                <div class="jwt-status-inline">
+                                    <span id="jwt-status-icon">🔓</span>
+                                    <span id="jwt-status-text">Token Status</span>
+                                </div>
+                            </div>
+                            
+                            <div class="user-menu-divider"></div>
+                            
+                            <button onclick="logout()" class="user-menu-item logout-item">
+                                <span>🚪</span>
+                                <span>Logout</span>
+                            </button>
+                        </div>
+                        
+                        <!-- Unauthenticated User Menu -->
+                        <div id="unauthenticated-menu">
+                            <div class="user-menu-section">
+                                <div class="menu-section-title">🔐 Account Access</div>
+                                <button onclick="showAuthModal('login')" class="user-menu-item">
+                                    <span>🔑</span>
+                                    <span>Login</span>
+                                </button>
+                                <button onclick="showAuthModal('register')" class="user-menu-item">
+                                    <span>📝</span>
+                                    <span>Register</span>
+                                </button>
+                                <button onclick="showAuthModal('import')" class="user-menu-item">
+                                    <span>📥</span>
+                                    <span>Import Wallet</span>
+                                </button>
+                            </div>
+                            
+                            <div class="user-menu-divider"></div>
+                            
+                            <div class="user-menu-section">
+                                <div class="menu-section-title">🎫 Advanced</div>
+                                <button onclick="showJWTModal()" class="user-menu-item">
+                                    <span>🎫</span>
+                                    <span>JWT Token</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3889,11 +4150,12 @@
                 </div>
                 <button onclick="login()">Login</button>
                 <button onclick="showRegisterForm()" class="btn-secondary">Register Instead</button>
+                <button onclick="showImportWalletForm()" class="btn-secondary">Import Wallet</button>
                 <button onclick="hideAuthModal()" class="btn-secondary">Cancel</button>
             </div>
             
             <div id="register-form" class="hidden">
-                <h2>Register</h2>
+                <h2>Register New Account</h2>
                 <div class="form-group">
                     <label for="register-email">Email:</label>
                     <input type="email" id="register-email" required>
@@ -3904,11 +4166,85 @@
                 </div>
                 <button onclick="register()">Register</button>
                 <button onclick="showLoginForm()" class="btn-secondary">Login Instead</button>
+                <button onclick="showImportWalletForm()" class="btn-secondary">Import Wallet</button>
+                <button onclick="hideAuthModal()" class="btn-secondary">Cancel</button>
+            </div>
+            
+            <div id="import-wallet-form" class="hidden">
+                <h2>Import Existing Wallet</h2>
+                <p style="color: #666; margin-bottom: 20px;">
+                    Import your wallet using your recovery phrase from another OIP node.
+                    <br><small>You'll need your 12-word recovery phrase and credentials.</small>
+                </p>
+                
+                <div class="form-group">
+                    <label for="import-email">Email:</label>
+                    <input type="email" id="import-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="import-password">Password:</label>
+                    <input type="password" id="import-password" required>
+                </div>
+                <div class="form-group">
+                    <label for="import-mnemonic">Recovery Phrase (12 words):</label>
+                    <textarea id="import-mnemonic" placeholder="abandon ability able about above absent absorb abstract absurd abuse access accident" 
+                             style="height: 80px; font-family: monospace; font-size: 12px; resize: vertical;" required></textarea>
+                    <small>Enter your 12-word recovery phrase separated by spaces</small>
+                </div>
+                
+                <button onclick="importWallet()">Import Wallet</button>
+                <button onclick="showLoginForm()" class="btn-secondary">Login Instead</button>
+                <button onclick="showRegisterForm()" class="btn-secondary">Register New</button>
                 <button onclick="hideAuthModal()" class="btn-secondary">Cancel</button>
             </div>
             
             <div id="auth-status" class="error-message hidden"></div>
             <div id="auth-success" class="success-message hidden"></div>
+        </div>
+    </div>
+    
+    <!-- Mnemonic Modal -->
+    <div id="mnemonic-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2 style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                <span>🔑</span>
+                Your Wallet Recovery Phrase
+            </h2>
+            
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ Security Warning</h4>
+                <ul style="margin: 0; padding-left: 20px; color: #856404;">
+                    <li>Never share your recovery phrase with anyone</li>
+                    <li>Store it securely offline (write it down)</li>
+                    <li>This phrase can restore your wallet on any OIP node</li>
+                    <li>Anyone with this phrase can access your account</li>
+                </ul>
+            </div>
+            
+            <div class="form-group">
+                <label for="mnemonic-password">Enter your password to view recovery phrase:</label>
+                <input type="password" id="mnemonic-password" placeholder="Your account password" required>
+            </div>
+            
+            <div id="mnemonic-display" class="hidden" style="background: #f8f9fa; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                <h4 style="margin: 0 0 15px 0; color: #667eea;">📝 Your Recovery Phrase:</h4>
+                <div id="mnemonic-words" style="font-family: monospace; font-size: 16px; font-weight: 600; color: #1f2937; background: white; padding: 15px; border-radius: 6px; border: 1px solid #d1d5db; word-spacing: 8px; line-height: 1.8;"></div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button onclick="copyMnemonicToClipboard()" class="btn-secondary" style="flex: 1;">
+                        📋 Copy to Clipboard
+                    </button>
+                    <button onclick="hideMnemonic()" class="btn-secondary" style="flex: 1;">
+                        👁️ Hide Phrase
+                    </button>
+                </div>
+            </div>
+            
+            <div id="mnemonic-status" class="hidden" style="margin: 15px 0;"></div>
+            
+            <div class="button-group">
+                <button onclick="showMnemonic()" class="btn-primary">Show Recovery Phrase</button>
+                <button onclick="hideMnemonicModal()" class="btn-secondary">Close</button>
+            </div>
         </div>
     </div>
 
@@ -3964,6 +4300,82 @@
                     </p>
                 </div>
             </details>
+        </div>
+    </div>
+
+    <!-- GUN Sync Status Modal -->
+    <div id="gun-sync-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2 style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                <span id="gun-sync-modal-indicator">🔄</span>
+                GUN Record Sync Status
+            </h2>
+            
+            <div id="gun-sync-loading" class="loading" style="text-align: center; padding: 20px;">
+                <div class="spinner"></div>
+                Loading sync status...
+            </div>
+            
+            <div id="gun-sync-content" class="hidden">
+                <!-- Service Status -->
+                <div class="form-group" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #495057;">📊 Service Status</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                        <div><strong>Status:</strong> <span id="sync-service-status">-</span></div>
+                        <div><strong>Running:</strong> <span id="sync-service-running">-</span></div>
+                        <div><strong>Node ID:</strong> <span id="sync-node-id" style="font-family: monospace; font-size: 12px;">-</span></div>
+                        <div><strong>Last Sync:</strong> <span id="sync-last-time">-</span></div>
+                    </div>
+                </div>
+                
+                <!-- Sync Metrics -->
+                <div class="form-group" style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #1976d2;">📈 Sync Metrics</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                        <div><strong>Records Discovered:</strong> <span id="sync-total-discovered">-</span></div>
+                        <div><strong>Records Synced:</strong> <span id="sync-total-synced">-</span></div>
+                        <div><strong>Success Rate:</strong> <span id="sync-success-rate">-</span></div>
+                        <div><strong>Sync Cycles:</strong> <span id="sync-cycles">-</span></div>
+                        <div><strong>Errors:</strong> <span id="sync-total-errors">-</span></div>
+                        <div><strong>Avg Sync Time:</strong> <span id="sync-avg-time">-</span></div>
+                    </div>
+                </div>
+                
+                <!-- Registry Statistics -->
+                <div class="form-group" style="background: #f0f4ff; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #3730a3;">📋 Registry Statistics</h4>
+                    <div style="font-size: 14px;">
+                        <div><strong>Total Records Registered:</strong> <span id="registry-total-records">-</span></div>
+                        <div style="margin-top: 8px;"><strong>Records by Type:</strong></div>
+                        <div id="registry-by-type" style="margin-left: 15px; font-size: 13px; color: #666;">-</div>
+                    </div>
+                </div>
+                
+                <!-- Configuration -->
+                <div class="form-group" style="background: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 10px 0; color: #f57c00;">⚙️ Configuration</h4>
+                    <div style="font-size: 14px;">
+                        <div><strong>Private Records:</strong> <span id="sync-config-private">-</span></div>
+                        <div><strong>Trusted Nodes:</strong> <span id="sync-config-trusted">-</span></div>
+                        <div><strong>Sync Interval:</strong> <span id="sync-config-interval">-</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="gun-sync-error" class="hidden" style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0;">❌ Sync Service Error</h4>
+                <div id="gun-sync-error-message">-</div>
+            </div>
+            
+            <div class="button-group">
+                <button id="force-sync-btn" onclick="forceSyncCycle()" class="btn-primary" disabled>
+                    🔄 Force Sync Now
+                </button>
+                <button onclick="refreshGunSyncStatus()" class="btn-secondary">
+                    🔄 Refresh Status
+                </button>
+                <button onclick="hideGunSyncModal()" class="btn-secondary">Close</button>
+            </div>
         </div>
     </div>
 
@@ -4031,6 +4443,12 @@
             
             // Initialize JWT token from localStorage
             initializeJWTToken();
+            
+            // Initialize GUN sync status checking
+            initializeGunSyncStatus();
+            
+            // Initialize user menu state
+            updateUserMenuState();
             
             // Always load templates first for dynamic rendering
             await loadTemplates();
@@ -4789,10 +5207,123 @@
             showSearchInterface();
         }
 
+        // User Menu Functions
+        function toggleUserMenu() {
+            const dropdown = document.getElementById('user-menu-dropdown');
+            const button = document.getElementById('user-menu-button');
+            
+            if (dropdown.classList.contains('hidden')) {
+                dropdown.classList.remove('hidden');
+                button.classList.add('open');
+                // Close menu when clicking outside
+                setTimeout(() => {
+                    document.addEventListener('click', closeUserMenuOnClickOutside);
+                }, 0);
+            } else {
+                dropdown.classList.add('hidden');
+                button.classList.remove('open');
+                document.removeEventListener('click', closeUserMenuOnClickOutside);
+            }
+        }
+
+        function closeUserMenuOnClickOutside(event) {
+            const userMenu = document.getElementById('user-menu');
+            if (!userMenu.contains(event.target)) {
+                const dropdown = document.getElementById('user-menu-dropdown');
+                const button = document.getElementById('user-menu-button');
+                dropdown.classList.add('hidden');
+                button.classList.remove('open');
+                document.removeEventListener('click', closeUserMenuOnClickOutside);
+            }
+        }
+
+        function updateUserMenuState() {
+            const button = document.getElementById('user-menu-button');
+            const indicator = document.getElementById('user-menu-indicator');
+            const text = document.getElementById('user-menu-text');
+            const authenticatedMenu = document.getElementById('authenticated-menu');
+            const unauthenticatedMenu = document.getElementById('unauthenticated-menu');
+            
+            if (authToken && currentUser) {
+                // Authenticated state
+                button.classList.add('authenticated');
+                indicator.textContent = '👤';
+                text.textContent = currentUser.split('@')[0]; // Show username part of email
+                authenticatedMenu.classList.remove('hidden');
+                unauthenticatedMenu.classList.add('hidden');
+                
+                // Update user details in dropdown
+                document.getElementById('user-email-display').textContent = currentUser;
+                
+                // Get public key from JWT if available
+                try {
+                    if (authToken) {
+                        const parts = authToken.split('.');
+                        if (parts.length === 3) {
+                            const payload = JSON.parse(atob(parts[1]));
+                            const publicKey = payload.publicKey;
+                            if (publicKey) {
+                                document.getElementById('user-key-display').textContent = `...${publicKey.slice(-8)}`;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Could not extract public key from JWT:', error);
+                }
+            } else {
+                // Unauthenticated state
+                button.classList.remove('authenticated');
+                indicator.textContent = '🔓';
+                text.textContent = 'Account';
+                authenticatedMenu.classList.add('hidden');
+                unauthenticatedMenu.classList.remove('hidden');
+            }
+            
+            // Update inline JWT status
+            updateInlineJWTStatus();
+        }
+
+        function updateInlineJWTStatus() {
+            const statusIcon = document.getElementById('jwt-status-icon');
+            const statusText = document.getElementById('jwt-status-text');
+            
+            if (authToken) {
+                try {
+                    const parts = authToken.split('.');
+                    if (parts.length === 3) {
+                        const payload = JSON.parse(atob(parts[1]));
+                        statusIcon.textContent = '🔐';
+                        statusText.textContent = 'Token Active';
+                    }
+                } catch (error) {
+                    statusIcon.textContent = '⚠️';
+                    statusText.textContent = 'Invalid Token';
+                }
+            } else {
+                statusIcon.textContent = '🔓';
+                statusText.textContent = 'No Token';
+            }
+        }
+
         // Authentication Modal functions
-        function showAuthModal() {
+        function showAuthModal(mode = 'login') {
             document.getElementById('auth-modal').classList.remove('hidden');
-            showLoginForm();
+            
+            if (mode === 'login') {
+                showLoginForm();
+            } else if (mode === 'register') {
+                showRegisterForm();
+            } else if (mode === 'import') {
+                showImportWalletForm();
+            } else {
+                showLoginForm();
+            }
+            
+            // Close user menu
+            const dropdown = document.getElementById('user-menu-dropdown');
+            const button = document.getElementById('user-menu-button');
+            dropdown.classList.add('hidden');
+            button.classList.remove('open');
         }
 
         function hideAuthModal() {
@@ -4803,11 +5334,19 @@
         function showLoginForm() {
             document.getElementById('login-form').classList.remove('hidden');
             document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('import-wallet-form').classList.add('hidden');
         }
 
         function showRegisterForm() {
             document.getElementById('login-form').classList.add('hidden');
             document.getElementById('register-form').classList.remove('hidden');
+            document.getElementById('import-wallet-form').classList.add('hidden');
+        }
+
+        function showImportWalletForm() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('import-wallet-form').classList.remove('hidden');
         }
 
         function clearAuthForms() {
@@ -4815,6 +5354,9 @@
             document.getElementById('password').value = '';
             document.getElementById('register-email').value = '';
             document.getElementById('register-password').value = '';
+            document.getElementById('import-email').value = '';
+            document.getElementById('import-password').value = '';
+            document.getElementById('import-mnemonic').value = '';
             hideElement('auth-status');
             hideElement('auth-success');
         }
@@ -4861,6 +5403,7 @@
                     }
                     
                     showLoggedInState();
+                    updateUserMenuState();
                     await loadTemplates();
                     showMessage('auth-success', 'Login successful!', 'success');
                     setTimeout(hideAuthModal, 1500);
@@ -4913,11 +5456,84 @@
                     }
                     
                     showLoggedInState();
+                    updateUserMenuState();
                     await loadTemplates();
-                    showMessage('auth-success', 'Registration successful!', 'success');
-                    setTimeout(hideAuthModal, 1500);
+                    
+                    // Show mnemonic for new registration
+                    if (data.mnemonic) {
+                        showMessage('auth-success', 'Registration successful! Please save your recovery phrase.', 'success');
+                        setTimeout(() => {
+                            hideAuthModal();
+                            showRegistrationMnemonicModal(data.mnemonic);
+                        }, 1500);
+                    } else {
+                        showMessage('auth-success', 'Registration successful!', 'success');
+                        setTimeout(hideAuthModal, 1500);
+                    }
                 } else {
                     showMessage('auth-status', data.error || 'Registration failed', 'error');
+                }
+            } catch (error) {
+                showMessage('auth-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        // Import wallet function
+        async function importWallet() {
+            const email = document.getElementById('import-email').value;
+            const password = document.getElementById('import-password').value;
+            const mnemonic = document.getElementById('import-mnemonic').value.trim();
+            
+            if (!email || !password || !mnemonic) {
+                showMessage('auth-status', 'Please fill in all fields', 'error');
+                return;
+            }
+
+            // Validate mnemonic (should be 12 words)
+            const words = mnemonic.split(/\s+/).filter(w => w.length > 0);
+            if (words.length !== 12) {
+                showMessage('auth-status', 'Recovery phrase must be exactly 12 words', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/user/import-wallet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password, mnemonic })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    currentUser = email;
+                    localStorage.setItem('oip-auth-token', authToken);
+                    localStorage.setItem('oip-user-email', currentUser);
+                    
+                    // Also store in the JWT token localStorage for consistency
+                    localStorage.setItem('oip-jwt-token', authToken);
+                    
+                    // Update JWT status display
+                    try {
+                        const parts = authToken.split('.');
+                        if (parts.length === 3) {
+                            const payload = JSON.parse(atob(parts[1]));
+                            updateJWTStatus(payload);
+                        }
+                    } catch (error) {
+                        console.error('Error updating JWT status after import:', error);
+                    }
+                    
+                    showLoggedInState();
+                    updateUserMenuState();
+                    await loadTemplates();
+                    showMessage('auth-success', 'Wallet imported successfully!', 'success');
+                    setTimeout(hideAuthModal, 1500);
+                } else {
+                    showMessage('auth-status', data.error || 'Wallet import failed', 'error');
                 }
             } catch (error) {
                 showMessage('auth-status', 'Network error: ' + error.message, 'error');
@@ -4935,20 +5551,174 @@
             updateJWTStatus(null);
             
             showLoginState();
+            updateUserMenuState();
+            
+            // Close user menu
+            const dropdown = document.getElementById('user-menu-dropdown');
+            const button = document.getElementById('user-menu-button');
+            dropdown.classList.add('hidden');
+            button.classList.remove('open');
         }
 
         function showLoggedInState() {
+            // Legacy elements (keep for compatibility)
             document.getElementById('user-info').classList.remove('hidden');
             document.getElementById('auth-buttons').classList.add('hidden');
             document.getElementById('publishing-content').classList.remove('hidden');
             document.getElementById('logged-in-display').textContent = currentUser;
+            
+            // Update new user menu
+            updateUserMenuState();
         }
 
         function showLoginState() {
+            // Legacy elements (keep for compatibility)
             document.getElementById('user-info').classList.add('hidden');
             document.getElementById('auth-buttons').classList.remove('hidden');
             document.getElementById('publishing-content').classList.add('hidden');
             hideAllPublishingSections();
+            
+            // Update new user menu
+            updateUserMenuState();
+        }
+
+        // Mnemonic Management Functions
+        function showMnemonicModal() {
+            document.getElementById('mnemonic-modal').classList.remove('hidden');
+            // Clear previous state
+            document.getElementById('mnemonic-display').classList.add('hidden');
+            document.getElementById('mnemonic-password').value = '';
+            document.getElementById('mnemonic-status').classList.add('hidden');
+            
+            // Close user menu
+            const dropdown = document.getElementById('user-menu-dropdown');
+            const button = document.getElementById('user-menu-button');
+            dropdown.classList.add('hidden');
+            button.classList.remove('open');
+        }
+
+        function hideMnemonicModal() {
+            document.getElementById('mnemonic-modal').classList.add('hidden');
+            // Clear sensitive data
+            document.getElementById('mnemonic-words').textContent = '';
+            document.getElementById('mnemonic-password').value = '';
+        }
+
+        async function showMnemonic() {
+            const password = document.getElementById('mnemonic-password').value;
+            
+            if (!password) {
+                showMnemonicStatus('Please enter your password', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/user/mnemonic?password=${encodeURIComponent(password)}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('mnemonic-words').textContent = data.mnemonic;
+                    document.getElementById('mnemonic-display').classList.remove('hidden');
+                    showMnemonicStatus('Recovery phrase retrieved successfully', 'success');
+                } else {
+                    showMnemonicStatus(data.error || 'Failed to retrieve recovery phrase', 'error');
+                }
+            } catch (error) {
+                showMnemonicStatus('Network error: ' + error.message, 'error');
+            }
+        }
+
+        function hideMnemonic() {
+            document.getElementById('mnemonic-display').classList.add('hidden');
+            document.getElementById('mnemonic-words').textContent = '';
+        }
+
+        function copyMnemonicToClipboard() {
+            const mnemonicText = document.getElementById('mnemonic-words').textContent;
+            
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(mnemonicText).then(() => {
+                    showMnemonicStatus('Recovery phrase copied to clipboard!', 'success');
+                }).catch(error => {
+                    showMnemonicStatus('Failed to copy to clipboard', 'error');
+                });
+            } else {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = mnemonicText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showMnemonicStatus('Recovery phrase copied to clipboard!', 'success');
+                } catch (error) {
+                    showMnemonicStatus('Failed to copy to clipboard', 'error');
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function showMnemonicStatus(message, type) {
+            const statusElement = document.getElementById('mnemonic-status');
+            statusElement.innerHTML = `<div class="${type === 'success' ? 'success-message' : 'error-message'}">${message}</div>`;
+            statusElement.classList.remove('hidden');
+            
+            if (type === 'success') {
+                setTimeout(() => statusElement.classList.add('hidden'), 3000);
+            }
+        }
+
+        function showRegistrationMnemonicModal(mnemonic) {
+            // Show the mnemonic modal with the new user's mnemonic pre-filled
+            const modal = document.getElementById('mnemonic-modal');
+            const passwordGroup = document.getElementById('mnemonic-password').closest('.form-group');
+            const showButton = document.querySelector('[onclick="showMnemonic()"]');
+            
+            modal.classList.remove('hidden');
+            document.getElementById('mnemonic-words').textContent = mnemonic;
+            document.getElementById('mnemonic-display').classList.remove('hidden');
+            
+            // Hide the password field since we're showing it directly after registration
+            passwordGroup.style.display = 'none';
+            showButton.style.display = 'none';
+            
+            showMnemonicStatus('🎉 Account created! Please save your recovery phrase securely.', 'success');
+            
+            // Add a special close handler to restore the modal to normal state
+            const closeButton = modal.querySelector('[onclick="hideMnemonicModal()"]');
+            const originalOnClick = closeButton.onclick;
+            closeButton.onclick = function() {
+                // Restore normal modal state
+                passwordGroup.style.display = 'block';
+                showButton.style.display = 'inline-block';
+                closeButton.onclick = originalOnClick;
+                hideMnemonicModal();
+            };
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('oip-auth-token');
+            localStorage.removeItem('oip-user-email');
+            localStorage.removeItem('oip-jwt-token');
+            
+            // Update JWT status display
+            updateJWTStatus(null);
+            
+            showLoginState();
+            updateUserMenuState();
+            
+            // Close user menu
+            const dropdown = document.getElementById('user-menu-dropdown');
+            const button = document.getElementById('user-menu-button');
+            dropdown.classList.add('hidden');
+            button.classList.remove('open');
         }
 
         // JWT Token Management Functions
@@ -4997,6 +5767,7 @@
 
                 // Update UI
                 updateJWTStatus(payload);
+                updateUserMenuState();
                 showJWTStatus(`Token set successfully! User: ${payload.email || 'Unknown'}`, 'success');
                 
                 // Auto-hide modal after success
@@ -5014,6 +5785,7 @@
             localStorage.removeItem('oip-jwt-token');
             document.getElementById('jwt-token-input').value = '';
             updateJWTStatus(null);
+            updateUserMenuState();
             showJWTStatus('Token cleared', 'success');
         }
 
@@ -5062,6 +5834,239 @@
                     localStorage.removeItem('oip-jwt-token');
                     localStorage.removeItem('oip-auth-token');
                 }
+            }
+        }
+
+        // GUN Sync Status Management
+        let gunSyncStatus = {
+            isHealthy: false,
+            lastChecked: null,
+            checkInterval: null
+        };
+
+        // Show GUN sync status modal
+        function showGunSyncModal() {
+            document.getElementById('gun-sync-modal').classList.remove('hidden');
+            loadGunSyncStatus();
+        }
+
+        // Hide GUN sync status modal
+        function hideGunSyncModal() {
+            document.getElementById('gun-sync-modal').classList.add('hidden');
+        }
+
+        // Load GUN sync status from API
+        async function loadGunSyncStatus() {
+            const loadingDiv = document.getElementById('gun-sync-loading');
+            const contentDiv = document.getElementById('gun-sync-content');
+            const errorDiv = document.getElementById('gun-sync-error');
+            
+            // Show loading state
+            loadingDiv.classList.remove('hidden');
+            contentDiv.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            
+            try {
+                console.log('[GUN Sync] Fetching sync status...');
+                
+                const response = await fetch('/api/health/gun-sync');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayGunSyncStatus(data);
+                    gunSyncStatus.isHealthy = data.status === 'healthy';
+                    gunSyncStatus.lastChecked = new Date();
+                    updateHeaderSyncIndicator(data);
+                } else {
+                    throw new Error(data.error || `HTTP ${response.status}`);
+                }
+                
+            } catch (error) {
+                console.error('[GUN Sync] Error loading status:', error);
+                displayGunSyncError(error.message);
+                gunSyncStatus.isHealthy = false;
+                updateHeaderSyncIndicator({ status: 'error' });
+            } finally {
+                loadingDiv.classList.add('hidden');
+            }
+        }
+
+        // Display GUN sync status in modal
+        function displayGunSyncStatus(data) {
+            const contentDiv = document.getElementById('gun-sync-content');
+            const errorDiv = document.getElementById('gun-sync-error');
+            
+            // Hide error and show content
+            errorDiv.classList.add('hidden');
+            contentDiv.classList.remove('hidden');
+            
+            // Update modal indicator
+            const modalIndicator = document.getElementById('gun-sync-modal-indicator');
+            if (data.status === 'healthy') {
+                modalIndicator.textContent = '✅';
+            } else if (data.status === 'unhealthy') {
+                modalIndicator.textContent = '⚠️';
+            } else {
+                modalIndicator.textContent = '❌';
+            }
+            
+            // Service Status
+            document.getElementById('sync-service-status').textContent = data.status || 'unknown';
+            document.getElementById('sync-service-running').textContent = data.running ? 'Yes' : 'No';
+            document.getElementById('sync-node-id').textContent = data.nodeId || 'unknown';
+            document.getElementById('sync-last-time').textContent = data.metrics?.lastSyncAgo || 'never';
+            
+            // Sync Metrics
+            document.getElementById('sync-total-discovered').textContent = data.metrics?.totalDiscovered || '0';
+            document.getElementById('sync-total-synced').textContent = data.metrics?.totalSynced || '0';
+            document.getElementById('sync-success-rate').textContent = data.metrics?.successRate || '0%';
+            document.getElementById('sync-cycles').textContent = data.metrics?.syncCycles || '0';
+            document.getElementById('sync-total-errors').textContent = data.metrics?.totalErrors || '0';
+            document.getElementById('sync-avg-time').textContent = data.metrics?.averageSyncTime || '0ms';
+            
+            // Registry Statistics
+            document.getElementById('registry-total-records').textContent = data.registry?.totalRecordsRegistered || '0';
+            
+            const recordsByType = data.registry?.recordsByType || {};
+            const typesList = Object.entries(recordsByType)
+                .map(([type, count]) => `${type}: ${count}`)
+                .join(', ') || 'No records registered';
+            document.getElementById('registry-by-type').textContent = typesList;
+            
+            // Configuration
+            const config = data.configuration || {};
+            document.getElementById('sync-config-private').textContent = config.privateRecordsEnabled ? 'Enabled' : 'Disabled';
+            document.getElementById('sync-config-trusted').textContent = 
+                config.trustedNodes && config.trustedNodes.length > 0 ? config.trustedNodes.join(', ') : 'All nodes trusted';
+            document.getElementById('sync-config-interval').textContent = 
+                data.metrics?.syncInterval ? `${data.metrics.syncInterval / 1000}s` : '30s';
+            
+            // Enable/disable force sync button
+            const forceSyncBtn = document.getElementById('force-sync-btn');
+            forceSyncBtn.disabled = !data.running;
+            
+            console.log('[GUN Sync] Status displayed successfully');
+        }
+
+        // Display GUN sync error in modal
+        function displayGunSyncError(errorMessage) {
+            const contentDiv = document.getElementById('gun-sync-content');
+            const errorDiv = document.getElementById('gun-sync-error');
+            const errorMessageDiv = document.getElementById('gun-sync-error-message');
+            
+            // Show error and hide content
+            contentDiv.classList.add('hidden');
+            errorDiv.classList.remove('hidden');
+            
+            // Update modal indicator
+            const modalIndicator = document.getElementById('gun-sync-modal-indicator');
+            modalIndicator.textContent = '❌';
+            
+            // Show error message
+            errorMessageDiv.textContent = errorMessage;
+            
+            // Disable force sync button
+            const forceSyncBtn = document.getElementById('force-sync-btn');
+            forceSyncBtn.disabled = true;
+        }
+
+        // Update header sync indicator
+        function updateHeaderSyncIndicator(data) {
+            const syncButton = document.getElementById('gun-sync-status');
+            const syncIndicator = document.getElementById('gun-sync-indicator');
+            
+            // Remove all status classes
+            syncButton.classList.remove('healthy', 'unhealthy', 'disabled');
+            
+            if (data.status === 'healthy') {
+                syncButton.classList.add('healthy');
+                syncIndicator.textContent = '✅';
+                syncButton.title = `GUN sync healthy - Last sync: ${data.metrics?.lastSyncAgo || 'unknown'}`;
+            } else if (data.status === 'unhealthy') {
+                syncButton.classList.add('unhealthy');
+                syncIndicator.textContent = '⚠️';
+                syncButton.title = 'GUN sync has issues - Click for details';
+            } else if (data.status === 'unavailable') {
+                syncButton.classList.add('disabled');
+                syncIndicator.textContent = '⏸️';
+                syncButton.title = 'GUN sync service not available';
+            } else {
+                syncButton.classList.add('unhealthy');
+                syncIndicator.textContent = '❌';
+                syncButton.title = 'GUN sync error - Click for details';
+            }
+        }
+
+        // Refresh sync status
+        async function refreshGunSyncStatus() {
+            await loadGunSyncStatus();
+        }
+
+        // Force a sync cycle
+        async function forceSyncCycle() {
+            const forceSyncBtn = document.getElementById('force-sync-btn');
+            const originalText = forceSyncBtn.textContent;
+            
+            try {
+                forceSyncBtn.disabled = true;
+                forceSyncBtn.textContent = '🔄 Forcing sync...';
+                
+                const response = await fetch('/api/health/gun-sync/force', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Show success and refresh status after a delay
+                    forceSyncBtn.textContent = '✅ Sync triggered!';
+                    setTimeout(async () => {
+                        await refreshGunSyncStatus();
+                        forceSyncBtn.textContent = originalText;
+                        forceSyncBtn.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error(result.error || 'Failed to trigger sync');
+                }
+                
+            } catch (error) {
+                console.error('[GUN Sync] Error forcing sync:', error);
+                forceSyncBtn.textContent = '❌ Failed';
+                setTimeout(() => {
+                    forceSyncBtn.textContent = originalText;
+                    forceSyncBtn.disabled = false;
+                }, 2000);
+            }
+        }
+
+        // Initialize sync status checking on page load
+        function initializeGunSyncStatus() {
+            // Check sync status immediately
+            checkGunSyncStatusQuiet();
+            
+            // Set up periodic status checking (every 60 seconds)
+            gunSyncStatus.checkInterval = setInterval(checkGunSyncStatusQuiet, 60000);
+        }
+
+        // Quietly check sync status (no modal, just update header indicator)
+        async function checkGunSyncStatusQuiet() {
+            try {
+                const response = await fetch('/api/health/gun-sync');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    updateHeaderSyncIndicator(data);
+                    gunSyncStatus.isHealthy = data.status === 'healthy';
+                    gunSyncStatus.lastChecked = new Date();
+                } else {
+                    updateHeaderSyncIndicator({ status: 'error' });
+                    gunSyncStatus.isHealthy = false;
+                }
+                
+            } catch (error) {
+                // Silently handle errors for background checks
+                updateHeaderSyncIndicator({ status: 'unavailable' });
+                gunSyncStatus.isHealthy = false;
             }
         }
 

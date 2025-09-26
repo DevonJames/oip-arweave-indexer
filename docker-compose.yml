@@ -475,7 +475,7 @@ services:
     profiles:
       - standard-gpu
 
-  # GUN Relay Service for private/temporary storage
+  # GUN Relay Service for private/temporary storage with multi-node sync support
   gun-relay:
     image: node:18-alpine
     working_dir: /app
@@ -485,6 +485,11 @@ services:
     volumes:
       - gundata:/app/data
       - ./gun-relay-server.js:/app/gun-relay-server.js:ro
+    environment:
+      # Configure GUN peers for multi-node synchronization
+      - GUN_PEERS=${GUN_EXTERNAL_PEERS:-}
+      - GUN_ENV=production
+      - GUN_SYNC_ENABLED=true
     networks:
       - oip-network
     restart: unless-stopped

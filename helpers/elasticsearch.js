@@ -11,6 +11,33 @@ const semver = require('semver');
 const { gql, request } = require('graphql-request');
 const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber, resolveRecords } = require('./utils');
 const recordTypeIndexConfig = require('../config/recordTypesToIndex');
+
+// Helper function for async filtering
+async function asyncFilter(array, predicate) {
+    const results = await Promise.all(array.map(predicate));
+    return array.filter((_, index) => results[index]);
+}
+
+// Check organization membership for record access
+async function checkOrganizationMembershipForRecord(userPublicKey, sharedWithArray, requestInfo) {
+    const { OrganizationEncryption } = require('./organizationEncryption');
+    const orgEncryption = new OrganizationEncryption();
+    
+    // Check membership for any organization in the shared_with array
+    for (const organizationDid of sharedWithArray) {
+        try {
+            const isMember = await orgEncryption.isUserOrganizationMember(userPublicKey, organizationDid, requestInfo);
+            if (isMember) {
+                return true; // User is member of at least one organization
+            }
+        } catch (error) {
+            console.error(`Error checking membership for ${organizationDid}:`, error);
+            continue;
+        }
+    }
+    
+    return false; // User is not member of any organization
+}
 // const { sign } = require('crypto');
 // const { get } = require('http');
 const path = require('path');
@@ -1365,6 +1392,7 @@ async function getRecords(queryParams) {
         summarizeTags,
         user,           // NEW: User information from optional auth
         isAuthenticated, // NEW: Authentication status
+        requestInfo,    // NEW: Request information for domain validation
         tagCount,
         tagPage,
         dateStart,
@@ -2099,7 +2127,8 @@ async function getRecords(queryParams) {
             console.log(`after filtering non-public records for unauthenticated user, there are ${records.length} records`);
         } else {
             // Authenticated users see public records + their own private/shared records
-            records = records.filter(record => {
+            // Use async filter for organization membership checking
+            records = await asyncFilter(records, async (record) => {
                 const accessControl = record.data?.accessControl;
                 const conversationSession = record.data?.conversationSession;
                 const accessLevel = accessControl?.access_level;
@@ -2129,6 +2158,37 @@ async function getRecords(queryParams) {
                     
                     console.log('Excluding private/shared record (not owner/shared):', record.oip?.did, 'user:', userPubKey?.slice(0, 12), 'owner:', recordOwnerPubKey?.slice(0, 12));
                     return false;
+                }
+                
+                // For organization records, check membership based on policy
+                if (accessLevel === 'organization') {
+                    const sharedWith = accessControl?.shared_with;
+                    const userPubKey = user?.publicKey || user?.publisherPubKey;
+                    
+                    if (!sharedWith || !Array.isArray(sharedWith) || sharedWith.length === 0) {
+                        console.log('Excluding organization record (no shared_with):', record.oip?.did);
+                        return false;
+                    }
+                    
+                    if (!userPubKey) {
+                        console.log('Excluding organization record (no user public key):', record.oip?.did);
+                        return false;
+                    }
+                    
+                    // Check membership for each organization in shared_with
+                    try {
+                        const isMember = await checkOrganizationMembershipForRecord(userPubKey, sharedWith, requestInfo);
+                        if (isMember) {
+                            console.log('Including organization record for member:', record.oip?.did, 'user:', userPubKey.slice(0, 12));
+                            return true;
+                        } else {
+                            console.log('Excluding organization record (not member):', record.oip?.did, 'user:', userPubKey.slice(0, 12));
+                            return false;
+                        }
+                    } catch (error) {
+                        console.error('Error checking organization membership:', error);
+                        return false;
+                    }
                 }
                 
                 // Legacy support: treat conversation sessions with is_private as access_level: 'private'
@@ -3115,7 +3175,35 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
     const basicData = parsedData.find(obj => obj.t === "-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk");
     const orgData = parsedData.find(obj => obj.t === "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM");
     
-    organizationHandle = (organizationHandle !== undefined) ? organizationHandle : await convertToOrgHandle(transaction.transactionId, JSON.parse(orgData)["0"]); // Use second object for org data
+    organizationHandle = (organizationHandle !== undefined) ? organizationHandle : await convertToOrgHandle(transaction.transactionId, orgData["0"]); // Use second object for org data
+    
+    // Get templates and expand enum values
+    const templates = await getTemplatesInDB();
+    const orgTemplate = findTemplateByTxId("NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM", templates.templatesInDB);
+    
+    // Expand membershipPolicy enum value
+    let membershipPolicyValue = orgData["3"]; // Raw index value
+    if (orgTemplate && orgTemplate.data && orgTemplate.data.fields) {
+        const fields = JSON.parse(orgTemplate.data.fields);
+        if (fields.membership_policy === "enum" && Array.isArray(fields.membership_policyValues)) {
+            const enumValues = fields.membership_policyValues;
+            if (typeof membershipPolicyValue === "number" && membershipPolicyValue < enumValues.length) {
+                membershipPolicyValue = enumValues[membershipPolicyValue].name;
+                console.log(getFileInfo(), getLineNumber(), `Expanded membershipPolicy enum: ${orgData["3"]} -> ${membershipPolicyValue}`);
+            }
+        }
+    }
+    
+    // Get creator information
+    const creatorDid = `did:arweave:${transaction.owner}`;
+    let creatorInfo = null;
+    try {
+        creatorInfo = await searchCreatorByAddress(creatorDid);
+        console.log(getFileInfo(), getLineNumber(), 'Creator info found for organization:', creatorInfo);
+    } catch (error) {
+        console.error(getFileInfo(), getLineNumber(), 'Error getting creator info for organization:', error);
+    }
+    
     organization = {
         data: {
             orgHandle: organizationHandle,
@@ -3127,7 +3215,7 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
             webUrl: basicData["12"],
             orgPublicKey: orgData["1"],        // org_public_key
             adminPublicKeys: orgData["2"],     // admin_public_keys  
-            membershipPolicy: orgData["3"],    // membership_policy
+            membershipPolicy: membershipPolicyValue,    // Expanded enum value
             metadata: orgData["4"] || null     // metadata (if exists)
         },
         oip: {
@@ -3142,10 +3230,23 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
                 orgHandle: organizationHandle,
                 orgPublicKey: orgData["1"],
                 adminPublicKeys: orgData["2"],
-                membershipPolicy: orgData["3"],
+                membershipPolicy: membershipPolicyValue,  // Expanded enum value
                 metadata: orgData["4"] || null
             }
         },
+    }
+    
+    // Add creator object if we found creator info
+    if (creatorInfo && creatorInfo.data) {
+        organization.oip.creator = {
+            creatorHandle: creatorInfo.data.creatorHandle,
+            didAddress: creatorInfo.data.didAddress,
+            didTx: creatorInfo.data.didTx,
+            publicKey: creatorInfo.data.publicKey
+        };
+        console.log(getFileInfo(), getLineNumber(), 'Added creator object to organization:', organization.oip.creator);
+    } else {
+        console.log(getFileInfo(), getLineNumber(), 'No creator info found for organization, creator object not added');
     }
     
     console.log(getFileInfo(), getLineNumber(), 'Organization to index:', organization);

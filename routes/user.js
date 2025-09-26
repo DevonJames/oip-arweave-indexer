@@ -14,6 +14,44 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 const router = express.Router();
 const REGISTRATION_LIMIT = process.env.REGISTRATION_LIMIT
 
+// Helper functions for salt encryption/decryption
+function encryptSaltWithPassword(salt, password) {
+    // Generate encryption key from password
+    const key = crypto.pbkdf2Sync(password, 'oip-salt-encryption', 100000, 32, 'sha256');
+    const iv = crypto.randomBytes(12); // 12-byte IV for GCM
+    
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(salt, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    
+    // Return as JSON string with all components
+    return JSON.stringify({
+        encrypted: encrypted.toString('base64'),
+        iv: iv.toString('base64'),
+        authTag: authTag.toString('base64')
+    });
+}
+
+function decryptSaltWithPassword(encryptedSaltData, password) {
+    try {
+        const saltData = JSON.parse(encryptedSaltData);
+        
+        // Generate decryption key from password
+        const key = crypto.pbkdf2Sync(password, 'oip-salt-encryption', 100000, 32, 'sha256');
+        const iv = Buffer.from(saltData.iv, 'base64');
+        const authTag = Buffer.from(saltData.authTag, 'base64');
+        const encrypted = Buffer.from(saltData.encrypted, 'base64');
+        
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+        
+        const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+        return decrypted.toString('utf8');
+        
+    } catch (error) {
+        throw new Error(`Failed to decrypt GUN salt: ${error.message}`);
+    }
+}
 
 // Join Waitlist Endpoint
 router.post('/joinWaitlist', async (req, res) => {
@@ -180,11 +218,18 @@ async function completeRegistration(userId, password, email, res) {
         
         const privateKey = userKey.privateKey.toString('hex');
         
+        // Generate user-specific encryption salt for GUN records
+        const gunEncryptionSalt = crypto.randomBytes(32).toString('hex');
+        
         // Encrypt private key and mnemonic with user's password
         const encryptedPrivateKey = crypto.pbkdf2Sync(privateKey, password, 100000, 32, 'sha256').toString('hex');
         const encryptedMnemonic = crypto.pbkdf2Sync(mnemonic, password, 100000, 32, 'sha256').toString('hex');
         
+        // Encrypt the GUN encryption salt with user's password using AES-256-GCM
+        const encryptedGunSalt = encryptSaltWithPassword(gunEncryptionSalt, password);
+        
         console.log('🔑 Generated user public key (hex):', publicKey.slice(0, 20) + '...');
+        console.log('🔑 Generated user GUN encryption salt:', gunEncryptionSalt.slice(0, 8) + '...');
         console.log('🔑 Public key type:', typeof publicKey, 'length:', publicKey.length);
         
         // If userId is undefined, create a new user document; otherwise, update existing document
@@ -200,6 +245,7 @@ async function completeRegistration(userId, password, email, res) {
                         publicKey: publicKey,
                         encryptedPrivateKey: encryptedPrivateKey, // Encrypted with user's password
                         encryptedMnemonic: encryptedMnemonic, // Encrypted mnemonic
+                        encryptedGunSalt: encryptedGunSalt, // NEW: Encrypted GUN encryption salt
                         keyDerivationPath: "m/44'/0'/0'/0/0",
                         createdAt: new Date(),
                         waitlistStatus: 'registered',
@@ -220,6 +266,7 @@ async function completeRegistration(userId, password, email, res) {
                     publicKey: publicKey,
                     encryptedPrivateKey: encryptedPrivateKey, // Encrypted with user's password
                     encryptedMnemonic: encryptedMnemonic, // Encrypted mnemonic
+                    encryptedGunSalt: encryptedGunSalt, // NEW: Encrypted GUN encryption salt
                     keyDerivationPath: "m/44'/0'/0'/0/0",
                     createdAt: new Date(),
                     waitlistStatus: 'registered',
@@ -243,7 +290,8 @@ async function completeRegistration(userId, password, email, res) {
             success: true,
             message: 'User registered successfully',
             token, // Return the JWT token
-            publicKey: publicKey // NEW: Return public key for client awareness
+            publicKey: publicKey, // NEW: Return public key for client awareness
+            mnemonic: mnemonic // NEW: Return mnemonic for user to backup and import on other nodes
         });
     } catch (error) {
         console.error('Error completing registration:', error);
@@ -420,6 +468,7 @@ router.post('/login', async (req, res) => {
         // console.log('Search result...', searchResult.hits.hits[0]._source, searchResult.hits.hits[1]._source, searchResult.hits.hits[2]._source);
 
         const user = searchResult.hits.hits[0]._source;
+        const userId = searchResult.hits.hits[0]._id;
 
         // Compare the provided password with the stored hash
         const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
@@ -431,9 +480,90 @@ router.post('/login', async (req, res) => {
             });
         }
 
-        // Authentication successful - Create JWT token
-        const userId = searchResult.hits.hits[0]._id; // Retrieve the Elasticsearch _id for the user
+        // Check if user needs GUN encryption salt (for existing users)
+        if (!user.encryptedGunSalt) {
+            console.log('🔑 Generating GUN encryption salt for existing user during login:', user.email);
+            
+            try {
+                // Generate new salt
+                const gunEncryptionSalt = crypto.randomBytes(32).toString('hex');
+                const encryptedGunSalt = encryptSaltWithPassword(gunEncryptionSalt, password);
+                
+                // Update user record with new salt
+                await elasticClient.update({
+                    index: 'users',
+                    id: userId,
+                    body: {
+                        doc: {
+                            encryptedGunSalt: encryptedGunSalt,
+                            gunSaltGeneratedAt: new Date().toISOString()
+                        }
+                    },
+                    refresh: 'wait_for'
+                });
+                
+                console.log('✅ Generated and stored GUN encryption salt for existing user');
+                
+            } catch (error) {
+                console.error('❌ Failed to generate GUN salt for existing user:', error);
+                // Don't fail login for salt generation issues
+            }
+        } else {
+            // Check if this is a migration placeholder that needs proper encryption
+            try {
+                const saltData = JSON.parse(user.encryptedGunSalt);
+                if (saltData.isMigrationPlaceholder) {
+                    console.log('🔄 Converting migration placeholder salt to properly encrypted salt:', user.email);
+                    
+                    const plaintextSalt = saltData.plaintextSalt;
+                    const properlyEncryptedSalt = encryptSaltWithPassword(plaintextSalt, password);
+                    
+                    // Update with properly encrypted salt
+                    await elasticClient.update({
+                        index: 'users',
+                        id: userId,
+                        body: {
+                            doc: {
+                                encryptedGunSalt: properlyEncryptedSalt,
+                                gunSaltUpgradedAt: new Date().toISOString()
+                            }
+                        },
+                        refresh: 'wait_for'
+                    });
+                    
+                    console.log('✅ Upgraded migration placeholder to properly encrypted salt');
+                }
+            } catch (error) {
+                // If parsing fails, it's probably already properly encrypted
+                console.log('🔑 User already has properly encrypted GUN salt');
+            }
+        }
 
+        // Decrypt user's private key for organization processing
+        let decryptedPrivateKey = null;
+        try {
+            if (user.encryptedPrivateKey) {
+                decryptedPrivateKey = decryptPrivateKeyWithPassword(user.encryptedPrivateKey, password);
+                console.log('🔑 Successfully decrypted user private key for organization processing');
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not decrypt private key for organization processing:', error.message);
+        }
+
+        // Process organization decryption queue if user owns organizations
+        if (decryptedPrivateKey) {
+            try {
+                const { OrganizationDecryptionQueue } = require('../helpers/organizationDecryptionQueue');
+                const decryptQueue = new OrganizationDecryptionQueue();
+                await decryptQueue.processDecryptionQueue(user.publicKey, decryptedPrivateKey);
+                console.log('✅ Processed organization decryption queue for user');
+            } catch (orgError) {
+                console.error('❌ Error processing organization decryption queue:', orgError);
+                // Don't fail login for organization processing errors
+            }
+        }
+
+        // Authentication successful - Create JWT token
         const token = jwt.sign({ 
             userId, 
             email: user.email, 
@@ -755,4 +885,193 @@ router.post('/admin/reset', async (req, res) => {
     }
 });
 
-module.exports = router;
+// Function to get user's decrypted GUN encryption salt
+async function getUserGunEncryptionSalt(userPublicKey, userPassword) {
+    try {
+        // Find user by public key
+        const searchResult = await elasticClient.search({
+            index: 'users',
+            body: {
+                query: {
+                    term: { 
+                        publicKey: {
+                            value: userPublicKey
+                        }
+                    }
+                }
+            }
+        });
+
+        if (searchResult.hits.hits.length === 0) {
+            throw new Error('User not found');
+        }
+
+        const user = searchResult.hits.hits[0]._source;
+        
+        // Check if user has encrypted GUN salt
+        if (!user.encryptedGunSalt) {
+            // Generate and store salt for existing users who don't have one
+            console.log('🔑 Generating GUN salt for existing user:', user.email);
+            const gunEncryptionSalt = crypto.randomBytes(32).toString('hex');
+            const encryptedGunSalt = encryptSaltWithPassword(gunEncryptionSalt, userPassword);
+            
+            // Update user record with new salt
+            await elasticClient.update({
+                index: 'users',
+                id: searchResult.hits.hits[0]._id,
+                body: {
+                    doc: {
+                        encryptedGunSalt: encryptedGunSalt
+                    }
+                },
+                refresh: 'wait_for'
+            });
+            
+            return gunEncryptionSalt;
+        }
+        
+        // Decrypt the stored salt using the user's password
+        const decryptedSalt = decryptSaltWithPassword(user.encryptedGunSalt, userPassword);
+        
+        console.log('🔑 Retrieved GUN encryption salt for user:', user.email);
+        return decryptedSalt;
+        
+    } catch (error) {
+        console.error('Error getting user GUN encryption salt:', error);
+        throw error;
+    }
+}
+
+// Function to generate user-specific encryption key for GUN records
+function generateUserEncryptionKey(userPublicKey, gunSalt) {
+    // Combine user's public key with their unique salt
+    const keyMaterial = userPublicKey + ':' + gunSalt;
+    return crypto.pbkdf2Sync(keyMaterial, 'oip-gun-encryption', 100000, 32, 'sha256');
+}
+
+// Get user's mnemonic (for backup/import to other nodes)
+router.get('/mnemonic', authenticateToken, async (req, res) => {
+    try {
+        const { password } = req.query;
+        
+        if (!password) {
+            return res.status(400).json({ error: 'Password required to access mnemonic' });
+        }
+        
+        const user = req.user;
+        
+        // Verify password
+        const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: 'Invalid password' });
+        }
+        
+        // Decrypt mnemonic
+        const decryptedMnemonic = decryptMnemonicWithPassword(user.encryptedMnemonic, password);
+        
+        res.status(200).json({
+            success: true,
+            mnemonic: decryptedMnemonic,
+            message: 'Save this mnemonic securely. You can use it to import your wallet on other OIP nodes.'
+        });
+        
+    } catch (error) {
+        console.error('Error retrieving mnemonic:', error);
+        res.status(500).json({ error: 'Failed to retrieve mnemonic' });
+    }
+});
+
+// Import wallet from mnemonic (for cross-node compatibility)
+router.post('/import-wallet', async (req, res) => {
+    try {
+        const { email, password, mnemonic } = req.body;
+        
+        if (!email || !password || !mnemonic) {
+            return res.status(400).json({ error: 'Email, password, and mnemonic are required' });
+        }
+        
+        // Validate mnemonic
+        if (!bip39.validateMnemonic(mnemonic)) {
+            return res.status(400).json({ error: 'Invalid mnemonic phrase' });
+        }
+        
+        // Check if user already exists
+        const existingUser = await findUserByEmail(email);
+        if (existingUser) {
+            return res.status(400).json({ error: 'User already exists on this node' });
+        }
+        
+        // Generate wallet from provided mnemonic
+        console.log('🔑 Importing HD wallet for user:', email);
+        const seed = await bip39.mnemonicToSeed(mnemonic);
+        const masterKey = bip32.fromSeed(seed);
+        
+        // Derive user's signing key (m/44'/0'/0'/0/0)
+        const userKey = masterKey.derivePath("m/44'/0'/0'/0/0");
+        
+        // Ensure public key is properly converted to hex string
+        const publicKeyBuffer = userKey.publicKey;
+        const publicKey = Buffer.isBuffer(publicKeyBuffer) 
+            ? publicKeyBuffer.toString('hex')
+            : Array.from(publicKeyBuffer).map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        const privateKey = userKey.privateKey.toString('hex');
+        
+        // Generate user-specific encryption salt for GUN records
+        const gunEncryptionSalt = crypto.randomBytes(32).toString('hex');
+        
+        // Hash password and encrypt wallet data
+        const saltRounds = 10;
+        const passwordHash = await bcrypt.hash(password, saltRounds);
+        const encryptedPrivateKey = crypto.pbkdf2Sync(privateKey, password, 100000, 32, 'sha256').toString('hex');
+        const encryptedMnemonic = crypto.pbkdf2Sync(mnemonic, password, 100000, 32, 'sha256').toString('hex');
+        const encryptedGunSalt = encryptSaltWithPassword(gunEncryptionSalt, password);
+        
+        // Create user record
+        const newUser = await elasticClient.index({
+            index: 'users',
+            body: {
+                email: email,
+                passwordHash: passwordHash,
+                publicKey: publicKey,
+                encryptedPrivateKey: encryptedPrivateKey,
+                encryptedMnemonic: encryptedMnemonic,
+                encryptedGunSalt: encryptedGunSalt,
+                keyDerivationPath: "m/44'/0'/0'/0/0",
+                createdAt: new Date(),
+                waitlistStatus: 'registered',
+                subscriptionStatus: 'inactive',
+                paymentMethod: null,
+                importedWallet: true // Mark as imported
+            },
+            refresh: 'wait_for'
+        });
+        
+        const userId = newUser._id;
+        
+        // Create JWT token
+        const token = jwt.sign({ 
+            userId, 
+            email, 
+            publicKey: publicKey,
+            isAdmin: false 
+        }, JWT_SECRET, { expiresIn: '45d' });
+        
+        res.status(201).json({
+            success: true,
+            message: 'Wallet imported successfully',
+            token,
+            publicKey: publicKey
+        });
+        
+    } catch (error) {
+        console.error('Error importing wallet:', error);
+        res.status(500).json({ error: 'Failed to import wallet' });
+    }
+});
+
+module.exports = { 
+    router, 
+    getUserGunEncryptionSalt, 
+    generateUserEncryptionKey 
+};

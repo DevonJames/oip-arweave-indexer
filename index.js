@@ -43,6 +43,13 @@ dotenv.config();
 // Validate environment variables
 validateEnvironment();
 
+// Initialize GUN Sync Service (will be started after server is ready)
+let gunSyncService = null;
+if (process.env.GUN_SYNC_ENABLED !== 'false') {
+    const { GunSyncService } = require('./helpers/gunSyncService');
+    gunSyncService = new GunSyncService();
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -340,6 +347,17 @@ initializeIndices()
         console.error('❌ Failed to initialize MediaSeeder:', error);
       }
 
+      // Start GUN sync service after server is ready
+      if (gunSyncService) {
+        try {
+          await gunSyncService.start();
+          global.gunSyncService = gunSyncService; // Make globally accessible for health endpoint
+          console.log('🔄 GUN Record Sync Service started successfully');
+        } catch (error) {
+          console.error('❌ Failed to start GUN Sync Service:', error);
+        }
+      }
+
       // Initialize remapTemplates
       let remapTemplates = [];
       if (args.remapTemplates) {
@@ -405,6 +423,23 @@ initializeIndices()
       console.log(`Server is running on port ${port}`);
     });
   });
+
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log('🛑 Received SIGTERM, shutting down gracefully...');
+  if (gunSyncService) {
+    gunSyncService.stop();
+  }
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 Received SIGINT, shutting down gracefully...');
+  if (gunSyncService) {
+    gunSyncService.stop();
+  }
+  process.exit(0);
+});
 
 // Error handler
 app.use((err, req, res, next) => {
