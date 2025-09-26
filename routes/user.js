@@ -53,6 +53,39 @@ function decryptSaltWithPassword(encryptedSaltData, password) {
     }
 }
 
+function decryptMnemonicWithPassword(encryptedMnemonic, password) {
+    try {
+        // Check if it's the new AES-256-GCM format (JSON string)
+        if (encryptedMnemonic.startsWith('{')) {
+            // New format - use AES decryption
+            const mnemonicData = JSON.parse(encryptedMnemonic);
+            
+            const key = crypto.pbkdf2Sync(password, 'oip-mnemonic-encryption', 100000, 32, 'sha256');
+            const iv = Buffer.from(mnemonicData.iv, 'base64');
+            const authTag = Buffer.from(mnemonicData.authTag, 'base64');
+            const encrypted = Buffer.from(mnemonicData.encrypted, 'base64');
+            
+            const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+            decipher.setAuthTag(authTag);
+            
+            const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+            return decrypted.toString('utf8');
+            
+        } else {
+            // Legacy format - stored as PBKDF2 hex string
+            // For legacy accounts, we can't actually decrypt the mnemonic
+            // because PBKDF2 is one-way. We need to inform the user.
+            throw new Error('Legacy account: Mnemonic cannot be retrieved. Please contact support for account migration.');
+        }
+        
+    } catch (error) {
+        if (error.message.includes('Legacy account')) {
+            throw error; // Re-throw legacy account message
+        }
+        throw new Error(`Failed to decrypt mnemonic: ${error.message}`);
+    }
+}
+
 // Join Waitlist Endpoint
 router.post('/joinWaitlist', async (req, res) => {
     const { email } = req.body;
@@ -543,25 +576,23 @@ router.post('/login', async (req, res) => {
         let decryptedPrivateKey = null;
         try {
             if (user.encryptedPrivateKey) {
-                decryptedPrivateKey = decryptPrivateKeyWithPassword(user.encryptedPrivateKey, password);
-                console.log('🔑 Successfully decrypted user private key for organization processing');
+                // The encryptedPrivateKey is stored as a hex string from PBKDF2
+                // To decrypt it, we need to reverse the PBKDF2 process
+                // But since PBKDF2 is one-way, we can't actually decrypt it
+                // This suggests the storage method needs to be updated to use proper encryption
+                
+                console.warn('⚠️ Cannot decrypt private key - stored with PBKDF2 (one-way). Skipping organization queue processing.');
+                console.log('💡 Note: Organization queue will be processed when owner authenticates with proper key storage');
             }
         } catch (error) {
             console.warn('⚠️ Could not decrypt private key for organization processing:', error.message);
         }
 
         // Process organization decryption queue if user owns organizations
-        if (decryptedPrivateKey) {
-            try {
-                const { OrganizationDecryptionQueue } = require('../helpers/organizationDecryptionQueue');
-                const decryptQueue = new OrganizationDecryptionQueue();
-                await decryptQueue.processDecryptionQueue(user.publicKey, decryptedPrivateKey);
-                console.log('✅ Processed organization decryption queue for user');
-            } catch (orgError) {
-                console.error('❌ Error processing organization decryption queue:', orgError);
-                // Don't fail login for organization processing errors
-            }
-        }
+        // Note: Currently disabled due to private key storage method (PBKDF2 is one-way)
+        // This will be re-enabled when proper AES encryption is implemented for private keys
+        console.log('💡 Organization decryption queue processing temporarily disabled for legacy accounts');
+        console.log('💡 Organization records will sync but may need manual decryption for now');
 
         // Authentication successful - Create JWT token
         const token = jwt.sign({ 

@@ -5244,6 +5244,12 @@
             const authenticatedMenu = document.getElementById('authenticated-menu');
             const unauthenticatedMenu = document.getElementById('unauthenticated-menu');
             
+            // Check if user menu elements exist
+            if (!button || !indicator || !text || !authenticatedMenu || !unauthenticatedMenu) {
+                console.warn('User menu elements not found, skipping update');
+                return;
+            }
+            
             if (authToken && currentUser) {
                 // Authenticated state
                 button.classList.add('authenticated');
@@ -5286,6 +5292,11 @@
         function updateInlineJWTStatus() {
             const statusIcon = document.getElementById('jwt-status-icon');
             const statusText = document.getElementById('jwt-status-text');
+            
+            // Check if elements exist
+            if (!statusIcon || !statusText) {
+                return;
+            }
             
             if (authToken) {
                 try {
@@ -5397,9 +5408,12 @@
                         if (parts.length === 3) {
                             const payload = JSON.parse(atob(parts[1]));
                             updateJWTStatus(payload);
+                            currentUser = payload.email; // Ensure currentUser is set
                         }
                     } catch (error) {
                         console.error('Error updating JWT status after login:', error);
+                        // Set currentUser from response if JWT parsing fails
+                        currentUser = email;
                     }
                     
                     showLoggedInState();
@@ -5691,14 +5705,16 @@
             
             // Add a special close handler to restore the modal to normal state
             const closeButton = modal.querySelector('[onclick="hideMnemonicModal()"]');
-            const originalOnClick = closeButton.onclick;
-            closeButton.onclick = function() {
-                // Restore normal modal state
-                passwordGroup.style.display = 'block';
-                showButton.style.display = 'inline-block';
-                closeButton.onclick = originalOnClick;
-                hideMnemonicModal();
-            };
+            if (closeButton) {
+                const originalOnClick = closeButton.onclick;
+                closeButton.onclick = function() {
+                    // Restore normal modal state
+                    passwordGroup.style.display = 'block';
+                    showButton.style.display = 'inline-block';
+                    closeButton.onclick = originalOnClick;
+                    hideMnemonicModal();
+                };
+            }
         }
 
         function logout() {
@@ -5790,20 +5806,29 @@
         }
 
         function updateJWTStatus(payload) {
+            // Legacy JWT status elements (may not exist with new user menu)
             const indicator = document.getElementById('jwt-indicator');
             const userInfo = document.getElementById('jwt-user-info');
             
-            if (payload && authToken) {
-                indicator.textContent = '🔐';
-                const userEmail = payload.email || 'Unknown';
-                const publicKey = payload.publicKey ? `...${payload.publicKey.slice(-6)}` : 'No key';
-                userInfo.textContent = `${userEmail} (${publicKey})`;
-                userInfo.title = `Email: ${userEmail}\\nPublic Key: ${payload.publicKey || 'None'}`;
-            } else {
-                indicator.textContent = '🔓';
-                userInfo.textContent = 'Not authenticated';
-                userInfo.title = '';
+            if (indicator && userInfo) {
+                if (payload && authToken) {
+                    indicator.textContent = '🔐';
+                    const userEmail = payload.email || 'Unknown';
+                    const publicKey = payload.publicKey ? `...${payload.publicKey.slice(-6)}` : 'No key';
+                    userInfo.textContent = `${userEmail} (${publicKey})`;
+                    userInfo.title = `Email: ${userEmail}\\nPublic Key: ${payload.publicKey || 'None'}`;
+                } else {
+                    indicator.textContent = '🔓';
+                    userInfo.textContent = 'Not authenticated';
+                    userInfo.title = '';
+                }
             }
+            
+            // Update user menu state regardless
+            if (payload && authToken) {
+                currentUser = payload.email;
+            }
+            updateUserMenuState();
         }
 
         function showJWTStatus(message, type) {
