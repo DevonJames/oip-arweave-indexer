@@ -793,29 +793,49 @@ async function deleteRecordFromDB(creatorDid, transaction) {
         if (creatorDid === 'did:arweave:' + transaction.creator) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
 
-            const searchResponse = await elasticClient.search({
+            // First, search in the records index
+            const recordsSearchResponse = await elasticClient.search({
                 index: 'records',
                 body: {
                     query: createDIDQuery(didTxToDelete)
                 }
             });
 
-            if (searchResponse.hits.hits.length === 0) {
-                console.log(getFileInfo(), getLineNumber(), 'No record found with the specified ID:', didTxToDelete);
-
-                
-
-                return; // Exit the function early if no record is found
-                // response = { message: 'No record found with the specified ID:', didTxToDelete }
+            if (recordsSearchResponse.hits.hits.length > 0) {
+                // Found in records index, delete it
+                const recordId = recordsSearchResponse.hits.hits[0]._id;
+                const response = await elasticClient.delete({
+                    index: 'records',
+                    id: recordId
+                });
+                console.log(getFileInfo(), getLineNumber(), 'Record deleted from records index:', response);
+                return;
             }
 
-            const recordId = searchResponse.hits.hits[0]._id;
-
-            const response = await elasticClient.delete({
-                index: 'records',
-                id: recordId
+            // If not found in records, search in organizations index
+            console.log(getFileInfo(), getLineNumber(), 'Record not found in records index, checking organizations index');
+            const organizationsSearchResponse = await elasticClient.search({
+                index: 'organizations',
+                body: {
+                    query: createDIDQuery(didTxToDelete)
+                }
             });
-            console.log(getFileInfo(), getLineNumber(), 'Record deleted:', response);
+
+            if (organizationsSearchResponse.hits.hits.length > 0) {
+                // Found in organizations index, delete it
+                const orgId = organizationsSearchResponse.hits.hits[0]._id;
+                const response = await elasticClient.delete({
+                    index: 'organizations',
+                    id: orgId
+                });
+                console.log(getFileInfo(), getLineNumber(), 'Organization deleted from organizations index:', response);
+                return;
+            }
+
+            // If not found in either index, log and exit
+            console.log(getFileInfo(), getLineNumber(), 'No record found with the specified ID in records or organizations indices:', didTxToDelete);
+            return; // Exit the function early if no record is found
+
         } else {
             console.log(getFileInfo(), getLineNumber(), 'different creator, deletion unauthorized');
         }

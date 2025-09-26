@@ -2,7 +2,12 @@
 
 ## Overview
 
-The OIP Arweave Indexer provides several CLI commands for deleting records from Elasticsearch indices during development and maintenance. These commands are useful for cleaning up test data, removing problematic records, or performing bulk deletions based on various criteria.
+The OIP Arweave Indexer provides multiple methods for deleting records:
+
+1. **CLI Commands**: Direct server commands for deleting records from local Elasticsearch indices
+2. **Blockchain-Based Deletion**: Publishing delete messages to Arweave that are processed by all OIP nodes
+
+These methods are useful for cleaning up test data, removing problematic records, or performing bulk deletions based on various criteria.
 
 ## Prerequisites
 
@@ -10,7 +15,165 @@ The OIP Arweave Indexer provides several CLI commands for deleting records from 
 - Elasticsearch running and accessible
 - Appropriate permissions to modify indices
 
-## CLI Commands
+## Method 1: Blockchain-Based Deletion (Network-Wide)
+
+### Overview
+
+Blockchain-based deletion publishes delete messages to the Arweave blockchain that are automatically processed by all OIP nodes during their blockchain synchronization. This ensures records are deleted across the entire OIP network, not just on a single server.
+
+### Delete Message Format
+
+**Standard Record Deletion:**
+```json
+{
+    "delete": {
+        "didTx": "did:arweave:21CFWdPPblqaF9f5yKH3Cqs4k32oaWyY7dQop-JLDsE"
+    }
+}
+```
+
+**Alternative DID Format (also supported):**
+```json
+{
+    "delete": {
+        "did": "did:arweave:21CFWdPPblqaF9f5yKH3Cqs4k32oaWyY7dQop-JLDsE"
+    }
+}
+```
+
+### Publishing Delete Messages
+
+**Endpoint:** `POST /api/records/newRecord`
+
+**Headers:**
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt-token>  # Optional but recommended for creator verification
+```
+
+**Request Body:**
+```json
+{
+    "delete": {
+        "didTx": "did:arweave:TARGET_RECORD_DID"
+    }
+}
+```
+
+**Response:**
+```json
+{
+    "transactionId": "new_delete_message_txid",
+    "didTx": "did:arweave:new_delete_message_txid",
+    "message": "Delete message published successfully"
+}
+```
+
+### How Blockchain Deletion Works
+
+1. **Publish Delete Message**: Client sends delete message to `/api/records/newRecord`
+2. **Blockchain Storage**: Delete message is stored on Arweave with `recordType: "deleteMessage"`
+3. **Network Discovery**: All OIP nodes discover the delete message during blockchain sync (`keepDBUpToDate`)
+4. **Authorization Check**: Each node verifies the delete message creator matches the original record creator
+5. **Multi-Index Deletion**: Nodes search and delete from multiple indices:
+   - `records` index (standard records)
+   - `organizations` index (organization records)
+   - `templates` index (template records - requires `deleteTemplate` format)
+6. **Network-Wide Effect**: Record is deleted from all OIP nodes automatically
+
+### Supported Record Types
+
+#### Standard Records (records index)
+- `post`, `image`, `video`, `audio`, `recipe`, `workout`, `exercise`, `text`, etc.
+- **Format**: `{"delete": {"didTx": "did:arweave:record_id"}}`
+
+#### Organization Records (organizations index)
+- `organization` records
+- **Format**: `{"delete": {"didTx": "did:arweave:organization_id"}}`
+- **Note**: Organizations are stored in a separate `organizations` index but deletion works seamlessly
+- **Recent Fix**: Enhanced `deleteRecordFromDB()` to search both `records` and `organizations` indices
+
+#### Template Records (templates index)
+- Template deletion requires a different format (covered in separate section)
+
+### Authorization and Security
+
+- **Creator Verification**: Only the original creator can delete their records
+- **DID Matching**: Delete message creator must match `oip.creator.didAddress` of target record
+- **Cross-Node Consistency**: All nodes enforce the same authorization rules
+- **Immutable Audit Trail**: Delete messages are permanently stored on blockchain
+
+### Examples
+
+#### Delete a Blog Post
+```bash
+curl -X POST https://api.oip.onl/api/records/newRecord \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "delete": {
+      "didTx": "did:arweave:blog_post_transaction_id"
+    }
+  }'
+```
+
+#### Delete an Organization
+```bash
+curl -X POST https://api.oip.onl/api/records/newRecord \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "delete": {
+      "didTx": "did:arweave:yUzIZdeCYOoHG1iZpL-pTsKmR-QDwunnCUkCVmeWB7E"
+    }
+  }'
+```
+
+#### Delete a Media File
+```bash
+curl -X POST https://api.oip.onl/api/records/newRecord \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "delete": {
+      "didTx": "did:arweave:media_record_transaction_id"
+    }
+  }'
+```
+
+### Verification
+
+After publishing a delete message, you can verify deletion by:
+
+1. **Check Target Record**: Query the target record to confirm it's deleted
+   ```bash
+   curl "https://api.oip.onl/api/records?didTx=TARGET_RECORD_DID"
+   ```
+
+2. **Check Delete Message**: Verify the delete message was indexed
+   ```bash
+   curl "https://api.oip.onl/api/records?recordType=deleteMessage&didTx=DELETE_MESSAGE_DID"
+   ```
+
+3. **Organization-Specific Check**: For organizations, check the organizations endpoint
+   ```bash
+   curl "https://api.oip.onl/api/organizations"
+   ```
+
+### Limitations
+
+- **Creator-Only**: Only record creators can delete their records
+- **Irreversible**: Once processed by the network, deletion cannot be undone
+- **Propagation Time**: Delete messages take time to propagate across all nodes
+- **Template Deletion**: Requires different format (`deleteTemplate` instead of `delete`)
+
+---
+
+## Method 2: CLI Commands (Single Server)
+
+### Overview
+
+CLI commands directly delete records from a single server's Elasticsearch indices. These are useful for development, maintenance, and emergency cleanup but only affect the local server.
 
 ### Basic Syntax
 
@@ -18,7 +181,7 @@ The OIP Arweave Indexer provides several CLI commands for deleting records from 
 node index.js [deletion_command] [parameters]
 ```
 
-### Available Deletion Commands
+### Available CLI Deletion Commands
 
 #### 1. Delete Records by DID
 
