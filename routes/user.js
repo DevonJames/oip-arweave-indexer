@@ -53,6 +53,40 @@ function decryptSaltWithPassword(encryptedSaltData, password) {
     }
 }
 
+function encryptMnemonicWithPassword(mnemonic, password) {
+    // Generate encryption key from password
+    const key = crypto.pbkdf2Sync(password, 'oip-mnemonic-encryption', 100000, 32, 'sha256');
+    const iv = crypto.randomBytes(12); // 12-byte IV for GCM
+    
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(mnemonic, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    
+    // Return as JSON string with all components
+    return JSON.stringify({
+        encrypted: encrypted.toString('base64'),
+        iv: iv.toString('base64'),
+        authTag: authTag.toString('base64')
+    });
+}
+
+function encryptPrivateKeyWithPassword(privateKey, password) {
+    // Generate encryption key from password
+    const key = crypto.pbkdf2Sync(password, 'oip-private-key-encryption', 100000, 32, 'sha256');
+    const iv = crypto.randomBytes(12); // 12-byte IV for GCM
+    
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(privateKey, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    
+    // Return as JSON string with all components
+    return JSON.stringify({
+        encrypted: encrypted.toString('base64'),
+        iv: iv.toString('base64'),
+        authTag: authTag.toString('base64')
+    });
+}
+
 function decryptMnemonicWithPassword(encryptedMnemonic, password) {
     try {
         // Check if it's the new AES-256-GCM format (JSON string)
@@ -83,6 +117,39 @@ function decryptMnemonicWithPassword(encryptedMnemonic, password) {
             throw error; // Re-throw legacy account message
         }
         throw new Error(`Failed to decrypt mnemonic: ${error.message}`);
+    }
+}
+
+function decryptPrivateKeyWithPassword(encryptedPrivateKey, password) {
+    try {
+        // Check if it's the new AES-256-GCM format (JSON string)
+        if (encryptedPrivateKey.startsWith('{')) {
+            // New format - use AES decryption
+            const privateKeyData = JSON.parse(encryptedPrivateKey);
+            
+            const key = crypto.pbkdf2Sync(password, 'oip-private-key-encryption', 100000, 32, 'sha256');
+            const iv = Buffer.from(privateKeyData.iv, 'base64');
+            const authTag = Buffer.from(privateKeyData.authTag, 'base64');
+            const encrypted = Buffer.from(privateKeyData.encrypted, 'base64');
+            
+            const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+            decipher.setAuthTag(authTag);
+            
+            const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+            return decrypted.toString('utf8');
+            
+        } else {
+            // Legacy format - stored as PBKDF2 hex string
+            // For legacy accounts, we can't actually decrypt the private key
+            // because PBKDF2 is one-way.
+            throw new Error('Legacy account: Private key cannot be decrypted. Please create new account for organization queue processing.');
+        }
+        
+    } catch (error) {
+        if (error.message.includes('Legacy account')) {
+            throw error; // Re-throw legacy account message
+        }
+        throw new Error(`Failed to decrypt private key: ${error.message}`);
     }
 }
 
@@ -254,9 +321,9 @@ async function completeRegistration(userId, password, email, res) {
         // Generate user-specific encryption salt for GUN records
         const gunEncryptionSalt = crypto.randomBytes(32).toString('hex');
         
-        // Encrypt private key and mnemonic with user's password
-        const encryptedPrivateKey = crypto.pbkdf2Sync(privateKey, password, 100000, 32, 'sha256').toString('hex');
-        const encryptedMnemonic = crypto.pbkdf2Sync(mnemonic, password, 100000, 32, 'sha256').toString('hex');
+        // Encrypt private key and mnemonic with user's password using AES-256-GCM (reversible)
+        const encryptedPrivateKey = encryptPrivateKeyWithPassword(privateKey, password);
+        const encryptedMnemonic = encryptMnemonicWithPassword(mnemonic, password);
         
         // Encrypt the GUN encryption salt with user's password using AES-256-GCM
         const encryptedGunSalt = encryptSaltWithPassword(gunEncryptionSalt, password);
@@ -572,33 +639,100 @@ router.post('/login', async (req, res) => {
             }
         }
 
+        // Check if user needs encryption migration (legacy PBKDF2 → AES-256-GCM)
+        const needsMnemonicMigration = user.encryptedMnemonic && !user.encryptedMnemonic.startsWith('{');
+        const needsPrivateKeyMigration = user.encryptedPrivateKey && !user.encryptedPrivateKey.startsWith('{');
+        
+        if (needsMnemonicMigration || needsPrivateKeyMigration) {
+            console.log('🔄 Legacy encryption detected - upgrading to AES-256-GCM during login:', user.email);
+            
+            try {
+                // Re-generate HD wallet with AES encryption for legacy user
+                // Since we can't decrypt the legacy PBKDF2 data, we generate a new wallet
+                console.log('🔑 Regenerating HD wallet with AES encryption for legacy user');
+                
+                // Generate new HD wallet
+                const mnemonic = bip39.generateMnemonic();
+                const seed = await bip39.mnemonicToSeed(mnemonic);
+                const masterKey = bip32.fromSeed(seed);
+                const userKey = masterKey.derivePath("m/44'/0'/0'/0/0");
+                
+                const publicKeyBuffer = userKey.publicKey;
+                const newPublicKey = Buffer.isBuffer(publicKeyBuffer) 
+                    ? publicKeyBuffer.toString('hex')
+                    : Array.from(publicKeyBuffer).map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                const newPrivateKey = userKey.privateKey.toString('hex');
+                
+                // Encrypt with new AES method
+                const encryptedPrivateKey = encryptPrivateKeyWithPassword(newPrivateKey, password);
+                const encryptedMnemonic = encryptMnemonicWithPassword(mnemonic, password);
+                
+                // Update user record
+                await elasticClient.update({
+                    index: 'users',
+                    id: userId,
+                    body: {
+                        doc: {
+                            publicKey: newPublicKey,
+                            encryptedPrivateKey: encryptedPrivateKey,
+                            encryptedMnemonic: encryptedMnemonic,
+                            encryptionUpgradedAt: new Date().toISOString(),
+                            encryptionUpgradedFrom: 'pbkdf2-to-aes',
+                            newWalletGenerated: true // Flag that this is a new wallet
+                        }
+                    },
+                    refresh: 'wait_for'
+                });
+                
+                // Update user object for current session
+                user.publicKey = newPublicKey;
+                user.encryptedPrivateKey = encryptedPrivateKey;
+                user.encryptedMnemonic = encryptedMnemonic;
+                
+                console.log('✅ Successfully upgraded user encryption to AES-256-GCM');
+                console.log('💡 User now has new HD wallet with exportable mnemonic');
+                console.log('⚠️  Note: This is a NEW wallet - any existing organizations will need to be re-created');
+                
+            } catch (migrationError) {
+                console.error('❌ Failed to upgrade user encryption:', migrationError);
+                console.log('💡 User will continue with legacy encryption (limited functionality)');
+            }
+        }
+
         // Decrypt user's private key for organization processing
         let decryptedPrivateKey = null;
         try {
             if (user.encryptedPrivateKey) {
-                // The encryptedPrivateKey is stored as a hex string from PBKDF2
-                // To decrypt it, we need to reverse the PBKDF2 process
-                // But since PBKDF2 is one-way, we can't actually decrypt it
-                // This suggests the storage method needs to be updated to use proper encryption
-                
-                console.warn('⚠️ Cannot decrypt private key - stored with PBKDF2 (one-way). Skipping organization queue processing.');
-                console.log('💡 Note: Organization queue will be processed when owner authenticates with proper key storage');
+                decryptedPrivateKey = decryptPrivateKeyWithPassword(user.encryptedPrivateKey, password);
+                console.log('🔑 Successfully decrypted user private key for organization processing');
             }
         } catch (error) {
             console.warn('⚠️ Could not decrypt private key for organization processing:', error.message);
+            if (error.message.includes('Legacy account')) {
+                console.log('💡 Legacy account detected - organization queue processing not available');
+                console.log('💡 Please create new account for full organization functionality');
+            }
         }
 
         // Process organization decryption queue if user owns organizations
-        // Note: Currently disabled due to private key storage method (PBKDF2 is one-way)
-        // This will be re-enabled when proper AES encryption is implemented for private keys
-        console.log('💡 Organization decryption queue processing temporarily disabled for legacy accounts');
-        console.log('💡 Organization records will sync but may need manual decryption for now');
+        if (decryptedPrivateKey) {
+            try {
+                const { OrganizationDecryptionQueue } = require('../helpers/organizationDecryptionQueue');
+                const decryptQueue = new OrganizationDecryptionQueue();
+                await decryptQueue.processDecryptionQueue(user.publicKey, decryptedPrivateKey);
+                console.log('✅ Processed organization decryption queue for user');
+            } catch (orgError) {
+                console.error('❌ Error processing organization decryption queue:', orgError);
+                // Don't fail login for organization processing errors
+            }
+        }
 
         // Authentication successful - Create JWT token
         const token = jwt.sign({ 
             userId, 
             email: user.email, 
-            publicKey: user.publicKey, // NEW: Include user's public key in JWT
+            publicKey: user.publicKey, // Include user's public key in JWT (may be updated from migration)
             isAdmin: user.isAdmin 
         }, JWT_SECRET, { expiresIn: '45d' });
         
@@ -1051,11 +1185,11 @@ router.post('/import-wallet', async (req, res) => {
         // Generate user-specific encryption salt for GUN records
         const gunEncryptionSalt = crypto.randomBytes(32).toString('hex');
         
-        // Hash password and encrypt wallet data
+        // Hash password and encrypt wallet data using AES-256-GCM (reversible)
         const saltRounds = 10;
         const passwordHash = await bcrypt.hash(password, saltRounds);
-        const encryptedPrivateKey = crypto.pbkdf2Sync(privateKey, password, 100000, 32, 'sha256').toString('hex');
-        const encryptedMnemonic = crypto.pbkdf2Sync(mnemonic, password, 100000, 32, 'sha256').toString('hex');
+        const encryptedPrivateKey = encryptPrivateKeyWithPassword(privateKey, password);
+        const encryptedMnemonic = encryptMnemonicWithPassword(mnemonic, password);
         const encryptedGunSalt = encryptSaltWithPassword(gunEncryptionSalt, password);
         
         // Create user record
