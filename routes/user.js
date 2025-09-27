@@ -335,7 +335,8 @@ async function completeRegistration(userId, password, email, res) {
         // If userId is undefined, create a new user document; otherwise, update existing document
         if (userId) {
         // Update user record with registration details
-            await elasticClient.update({
+            console.log('💾 Updating existing user record with ID:', userId);
+            const updateResult = await elasticClient.update({
                 index: 'users',
                 id: userId, // Use userId passed as a parameter
                 body: {
@@ -355,8 +356,10 @@ async function completeRegistration(userId, password, email, res) {
                 },
                 refresh: 'wait_for'
             });
+            console.log('✅ User update result:', updateResult.result);
         } else {
             // Handle case where user needs to be created because `userId` is undefined
+            console.log('💾 Creating new user record for email:', email);
             const newUser = await elasticClient.index({
                 index: 'users',
                 body: {
@@ -376,6 +379,20 @@ async function completeRegistration(userId, password, email, res) {
                 refresh: 'wait_for'
             });
             userId = newUser._id; // Set the new user ID
+            console.log('✅ Created new user with ID:', userId);
+        }
+
+        // Immediately verify we can find the user (for debugging)
+        console.log('🔍 Verifying user can be found immediately after creation...');
+        try {
+            const verificationSearch = await findUserByEmail(email);
+            if (verificationSearch.hits.hits.length > 0) {
+                console.log('✅ User verification successful - can find user immediately');
+            } else {
+                console.warn('⚠️ User verification failed - cannot find user immediately after creation');
+            }
+        } catch (verifyError) {
+            console.error('❌ User verification error:', verifyError.message);
         }
 
         // Create JWT token for the new user - include user's public key
@@ -405,25 +422,27 @@ async function findUserByEmail(email) {
     console.log(`🔍 Searching for user with email: "${email}"`);
     
     // SECURITY: Only use exact match for user authentication
-    // Fuzzy/wildcard matching could allow login to wrong account
-    const exactMatchResult = await elasticClient.search({
+    // Try multiple exact match formats due to Elasticsearch field mapping variations
+    
+    // Try 1: email.keyword (most precise)
+    let exactMatchResult = await elasticClient.search({
         index: 'users',
         body: {
             query: {
                 term: { 
-                    'email.keyword': email.toLowerCase() // Use .keyword for exact match
+                    'email.keyword': email.toLowerCase()
                 }
             }
         }
     });
     
     if (exactMatchResult.hits.hits.length > 0) {
-        console.log('✅ Found user with exact email match');
+        console.log('✅ Found user with email.keyword exact match');
         return exactMatchResult;
     }
     
-    // Try alternative exact match format (in case email field mapping varies)
-    const alternativeExactMatch = await elasticClient.search({
+    // Try 2: email field without .keyword
+    exactMatchResult = await elasticClient.search({
         index: 'users',
         body: {
             query: {
@@ -434,9 +453,33 @@ async function findUserByEmail(email) {
         }
     });
     
-    if (alternativeExactMatch.hits.hits.length > 0) {
-        console.log('✅ Found user with alternative exact match');
-        return alternativeExactMatch;
+    if (exactMatchResult.hits.hits.length > 0) {
+        console.log('✅ Found user with email exact match');
+        return exactMatchResult;
+    }
+    
+    // Try 3: match query for exact matching (handles analyzed fields)
+    exactMatchResult = await elasticClient.search({
+        index: 'users',
+        body: {
+            query: {
+                match: { 
+                    email: email.toLowerCase()
+                }
+            }
+        }
+    });
+    
+    if (exactMatchResult.hits.hits.length > 0) {
+        console.log('✅ Found user with email match query');
+        // Additional security check: ensure it's an exact match, not partial
+        const foundEmail = exactMatchResult.hits.hits[0]._source.email;
+        if (foundEmail.toLowerCase() === email.toLowerCase()) {
+            console.log('✅ Confirmed exact email match');
+            return exactMatchResult;
+        } else {
+            console.log('⚠️ Match query returned different email, rejecting for security');
+        }
     }
     
     console.log('❌ No user found with exact email match');
@@ -1118,8 +1161,10 @@ router.get('/mnemonic', authenticateToken, async (req, res) => {
             return res.status(401).json({ error: 'User not authenticated' });
         }
         
-        // Get full user record from database
-        const searchResult = await elasticClient.search({
+        // Get full user record from database - try multiple search formats
+        console.log('🔍 Searching for user in database:', jwtUser.email);
+        
+        let searchResult = await elasticClient.search({
             index: 'users',
             body: {
                 query: {
@@ -1130,10 +1175,43 @@ router.get('/mnemonic', authenticateToken, async (req, res) => {
             }
         });
 
+        // If .keyword search fails, try without .keyword
         if (searchResult.hits.hits.length === 0) {
-            console.error('❌ User not found in database:', jwtUser.email);
-            return res.status(404).json({ error: 'User not found' });
+            console.log('🔄 Trying alternative email search format');
+            searchResult = await elasticClient.search({
+                index: 'users',
+                body: {
+                    query: {
+                        term: { 
+                            email: jwtUser.email.toLowerCase()
+                        }
+                    }
+                }
+            });
         }
+
+        // If both exact searches fail, try match query
+        if (searchResult.hits.hits.length === 0) {
+            console.log('🔄 Trying match query for email');
+            searchResult = await elasticClient.search({
+                index: 'users',
+                body: {
+                    query: {
+                        match: { 
+                            email: jwtUser.email
+                        }
+                    }
+                }
+            });
+        }
+
+        if (searchResult.hits.hits.length === 0) {
+            console.error('❌ User not found in database after all search attempts:', jwtUser.email);
+            console.log('💡 This might indicate an Elasticsearch field mapping issue');
+            return res.status(404).json({ error: 'User not found in database' });
+        }
+
+        console.log('✅ Found user in database:', jwtUser.email);
 
         const user = searchResult.hits.hits[0]._source;
         

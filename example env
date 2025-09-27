@@ -49,6 +49,8 @@ NGROK_DOMAIN=
 # NGROK_DOMAIN=                      # Leave empty for random ngrok URLs
 
 # LLM Configuration (Ollama-based)
+# OLLAMA_HOST: Internal Docker network address (port always 11434 inside Docker)
+# OLLAMA_PORT: External host port mapping (configurable for multi-stack)
 OLLAMA_HOST=http://ollama:11434
 LLAMA_MODEL=llama3.2:3b
 # Available models: tinyllama, mistral, llama2, llama3.2:3b
