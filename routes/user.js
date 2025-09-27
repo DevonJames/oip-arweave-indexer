@@ -1119,21 +1119,56 @@ router.get('/mnemonic', authenticateToken, async (req, res) => {
     try {
         const { password } = req.query;
         
+        console.log('🔑 Mnemonic retrieval request from user:', req.user?.email);
+        
         if (!password) {
+            console.warn('⚠️ Mnemonic request missing password');
             return res.status(400).json({ error: 'Password required to access mnemonic' });
         }
         
-        const user = req.user;
+        const jwtUser = req.user;
+        
+        if (!jwtUser || !jwtUser.email) {
+            console.error('❌ No user found in JWT');
+            return res.status(401).json({ error: 'User not authenticated' });
+        }
+        
+        // Get full user record from database
+        const searchResult = await elasticClient.search({
+            index: 'users',
+            body: {
+                query: {
+                    term: { 
+                        'email.keyword': jwtUser.email 
+                    }
+                }
+            }
+        });
+
+        if (searchResult.hits.hits.length === 0) {
+            console.error('❌ User not found in database:', jwtUser.email);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const user = searchResult.hits.hits[0]._source;
+        
+        if (!user.encryptedMnemonic) {
+            console.warn('⚠️ User has no encrypted mnemonic:', user.email);
+            return res.status(404).json({ error: 'No mnemonic found for user' });
+        }
         
         // Verify password
         const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
         if (!isPasswordValid) {
+            console.warn('⚠️ Invalid password for mnemonic retrieval:', user.email);
             return res.status(401).json({ error: 'Invalid password' });
         }
         
         // Decrypt mnemonic
+        console.log('🔓 Attempting to decrypt mnemonic for user:', user.email);
         const decryptedMnemonic = decryptMnemonicWithPassword(user.encryptedMnemonic, password);
         
+        console.log('✅ Successfully retrieved mnemonic for user:', user.email);
         res.status(200).json({
             success: true,
             mnemonic: decryptedMnemonic,
@@ -1141,8 +1176,9 @@ router.get('/mnemonic', authenticateToken, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error retrieving mnemonic:', error);
-        res.status(500).json({ error: 'Failed to retrieve mnemonic' });
+        console.error('❌ Error retrieving mnemonic:', error);
+        console.error('❌ Error stack:', error.stack);
+        res.status(500).json({ error: error.message || 'Failed to retrieve mnemonic' });
     }
 });
 

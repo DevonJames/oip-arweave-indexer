@@ -5575,21 +5575,30 @@
         }
 
         function showLoggedInState() {
-            // Legacy elements (keep for compatibility)
-            document.getElementById('user-info').classList.remove('hidden');
-            document.getElementById('auth-buttons').classList.add('hidden');
-            document.getElementById('publishing-content').classList.remove('hidden');
-            document.getElementById('logged-in-display').textContent = currentUser;
+            // Legacy elements (keep for compatibility) - check if they exist
+            const userInfo = document.getElementById('user-info');
+            const authButtons = document.getElementById('auth-buttons');
+            const publishingContent = document.getElementById('publishing-content');
+            const loggedInDisplay = document.getElementById('logged-in-display');
+            
+            if (userInfo) userInfo.classList.remove('hidden');
+            if (authButtons) authButtons.classList.add('hidden');
+            if (publishingContent) publishingContent.classList.remove('hidden');
+            if (loggedInDisplay) loggedInDisplay.textContent = currentUser;
             
             // Update new user menu
             updateUserMenuState();
         }
 
         function showLoginState() {
-            // Legacy elements (keep for compatibility)
-            document.getElementById('user-info').classList.add('hidden');
-            document.getElementById('auth-buttons').classList.remove('hidden');
-            document.getElementById('publishing-content').classList.add('hidden');
+            // Legacy elements (keep for compatibility) - check if they exist
+            const userInfo = document.getElementById('user-info');
+            const authButtons = document.getElementById('auth-buttons');
+            const publishingContent = document.getElementById('publishing-content');
+            
+            if (userInfo) userInfo.classList.add('hidden');
+            if (authButtons) authButtons.classList.remove('hidden');
+            if (publishingContent) publishingContent.classList.add('hidden');
             hideAllPublishingSections();
             
             // Update new user menu
@@ -9665,9 +9674,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
 
         // Publishing navigation functions
         function hideAllPublishingSections() {
-            document.getElementById('creator-section').classList.add('hidden');
-            document.getElementById('template-section').classList.add('hidden');
-            document.getElementById('record-section').classList.add('hidden');
+            const creatorSection = document.getElementById('creator-section');
+            const templateSection = document.getElementById('template-section');
+            const recordSection = document.getElementById('record-section');
+            
+            if (creatorSection) creatorSection.classList.add('hidden');
+            if (templateSection) templateSection.classList.add('hidden');
+            if (recordSection) recordSection.classList.add('hidden');
         }
 
         function showCreatorRegistration() {
