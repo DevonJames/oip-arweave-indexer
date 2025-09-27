@@ -402,60 +402,45 @@ async function completeRegistration(userId, password, email, res) {
 
 // Create a more robust search for users by email
 async function findUserByEmail(email) {
-    console.log(`Searching for user with email: "${email.toLowerCase()}"`);
+    console.log(`🔍 Searching for user with email: "${email}"`);
     
-    // Try an exact match first
+    // SECURITY: Only use exact match for user authentication
+    // Fuzzy/wildcard matching could allow login to wrong account
     const exactMatchResult = await elasticClient.search({
         index: 'users',
         body: {
             query: {
                 term: { 
-                    email: {
-                        value: email.toLowerCase()
-                    }
+                    'email.keyword': email.toLowerCase() // Use .keyword for exact match
                 }
             }
         }
     });
     
     if (exactMatchResult.hits.hits.length > 0) {
-        console.log('Found user with exact match');
+        console.log('✅ Found user with exact email match');
         return exactMatchResult;
     }
     
-    // If exact match fails, try a match query
-    console.log('Exact match failed, trying fuzzy match');
-    const fuzzyMatchResult = await elasticClient.search({
+    // Try alternative exact match format (in case email field mapping varies)
+    const alternativeExactMatch = await elasticClient.search({
         index: 'users',
         body: {
             query: {
-                match: {
+                term: { 
                     email: email.toLowerCase()
                 }
             }
         }
     });
     
-    if (fuzzyMatchResult.hits.hits.length > 0) {
-        console.log('Found user with fuzzy match');
-        return fuzzyMatchResult;
+    if (alternativeExactMatch.hits.hits.length > 0) {
+        console.log('✅ Found user with alternative exact match');
+        return alternativeExactMatch;
     }
     
-    // If all else fails, try a wildcard query
-    console.log('Fuzzy match failed, trying wildcard match');
-    const wildcardMatchResult = await elasticClient.search({
-        index: 'users',
-        body: {
-            query: {
-                wildcard: {
-                    email: `*${email.toLowerCase()}*`
-                }
-            }
-        }
-    });
-    
-    console.log(`Wildcard search results: ${wildcardMatchResult.hits.hits.length} hits`);
-    return wildcardMatchResult;
+    console.log('❌ No user found with exact email match');
+    return { hits: { hits: [] } }; // Return empty result - no fuzzy matching for security
 }
 
 // async function completeRegistration(userId, password, email, res) {
