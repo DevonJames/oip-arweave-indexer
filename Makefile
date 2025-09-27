@@ -543,7 +543,7 @@ rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + i
 	done || echo "$(YELLOW)⚠️ TTS GPU service didn't start in time, trying anyway...$(NC)"
 	@echo "$(YELLOW)⏳ Waiting for Ollama API to be ready...$(NC)"
 	@for i in {1..20}; do \
-		if curl -s http://localhost:11434/api/tags >/dev/null; then \
+		if curl -s "http://localhost:$${OLLAMA_PORT:-11434}/api/tags" >/dev/null; then \
 			echo "$(GREEN)✅ Ollama API is ready$(NC)"; \
 			break; \
 		fi; \

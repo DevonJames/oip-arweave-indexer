@@ -216,7 +216,7 @@ services:
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
       - STT_SERVICE_URL=http://stt-service-gpu:8003
       - TTS_SERVICE_URL=http://tts-service-gpu:5002
-      - OLLAMA_HOST=http://ollama-gpu:11434
+      - OLLAMA_HOST=http://ollama-gpu:11434  # Internal Docker network port stays 11434
       - DEFAULT_LLM_MODEL=llama3.2:3b
     depends_on:
       - elasticsearch
@@ -317,7 +317,7 @@ services:
     env_file:
       - .env
     environment:
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=http://ollama:11434  # Internal Docker network port stays 11434
       - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
     ports:
       - "${TEXT_GENERATOR_PORT:-8081}:8081"
@@ -337,7 +337,7 @@ services:
     env_file:
       - .env
     environment:
-      - OLLAMA_HOST=http://ollama-gpu:11434
+      - OLLAMA_HOST=http://ollama-gpu:11434  # Internal Docker network port stays 11434
       - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
     ports:
       - "${TEXT_GENERATOR_PORT:-8081}:8081"
