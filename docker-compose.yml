@@ -6,6 +6,10 @@ services:
       - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"      
       - xpack.security.enabled=false
+      # Reduce log verbosity - only show warnings and errors
+      - logger.level=WARN
+      - logger.org.elasticsearch=WARN
+      - logger.root=WARN
     ulimits:
       memlock:
         soft: -1
