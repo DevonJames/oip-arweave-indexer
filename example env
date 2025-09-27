@@ -3,6 +3,11 @@ REGISTRATION_LIMIT=50
 PORT=3005
 JWT_SECRET=
 
+# Public API Base URL (for generating media URLs)
+# Set this to your public domain when deploying (e.g., https://oip.fitnessally.io)
+# Leave empty for local development (will auto-detect from requests)
+PUBLIC_API_BASE_URL=
+
 # Arweave Configuration
 WALLET_FILE=config/arweave-keyfile.json
 

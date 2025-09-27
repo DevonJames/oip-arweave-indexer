@@ -1524,7 +1524,7 @@ async function generatePodcastFromArticles(articles, selectedHosts, targetLength
         "tagItems": episodeTagsArray || [],
       },
       "audio": {
-            "webUrl": `${process.env.PUBLIC_API_BASE_URL || `http://localhost:${process.env.PORT || 3005}`}/api/media?id=${podcastFile}`,
+            "webUrl": require('./urlHelper').getMediaUrl(podcastFile),
             "contentType" : "audio/mp3"
       },
       // "post": {

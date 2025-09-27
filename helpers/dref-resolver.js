@@ -15,7 +15,7 @@ async function fetchTemplate(templateName) {
   const txId = defaultTemplates[templateName];
   if (!txId) throw new Error(`No default TxId for ${templateName}`);
 
-  const apiBase = process.env.PUBLIC_API_BASE_URL || `http://localhost:${process.env.PORT || 3005}`;
+  const apiBase = require('./urlHelper').getBaseUrl();
   const response = await fetch(`${apiBase}/api/templates?didTx=did:arweave:${txId}`);
   const data = await response.json();
   if (data.templates && data.templates[0]) {

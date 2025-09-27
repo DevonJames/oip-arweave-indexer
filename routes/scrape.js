@@ -63,8 +63,8 @@ console.log('authenticateToken:', authenticateToken);
 
 require('dotenv').config();
 
-// Prefer PUBLIC_API_BASE_URL; fallback to local server if not set
-const backendURL = process.env.PUBLIC_API_BASE_URL || `http://localhost:${process.env.PORT || 3005}`;
+// Import URL helper for consistent URL generation
+const { getBaseUrl, getMediaUrl } = require('../helpers/urlHelper');
 
 // Add this line near the top of your file, after your imports
 // const ongoingScrapes = new Map();
@@ -498,7 +498,7 @@ async function publishArticleAndAttachedMedia(articleData, $, url, html, res, bl
 
   console.log('textFile', textFile);
 
-  articleTextURL = `${backendURL}/api/media?id=${textFile}`;
+  articleTextURL = `${getBaseUrl(req)}/api/media?id=${textFile}`;
 
   // Process embedded image if it exists
   if (articleData.embeddedImage) {
@@ -524,7 +524,7 @@ async function publishArticleAndAttachedMedia(articleData, $, url, html, res, bl
     console.log('mediaDownloadsDir', mediaDownloadsDir, 'fileName', imageFileName);
     const imagePath = path.join(mediaDownloadsDir, imageFileName);
 
-    const hostedImageUrl = `${backendURL}/api/media?id=${imageFileName}`;
+    const hostedImageUrl = `${getBaseUrl(req)}/api/media?id=${imageFileName}`;
     articleData.embeddedImageUrl = hostedImageUrl;
     
     // Get image info for the record
@@ -547,7 +547,7 @@ async function publishArticleAndAttachedMedia(articleData, $, url, html, res, bl
   }
 
   if (articleData.summaryTTS) {
-    const fullUrl = backendURL + articleData.summaryTTS;
+    const fullUrl = getBaseUrl(req) + articleData.summaryTTS;
     articleData.summaryTTS = fullUrl;
   }
 
@@ -956,7 +956,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
         }
       }
       console.log('SummaryTTS:', summaryTTS);
-      const screenshotURL = `${backendURL}/api/media?id=${screenshotMediaId}`;
+      const screenshotURL = `${getBaseUrl(req)}/api/media?id=${screenshotMediaId}`;
       let articleData = {
         title: records.records[0].data.basic !== undefined ? records.records[0].data.basic.name : null,
         byline: records.records[0].data.post !== undefined ? records.records[0].data.post.bylineWriter : null,
@@ -999,7 +999,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
 
       const domain = (new URL(url)).hostname.split('.').slice(-2, -1)[0];
 
-      const screenshotURL = `${backendURL}/api/media?id=${screenshotMediaId}`;
+      const screenshotURL = `${getBaseUrl(req)}/api/media?id=${screenshotMediaId}`;
 
       // Initial parsed article data
       let articleData = {
@@ -1114,7 +1114,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
         if (fs.existsSync(filePath)) {
           // If the file already exists, return the URL
           // return res.json({ url: `/api/generate/media?id=${contentFileName}` });
-          articleData.articleTextUrl = `${backendURL}/api/generate/media?id=${contentFileName}`;
+          articleData.articleTextUrl = `${getBaseUrl(req)}/api/generate/media?id=${contentFileName}`;
           articleData.articleTextId = contentFileName; 
         } else {
         const textSelector = [
@@ -1125,7 +1125,7 @@ async function fetchParsedArticleData(url, html, scrapeId, screenshotBase64, scr
         articleData.content = content ? content.trim() : articleData.content;
         console.log('Content:', articleData.content);
         fs.writeFileSync(filePath, Buffer.from(articleData.content, 'utf-8'));
-        articleData.articleTextUrl = `${backendURL}/api/generate/media?id=${contentFileName}`;
+        articleData.articleTextUrl = `${getBaseUrl(req)}/api/generate/media?id=${contentFileName}`;
         articleData.articleTextId = contentFileName; 
 
       }
@@ -1584,7 +1584,7 @@ async function fetchParsedRecipeData(url, html, scrapeId, screenshots, totalHeig
   console.log('converting screenshot to file');
   console.log('stitching images together using totalHeight:', totalHeight); 
   const screenshotMediaId = await stitchImages(screenshots, totalHeight, scrapeId);
-  const screenshotURL = `${backendURL}/api/media?id=${screenshotMediaId}`;
+  const screenshotURL = `${getBaseUrl(req)}/api/media?id=${screenshotMediaId}`;
   console.log('Full Screenshot saved at:', screenshotURL);
 
 
@@ -3088,7 +3088,7 @@ async function processYouTubeVideo(url, taskId) {
     if (metadata.thumbnail) {
       try {
         const thumbnailFileName = await downloadImageFile(metadata.thumbnail, url);
-        thumbnailUrl = `${backendURL}/api/media?id=${thumbnailFileName}`;
+        thumbnailUrl = `${getBaseUrl(req)}/api/media?id=${thumbnailFileName}`;
       } catch (error) {
         console.warn('Failed to download thumbnail:', error);
       }
@@ -3102,7 +3102,7 @@ async function processYouTubeVideo(url, taskId) {
 
     // Create hosted URL for the video
     const videoFileName = path.basename(outputPath);
-    const hostedVideoUrl = `${backendURL}/api/media?id=${videoFileName}`;
+    const hostedVideoUrl = `${getBaseUrl(req)}/api/media?id=${videoFileName}`;
 
     const result = {
       title: metadata.title,
