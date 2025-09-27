@@ -3,6 +3,7 @@
  */
 const WebSocket = require('ws');
 const { ongoingScrapes, ongoingDialogues } = require('../helpers/sharedState');
+const { getBaseUrl } = require('../helpers/urlHelper');
 
 // Store active connections
 const connections = new Map();
@@ -15,7 +16,7 @@ function initSocketServer(server) {
     const wss = new WebSocket.Server({ server });
     
     wss.on('connection', (ws, req) => {
-        const base = process.env.PUBLIC_API_BASE_URL || `http://localhost:${process.env.PORT || 3005}`;
+        const base = getBaseUrl();
         const url = new URL(req.url, `${base}/api/open-stream`);
         const id = url.searchParams.get('id');
         

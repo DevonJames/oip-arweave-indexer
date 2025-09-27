@@ -8,6 +8,7 @@ const { optionalAuth } = require('../middleware/auth');
 const { getMediaSeeder } = require('../services/mediaSeeder');
 const { publishToGun, publishNewRecord } = require('../helpers/templateHelper');
 const { indexRecord } = require('../helpers/elasticsearch');
+const { getBaseUrl, getMediaFileUrl } = require('../helpers/urlHelper');
 
 const router = express.Router();
 
@@ -123,7 +124,7 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       fileSize: fileSize,
       magnetURI: seedInfo.magnetURI,
       infoHash: seedInfo.infoHash,
-      httpUrl: `${req.protocol}://${req.get('host')}/api/media/${mediaId}`,
+      httpUrl: getMediaFileUrl(mediaId, req),
       createdAt: new Date().toISOString(),
       userPublicKey: userPublicKey,
       accessLevel: accessLevel
@@ -141,7 +142,7 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       mediaId,
       magnetURI: seedInfo.magnetURI,
       infoHash: seedInfo.infoHash,
-      httpUrl: `${req.protocol}://${req.get('host')}/api/media/${mediaId}`,
+      httpUrl: getMediaFileUrl(mediaId, req),
       size: fileSize,
       mime: mimeType,
       originalName: originalName,
