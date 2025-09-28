@@ -3221,7 +3221,7 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
     }
     
     // Get creator information
-    const creatorDid = `did:arweave:${transaction.owner}`;
+    const creatorDid = `did:arweave:${transaction.creator}`;
     let creatorInfo = null;
     try {
         creatorInfo = await searchCreatorByAddress(creatorDid);
