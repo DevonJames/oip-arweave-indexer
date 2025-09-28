@@ -11,7 +11,10 @@
  * @returns {string} Base URL (e.g., "https://oip.fitnessally.io")
  */
 function getBaseUrlFromRequest(req) {
-    return `${req.protocol}://${req.get('host')}`;
+    // Handle reverse proxy headers (e.g., from ngrok, nginx, etc.)
+    const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
+    const host = req.get('x-forwarded-host') || req.get('host');
+    return `${protocol}://${host}`;
 }
 
 /**

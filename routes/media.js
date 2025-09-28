@@ -570,9 +570,10 @@ router.post('/web-setup', authenticateToken, async (req, res) => {
     const webFilePath = path.join(webMediaDir, filename);
     fs.copyFileSync(originalPath, webFilePath);
 
-    // Build web URL
-    const ngrokDomain = process.env.NGROK_DOMAIN || req.get('host');
-    const webUrl = `${req.protocol}://${ngrokDomain}/media/${composeProjectName}/${filename}`;
+    // Build web URL with proper protocol detection (handle reverse proxy)
+    const ngrokDomain = process.env.NGROK_DOMAIN || req.get('x-forwarded-host') || req.get('host');
+    const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
+    const webUrl = `${protocol}://${ngrokDomain}/media/${composeProjectName}/${filename}`;
 
     console.log('✅ Web access setup complete:', webUrl);
 
