@@ -2880,6 +2880,9 @@ async function getRecords(queryParams) {
                 sortedRecords.sort((a, b) => b.score - a.score); // Sort in descending order by score
             }
 
+            const finalRecords = sortedRecords.slice(startIndex, endIndex);
+            console.log(`🔍 DEBUG: Final pagination - sortedRecords.length=${sortedRecords.length}, startIndex=${startIndex}, endIndex=${endIndex}, finalRecords.length=${finalRecords.length}`);
+            
             return {
                 message: "Records retrieved successfully",
                 latestArweaveBlockInDB: maxArweaveBlockInDB,
@@ -2891,7 +2894,7 @@ async function getRecords(queryParams) {
                 pageSize: pageSize,
                 currentPage: pageNumber,
                 totalPages: Math.ceil(summary.length / pageSize),
-                records: sortedRecords.slice(startIndex, endIndex),
+                records: finalRecords,
             };
         
         }
@@ -2905,6 +2908,8 @@ async function getRecords(queryParams) {
         
         const paginatedRecords = resolvedRecords.slice(startIndex, endIndex);
         resolvedRecords = paginatedRecords;
+        
+        console.log(`🔍 DEBUG: Second pagination - resolvedRecords.length=${resolvedRecords.length}, startIndex=${startIndex}, endIndex=${endIndex}, paginatedRecords.length=${paginatedRecords.length}`);
 
         return {
             message: "Records retrieved successfully",
