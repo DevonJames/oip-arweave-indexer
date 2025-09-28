@@ -3845,7 +3845,7 @@
                         <select id="voice-storage-filter" onchange="applyVoiceFilters()">
                             <option value="all">All Sources</option>
                             <option value="arweave">Arweave (Permanent)</option>
-                            <option value="gun">GUN (Private/Drafts)</option>
+                            <option value="gun" selected>GUN (Private/Drafts)</option>
                             <option value="irys">Irys (Permanent)</option>
                         </select>
                     </div>
@@ -4749,7 +4749,13 @@
                 // Try to search for records that match this truncated DID
                 console.log('[Routing] Searching for record with truncated DID:', truncatedDidTx);
                 try {
-                    const response = await fetch(`/api/records?limit=50&resolveDepth=3`);
+                    // Add authentication header if available
+                    const headers = {};
+                    if (authToken) {
+                        headers['Authorization'] = `Bearer ${authToken}`;
+                    }
+                    
+                    const response = await fetch(`/api/records?limit=50&resolveDepth=3`, { headers });
                     const data = await response.json();
                     
                     if (data.records) {
@@ -4843,7 +4849,13 @@
                 console.log('[RecordView] Loading record:', didTx);
                 document.getElementById('record-view-content').innerHTML = '<div class="loading" style="text-align: center; padding: 40px;">Loading record...</div>';
                 
-                const response = await fetch(`/api/records?didTx=${encodeURIComponent(didTx)}&resolveDepth=3&limit=1`);
+                // Add authentication header if available
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
+                const response = await fetch(`/api/records?didTx=${encodeURIComponent(didTx)}&resolveDepth=3&limit=1`, { headers });
                 const data = await response.json();
                 
                 if (data.records && data.records.length > 0) {
@@ -6132,7 +6144,13 @@
             try {
                 const params = buildApiParams();
                 const base = (typeof window !== 'undefined' && window.API_BASE_URL) ? window.API_BASE_URL : '';
-                const response = await fetch(`${base}/api/records?${params}`);
+                // Add authentication header if available
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
+                const response = await fetch(`${base}/api/records?${params}`, { headers });
                 const data = await response.json();
                 
                 if (data.records) {
@@ -14216,7 +14234,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 const params = buildVoiceApiParams();
                 console.log(`[Enhanced Records] Loading with resolveDepth=${currentFilters.resolveDepth}, debug=${showDebugInfo}`);
                 
-                const response = await fetch(`/api/records?${params}`);
+                // Add authentication header if available
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
+                const response = await fetch(`/api/records?${params}`, { headers });
                 const data = await response.json();
                 
                 if (data.records) {
@@ -14274,6 +14298,11 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             
             if (currentFilters.recordType) {
                 params.append('recordType', currentFilters.recordType);
+            }
+            
+            if (currentFilters.source && currentFilters.source !== 'all') {
+                params.append('source', currentFilters.source);
+                console.log('[Enhanced API] Using source filter:', currentFilters.source);
             }
             
             if (currentFilters.dateStart) {
