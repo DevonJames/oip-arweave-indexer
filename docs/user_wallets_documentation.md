@@ -80,26 +80,44 @@ const publicKey = Buffer.isBuffer(publicKeyBuffer)
 const privateKey = userKey.privateKey.toString('hex');
 ```
 
-#### 2. Secure Key Storage
+#### 2. Secure Key Storage (AES-256-GCM Encryption)
 
 ```javascript
-// Encrypt private key with user's password
-const encryptedPrivateKey = crypto.pbkdf2Sync(
-  privateKey, 
-  password, 
-  100000, 
-  32, 
-  'sha256'
-).toString('hex');
+// NEW: AES-256-GCM encryption (reversible) - replaces PBKDF2 one-way hashing
+function encryptPrivateKeyWithPassword(privateKey, password) {
+    const key = crypto.pbkdf2Sync(password, 'oip-private-key-encryption', 100000, 32, 'sha256');
+    const iv = crypto.randomBytes(12); // 12-byte IV for GCM
+    
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(privateKey, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    
+    // Return as JSON string with all components
+    return JSON.stringify({
+        encrypted: encrypted.toString('base64'),
+        iv: iv.toString('base64'),
+        authTag: authTag.toString('base64')
+    });
+}
 
-// Encrypt mnemonic with user's password
-const encryptedMnemonic = crypto.pbkdf2Sync(
-  mnemonic, 
-  password, 
-  100000, 
-  32, 
-  'sha256'
-).toString('hex');
+function encryptMnemonicWithPassword(mnemonic, password) {
+    const key = crypto.pbkdf2Sync(password, 'oip-mnemonic-encryption', 100000, 32, 'sha256');
+    const iv = crypto.randomBytes(12);
+    
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(mnemonic, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    
+    return JSON.stringify({
+        encrypted: encrypted.toString('base64'),
+        iv: iv.toString('base64'),
+        authTag: authTag.toString('base64')
+    });
+}
+
+// Encrypt private key and mnemonic with user's password using AES-256-GCM (reversible)
+const encryptedPrivateKey = encryptPrivateKeyWithPassword(privateKey, password);
+const encryptedMnemonic = encryptMnemonicWithPassword(mnemonic, password);
 ```
 
 #### 3. Database Storage
@@ -109,9 +127,9 @@ const userDoc = {
   email: email,
   passwordHash: passwordHash,
   // Cryptographic identity
-  publicKey: publicKey,                    // Hex-encoded public key
-  encryptedPrivateKey: encryptedPrivateKey, // PBKDF2-encrypted private key
-  encryptedMnemonic: encryptedMnemonic,     // PBKDF2-encrypted mnemonic
+  publicKey: publicKey,                    // Hex-encoded public key (66 chars)
+  encryptedPrivateKey: encryptedPrivateKey, // AES-256-GCM encrypted private key (JSON string)
+  encryptedMnemonic: encryptedMnemonic,     // AES-256-GCM encrypted mnemonic (JSON string)
   encryptedGunSalt: encryptedGunSalt,       // AES-256-GCM encrypted GUN salt
   keyDerivationPath: "m/44'/0'/0'/0/0",     // BIP-32 derivation path
   createdAt: new Date(),
@@ -141,9 +159,12 @@ const userDoc = {
   "success": true,
   "message": "User registered successfully",
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "publicKey": "02a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a"
+  "publicKey": "02a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+  "mnemonic": "abandon ability able about above absent absorb abstract absurd abuse access accident"
 }
 ```
+
+**Note**: The `mnemonic` field is only returned during registration to allow users to back up their recovery phrase. It is not returned during login for security reasons.
 
 **JWT Payload**:
 ```json
@@ -176,6 +197,102 @@ const userDoc = {
   "message": "Login successful",
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "publicKey": "02a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a"
+}
+```
+
+### Mnemonic Retrieval (NEW)
+
+**Endpoint**: `GET /api/user/mnemonic`
+
+**Headers**:
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters**:
+```
+password=<user_password>
+```
+
+**Example Request**:
+```javascript
+const response = await fetch('/api/user/mnemonic?password=user_password', {
+  headers: {
+    'Authorization': `Bearer ${jwtToken}`
+  }
+});
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "mnemonic": "abandon ability able about above absent absorb abstract absurd abuse access accident",
+  "message": "Save this mnemonic securely. You can use it to import your wallet on other OIP nodes."
+}
+```
+
+**Error Responses**:
+```json
+// Missing password
+{
+  "error": "Password required to access mnemonic"
+}
+
+// Invalid password
+{
+  "error": "Invalid password"
+}
+
+// Legacy account (PBKDF2 encrypted)
+{
+  "error": "Legacy account: Mnemonic cannot be retrieved. Please contact support for account migration."
+}
+
+// User not found
+{
+  "error": "User not found in database"
+}
+```
+
+### Wallet Import (NEW)
+
+**Endpoint**: `POST /api/user/import-wallet`
+
+**Request Body**:
+```json
+{
+  "email": "user@example.com",
+  "password": "secure_password",
+  "mnemonic": "abandon ability able about above absent absorb abstract absurd abuse access accident"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Wallet imported successfully",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "publicKey": "02a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a"
+}
+```
+
+**Error Responses**:
+```json
+// Missing fields
+{
+  "error": "Email, password, and mnemonic are required"
+}
+
+// Invalid mnemonic
+{
+  "error": "Invalid mnemonic phrase"
+}
+
+// User already exists
+{
+  "error": "User already exists on this node"
 }
 ```
 
@@ -220,16 +337,51 @@ New records created by users include simplified access control (compatible with 
 
 ### Encryption at Rest
 
-- **Private Keys**: Encrypted with user's password using PBKDF2 (100,000 iterations)
-- **Mnemonics**: Encrypted with user's password using PBKDF2 (100,000 iterations)
+- **Private Keys**: Encrypted with user's password using AES-256-GCM (reversible, secure)
+- **Mnemonics**: Encrypted with user's password using AES-256-GCM (reversible, exportable)
 - **GUN Encryption Salt**: User-specific salt encrypted with password using AES-256-GCM
 - **Public Keys**: Stored in plaintext (safe to expose)
+
+**New AES-256-GCM Format**:
+```json
+{
+  "encrypted": "base64_encrypted_data",
+  "iv": "base64_initialization_vector",
+  "authTag": "base64_authentication_tag"
+}
+```
+
+**Legacy PBKDF2 Format** (read-only, cannot decrypt):
+```
+"hex_string_from_pbkdf2_one_way_hash"
+```
 
 ### Key Derivation Security
 
 - **PBKDF2**: 100,000 iterations with SHA-256
-- **Salt**: User's password (unique per user)
+- **Unique Salts**: Different salts for mnemonic vs private key encryption
+  - Mnemonic: `'oip-mnemonic-encryption'`
+  - Private Key: `'oip-private-key-encryption'`
+- **AES-256-GCM**: Provides both confidentiality and authenticity
 - **Output**: 32-byte derived keys for AES-256 encryption
+
+### Enhanced Security Features (NEW)
+
+#### Exact Email Matching
+- **Security Fix**: Removed fuzzy/wildcard email matching that could allow wrong account access
+- **Exact Match Only**: System tries multiple exact match formats but never partial matches
+- **Multi-Format Support**: Handles different Elasticsearch field mappings securely
+
+#### Automatic Legacy Migration
+- **Detection**: System detects PBKDF2-encrypted accounts during login
+- **Automatic Upgrade**: Generates new HD wallet with AES encryption
+- **Seamless Transition**: Users get new exportable mnemonic without losing access
+- **Backward Compatibility**: Legacy accounts continue to work during migration
+
+#### Cross-Node Wallet Compatibility
+- **Mnemonic Export**: Users can retrieve their 12-word recovery phrase
+- **Wallet Import**: Users can import existing wallets on new nodes
+- **Consistent Identity**: Same mnemonic generates same public/private keys across nodes
 
 ### Record Privacy
 
@@ -246,8 +398,16 @@ User → Frontend → POST /api/user/register → HD Wallet Generation → Encry
 
 ### 2. User Login  
 ```
-User → Frontend → POST /api/user/login → Database Lookup → JWT with publicKey
+User → Frontend → POST /api/user/login → Database Lookup → Legacy Migration (if needed) → Organization Queue Processing → JWT with publicKey
 ```
+
+**Enhanced Login Process**:
+1. **User Authentication**: Verify email/password combination
+2. **Legacy Detection**: Check if user has PBKDF2 encryption
+3. **Automatic Migration**: Generate new AES-encrypted wallet if legacy
+4. **Private Key Decryption**: Decrypt user's private key for organization processing
+5. **Organization Queue**: Process any queued organization records that need decryption
+6. **JWT Generation**: Create token with user's (possibly updated) public key
 
 ### 3. Record Creation
 ```
@@ -330,11 +490,16 @@ const userOwnsRecord = (record, user) => {
 
 ✅ **True User Ownership**: Each user has unique cryptographic identity  
 ✅ **Cross-Device Identity**: 12-word mnemonic enables account recovery  
-✅ **Secure Storage**: Private keys encrypted with user's password  
+✅ **Secure Storage**: Private keys encrypted with AES-256-GCM (reversible)  
+✅ **Exportable Mnemonics**: Users can retrieve and backup recovery phrases  
+✅ **Cross-Node Compatibility**: Import/export wallets between OIP nodes  
 ✅ **Standard Compliance**: Uses established BIP standards  
 ✅ **GUN Compatibility**: Data structures optimized for GUN's limitations  
 ✅ **Elasticsearch Integration**: JSON strings converted to arrays for proper indexing  
 ✅ **Cross-User Privacy**: Users can only access their own private records  
+✅ **Automatic Migration**: Legacy accounts upgraded seamlessly  
+✅ **Organization Processing**: Organization queue works with proper encryption  
+✅ **Enhanced Security**: Exact email matching prevents account confusion  
 ✅ **Backward Compatibility**: Legacy records continue to work  
 ✅ **Privacy Protection**: Only record owners can access private data  
 

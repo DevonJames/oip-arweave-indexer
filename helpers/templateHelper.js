@@ -5,7 +5,7 @@ const { exec } = require('child_process');
 const { crypto, createHash } = require('crypto');
 const base64url = require('base64url');
 const { signMessage, txidToDid, getTurboArweave, getTemplateTxidByName, getWalletFilePath } = require('./utils');
-const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, deleteTemplateFromDB, searchCreatorByAddress, indexRecord, elasticClient } = require('./elasticsearch');
+const { searchTemplateByTxId, searchRecordInDB, getTemplatesInDB, deleteRecordFromDB, deleteTemplateFromDB, searchCreatorByAddress, indexRecord, elasticClient, convertToOrgHandle, findTemplateByTxId } = require('./elasticsearch');
 const {getCurrentBlockHeight} = require('../helpers/arweave');
 const arweaveWallet = require('./arweave-wallet');
 const publisherManager = require('./publisher-manager');
@@ -521,6 +521,101 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                     }
                 }
                 };
+                
+                // Special handling for organization records
+                if (recordType === 'organization') {
+                    console.log('Processing immediate organization record for:', transactionId);
+                    
+                    // Create a mock transaction object for the organization processing
+                    const mockTransaction = {
+                        transactionId: transactionId,
+                        owner: myAddress,
+                        data: recordData,
+                        creator: myAddress,
+                        creatorSig: creatorSig,
+                        ver: '0.8.0'
+                    };
+                    
+                    // Get the organization template for enum expansion
+                    const templates = await getTemplatesInDB();
+                    const orgTemplate = findTemplateByTxId("NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM", templates.templatesInDB);
+                    
+                    // Parse the compressed record data to get organization fields
+                    const parsedData = JSON.parse(recordData);
+                    const basicData = parsedData.find(obj => obj.t === "-9DirnjVO1FlbEW1lN8jITBESrTsQKEM_BoZ1ey_0mk");
+                    const orgData = parsedData.find(obj => obj.t === "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM");
+                    
+                    if (basicData && orgData) {
+                        // Generate unique organization handle
+                        const orgHandle = await convertToOrgHandle(transactionId, orgData["0"]);
+                        
+                        // Expand membershipPolicy enum value
+                        let membershipPolicyValue = orgData["3"]; // Raw index value
+                        if (orgTemplate && orgTemplate.data && orgTemplate.data.fields) {
+                            const fields = JSON.parse(orgTemplate.data.fields);
+                            if (fields.membership_policy === "enum" && Array.isArray(fields.membership_policyValues)) {
+                                const enumValues = fields.membership_policyValues;
+                                if (typeof membershipPolicyValue === "number" && membershipPolicyValue < enumValues.length) {
+                                    membershipPolicyValue = enumValues[membershipPolicyValue].name;
+                                    console.log(`Expanded membershipPolicy enum: ${orgData["3"]} -> ${membershipPolicyValue}`);
+                                }
+                            }
+                        }
+                        
+                        // Update the recordToIndex data with processed organization info
+                        recordToIndex.data.orgHandle = orgHandle;
+                        recordToIndex.data.membershipPolicy = membershipPolicyValue;
+                        
+                        // Create organization-specific data structure for organizations index
+                        const organizationRecord = {
+                            data: {
+                                orgHandle: orgHandle,
+                                name: basicData["0"],
+                                description: basicData["1"],
+                                date: basicData["2"],
+                                language: basicData["3"],
+                                nsfw: basicData["6"],
+                                webUrl: basicData["12"],
+                                orgPublicKey: orgData["1"],
+                                adminPublicKeys: orgData["2"],
+                                membershipPolicy: membershipPolicyValue,  // Expanded enum value
+                                metadata: orgData["4"] || null,
+                                org_handle: orgData["0"]  // Keep original user input
+                            },
+                            oip: {
+                                recordType: 'organization',
+                                did: 'did:arweave:' + transactionId,
+                                didTx: 'did:arweave:' + transactionId, // Backward compatibility
+                                inArweaveBlock: currentblock,
+                                indexedAt: new Date(),
+                                ver: '0.8.0',
+                                signature: creatorSig,
+                                organization: {
+                                    orgHandle: orgHandle,
+                                    orgPublicKey: orgData["1"],
+                                    adminPublicKeys: orgData["2"],
+                                    membershipPolicy: membershipPolicyValue,  // Expanded enum value
+                                    metadata: orgData["4"] || null
+                                },
+                                creator: {
+                                    ...creator
+                                }
+                            }
+                        };
+                        
+                        // Index to organizations index
+                        try {
+                            await elasticClient.index({
+                                index: 'organizations',
+                                id: 'did:arweave:' + transactionId,
+                                body: organizationRecord
+                            });
+                            console.log('Organization indexed to organizations index:', transactionId);
+                        } catch (error) {
+                            console.error('Error indexing organization to organizations index:', error);
+                        }
+                    }
+                }
                 
                 // console.log('40 indexRecord pending record to index:', recordToIndex);
                 
