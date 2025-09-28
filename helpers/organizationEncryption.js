@@ -124,8 +124,19 @@ class OrganizationEncryption {
                 return false;
             }
             
-            // Extract domain from organization's webUrl
-            const orgDomain = new URL(orgWebUrl).hostname;
+            // Extract domain from organization's webUrl (handle URLs without protocol)
+            let orgDomain;
+            try {
+                if (orgWebUrl.startsWith('http://') || orgWebUrl.startsWith('https://')) {
+                    orgDomain = new URL(orgWebUrl).hostname;
+                } else {
+                    // Assume it's just a domain name
+                    orgDomain = orgWebUrl;
+                }
+            } catch (error) {
+                console.warn(`⚠️ Could not parse organization webUrl: ${orgWebUrl}`, error);
+                return false;
+            }
             console.log(`🌐 Organization domain: ${orgDomain}`);
             
             // Check various request sources for domain match
@@ -138,6 +149,8 @@ class OrganizationEncryption {
                 requestInfo.headers?.host
             ].filter(Boolean);
             
+            console.log(`🔍 Checking domain membership for sources:`, requestSources);
+            
             for (const source of requestSources) {
                 try {
                     let sourceDomain;
@@ -147,13 +160,20 @@ class OrganizationEncryption {
                         sourceDomain = source;
                     }
                     
+                    console.log(`🔍 Comparing: ${sourceDomain} vs ${orgDomain}`);
+                    
                     // Check for exact domain match or subdomain
-                    if (sourceDomain === orgDomain || sourceDomain.endsWith('.' + orgDomain)) {
-                        console.log(`✅ Domain-based membership granted: ${sourceDomain} matches ${orgDomain}`);
+                    if (sourceDomain === orgDomain) {
+                        console.log(`✅ Domain-based membership granted (exact match): ${sourceDomain} === ${orgDomain}`);
                         return true;
+                    } else if (sourceDomain.endsWith('.' + orgDomain)) {
+                        console.log(`✅ Domain-based membership granted (subdomain match): ${sourceDomain} ends with .${orgDomain}`);
+                        return true;
+                    } else {
+                        console.log(`❌ No match: ${sourceDomain} does not match ${orgDomain}`);
                     }
                 } catch (error) {
-                    // Skip invalid URLs
+                    console.warn(`⚠️ Error processing source ${source}:`, error);
                     continue;
                 }
             }
