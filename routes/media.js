@@ -456,4 +456,203 @@ router.post('/createRecord', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/media/ipfs-upload
+ * Upload media file to IPFS and return hash
+ */
+router.post('/ipfs-upload', authenticateToken, async (req, res) => {
+  try {
+    const { mediaId } = req.body;
+    
+    if (!mediaId) {
+      return res.status(400).json({ error: 'mediaId is required' });
+    }
+
+    // Check if media file exists
+    const mediaIdDir = path.join(MEDIA_DIR, mediaId);
+    const filePath = path.join(mediaIdDir, 'original');
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Media file not found' });
+    }
+
+    // Verify ownership
+    const manifestPath = path.join(mediaIdDir, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+    
+    if (manifest.userPublicKey !== userPublicKey) {
+      return res.status(403).json({ error: 'Access denied: not the owner of this media file' });
+    }
+
+    console.log('📤 Uploading to IPFS:', mediaId);
+
+    // Upload to IPFS using the IPFS API
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', fs.createReadStream(filePath));
+
+    const ipfsResponse = await fetch('http://ipfs:5001/api/v0/add', {
+      method: 'POST',
+      body: form
+    });
+
+    const ipfsResult = await ipfsResponse.json();
+    
+    if (!ipfsResponse.ok) {
+      throw new Error('IPFS upload failed');
+    }
+
+    const ipfsHash = ipfsResult.Hash;
+    console.log('✅ IPFS upload complete:', ipfsHash);
+
+    // Update manifest with IPFS hash
+    manifest.ipfsHash = ipfsHash;
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    res.json({
+      success: true,
+      ipfsHash: ipfsHash,
+      ipfsUrl: `https://ipfs.io/ipfs/${ipfsHash}`,
+      message: 'File uploaded to IPFS successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ IPFS upload failed:', error);
+    res.status(500).json({
+      error: 'IPFS upload failed',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/media/web-setup
+ * Set up web server access for media file
+ */
+router.post('/web-setup', authenticateToken, async (req, res) => {
+  try {
+    const { mediaId, filename } = req.body;
+    
+    if (!mediaId || !filename) {
+      return res.status(400).json({ error: 'mediaId and filename are required' });
+    }
+
+    // Check if media file exists
+    const mediaIdDir = path.join(MEDIA_DIR, mediaId);
+    const originalPath = path.join(mediaIdDir, 'original');
+    
+    if (!fs.existsSync(originalPath)) {
+      return res.status(404).json({ error: 'Media file not found' });
+    }
+
+    // Verify ownership
+    const manifestPath = path.join(mediaIdDir, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+    
+    if (manifest.userPublicKey !== userPublicKey) {
+      return res.status(403).json({ error: 'Access denied: not the owner of this media file' });
+    }
+
+    console.log('🌍 Setting up web access:', mediaId, filename);
+
+    // Create web-accessible directory structure
+    const composeProjectName = process.env.COMPOSE_PROJECT_NAME || 'oip-arweave-indexer';
+    const webMediaDir = path.join(MEDIA_DIR, 'web', composeProjectName);
+    
+    if (!fs.existsSync(webMediaDir)) {
+      fs.mkdirSync(webMediaDir, { recursive: true });
+      console.log('📁 Created web media directory:', webMediaDir);
+    }
+
+    // Copy file to web-accessible location with original filename
+    const webFilePath = path.join(webMediaDir, filename);
+    fs.copyFileSync(originalPath, webFilePath);
+
+    // Build web URL
+    const ngrokDomain = process.env.NGROK_DOMAIN || req.get('host');
+    const webUrl = `${req.protocol}://${ngrokDomain}/media/${composeProjectName}/${filename}`;
+
+    console.log('✅ Web access setup complete:', webUrl);
+
+    // Update manifest with web URL
+    manifest.webUrl = webUrl;
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    res.json({
+      success: true,
+      webUrl: webUrl,
+      filename: filename,
+      message: 'Web access setup successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Web setup failed:', error);
+    res.status(500).json({
+      error: 'Web setup failed',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/media/arweave-upload
+ * Upload media file to Arweave and return transaction ID
+ */
+router.post('/arweave-upload', authenticateToken, async (req, res) => {
+  try {
+    const { mediaId } = req.body;
+    
+    if (!mediaId) {
+      return res.status(400).json({ error: 'mediaId is required' });
+    }
+
+    // Check if media file exists
+    const mediaIdDir = path.join(MEDIA_DIR, mediaId);
+    const filePath = path.join(mediaIdDir, 'original');
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Media file not found' });
+    }
+
+    // Verify ownership
+    const manifestPath = path.join(mediaIdDir, 'manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+    
+    if (manifest.userPublicKey !== userPublicKey) {
+      return res.status(403).json({ error: 'Access denied: not the owner of this media file' });
+    }
+
+    console.log('⛓️ Uploading to Arweave:', mediaId);
+
+    // Use the existing Arweave upload functionality
+    const { uploadToArweave } = require('../helpers/arweave');
+    
+    const fileBuffer = fs.readFileSync(filePath);
+    const arweaveResult = await uploadToArweave(fileBuffer, manifest.mimeType, manifest.originalName);
+
+    console.log('✅ Arweave upload complete:', arweaveResult.transactionId);
+
+    // Update manifest with Arweave transaction ID
+    manifest.arweaveTransactionId = arweaveResult.transactionId;
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    res.json({
+      success: true,
+      transactionId: arweaveResult.transactionId,
+      arweaveUrl: `https://arweave.net/${arweaveResult.transactionId}`,
+      message: 'File uploaded to Arweave successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Arweave upload failed:', error);
+    res.status(500).json({
+      error: 'Arweave upload failed',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;
