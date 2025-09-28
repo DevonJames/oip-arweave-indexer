@@ -200,6 +200,8 @@ app.use('/api/scrape', scrapeRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/generate/media', express.static(path.join(__dirname, 'media')));
+// Serve web-accessible media files
+app.use('/media', express.static(path.join(__dirname, 'data', 'media', 'web')));
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/workout', workoutRoutes);

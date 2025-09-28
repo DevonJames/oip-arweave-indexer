@@ -11614,6 +11614,32 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <small>Choose which organization this media belongs to</small>
                     </div>
 
+                    <!-- Multi-Network Storage Options -->
+                    <div class="form-group" style="background: #e8f5e8; padding: 15px; border-radius: 8px; border: 1px solid #4caf50;">
+                        <h4 style="margin: 0 0 15px 0; color: #2e7d32;">🌐 Multi-Network Storage</h4>
+                        <div style="margin-bottom: 10px;">
+                            <label>
+                                <input type="checkbox" id="media-enable-ipfs" checked> Store on IPFS
+                            </label>
+                            <small style="display: block; color: #555; margin-top: 2px;">Enable IPFS storage for decentralized distribution</small>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label>
+                                <input type="checkbox" id="media-enable-web" checked> Store on Web Server
+                            </label>
+                            <small style="display: block; color: #555; margin-top: 2px;">Enable direct HTTP access via web server</small>
+                        </div>
+                        <div>
+                            <label>
+                                <input type="checkbox" id="media-enable-arweave"> Store on Arweave
+                            </label>
+                            <small style="display: block; color: #555; margin-top: 2px;">Enable permanent storage on Arweave blockchain (costs AR tokens)</small>
+                        </div>
+                        <small style="display: block; margin-top: 10px; color: #666; font-style: italic;">
+                            BitTorrent is always enabled. Multiple storage options provide redundancy and different access methods.
+                        </small>
+                    </div>
+
                     <!-- Tags -->
                     <div class="form-group">
                         <label for="media-tags">Tags:</label>
@@ -16328,11 +16354,21 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 progressText.textContent = 'Uploading file...';
                 progressFill.style.width = '10%';
 
+                // Get multi-network storage options
+                const enableIPFS = document.getElementById('media-enable-ipfs').checked;
+                const enableWeb = document.getElementById('media-enable-web').checked;
+                const enableArweave = document.getElementById('media-enable-arweave').checked;
+
                 // Step 1: Upload file to get BitTorrent info and file metadata
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('name', document.getElementById('media-name').value || file.name);
                 formData.append('access_level', document.getElementById('media-access-level').value);
+                
+                // Add multi-network storage options
+                formData.append('publishTo[ipfs]', enableIPFS);
+                formData.append('publishTo[web]', enableWeb);
+                formData.append('publishTo[arweave]', enableArweave);
                 
                 // Add description if provided
                 const description = document.getElementById('media-description').value;
@@ -16348,7 +16384,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     body: formData
                 });
 
-                progressFill.style.width = '50%';
+                progressFill.style.width = '30%';
                 progressText.textContent = 'Creating BitTorrent...';
 
                 const uploadResult = await uploadResponse.json();
@@ -16357,10 +16393,87 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     throw new Error(uploadResult.error || 'File upload failed');
                 }
 
-                progressFill.style.width = '70%';
+                // Step 2: Process additional storage networks
+                let ipfsAddress = '';
+                let webUrl = '';
+                let arweaveAddress = '';
+
+                if (enableIPFS) {
+                    progressFill.style.width = '50%';
+                    progressText.textContent = 'Uploading to IPFS...';
+                    
+                    try {
+                        const ipfsResponse = await fetch('/api/media/ipfs-upload', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: JSON.stringify({ mediaId: uploadResult.mediaId })
+                        });
+                        
+                        const ipfsResult = await ipfsResponse.json();
+                        if (ipfsResponse.ok) {
+                            ipfsAddress = ipfsResult.ipfsHash;
+                        }
+                    } catch (error) {
+                        console.warn('IPFS upload failed:', error);
+                    }
+                }
+
+                if (enableWeb) {
+                    progressFill.style.width = '60%';
+                    progressText.textContent = 'Setting up web access...';
+                    
+                    try {
+                        const webResponse = await fetch('/api/media/web-setup', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: JSON.stringify({ 
+                                mediaId: uploadResult.mediaId,
+                                filename: uploadResult.originalName
+                            })
+                        });
+                        
+                        const webResult = await webResponse.json();
+                        if (webResponse.ok) {
+                            webUrl = webResult.webUrl;
+                        }
+                    } catch (error) {
+                        console.warn('Web setup failed:', error);
+                    }
+                }
+
+                if (enableArweave) {
+                    progressFill.style.width = '70%';
+                    progressText.textContent = 'Uploading to Arweave...';
+                    
+                    try {
+                        const arweaveResponse = await fetch('/api/media/arweave-upload', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: JSON.stringify({ mediaId: uploadResult.mediaId })
+                        });
+                        
+                        const arweaveResult = await arweaveResponse.json();
+                        if (arweaveResponse.ok) {
+                            arweaveAddress = arweaveResult.transactionId;
+                        }
+                    } catch (error) {
+                        console.warn('Arweave upload failed:', error);
+                    }
+                }
+
+                progressFill.style.width = '80%';
                 progressText.textContent = 'Creating OIP record...';
 
-                // Step 2: Create proper OIP record based on detected type
+                // Step 3: Create proper OIP record with all storage addresses
                 const mediaTitle = document.getElementById('media-name').value || file.name;
                 const mediaDescription = document.getElementById('media-description').value || `${recordType.charAt(0).toUpperCase() + recordType.slice(1)} file: ${file.name}`;
                 const language = document.getElementById('media-language').value;
@@ -16403,39 +16516,87 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     } catch (error) {
                         console.warn('Could not extract media dimensions:', error);
                     }
+                } else if (recordType === 'audio') {
+                    // Try to get audio duration
+                    try {
+                        const dimensions = await getMediaDimensions(file, recordType);
+                        duration = dimensions.duration || 0;
+                    } catch (error) {
+                        console.warn('Could not extract audio duration:', error);
+                    }
                 }
 
-
-                progressFill.style.width = '80%';
-                progressText.textContent = 'Creating OIP record...';
-
-                // Step 3: Create proper OIP record using the new media endpoint
+                // Build OIP record with multiple storage addresses
                 const recordData = {
-                    mediaId: uploadResult.mediaId,
-                    recordType: recordType,
-                    basicInfo: {
+                    basic: {
                         name: mediaTitle,
                         description: mediaDescription,
                         language: language,
+                        date: Math.floor(Date.now() / 1000),
                         nsfw: nsfw,
-                        tagItems: tags
+                        tagItems: tags,
+                        webUrl: webUrl || uploadResult.httpUrl // Use web URL if available, fallback to HTTP
                     }
                 };
 
-                // Only add accessControl for GUN storage (private records)
-                if (storageType === 'gun') {
-                    recordData.accessControl = {
-                        access_level: accessLevel,
-                        shared_with: selectedOrganizationDid // Organization's DID goes in shared_with field
+                // Add media-specific template data based on record type
+                if (recordType === 'image') {
+                    recordData.image = {
+                        webUrl: webUrl || uploadResult.httpUrl,
+                        bittorrentAddress: uploadResult.magnetURI,
+                        ipfsAddress: ipfsAddress,
+                        arweaveAddress: arweaveAddress,
+                        filename: uploadResult.originalName,
+                        size: uploadResult.size,
+                        contentType: uploadResult.mime,
+                        width: width,
+                        height: height
+                    };
+                } else if (recordType === 'video') {
+                    recordData.video = {
+                        webUrl: webUrl || uploadResult.httpUrl,
+                        bittorrentAddress: uploadResult.magnetURI,
+                        ipfsAddress: ipfsAddress,
+                        arweaveAddress: arweaveAddress,
+                        filename: uploadResult.originalName,
+                        size: uploadResult.size,
+                        duration: duration,
+                        contentType: uploadResult.mime,
+                        width: width,
+                        height: height
+                    };
+                } else if (recordType === 'audio') {
+                    recordData.audio = {
+                        webUrl: webUrl || uploadResult.httpUrl,
+                        bittorrentAddress: uploadResult.magnetURI,
+                        ipfsAddress: ipfsAddress,
+                        arweaveAddress: arweaveAddress,
+                        filename: uploadResult.originalName,
+                        size: uploadResult.size,
+                        duration: duration,
+                        contentType: uploadResult.mime,
+                        creator: mediaTitle // Use title as creator for media files
                     };
                 }
 
-                // Add dimensions to recordData
-                recordData.width = width;
-                recordData.height = height;
-                recordData.duration = duration;
+                // Add access control for GUN storage
+                if (storageType === 'gun') {
+                    recordData.accessControl = {
+                        access_level: accessLevel,
+                        owner_public_key: getUserPublicKeyFromJWT(),
+                        created_by: getUserPublicKeyFromJWT()
+                    };
+                    
+                    if (accessLevel === 'organization' && selectedOrganizationDid) {
+                        recordData.accessControl.shared_with = selectedOrganizationDid;
+                    }
+                }
 
-                const recordResponse = await fetch('/api/media/createRecord', {
+                // Use the standard record publishing endpoint
+                const endpoint = '/api/records/newRecord';
+                const queryParams = `?recordType=${recordType}&storage=${storageType}`;
+
+                const recordResponse = await fetch(endpoint + queryParams, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -16453,20 +16614,29 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 progressFill.style.width = '100%';
                 progressText.textContent = 'Upload complete!';
                 
+                // Build storage summary for success message
+                let storageSummary = `BitTorrent: ${uploadResult.magnetURI ? 'Enabled' : 'Failed'}`;
+                if (ipfsAddress) storageSummary += `\\nIPFS: ${ipfsAddress}`;
+                if (webUrl) storageSummary += `\\nWeb: Available`;
+                if (arweaveAddress) storageSummary += `\\nArweave: ${arweaveAddress}`;
+
                 showMessage('publish-success', 
                     `${recordType.charAt(0).toUpperCase() + recordType.slice(1)} published successfully!\\n` +
                     `Record Type: ${recordType}\\n` +
                     `DID: ${recordResult.did}\\n` +
                     `Media ID: ${uploadResult.mediaId}\\n` +
                     `Size: ${(file.size / 1024).toFixed(1)} KB\\n` +
-                    `BitTorrent: ${uploadResult.magnetURI ? 'Enabled' : 'Failed'}`, 'success');
+                    storageSummary, 'success');
                 
                 // Show media preview with both upload and record info
                 showMediaPreview({
                     ...uploadResult,
                     recordType: recordType,
                     recordDid: recordResult.did,
-                    dimensions: { width, height, duration }
+                    dimensions: { width, height, duration },
+                    ipfsAddress: ipfsAddress,
+                    webUrl: webUrl,
+                    arweaveAddress: arweaveAddress
                 });
                 
                 // Clear form after delay
@@ -16511,10 +16681,39 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         resolve({ width: 0, height: 0, duration: 0 });
                     };
                     video.src = URL.createObjectURL(file);
+                } else if (recordType === 'audio') {
+                    const audio = document.createElement('audio');
+                    audio.onloadedmetadata = () => {
+                        resolve({ 
+                            width: 0, 
+                            height: 0,
+                            duration: Math.floor(audio.duration) || 0
+                        });
+                    };
+                    audio.onerror = () => {
+                        resolve({ width: 0, height: 0, duration: 0 });
+                    };
+                    audio.src = URL.createObjectURL(file);
                 } else {
                     resolve({ width: 0, height: 0, duration: 0 });
                 }
             });
+        }
+
+        // Helper function to extract user's public key from JWT
+        function getUserPublicKeyFromJWT() {
+            try {
+                if (authToken) {
+                    const parts = authToken.split('.');
+                    if (parts.length === 3) {
+                        const payload = JSON.parse(atob(parts[1]));
+                        return payload.publicKey;
+                    }
+                }
+            } catch (error) {
+                console.warn('Could not extract public key from JWT:', error);
+            }
+            return null;
         }
 
         // Organization management for media publishing
@@ -16675,13 +16874,19 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 </div>`;
             }
             
-            // Build info display
+            // Build info display with all storage addresses
             let infoHtml = `
                 <strong>Media ID:</strong> ${mediaResult.mediaId}<br>
                 <strong>Size:</strong> ${(mediaResult.size / 1024).toFixed(1)} KB<br>
                 <strong>MIME:</strong> ${mediaResult.mime}<br>
                 <strong>Access:</strong> ${mediaResult.access_level}<br>
-                <strong>BitTorrent:</strong> ${mediaResult.magnetURI ? 'Available' : 'Not available'}
+                <strong>Storage Networks:</strong><br>
+                <div style="margin-left: 15px; font-size: 11px; color: #666;">
+                    🔗 BitTorrent: ${mediaResult.magnetURI ? 'Available' : 'Not available'}<br>
+                    ${mediaResult.ipfsAddress ? `🌐 IPFS: ${mediaResult.ipfsAddress}<br>` : ''}
+                    ${mediaResult.webUrl ? `🌍 Web: Available<br>` : ''}
+                    ${mediaResult.arweaveAddress ? `⛓️ Arweave: ${mediaResult.arweaveAddress}<br>` : ''}
+                </div>
             `;
             
             // Add record-specific info if available
@@ -17407,11 +17612,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 }
             });
             
-            [mediaOrgSelection, exerciseOrgSelection, equipmentOrgSelection, gifOrgSelection].forEach(element => {
-                if (element) {
-                    element.style.display = 'none'; // Always hide organization selection when storage type changes
-                }
-            });
+            // Don't automatically hide organization selections - let individual access level handlers manage them
+            // [mediaOrgSelection, exerciseOrgSelection, equipmentOrgSelection, gifOrgSelection].forEach(element => {
+            //     if (element) {
+            //         element.style.display = 'none'; // Always hide organization selection when storage type changes
+            //     }
+            // });
             
             console.log(`🔒 Access control fields ${showAccessControl ? 'shown' : 'hidden'} for storage type: ${storageType}`);
         }
