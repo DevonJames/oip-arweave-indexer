@@ -2191,7 +2191,15 @@ async function getRecords(queryParams) {
                     const sharedWith = accessControl?.shared_with;
                     const userPubKey = user?.publicKey || user?.publisherPubKey;
                     
-                    if (!sharedWith || !Array.isArray(sharedWith) || sharedWith.length === 0) {
+                    // Handle both string and array formats for shared_with
+                    let sharedWithArray = [];
+                    if (typeof sharedWith === 'string') {
+                        sharedWithArray = [sharedWith];
+                    } else if (Array.isArray(sharedWith)) {
+                        sharedWithArray = sharedWith;
+                    }
+                    
+                    if (!sharedWith || sharedWithArray.length === 0) {
                         console.log('Excluding organization record (no shared_with):', record.oip?.did);
                         return false;
                     }
@@ -2203,7 +2211,7 @@ async function getRecords(queryParams) {
                     
                     // Check membership for each organization in shared_with
                     try {
-                        const isMember = await checkOrganizationMembershipForRecord(userPubKey, sharedWith, requestInfo);
+                        const isMember = await checkOrganizationMembershipForRecord(userPubKey, sharedWithArray, requestInfo);
                         if (isMember) {
                             console.log('Including organization record for member:', record.oip?.did, 'user:', userPubKey.slice(0, 12));
                             return true;
