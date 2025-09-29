@@ -57,6 +57,14 @@ NGROK_DASHBOARD_PORT=4040
 DEBUG_PORT=9229
 NEXT_FRONTEND_PORT=3000
 
+# LLM Configuration (Internal Docker network addresses - do not change)
+OLLAMA_HOST=http://ollama:11434
+LLAMA_MODEL=llama3.2:3b
+
+# Ngrok Configuration  
+NGROK_DOMAIN=rockhoppersgame.com
+NGROK_AUTH_TOKEN=your_ngrok_token
+
 # Other OIP configuration...
 JWT_SECRET=rockhoppers_jwt_secret
 ELASTICSEARCHHOST=http://elasticsearch:9200
@@ -90,9 +98,17 @@ NGROK_DASHBOARD_PORT=4140
 DEBUG_PORT=9329
 NEXT_FRONTEND_PORT=3100
 
+# LLM Configuration (Internal Docker network addresses - do not change)
+OLLAMA_HOST=http://ollama:11434
+LLAMA_MODEL=llama3.2:3b
+
+# Ngrok Configuration
+NGROK_DOMAIN=spaceadventure.com
+NGROK_AUTH_TOKEN=your_ngrok_token
+
 # Other OIP configuration...
 JWT_SECRET=space_adventure_jwt_secret
-ELASTICSEARCHHOST=http://elasticsearch:9300  # Note: Use Stack 2's Elasticsearch port
+ELASTICSEARCHHOST=http://elasticsearch:9200  # Internal Docker network address
 ```
 
 ### **3. Deploy Both Stacks**
@@ -161,14 +177,24 @@ space-adventure-ollama-1
 
 ## Port Allocation Strategy
 
+### **Important: Docker Internal vs External Ports**
+
+**Key Concept**: Docker services communicate internally using fixed ports, but external access uses configurable ports.
+
+| Service | Internal Port | External Port Variable | Purpose |
+|---------|---------------|------------------------|---------|
+| Ollama | `11434` (fixed) | `OLLAMA_PORT` | External access only |
+| Elasticsearch | `9200` (fixed) | `ELASTICSEARCH_PORT` | External access only |
+| OIP API | `${PORT}` (configurable) | `PORT` | Both internal and external |
+
 ### **Recommended Port Ranges**
 
-| Project | Port Range | Main API | Elasticsearch | Kibana | Example |
-|---------|------------|----------|---------------|--------|---------|
-| Stack 1 | 3000-3099  | 3005     | 9200          | 5601   | RockHoppersGame |
-| Stack 2 | 3100-3199  | 3105     | 9300          | 5701   | SpaceAdventure |
-| Stack 3 | 3200-3299  | 3205     | 9400          | 5801   | PuzzleQuest |
-| Stack 4 | 3300-3399  | 3305     | 9500          | 5901   | RPGWorld |
+| Project | Port Range | Main API | Elasticsearch | Kibana | Ollama | Example |
+|---------|------------|----------|---------------|--------|--------|---------|
+| Stack 1 | 3000-3099  | 3005     | 9200          | 5601   | 11434  | RockHoppersGame |
+| Stack 2 | 3100-3199  | 3105     | 9300          | 5701   | 11534  | SpaceAdventure |
+| Stack 3 | 3200-3299  | 3205     | 9400          | 5801   | 11634  | PuzzleQuest |
+| Stack 4 | 3300-3399  | 3305     | 9500          | 5901   | 11734  | RPGWorld |
 
 ### **Port Offset Pattern (+100)**
 ```bash
@@ -241,6 +267,14 @@ GUN_RELAY_PORT=$((8765 + PORT_OFFSET))
 NGROK_DASHBOARD_PORT=$((4040 + PORT_OFFSET))
 DEBUG_PORT=$((9229 + PORT_OFFSET))
 NEXT_FRONTEND_PORT=$((3000 + PORT_OFFSET))
+
+# LLM Configuration (Internal Docker network - do not change ports)
+OLLAMA_HOST=http://ollama:11434
+LLAMA_MODEL=llama3.2:3b
+
+# Ngrok Configuration
+NGROK_DOMAIN=${PROJECT_NAME}.ngrok.io
+NGROK_AUTH_TOKEN=your_ngrok_token
 
 # Other Configuration
 JWT_SECRET=${PROJECT_NAME}_jwt_secret
@@ -333,15 +367,37 @@ make minimal
 For efficiency, you can share some services between stacks:
 
 ```bash
-# Stack 1: Full stack
+# Stack 1: Full stack with default ports
 COMPOSE_PROJECT_NAME=shared-infrastructure
 
-# Stack 2: Connect to Stack 1's services
+# Stack 2: Connect to Stack 1's services via external ports
 ELASTICSEARCHHOST=http://localhost:9200  # Use Stack 1's Elasticsearch
 GUN_PEERS=http://localhost:8765           # Use Stack 1's GUN relay
+# Note: Use external ports when connecting to other stacks
 ```
 
 ## Troubleshooting
+
+### **Ollama Port Issues**
+**Problem**: Ollama fails when `OLLAMA_PORT` is changed from default
+
+**Root Cause**: Docker internal vs external port confusion
+
+**Solution**: 
+- ✅ **Change `OLLAMA_PORT`** for external access (localhost:11534)
+- ✅ **Keep `OLLAMA_HOST=http://ollama:11434`** for internal Docker communication
+- ✅ **Never change the `11434` in `OLLAMA_HOST`** - it's the internal Docker network port
+
+**Example**:
+```bash
+# Stack 1
+OLLAMA_PORT=11434
+OLLAMA_HOST=http://ollama:11434  # Internal - always 11434
+
+# Stack 2  
+OLLAMA_PORT=11534               # External - different port
+OLLAMA_HOST=http://ollama:11434  # Internal - still 11434!
+```
 
 ### **Port Conflicts**
 ```bash
@@ -351,6 +407,18 @@ netstat -tulpn | grep 3005
 
 # Find available ports
 for port in {3005..3010}; do ! lsof -i:$port && echo "Port $port is free"; done
+```
+
+### **Express Router Errors**
+**Problem**: `TypeError: Router.use() requires a middleware function`
+
+**Solution**: Some route files export objects instead of routers. Check imports:
+```javascript
+// ❌ Wrong (if route exports {router, ...})
+const userRoutes = require('./routes/user');
+
+// ✅ Correct  
+const { router: userRoutes } = require('./routes/user');
 ```
 
 ### **Network Conflicts**
@@ -400,9 +468,19 @@ COMPOSE_PROJECT_NAME=puzzle-quest PORT=3205 ELASTICSEARCH_PORT=9400 KIBANA_PORT=
 
 ✅ **Network Isolation**: Each stack gets its own Docker network  
 ✅ **Volume Isolation**: Each stack gets its own data volumes  
-✅ **Port Flexibility**: All ports configurable via environment variables  
+✅ **Port Flexibility**: All external ports configurable via environment variables  
 ✅ **Container Isolation**: Each stack gets unique container names  
 ✅ **Resource Management**: Independent scaling and resource allocation  
 ✅ **Independent Deployment**: Each stack can use different profiles  
+✅ **Internal Network Consistency**: Docker services communicate via fixed internal ports  
+✅ **Express Router Compatibility**: Fixed middleware import issues  
+✅ **Ngrok Domain Flexibility**: All profiles use configurable NGROK_DOMAIN  
 
-The system now fully supports running multiple isolated OIP stacks simultaneously on the same machine!
+### **Key Learnings**
+- **Docker Internal Ports**: Always fixed (e.g., `ollama:11434`) for service-to-service communication
+- **External Port Mapping**: Configurable via environment variables for host access
+- **OLLAMA_HOST**: Always `http://ollama:11434` regardless of external `OLLAMA_PORT`
+- **Router Imports**: Some routes export objects, require destructuring import
+- **Custom Public Paths**: Handled via Docker entrypoint script and symlinks
+
+The system now fully supports running multiple isolated OIP stacks simultaneously on the same machine with complete port and resource isolation!
