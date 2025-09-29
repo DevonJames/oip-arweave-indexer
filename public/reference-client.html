@@ -8596,6 +8596,33 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             // Get basic data for image titles
             const basicData = record?.data?.basic || {};
             
+            // Handle direct media records (image, video, audio record types)
+            if (sectionName === 'image' && section.webUrl && !content.featuredImage) {
+                content.featuredImage = {
+                    url: section.webUrl,
+                    title: basicData?.name || 'Image',
+                    contentType: section.contentType || 'image/jpeg'
+                };
+                console.log(`[Media Detection] ✅ Found direct image record: ${section.webUrl}`);
+                return; // Early return since we found what we need
+            } else if (sectionName === 'video' && section.webUrl) {
+                content.videoItems.push({
+                    url: section.webUrl,
+                    title: basicData?.name || 'Video',
+                    contentType: section.contentType || 'video/mp4'
+                });
+                console.log(`[Media Detection] ✅ Found direct video record: ${section.webUrl}`);
+                return; // Early return since we found what we need
+            } else if (sectionName === 'audio' && section.webUrl) {
+                content.audioItems.push({
+                    url: section.webUrl,
+                    title: basicData?.name || 'Audio',
+                    contentType: section.contentType || 'audio/mpeg'
+                });
+                console.log(`[Media Detection] ✅ Found direct audio record: ${section.webUrl}`);
+                return; // Early return since we found what we need
+            }
+            
             Object.keys(section).forEach(fieldName => {
                 const value = section[fieldName];
                 
