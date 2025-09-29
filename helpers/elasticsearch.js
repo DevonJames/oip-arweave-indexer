@@ -1490,27 +1490,55 @@ async function getRecords(queryParams) {
             
 
         if (dateStart != undefined) {
-            records = records.filter(record => 
-                {
+            records = records.filter(record => {
+                let dateToCheck;
+                
+                // Handle special record types with their own date fields
+                if (record.oip.recordType === 'workoutSchedule' && record.data?.workoutSchedule?.scheduled_date) {
+                    // scheduled_date is stored as Unix timestamp, convert to Date
+                    dateToCheck = new Date(record.data.workoutSchedule.scheduled_date * 1000);
+                } else if (record.oip.recordType === 'mealPlan' && record.data?.mealPlan?.meal_date) {
+                    // meal_date is stored as Unix timestamp, convert to Date
+                    dateToCheck = new Date(record.data.mealPlan.meal_date * 1000);
+                } else {
+                    // Default behavior for other record types
                     const basicData = record.data.basic;
                     if (basicData && basicData.date) {
-                        const recordDate = new Date(basicData.date); 
-                        return recordDate >= dateStart;
+                        dateToCheck = new Date(basicData.date * 1000); // Assuming Unix timestamp
                     }
-                    return false;
                 }
-            );
+                
+                if (dateToCheck) {
+                    return dateToCheck >= dateStart;
+                }
+                return false;
+            });
             // console.log('after filtering by dateStart, there are', records.length, 'records');
         }
 
         if (dateEnd != undefined) {
             records = records.filter(record => {
-            const basicData = record.data.basic;
-            if (basicData && basicData.date) {
-                const recordDate = new Date(basicData.date); 
-                return recordDate <= dateEnd;
-            }
-            return false;
+                let dateToCheck;
+                
+                // Handle special record types with their own date fields
+                if (record.oip.recordType === 'workoutSchedule' && record.data?.workoutSchedule?.scheduled_date) {
+                    // scheduled_date is stored as Unix timestamp, convert to Date
+                    dateToCheck = new Date(record.data.workoutSchedule.scheduled_date * 1000);
+                } else if (record.oip.recordType === 'mealPlan' && record.data?.mealPlan?.meal_date) {
+                    // meal_date is stored as Unix timestamp, convert to Date
+                    dateToCheck = new Date(record.data.mealPlan.meal_date * 1000);
+                } else {
+                    // Default behavior for other record types
+                    const basicData = record.data.basic;
+                    if (basicData && basicData.date) {
+                        dateToCheck = new Date(basicData.date * 1000); // Assuming Unix timestamp
+                    }
+                }
+                
+                if (dateToCheck) {
+                    return dateToCheck <= dateEnd;
+                }
+                return false;
             });
             // console.log('after filtering by dateEnd, there are', records.length, 'records');
         }
