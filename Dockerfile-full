@@ -36,10 +36,11 @@ COPY . .
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Include all necessary directories
+# Include all necessary directories (these are redundant after COPY . . but kept for clarity)
 COPY config ./config
 COPY helpers ./helpers
 COPY lib ./lib
+COPY media ./media
 COPY remapTemplates ./remapTemplates
 COPY routes ./routes
 COPY services ./services

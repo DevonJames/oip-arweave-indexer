@@ -48,6 +48,7 @@ RUN sed -i 's/\r$//' wait-for-it.sh && chmod +x wait-for-it.sh
 COPY config ./config
 COPY helpers ./helpers
 COPY lib ./lib
+COPY media ./media
 COPY remapTemplates ./remapTemplates
 COPY routes ./routes
 COPY speech-synthesizer ./speech-synthesizer

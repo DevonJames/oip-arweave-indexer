@@ -6,35 +6,52 @@ The OIP system provides a sophisticated image publishing workflow that combines 
 
 ## Architecture Overview
 
-### Two-Phase Publishing Process
+### Unified Media Publishing Process
 
-Image publishing in OIP follows a two-phase process:
+Image publishing in OIP follows a streamlined, unified process that automatically handles file upload, multi-network distribution, and OIP record creation:
 
-1. **Phase 1: File Upload & BitTorrent Creation** (`/api/media/upload`)
-   - File storage and hash generation
-   - BitTorrent torrent creation and seeding
-   - File metadata extraction
-   - Returns media ID and torrent information
+1. **Phase 1: File Upload & Multi-Network Distribution** (`/api/media/upload`)
+   - File storage with SHA256-based mediaId generation
+   - BitTorrent torrent creation and automatic seeding
+   - IPFS upload (optional, user-configurable)
+   - Web server setup with dynamic domain-based URLs
+   - Arweave upload (optional, user-configurable)
+   - File metadata extraction (dimensions, duration, MIME type)
 
-2. **Phase 2: OIP Record Creation** (`/api/media/createRecord`)
-   - Creates proper OIP record structure
-   - Links file metadata to blockchain record
-   - Applies access control and ownership
-   - Indexes record in Elasticsearch
+2. **Phase 2: Automatic OIP Record Creation** (`/api/media/createRecord`)
+   - Creates proper OIP record structure with multi-network addresses
+   - Links all storage addresses (BitTorrent, IPFS, Web, Arweave)
+   - Applies HD wallet-based access control and ownership
+   - Indexes record in Elasticsearch with organization support
+   - Enables immediate streaming and P2P distribution
 
-### Storage Systems
+### Multi-Network Storage Architecture
 
-#### GUN Storage (Default for Media Files)
+#### Primary Storage: GUN + BitTorrent (Always Enabled)
 - **Privacy**: Private by default with HD wallet ownership
-- **Distribution**: BitTorrent P2P distribution + HTTP streaming
+- **Distribution**: BitTorrent P2P distribution with automatic seeding
 - **Access Control**: User-owned with organization sharing support
 - **Performance**: Immediate availability, optimized for media streaming
+- **Reliability**: Server maintains persistent seeding for all files
 
-#### Arweave Storage (Alternative)
-- **Privacy**: Public, permanent storage
-- **Distribution**: IPFS + HTTP
-- **Access Control**: Public by design
-- **Performance**: Slower confirmation, permanent archive
+#### Web Server Distribution (Configurable)
+- **URL Generation**: Dynamic URLs based on request domain (e.g., `https://oip.fitnessally.io/media/fitnessally/filename.jpg`)
+- **Folder Organization**: Files organized by domain-specific folders for multi-tenant support
+- **Range Requests**: Full HTTP range request support for streaming
+- **Authentication**: Respects access control for private files
+- **Performance**: Direct HTTP serving with browser caching
+
+#### IPFS Distribution (Optional)
+- **Decentralization**: Content-addressed storage on IPFS network
+- **Global Access**: Available via any IPFS gateway
+- **Redundancy**: Distributed across IPFS peer network
+- **Integration**: Automatic pinning and hash generation
+
+#### Arweave Storage (Optional)
+- **Permanence**: Immutable, permanent blockchain storage
+- **Public Access**: Globally accessible via Arweave gateways
+- **Cost**: Requires AR tokens for storage fees
+- **Archival**: Best for long-term preservation
 
 ## User Authentication & Ownership
 
@@ -107,6 +124,42 @@ function createMediaInterface() {
                     <option value="organization" selected>Organization (Your team/org)</option>
                     <option value="public">Public (Everyone)</option>
                 </select>
+                <small>Controls who can access this media file</small>
+            </div>
+
+            <!-- Organization Selection (shown when Organization access level is selected) -->
+            <div id="media-organization-selection" class="form-group" style="background: #f0f4ff; padding: 15px; border-radius: 8px; border: 1px solid #c7d2fe;">
+                <label for="media-organization">Select Organization:</label>
+                <select id="media-organization" required>
+                    <option value="">Loading organizations...</option>
+                </select>
+                <small>Choose which organization this media belongs to</small>
+            </div>
+
+            <!-- Multi-Network Storage Options -->
+            <div class="form-group" style="background: #e8f5e8; padding: 15px; border-radius: 8px; border: 1px solid #4caf50;">
+                <h4 style="margin: 0 0 15px 0; color: #2e7d32;">🌐 Multi-Network Storage</h4>
+                <div style="margin-bottom: 10px;">
+                    <label>
+                        <input type="checkbox" id="media-enable-ipfs" checked> Store on IPFS
+                    </label>
+                    <small style="display: block; color: #555; margin-top: 2px;">Enable IPFS storage for decentralized distribution</small>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label>
+                        <input type="checkbox" id="media-enable-web" checked> Store on Web Server
+                    </label>
+                    <small style="display: block; color: #555; margin-top: 2px;">Enable direct HTTP access via web server</small>
+                </div>
+                <div>
+                    <label>
+                        <input type="checkbox" id="media-enable-arweave"> Store on Arweave
+                    </label>
+                    <small style="display: block; color: #555; margin-top: 2px;">Enable permanent storage on Arweave blockchain (costs AR tokens)</small>
+                </div>
+                <small style="display: block; margin-top: 10px; color: #666; font-style: italic;">
+                    BitTorrent is always enabled. Multiple storage options provide redundancy and different access methods.
+                </small>
             </div>
             
             <!-- Additional metadata fields... -->
@@ -245,103 +298,206 @@ async function publishMedia() {
 
 ### Backend Implementation
 
-#### 1. File Upload Endpoint (`POST /api/media/upload`)
+#### 1. Unified Media Upload Endpoint (`POST /api/media/upload`)
 
-Located in `routes/media.js`, this endpoint handles the initial file processing:
+Located in `routes/media.js`, this endpoint handles complete file processing and multi-network distribution:
 
 ```javascript
 router.post('/upload', authenticateToken, upload.single('file'), async (req, res) => {
-    // Generate SHA256 hash as mediaId
+    // Generate SHA256 hash as mediaId for deduplication
     const fileBuffer = fs.readFileSync(tempFilePath);
     const mediaId = crypto.createHash('sha256').update(fileBuffer).digest('hex');
     
-    // Create directory structure
+    // Create secure directory structure
     const mediaIdDir = path.join(MEDIA_DIR, mediaId);
     const finalFilePath = path.join(mediaIdDir, 'original');
     fs.renameSync(tempFilePath, finalFilePath);
     
-    // Start BitTorrent seeding
+    // Phase 1: BitTorrent Distribution (Always Enabled)
     const mediaSeeder = getMediaSeeder();
     const seedInfo = await mediaSeeder.seedFile(finalFilePath, mediaId);
+    console.log('🌱 Started seeding:', mediaId);
     
-    // Create file manifest
+    // Phase 2: IPFS Upload (Optional)
+    let ipfsAddress = '';
+    if (req.body['publishTo[ipfs]'] === 'true') {
+        try {
+            const ipfsResult = await uploadToIPFS(finalFilePath);
+            ipfsAddress = ipfsResult.hash;
+            console.log('✅ IPFS upload complete:', ipfsAddress);
+        } catch (error) {
+            console.warn('⚠️ IPFS upload failed:', error.message);
+        }
+    }
+    
+    // Phase 3: Web Server Setup (Optional)
+    let webUrl = '';
+    if (req.body['publishTo[web]'] === 'true') {
+        try {
+            // Extract domain from request for folder organization
+            const domain = req.get('host').replace(/^oip\./, ''); // Remove 'oip.' prefix
+            const webDir = path.join('/usr/src/app/data/media/web', domain);
+            
+            // Create domain-specific directory
+            if (!fs.existsSync(webDir)) {
+                fs.mkdirSync(webDir, { recursive: true });
+                console.log('📁 Created web media directory:', webDir);
+            }
+            
+            // Copy file to web directory with original filename
+            const webFilePath = path.join(webDir, originalName);
+            fs.copyFileSync(finalFilePath, webFilePath);
+            
+            // Generate dynamic URL based on request domain
+            webUrl = `${req.protocol}://${req.get('host')}/media/${domain}/${originalName}`;
+            console.log('✅ Web access setup complete:', webUrl);
+        } catch (error) {
+            console.warn('⚠️ Web setup failed:', error.message);
+        }
+    }
+    
+    // Phase 4: Arweave Upload (Optional)
+    let arweaveAddress = '';
+    if (req.body['publishTo[arweave]'] === 'true') {
+        try {
+            const arweaveResult = await uploadToArweave(finalFilePath);
+            arweaveAddress = arweaveResult.transactionId;
+            console.log('✅ Arweave upload complete:', arweaveAddress);
+        } catch (error) {
+            console.warn('⚠️ Arweave upload failed:', error.message);
+        }
+    }
+    
+    // Create comprehensive file manifest
     const mediaManifest = {
         mediaId: mediaId,
         originalName: originalName,
         mimeType: mimeType,
         fileSize: fileSize,
+        // BitTorrent (Always Available)
         magnetURI: seedInfo.magnetURI,
         infoHash: seedInfo.infoHash,
-        httpUrl: `${req.protocol}://${req.get('host')}/api/media/${mediaId}`,
+        httpUrl: getMediaFileUrl(mediaId, req), // Dynamic URL generation
+        // Multi-Network Addresses
+        ipfsAddress: ipfsAddress,
+        webUrl: webUrl,
+        arweaveAddress: arweaveAddress,
+        // Metadata
         createdAt: new Date().toISOString(),
         userPublicKey: userPublicKey,
-        accessLevel: accessLevel
+        accessLevel: accessLevel,
+        networks: {
+            bittorrent: true,
+            ipfs: !!ipfsAddress,
+            web: !!webUrl,
+            arweave: !!arweaveAddress
+        }
     };
     
-    // Save manifest for tracking
+    // Save manifest for tracking and recovery
     fs.writeFileSync(manifestPath, JSON.stringify(mediaManifest, null, 2));
     
-    // Return BitTorrent info for OIP record creation
+    // Return comprehensive distribution info
     res.json({
         success: true,
         mediaId,
+        // BitTorrent Distribution
         magnetURI: seedInfo.magnetURI,
         infoHash: seedInfo.infoHash,
-        httpUrl: `${req.protocol}://${req.get('host')}/api/media/${mediaId}`,
+        httpUrl: getMediaFileUrl(mediaId, req),
+        // Multi-Network Distribution
+        ipfsAddress: ipfsAddress,
+        webUrl: webUrl,
+        arweaveAddress: arweaveAddress,
+        // File Metadata
         size: fileSize,
         mime: mimeType,
         originalName: originalName,
         access_level: accessLevel,
-        owner: userPublicKey
+        owner: userPublicKey,
+        networks: mediaManifest.networks
     });
 });
 ```
 
-#### 2. OIP Record Creation (`POST /api/media/createRecord`)
+#### 2. Automatic OIP Record Creation (`POST /api/media/createRecord`)
 
-This endpoint creates the actual OIP record linking to the uploaded file:
+This endpoint creates comprehensive OIP records with multi-network addresses:
 
 ```javascript
 router.post('/createRecord', authenticateToken, async (req, res) => {
     const { mediaId, recordType, basicInfo, accessControl, width, height, duration } = req.body;
     
-    // Verify ownership of media file
+    // Load comprehensive file manifest with all network addresses
+    const manifestPath = path.join(MEDIA_DIR, mediaId, 'manifest.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
     
+    // Verify ownership
     if (manifest.userPublicKey !== userPublicKey) {
         return res.status(403).json({ error: 'Access denied: not the owner of this media file' });
     }
     
-    // Build OIP record structure
+    // Build comprehensive OIP record with all network addresses
     const oipRecord = {
         basic: {
             name: basicInfo.name || manifest.originalName,
-            description: basicInfo.description || `Image file: ${manifest.originalName}`,
+            description: basicInfo.description || `${recordType} file: ${manifest.originalName}`,
             language: basicInfo.language || 'en',
             date: Math.floor(Date.now() / 1000),
             nsfw: basicInfo.nsfw || false,
-            tagItems: basicInfo.tagItems || []
+            tagItems: basicInfo.tagItems || [],
+            webUrl: manifest.webUrl || manifest.httpUrl // Prefer web URL for public access
         },
         accessControl: {
             access_level: accessControl.access_level || 'private',
-            owner_public_key: userPublicKey
+            owner_public_key: userPublicKey,
+            created_by: userPublicKey,
+            shared_with: accessControl.shared_with || undefined // Organization DID if specified
         }
     };
     
-    // Add image-specific fields
+    // Add media-specific fields with all network addresses
     if (recordType === 'image') {
         oipRecord.image = {
+            webUrl: manifest.webUrl || manifest.httpUrl, // Primary access URL
             bittorrentAddress: manifest.magnetURI,
+            ipfsAddress: manifest.ipfsAddress || '',
+            arweaveAddress: manifest.arweaveAddress || '',
             filename: manifest.originalName,
             width: width || 0,
             height: height || 0,
             size: manifest.fileSize,
             contentType: manifest.mimeType
         };
+    } else if (recordType === 'video') {
+        oipRecord.video = {
+            webUrl: manifest.webUrl || manifest.httpUrl,
+            bittorrentAddress: manifest.magnetURI,
+            ipfsAddress: manifest.ipfsAddress || '',
+            arweaveAddress: manifest.arweaveAddress || '',
+            filename: manifest.originalName,
+            width: width || 0,
+            height: height || 0,
+            duration: duration || 0,
+            size: manifest.fileSize,
+            contentType: manifest.mimeType
+        };
+    } else if (recordType === 'audio') {
+        oipRecord.audio = {
+            webUrl: manifest.webUrl || manifest.httpUrl,
+            bittorrentAddress: manifest.magnetURI,
+            ipfsAddress: manifest.ipfsAddress || '',
+            arweaveAddress: manifest.arweaveAddress || '',
+            filename: manifest.originalName,
+            duration: duration || 0,
+            size: manifest.fileSize,
+            contentType: manifest.mimeType,
+            creator: basicInfo.name || manifest.originalName
+        };
     }
     
-    // Publish to GUN storage
+    // Publish to GUN with organization support
     const result = await publishNewRecord(oipRecord, recordType, false, false, false, null, 'gun', false, {
         storage: 'gun',
         localId: `media_${mediaId}`,
@@ -354,84 +510,148 @@ router.post('/createRecord', authenticateToken, async (req, res) => {
         recordType: recordType,
         mediaId: mediaId,
         storage: 'gun',
-        encrypted: result.encrypted
+        encrypted: result.encrypted,
+        networks: manifest.networks,
+        addresses: {
+            gun: result.did,
+            bittorrent: manifest.magnetURI,
+            ipfs: manifest.ipfsAddress,
+            web: manifest.webUrl,
+            arweave: manifest.arweaveAddress
+        }
     });
 });
 ```
 
 ## Image Record Structure
 
-### Complete OIP Image Record
+### Complete Multi-Network OIP Image Record
 
-When an image file is uploaded, it creates a comprehensive OIP record:
+When an image file is uploaded with multi-network distribution, it creates a comprehensive OIP record:
 
 ```json
 {
   "data": {
     "basic": {
-      "name": "My Beautiful Landscape",
-      "description": "A sunset photo taken in the mountains",
+      "name": "Barbell Equipment Image",
+      "description": "Barbell icon from TheNounProject.com",
       "language": "en",
-      "date": 1757789558,
+      "date": 1759094653,
       "nsfw": false,
-      "tagItems": ["landscape", "sunset", "mountains", "photography"]
+      "tagItems": ["fitness", "equipment", "barbell"],
+      "webUrl": "https://oip.fitnessally.io/media/fitnessally/noun-barbell-5673068.svg"
     },
     "image": {
-      "bittorrentAddress": "magnet:?xt=urn:btih:abc123def456...",
-      "filename": "landscape_sunset.jpg",
-      "width": 1920,
-      "height": 1080,
-      "size": 2048576,
-      "contentType": "image/jpeg"
+      "webUrl": "https://oip.fitnessally.io/media/fitnessally/noun-barbell-5673068.svg",
+      "bittorrentAddress": "magnet:?xt=urn:btih:2993527fd556b60f61aa0185210fa126088c2f8f&dn=original&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&tr=wss%3A%2F%2Ftracker.btorrent.xyz",
+      "ipfsAddress": "QmdjNDFTiuixbJWJXVDmuS2kEfx5Y3M2t816578vkynVVa",
+      "arweaveAddress": "",
+      "filename": "noun-barbell-5673068.svg",
+      "size": 2760,
+      "contentType": "image/svg+xml",
+      "width": 683,
+      "height": 683
     },
     "accessControl": {
-      "access_level": "private",
-      "owner_public_key": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
-      "created_by": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
-      "created_timestamp": 1757789558199,
-      "last_modified_timestamp": 1757789558199,
-      "version": "1.0.0"
+      "access_level": "organization",
+      "owner_public_key": "034d41b0c8bdbf3ad65e55624b554aa01533c7d2695fe91cb8a20febc99e63e92d",
+      "created_by": "034d41b0c8bdbf3ad65e55624b554aa01533c7d2695fe91cb8a20febc99e63e92d",
+      "shared_with": "did:arweave:6zmCRZ06E2XtvN84BEQE_g4laBJdoCzTfQURHD2YlC4"
     }
   },
   "oip": {
-    "did": "did:gun:media:a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
-    "didTx": "did:gun:media:a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+    "did": "did:gun:647f79c2a338:h:cc3bc323",
+    "didTx": "did:gun:647f79c2a338:h:cc3bc323",
     "recordType": "image",
     "storage": "gun",
-    "indexedAt": "2025-09-13T18:52:38.413Z",
+    "indexedAt": "2025-09-28T21:24:14.215Z",
     "ver": "0.8.0",
     "creator": {
       "didAddress": "did:arweave:u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0",
-      "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+      "publicKey": "034d41b0c8bdbf3ad65e55624b554aa01533c7d2695fe91cb8a20febc99e63e92d"
     }
   }
 }
 ```
+
+### Network Address Priority
+
+The system uses this priority order for image URLs:
+1. **Web URL** (`webUrl`): Direct HTTP access with domain-specific organization
+2. **HTTP API** (`httpUrl`): Authenticated access via `/api/media/:mediaId`
+3. **IPFS** (`ipfsAddress`): Decentralized content-addressed storage
+4. **BitTorrent** (`bittorrentAddress`): P2P distribution via magnet URI
+5. **Arweave** (`arweaveAddress`): Permanent blockchain storage
 
 ### File Storage Structure
 
 ```
 /data/media/
 ├── <mediaId>/
-│   ├── original          # Original uploaded image file
-│   └── manifest.json     # File metadata and BitTorrent info
-└── seeder.json          # Global seeding state
+│   ├── original              # Original uploaded file (all networks use this)
+│   └── manifest.json         # Comprehensive metadata with all network addresses
+├── web/                      # Web server distribution (optional)
+│   ├── fitnessally/         # Domain-specific folder (from request host)
+│   │   ├── noun-barbell-5673068.svg
+│   │   └── other-files.jpg
+│   ├── example.com/         # Another domain's files
+│   │   └── domain-files.png
+│   └── localhost/           # Local development files
+│       └── dev-files.gif
+└── seeder.json              # Global BitTorrent seeding state
 ```
 
-### Media Manifest Structure
+### Dynamic URL Generation
+
+The system generates URLs dynamically based on the request domain:
+
+```javascript
+// URL Helper (helpers/urlHelper.js)
+function getBaseUrl(req) {
+    return `${req.protocol}://${req.get('host')}`;
+}
+
+function getMediaUrl(mediaId, req) {
+    return `${getBaseUrl(req)}/api/media?id=${mediaId}`;
+}
+
+// Web URL generation (routes/media.js)
+const domain = req.get('host').replace(/^oip\./, ''); // Extract domain
+const webUrl = `${req.protocol}://${req.get('host')}/media/${domain}/${originalName}`;
+
+// Examples:
+// Request from: oip.fitnessally.io → https://oip.fitnessally.io/media/fitnessally/file.jpg
+// Request from: oip.example.com   → https://oip.example.com/media/example.com/file.jpg
+// Request from: localhost:3005    → http://localhost:3005/media/localhost/file.jpg
+```
+
+### Enhanced Media Manifest Structure
 
 ```json
 {
-  "mediaId": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
-  "originalName": "landscape_sunset.jpg",
-  "mimeType": "image/jpeg",
-  "fileSize": 2048576,
-  "magnetURI": "magnet:?xt=urn:btih:abc123def456...",
-  "infoHash": "abc123def456789abcdef0123456789abcdef01",
-  "httpUrl": "https://api.oip.onl/api/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
-  "createdAt": "2025-09-13T18:52:38.199Z",
-  "userPublicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
-  "accessLevel": "private"
+  "mediaId": "651189db9bd4c6874af389b65d5fb8cf1f2cc7fa69c5711a40d79206a1c4c6b7",
+  "originalName": "noun-barbell-5673068.svg",
+  "mimeType": "image/svg+xml",
+  "fileSize": 2760,
+  
+  "magnetURI": "magnet:?xt=urn:btih:2993527fd556b60f61aa0185210fa126088c2f8f&dn=original&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&tr=wss%3A%2F%2Ftracker.btorrent.xyz",
+  "infoHash": "2993527fd556b60f61aa0185210fa126088c2f8f",
+  "httpUrl": "https://oip.fitnessally.io/api/media/651189db9bd4c6874af389b65d5fb8cf1f2cc7fa69c5711a40d79206a1c4c6b7",
+  
+  "ipfsAddress": "QmdjNDFTiuixbJWJXVDmuS2kEfx5Y3M2t816578vkynVVa",
+  "webUrl": "https://oip.fitnessally.io/media/fitnessally/noun-barbell-5673068.svg",
+  "arweaveAddress": "",
+  
+  "createdAt": "2025-09-28T21:24:11.199Z",
+  "userPublicKey": "034d41b0c8bdbf3ad65e55624b554aa01533c7d2695fe91cb8a20febc99e63e92d",
+  "accessLevel": "organization",
+  
+  "networks": {
+    "bittorrent": true,
+    "ipfs": true,
+    "web": true,
+    "arweave": false
+  }
 }
 ```
 
@@ -451,24 +671,41 @@ Authorization: Bearer <jwt-token>
 ```
 file: <binary_image_file>           # Required: The image file
 name: "My Image Title"              # Optional: Human-readable name
-access_level: "private"             # Optional: "private" (default), "organization", or "public"
+access_level: "organization"        # Optional: "private", "organization" (default), or "public"
 description: "Image description"     # Optional: Description text
+
+# Multi-Network Distribution Options (Optional)
+publishTo[ipfs]: "true"             # Enable IPFS upload
+publishTo[web]: "true"              # Enable web server setup (recommended)
+publishTo[arweave]: "false"         # Enable Arweave upload (costs AR tokens)
 ```
 
 **Response**:
 ```json
 {
   "success": true,
-  "mediaId": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
-  "magnetURI": "magnet:?xt=urn:btih:abc123def456...",
-  "infoHash": "abc123def456789abcdef0123456789abcdef01",
-  "httpUrl": "https://api.oip.onl/api/media/a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
-  "size": 2048576,
-  "mime": "image/jpeg",
-  "originalName": "landscape_sunset.jpg",
-  "access_level": "private",
-  "owner": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
-  "message": "File uploaded and BitTorrent created. Use /api/records/newRecord to create proper OIP record."
+  "mediaId": "651189db9bd4c6874af389b65d5fb8cf1f2cc7fa69c5711a40d79206a1c4c6b7",
+  
+  "magnetURI": "magnet:?xt=urn:btih:2993527fd556b60f61aa0185210fa126088c2f8f&dn=original&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&tr=wss%3A%2F%2Ftracker.btorrent.xyz",
+  "infoHash": "2993527fd556b60f61aa0185210fa126088c2f8f",
+  "httpUrl": "https://oip.fitnessally.io/api/media/651189db9bd4c6874af389b65d5fb8cf1f2cc7fa69c5711a40d79206a1c4c6b7",
+  
+  "ipfsAddress": "QmdjNDFTiuixbJWJXVDmuS2kEfx5Y3M2t816578vkynVVa",
+  "webUrl": "https://oip.fitnessally.io/media/fitnessally/noun-barbell-5673068.svg",
+  "arweaveAddress": "",
+  
+  "size": 2760,
+  "mime": "image/svg+xml",
+  "originalName": "noun-barbell-5673068.svg",
+  "access_level": "organization",
+  "owner": "034d41b0c8bdbf3ad65e55624b554aa01533c7d2695fe91cb8a20febc99e63e92d",
+  
+  "networks": {
+    "bittorrent": true,
+    "ipfs": true,
+    "web": true,
+    "arweave": false
+  }
 }
 ```
 
@@ -485,21 +722,21 @@ Authorization: Bearer <jwt-token>
 **Request Body**:
 ```json
 {
-  "mediaId": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+  "mediaId": "651189db9bd4c6874af389b65d5fb8cf1f2cc7fa69c5711a40d79206a1c4c6b7",
   "recordType": "image",
   "basicInfo": {
-    "name": "My Beautiful Landscape",
-    "description": "A sunset photo taken in the mountains",
+    "name": "Barbell Equipment Image",
+    "description": "Barbell icon from TheNounProject.com",
     "language": "en",
     "nsfw": false,
-    "tagItems": ["landscape", "sunset", "mountains", "photography"]
+    "tagItems": ["fitness", "equipment", "barbell"]
   },
   "accessControl": {
-    "access_level": "private",
-    "shared_with": "did:arweave:organization_did"
+    "access_level": "organization",
+    "shared_with": "did:arweave:6zmCRZ06E2XtvN84BEQE_g4laBJdoCzTfQURHD2YlC4"
   },
-  "width": 1920,
-  "height": 1080,
+  "width": 683,
+  "height": 683,
   "duration": 0
 }
 ```
@@ -508,12 +745,24 @@ Authorization: Bearer <jwt-token>
 ```json
 {
   "success": true,
-  "did": "did:gun:media:a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+  "did": "did:gun:647f79c2a338:h:cc3bc323",
   "recordType": "image",
-  "mediaId": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789a",
+  "mediaId": "651189db9bd4c6874af389b65d5fb8cf1f2cc7fa69c5711a40d79206a1c4c6b7",
   "storage": "gun",
   "encrypted": true,
-  "message": "Image record created successfully"
+  "networks": {
+    "bittorrent": true,
+    "ipfs": true,
+    "web": true,
+    "arweave": false
+  },
+  "addresses": {
+    "gun": "did:gun:647f79c2a338:h:cc3bc323",
+    "bittorrent": "magnet:?xt=urn:btih:2993527fd556b60f61aa0185210fa126088c2f8f&dn=original&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&tr=wss%3A%2F%2Ftracker.btorrent.xyz",
+    "ipfs": "QmdjNDFTiuixbJWJXVDmuS2kEfx5Y3M2t816578vkynVVa",
+    "web": "https://oip.fitnessally.io/media/fitnessally/noun-barbell-5673068.svg",
+    "arweave": ""
+  }
 }
 ```
 
@@ -584,23 +833,66 @@ Authorization: Bearer <jwt-token>
 
 ## Access Control Levels
 
-### Private Access (Default)
+### Private Access
 - **Visibility**: Only the owner can access
 - **Use Case**: Personal photos, private content
 - **Organization**: Not shared with any organization
 - **BitTorrent**: Still available via magnet URI (encrypted if enabled)
+- **Web URL**: Requires authentication to access
 
-### Organization Access
-- **Visibility**: Owner + organization members
-- **Use Case**: Team photos, shared project images
-- **Organization**: Must select an organization from dropdown
+### Organization Access (Enhanced)
+- **Visibility**: Owner + organization members (domain-based membership)
+- **Use Case**: Team photos, shared project images, branded content
+- **Organization**: Must select an organization from dropdown (populated from user's organizations)
+- **Membership Validation**: Automatic via domain matching (e.g., `oip.fitnessally.io` → `fitnessally.io`)
+- **Policy Support**: "Auto-Enroll App Users" policy grants access based on request domain
 - **BitTorrent**: Available to organization members
+- **Web URL**: Organization members can access without authentication
 
 ### Public Access
 - **Visibility**: Everyone can access
 - **Use Case**: Public artwork, open content
 - **Organization**: Not applicable
 - **BitTorrent**: Publicly available
+- **Web URL**: No authentication required
+
+### Organization Access Control Implementation
+
+The system implements sophisticated organization-level access control:
+
+```javascript
+// Domain-based membership validation (helpers/organizationEncryption.js)
+async function checkDomainBasedMembership(organization, requestInfo) {
+    const orgWebUrl = organization.data.webUrl; // e.g., "fitnessally.io"
+    const requestHost = requestInfo.host;        // e.g., "oip.fitnessally.io"
+    
+    // Extract domain from organization's webUrl
+    let orgDomain = orgWebUrl.startsWith('http') ? 
+        new URL(orgWebUrl).hostname : orgWebUrl;
+    
+    // Check for subdomain match
+    if (requestHost === orgDomain || requestHost.endsWith('.' + orgDomain)) {
+        console.log(`✅ Domain-based membership granted: ${requestHost} matches ${orgDomain}`);
+        return true;
+    }
+    
+    return false;
+}
+
+// Organization record filtering (helpers/elasticsearch.js)
+if (accessLevel === 'organization') {
+    const sharedWith = accessControl?.shared_with; // Organization DID
+    const isMember = await checkOrganizationMembershipForRecord(userPubKey, [sharedWith], requestInfo);
+    
+    if (isMember) {
+        console.log('Including organization record for member:', record.oip?.did);
+        return true; // User can access this organization record
+    } else {
+        console.log('Excluding organization record (not member):', record.oip?.did);
+        return false; // User cannot access this organization record
+    }
+}
+```
 
 ## Supported Image Formats
 
