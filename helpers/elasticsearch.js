@@ -2854,30 +2854,45 @@ async function getRecords(queryParams) {
 
             const paginatedTagSummary = summary.slice(tagStartIndex, tagEndIndex);
 
-            // Filter and sort records based on paginated tags
-            const tagArray = paginatedTagSummary.map(summary => summary.tag);
-            const filteredRecords = resolvedRecords.filter(record => {
-                return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
-            });
-            // Add tag match scores to records
-            const sortedRecords = filteredRecords.map(record => {
-                const countMatches = (record) => {
-                    if (record.data && record.data.basic && record.data.basic.tagItems) {
-                        return record.data.basic.tagItems.filter(tag => tagArray.includes(tag)).length;
-                    }
-                    return 0;
-                };
+            // Only filter by tags if user has actually applied tag filters
+            let sortedRecords;
+            if (tags && tags.trim()) {
+                // User applied tag filters - filter and sort by tag matches
+                console.log(`🔍 DEBUG: Applying tag-based filtering with tags: ${tags}`);
+                const tagArray = paginatedTagSummary.map(summary => summary.tag);
+                const filteredRecords = resolvedRecords.filter(record => {
+                    return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
+                });
+                // Add tag match scores to records
+                sortedRecords = filteredRecords.map(record => {
+                    const countMatches = (record) => {
+                        if (record.data && record.data.basic && record.data.basic.tagItems) {
+                            return record.data.basic.tagItems.filter(tag => tagArray.includes(tag)).length;
+                        }
+                        return 0;
+                    };
 
-                const matches = countMatches(record);
-                const score = (matches / tagArray.length).toFixed(3); // Calculate the score as a ratio of matches to total tags and trim to three decimal places
-                return { ...record, score }; // Attach the score to the record
-            });
+                    const matches = countMatches(record);
+                    const score = (matches / tagArray.length).toFixed(3); // Calculate the score as a ratio of matches to total tags and trim to three decimal places
+                    return { ...record, score }; // Attach the score to the record
+                });
+                console.log(`🔍 DEBUG: After tag filtering - sortedRecords.length=${sortedRecords.length}`);
+            } else {
+                // No tag filters applied - use all resolved records with default score
+                console.log(`🔍 DEBUG: No tag filters applied - using all ${resolvedRecords.length} resolved records`);
+                sortedRecords = resolvedRecords.map(record => {
+                    return { ...record, score: 1.0 }; // Default score for non-tag-filtered records
+                });
+            }
 
             // Apply sorting - use sortBy parameter if provided, otherwise sort by score
+            console.log(`🔍 DEBUG: Before sorting - sortedRecords.length=${sortedRecords.length}, sortBy=${sortBy}`);
             if (sortBy != undefined) {
                 applySorting(sortedRecords, sortBy);
+                console.log(`🔍 DEBUG: After applySorting - sortedRecords.length=${sortedRecords.length}`);
             } else {
                 sortedRecords.sort((a, b) => b.score - a.score); // Sort in descending order by score
+                console.log(`🔍 DEBUG: After score sorting - sortedRecords.length=${sortedRecords.length}`);
             }
 
             const finalRecords = sortedRecords.slice(startIndex, endIndex);
