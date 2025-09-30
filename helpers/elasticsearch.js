@@ -1491,25 +1491,27 @@ async function getRecords(queryParams) {
 
         if (dateStart != undefined) {
             records = records.filter(record => {
-                let dateToCheck;
+                let timestampToCheck;
                 
                 // Handle special record types with their own date fields
                 if (record.oip.recordType === 'workoutSchedule' && record.data?.workoutSchedule?.scheduled_date) {
-                    // scheduled_date is stored as Unix timestamp, convert to Date
-                    dateToCheck = new Date(record.data.workoutSchedule.scheduled_date * 1000);
+                    // scheduled_date is stored as Unix timestamp
+                    timestampToCheck = record.data.workoutSchedule.scheduled_date;
                 } else if (record.oip.recordType === 'mealPlan' && record.data?.mealPlan?.meal_date) {
-                    // meal_date is stored as Unix timestamp, convert to Date
-                    dateToCheck = new Date(record.data.mealPlan.meal_date * 1000);
+                    // meal_date is stored as Unix timestamp
+                    timestampToCheck = record.data.mealPlan.meal_date;
                 } else {
                     // Default behavior for other record types
                     const basicData = record.data.basic;
                     if (basicData && basicData.date) {
-                        dateToCheck = new Date(basicData.date * 1000); // Assuming Unix timestamp
+                        timestampToCheck = basicData.date; // Unix timestamp
                     }
                 }
                 
-                if (dateToCheck) {
-                    return dateToCheck >= dateStart;
+                if (timestampToCheck !== undefined) {
+                    // Convert dateStart to Unix timestamp if it's a Date object
+                    const dateStartTimestamp = dateStart instanceof Date ? Math.floor(dateStart.getTime() / 1000) : dateStart;
+                    return timestampToCheck >= dateStartTimestamp;
                 }
                 return false;
             });
@@ -1518,25 +1520,27 @@ async function getRecords(queryParams) {
 
         if (dateEnd != undefined) {
             records = records.filter(record => {
-                let dateToCheck;
+                let timestampToCheck;
                 
                 // Handle special record types with their own date fields
                 if (record.oip.recordType === 'workoutSchedule' && record.data?.workoutSchedule?.scheduled_date) {
-                    // scheduled_date is stored as Unix timestamp, convert to Date
-                    dateToCheck = new Date(record.data.workoutSchedule.scheduled_date * 1000);
+                    // scheduled_date is stored as Unix timestamp
+                    timestampToCheck = record.data.workoutSchedule.scheduled_date;
                 } else if (record.oip.recordType === 'mealPlan' && record.data?.mealPlan?.meal_date) {
-                    // meal_date is stored as Unix timestamp, convert to Date
-                    dateToCheck = new Date(record.data.mealPlan.meal_date * 1000);
+                    // meal_date is stored as Unix timestamp
+                    timestampToCheck = record.data.mealPlan.meal_date;
                 } else {
                     // Default behavior for other record types
                     const basicData = record.data.basic;
                     if (basicData && basicData.date) {
-                        dateToCheck = new Date(basicData.date * 1000); // Assuming Unix timestamp
+                        timestampToCheck = basicData.date; // Unix timestamp
                     }
                 }
                 
-                if (dateToCheck) {
-                    return dateToCheck <= dateEnd;
+                if (timestampToCheck !== undefined) {
+                    // Convert dateEnd to Unix timestamp if it's a Date object
+                    const dateEndTimestamp = dateEnd instanceof Date ? Math.floor(dateEnd.getTime() / 1000) : dateEnd;
+                    return timestampToCheck <= dateEndTimestamp;
                 }
                 return false;
             });
