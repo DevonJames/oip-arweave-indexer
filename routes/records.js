@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, optionalAuthenticateToken } = require('../helpers/utils'); // Import authentication middleware
+const { authenticateToken, optionalAuthenticateToken, userOwnsRecord } = require('../helpers/utils'); // Import authentication middleware
 
 // const path = require('path');
-const { getRecords, searchRecordInDB, getRecordTypesSummary } = require('../helpers/elasticsearch');
+const { getRecords, searchRecordInDB, getRecordTypesSummary, deleteRecordsByDID } = require('../helpers/elasticsearch');
 // const { resolveRecords } = require('../helpers/utils');
 const { publishNewRecord} = require('../helpers/templateHelper');
 // const paymentManager = require('../helpers/payment-manager');
@@ -363,5 +363,81 @@ router.post('/decrypt', async (req, res) => {
 //         res.status(500).json({ error: 'Failed to retrieve GUN records' });
 //     }
 // });
+
+// Delete record endpoint - allows authenticated users to delete their own records
+router.post('/deleteRecord', authenticateToken, async (req, res) => {
+    try {
+        console.log('POST /api/records/deleteRecord', req.body);
+        
+        // Validate request format
+        if (!req.body.delete || !req.body.delete.did) {
+            return res.status(400).json({ 
+                error: 'Invalid request format. Expected: {"delete": {"did": "did:gun:..."}}' 
+            });
+        }
+        
+        const didToDelete = req.body.delete.did;
+        const user = req.user;
+        
+        // Validate DID format
+        if (!didToDelete || typeof didToDelete !== 'string') {
+            return res.status(400).json({ 
+                error: 'Invalid DID format. DID must be a non-empty string.' 
+            });
+        }
+        
+        console.log('Attempting to delete record:', didToDelete, 'for user:', user.publicKey?.slice(0, 12));
+        
+        // First, find the record to verify ownership
+        const recordToDelete = await searchRecordInDB(didToDelete);
+        
+        if (!recordToDelete) {
+            return res.status(404).json({ 
+                error: 'Record not found',
+                did: didToDelete
+            });
+        }
+        
+        // Verify that the authenticated user owns this record
+        const ownsRecord = userOwnsRecord(recordToDelete, user);
+        
+        if (!ownsRecord) {
+            console.log('User does not own record. User:', user.publicKey?.slice(0, 12), 'Record owner checks failed');
+            return res.status(403).json({ 
+                error: 'Access denied. You can only delete records that you own.',
+                did: didToDelete
+            });
+        }
+        
+        console.log('Ownership verified. Proceeding with deletion.');
+        
+        // Delete the record using the same method as CLI
+        const deleteResponse = await deleteRecordsByDID('records', didToDelete);
+        
+        if (deleteResponse.deleted > 0) {
+            console.log(`Successfully deleted ${deleteResponse.deleted} record(s) with DID: ${didToDelete}`);
+            
+            res.status(200).json({
+                success: true,
+                message: 'Record deleted successfully',
+                did: didToDelete,
+                deletedCount: deleteResponse.deleted
+            });
+        } else {
+            console.log('No records were deleted. Record may not exist in index.');
+            res.status(404).json({
+                error: 'Record not found in index or already deleted',
+                did: didToDelete
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error deleting record:', error);
+        res.status(500).json({ 
+            error: 'Failed to delete record',
+            details: error.message
+        });
+    }
+});
 
 module.exports = router;

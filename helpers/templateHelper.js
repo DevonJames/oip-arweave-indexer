@@ -942,6 +942,14 @@ async function publishToGun(record, recordType, options = {}) {
         
         // Determine if encryption is needed based on access control
         const accessControl = gunCompatibleRecord.accessControl || options.accessControl;
+        
+        // Ensure owner_public_key is set for access control
+        if (accessControl && !accessControl.owner_public_key) {
+            accessControl.owner_public_key = myPublicKey;
+            accessControl.created_by = myPublicKey;
+            console.log('Added owner_public_key to accessControl for ownership verification');
+        }
+        
         const shouldEncrypt = accessControl && 
                             (accessControl.access_level === 'private' || 
                              accessControl.access_level === 'organization' ||
