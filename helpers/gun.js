@@ -203,7 +203,7 @@ class GunHelper {
      */
     async getRecord(soul, options = {}) {
         try {
-            console.log('📡 Sending HTTP GET request to GUN API...');
+            // console.log('📡 Sending HTTP GET request to GUN API...'); // Commented out - too verbose
             
             const response = await axios.get(`${this.apiUrl}/get`, {
                 params: { soul },
