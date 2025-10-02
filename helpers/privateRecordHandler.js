@@ -36,7 +36,7 @@ class PrivateRecordHandler {
         }
         
         try {
-            console.log('🔍 Discovering private records from other nodes...');
+            // console.log('🔍 Discovering private records from other nodes...'); // Commented out - too verbose
             
             const discoveredRecords = await this.registry.discoverOIPRecords();
             const privateRecords = [];
@@ -118,7 +118,10 @@ class PrivateRecordHandler {
                 }
             }
             
-            console.log(`🔓 Processed ${privateRecords.length} records (including private ones)`);
+            // Only log if we actually found records
+            if (privateRecords.length > 0) {
+                console.log(`🔓 Processed ${privateRecords.length} records (including private ones)`);
+            }
             return privateRecords;
             
         } catch (error) {

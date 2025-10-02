@@ -83,7 +83,7 @@ class GunSyncService {
         const startTime = Date.now();
         
         try {
-            console.log('🔄 Starting GUN record sync cycle...');
+            // console.log('🔄 Starting GUN record sync cycle...'); // Commented out - too verbose
             
             // Discover records from other nodes (includes both public and private)
             const discoveredRecords = await this.privateHandler.discoverPrivateRecords();
@@ -108,7 +108,10 @@ class GunSyncService {
             const duration = Date.now() - startTime;
             this.healthMonitor.recordSyncCycle(discoveredRecords.length, syncedCount, errorCount, duration);
             
-            console.log(`✅ Sync cycle complete: ${syncedCount}/${discoveredRecords.length} records synced (${errorCount} errors) in ${duration}ms`);
+            // Only log if records were actually discovered or synced
+            if (discoveredRecords.length > 0 || syncedCount > 0 || errorCount > 0) {
+                console.log(`✅ GUN sync: ${syncedCount}/${discoveredRecords.length} records synced (${errorCount} errors) in ${duration}ms`);
+            }
             
         } catch (error) {
             console.error('❌ Error in sync cycle:', error);

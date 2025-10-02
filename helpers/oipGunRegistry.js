@@ -82,7 +82,7 @@ class OIPGunRegistry {
      */
     async discoverOIPRecords() {
         try {
-            console.log('🔍 Discovering OIP records from other nodes...');
+            // console.log('🔍 Discovering OIP records from other nodes...'); // Commented out - too verbose
             const discoveredRecords = [];
             
             // Scan all record types in the global registry
@@ -96,7 +96,10 @@ class OIPGunRegistry {
                 discoveredRecords.push(...typeRecords);
             }
             
-            console.log(`🔍 Discovered ${discoveredRecords.length} new OIP records from other nodes`);
+            // Only log if we discovered new records
+            if (discoveredRecords.length > 0) {
+                console.log(`🔍 Discovered ${discoveredRecords.length} new OIP records from other nodes`);
+            }
             return discoveredRecords;
             
         } catch (error) {
