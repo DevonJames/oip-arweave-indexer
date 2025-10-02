@@ -1406,7 +1406,41 @@ JSON Response:`;
                         const ingText = Array.isArray(item.ingredients) ? item.ingredients.join(' | ') : String(item.ingredients);
                         context += `Ingredients (measured): ${ingText}\n`;
                     }
-                    if (item.instructions) context += `Instructions: ${item.instructions}\n`;
+                    
+                    // Split instructions into numbered steps for better LLM understanding
+                    if (item.instructions) {
+                        const instructionText = String(item.instructions);
+                        // Split by newlines or periods followed by capital letters (sentence boundaries)
+                        const steps = instructionText
+                            .split(/\n+/)
+                            .map(step => step.trim())
+                            .filter(step => step.length > 0);
+                        
+                        if (steps.length > 1) {
+                            context += `Instructions (${steps.length} steps):\n`;
+                            steps.forEach((step, index) => {
+                                context += `Step ${index + 1}: ${step}\n`;
+                            });
+                        } else {
+                            // If only one line, try splitting by sentence
+                            const sentences = instructionText
+                                .split(/\.\s+(?=[A-Z])/)
+                                .map(s => s.trim())
+                                .filter(s => s.length > 10); // Filter out very short fragments
+                            
+                            if (sentences.length > 1) {
+                                context += `Instructions (${sentences.length} steps):\n`;
+                                sentences.forEach((sentence, index) => {
+                                    // Ensure sentence ends with period
+                                    const step = sentence.endsWith('.') ? sentence : sentence + '.';
+                                    context += `Step ${index + 1}: ${step}\n`;
+                                });
+                            } else {
+                                // Fallback to original format if can't split
+                                context += `Instructions: ${instructionText}\n`;
+                            }
+                        }
+                    }
                     
                     if (item.nutrition) {
                         context += `Nutritional Info (Total): Calories: ${item.nutrition.calories || 'N/A'}, Protein: ${item.nutrition.proteinG || 'N/A'}g, Fat: ${item.nutrition.fatG || 'N/A'}g, Carbs: ${item.nutrition.carbohydratesG || 'N/A'}g\n`;
@@ -1518,6 +1552,7 @@ CRITICAL INSTRUCTIONS:
 4. DO NOT say "I found information about..." or "According to the article..." 
 5. DO NOT summarize articles unless specifically asked to summarize
 6. If the information doesn't contain the answer, say "I don't have current information about that in my database, but based on my general knowledge..."
+7. FOR RECIPE STEP-BY-STEP QUESTIONS: Look at the conversation history to see which step was last mentioned. If the user asks "then what?" or "next?" or "after that?", provide the NEXT numbered step. Do NOT repeat the same step. Track step progression carefully.
 
 Examples of GOOD responses:
 - Question: "Who's the president?" Answer: "Donald Trump is the current president."
@@ -1531,11 +1566,13 @@ Examples of BAD responses:
 Answer the question directly and conversationally:`;
 
             console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
+            console.log(`[ALFRED] 🏁 Starting parallel LLM race with ${this.openaiApiKey ? 'OpenAI + ' : ''}${this.xaiApiKey ? 'Grok + ' : ''}Ollama (${this.defaultModel}) + Tinyllama`);
             
             // Create parallel requests - local LLM with shorter timeout + cloud fallbacks
             const requests = [];
             
             // Local Ollama request with optimized settings
+            console.log(`[ALFRED] 🏁 Starting Ollama (${this.defaultModel}) request...`);
             const ollamaRequest = axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                 model: this.defaultModel,
                 prompt: prompt,
@@ -1550,19 +1587,23 @@ Answer the question directly and conversationally:`;
                 }
             }, {
                 timeout: 25000 // Increased timeout back to 25 seconds for better reliability
-            }).then(response => ({
-                answer: response.data?.response?.trim() || "I couldn't generate a response based on the available information.",
-                model_used: this.defaultModel,
-                context_length: context.length,
-                source: 'ollama'
-            })).catch(error => {
-                console.warn(`[ALFRED] Ollama request failed after 25s: ${error.message}`);
+            }).then(response => {
+                console.log(`[ALFRED] ✅ Ollama (${this.defaultModel}) completed: ${response.data?.response?.trim()?.length || 0} chars`);
+                return {
+                    answer: response.data?.response?.trim() || "I couldn't generate a response based on the available information.",
+                    model_used: this.defaultModel,
+                    context_length: context.length,
+                    source: 'ollama'
+                };
+            }).catch(error => {
+                console.warn(`[ALFRED] ❌ Ollama (${this.defaultModel}) failed after 25s: ${error.message}`);
                 return null;
             });
             
             requests.push(ollamaRequest);
             
-            // Add tinyllama for ultra-fast responses
+            // Add tinyllama for ultra-fast responses - installed via install_llm_models.sh
+            console.log(`[ALFRED] 🏁 Starting Tinyllama request to ${this.ollamaBaseUrl}...`);
             const tinyllamaRequest = axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                 model: 'tinyllama',
                 prompt: prompt,
@@ -1577,13 +1618,16 @@ Answer the question directly and conversationally:`;
                 }
             }, {
                 timeout: 15000 // Shorter timeout for tiny model - it should be very fast!
-            }).then(response => ({
-                answer: response.data?.response?.trim() || "I couldn't generate a response based on the available information.",
-                model_used: 'tinyllama',
-                context_length: context.length,
-                source: 'ollama-tinyllama'
-            })).catch(error => {
-                console.warn(`[ALFRED] Tinyllama request failed after 15s: ${error.message}`);
+            }).then(response => {
+                console.log(`[ALFRED] ✅ Tinyllama completed: ${response.data?.response?.trim()?.length || 0} chars`);
+                return {
+                    answer: response.data?.response?.trim() || "I couldn't generate a response based on the available information.",
+                    model_used: 'tinyllama',
+                    context_length: context.length,
+                    source: 'ollama-tinyllama'
+                };
+            }).catch(error => {
+                console.warn(`[ALFRED] ❌ Tinyllama failed after 15s: ${error.message}`);
                 return null;
             });
             
@@ -1591,17 +1635,21 @@ Answer the question directly and conversationally:`;
             
             // Add cloud model requests in parallel
             if (this.openaiApiKey) {
+                console.log(`[ALFRED] 🏁 Starting OpenAI (gpt-4o-mini) request...`);
                 const openaiRequest = this.callCloudModel('gpt-4o-mini', prompt, {
                     temperature: 0.4,
                     max_tokens: 700,
                     stop: null
-                }).then(cloudText => ({
-                    answer: cloudText.trim(),
-                    model_used: 'gpt-4o-mini',
-                    context_length: context.length,
-                    source: 'openai'
-                })).catch(error => {
-                    console.warn(`[ALFRED] OpenAI request failed: ${error.message}`);
+                }).then(cloudText => {
+                    console.log(`[ALFRED] ✅ OpenAI completed: ${cloudText.trim().length} chars`);
+                    return {
+                        answer: cloudText.trim(),
+                        model_used: 'gpt-4o-mini',
+                        context_length: context.length,
+                        source: 'openai'
+                    };
+                }).catch(error => {
+                    console.warn(`[ALFRED] ❌ OpenAI failed: ${error.message}`);
                     return null;
                 });
                 requests.push(openaiRequest);
@@ -1609,24 +1657,35 @@ Answer the question directly and conversationally:`;
             
             // Re-enabled XAI with updated grok-4 model
             if (this.xaiApiKey) {
+                console.log(`[ALFRED] 🏁 Starting XAI (grok-4) request...`);
                 const xaiRequest = this.callCloudModel('grok-4', prompt, {
                     temperature: 0.4,
                     max_tokens: 700,
                     stop: null
-                }).then(cloudText => ({
-                    answer: cloudText.trim(),
-                    model_used: 'grok-4',
-                    context_length: context.length,
-                    source: 'xai'
-                })).catch(error => {
-                    console.warn(`[ALFRED] XAI request failed: ${error.message}`);
+                }).then(cloudText => {
+                    console.log(`[ALFRED] ✅ XAI completed: ${cloudText.trim().length} chars`);
+                    return {
+                        answer: cloudText.trim(),
+                        model_used: 'grok-4',
+                        context_length: context.length,
+                        source: 'xai'
+                    };
+                }).catch(error => {
+                    console.warn(`[ALFRED] ❌ XAI failed: ${error.message}`);
                     return null;
                 });
                 requests.push(xaiRequest);
             }
             
             // Wait for the first successful response
+            console.log(`[ALFRED] 🏁 Racing ${requests.length} parallel LLM requests...`);
+            const raceStartTime = Date.now();
             const results = await Promise.allSettled(requests);
+            const raceEndTime = Date.now();
+            
+            console.log(`[ALFRED] 🏁 Race completed in ${raceEndTime - raceStartTime}ms - Results:`, 
+                results.map((r, i) => `${i}: ${r.status === 'fulfilled' ? (r.value ? `✅ ${r.value.source}` : '❌ null') : `❌ ${r.reason?.message || 'failed'}`}`).join(', '));
+            
             const successfulResults = results
                 .filter(result => result.status === 'fulfilled' && result.value !== null)
                 .map(result => result.value)
@@ -1635,7 +1694,7 @@ Answer the question directly and conversationally:`;
             if (successfulResults.length > 0) {
                 // Return the first successful response
                 const winner = successfulResults[0];
-                console.log(`[ALFRED] Generated response using ${winner.source} (${winner.answer.length} chars)`);
+                console.log(`[ALFRED] 🏆 WINNER: ${winner.source} with ${winner.answer.length} chars in ${raceEndTime - raceStartTime}ms`);
                 return winner;
             } else {
                 console.warn(`[ALFRED] All parallel requests failed`);
