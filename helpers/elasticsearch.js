@@ -1241,45 +1241,45 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                 let multiplier;
                 
                 const ingredientName = ingredientRecord.data.basic?.name || `ingredient ${i}`;
-                console.log(`\n=== Processing ${ingredientName} ===`);
-                console.log(`Recipe: ${recipeAmount} ${recipeUnit}`);
-                console.log(`Standard: ${standardAmount} ${standardUnit}`);
+                // console.log(`\n=== Processing ${ingredientName} ===`);
+                // console.log(`Recipe: ${recipeAmount} ${recipeUnit}`);
+                // console.log(`Standard: ${standardAmount} ${standardUnit}`);
                 
                 // First, try direct unit conversion using enhanced convertUnits function
                 const convertedAmount = convertUnits(recipeAmount, recipeUnit, standardUnit);
-                console.log(`Direct conversion result: ${convertedAmount}`);
+                // console.log(`Direct conversion result: ${convertedAmount}`);
                 
                 if (convertedAmount !== null) {
                     // Direct conversion successful
                     multiplier = convertedAmount / standardAmount;
-                    console.log(`✅ Direct conversion: ${convertedAmount} / ${standardAmount} = ${multiplier}`);
+                    // console.log(`✅ Direct conversion: ${convertedAmount} / ${standardAmount} = ${multiplier}`);
                 } else {
                     // Direct conversion failed, use fallback logic
-                    console.log(`❌ Direct conversion failed, trying fallback logic...`);
+                    // console.log(`❌ Direct conversion failed, trying fallback logic...`);
                     
                     if (recipeUnit.toLowerCase().trim() === 'unit') {
                         // If recipe unit is "unit", use recipe amount directly
                         multiplier = recipeAmount / standardAmount;
-                        console.log(`📦 Unit fallback: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
+                        // console.log(`📦 Unit fallback: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
                     } else if (recipeUnit.toLowerCase().trim() === standardUnit.toLowerCase().trim()) {
                         // If units are the same (after normalization), use 1:1 ratio
                         multiplier = recipeAmount / standardAmount;
-                        console.log(`🔄 Same unit fallback: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
+                        // console.log(`🔄 Same unit fallback: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
                     } else {
                         // Try the old logic as final fallback
-                        console.log(`🔧 Using old conversion logic...`);
+                        // console.log(`🔧 Using old conversion logic...`);
                         if (isCountUnit(recipeUnit)) {
                             // Recipe uses count-based units (pieces, units, etc.)
                             if (isCountUnit(standardUnit)) {
                                 // Both are count-based: direct comparison
                                 multiplier = recipeAmount / standardAmount;
-                                console.log(`📊 Both count units: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
+                                // console.log(`📊 Both count units: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
                             } else {
                                 // Recipe is count-based, standard is weight/volume
                                 // The standardAmount tells us what 1 unit weighs
                                 // So recipeAmount units = recipeAmount * standardAmount weight
                                 multiplier = recipeAmount;
-                                console.log(`📈 Count to weight: multiplier = ${recipeAmount}`);
+                                // console.log(`📈 Count to weight: multiplier = ${recipeAmount}`);
                             }
                         } else {
                             // Recipe uses weight/volume units
@@ -1303,16 +1303,16 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                                     continue;
                                 }
                                 multiplier = recipeAmountInGrams / standardAmountInGrams;
-                                console.log(`⚖️ Gram conversion: ${recipeAmountInGrams}g / ${standardAmountInGrams}g = ${multiplier}`);
+                                // console.log(`⚖️ Gram conversion: ${recipeAmountInGrams}g / ${standardAmountInGrams}g = ${multiplier}`);
                             }
                         }
                     }
                 }
                 
-                console.log(`📝 Final multiplier for ${ingredientName}: ${multiplier}`);
-                console.log(`🍽️ Calories contribution: ${nutritionalInfo.calories} × ${multiplier} = ${(nutritionalInfo.calories || 0) * multiplier}`);
-                console.log(`🥩 Protein contribution: ${nutritionalInfo.proteinG} × ${multiplier} = ${(nutritionalInfo.proteinG || 0) * multiplier}`);
-                console.log(`=================================\n`);
+                // console.log(`📝 Final multiplier for ${ingredientName}: ${multiplier}`);
+                // console.log(`🍽️ Calories contribution: ${nutritionalInfo.calories} × ${multiplier} = ${(nutritionalInfo.calories || 0) * multiplier}`);
+                // console.log(`🥩 Protein contribution: ${nutritionalInfo.proteinG} × ${multiplier} = ${(nutritionalInfo.proteinG || 0) * multiplier}`);
+                // console.log(`=================================\n`);
                 
                 // Step 2: Calculate multiplier per serving = multiplier / ServingsFromRecipe
                 const multiplierPerServing = multiplier / servings;
@@ -1368,7 +1368,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
             totalIngredients: totalIngredients
         };
         
-        console.log(`Successfully calculated nutritional summary for recipe ${record.oip?.didTx || 'unknown'} using ${processedIngredients}/${totalIngredients} ingredients`);
+        // console.log(`Successfully calculated nutritional summary for recipe ${record.oip?.didTx || 'unknown'} using ${processedIngredients}/${totalIngredients} ingredients`);
         
         // Add the summaries to the record
         return {

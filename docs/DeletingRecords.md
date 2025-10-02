@@ -4,10 +4,25 @@
 
 The OIP Arweave Indexer provides multiple methods for deleting records:
 
-1. **CLI Commands**: Direct server commands for deleting records from local Elasticsearch indices
-2. **Blockchain-Based Deletion**: Publishing delete messages to Arweave that are processed by all OIP nodes
+1. **API Endpoint Deletion**: Direct API calls for authenticated users to delete their own records from local Elasticsearch indices
+2. **CLI Commands**: Direct server commands for deleting records from local Elasticsearch indices
+3. **Blockchain-Based Deletion**: Publishing delete messages to Arweave that are processed by all OIP nodes
 
 These methods are useful for cleaning up test data, removing problematic records, or performing bulk deletions based on various criteria.
+
+## Method Comparison
+
+| Feature | API Endpoint | Blockchain-Based | CLI Commands |
+|---------|-------------|------------------|--------------|
+| **Scope** | Single server | Network-wide | Single server |
+| **Authentication** | JWT required | JWT optional | Server access |
+| **Ownership Check** | Yes (strict) | Yes (creator only) | No |
+| **Immediate Effect** | Yes | No (sync delay) | Yes |
+| **User Access** | Any authenticated user | Any user | Admin/developer |
+| **Record Types** | User-owned only | Creator-owned only | Any record |
+| **Audit Trail** | Logged | Blockchain permanent | Logged |
+| **Undo Possible** | No | No | No |
+| **Best For** | User self-service | Production cleanup | Development/maintenance |
 
 ## Prerequisites
 
@@ -15,7 +30,193 @@ These methods are useful for cleaning up test data, removing problematic records
 - Elasticsearch running and accessible
 - Appropriate permissions to modify indices
 
-## Method 1: Blockchain-Based Deletion (Network-Wide)
+## Method 1: API Endpoint Deletion (Single Server, User-Owned Records)
+
+### Overview
+
+The API endpoint deletion method allows authenticated users to delete their own records directly from the local server's Elasticsearch indices. This method provides immediate deletion with proper ownership verification, ensuring users can only delete records they created.
+
+### Authentication Required
+
+This method requires a valid JWT token obtained through the OIP authentication system. The token must contain the user's public key for ownership verification.
+
+### Delete Record Format
+
+**Standard Record Deletion:**
+```json
+{
+    "delete": {
+        "did": "did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl"
+    }
+}
+```
+
+**Supported DID Types:**
+- GUN records: `did:gun:hash:record_id`
+- Arweave records: `did:arweave:transaction_id`
+- Any record type with proper ownership verification
+
+### API Endpoint
+
+**Endpoint:** `POST /api/records/deleteRecord`
+
+**Headers:**
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt-token>  # Required for authentication and ownership verification
+```
+
+**Request Body:**
+```json
+{
+    "delete": {
+        "did": "did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl"
+    }
+}
+```
+
+**Success Response:**
+```json
+{
+    "success": true,
+    "message": "Record deleted successfully",
+    "did": "did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl",
+    "deletedCount": 1
+}
+```
+
+**Error Responses:**
+```json
+// Invalid request format
+{
+    "error": "Invalid request format. Expected: {\"delete\": {\"did\": \"did:gun:...\"}}"
+}
+
+// Record not found
+{
+    "error": "Record not found",
+    "did": "did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl"
+}
+
+// Access denied (not owner)
+{
+    "error": "Access denied. You can only delete records that you own.",
+    "did": "did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl"
+}
+
+// Authentication required
+{
+    "error": "Access denied. Authentication required."
+}
+```
+
+### How API Deletion Works
+
+1. **Authentication Check**: Verify JWT token and extract user's public key
+2. **Request Validation**: Validate JSON format and DID structure
+3. **Record Lookup**: Search for the record in Elasticsearch using `searchRecordInDB`
+4. **Ownership Verification**: Verify user owns the record using the ownership priority system:
+   - AccessControl Template: `accessControl.owner_public_key`
+   - Conversation Session: `conversationSession.owner_public_key`
+   - AccessControl Created By: `accessControl.created_by`
+   - GUN Soul Hash: Hash of user's public key in DID
+   - Creator Fallback: `oip.creator.publicKey` (legacy server-signed records)
+5. **Deletion**: Use `deleteRecordsByDID('records', did)` - same function as CLI
+6. **Response**: Return success/failure with appropriate HTTP status codes
+
+### Examples
+
+#### Delete a GUN Record
+```bash
+curl -X POST https://api.oip.onl/api/records/deleteRecord \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "delete": {
+      "did": "did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl"
+    }
+  }'
+```
+
+#### Delete an Arweave Record
+```bash
+curl -X POST https://api.oip.onl/api/records/deleteRecord \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "delete": {
+      "did": "did:arweave:abc123def456789"
+    }
+  }'
+```
+
+#### JavaScript/Frontend Example
+```javascript
+const deleteRecord = async (did, jwtToken) => {
+  try {
+    const response = await fetch('/api/records/deleteRecord', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${jwtToken}`
+      },
+      body: JSON.stringify({
+        delete: {
+          did: did
+        }
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      console.log('Record deleted successfully:', result);
+    } else {
+      console.error('Failed to delete record:', result.error);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error deleting record:', error);
+    throw error;
+  }
+};
+
+// Usage
+await deleteRecord('did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl', userJwtToken);
+```
+
+### Security Features
+
+- **Owner-Only Deletion**: Users can only delete records they created/own
+- **Authentication Required**: Valid JWT token required for all requests
+- **Ownership Verification**: Multiple fallback methods for verifying record ownership
+- **Immediate Effect**: Deletion takes effect immediately on the local server
+- **Audit Trail**: All deletion attempts are logged with user and record information
+
+### Limitations
+
+- **Single Server**: Only affects the local server's Elasticsearch index
+- **Owner-Only**: Users cannot delete records created by others
+- **Authentication Required**: Anonymous deletion not supported
+- **No Undo**: Deletion is immediate and irreversible
+- **Local Only**: Does not publish delete messages to blockchain (use Method 3 for network-wide deletion)
+
+### Verification
+
+After deletion, you can verify the record was removed:
+
+```bash
+# Check if record still exists
+curl "https://api.oip.onl/api/records?did=DELETED_RECORD_DID" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Should return empty results or 404
+```
+
+---
+
+## Method 2: Blockchain-Based Deletion (Network-Wide)
 
 ### Overview
 
@@ -169,7 +370,7 @@ After publishing a delete message, you can verify deletion by:
 
 ---
 
-## Method 2: CLI Commands (Single Server)
+## Method 3: CLI Commands (Single Server)
 
 ### Overview
 
