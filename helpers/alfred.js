@@ -1562,6 +1562,33 @@ Answer the question directly and conversationally:`;
             
             requests.push(ollamaRequest);
             
+            // Add tinyllama for ultra-fast responses
+            const tinyllamaRequest = axios.post(`${this.ollamaHost}/api/generate`, {
+                model: 'tinyllama',
+                prompt: prompt,
+                stream: false,
+                options: {
+                    temperature: 0.4,
+                    top_p: 0.9,
+                    top_k: 40,
+                    repeat_penalty: 1.1,
+                    num_predict: 512,
+                    stop: ["\n\n", "Question:", "Explanation:", "Note:"]
+                }
+            }, {
+                timeout: 15000 // Shorter timeout for tiny model - it should be very fast!
+            }).then(response => ({
+                answer: response.data?.response?.trim() || "I couldn't generate a response based on the available information.",
+                model_used: 'tinyllama',
+                context_length: context.length,
+                source: 'ollama-tinyllama'
+            })).catch(error => {
+                console.warn(`[ALFRED] Tinyllama request failed after 15s: ${error.message}`);
+                return null;
+            });
+            
+            requests.push(tinyllamaRequest);
+            
             // Add cloud model requests in parallel
             if (this.openaiApiKey) {
                 const openaiRequest = this.callCloudModel('gpt-4o-mini', prompt, {
