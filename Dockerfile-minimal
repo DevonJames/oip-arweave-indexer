@@ -63,6 +63,7 @@ COPY socket ./socket
 COPY services ./services
 COPY utils ./utils
 COPY voices ./voices
+COPY soundfx ./soundfx
 COPY *.js ./
 COPY *.json ./
 COPY *.md ./

@@ -1552,16 +1552,24 @@ CRITICAL INSTRUCTIONS:
 4. DO NOT say "I found information about..." or "According to the article..." 
 5. DO NOT summarize articles unless specifically asked to summarize
 6. If the information doesn't contain the answer, say "I don't have current information about that in my database, but based on my general knowledge..."
-7. FOR RECIPE STEP-BY-STEP QUESTIONS: Look at the conversation history to see which step was last mentioned. If the user asks "then what?" or "next?" or "after that?", provide the NEXT numbered step. Do NOT repeat the same step. Track step progression carefully.
+7. FOR RECIPE STEP-BY-STEP QUESTIONS:
+   - Look at conversation history to find which step number was last mentioned
+   - If user asks "next?", "then what?", "after that?", provide ONLY the NEXT step number
+   - DO NOT repeat what they already did
+   - DO NOT say "For [Recipe Name]" repeatedly - they know what recipe they're making
+   - Format: Just give the step directly, like "Step 2: Add the pasta and cook until al dente."
 
 Examples of GOOD responses:
 - Question: "Who's the president?" Answer: "Donald Trump is the current president."
 - Question: "What happened in the election?" Answer: "Trump won with broader voter support than previous elections, including gains among demographics traditionally supporting Democrats."
+- Question: "What's the first step?" Answer: "Step 1: Add water and salt to a pot and bring to a boil."
+- Question: "Then what?" Answer: "Step 2: Add the pasta and cook until al dente."
+- Question: "And after that?" Answer: "Step 3: Drain the pasta, reserving some pasta water."
 
-Examples of BAD responses:
-- "I found information about an article discussing..."
-- "According to the context provided..."
-- "The article states that..."
+Examples of BAD responses for recipes:
+- "For Pesto Pasta, you'll need to add water..." (too verbose, don't repeat recipe name)
+- "After adding water and salt to a pot and bringing to a boil, you'll need to..." (don't repeat what they did, just say next step)
+- "I found information about..." or "According to the article..."
 
 Answer the question directly and conversationally:`;
 
@@ -1677,27 +1685,51 @@ Answer the question directly and conversationally:`;
                 requests.push(xaiRequest);
             }
             
-            // Wait for the first successful response
+            // Race for the first successful response (true racing - first to finish wins!)
             console.log(`[ALFRED] 🏁 Racing ${requests.length} parallel LLM requests...`);
             const raceStartTime = Date.now();
-            const results = await Promise.allSettled(requests);
+            
+            // Create a race that resolves when the FIRST valid response arrives
+            let firstWinner = null;
+            let winnerFound = false;
+            
+            const racePromise = new Promise((resolve) => {
+                requests.forEach((req, index) => {
+                    req.then(result => {
+                        if (!winnerFound && result && result.answer && result.answer.length > 0) {
+                            winnerFound = true;
+                            firstWinner = result;
+                            const completionTime = Date.now() - raceStartTime;
+                            console.log(`[ALFRED] 🏆 FIRST TO FINISH: ${result.source} in ${completionTime}ms with ${result.answer.length} chars`);
+                            resolve(result);
+                        }
+                    }).catch(err => {
+                        // Silently ignore errors - other requests might succeed
+                    });
+                });
+                
+                // Fallback: if all fail within timeout, reject
+                setTimeout(() => {
+                    if (!winnerFound) {
+                        resolve(null);
+                    }
+                }, 30000);
+            });
+            
+            const winner = await racePromise;
             const raceEndTime = Date.now();
             
-            console.log(`[ALFRED] 🏁 Race completed in ${raceEndTime - raceStartTime}ms - Results:`, 
-                results.map((r, i) => `${i}: ${r.status === 'fulfilled' ? (r.value ? `✅ ${r.value.source}` : '❌ null') : `❌ ${r.reason?.message || 'failed'}`}`).join(', '));
+            // Log all results after race completes (non-blocking)
+            Promise.allSettled(requests).then(results => {
+                console.log(`[ALFRED] 🏁 All ${results.length} requests completed - Final results:`, 
+                    results.map((r, i) => `${i}: ${r.status === 'fulfilled' ? (r.value ? `✅ ${r.value.source} (${r.value.answer.length}ch)` : '❌ null') : `❌ failed`}`).join(', '));
+            });
             
-            const successfulResults = results
-                .filter(result => result.status === 'fulfilled' && result.value !== null)
-                .map(result => result.value)
-                .filter(Boolean);
-            
-            if (successfulResults.length > 0) {
-                // Return the first successful response
-                const winner = successfulResults[0];
-                console.log(`[ALFRED] 🏆 WINNER: ${winner.source} with ${winner.answer.length} chars in ${raceEndTime - raceStartTime}ms`);
+            if (winner) {
+                console.log(`[ALFRED] 🏆 FINAL WINNER: ${winner.source} with ${winner.answer.length} chars in ${raceEndTime - raceStartTime}ms`);
                 return winner;
             } else {
-                console.warn(`[ALFRED] All parallel requests failed`);
+                console.warn(`[ALFRED] All parallel requests failed or timed out`);
                 throw new Error('All LLM requests failed');
             }
             
