@@ -183,10 +183,16 @@ async function synthesizeWithEspeak(text, voiceId = 'default', speed = 1.0) {
 // Shared function to detect self-referential questions about the AI
 function isSelfReferentialQuestion(text) {
     const lowerText = text.toLowerCase();
+    
+    // Don't treat system prompts as self-referential (avoid "You are a professional..." false positives)
+    if (lowerText.startsWith('you are a ') || lowerText.includes('based on this request')) {
+        return false;
+    }
+    
     const selfReferentialPatterns = [
         /\b(tell me about yourself|about yourself|who are you|what are you|introduce yourself|describe yourself)\b/,
         /\b(your capabilities|what can you do|what do you do|your purpose|your role)\b/,
-        /\b(are you|you are|yourself|your name|your identity)\b/,
+        /\b(are you alfred|are you an ai|what are you|who are you)\b/,  // More specific - avoid "you are" at start
         /\b(hello.*yourself|hi.*yourself|greet.*yourself)\b/,
         /\b(how do you work|how were you made|how were you created)\b/,
         /\b(what is your function|what is your job|what is your mission)\b/
@@ -402,8 +408,8 @@ async function processDirectLLM(inputText, processingMode, model, conversationHi
         let modelUsed = '';
         
         if (processingMode === 'llm') {
-            // Parallel requests to multiple models
-            console.log(`[Direct LLM] Running parallel requests to: OpenAI, Grok-4, Mistral 7B, LLaMA 2 7B`);
+            // Parallel requests to multiple models with TRUE RACING
+            console.log(`[Direct LLM] 🏁 Racing parallel requests: OpenAI, Grok-4, Mistral, ${process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b'}`);
             
             const requests = [];
             
@@ -422,18 +428,42 @@ async function processDirectLLM(inputText, processingMode, model, conversationHi
             const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
             requests.push(callOllama(conversationWithSystem, defaultModel));
             
-            // Wait for first successful response
-            const results = await Promise.allSettled(requests);
-            const successfulResults = results
-                .filter(result => result.status === 'fulfilled' && result.value !== null)
-                .map(result => result.value)
-                .filter(Boolean);
+            // TRUE RACING: First to finish wins!
+            let winnerFound = false;
+            const racePromise = new Promise((resolve) => {
+                requests.forEach((req) => {
+                    req.then(result => {
+                        if (!winnerFound && result && result.response) {
+                            winnerFound = true;
+                            const raceTime = Date.now() - startTime;
+                            console.log(`[Direct LLM] 🏆 FIRST TO FINISH: ${result.source} in ${raceTime}ms`);
+                            resolve(result);
+                        }
+                    }).catch(() => {
+                        // Ignore errors - other requests might succeed
+                    });
+                });
+                
+                // Fallback timeout
+                setTimeout(() => {
+                    if (!winnerFound) resolve(null);
+                }, 30000);
+            });
             
-            if (successfulResults.length > 0) {
-                const winner = successfulResults[0];
+            const winner = await racePromise;
+            
+            if (winner) {
                 fullResponse = winner.response;
                 modelUsed = winner.source;
-                console.log(`[Direct LLM] First response from ${winner.source} (${Date.now() - startTime}ms)`);
+                console.log(`[Direct LLM] ✅ Winner: ${winner.source} (${Date.now() - startTime}ms)`);
+                
+                // Log all results after (non-blocking)
+                Promise.allSettled(requests).then(results => {
+                    const resultSummary = results.map((r, i) => 
+                        r.status === 'fulfilled' && r.value ? `✅ ${r.value.source}` : '❌ failed'
+                    ).join(', ');
+                    console.log(`[Direct LLM] All completed: ${resultSummary}`);
+                });
             } else {
                 throw new Error('All LLM requests failed');
             }
@@ -606,8 +636,8 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
         let modelUsed = '';
         
         if (processingMode === 'llm') {
-            // Parallel requests to multiple models
-            console.log(`[Direct LLM Non-Streaming] Running parallel requests to: OpenAI, Grok-4, Mistral 7B, LLaMA 2 7B`);
+            // Parallel requests to multiple models with TRUE RACING
+            console.log(`[Direct LLM Non-Streaming] 🏁 Racing parallel requests: OpenAI, Grok-4, Mistral, ${process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b'}`);
             
             const requests = [];
             
@@ -626,18 +656,42 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
             const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
             requests.push(callOllama(conversationWithSystem, defaultModel));
             
-            // Wait for first successful response
-            const results = await Promise.allSettled(requests);
-            const successfulResults = results
-                .filter(result => result.status === 'fulfilled' && result.value !== null)
-                .map(result => result.value)
-                .filter(Boolean);
+            // TRUE RACING: First to finish wins!
+            let winnerFound = false;
+            const racePromise = new Promise((resolve) => {
+                requests.forEach((req) => {
+                    req.then(result => {
+                        if (!winnerFound && result && result.response) {
+                            winnerFound = true;
+                            const raceTime = Date.now() - startTime;
+                            console.log(`[Direct LLM Non-Streaming] 🏆 FIRST TO FINISH: ${result.source} in ${raceTime}ms`);
+                            resolve(result);
+                        }
+                    }).catch(() => {
+                        // Ignore errors - other requests might succeed
+                    });
+                });
+                
+                // Fallback timeout
+                setTimeout(() => {
+                    if (!winnerFound) resolve(null);
+                }, 30000);
+            });
             
-            if (successfulResults.length > 0) {
-                const winner = successfulResults[0];
+            const winner = await racePromise;
+            
+            if (winner) {
                 fullResponse = winner.response;
                 modelUsed = winner.source;
-                console.log(`[Direct LLM Non-Streaming] First response from ${winner.source} (${Date.now() - startTime}ms)`);
+                console.log(`[Direct LLM Non-Streaming] ✅ Winner: ${winner.source} (${Date.now() - startTime}ms)`);
+                
+                // Log all results after (non-blocking)
+                Promise.allSettled(requests).then(results => {
+                    const resultSummary = results.map((r, i) => 
+                        r.status === 'fulfilled' && r.value ? `✅ ${r.value.source}` : '❌ failed'
+                    ).join(', ');
+                    console.log(`[Direct LLM Non-Streaming] All completed: ${resultSummary}`);
+                });
             } else {
                 throw new Error('All LLM requests failed');
             }
