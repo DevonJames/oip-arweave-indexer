@@ -1563,7 +1563,7 @@ Answer the question directly and conversationally:`;
             requests.push(ollamaRequest);
             
             // Add tinyllama for ultra-fast responses
-            const tinyllamaRequest = axios.post(`${this.ollamaHost}/api/generate`, {
+            const tinyllamaRequest = axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                 model: 'tinyllama',
                 prompt: prompt,
                 stream: false,
