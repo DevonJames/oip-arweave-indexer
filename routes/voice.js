@@ -683,6 +683,7 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
  * Transcribe uploaded audio file to text
  */
 router.post('/transcribe', upload.single('audio'), async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/transcribe] Processing audio transcription request');
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No audio file provided' });
@@ -749,6 +750,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
  * Convert text to speech audio using Chatterbox TTS service
  */
 router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/synthesize] Processing text-to-speech synthesis request');
     try {
         const { 
             text, 
@@ -1020,6 +1022,7 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
  * Complete voice chat: STT → LLM → TTS pipeline
  */
 router.post('/chat', upload.single('audio'), async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/chat] Processing complete voice chat request (STT → RAG/LLM → TTS)');
     const startTime = Date.now();
     const processingMetrics = {
         stt_time_ms: 0,
@@ -1558,6 +1561,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
  * List available TTS voices from Chatterbox service
  */
 router.get('/voices', async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/voices] Fetching available TTS voices');
     try {
         // Try to get voices from Chatterbox TTS service
         const response = await safeAxiosCall(
@@ -1648,6 +1652,7 @@ router.get('/voices', async (req, res) => {
  * List available TTS engines
  */
 router.get('/engines', async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/engines] Fetching available TTS engines');
     const engines = [
         { id: 'chatterbox', name: 'Chatterbox TTS (Default)', available: true, preferred: true },
         { id: 'espeak', name: 'eSpeak TTS (Fallback)', available: true, preferred: false }
@@ -1670,6 +1675,7 @@ router.get('/engines', async (req, res) => {
  * List available STT models
  */
 router.get('/models', async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/models] Fetching available STT models');
     try {
         const response = await safeAxiosCall(`${STT_SERVICE_URL}/models`, {
             timeout: 10000
@@ -1693,6 +1699,7 @@ router.get('/models', async (req, res) => {
  * Similar to /generate/converse but uses ALFRED's RAG system
  */
 router.post('/converse', upload.single('audio'), async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/converse] Processing streaming voice conversation with SSE');
     const startTime = Date.now();
     console.log('Voice converse request received');
     
@@ -2357,6 +2364,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
 router.get('/open-stream', (req, res) => {
     const dialogueId = req.query.dialogueId;
     
+    console.log('🎯 [ROUTE: /api/voice/open-stream] Opening SSE stream for voice conversation');
+    
     if (!dialogueId) {
         return res.status(400).json({ error: 'dialogueId is required' });
     }
@@ -2473,6 +2482,7 @@ router.get('/open-stream', (req, res) => {
  * Direct RAG query without TTS (for testing and text-only use)
  */
 router.post('/rag', async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/rag] Processing direct RAG query (text-only, no TTS)');
     try {
         const { 
             text, 
@@ -2543,6 +2553,7 @@ router.post('/rag', async (req, res) => {
  * Get adaptive streaming diagnostics for a session
  */
 router.get('/adaptive-diagnostics/:sessionId', (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/adaptive-diagnostics/:sessionId] Fetching adaptive streaming diagnostics');
     try {
         const { sessionId } = req.params;
         const { getAdaptiveStreamingDiagnostics } = require('../helpers/generators');
@@ -2577,6 +2588,7 @@ router.get('/adaptive-diagnostics/:sessionId', (req, res) => {
  * Check health of voice services
  */
 router.get('/health', async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/health] Checking health of voice services');
     const services = {
         stt: { url: STT_SERVICE_URL, status: 'unknown' },
         tts: { url: TTS_SERVICE_URL, status: 'unknown', engine: 'kokoro' }
@@ -2676,6 +2688,7 @@ router.get('/health', async (req, res) => {
 
 // ElevenLabs TTS endpoint for reference client
 router.post('/elevenlabs/:voiceId/synthesize', async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/elevenlabs/:voiceId/synthesize] Processing ElevenLabs TTS request');
     try {
         const { voiceId } = req.params;
         const { text, voice_settings = {}, model_id = 'eleven_turbo_v2' } = req.body;
