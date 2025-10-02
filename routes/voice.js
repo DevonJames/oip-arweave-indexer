@@ -1865,11 +1865,37 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
             }
         }
         
-        // Return success immediately, client will connect to SSE stream
-        res.json({
+        // Decide on thinking indicator: 30% text, 70% sound loop
+        const useTextResponse = Math.random() < 0.3;
+        const thinkingIndicator = { type: useTextResponse ? 'text' : 'sound' };
+        
+        // Return success immediately with thinking indicator, client will connect to SSE stream
+        const response = {
             success: true,
-            dialogueId: dialogueId
-        });
+            dialogueId: dialogueId,
+            thinkingIndicator: thinkingIndicator
+        };
+        
+        // If using sound, include the audio in the response
+        if (!useTextResponse) {
+            try {
+                const thinkingSoundPath = path.join(__dirname, '../soundfx/thinking-v1.wav');
+                const thinkingAudio = fs.readFileSync(thinkingSoundPath);
+                response.thinkingSound = {
+                    audio: thinkingAudio.toString('base64'),
+                    duration: 2300,
+                    loop: true,
+                    format: 'wav'
+                };
+                console.log(`[Voice Converse] 🔊 Including thinking sound in POST response (${thinkingAudio.length} bytes)`);
+            } catch (soundError) {
+                console.warn(`[Voice Converse] Failed to load thinking sound:`, soundError.message);
+                // Fallback to text if sound fails
+                thinkingIndicator.type = 'text';
+            }
+        }
+        
+        res.json(response);
         
         // Start background processing with ALFRED RAG integration
         (async () => {
@@ -2049,11 +2075,9 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     if (processingMode === 'rag') {
                         console.log(`[Voice Converse] Using ALFRED RAG for question: "${inputText}"`);
                         
-                        // 30% text response, 70% thinking sound loop
-                        const useTextResponse = Math.random() < 0.3;
-                        
-                        if (useTextResponse) {
-                            // Send immediate "checking" text response while RAG processes
+                        // Send text checking response only if that mode was selected (30% of time)
+                        // Sound loop is already included in POST response, so client is handling it
+                        if (thinkingIndicator.type === 'text') {
                             const checkingResponses = [
                                 "Let me check that for you.",
                                 "One moment, checking...",
@@ -2067,34 +2091,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                             // Send the checking response immediately
                             await handleTextChunk(checkingResponse + " ");
                         } else {
-                            // Send looping thinking sound effect (70% of the time)
-                            try {
-                                console.log(`[Voice Converse] 🔊 Sending thinking sound loop`);
-                                const thinkingSoundPath = path.join(__dirname, '../soundfx/thinking-v1.wav');
-                                const thinkingAudio = fs.readFileSync(thinkingSoundPath);
-                                const thinkingAudioBase64 = thinkingAudio.toString('base64');
-                                
-                                // Send special audioLoop event to client
-                                socketManager.sendToClients(dialogueId, {
-                                    type: 'audioLoop',
-                                    audio: thinkingAudioBase64,
-                                    duration: 2300, // 2.3 seconds
-                                    loop: true,
-                                    description: 'Thinking sound effect - loop until response'
-                                });
-                                
-                                ongoingStream.data.push({
-                                    event: 'audioLoop',
-                                    data: {
-                                        audio: thinkingAudioBase64,
-                                        duration: 2300,
-                                        loop: true
-                                    }
-                                });
-                            } catch (soundError) {
-                                console.warn(`[Voice Converse] Failed to load thinking sound, falling back to text:`, soundError.message);
-                                await handleTextChunk("One moment... ");
-                            }
+                            console.log(`[Voice Converse] 🔊 Sound loop mode - client handling thinking sound from POST response`);
                         }
                         
                         // Use ALFRED RAG system for contextual queries
@@ -2185,11 +2182,9 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     } else if (processingMode === 'llm' || processingMode.startsWith('llm-')) {
                         console.log(`[Voice Converse] Using direct LLM mode: ${processingMode} for question: "${inputText}"`);
                         
-                        // 30% text response, 70% thinking sound loop
-                        const useTextResponse = Math.random() < 0.3;
-                        
-                        if (useTextResponse) {
-                            // Send immediate text response for LLM mode
+                        // Send text response only if text mode was selected (30% of time)
+                        // Sound loop is already included in POST response
+                        if (thinkingIndicator.type === 'text') {
                             const llmResponses = [
                                 "Let me think about that.",
                                 "Processing your question...",
@@ -2200,33 +2195,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                             console.log(`[Voice Converse] 📝 Sending text thinking response: "${llmResponse}"`);
                             await handleTextChunk(llmResponse + " ");
                         } else {
-                            // Send looping thinking sound effect (70% of the time)
-                            try {
-                                console.log(`[Voice Converse] 🔊 Sending thinking sound loop (LLM mode)`);
-                                const thinkingSoundPath = path.join(__dirname, '../soundfx/thinking-v1.wav');
-                                const thinkingAudio = fs.readFileSync(thinkingSoundPath);
-                                const thinkingAudioBase64 = thinkingAudio.toString('base64');
-                                
-                                socketManager.sendToClients(dialogueId, {
-                                    type: 'audioLoop',
-                                    audio: thinkingAudioBase64,
-                                    duration: 2300,
-                                    loop: true,
-                                    description: 'Thinking sound effect - loop until response'
-                                });
-                                
-                                ongoingStream.data.push({
-                                    event: 'audioLoop',
-                                    data: {
-                                        audio: thinkingAudioBase64,
-                                        duration: 2300,
-                                        loop: true
-                                    }
-                                });
-                            } catch (soundError) {
-                                console.warn(`[Voice Converse] Failed to load thinking sound, falling back to text:`, soundError.message);
-                                await handleTextChunk("One moment... ");
-                            }
+                            console.log(`[Voice Converse] 🔊 Sound loop mode - client handling thinking sound from POST response (LLM mode)`);
                         }
                         
                         try {
@@ -2254,41 +2223,13 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         // Invalid processing mode - fallback to RAG
                         console.warn(`[Voice Converse] Invalid processing_mode: ${processingMode}, falling back to RAG`);
                         
-                        // 30% text response, 70% thinking sound loop
-                        const useTextResponse = Math.random() < 0.3;
-                        
-                        if (useTextResponse) {
-                            // Send immediate "checking" response
+                        // Send text response only if text mode was selected
+                        // Sound loop is already included in POST response
+                        if (thinkingIndicator.type === 'text') {
                             console.log(`[Voice Converse] 📝 Sending text checking response (fallback RAG)`);
                             await handleTextChunk("Let me check that for you. ");
                         } else {
-                            // Send looping thinking sound effect (70% of the time)
-                            try {
-                                console.log(`[Voice Converse] 🔊 Sending thinking sound loop (fallback RAG)`);
-                                const thinkingSoundPath = path.join(__dirname, '../soundfx/thinking-v1.wav');
-                                const thinkingAudio = fs.readFileSync(thinkingSoundPath);
-                                const thinkingAudioBase64 = thinkingAudio.toString('base64');
-                                
-                                socketManager.sendToClients(dialogueId, {
-                                    type: 'audioLoop',
-                                    audio: thinkingAudioBase64,
-                                    duration: 2300,
-                                    loop: true,
-                                    description: 'Thinking sound effect - loop until response'
-                                });
-                                
-                                ongoingStream.data.push({
-                                    event: 'audioLoop',
-                                    data: {
-                                        audio: thinkingAudioBase64,
-                                        duration: 2300,
-                                        loop: true
-                                    }
-                                });
-                            } catch (soundError) {
-                                console.warn(`[Voice Converse] Failed to load thinking sound, falling back to text:`, soundError.message);
-                                await handleTextChunk("One moment... ");
-                            }
+                            console.log(`[Voice Converse] 🔊 Sound loop mode - client handling thinking sound from POST response (fallback RAG)`);
                         }
                         
                         // Use RAG as fallback (simplified version)
