@@ -535,7 +535,7 @@ async function callOpenAI(conversation, modelName = 'gpt-4o-mini') {
             model: modelName,
             messages: conversation,
             temperature: 0.7,
-            max_tokens: 500
+            max_tokens: 2000  // Increased for JSON responses
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -563,7 +563,7 @@ async function callGrok(conversation, modelName = 'grok-4') {
             model: modelName,
             messages: conversation,
             temperature: 0.7,
-            max_tokens: 500
+            max_tokens: 2000  // Increased for JSON responses
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
@@ -600,7 +600,7 @@ async function callOllama(conversation, modelName) {
                 top_p: 0.9,
                 top_k: 40,
                 repeat_penalty: 1.1,
-                num_predict: 500
+                num_predict: 2000  // Increased for JSON responses
             }
         }, {
             timeout: 20000
@@ -1151,11 +1151,13 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             model = 'llama3.2:3b',
             voice_id = 'female_1',
             speed = 1.0,
-            return_audio = true,
             creator_filter = null,
             record_type_filter = null,
             tag_filter = null
         } = req.body;
+        
+        // Parse return_audio properly (handle string 'false' from FormData)
+        const return_audio = req.body.return_audio === 'false' || req.body.return_audio === false ? false : true;
 
         let responseText;
         let ragResponse = null;
@@ -1335,6 +1337,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         }
 
         // Step 3: Convert response to speech if requested
+        console.log(`[Voice Chat] return_audio=${return_audio} (type: ${typeof return_audio})`);
+        
         if (return_audio) {
             try {
                 console.log(`[Voice Chat] Synthesizing response audio with voice: ${voice_id} and engine: ${req.body.engine}`);
@@ -1555,6 +1559,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         } else {
             // Calculate total processing time
             processingMetrics.total_time_ms = Date.now() - startTime;
+            
+            console.log(`[Voice Chat] 📝 Skipping TTS - returning text-only response (${responseText.length} chars)`);
             
             // Text-only response with RAG metadata
             const response = {
