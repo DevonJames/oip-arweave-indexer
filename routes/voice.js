@@ -456,6 +456,7 @@ async function processDirectLLM(inputText, processingMode, model, conversationHi
                 fullResponse = winner.response;
                 modelUsed = winner.source;
                 console.log(`[Direct LLM] ✅ Winner: ${winner.source} (${Date.now() - startTime}ms)`);
+                console.log(`[Direct LLM] 📤 Winner response preview:`, fullResponse.substring(0, 300) + (fullResponse.length > 300 ? '...' : ''));
                 
                 // Log all results after (non-blocking)
                 Promise.allSettled(requests).then(results => {
@@ -488,6 +489,7 @@ async function processDirectLLM(inputText, processingMode, model, conversationHi
                 fullResponse = result.response;
                 modelUsed = result.source;
                 console.log(`[Direct LLM] Response from ${modelName} (${Date.now() - startTime}ms)`);
+                console.log(`[Direct LLM] 📤 Response preview:`, fullResponse.substring(0, 300) + (fullResponse.length > 300 ? '...' : ''));
             } else {
                 throw new Error(`Failed to get response from ${modelName}`);
             }
@@ -684,6 +686,7 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
                 fullResponse = winner.response;
                 modelUsed = winner.source;
                 console.log(`[Direct LLM Non-Streaming] ✅ Winner: ${winner.source} (${Date.now() - startTime}ms)`);
+                console.log(`[Direct LLM Non-Streaming] 📤 Winner response preview:`, fullResponse.substring(0, 300) + (fullResponse.length > 300 ? '...' : ''));
                 
                 // Log all results after (non-blocking)
                 Promise.allSettled(requests).then(results => {
@@ -716,6 +719,7 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
                 fullResponse = result.response;
                 modelUsed = result.source;
                 console.log(`[Direct LLM Non-Streaming] Response from ${modelName} (${Date.now() - startTime}ms)`);
+                console.log(`[Direct LLM Non-Streaming] 📤 Response preview:`, fullResponse.substring(0, 300) + (fullResponse.length > 300 ? '...' : ''));
             } else {
                 throw new Error(`Failed to get response from ${modelName}`);
             }
@@ -1561,6 +1565,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             processingMetrics.total_time_ms = Date.now() - startTime;
             
             console.log(`[Voice Chat] 📝 Skipping TTS - returning text-only response (${responseText.length} chars)`);
+            console.log(`[Voice Chat] 📤 Response preview:`, responseText.substring(0, 300) + (responseText.length > 300 ? '...' : ''));
             
             // Text-only response with RAG metadata
             const response = {
