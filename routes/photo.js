@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const crypto = require('crypto');
 const axios = require('axios');
+const sharp = require('sharp');
 const router = express.Router();
 
 // Configure multer for photo uploads with temporary storage
@@ -78,6 +79,49 @@ function generatePhotoId() {
 // Convert buffer to base64 for Grok API
 function bufferToBase64(buffer) {
     return buffer.toString('base64');
+}
+
+// Compress and resize image for API efficiency
+async function optimizeImageForAPI(buffer, mimetype) {
+    try {
+        // Skip optimization for SVG files
+        if (mimetype === 'image/svg+xml') {
+            return buffer;
+        }
+
+        const image = sharp(buffer);
+        const metadata = await image.metadata();
+        
+        console.log(`[Photo] Original image: ${metadata.width}x${metadata.height}, ${buffer.length} bytes`);
+        
+        // Resize if image is too large (max 1920px on longest side)
+        let processedImage = image;
+        const maxDimension = 1920;
+        
+        if (metadata.width > maxDimension || metadata.height > maxDimension) {
+            processedImage = image.resize(maxDimension, maxDimension, {
+                fit: 'inside',
+                withoutEnlargement: true
+            });
+            console.log(`[Photo] Resizing image to fit within ${maxDimension}px`);
+        }
+        
+        // Convert to JPEG with quality optimization for better compression
+        const optimizedBuffer = await processedImage
+            .jpeg({ 
+                quality: 85,
+                progressive: true,
+                mozjpeg: true 
+            })
+            .toBuffer();
+            
+        console.log(`[Photo] Optimized image: ${optimizedBuffer.length} bytes (${((1 - optimizedBuffer.length / buffer.length) * 100).toFixed(1)}% reduction)`);
+        
+        return optimizedBuffer;
+    } catch (error) {
+        console.warn('[Photo] Image optimization failed, using original:', error.message);
+        return buffer;
+    }
 }
 
 // Get file extension from mimetype
@@ -190,8 +234,11 @@ router.post('/analyze', async (req, res) => {
 
         // Load photo data
         const photoPath = path.join(TEMP_CACHE_DIR, metadata.filename);
-        const photoBuffer = await fs.readFile(photoPath);
-        const base64Image = bufferToBase64(photoBuffer);
+        const originalBuffer = await fs.readFile(photoPath);
+        
+        // Optimize image for API efficiency
+        const optimizedBuffer = await optimizeImageForAPI(originalBuffer, metadata.mimetype);
+        const base64Image = bufferToBase64(optimizedBuffer);
 
         console.log(`[Photo] Analyzing ${metadata.filename} with Grok-4: "${question}"`);
 
@@ -233,6 +280,7 @@ router.post('/analyze', async (req, res) => {
         };
 
         console.log(`[Photo] Sending request to Grok API: ${grokApiUrl}`);
+        console.log(`[Photo] Payload size: ${JSON.stringify(requestBody).length} bytes`);
 
         const startTime = Date.now();
         const grokResponse = await axios.post(grokApiUrl, requestBody, {
@@ -240,7 +288,9 @@ router.post('/analyze', async (req, res) => {
                 'Authorization': `Bearer ${grokApiKey}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 30000 // 30 second timeout
+            timeout: 120000, // Increased to 2 minutes for large images
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
         });
 
         const processingTime = Date.now() - startTime;
@@ -285,15 +335,27 @@ router.post('/analyze', async (req, res) => {
                 message: apiError.error?.message || 'Grok API error',
                 details: apiError
             });
+        } else if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+            res.status(408).json({
+                error: 'Request timeout',
+                message: 'The image analysis request timed out. This may be due to a large image size or API server load. Try with a smaller image or retry later.',
+                suggestion: 'Consider uploading a smaller image (under 1MB) for faster processing'
+            });
         } else if (error.code === 'ENOENT') {
             res.status(404).json({
                 error: 'Photo not found',
                 message: 'Photo may have expired or was not uploaded properly'
             });
+        } else if (error.code === 'ECONNRESET' || error.code === 'ENOTFOUND') {
+            res.status(503).json({
+                error: 'Service unavailable',
+                message: 'Unable to connect to the image analysis service. Please try again later.'
+            });
         } else {
             res.status(500).json({
                 error: 'Analysis service error',
-                message: error.message
+                message: error.message,
+                code: error.code
             });
         }
     }

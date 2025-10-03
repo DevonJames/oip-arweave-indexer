@@ -1081,6 +1081,18 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
  */
 router.post('/chat', upload.single('audio'), async (req, res) => {
     console.log('🎯 [ROUTE: /api/voice/chat] Processing complete voice chat request (STT → RAG/LLM → TTS)');
+    console.log('📥 [ROUTE: /api/voice/chat] Request body:', {
+        text: req.body.text?.substring(0, 200) + (req.body.text?.length > 200 ? '...' : ''),
+        processing_mode: req.body.processing_mode,
+        model: req.body.model,
+        return_audio: req.body.return_audio,
+        voice_id: req.body.voice_id,
+        engine: req.body.engine,
+        pinnedDidTx: req.body.pinnedDidTx,
+        conversationHistory: req.body.conversationHistory ? `${JSON.parse(req.body.conversationHistory || '[]').length} messages` : 'none',
+        hasAudioFile: !!req.file
+    });
+    
     const startTime = Date.now();
     const processingMetrics = {
         stt_time_ms: 0,
