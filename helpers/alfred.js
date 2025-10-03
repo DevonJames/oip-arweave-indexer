@@ -1575,6 +1575,61 @@ Examples of BAD responses for recipes:
 Answer the question directly and conversationally:`;
 
             console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
+            
+            // Check if a specific model was requested (bypass racing)
+            const requestedModel = options.model;
+            const shouldRace = !requestedModel || requestedModel === 'parallel';
+            
+            if (!shouldRace) {
+                console.log(`[ALFRED] 🎯 Using specific model (no racing): ${requestedModel}`);
+                
+                // Use only the requested model
+                try {
+                    let response;
+                    if (this.isCloudModel(requestedModel)) {
+                        response = await this.callCloudModel(requestedModel, prompt, {
+                            temperature: 0.4,
+                            max_tokens: 700,
+                            stop: null
+                        });
+                        return {
+                            answer: response.trim(),
+                            model_used: requestedModel,
+                            context_length: context.length,
+                            source: this.cloudModels[requestedModel]?.provider || 'cloud'
+                        };
+                    } else {
+                        // Assume it's an Ollama model
+                        const ollamaResponse = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
+                            model: requestedModel,
+                            prompt: prompt,
+                            stream: false,
+                            options: {
+                                temperature: 0.4,
+                                top_p: 0.9,
+                                top_k: 40,
+                                repeat_penalty: 1.1,
+                                num_predict: 512,
+                                stop: ["\n\n", "Question:", "Explanation:", "Note:"]
+                            }
+                        }, {
+                            timeout: 25000
+                        });
+                        
+                        return {
+                            answer: ollamaResponse.data?.response?.trim() || "I couldn't generate a response.",
+                            model_used: requestedModel,
+                            context_length: context.length,
+                            source: 'ollama'
+                        };
+                    }
+                } catch (error) {
+                    console.error(`[ALFRED] Specific model ${requestedModel} failed:`, error.message);
+                    // Fall back to racing if specific model fails
+                    console.log(`[ALFRED] ⚠️ Falling back to parallel racing...`);
+                }
+            }
+            
             console.log(`[ALFRED] 🏁 Starting parallel LLM race with ${this.openaiApiKey ? 'OpenAI + ' : ''}${this.xaiApiKey ? 'Grok-4 + Grok-4-Fast + ' : ''}Ollama (${this.defaultModel})`);
             
             // Create parallel requests - local LLM with shorter timeout + cloud fallbacks
