@@ -23,6 +23,7 @@ class ALFRED {
         this.cloudModels = {
             // XAI Models (Grok) - Updated to current models
             'grok-4': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
+            'grok-4-fast': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' },
             'grok-beta': { provider: 'xai', apiUrl: 'https://api.x.ai/v1/chat/completions' }, // Legacy fallback
 
             // OpenAI Models
@@ -1574,7 +1575,7 @@ Examples of BAD responses for recipes:
 Answer the question directly and conversationally:`;
 
             console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
-            console.log(`[ALFRED] 🏁 Starting parallel LLM race with ${this.openaiApiKey ? 'OpenAI + ' : ''}${this.xaiApiKey ? 'Grok + ' : ''}Ollama (${this.defaultModel}) + Tinyllama`);
+            console.log(`[ALFRED] 🏁 Starting parallel LLM race with ${this.openaiApiKey ? 'OpenAI + ' : ''}${this.xaiApiKey ? 'Grok-4 + Grok-4-Fast + ' : ''}Ollama (${this.defaultModel})`);
             
             // Create parallel requests - local LLM with shorter timeout + cloud fallbacks
             const requests = [];
@@ -1610,7 +1611,9 @@ Answer the question directly and conversationally:`;
             
             requests.push(ollamaRequest);
             
-            // Add tinyllama for ultra-fast responses - installed via install_llm_models.sh
+            // Tinyllama removed from race - too fast but quality is poor for RAG responses
+            // Keeping code commented for future reference if we want to re-enable with different settings
+            /*
             console.log(`[ALFRED] 🏁 Starting Tinyllama request to ${this.ollamaBaseUrl}...`);
             const tinyllamaRequest = axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                 model: 'tinyllama',
@@ -1625,7 +1628,7 @@ Answer the question directly and conversationally:`;
                     stop: ["\n\n", "Question:", "Explanation:", "Note:"]
                 }
             }, {
-                timeout: 15000 // Shorter timeout for tiny model - it should be very fast!
+                timeout: 15000
             }).then(response => {
                 console.log(`[ALFRED] ✅ Tinyllama completed: ${response.data?.response?.trim()?.length || 0} chars`);
                 return {
@@ -1640,6 +1643,7 @@ Answer the question directly and conversationally:`;
             });
             
             requests.push(tinyllamaRequest);
+            */
             
             // Add cloud model requests in parallel
             if (this.openaiApiKey) {
@@ -1663,7 +1667,7 @@ Answer the question directly and conversationally:`;
                 requests.push(openaiRequest);
             }
             
-            // Re-enabled XAI with updated grok-4 model
+            // XAI models - race both grok-4 and grok-4-fast
             if (this.xaiApiKey) {
                 console.log(`[ALFRED] 🏁 Starting XAI (grok-4) request...`);
                 const xaiRequest = this.callCloudModel('grok-4', prompt, {
@@ -1671,18 +1675,38 @@ Answer the question directly and conversationally:`;
                     max_tokens: 700,
                     stop: null
                 }).then(cloudText => {
-                    console.log(`[ALFRED] ✅ XAI completed: ${cloudText.trim().length} chars`);
+                    console.log(`[ALFRED] ✅ XAI (grok-4) completed: ${cloudText.trim().length} chars`);
                     return {
                         answer: cloudText.trim(),
                         model_used: 'grok-4',
                         context_length: context.length,
-                        source: 'xai'
+                        source: 'xai-grok-4'
                     };
                 }).catch(error => {
-                    console.warn(`[ALFRED] ❌ XAI failed: ${error.message}`);
+                    console.warn(`[ALFRED] ❌ XAI (grok-4) failed: ${error.message}`);
                     return null;
                 });
                 requests.push(xaiRequest);
+                
+                // Add grok-4-fast for faster responses
+                console.log(`[ALFRED] 🏁 Starting XAI (grok-4-fast) request...`);
+                const xaiFastRequest = this.callCloudModel('grok-4-fast', prompt, {
+                    temperature: 0.4,
+                    max_tokens: 700,
+                    stop: null
+                }).then(cloudText => {
+                    console.log(`[ALFRED] ✅ XAI (grok-4-fast) completed: ${cloudText.trim().length} chars`);
+                    return {
+                        answer: cloudText.trim(),
+                        model_used: 'grok-4-fast',
+                        context_length: context.length,
+                        source: 'xai-grok-4-fast'
+                    };
+                }).catch(error => {
+                    console.warn(`[ALFRED] ❌ XAI (grok-4-fast) failed: ${error.message}`);
+                    return null;
+                });
+                requests.push(xaiFastRequest);
             }
             
             // Race for the first successful response (true racing - first to finish wins!)
