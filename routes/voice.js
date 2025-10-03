@@ -1777,6 +1777,17 @@ router.get('/models', async (req, res) => {
  */
 router.post('/converse', upload.single('audio'), async (req, res) => {
     console.log('🎯 [ROUTE: /api/voice/converse] Processing streaming voice conversation with SSE');
+    console.log('📥 [ROUTE: /api/voice/converse] Request body:', {
+        text: req.body.text || req.body.userInput,
+        processing_mode: req.body.processing_mode,
+        model: req.body.model,
+        pinnedDidTx: req.body.pinnedDidTx,
+        conversationHistory: req.body.conversationHistory ? `${(typeof req.body.conversationHistory === 'string' ? JSON.parse(req.body.conversationHistory || '[]') : req.body.conversationHistory).length} messages` : 'none',
+        dialogueId: req.body.dialogueId,
+        voiceConfig: req.body.voiceConfig ? 'provided' : 'default',
+        hasAudioFile: !!req.file
+    });
+    
     const startTime = Date.now();
     console.log('Voice converse request received');
     
@@ -2221,11 +2232,14 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         
                         const alfredResponseText = ragResponse.answer;
                         console.log(`[Voice Converse] RAG processing (${processingMetrics.rag_time_ms}ms): Generated ${alfredResponseText.length} chars`);
+                        console.log(`[Voice Converse] 📤 Full response preview:`, alfredResponseText.substring(0, 150) + (alfredResponseText.length > 150 ? '...' : ''));
                         
                         // For now, send the complete RAG response as chunks to simulate streaming
                         // TODO: Implement true streaming RAG responses in future versions
                         const words = alfredResponseText.split(' ');
                         const chunkSize = 3; // Send 3 words at a time
+                        
+                        console.log(`[Voice Converse] 📨 Starting to stream ${words.length} words in chunks of ${chunkSize}...`);
                         
                         for (let i = 0; i < words.length; i += chunkSize) {
                             const chunk = words.slice(i, i + chunkSize).join(' ');
@@ -2238,6 +2252,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                             // Small delay to simulate streaming
                             await new Promise(resolve => setTimeout(resolve, 50));
                         }
+                        
+                        console.log(`[Voice Converse] ✅ Finished streaming all ${words.length} words`);
                         
                         // Store RAG metadata for response
                         ongoingStream.ragMetadata = {
