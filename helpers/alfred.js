@@ -1806,6 +1806,7 @@ Answer the question directly and conversationally:`;
             
             if (winner) {
                 console.log(`[ALFRED] 🏆 FINAL WINNER: ${winner.source} with ${winner.answer.length} chars in ${raceEndTime - raceStartTime}ms`);
+                console.log(`[ALFRED] 📤 Returning complete answer (${winner.answer.length} chars):`, winner.answer.substring(0, 200) + (winner.answer.length > 200 ? '...' : ''));
                 return winner;
             } else {
                 console.warn(`[ALFRED] All parallel requests failed or timed out`);
