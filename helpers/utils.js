@@ -446,6 +446,56 @@ const optionalAuthenticateToken = (req, res, next) => {
 };
 
 /**
+ * Get the server's wallet public key
+ * @returns {string|null} - Server's public key or null if unavailable
+ */
+const getServerPublicKey = () => {
+    try {
+        const walletPath = getWalletFilePath();
+        const jwk = JSON.parse(fs.readFileSync(walletPath));
+        return jwk.n;
+    } catch (error) {
+        console.error('Error getting server public key:', error);
+        return null;
+    }
+};
+
+/**
+ * Check if user is a server admin based on email domain matching
+ * @param {Object} user - The authenticated user
+ * @returns {boolean} - True if user's email domain matches server domain
+ */
+const isServerAdmin = (user) => {
+    if (!user || !user.email) return false;
+    
+    // Extract domain from user email (e.g., user@fitnessally.io -> fitnessally.io)
+    const emailDomain = user.email.split('@')[1]?.toLowerCase();
+    if (!emailDomain) return false;
+    
+    // Get server domain from PUBLIC_API_BASE_URL or fallback to default patterns
+    let serverDomain = null;
+    if (process.env.PUBLIC_API_BASE_URL) {
+        try {
+            const url = new URL(process.env.PUBLIC_API_BASE_URL);
+            serverDomain = url.hostname.toLowerCase();
+            // Remove 'api.' prefix if present to match email domain
+            serverDomain = serverDomain.replace(/^api\./, '');
+        } catch (error) {
+            console.error('Error parsing PUBLIC_API_BASE_URL:', error);
+        }
+    }
+    
+    // Check if email domain matches server domain
+    const isMatch = serverDomain && emailDomain === serverDomain;
+    
+    if (isMatch) {
+        console.log('✅ User is server admin - email domain matches:', emailDomain);
+    }
+    
+    return isMatch;
+};
+
+/**
  * Check if a user owns a record based on various ownership indicators
  * @param {Object} record - The record to check
  * @param {Object} user - The authenticated user
@@ -473,6 +523,18 @@ const userOwnsRecord = (record, user) => {
     
     // Note: Shared access and permissions will be implemented when we have the full accessControl template
     // For now, we only support private/public access levels
+    
+    // Priority 3: Check server admin privilege for server-created records
+    // This allows trusted admin users (with matching email domain) to manage server-created content
+    if (isServerAdmin(user)) {
+        const serverPubKey = getServerPublicKey();
+        const creatorPubKey = record.oip?.creator?.publicKey;
+        
+        if (serverPubKey && creatorPubKey === serverPubKey) {
+            console.log('✅ Server admin can manage server-created record:', user.email);
+            return true;
+        }
+    }
     
     // Priority 4: Check DID-based ownership for GUN records (user's key in soul)
     if (record.oip?.did?.startsWith('did:gun:')) {
@@ -519,6 +581,8 @@ module.exports = {
     authenticateToken,
     optionalAuthenticateToken, // NEW: Add optional authentication
     userOwnsRecord, // NEW: Add ownership check utility
+    getServerPublicKey, // NEW: Get server wallet public key
+    isServerAdmin, // NEW: Check if user is server admin
     isValidDid,
     isValidTxId,
     getWalletFilePath
