@@ -461,35 +461,61 @@ const getServerPublicKey = () => {
 };
 
 /**
+ * Extract base domain from a hostname (e.g., api.fitnessally.io -> fitnessally.io)
+ * @param {string} hostname - The hostname to extract from
+ * @returns {string} - The base domain (last two parts)
+ */
+const extractBaseDomain = (hostname) => {
+    const parts = hostname.split('.');
+    if (parts.length >= 2) {
+        // Return the last two parts (e.g., ['oip', 'fitnessally', 'io'] -> 'fitnessally.io')
+        return parts.slice(-2).join('.');
+    }
+    return hostname;
+};
+
+/**
  * Check if user is a server admin based on email domain matching
  * @param {Object} user - The authenticated user
  * @returns {boolean} - True if user's email domain matches server domain
  */
 const isServerAdmin = (user) => {
-    if (!user || !user.email) return false;
+    if (!user || !user.email) {
+        console.log('❌ No user or email provided for admin check');
+        return false;
+    }
     
     // Extract domain from user email (e.g., user@fitnessally.io -> fitnessally.io)
     const emailDomain = user.email.split('@')[1]?.toLowerCase();
-    if (!emailDomain) return false;
+    if (!emailDomain) {
+        console.log('❌ Could not extract email domain from:', user.email);
+        return false;
+    }
     
-    // Get server domain from PUBLIC_API_BASE_URL or fallback to default patterns
-    let serverDomain = null;
+    console.log('🔍 Checking admin status for email domain:', emailDomain);
+    
+    // Get server domain from PUBLIC_API_BASE_URL
+    let serverBaseDomain = null;
     if (process.env.PUBLIC_API_BASE_URL) {
         try {
             const url = new URL(process.env.PUBLIC_API_BASE_URL);
-            serverDomain = url.hostname.toLowerCase();
-            // Remove 'api.' prefix if present to match email domain
-            serverDomain = serverDomain.replace(/^api\./, '');
+            const hostname = url.hostname.toLowerCase();
+            serverBaseDomain = extractBaseDomain(hostname);
+            console.log('🔍 Server hostname:', hostname, '-> base domain:', serverBaseDomain);
         } catch (error) {
             console.error('Error parsing PUBLIC_API_BASE_URL:', error);
         }
+    } else {
+        console.log('⚠️ PUBLIC_API_BASE_URL not set - admin check will fail');
     }
     
-    // Check if email domain matches server domain
-    const isMatch = serverDomain && emailDomain === serverDomain;
+    // Check if email domain matches server base domain
+    const isMatch = serverBaseDomain && emailDomain === serverBaseDomain;
     
     if (isMatch) {
         console.log('✅ User is server admin - email domain matches:', emailDomain);
+    } else {
+        console.log('❌ Admin check failed - email domain:', emailDomain, 'vs server domain:', serverBaseDomain);
     }
     
     return isMatch;

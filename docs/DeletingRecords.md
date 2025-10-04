@@ -211,21 +211,24 @@ await deleteRecord('did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl', u
 **How It Works:**
 1. User authenticates with JWT token containing their email
 2. System extracts domain from user's email (e.g., `user@fitnessally.io` → `fitnessally.io`)
-3. System checks if domain matches `PUBLIC_API_BASE_URL` environment variable (e.g., `https://api.fitnessally.io`)
-4. If domains match AND record was created by server's wallet, deletion is authorized
+3. System extracts base domain from `PUBLIC_API_BASE_URL` (e.g., `https://oip.fitnessally.io` → `fitnessally.io`)
+4. If email domain matches server base domain AND record was created by server's wallet, deletion is authorized
 5. Delete message is signed with server's wallet (not user's) for blockchain verification
 
 **Configuration:**
 Set `PUBLIC_API_BASE_URL` in your environment:
 ```bash
 # In .env file
+PUBLIC_API_BASE_URL=https://oip.fitnessally.io
+# or
 PUBLIC_API_BASE_URL=https://api.fitnessally.io
+# Both work - the system extracts the base domain (fitnessally.io)
 ```
 
 **Example:**
 ```bash
-# User devon@fitnessally.io can delete records created by api.fitnessally.io server
-curl -X POST https://api.fitnessally.io/api/records/deleteRecord \
+# User admin@fitnessally.io can delete records created by oip.fitnessally.io server
+curl -X POST https://oip.fitnessally.io/api/records/deleteRecord \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
@@ -250,9 +253,11 @@ curl -X POST https://api.fitnessally.io/api/records/deleteRecord \
 
 **Security Notes:**
 - Only works for records created by the server's wallet (checked via `oip.creator.publicKey`)
-- Email domain must exactly match server domain (after removing 'api.' prefix)
+- Email domain must exactly match server's base domain (last two parts of hostname)
+  - Examples: `oip.fitnessally.io` → `fitnessally.io`, `api.example.com` → `example.com`
 - Delete message is signed by server wallet, ensuring network-wide deletion authorization
 - All deletion attempts are logged with user email and record information
+- Detailed admin check logging helps troubleshoot domain matching issues
 
 ### Verification
 
