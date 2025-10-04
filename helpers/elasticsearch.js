@@ -1018,6 +1018,42 @@ async function searchCreatorByAddress(didAddress) {
     }
 };
 
+// Helper function to normalize and extract base unit from compound descriptions
+const normalizeUnit = (unit) => {
+    if (!unit) return '';
+    
+    const normalized = unit.toLowerCase().trim();
+    
+    // Handle compound units like "tsp or 1 packet" -> "tsp"
+    if (normalized.includes(' or ')) {
+        return normalized.split(' or ')[0].trim();
+    }
+    
+    // Handle descriptive units like "cups shredded" -> "cups"
+    // or "roll 1 serving" -> "roll"
+    const firstWord = normalized.split(' ')[0];
+    
+    return firstWord;
+};
+
+// Check if a unit is count-based (pieces, units, etc.)
+const isCountUnit = (unit) => {
+    const countUnits = [
+        'unit', 'units', 'piece', 'pieces', 'item', 'items', 
+        'large', 'medium', 'small', 'whole', 'clove', 'cloves', 
+        'slice', 'slices', 'pickle', 'pickles', 'spear', 'spears',
+        'head', 'heads', 'bun', 'buns', 'roll', 'rolls',
+        'leaf', 'leaves', 'stalk', 'stalks', 'bunch', 'bunches',
+        'can', 'cans', 'bottle', 'bottles', 'jar', 'jars',
+        'packet', 'packets', 'bag', 'bags', 'box', 'boxes',
+        'fillet', 'fillets', 'breast', 'breasts', 'thigh', 'thighs',
+        'serving', 'servings', 'portion', 'portions'
+    ];
+    
+    const normalizedUnit = normalizeUnit(unit);
+    return countUnits.includes(normalizedUnit);
+};
+
 // Enhanced unit conversion utility functions
 const convertToGrams = (amount, unit) => {
     const conversions = {
@@ -1083,6 +1119,7 @@ const convertToGrams = (amount, unit) => {
         'serving', 'servings', 'portion', 'portions'
     ];
     if (countUnits.includes(normalizedUnit)) {
+        console.log(`🔢 '${unit}' (normalized: '${normalizedUnit}') is a count unit, returning null`);
         return null; // Special handling required
     }
     
@@ -1195,42 +1232,6 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     
     // Return null if conversion is not possible
     return null;
-};
-
-// Helper function to normalize and extract base unit from compound descriptions
-const normalizeUnit = (unit) => {
-    if (!unit) return '';
-    
-    const normalized = unit.toLowerCase().trim();
-    
-    // Handle compound units like "tsp or 1 packet" -> "tsp"
-    if (normalized.includes(' or ')) {
-        return normalized.split(' or ')[0].trim();
-    }
-    
-    // Handle descriptive units like "cups shredded" -> "cups"
-    // or "roll 1 serving" -> "roll"
-    const firstWord = normalized.split(' ')[0];
-    
-    return firstWord;
-};
-
-// Check if a unit is count-based (pieces, units, etc.)
-const isCountUnit = (unit) => {
-    const countUnits = [
-        'unit', 'units', 'piece', 'pieces', 'item', 'items', 
-        'large', 'medium', 'small', 'whole', 'clove', 'cloves', 
-        'slice', 'slices', 'pickle', 'pickles', 'spear', 'spears',
-        'head', 'heads', 'bun', 'buns', 'roll', 'rolls',
-        'leaf', 'leaves', 'stalk', 'stalks', 'bunch', 'bunches',
-        'can', 'cans', 'bottle', 'bottles', 'jar', 'jars',
-        'packet', 'packets', 'bag', 'bags', 'box', 'boxes',
-        'fillet', 'fillets', 'breast', 'breasts', 'thigh', 'thighs',
-        'serving', 'servings', 'portion', 'portions'
-    ];
-    
-    const normalizedUnit = normalizeUnit(unit);
-    return countUnits.includes(normalizedUnit);
 };
 
 // Function to add nutritional summary to recipe records
