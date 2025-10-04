@@ -414,7 +414,10 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
         
         // For Arweave records, publish a blockchain delete message first
         // This ensures deletion propagates to all nodes in the network
+        // NOTE: Publishing the delete message also deletes the record locally via deleteRecordFromDB
         let deleteMessageTxId = null;
+        let alreadyDeleted = false;
+        
         if (didToDelete.startsWith('did:arweave:')) {
             try {
                 console.log('📝 Publishing blockchain delete message for Arweave record...');
@@ -430,6 +433,7 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
                 }
                 
                 // Publish delete message (will be signed by server wallet automatically via publishNewRecord)
+                // This also triggers deleteRecordFromDB which deletes the target record immediately
                 const deleteMessage = {
                     delete: {
                         didTx: didToDelete,
@@ -449,24 +453,32 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
                 );
                 
                 deleteMessageTxId = publishResult.transactionId;
+                alreadyDeleted = true; // The record was deleted by deleteRecordFromDB during publishing
                 console.log('✅ Delete message published to blockchain:', deleteMessageTxId);
+                console.log('✅ Record deleted locally via deleteRecordFromDB during message publishing');
             } catch (error) {
                 console.error('⚠️ Failed to publish blockchain delete message:', error);
                 // Continue with local deletion even if blockchain message fails
             }
         }
         
-        // Delete the record from local index
-        const deleteResponse = await deleteRecordsByDID('records', didToDelete);
+        // Only try to delete from local index if not already deleted during blockchain message publishing
+        let deleteResponse = { deleted: 0 };
+        if (!alreadyDeleted) {
+            deleteResponse = await deleteRecordsByDID('records', didToDelete);
+        } else {
+            // Mark as deleted since it was already handled
+            deleteResponse = { deleted: 1 };
+        }
         
-        if (deleteResponse.deleted > 0) {
-            console.log(`Successfully deleted ${deleteResponse.deleted} record(s) with DID: ${didToDelete}`);
+        if (deleteResponse.deleted > 0 || alreadyDeleted) {
+            console.log(`Successfully deleted record with DID: ${didToDelete}`);
             
             const response = {
                 success: true,
                 message: 'Record deleted successfully',
                 did: didToDelete,
-                deletedCount: deleteResponse.deleted
+                deletedCount: 1
             };
             
             if (deleteMessageTxId) {
