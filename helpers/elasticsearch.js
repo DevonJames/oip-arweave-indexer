@@ -1119,7 +1119,7 @@ const convertToGrams = (amount, unit) => {
         'serving', 'servings', 'portion', 'portions'
     ];
     if (countUnits.includes(normalizedUnit)) {
-        console.log(`🔢 '${unit}' (normalized: '${normalizedUnit}') is a count unit, returning null`);
+        // console.log(`🔢 '${unit}' (normalized: '${normalizedUnit}') is a count unit, returning null`);
         return null; // Special handling required
     }
     
@@ -1136,7 +1136,7 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     
     // If base units are identical, return 1:1 ratio
     if (normalizedFromUnit === normalizedToUnit) {
-        console.log(`Units are same after normalization: '${fromUnit}' -> '${normalizedFromUnit}', '${toUnit}' -> '${normalizedToUnit}'`);
+        // console.log(`Units are same after normalization: '${fromUnit}' -> '${normalizedFromUnit}', '${toUnit}' -> '${normalizedToUnit}'`);
         return fromAmount;
     }
     
@@ -1221,14 +1221,141 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
         return fromAmount * volumeConversions[baseFromUnit][baseToUnit];
     }
     
+    // Special conversions for common food items (count-based to grams)
+    // Note: These are approximate values based on standard serving sizes
+    const foodItemConversions = {
+        'pat': 10,           // Butter pat
+        'pats': 10,
+        'clove': 3,          // Garlic clove
+        'cloves': 3,
+        'wedge': 7,          // Lemon wedge
+        'wedges': 7,
+        'stalk': 40,         // Celery stalk (average), also for scallion/green onion use 15g if specified
+        'stalks': 40,
+        'slice': 28,         // Cheese/bread slice (average - American cheese ~28g, bread ~40g, bacon ~16g)
+        'slices': 28,
+        'medium': 18,        // Medium mushroom (cremini/button)
+        'sprig': 1,          // Herb sprig (parsley ~1g, thyme ~0.64g, average ~1g)
+        'sprigs': 1,
+        'piece': 8,          // 1-inch piece (e.g., ginger)
+        'pieces': 8
+    };
+    
+    // Context-aware conversions based on ingredient name hints
+    // Check if we can determine a more specific conversion based on the unit description
+    const contextualGrams = (() => {
+        const fromUnitLower = fromUnit.toLowerCase();
+        const toUnitLower = toUnit.toLowerCase();
+        
+        // Bacon slice: 16g instead of default 28g
+        if (fromUnitLower.includes('bacon') || (normalizedFromUnit === 'slice' && fromUnitLower.includes('bacon'))) {
+            return 16;
+        }
+        // Bread slice: 40g instead of default 28g
+        if (fromUnitLower.includes('bread') || fromUnitLower.includes('sandwich')) {
+            return 40;
+        }
+        // Scallion/green onion stalk: 15g instead of default 40g
+        if (fromUnitLower.includes('scallion') || fromUnitLower.includes('green onion')) {
+            return 15;
+        }
+        // Thyme sprig: 0.64g instead of default 1g
+        if (fromUnitLower.includes('thyme')) {
+            return 0.64;
+        }
+        
+        return null;
+    })();
+    
+    if (contextualGrams && foodItemConversions[normalizedFromUnit]) {
+        const totalGrams = fromAmount * contextualGrams;
+        const targetGramConversion = {
+            'g': 1, 'gram': 1, 'grams': 1,
+            'kg': 1000,
+            'oz': 28.3495,
+            'lb': 453.592
+        };
+        
+        if (targetGramConversion[normalizedToUnit]) {
+            const result = totalGrams / targetGramConversion[normalizedToUnit];
+            console.log(`🍴 Context-aware food conversion: ${fromAmount} ${fromUnit} = ${totalGrams}g (${contextualGrams}g each) = ${result} ${toUnit}`);
+            return result;
+        }
+    }
+    
+    // Try food item conversions: count unit -> grams -> target weight unit
+    if (foodItemConversions[normalizedFromUnit]) {
+        const gramsPerUnit = foodItemConversions[normalizedFromUnit];
+        const totalGrams = fromAmount * gramsPerUnit;
+        
+        // Now convert grams to target unit
+        const targetGramConversion = {
+            'g': 1,
+            'gram': 1,
+            'grams': 1,
+            'kg': 1000,
+            'oz': 28.3495,
+            'lb': 453.592
+        };
+        
+        if (targetGramConversion[normalizedToUnit]) {
+            const result = totalGrams / targetGramConversion[normalizedToUnit];
+            console.log(`🍴 Food item conversion: ${fromAmount} ${fromUnit} = ${totalGrams}g = ${result} ${toUnit}`);
+            return result;
+        }
+    }
+    
+    // Reverse: weight unit -> grams -> count unit
+    if (foodItemConversions[normalizedToUnit]) {
+        const sourceGramConversion = {
+            'g': 1,
+            'gram': 1,
+            'grams': 1,
+            'kg': 1000,
+            'oz': 28.3495,
+            'lb': 453.592
+        };
+        
+        if (sourceGramConversion[normalizedFromUnit]) {
+            const totalGrams = fromAmount * sourceGramConversion[normalizedFromUnit];
+            const gramsPerUnit = foodItemConversions[normalizedToUnit];
+            const result = totalGrams / gramsPerUnit;
+            console.log(`🍴 Food item conversion: ${fromAmount} ${fromUnit} = ${totalGrams}g = ${result} ${toUnit}`);
+            return result;
+        }
+    }
+    
+    // Check if one unit is count-based and the other is weight/volume - can't convert
+    const fromIsCount = isCountUnit(fromUnit);
+    const toIsCount = isCountUnit(toUnit);
+    
+    if (fromIsCount !== toIsCount) {
+        // One is count, one is weight/volume - incompatible
+        console.log(`🚫 Cannot convert between count unit (${fromIsCount ? fromUnit : toUnit}) and weight/volume unit (${fromIsCount ? toUnit : fromUnit})`);
+        return null;
+    }
+    
+    // If both are count units, use simple ratio
+    if (fromIsCount && toIsCount) {
+        console.log(`📦 Both are count units, using simple ratio`);
+        return fromAmount;
+    }
+    
     // Try converting both to grams and compare (for weight conversions)
+    // console.log(`🔄 Attempting gram conversion: ${fromAmount} ${fromUnit} -> ${baseFromUnit}, 1 ${toUnit} -> ${baseToUnit}`);
     const fromGrams = convertToGrams(fromAmount, baseFromUnit);
     const toGramsPerUnit = convertToGrams(1, baseToUnit);
+    // console.log(`📊 Gram conversion results: fromGrams=${fromGrams}, toGramsPerUnit=${toGramsPerUnit}`);
     
     // If both can be converted to grams, do the conversion
-    if (fromGrams !== null && toGramsPerUnit !== null) {
-        return fromGrams / toGramsPerUnit;
+    if (fromGrams !== null && toGramsPerUnit !== null && !isNaN(fromGrams) && !isNaN(toGramsPerUnit)) {
+        const result = fromGrams / toGramsPerUnit;
+        // console.log(`✅ Gram conversion successful: ${fromGrams} / ${toGramsPerUnit} = ${result}`);
+        return result;
     }
+    
+    // console.log(`❌ Gram conversion failed or returned null`);
+
     
     // Return null if conversion is not possible
     return null;
@@ -1300,9 +1427,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                 
                 const ingredientName = ingredientRecord.data.basic?.name || `ingredient ${i}`;
                 console.log(`\n=== Processing ${ingredientName} ===`);
-                console.log(`Recipe: ${recipeAmount} ${recipeUnit}`);
-                console.log(`Standard: ${standardAmount} ${standardUnit}`);
-                console.log(`Standard nutritional info (for ${standardAmount} ${standardUnit}): ${nutritionalInfo.calories} cal, ${nutritionalInfo.proteinG}g protein`);
+                console.log(`Recipe: ${recipeAmount} ${recipeUnit} | Standard: ${standardAmount} ${standardUnit}`);
                 
                 // Validate that we have valid amounts
                 if (!recipeAmount || recipeAmount <= 0) {
@@ -1317,12 +1442,11 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                 
                 // First, try direct unit conversion using enhanced convertUnits function
                 const convertedAmount = convertUnits(recipeAmount, recipeUnit, standardUnit);
-                console.log(`Direct conversion result: ${convertedAmount}`);
                 
                 if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
                     // Direct conversion successful
                     multiplier = convertedAmount / standardAmount;
-                    console.log(`✅ Direct conversion: ${convertedAmount} / ${standardAmount} = ${multiplier}`);
+                    console.log(`✅ Converted: ${recipeAmount} ${recipeUnit} → ${convertedAmount} ${standardUnit} | Multiplier: ${multiplier.toFixed(4)}`);
                 } else {
                     // Direct conversion failed, use fallback logic
                     // console.log(`❌ Direct conversion failed, trying fallback logic...`);
@@ -1373,10 +1497,9 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                     continue;
                 }
                 
-                console.log(`📝 Final multiplier for ${ingredientName}: ${multiplier}`);
-                console.log(`🍽️ Calories contribution: ${nutritionalInfo.calories} × ${multiplier} = ${(nutritionalInfo.calories || 0) * multiplier}`);
-                console.log(`🥩 Protein contribution: ${nutritionalInfo.proteinG} × ${multiplier} = ${(nutritionalInfo.proteinG || 0) * multiplier}`);
-                console.log(`=================================\n`);
+                const calorieContribution = (nutritionalInfo.calories || 0) * multiplier;
+                const proteinContribution = (nutritionalInfo.proteinG || 0) * multiplier;
+                console.log(`📊 Contribution: ${Math.round(calorieContribution)} cal, ${proteinContribution.toFixed(1)}g protein`);
                 
                 // Step 2: Calculate multiplier per serving = multiplier / ServingsFromRecipe
                 const multiplierPerServing = multiplier / servings;
