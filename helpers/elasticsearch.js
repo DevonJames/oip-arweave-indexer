@@ -1062,7 +1062,8 @@ const convertToGrams = (amount, unit) => {
         'gallons': 3785
     };
     
-    const normalizedUnit = unit.toLowerCase().trim();
+    // Use normalizeUnit helper to extract base unit from compound descriptions
+    const normalizedUnit = normalizeUnit(unit);
     const conversionFactor = conversions[normalizedUnit];
     
     if (conversionFactor) {
@@ -1070,7 +1071,17 @@ const convertToGrams = (amount, unit) => {
     }
     
     // For count-based units, return null to indicate special handling needed
-    const countUnits = ['unit', 'units', 'piece', 'pieces', 'item', 'items', 'large', 'medium', 'small', 'whole', 'clove', 'cloves', 'slice', 'slices'];
+    const countUnits = [
+        'unit', 'units', 'piece', 'pieces', 'item', 'items', 
+        'large', 'medium', 'small', 'whole', 'clove', 'cloves', 
+        'slice', 'slices', 'pickle', 'pickles', 'spear', 'spears',
+        'head', 'heads', 'bun', 'buns', 'roll', 'rolls',
+        'leaf', 'leaves', 'stalk', 'stalks', 'bunch', 'bunches',
+        'can', 'cans', 'bottle', 'bottles', 'jar', 'jars',
+        'packet', 'packets', 'bag', 'bags', 'box', 'boxes',
+        'fillet', 'fillets', 'breast', 'breasts', 'thigh', 'thighs',
+        'serving', 'servings', 'portion', 'portions'
+    ];
     if (countUnits.includes(normalizedUnit)) {
         return null; // Special handling required
     }
@@ -1082,12 +1093,13 @@ const convertToGrams = (amount, unit) => {
 
 // Enhanced unit conversion function that attempts direct unit matching first
 const convertUnits = (fromAmount, fromUnit, toUnit) => {
-    // Normalize units
-    const normalizedFromUnit = fromUnit.toLowerCase().trim();
-    const normalizedToUnit = toUnit.toLowerCase().trim();
+    // Normalize units using helper function to extract base units
+    const normalizedFromUnit = normalizeUnit(fromUnit);
+    const normalizedToUnit = normalizeUnit(toUnit);
     
-    // If units are identical, return 1:1 ratio
+    // If base units are identical, return 1:1 ratio
     if (normalizedFromUnit === normalizedToUnit) {
+        console.log(`Units are same after normalization: '${fromUnit}' -> '${normalizedFromUnit}', '${toUnit}' -> '${normalizedToUnit}'`);
         return fromAmount;
     }
     
@@ -1113,7 +1125,22 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
         'slices': 'slice',
         'units': 'unit',
         'pieces': 'piece',
-        'items': 'item'
+        'items': 'item',
+        // Count-based item equivalencies
+        'spear': 'pickle',  // pickle spears are pickles
+        'spears': 'pickle',
+        'pickles': 'pickle',
+        'roll': 'bun',  // rolls and buns are equivalent
+        'rolls': 'bun',
+        'buns': 'bun',
+        'cloves': 'clove',
+        'heads': 'head',
+        'fillets': 'fillet',
+        'breasts': 'breast',
+        'thighs': 'thigh',
+        'leaves': 'leaf',
+        'stalks': 'stalk',
+        'bunches': 'bunch'
     };
     
     const aliasedFromUnit = unitAliases[normalizedFromUnit] || normalizedFromUnit;
@@ -1170,10 +1197,40 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     return null;
 };
 
+// Helper function to normalize and extract base unit from compound descriptions
+const normalizeUnit = (unit) => {
+    if (!unit) return '';
+    
+    const normalized = unit.toLowerCase().trim();
+    
+    // Handle compound units like "tsp or 1 packet" -> "tsp"
+    if (normalized.includes(' or ')) {
+        return normalized.split(' or ')[0].trim();
+    }
+    
+    // Handle descriptive units like "cups shredded" -> "cups"
+    // or "roll 1 serving" -> "roll"
+    const firstWord = normalized.split(' ')[0];
+    
+    return firstWord;
+};
+
 // Check if a unit is count-based (pieces, units, etc.)
 const isCountUnit = (unit) => {
-    const countUnits = ['unit', 'units', 'piece', 'pieces', 'item', 'items', 'large', 'medium', 'small', 'whole', 'clove', 'cloves', 'slice', 'slices'];
-    return countUnits.includes(unit.toLowerCase().trim());
+    const countUnits = [
+        'unit', 'units', 'piece', 'pieces', 'item', 'items', 
+        'large', 'medium', 'small', 'whole', 'clove', 'cloves', 
+        'slice', 'slices', 'pickle', 'pickles', 'spear', 'spears',
+        'head', 'heads', 'bun', 'buns', 'roll', 'rolls',
+        'leaf', 'leaves', 'stalk', 'stalks', 'bunch', 'bunches',
+        'can', 'cans', 'bottle', 'bottles', 'jar', 'jars',
+        'packet', 'packets', 'bag', 'bags', 'box', 'boxes',
+        'fillet', 'fillets', 'breast', 'breasts', 'thigh', 'thighs',
+        'serving', 'servings', 'portion', 'portions'
+    ];
+    
+    const normalizedUnit = normalizeUnit(unit);
+    return countUnits.includes(normalizedUnit);
 };
 
 // Function to add nutritional summary to recipe records
@@ -1244,7 +1301,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
                 console.log(`\n=== Processing ${ingredientName} ===`);
                 console.log(`Recipe: ${recipeAmount} ${recipeUnit}`);
                 console.log(`Standard: ${standardAmount} ${standardUnit}`);
-                console.log(`Nutritional info calories: ${nutritionalInfo.calories}`);
+                console.log(`Standard nutritional info (for ${standardAmount} ${standardUnit}): ${nutritionalInfo.calories} cal, ${nutritionalInfo.proteinG}g protein`);
                 
                 // Validate that we have valid amounts
                 if (!recipeAmount || recipeAmount <= 0) {
