@@ -118,11 +118,12 @@ Authorization: Bearer <jwt-token>  # Required for authentication and ownership v
 4. **Ownership Verification**: Verify user owns the record using the ownership priority system:
    - AccessControl Template: `accessControl.owner_public_key`
    - Conversation Session: `conversationSession.owner_public_key`
-   - AccessControl Created By: `accessControl.created_by`
+   - **Server Admin Privilege**: Email domain matches server domain AND record was created by server wallet
    - GUN Soul Hash: Hash of user's public key in DID
    - Creator Fallback: `oip.creator.publicKey` (legacy server-signed records)
-5. **Deletion**: Use `deleteRecordsByDID('records', did)` - same function as CLI
-6. **Response**: Return success/failure with appropriate HTTP status codes
+5. **Blockchain Delete Message**: For Arweave records, publish a delete message to the blockchain (signed by server wallet)
+6. **Local Deletion**: Use `deleteRecordsByDID('records', did)` to remove from local index
+7. **Response**: Return success/failure with blockchain propagation status
 
 ### Examples
 
@@ -189,18 +190,69 @@ await deleteRecord('did:gun:647f79c2a338:meal_1765213200_breakfast_tp8e47onl', u
 ### Security Features
 
 - **Owner-Only Deletion**: Users can only delete records they created/own
+- **Server Admin Privilege**: Users with email domains matching the server domain can delete server-created records
 - **Authentication Required**: Valid JWT token required for all requests
 - **Ownership Verification**: Multiple fallback methods for verifying record ownership
 - **Immediate Effect**: Deletion takes effect immediately on the local server
+- **Blockchain Propagation**: Arweave records automatically publish delete messages to blockchain
 - **Audit Trail**: All deletion attempts are logged with user and record information
 
 ### Limitations
 
-- **Single Server**: Only affects the local server's Elasticsearch index
-- **Owner-Only**: Users cannot delete records created by others
+- **Owner-Only**: Users cannot delete records created by others (except server admins can delete server-created records)
 - **Authentication Required**: Anonymous deletion not supported
 - **No Undo**: Deletion is immediate and irreversible
-- **Local Only**: Does not publish delete messages to blockchain (use Method 3 for network-wide deletion)
+- **Domain-Based Admin**: Admin privilege requires email domain to match `PUBLIC_API_BASE_URL` configuration
+
+### Server Admin Privilege
+
+**NEW FEATURE**: Users with email domains matching the server domain can delete server-created records.
+
+**How It Works:**
+1. User authenticates with JWT token containing their email
+2. System extracts domain from user's email (e.g., `user@fitnessally.io` → `fitnessally.io`)
+3. System checks if domain matches `PUBLIC_API_BASE_URL` environment variable (e.g., `https://api.fitnessally.io`)
+4. If domains match AND record was created by server's wallet, deletion is authorized
+5. Delete message is signed with server's wallet (not user's) for blockchain verification
+
+**Configuration:**
+Set `PUBLIC_API_BASE_URL` in your environment:
+```bash
+# In .env file
+PUBLIC_API_BASE_URL=https://api.fitnessally.io
+```
+
+**Example:**
+```bash
+# User devon@fitnessally.io can delete records created by api.fitnessally.io server
+curl -X POST https://api.fitnessally.io/api/records/deleteRecord \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "delete": {
+      "did": "did:arweave:5KMJavCBFR6rXGr1li2gFW-WukGxyGOz6ErV_F1VG5o"
+    }
+  }'
+```
+
+**Response with Blockchain Propagation:**
+```json
+{
+    "success": true,
+    "message": "Record deleted successfully",
+    "did": "did:arweave:5KMJavCBFR6rXGr1li2gFW-WukGxyGOz6ErV_F1VG5o",
+    "deletedCount": 1,
+    "deleteMessageTxId": "new_delete_message_transaction_id",
+    "blockchainDeletion": true,
+    "propagationNote": "Delete message published to blockchain. Deletion will propagate to all nodes during sync."
+}
+```
+
+**Security Notes:**
+- Only works for records created by the server's wallet (checked via `oip.creator.publicKey`)
+- Email domain must exactly match server domain (after removing 'api.' prefix)
+- Delete message is signed by server wallet, ensuring network-wide deletion authorization
+- All deletion attempts are logged with user email and record information
 
 ### Verification
 
@@ -212,6 +264,9 @@ curl "https://api.oip.onl/api/records?did=DELETED_RECORD_DID" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 
 # Should return empty results or 404
+
+# For blockchain-propagated deletions, check the delete message
+curl "https://api.oip.onl/api/records?didTx=DELETE_MESSAGE_TXID&recordType=deleteMessage"
 ```
 
 ---
