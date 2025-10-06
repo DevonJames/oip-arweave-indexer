@@ -23,6 +23,13 @@ ELASTICSEARCHHOST=http://elasticsearch:9200
 ELASTICCLIENTUSERNAME=elastic
 ELASTICCLIENTPASSWORD=yourpassword
 
+# Elasticsearch Data Storage Path
+# Path where Elasticsearch data will be stored on host filesystem
+# Uses bind mount instead of Docker-managed volume to avoid disk space issues
+# Default: ./elasticsearch_data (relative to project root)
+# For more space, use absolute path like: /data/elasticsearch
+ELASTICSEARCH_DATA_PATH=./elasticsearch_data
+
 # API Keys
 OPENAI_API_KEY=
 XAI_API_KEY=

@@ -1746,7 +1746,7 @@ async function getRecords(queryParams) {
             // console.log('after filtering by dateEnd, there are', records.length, 'records');
         }
 
-        // Filter by scheduledOn date for workoutSchedule records
+        // Filter by scheduledOn date for workoutSchedule and mealPlan records
         if (scheduledOn != undefined) {
             console.log('Filtering by scheduledOn:', scheduledOn);
             
@@ -1765,27 +1765,34 @@ async function getRecords(queryParams) {
                 const startTimestamp = Math.floor(startOfDay.getTime() / 1000);
                 const endTimestamp = Math.floor(endOfDay.getTime() / 1000);
                 
-                console.log(`Filtering workoutSchedule records for date ${scheduledOn}`);
+                console.log(`Filtering workoutSchedule and mealPlan records for date ${scheduledOn}`);
                 console.log(`Start timestamp: ${startTimestamp} (${startOfDay.toISOString()})`);
                 console.log(`End timestamp: ${endTimestamp} (${endOfDay.toISOString()})`);
                 
                 records = records.filter(record => {
-                    // Only apply this filter to workoutSchedule records
-                    if (record.oip.recordType !== 'workoutSchedule') {
-                        return true; // Keep non-workoutSchedule records
+                    // Only apply this filter to workoutSchedule and mealPlan records
+                    if (record.oip.recordType !== 'workoutSchedule' && record.oip.recordType !== 'mealPlan') {
+                        return true; // Keep other record types
                     }
                     
-                    const scheduledDate = record.data?.workoutSchedule?.scheduled_date;
+                    // Get the date field based on record type
+                    let scheduledDate;
+                    if (record.oip.recordType === 'workoutSchedule') {
+                        scheduledDate = record.data?.workoutSchedule?.scheduled_date;
+                    } else if (record.oip.recordType === 'mealPlan') {
+                        scheduledDate = record.data?.mealPlan?.meal_date;
+                    }
+                    
                     if (!scheduledDate) {
-                        console.warn(`WorkoutSchedule record ${record.oip?.did || record.oip?.didTx} missing scheduled_date`);
+                        console.warn(`${record.oip.recordType} record ${record.oip?.did || record.oip?.didTx} missing date field`);
                         return false;
                     }
                     
-                    // Check if the scheduled_date falls within the specified day
+                    // Check if the scheduled_date/meal_date falls within the specified day
                     const isMatch = scheduledDate >= startTimestamp && scheduledDate <= endTimestamp;
                     
                     if (isMatch) {
-                        console.log(`✅ Match found: ${record.oip?.did || record.oip?.didTx} scheduled for ${new Date(scheduledDate * 1000).toISOString()}`);
+                        console.log(`✅ Match found: ${record.oip?.did || record.oip?.didTx} (${record.oip.recordType}) scheduled for ${new Date(scheduledDate * 1000).toISOString()}`);
                     }
                     
                     return isMatch;

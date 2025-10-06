@@ -58,6 +58,11 @@ help: ## Show this help message
 	@echo "  make mac-logs-interface        # Monitor Interface server logs"
 	@echo "  make mac-logs-all              # Monitor all Mac service logs"
 	@echo ""
+	@echo "$(YELLOW)Elasticsearch Storage Management:$(NC)"
+	@echo "  make check-es-storage          # Check Elasticsearch storage location and disk space"
+	@echo "  make migrate-elasticsearch-data # Migrate from Docker volume to host bind mount"
+	@echo "  make clean-old-es-volume       # Remove old Docker volume after migration"
+	@echo ""
 	@echo "$(YELLOW)ngrok Integration (Simplified v3 Command):$(NC)"
 	@echo "  🌐 API available at: $(GREEN)https://api.oip.onl$(NC)"
 	@echo "  🔧 Setup: Add NGROK_AUTH_TOKEN=your_token to .env file"
@@ -780,6 +785,113 @@ ngrok-test: ## Test ngrok configuration and environment setup
 	fi
 	@echo "$(GREEN)✅ ngrok configuration looks good!$(NC)"
 	@echo "$(BLUE)You can now run: make start-ngrok$(NC)"
+
+# Elasticsearch Migration
+migrate-elasticsearch-data: ## Migrate Elasticsearch from Docker volume to host bind mount
+	@echo "$(BLUE)📦 Elasticsearch Data Migration Tool$(NC)"
+	@echo "$(YELLOW)This will migrate your Elasticsearch data from Docker-managed volume to host filesystem$(NC)"
+	@echo ""
+	@if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep -E "^ELASTICSEARCH_DATA_PATH=" | xargs); \
+	fi; \
+	ES_DATA_PATH="$${ELASTICSEARCH_DATA_PATH:-./elasticsearch_data}"; \
+	echo "$(BLUE)Target path: $$ES_DATA_PATH$(NC)"; \
+	if [ -d "$$ES_DATA_PATH" ] && [ "$$(ls -A $$ES_DATA_PATH 2>/dev/null)" ]; then \
+		echo "$(YELLOW)⚠️  Target directory already exists and is not empty$(NC)"; \
+		echo "$(YELLOW)Skipping migration to avoid overwriting existing data$(NC)"; \
+		exit 0; \
+	fi; \
+	echo "$(BLUE)🔍 Looking for old Docker volume...$(NC)"; \
+	OLD_VOLUME_NAME="$${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_esdata"; \
+	if ! docker volume inspect $$OLD_VOLUME_NAME >/dev/null 2>&1; then \
+		echo "$(YELLOW)⚠️  Old Docker volume '$$OLD_VOLUME_NAME' not found$(NC)"; \
+		echo "$(BLUE)Creating fresh directory for Elasticsearch data...$(NC)"; \
+		mkdir -p "$$ES_DATA_PATH"; \
+		sudo chown -R 1000:1000 "$$ES_DATA_PATH" 2>/dev/null || chown -R 1000:1000 "$$ES_DATA_PATH" 2>/dev/null || echo "$(YELLOW)⚠️  Could not set ownership (may need sudo)$(NC)"; \
+		echo "$(GREEN)✅ Fresh Elasticsearch data directory ready$(NC)"; \
+		exit 0; \
+	fi; \
+	echo "$(GREEN)✅ Found old volume: $$OLD_VOLUME_NAME$(NC)"; \
+	echo "$(BLUE)📋 Stopping Elasticsearch to ensure data consistency...$(NC)"; \
+	docker-compose stop elasticsearch 2>/dev/null || true; \
+	sleep 2; \
+	echo "$(BLUE)📂 Creating target directory...$(NC)"; \
+	mkdir -p "$$ES_DATA_PATH"; \
+	echo "$(BLUE)🚚 Copying data from Docker volume to host filesystem...$(NC)"; \
+	echo "$(YELLOW)This may take several minutes depending on data size...$(NC)"; \
+	docker run --rm \
+		-v "$$OLD_VOLUME_NAME:/source:ro" \
+		-v "$$(cd "$$(dirname "$$ES_DATA_PATH")" && pwd)/$$(basename "$$ES_DATA_PATH"):/target" \
+		alpine:latest \
+		sh -c "cp -av /source/. /target/ && chown -R 1000:1000 /target" || \
+	docker run --rm \
+		-v "$$OLD_VOLUME_NAME:/source:ro" \
+		-v "$$(cd "$$(dirname "$$ES_DATA_PATH")" && pwd)/$$(basename "$$ES_DATA_PATH"):/target" \
+		alpine:latest \
+		sh -c "cp -av /source/. /target/"; \
+	echo "$(GREEN)✅ Data migration completed$(NC)"; \
+	echo "$(BLUE)🔍 Verifying data...$(NC)"; \
+	if [ -d "$$ES_DATA_PATH/nodes" ]; then \
+		echo "$(GREEN)✅ Elasticsearch data structure verified$(NC)"; \
+		echo ""; \
+		echo "$(GREEN)📊 Migration Summary:$(NC)"; \
+		echo "  Old volume: $$OLD_VOLUME_NAME"; \
+		echo "  New location: $$ES_DATA_PATH"; \
+		echo "  Size: $$(du -sh "$$ES_DATA_PATH" 2>/dev/null | cut -f1 || echo 'unknown')"; \
+		echo ""; \
+		echo "$(BLUE)💡 Next steps:$(NC)"; \
+		echo "  1. Start services: make up PROFILE=<your-profile>"; \
+		echo "  2. Verify Elasticsearch is working"; \
+		echo "  3. Remove old volume: make clean-old-es-volume"; \
+	else \
+		echo "$(RED)⚠️  Data verification failed - Elasticsearch data structure not found$(NC)"; \
+	fi
+
+clean-old-es-volume: ## Remove old Elasticsearch Docker volume (after successful migration)
+	@echo "$(YELLOW)⚠️  This will permanently delete the old Elasticsearch Docker volume$(NC)"
+	@echo "$(YELLOW)Only do this after verifying your migrated data works correctly!$(NC)"
+	@echo "$(YELLOW)Press Ctrl+C to cancel, or wait 10 seconds to continue...$(NC)"
+	@sleep 10
+	@OLD_VOLUME_NAME="$${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_esdata"; \
+	if docker volume inspect $$OLD_VOLUME_NAME >/dev/null 2>&1; then \
+		echo "$(BLUE)🗑️  Removing old Docker volume: $$OLD_VOLUME_NAME$(NC)"; \
+		docker volume rm $$OLD_VOLUME_NAME && \
+		echo "$(GREEN)✅ Old volume removed successfully$(NC)" || \
+		echo "$(RED)❌ Failed to remove volume. Make sure all containers using it are stopped.$(NC)"; \
+	else \
+		echo "$(YELLOW)Volume $$OLD_VOLUME_NAME not found$(NC)"; \
+	fi
+
+check-es-storage: ## Check Elasticsearch storage location and disk space
+	@echo "$(BLUE)📊 Elasticsearch Storage Information$(NC)"
+	@echo ""
+	@if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep -E "^ELASTICSEARCH_DATA_PATH=" | xargs); \
+	fi; \
+	ES_DATA_PATH="$${ELASTICSEARCH_DATA_PATH:-./elasticsearch_data}"; \
+	echo "$(YELLOW)Configured path:$(NC) $$ES_DATA_PATH"; \
+	if [ -d "$$ES_DATA_PATH" ]; then \
+		echo "$(GREEN)✅ Directory exists$(NC)"; \
+		echo "$(YELLOW)Size:$(NC) $$(du -sh "$$ES_DATA_PATH" 2>/dev/null | cut -f1 || echo 'unknown')"; \
+		echo "$(YELLOW)Disk space available:$(NC) $$(df -h "$$ES_DATA_PATH" | tail -1 | awk '{print $$4}')"; \
+		echo "$(YELLOW)Mount point:$(NC) $$(df -h "$$ES_DATA_PATH" | tail -1 | awk '{print $$6}')"; \
+		if [ -d "$$ES_DATA_PATH/nodes" ]; then \
+			echo "$(GREEN)✅ Contains Elasticsearch data$(NC)"; \
+		else \
+			echo "$(YELLOW)⚠️  No Elasticsearch data found yet$(NC)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)⚠️  Directory does not exist yet$(NC)"; \
+		echo "$(BLUE)It will be created when you start Elasticsearch$(NC)"; \
+	fi; \
+	echo ""; \
+	OLD_VOLUME_NAME="$${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_esdata"; \
+	if docker volume inspect $$OLD_VOLUME_NAME >/dev/null 2>&1; then \
+		echo "$(YELLOW)⚠️  Old Docker volume still exists:$(NC) $$OLD_VOLUME_NAME"; \
+		echo "$(BLUE)💡 Run 'make migrate-elasticsearch-data' to migrate to bind mount$(NC)"; \
+	else \
+		echo "$(GREEN)✅ No old Docker volume found$(NC)"; \
+	fi
 
 # Development helpers
 dev-build: ## Development: Build without cache
