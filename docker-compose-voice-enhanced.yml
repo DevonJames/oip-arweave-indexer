@@ -124,7 +124,10 @@ services:
     ports:
       - "9200:9200"
     volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
+      # Bind mount to host filesystem instead of Docker-managed volume
+      # This prevents hitting Docker's disk image space limits
+      # Set ELASTICSEARCH_DATA_PATH in .env to customize location (default: ./elasticsearch_data)
+      - ${ELASTICSEARCH_DATA_PATH:-./elasticsearch_data}:/usr/share/elasticsearch/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
       interval: 30s
@@ -226,8 +229,8 @@ networks:
 
 # Volumes
 volumes:
-  elasticsearch_data:
-    driver: local
+  # Note: elasticsearch_data removed - now using bind mount to host filesystem
+  # This prevents hitting Docker's disk image space limits
   ollama_data:
     driver: local
   models:

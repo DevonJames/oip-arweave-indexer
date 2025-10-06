@@ -17,6 +17,7 @@ media
 text-generator/packages
 text-generator/myenv
 ollama_data
+elasticsearch_data
 mac-client/mac-client-env/
 mac-client/logs/
 *.log

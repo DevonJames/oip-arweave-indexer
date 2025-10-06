@@ -15,7 +15,10 @@ services:
         soft: -1
         hard: -1
     volumes:
-      - esdata:/usr/share/elasticsearch/data
+      # Bind mount to host filesystem instead of Docker-managed volume
+      # This prevents hitting Docker's disk image space limits
+      # Set ELASTICSEARCH_DATA_PATH in .env to customize location (default: ./elasticsearch_data)
+      - ${ELASTICSEARCH_DATA_PATH:-./elasticsearch_data}:/usr/share/elasticsearch/data
     ports:
       - "${ELASTICSEARCH_PORT:-9200}:9200"
       - "${ELASTICSEARCH_TRANSPORT_PORT:-9300}:9300"
@@ -511,8 +514,8 @@ networks:
     driver: bridge
 
 volumes:
-  esdata:
-    name: ${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_esdata
+  # Note: esdata removed - now using bind mount to host filesystem (see elasticsearch service)
+  # This prevents hitting Docker's disk image space limits
   ipfsdata:
     name: ${COMPOSE_PROJECT_NAME:-oip-arweave-indexer}_ipfsdata
   whisper_models:
