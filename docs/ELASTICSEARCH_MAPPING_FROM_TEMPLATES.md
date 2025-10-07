@@ -63,11 +63,72 @@ The system will automatically:
 
 ### For Existing Templates
 
-Run the mapping generator script:
+#### Local Execution (Development)
 
 ```bash
-# From project root
+# From project root - update ALL templates
 node config/updateElasticsearchMappings.js
+
+# Update single template (test first!)
+node config/updateElasticsearchMappings.js shoppingList
+
+# Update single template and reindex its records
+node config/updateElasticsearchMappings.js shoppingList --reindex
+```
+
+#### Docker Execution (Production)
+
+```bash
+# Make sure container is running
+docker ps | grep oip-gpu
+
+# Update ALL templates
+docker exec -it fitnessally-oip-gpu-1 \
+  node config/updateElasticsearchMappings.js
+
+# Update single template (safer for testing)
+docker exec -it fitnessally-oip-gpu-1 \
+  node config/updateElasticsearchMappings.js shoppingList
+
+# Update single template with reindex
+docker exec -it fitnessally-oip-gpu-1 \
+  node config/updateElasticsearchMappings.js shoppingList --reindex
+
+# For other deployments, use appropriate container name:
+# oip-arweave-indexer-oip-1 (standard)
+# rockhoppers-oip-minimal-1 (rockhoppers)
+# etc.
+```
+
+### After Migration
+
+If you've just migrated Elasticsearch data, run:
+
+```bash
+# 1. Update mappings from templates (Docker)
+docker exec -it fitnessally-oip-gpu-1 \
+  node config/updateElasticsearchMappings.js
+
+# 2. Restart your application
+docker-compose restart oip-gpu
+```
+
+### Testing Workflow
+
+**Recommended approach** - test on one template first:
+
+```bash
+# 1. Test on a single template
+docker exec -it fitnessally-oip-gpu-1 \
+  node config/updateElasticsearchMappings.js shoppingList
+
+# 2. Verify the mapping
+curl -s 'http://localhost:9210/records/_mapping' | \
+  jq '.records.mappings.properties.data.properties.shoppingList'
+
+# 3. If it looks good, update all templates
+docker exec -it fitnessally-oip-gpu-1 \
+  node config/updateElasticsearchMappings.js
 ```
 
 This will:
@@ -76,18 +137,6 @@ This will:
 - ✅ Update the records index
 - ✅ Reindex existing records to apply mappings
 - ✅ Show summary of what was updated
-
-### After Migration
-
-If you've just migrated Elasticsearch data, run:
-
-```bash
-# 1. Update mappings from templates
-node config/updateElasticsearchMappings.js
-
-# 2. Restart your application
-docker-compose restart oip-gpu
-```
 
 ## Field Type Mapping Reference
 

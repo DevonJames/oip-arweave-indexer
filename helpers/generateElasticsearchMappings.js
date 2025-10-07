@@ -100,7 +100,8 @@ async function updateAllRecordsMappings() {
             }
         });
         
-        const templates = templatesResult.body.hits.hits;
+        // Handle both response formats (with and without .body wrapper)
+        const templates = templatesResult.body?.hits?.hits || templatesResult.hits?.hits || [];
         console.log(`📚 Found ${templates.length} templates to process`);
         
         let successCount = 0;
@@ -147,13 +148,15 @@ async function updateAllRecordsMappings() {
             conflicts: 'proceed'
         });
         
-        console.log(`✅ Reindexed ${reindexResult.body.updated} records`);
+        // Handle both response formats
+        const reindexCount = reindexResult.body?.updated || reindexResult.updated || 0;
+        console.log(`✅ Reindexed ${reindexCount} records`);
         
         return {
             templatesProcessed: templates.length,
             mappingsUpdated: successCount,
             skipped: skipCount,
-            recordsReindexed: reindexResult.body.updated
+            recordsReindexed: reindexCount
         };
         
     } catch (error) {
@@ -195,11 +198,14 @@ async function updateMappingForSingleTemplate(templateName, shouldReindex = fals
             }
         });
         
-        if (templateResult.body.hits.hits.length === 0) {
+        // Handle both response formats (with and without .body wrapper)
+        const hits = templateResult.body?.hits?.hits || templateResult.hits?.hits || [];
+        
+        if (hits.length === 0) {
             throw new Error(`Template not found: ${templateName}`);
         }
         
-        const template = templateResult.body.hits.hits[0]._source;
+        const template = hits[0]._source;
         const fieldsInTemplate = template.data?.fieldsInTemplate;
         
         if (!fieldsInTemplate) {
@@ -230,7 +236,8 @@ async function updateMappingForSingleTemplate(templateName, shouldReindex = fals
                 conflicts: 'proceed'
             });
             
-            recordsReindexed = reindexResult.body.updated;
+            // Handle both response formats
+            recordsReindexed = reindexResult.body?.updated || reindexResult.updated || 0;
             console.log(`✅ Reindexed ${recordsReindexed} ${templateName} records`);
         }
         
