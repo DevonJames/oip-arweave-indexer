@@ -56,9 +56,11 @@ async function updateRecordsMappingForTemplate(templateName, fieldsInTemplate) {
         
         const properties = generateMappingFromTemplate(templateName, fieldsInTemplate);
         
+        // Must preserve the nested type for data field when updating
         const mappingUpdate = {
             properties: {
                 data: {
+                    type: 'nested',  // Critical: must specify nested type when updating
                     properties: {
                         [templateName]: {
                             properties: properties
