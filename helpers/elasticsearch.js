@@ -580,11 +580,57 @@ const ensureUserIndexExists = async () => {
                 body: {
                     mappings: {
                         properties: {
-                            email: { type: 'text' },
+                            email: { 
+                                type: 'text',
+                                fields: {
+                                    keyword: {
+                                        type: 'keyword',
+                                        ignore_above: 256
+                                    }
+                                }
+                            },
                             passwordHash: { type: 'text' },
-                            subscriptionStatus: { type: 'text' },
-                            paymentMethod: { type: 'text' },
-                            createdAt: { type: 'date' }
+                            subscriptionStatus: { 
+                                type: 'text',
+                                fields: {
+                                    keyword: {
+                                        type: 'keyword',
+                                        ignore_above: 256
+                                    }
+                                }
+                            },
+                            paymentMethod: { 
+                                type: 'text',
+                                fields: {
+                                    keyword: {
+                                        type: 'keyword',
+                                        ignore_above: 256
+                                    }
+                                }
+                            },
+                            createdAt: { type: 'date' },
+                            publicKey: { 
+                                type: 'text',
+                                fields: {
+                                    keyword: {
+                                        type: 'keyword',
+                                        ignore_above: 256
+                                    }
+                                }
+                            },
+                            encryptedPrivateKey: { type: 'text' },
+                            encryptedMnemonic: { type: 'text' },
+                            encryptedGunSalt: { type: 'text' },
+                            keyDerivationPath: { type: 'text' },
+                            waitlistStatus: { 
+                                type: 'text',
+                                fields: {
+                                    keyword: {
+                                        type: 'keyword',
+                                        ignore_above: 256
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1638,6 +1684,9 @@ async function getRecords(queryParams) {
         modelMatchMode = 'OR', // New parameter for model match behavior (AND/OR, default OR)
         noDuplicates = false, // New parameter: filter out duplicate names (default: false)
         scheduledOn, // New parameter for filtering workoutSchedule by specific date (YYYY-MM-DD format)
+        fieldSearch, // New parameter: value to search for in a specific field path
+        fieldName, // New parameter: dot-notation path to field (e.g., 'recipe.course', 'data.basic.name')
+        fieldMatchMode = 'partial', // New parameter: 'exact' or 'partial' matching (default: 'partial')
     } = queryParams;
 
     // Normalize DID parameter for backward compatibility
@@ -1935,6 +1984,51 @@ async function getRecords(queryParams) {
             } catch (error) {
                 console.error('Error parsing exactMatch JSON:', error);
             }
+        }
+        
+        // Add flexible field search filtering
+        if (fieldSearch !== undefined && fieldName !== undefined) {
+            console.log(`Filtering by fieldName="${fieldName}" with value="${fieldSearch}" (mode: ${fieldMatchMode})`);
+            
+            // Helper function to safely navigate nested object paths
+            const getNestedValue = (obj, path) => {
+                const pathParts = path.split('.');
+                let currentValue = obj;
+                
+                for (const part of pathParts) {
+                    if (currentValue && typeof currentValue === 'object' && part in currentValue) {
+                        currentValue = currentValue[part];
+                    } else {
+                        return undefined; // Path doesn't exist
+                    }
+                }
+                
+                return currentValue;
+            };
+            
+            records = records.filter(record => {
+                const fieldValue = getNestedValue(record.data, fieldName);
+                
+                // If field doesn't exist in this record, exclude it
+                if (fieldValue === undefined || fieldValue === null) {
+                    return false;
+                }
+                
+                // Convert both values to strings for comparison
+                const fieldValueStr = String(fieldValue);
+                const searchValueStr = String(fieldSearch);
+                
+                // Perform matching based on mode
+                if (fieldMatchMode.toLowerCase() === 'exact') {
+                    // Exact match (case-sensitive)
+                    return fieldValueStr === searchValueStr;
+                } else {
+                    // Partial match (case-insensitive) - default
+                    return fieldValueStr.toLowerCase().includes(searchValueStr.toLowerCase());
+                }
+            });
+            
+            console.log(`After filtering by fieldName="${fieldName}", there are ${records.length} records`);
         }
         
         if (url !== undefined) {
