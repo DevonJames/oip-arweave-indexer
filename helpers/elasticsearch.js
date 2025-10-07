@@ -4359,6 +4359,15 @@ async function processNewTemplate(transaction) {
                     fieldsInTemplateKeys: Object.keys(finalTemplate.data.fieldsInTemplate || {}),
                     fieldsInTemplateCount: finalTemplate.data.fieldsInTemplateCount
                 });
+                
+                // Auto-generate Elasticsearch mapping from template field types
+                try {
+                    const { updateMappingForNewTemplate } = require('./generateElasticsearchMappings');
+                    await updateMappingForNewTemplate(templateName, fieldsInTemplate);
+                } catch (mappingError) {
+                    console.warn(`⚠️  Could not auto-generate Elasticsearch mapping for ${templateName}:`, mappingError.message);
+                    // Don't fail template indexing if mapping update fails
+                }
             }
         } catch (error) {
             console.error(`Error indexing template: ${transaction.transactionId}`, error);
