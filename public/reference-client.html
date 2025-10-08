@@ -15949,8 +15949,17 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
 
                 if (response.ok) {
                     const data = await response.json();
-                    bundleOrganizations = data.organizations || [];
-                    console.log(`✅ Loaded ${bundleOrganizations.length} organizations for bundle`);
+                    // The API returns organizationsInDB array
+                    const orgs = data.organizationsInDB || [];
+                    
+                    // Transform to the format we need
+                    bundleOrganizations = orgs.map(org => ({
+                        did: org.oip?.did,
+                        name: org.data?.name,
+                        handle: org.data?.orgHandle
+                    }));
+                    
+                    console.log(`✅ Loaded ${bundleOrganizations.length} organizations for bundle`, bundleOrganizations);
                 }
             } catch (error) {
                 console.error('Error loading organizations:', error);
@@ -15968,7 +15977,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             bundleOrganizations.forEach(org => {
                 const option = document.createElement('option');
                 option.value = org.did || '';
-                option.textContent = org.name || 'Unnamed Organization';
+                // Show handle (name)
+                option.textContent = org.handle ? `${org.handle} (${org.name || 'Unnamed'})` : (org.name || 'Unnamed Organization');
                 selectElement.appendChild(option);
             });
         }
@@ -16405,17 +16415,33 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     document.getElementById('bundle-exercise-muscle-groups').value = exerciseData.muscleGroups.join(', ');
                 }
                 if (exerciseData?.difficulty) {
-                    document.getElementById('bundle-exercise-difficulty').value = exerciseData.difficulty;
+                    // Normalize to lowercase for dropdown matching
+                    const difficultySelect = document.getElementById('bundle-exercise-difficulty');
+                    if (difficultySelect) {
+                        difficultySelect.value = exerciseData.difficulty.toLowerCase();
+                    }
                 }
                 if (exerciseData?.category) {
-                    document.getElementById('bundle-exercise-category').value = exerciseData.category;
+                    // Normalize to lowercase for dropdown matching
+                    const categorySelect = document.getElementById('bundle-exercise-category');
+                    if (categorySelect) {
+                        categorySelect.value = exerciseData.category.toLowerCase();
+                    }
                 }
                 if (exerciseData?.exercise_type) {
-                    document.getElementById('bundle-exercise-type').value = exerciseData.exercise_type;
+                    // Normalize to lowercase for dropdown matching
+                    const typeSelect = document.getElementById('bundle-exercise-type');
+                    if (typeSelect) {
+                        typeSelect.value = exerciseData.exercise_type.toLowerCase();
+                    }
                 }
                 if (exerciseData?.measurement_type) {
-                    document.getElementById('bundle-exercise-measurement').value = exerciseData.measurement_type;
-                    updateBundleExerciseMeasurement();
+                    // Normalize to lowercase for dropdown matching
+                    const measurementSelect = document.getElementById('bundle-exercise-measurement');
+                    if (measurementSelect) {
+                        measurementSelect.value = exerciseData.measurement_type.toLowerCase();
+                        updateBundleExerciseMeasurement();
+                    }
                 }
                 if (exerciseData?.recommended_sets) {
                     document.getElementById('bundle-exercise-sets').value = exerciseData.recommended_sets;
