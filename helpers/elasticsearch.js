@@ -48,8 +48,37 @@ const e = require('express');
 
 let startBlockHeight = 1579580;
 
+// Construct Elasticsearch URL from environment variables
+// Support both ELASTICSEARCHHOST (full URL) and ELASTICSEARCH_HOST + ELASTICSEARCH_PORT (separate)
+const getElasticsearchUrl = () => {
+    // First try the full URL variable (with or without underscore)
+    const fullHost = process.env.ELASTICSEARCHHOST || process.env.ELASTICSEARCH_HOST;
+    
+    if (fullHost) {
+        // If ELASTICSEARCH_PORT is explicitly set and different from default, reconstruct URL
+        const port = process.env.ELASTICSEARCH_PORT;
+        if (port && port !== '9200') {
+            // Extract protocol and hostname from full URL and replace port
+            const urlMatch = fullHost.match(/^(https?:\/\/[^:]+)(?::\d+)?$/);
+            if (urlMatch) {
+                return `${urlMatch[1]}:${port}`;
+            }
+        }
+        return fullHost;
+    }
+    
+    // Fallback to constructing from parts
+    const host = process.env.ELASTICSEARCH_HOSTNAME || 'elasticsearch';
+    const port = process.env.ELASTICSEARCH_PORT || '9200';
+    const protocol = process.env.ELASTICSEARCH_PROTOCOL || 'http';
+    return `${protocol}://${host}:${port}`;
+};
+
+const elasticsearchUrl = getElasticsearchUrl();
+console.log(`Connecting to Elasticsearch at: ${elasticsearchUrl}`);
+
 const elasticClient = new Client({
-    node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
+    node: elasticsearchUrl,
 
     auth: {
         username: process.env.ELASTICCLIENTUSERNAME,
