@@ -15023,8 +15023,15 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 // Add equipment options
                 availableEquipment.forEach(equipment => {
                     const option = document.createElement('option');
-                    option.value = equipment.oip?.did || '';
-                    option.textContent = equipment.data?.basic?.name || 'Unknown Equipment';
+                    const did = equipment.oip?.did || '';
+                    const name = equipment.data?.basic?.name || 'Unknown Equipment';
+                    
+                    option.value = did;
+                    option.textContent = name;
+                    
+                    // Debug logging
+                    console.log(`🔧 Equipment option: "${name}" -> DID: "${did}"`);
+                    
                     select.appendChild(option);
                 });
             });
@@ -15055,11 +15062,14 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             
             const selects = container.querySelectorAll('.equipment-select');
             const values = [];
-            selects.forEach(select => {
+            selects.forEach((select, index) => {
                 if (select.value && select.value.trim()) {
-                    values.push(select.value.trim());
+                    const value = select.value.trim();
+                    values.push(value);
+                    console.log(`🔧 Equipment ${containerId} [${index}]: Selected "${select.options[select.selectedIndex]?.textContent}" -> DID: "${value}"`);
                 }
             });
+            console.log(`🔧 Equipment ${containerId} values:`, values);
             return values;
         }
 
@@ -16368,6 +16378,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 const avatarValue = document.getElementById('exercise-avatar').value.trim();
                 console.log('🔍 Avatar value entered:', avatarValue);
                 
+                // Debug equipment values before creating exercise data
+                console.log('🔧 Debugging equipment values before publish:');
+                const equipmentRequired = getEquipmentValues('equipment-required-container');
+                const alternativeEquipment = getEquipmentValues('alternative-equipment-container');
+                console.log('🔧 Equipment Required:', equipmentRequired);
+                console.log('🔧 Alternative Equipment:', alternativeEquipment);
+
                 const exerciseData = {
                     basic: {
                         name: document.getElementById('exercise-name').value,
@@ -16382,8 +16399,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         muscleGroups: document.getElementById('exercise-muscle-groups').value.split(',').map(t => t.trim()).filter(t => t),
                         difficulty: document.getElementById('exercise-difficulty').value,
                         category: document.getElementById('exercise-category').value,
-                        equipmentRequired: getEquipmentValues('equipment-required-container'),
-                        alternativeEquipment: getEquipmentValues('alternative-equipment-container'),
+                        equipmentRequired: equipmentRequired,
+                        alternativeEquipment: alternativeEquipment,
                         isBodyweight: document.getElementById('exercise-bodyweight').checked,
                         exercise_type: document.getElementById('exercise-type').value,
                         measurement_type: document.getElementById('exercise-measurement-type').value,
