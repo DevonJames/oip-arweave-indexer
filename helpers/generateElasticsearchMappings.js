@@ -10,18 +10,29 @@ const { elasticClient } = require('./elasticsearch');
  */
 function mapOIPTypeToElasticsearchType(oipType) {
     const typeMap = {
+        // Basic types
         'string': { type: 'text', fields: { keyword: { type: 'keyword', ignore_above: 256 } } },
         'long': { type: 'long' },
         'uint64': { type: 'long' },
+        'uint32': { type: 'long' },  // Added missing uint32
+        'int32': { type: 'long' },    // Added missing int32
         'float': { type: 'float' },
+        'double': { type: 'double' }, // Added missing double
         'bool': { type: 'boolean' },
+        'boolean': { type: 'boolean' }, // Added missing boolean
         'enum': { type: 'text', fields: { keyword: { type: 'keyword', ignore_above: 256 } } },
         'dref': { type: 'text', fields: { keyword: { type: 'keyword', ignore_above: 256 } } },
+        
+        // Repeated types
         'repeated string': { type: 'text', fields: { keyword: { type: 'keyword', ignore_above: 256 } } },
         'repeated float': { type: 'float' },
+        'repeated double': { type: 'double' }, // Added missing repeated double
         'repeated long': { type: 'long' },
         'repeated uint64': { type: 'long' },
+        'repeated uint32': { type: 'long' }, // Added missing repeated uint32
+        'repeated int32': { type: 'long' },   // Added missing repeated int32
         'repeated bool': { type: 'boolean' },
+        'repeated boolean': { type: 'boolean' }, // Added missing repeated boolean
         'repeated dref': { type: 'text', fields: { keyword: { type: 'keyword', ignore_above: 256 } } }
     };
 
@@ -187,14 +198,18 @@ async function updateMappingForSingleTemplate(templateName, shouldReindex = fals
     try {
         console.log(`🔍 Fetching template: ${templateName}`);
         
-        // Search for the template by name
+        // Search for the template by name (try multiple approaches)
         const templateResult = await elasticClient.search({
             index: 'templates',
             body: {
-                size: 1,
+                size: 10,  // Get up to 10 templates with this name
                 query: {
-                    term: {
-                        'data.template.keyword': templateName
+                    bool: {
+                        should: [
+                            { term: { 'data.template.keyword': templateName } },
+                            { term: { 'data.template': templateName } },
+                            { match: { 'data.template': templateName } }
+                        ]
                     }
                 }
             }
@@ -205,6 +220,11 @@ async function updateMappingForSingleTemplate(templateName, shouldReindex = fals
         
         if (hits.length === 0) {
             throw new Error(`Template not found: ${templateName}`);
+        }
+        
+        if (hits.length > 1) {
+            console.log(`⚠️  Found ${hits.length} templates with name "${templateName}". Using the first one.`);
+            console.log(`   Template IDs: ${hits.map(h => h._id).join(', ')}`);
         }
         
         const template = hits[0]._source;
