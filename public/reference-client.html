@@ -4084,6 +4084,7 @@
                             <option value="recipe">Recipe</option>
                             <option value="workout">Workout</option>
                             <option value="exercise">Exercise</option>
+                            <option value="exerciseBundle">🎯 Exercise Bundle (Complete Workflow)</option>
                             <option value="fitnessEquipment">Fitness Equipment</option>
                             <option value="media">Media File</option>
                             <option value="multiResolutionGif">Multi-Resolution GIF</option>
@@ -10005,6 +10006,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         initializeStorageTypeHandler();
                     }, 100);
                     break;
+                case 'exerciseBundle':
+                    interfaceContainer.innerHTML = createExerciseBundleInterface();
+                    setTimeout(() => {
+                        initializeExerciseBundleInterface();
+                    }, 100);
+                    break;
                 default:
                     interfaceContainer.innerHTML = '<div class="loading">Unknown record type</div>';
             }
@@ -11230,6 +11237,400 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     <button onclick="publishOrganization()" class="btn-primary" style="width: 100%; margin-top: 20px;">
                         🏢 Register Organization
                     </button>
+                </div>
+            `;
+        }
+
+        function createExerciseBundleInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🎯 Exercise Bundle - Complete Workflow</h3>
+                    
+                    <div class="info-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
+                        <h4 style="margin: 0 0 12px 0; color: white;">📚 Multi-Record Publishing</h4>
+                        <p style="margin: 0 0 12px 0; opacity: 0.95;">Publish a complete exercise with all dependencies in one workflow:</p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin-top: 15px;">
+                            <div style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px;">
+                                <strong>1️⃣ Equipment Icon</strong><br>
+                                <small>Upload equipment image</small>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px;">
+                                <strong>2️⃣ Equipment</strong><br>
+                                <small>Define equipment details</small>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px;">
+                                <strong>3️⃣ Multi-Res GIF</strong><br>
+                                <small>Upload demo GIFs</small>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px;">
+                                <strong>4️⃣ Exercise</strong><br>
+                                <small>Complete exercise record</small>
+                            </div>
+                        </div>
+                        <p style="margin: 15px 0 0 0; font-size: 14px; opacity: 0.9;">
+                            ✨ <strong>Smart DID Passing:</strong> Each record automatically references the previous ones!
+                        </p>
+                    </div>
+
+                    <!-- Progress Tracker -->
+                    <div id="bundle-progress" class="hidden" style="background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 10px 0;">📊 Publishing Progress</h4>
+                        <div class="progress-steps" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                            <div id="progress-step-1" class="progress-step" style="padding: 8px; background: white; border-radius: 4px; text-align: center; border: 2px solid #e9ecef;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">⏳</div>
+                                <small>Equipment Icon</small>
+                            </div>
+                            <div id="progress-step-2" class="progress-step" style="padding: 8px; background: white; border-radius: 4px; text-align: center; border: 2px solid #e9ecef;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">⏳</div>
+                                <small>Equipment</small>
+                            </div>
+                            <div id="progress-step-3" class="progress-step" style="padding: 8px; background: white; border-radius: 4px; text-align: center; border: 2px solid #e9ecef;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">⏳</div>
+                                <small>Multi-Res GIF</small>
+                            </div>
+                            <div id="progress-step-4" class="progress-step" style="padding: 8px; background: white; border-radius: 4px; text-align: center; border: 2px solid #e9ecef;">
+                                <div style="font-size: 20px; margin-bottom: 4px;">⏳</div>
+                                <small>Exercise</small>
+                            </div>
+                        </div>
+                        <div id="bundle-progress-message" style="margin-top: 10px; font-weight: 500; text-align: center;"></div>
+                    </div>
+
+                    <!-- Enable/Disable Sections -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 10px 0;">🎛️ Configure Workflow</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="bundle-enable-icon" checked onchange="toggleBundleSection('icon')">
+                                <span>Include Equipment Icon</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="bundle-enable-equipment" checked onchange="toggleBundleSection('equipment')">
+                                <span>Include Equipment</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="bundle-enable-gif" checked onchange="toggleBundleSection('gif')">
+                                <span>Include Multi-Res GIF</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Section 1: Equipment Icon (Media File) -->
+                    <div id="bundle-section-icon" class="bundle-section" style="border: 2px solid #e3f2fd; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: linear-gradient(to right, #f8f9fa 0%, #ffffff 100%);">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">1</div>
+                            <h4 style="margin: 0; flex: 1;">📁 Equipment Icon (Media File)</h4>
+                            <button type="button" onclick="toggleSection('bundle-section-icon-content')" class="btn-small">Toggle</button>
+                        </div>
+                        
+                        <div id="bundle-section-icon-content">
+                            <div class="form-group">
+                                <label for="bundle-icon-name">Icon Name:</label>
+                                <input type="text" id="bundle-icon-name" placeholder="e.g., Foam Roller Icon">
+                                <small>Name for the equipment icon/image file</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-icon-file">Icon File:</label>
+                                <input type="file" id="bundle-icon-file" accept="image/*" onchange="previewBundleIcon(this)">
+                                <small>Upload SVG, PNG, or JPG icon for the equipment</small>
+                            </div>
+
+                            <div id="bundle-icon-preview" class="hidden" style="margin-top: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                                <img id="bundle-icon-preview-img" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
+                                <div id="bundle-icon-preview-info" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-icon-storage">Storage Type:</label>
+                                <select id="bundle-icon-storage">
+                                    <option value="gun">GUN + BitTorrent</option>
+                                    <option value="arweave">Arweave (Permanent)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group" id="bundle-icon-access-group">
+                                <label for="bundle-icon-access">Access Level:</label>
+                                <select id="bundle-icon-access" onchange="updateBundleIconAccess()">
+                                    <option value="public">Public</option>
+                                    <option value="organization">Organization</option>
+                                    <option value="private">Private</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group hidden" id="bundle-icon-org-group">
+                                <label for="bundle-icon-org">Organization:</label>
+                                <select id="bundle-icon-org"></select>
+                            </div>
+                            
+                            <div id="bundle-icon-did-display" class="hidden" style="margin-top: 15px; padding: 12px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 6px;">
+                                <strong>✅ Icon Published!</strong><br>
+                                <small>DID: <span id="bundle-icon-did" style="font-family: monospace; font-size: 12px;"></span></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Equipment (Fitness Equipment) -->
+                    <div id="bundle-section-equipment" class="bundle-section" style="border: 2px solid #f3e5f5; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: linear-gradient(to right, #f8f9fa 0%, #ffffff 100%);">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">2</div>
+                            <h4 style="margin: 0; flex: 1;">🏋️ Fitness Equipment</h4>
+                            <button type="button" onclick="toggleSection('bundle-section-equipment-content')" class="btn-small">Toggle</button>
+                        </div>
+                        
+                        <div id="bundle-section-equipment-content">
+                            <div class="form-group">
+                                <label for="bundle-equipment-name">Equipment Name:</label>
+                                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                                    <div style="flex: 1;">
+                                        <input type="text" id="bundle-equipment-name" placeholder="e.g., Foam Roller" style="width: 100%;">
+                                    </div>
+                                    <button type="button" class="btn-small" onclick="fillBundleEquipmentWithAI()">
+                                        🤖 Fill With AI
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-equipment-description">Description:</label>
+                                <textarea id="bundle-equipment-description" rows="3" placeholder="Brief description of the equipment..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Equipment Icon:</label>
+                                <div style="padding: 10px; background: #f0f4ff; border: 1px solid #667eea; border-radius: 6px;">
+                                    <span id="bundle-equipment-icon-status">🔗 Will use icon from Step 1</span>
+                                </div>
+                                <small>The equipment icon DID will be automatically set from Step 1</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-equipment-storage">Storage Type:</label>
+                                <select id="bundle-equipment-storage">
+                                    <option value="arweave">Arweave (Permanent)</option>
+                                    <option value="gun">GUN + BitTorrent</option>
+                                </select>
+                            </div>
+                            
+                            <div id="bundle-equipment-did-display" class="hidden" style="margin-top: 15px; padding: 12px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 6px;">
+                                <strong>✅ Equipment Published!</strong><br>
+                                <small>DID: <span id="bundle-equipment-did" style="font-family: monospace; font-size: 12px;"></span></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Multi-Resolution GIF -->
+                    <div id="bundle-section-gif" class="bundle-section" style="border: 2px solid #fff3e0; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: linear-gradient(to right, #f8f9fa 0%, #ffffff 100%);">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">3</div>
+                            <h4 style="margin: 0; flex: 1;">🎬 Multi-Resolution GIF Collection</h4>
+                            <button type="button" onclick="toggleSection('bundle-section-gif-content')" class="btn-small">Toggle</button>
+                        </div>
+                        
+                        <div id="bundle-section-gif-content">
+                            <div class="form-group">
+                                <label for="bundle-gif-name">Collection Name:</label>
+                                <input type="text" id="bundle-gif-name" placeholder="e.g., Exercise Name Demonstration">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-gif-description">Description:</label>
+                                <textarea id="bundle-gif-description" rows="2" placeholder="Multi-resolution GIF demonstration set for..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>GIF Files (Different Resolutions):</label>
+                                <div id="bundle-gif-files-container">
+                                    ${[180, 360, 720, 1080].map((res, idx) => `
+                                        <div class="gif-file-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; align-items: end; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fafafa;">
+                                            <div>
+                                                <label>${res}p GIF File:</label>
+                                                <input type="file" class="bundle-gif-file-input" data-resolution="${res}p" accept="image/gif" onchange="updateBundleGifFileInfo(this)">
+                                            </div>
+                                            <div>
+                                                <label>Resolution:</label>
+                                                <input type="text" class="bundle-gif-resolution-label" value="${res}p" readonly style="background: #eee;">
+                                            </div>
+                                            <div>
+                                                <label>Width:</label>
+                                                <input type="number" class="bundle-gif-width" value="${res}" readonly style="background: #eee;">
+                                            </div>
+                                            <div>
+                                                <label>Height:</label>
+                                                <input type="number" class="bundle-gif-height" value="${res}" readonly style="background: #eee;">
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-gif-framerate">Frame Rate (fps):</label>
+                                <input type="number" id="bundle-gif-framerate" value="4" min="1" max="60">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-gif-duration">Duration (seconds):</label>
+                                <input type="number" id="bundle-gif-duration" value="3" min="1">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-gif-storage">Storage Type:</label>
+                                <select id="bundle-gif-storage">
+                                    <option value="gun">GUN + BitTorrent</option>
+                                    <option value="arweave">Arweave (Permanent)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group" id="bundle-gif-access-group">
+                                <label for="bundle-gif-access">Access Level:</label>
+                                <select id="bundle-gif-access" onchange="updateBundleGifAccess()">
+                                    <option value="public">Public</option>
+                                    <option value="organization">Organization</option>
+                                    <option value="private">Private</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group hidden" id="bundle-gif-org-group">
+                                <label for="bundle-gif-org">Organization:</label>
+                                <select id="bundle-gif-org"></select>
+                            </div>
+                            
+                            <div id="bundle-gif-did-display" class="hidden" style="margin-top: 15px; padding: 12px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 6px;">
+                                <strong>✅ GIF Collection Published!</strong><br>
+                                <small>DID: <span id="bundle-gif-did" style="font-family: monospace; font-size: 12px;"></span></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 4: Exercise -->
+                    <div id="bundle-section-exercise" class="bundle-section" style="border: 2px solid #e8f5e9; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: linear-gradient(to right, #f8f9fa 0%, #ffffff 100%);">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">4</div>
+                            <h4 style="margin: 0; flex: 1;">🏃 Exercise Record</h4>
+                            <button type="button" onclick="toggleSection('bundle-section-exercise-content')" class="btn-small">Toggle</button>
+                        </div>
+                        
+                        <div id="bundle-section-exercise-content">
+                            <div class="form-group">
+                                <label for="bundle-exercise-name">Exercise Name:</label>
+                                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                                    <div style="flex: 1;">
+                                        <input type="text" id="bundle-exercise-name" placeholder="e.g., Roll Lat Foam Rolling" style="width: 100%;">
+                                    </div>
+                                    <button type="button" class="btn-small" onclick="copyBundleFromLatestExercise()">
+                                        📋 Copy From Latest
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-exercise-description">Description:</label>
+                                <textarea id="bundle-exercise-description" rows="3" placeholder="Brief description of the exercise..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-exercise-instructions">Instructions:</label>
+                                <textarea id="bundle-exercise-instructions" rows="4" placeholder="Step-by-step exercise instructions..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Avatar (Demo GIF):</label>
+                                <div style="padding: 10px; background: #f0f4ff; border: 1px solid #667eea; border-radius: 6px;">
+                                    <span id="bundle-exercise-avatar-status">🔗 Will use GIF collection from Step 3</span>
+                                </div>
+                                <small>The multi-resolution GIF DID will be automatically set from Step 3</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Equipment Required:</label>
+                                <div style="padding: 10px; background: #f0f4ff; border: 1px solid #667eea; border-radius: 6px;">
+                                    <span id="bundle-exercise-equipment-status">🔗 Will use equipment from Step 2</span>
+                                </div>
+                                <small>The equipment DID will be automatically set from Step 2</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-exercise-difficulty">Difficulty:</label>
+                                <select id="bundle-exercise-difficulty">
+                                    <option value="beginner">Beginner</option>
+                                    <option value="intermediate">Intermediate</option>
+                                    <option value="advanced">Advanced</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-exercise-category">Category:</label>
+                                <select id="bundle-exercise-category">
+                                    <option value="strength">Strength</option>
+                                    <option value="cardio">Cardio</option>
+                                    <option value="flexibility">Flexibility</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-exercise-type">Exercise Type:</label>
+                                <select id="bundle-exercise-type">
+                                    <option value="warmup">Warm-Up</option>
+                                    <option value="main">Main</option>
+                                    <option value="cooldown">Cool-Down</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-exercise-measurement">Measurement Type:</label>
+                                <select id="bundle-exercise-measurement" onchange="updateBundleExerciseMeasurement()">
+                                    <option value="reps">Reps</option>
+                                    <option value="timed">Timed</option>
+                                    <option value="hold">Hold</option>
+                                    <option value="maxdur">Maximum Duration</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" id="bundle-exercise-sets-group">
+                                <label for="bundle-exercise-sets">Recommended Sets:</label>
+                                <input type="number" id="bundle-exercise-sets" min="0">
+                            </div>
+
+                            <div class="form-group" id="bundle-exercise-reps-group">
+                                <label for="bundle-exercise-reps">Recommended Reps:</label>
+                                <input type="number" id="bundle-exercise-reps" min="0">
+                            </div>
+
+                            <div class="form-group" id="bundle-exercise-duration-group" class="hidden">
+                                <label for="bundle-exercise-duration">Target Duration (seconds):</label>
+                                <input type="number" id="bundle-exercise-duration" min="0">
+                            </div>
+
+                            <div class="form-group" id="bundle-exercise-est-duration-group" class="hidden">
+                                <label for="bundle-exercise-est-duration">Estimated Duration (minutes):</label>
+                                <input type="number" id="bundle-exercise-est-duration" min="0">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-exercise-storage">Storage Type:</label>
+                                <select id="bundle-exercise-storage">
+                                    <option value="arweave">Arweave (Permanent)</option>
+                                    <option value="gun">GUN + BitTorrent</option>
+                                </select>
+                            </div>
+                            
+                            <div id="bundle-exercise-did-display" class="hidden" style="margin-top: 15px; padding: 12px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 6px;">
+                                <strong>✅ Exercise Published!</strong><br>
+                                <small>DID: <span id="bundle-exercise-did" style="font-family: monospace; font-size: 12px;"></span></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Publish All Button -->
+                    <div style="position: sticky; bottom: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1); margin-top: 30px;">
+                        <button onclick="publishExerciseBundle()" class="btn-primary" id="bundle-publish-btn" style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600;">
+                            🚀 Publish Complete Exercise Bundle
+                        </button>
+                        <div style="text-align: center; margin-top: 10px; font-size: 14px; color: #666;">
+                            <span id="bundle-publish-estimate">This will publish up to 4 records in sequence</span>
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -15655,6 +16056,695 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 return { exercises, exerciseDidRefs: null };
             }
         }
+
+        // ==================== EXERCISE BUNDLE FUNCTIONS ====================
+        
+        /**
+         * Initialize Exercise Bundle Interface
+         */
+        function initializeExerciseBundleInterface() {
+            console.log('🎯 Initializing Exercise Bundle Interface');
+            
+            // Load organizations for dropdowns
+            loadOrganizationsForBundle();
+            
+            // Update section estimate
+            updateBundleEstimate();
+        }
+
+        /**
+         * Load organizations for bundle dropdowns
+         */
+        async function loadOrganizationsForBundle() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/records/search`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        recordTypes: ['organization'],
+                        size: 100
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const orgs = data.records || [];
+                    
+                    // Populate all organization dropdowns
+                    const iconOrgSelect = document.getElementById('bundle-icon-org');
+                    const gifOrgSelect = document.getElementById('bundle-gif-org');
+                    
+                    [iconOrgSelect, gifOrgSelect].forEach(select => {
+                        if (select) {
+                            select.innerHTML = '<option value="">Select Organization</option>';
+                            orgs.forEach(org => {
+                                const option = document.createElement('option');
+                                option.value = org.oip?.did || '';
+                                option.textContent = org.data?.basic?.name || 'Unnamed Organization';
+                                select.appendChild(option);
+                            });
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading organizations:', error);
+            }
+        }
+
+        /**
+         * Toggle section visibility
+         */
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.classList.toggle('hidden');
+            }
+        }
+
+        /**
+         * Toggle bundle section enable/disable
+         */
+        function toggleBundleSection(section) {
+            const checkbox = document.getElementById(`bundle-enable-${section}`);
+            const sectionDiv = document.getElementById(`bundle-section-${section}`);
+            
+            if (sectionDiv) {
+                if (checkbox.checked) {
+                    sectionDiv.style.opacity = '1';
+                    sectionDiv.style.pointerEvents = 'auto';
+                } else {
+                    sectionDiv.style.opacity = '0.5';
+                    sectionDiv.style.pointerEvents = 'none';
+                }
+            }
+            
+            updateBundleEstimate();
+        }
+
+        /**
+         * Update publish estimate
+         */
+        function updateBundleEstimate() {
+            const iconEnabled = document.getElementById('bundle-enable-icon')?.checked;
+            const equipmentEnabled = document.getElementById('bundle-enable-equipment')?.checked;
+            const gifEnabled = document.getElementById('bundle-enable-gif')?.checked;
+            
+            let count = 1; // Exercise is always included
+            if (iconEnabled) count++;
+            if (equipmentEnabled) count++;
+            if (gifEnabled) count++;
+            
+            const estimateEl = document.getElementById('bundle-publish-estimate');
+            if (estimateEl) {
+                estimateEl.textContent = `This will publish ${count} record${count > 1 ? 's' : ''} in sequence`;
+            }
+        }
+
+        /**
+         * Preview bundle icon
+         */
+        function previewBundleIcon(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const preview = document.getElementById('bundle-icon-preview');
+                    const img = document.getElementById('bundle-icon-preview-img');
+                    const info = document.getElementById('bundle-icon-preview-info');
+                    
+                    if (preview && img && info) {
+                        img.src = e.target.result;
+                        info.textContent = `${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+                        preview.classList.remove('hidden');
+                    }
+                };
+                
+                reader.readAsDataURL(file);
+            }
+        }
+
+        /**
+         * Update icon access level
+         */
+        function updateBundleIconAccess() {
+            const accessLevel = document.getElementById('bundle-icon-access')?.value;
+            const orgGroup = document.getElementById('bundle-icon-org-group');
+            
+            if (orgGroup) {
+                if (accessLevel === 'organization') {
+                    orgGroup.classList.remove('hidden');
+                } else {
+                    orgGroup.classList.add('hidden');
+                }
+            }
+        }
+
+        /**
+         * Update GIF access level
+         */
+        function updateBundleGifAccess() {
+            const accessLevel = document.getElementById('bundle-gif-access')?.value;
+            const orgGroup = document.getElementById('bundle-gif-org-group');
+            
+            if (orgGroup) {
+                if (accessLevel === 'organization') {
+                    orgGroup.classList.remove('hidden');
+                } else {
+                    orgGroup.classList.add('hidden');
+                }
+            }
+        }
+
+        /**
+         * Update exercise measurement type UI
+         */
+        function updateBundleExerciseMeasurement() {
+            const measurementType = document.getElementById('bundle-exercise-measurement')?.value;
+            const setsGroup = document.getElementById('bundle-exercise-sets-group');
+            const repsGroup = document.getElementById('bundle-exercise-reps-group');
+            const durationGroup = document.getElementById('bundle-exercise-duration-group');
+            const estDurationGroup = document.getElementById('bundle-exercise-est-duration-group');
+            
+            // Show/hide fields based on measurement type
+            if (measurementType === 'reps') {
+                setsGroup?.classList.remove('hidden');
+                repsGroup?.classList.remove('hidden');
+                durationGroup?.classList.add('hidden');
+                estDurationGroup?.classList.add('hidden');
+            } else if (measurementType === 'timed' || measurementType === 'hold' || measurementType === 'maxdur') {
+                setsGroup?.classList.add('hidden');
+                repsGroup?.classList.add('hidden');
+                durationGroup?.classList.remove('hidden');
+                estDurationGroup?.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Update GIF file info
+         */
+        function updateBundleGifFileInfo(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const row = input.closest('.gif-file-row');
+                
+                // Auto-detect dimensions if possible
+                const img = new Image();
+                img.onload = function() {
+                    const widthInput = row.querySelector('.bundle-gif-width');
+                    const heightInput = row.querySelector('.bundle-gif-height');
+                    if (widthInput) widthInput.value = this.width;
+                    if (heightInput) heightInput.value = this.height;
+                };
+                img.src = URL.createObjectURL(file);
+            }
+        }
+
+        /**
+         * Fill equipment with AI
+         */
+        async function fillBundleEquipmentWithAI() {
+            const name = document.getElementById('bundle-equipment-name')?.value;
+            if (!name) {
+                alert('Please enter an equipment name first');
+                return;
+            }
+            
+            // Use existing AI fill functionality
+            const descField = document.getElementById('bundle-equipment-description');
+            if (descField) {
+                descField.value = `A ${name.toLowerCase()} used for fitness and exercise training.`;
+            }
+            
+            alert('🤖 AI fill complete! Review and adjust as needed.');
+        }
+
+        /**
+         * Copy from latest exercise
+         */
+        async function copyBundleFromLatestExercise() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/records/search`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        recordTypes: ['exercise'],
+                        size: 1,
+                        sort: [{ 'oip.indexedAt': 'desc' }]
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.records && data.records.length > 0) {
+                        const exercise = data.records[0];
+                        
+                        // Populate fields
+                        document.getElementById('bundle-exercise-difficulty').value = exercise.data?.exercise?.difficulty || 'beginner';
+                        document.getElementById('bundle-exercise-category').value = exercise.data?.exercise?.category || 'strength';
+                        document.getElementById('bundle-exercise-type').value = exercise.data?.exercise?.exercise_type || 'main';
+                        document.getElementById('bundle-exercise-measurement').value = exercise.data?.exercise?.measurement_type || 'reps';
+                        
+                        updateBundleExerciseMeasurement();
+                        alert('📋 Latest exercise data copied!');
+                    }
+                }
+            } catch (error) {
+                console.error('Error copying from latest:', error);
+                alert('Failed to copy from latest exercise');
+            }
+        }
+
+        /**
+         * Update progress step
+         */
+        function updateBundleProgress(step, status, message) {
+            const stepEl = document.getElementById(`progress-step-${step}`);
+            const messageEl = document.getElementById('bundle-progress-message');
+            const progressContainer = document.getElementById('bundle-progress');
+            
+            if (progressContainer) {
+                progressContainer.classList.remove('hidden');
+            }
+            
+            if (stepEl) {
+                const icon = stepEl.querySelector('div');
+                if (status === 'active') {
+                    icon.textContent = '⏳';
+                    stepEl.style.borderColor = '#2196f3';
+                    stepEl.style.background = '#e3f2fd';
+                } else if (status === 'complete') {
+                    icon.textContent = '✅';
+                    stepEl.style.borderColor = '#4caf50';
+                    stepEl.style.background = '#e8f5e9';
+                } else if (status === 'error') {
+                    icon.textContent = '❌';
+                    stepEl.style.borderColor = '#f44336';
+                    stepEl.style.background = '#ffebee';
+                }
+            }
+            
+            if (messageEl && message) {
+                messageEl.textContent = message;
+            }
+        }
+
+        /**
+         * Main Exercise Bundle Publishing Function
+         */
+        async function publishExerciseBundle() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for publishing. Please log in first.', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById('bundle-publish-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '🚀 Publishing...';
+                }
+
+                const iconEnabled = document.getElementById('bundle-enable-icon')?.checked;
+                const equipmentEnabled = document.getElementById('bundle-enable-equipment')?.checked;
+                const gifEnabled = document.getElementById('bundle-enable-gif')?.checked;
+
+                let iconDID = null;
+                let equipmentDID = null;
+                let gifDID = null;
+
+                // Step 1: Publish Equipment Icon (if enabled)
+                if (iconEnabled) {
+                    updateBundleProgress(1, 'active', 'Publishing equipment icon...');
+                    iconDID = await publishBundleIcon();
+                    if (iconDID) {
+                        updateBundleProgress(1, 'complete', null);
+                        document.getElementById('bundle-icon-did-display')?.classList.remove('hidden');
+                        document.getElementById('bundle-icon-did').textContent = iconDID;
+                        document.getElementById('bundle-equipment-icon-status').innerHTML = `✅ Using icon: <code style="font-size: 11px;">${iconDID}</code>`;
+                    } else {
+                        updateBundleProgress(1, 'error', 'Failed to publish icon');
+                        throw new Error('Failed to publish equipment icon');
+                    }
+                }
+
+                // Step 2: Publish Equipment (if enabled)
+                if (equipmentEnabled) {
+                    updateBundleProgress(2, 'active', 'Publishing equipment...');
+                    equipmentDID = await publishBundleEquipment(iconDID);
+                    if (equipmentDID) {
+                        updateBundleProgress(2, 'complete', null);
+                        document.getElementById('bundle-equipment-did-display')?.classList.remove('hidden');
+                        document.getElementById('bundle-equipment-did').textContent = equipmentDID;
+                        document.getElementById('bundle-exercise-equipment-status').innerHTML = `✅ Using equipment: <code style="font-size: 11px;">${equipmentDID}</code>`;
+                    } else {
+                        updateBundleProgress(2, 'error', 'Failed to publish equipment');
+                        throw new Error('Failed to publish equipment');
+                    }
+                }
+
+                // Step 3: Publish Multi-Res GIF (if enabled)
+                if (gifEnabled) {
+                    updateBundleProgress(3, 'active', 'Publishing multi-resolution GIF collection...');
+                    gifDID = await publishBundleGif();
+                    if (gifDID) {
+                        updateBundleProgress(3, 'complete', null);
+                        document.getElementById('bundle-gif-did-display')?.classList.remove('hidden');
+                        document.getElementById('bundle-gif-did').textContent = gifDID;
+                        document.getElementById('bundle-exercise-avatar-status').innerHTML = `✅ Using GIF collection: <code style="font-size: 11px;">${gifDID}</code>`;
+                    } else {
+                        updateBundleProgress(3, 'error', 'Failed to publish GIF collection');
+                        throw new Error('Failed to publish GIF collection');
+                    }
+                }
+
+                // Step 4: Publish Exercise (always)
+                updateBundleProgress(4, 'active', 'Publishing exercise record...');
+                const exerciseDID = await publishBundleExercise(equipmentDID, gifDID);
+                if (exerciseDID) {
+                    updateBundleProgress(4, 'complete', 'All records published successfully!');
+                    document.getElementById('bundle-exercise-did-display')?.classList.remove('hidden');
+                    document.getElementById('bundle-exercise-did').textContent = exerciseDID;
+                    
+                    showMessage('publish-success', `🎉 Exercise Bundle published successfully! Final Exercise DID: ${exerciseDID}`, 'success');
+                } else {
+                    updateBundleProgress(4, 'error', 'Failed to publish exercise');
+                    throw new Error('Failed to publish exercise');
+                }
+
+            } catch (error) {
+                console.error('Bundle publishing error:', error);
+                showMessage('publish-status', `Error: ${error.message}`, 'error');
+            } finally {
+                const btn = document.getElementById('bundle-publish-btn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Publish Complete Exercise Bundle';
+                }
+            }
+        }
+
+        /**
+         * Publish Bundle Icon (Media File)
+         */
+        async function publishBundleIcon() {
+            try {
+                const file = document.getElementById('bundle-icon-file')?.files[0];
+                if (!file) {
+                    throw new Error('Please select an icon file');
+                }
+
+                const name = document.getElementById('bundle-icon-name')?.value || file.name;
+                const storageType = document.getElementById('bundle-icon-storage')?.value || 'gun';
+                const accessLevel = document.getElementById('bundle-icon-access')?.value || 'public';
+                const orgDID = document.getElementById('bundle-icon-org')?.value;
+
+                // Create FormData
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('name', name);
+                formData.append('description', `Icon for equipment`);
+                formData.append('language', 'en');
+                formData.append('storageType', storageType);
+                
+                if (storageType === 'gun') {
+                    formData.append('accessLevel', accessLevel);
+                    if (accessLevel === 'organization' && orgDID) {
+                        formData.append('organizationDID', orgDID);
+                    }
+                }
+
+                const response = await fetch(`${API_BASE_URL}/api/publish/media`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && result.did) {
+                    return result.did;
+                } else {
+                    throw new Error(result.error || 'Failed to publish icon');
+                }
+            } catch (error) {
+                console.error('Icon publishing error:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Publish Bundle Equipment
+         */
+        async function publishBundleEquipment(iconDID) {
+            try {
+                const name = document.getElementById('bundle-equipment-name')?.value;
+                if (!name) {
+                    throw new Error('Please enter equipment name');
+                }
+
+                const description = document.getElementById('bundle-equipment-description')?.value;
+                const storageType = document.getElementById('bundle-equipment-storage')?.value || 'arweave';
+
+                const equipmentData = {
+                    storageType,
+                    basic: {
+                        name,
+                        description: description || `Equipment: ${name}`,
+                        language: 'en',
+                        date: Math.floor(Date.now() / 1000)
+                    },
+                    fitnessEquipment: {
+                        category: 'General',
+                        subcategory: 'Training Equipment'
+                    }
+                };
+
+                // Add icon DID if available
+                if (iconDID) {
+                    equipmentData.basic.avatar = iconDID;
+                }
+
+                const response = await fetch(`${API_BASE_URL}/api/publish/fitnessEquipment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(equipmentData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && result.did) {
+                    return result.did;
+                } else {
+                    throw new Error(result.error || 'Failed to publish equipment');
+                }
+            } catch (error) {
+                console.error('Equipment publishing error:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Publish Bundle Multi-Resolution GIF
+         */
+        async function publishBundleGif() {
+            try {
+                const name = document.getElementById('bundle-gif-name')?.value;
+                if (!name) {
+                    throw new Error('Please enter GIF collection name');
+                }
+
+                const storageType = document.getElementById('bundle-gif-storage')?.value || 'gun';
+                const accessLevel = document.getElementById('bundle-gif-access')?.value || 'public';
+                const orgDID = document.getElementById('bundle-gif-org')?.value;
+
+                // Get all GIF files
+                const gifFileInputs = document.querySelectorAll('.bundle-gif-file-input');
+                const gifMediaRefs = [];
+
+                for (const input of gifFileInputs) {
+                    if (input.files && input.files[0]) {
+                        const file = input.files[0];
+                        const row = input.closest('.gif-file-row');
+                        const resolution = input.dataset.resolution;
+                        const width = row.querySelector('.bundle-gif-width').value;
+                        const height = row.querySelector('.bundle-gif-height').value;
+
+                        // Publish each GIF as a media file
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        formData.append('name', `${name} - ${resolution}`);
+                        formData.append('description', `GIF resolution: ${resolution}`);
+                        formData.append('language', 'en');
+                        formData.append('storageType', storageType);
+                        
+                        if (storageType === 'gun') {
+                            formData.append('accessLevel', accessLevel);
+                            if (accessLevel === 'organization' && orgDID) {
+                                formData.append('organizationDID', orgDID);
+                            }
+                        }
+
+                        const mediaResponse = await fetch(`${API_BASE_URL}/api/publish/media`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: formData
+                        });
+
+                        const mediaResult = await mediaResponse.json();
+                        
+                        if (mediaResponse.ok && mediaResult.did) {
+                            gifMediaRefs.push(mediaResult.did);
+                        } else {
+                            throw new Error(`Failed to publish ${resolution} GIF`);
+                        }
+                    }
+                }
+
+                if (gifMediaRefs.length === 0) {
+                    throw new Error('Please select at least one GIF file');
+                }
+
+                // Now publish the multi-resolution GIF collection
+                const frameRate = parseInt(document.getElementById('bundle-gif-framerate')?.value) || 4;
+                const duration = parseInt(document.getElementById('bundle-gif-duration')?.value) || 3;
+
+                const gifCollectionData = {
+                    storageType,
+                    basic: {
+                        name,
+                        description: document.getElementById('bundle-gif-description')?.value || `Multi-resolution GIF for ${name}`,
+                        language: 'en',
+                        date: Math.floor(Date.now() / 1000)
+                    },
+                    multiResolutionGif: {
+                        gif_media_refs: gifMediaRefs,
+                        frame_rate: frameRate,
+                        duration_seconds: duration,
+                        primary_resolution_index: 2,
+                        loop_count: 0
+                    }
+                };
+
+                if (storageType === 'gun') {
+                    gifCollectionData.accessControl = {
+                        access_level: accessLevel
+                    };
+                    if (accessLevel === 'organization' && orgDID) {
+                        gifCollectionData.accessControl.shared_with = orgDID;
+                    }
+                }
+
+                const response = await fetch(`${API_BASE_URL}/api/publish/multiResolutionGif`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(gifCollectionData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && result.did) {
+                    return result.did;
+                } else {
+                    throw new Error(result.error || 'Failed to publish GIF collection');
+                }
+            } catch (error) {
+                console.error('GIF publishing error:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Publish Bundle Exercise
+         */
+        async function publishBundleExercise(equipmentDID, gifDID) {
+            try {
+                const name = document.getElementById('bundle-exercise-name')?.value;
+                if (!name) {
+                    throw new Error('Please enter exercise name');
+                }
+
+                const storageType = document.getElementById('bundle-exercise-storage')?.value || 'arweave';
+
+                const exerciseData = {
+                    storageType,
+                    basic: {
+                        name,
+                        description: document.getElementById('bundle-exercise-description')?.value || `Exercise: ${name}`,
+                        language: 'en'
+                    },
+                    exercise: {
+                        instructions: [document.getElementById('bundle-exercise-instructions')?.value || ''],
+                        difficulty: document.getElementById('bundle-exercise-difficulty')?.value || 'beginner',
+                        category: document.getElementById('bundle-exercise-category')?.value || 'strength',
+                        exercise_type: document.getElementById('bundle-exercise-type')?.value || 'main',
+                        measurement_type: document.getElementById('bundle-exercise-measurement')?.value || 'reps'
+                    }
+                };
+
+                // Add avatar (GIF) if available
+                if (gifDID) {
+                    exerciseData.basic.avatar = gifDID;
+                }
+
+                // Add equipment if available
+                if (equipmentDID) {
+                    exerciseData.exercise.equipmentRequired = [equipmentDID];
+                }
+
+                // Add measurement-specific fields
+                const measurementType = exerciseData.exercise.measurement_type;
+                if (measurementType === 'reps') {
+                    const sets = document.getElementById('bundle-exercise-sets')?.value;
+                    const reps = document.getElementById('bundle-exercise-reps')?.value;
+                    if (sets) exerciseData.exercise.recommended_sets = parseInt(sets);
+                    if (reps) exerciseData.exercise.recommended_reps = parseInt(reps);
+                } else {
+                    const duration = document.getElementById('bundle-exercise-duration')?.value;
+                    const estDuration = document.getElementById('bundle-exercise-est-duration')?.value;
+                    if (duration) exerciseData.exercise.target_duration_seconds = parseInt(duration);
+                    if (estDuration) exerciseData.exercise.est_duration_minutes = parseInt(estDuration);
+                }
+
+                const response = await fetch(`${API_BASE_URL}/api/publish/exercise`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(exerciseData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && result.did) {
+                    return result.did;
+                } else {
+                    throw new Error(result.error || 'Failed to publish exercise');
+                }
+            } catch (error) {
+                console.error('Exercise publishing error:', error);
+                throw error;
+            }
+        }
+
+        // ==================== END EXERCISE BUNDLE FUNCTIONS ====================
 
         // Publishing functions for each record type
         async function publishPost() {
