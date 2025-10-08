@@ -43,11 +43,24 @@ class GunHelper {
         
         // Fallback: content hash for deterministic soul generation
         if (recordData) {
-            const canonicalString = JSON.stringify(recordData, Object.keys(recordData).sort());
+            // Create a more unique hash by including timestamp and random component
+            const timestamp = Date.now();
+            const randomComponent = Math.random().toString(36).slice(2, 8);
+            
+            // Include key identifying fields for better uniqueness
+            const keyFields = {
+                name: recordData.basic?.name || recordData.name,
+                date: recordData.basic?.date || recordData.date,
+                recordType: recordData.oip?.recordType || recordData.recordType,
+                timestamp: timestamp,
+                random: randomComponent
+            };
+            
+            const canonicalString = JSON.stringify(keyFields, Object.keys(keyFields).sort());
             const contentHash = crypto.createHash('sha256')
                 .update(canonicalString)
                 .digest('hex')
-                .slice(0, 8); // Short content hash
+                .slice(0, 12); // Longer hash for better uniqueness
             return `${pubKeyHash}:h:${contentHash}`;
         }
         
