@@ -15923,7 +15923,10 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             // Load organizations FIRST and wait for it to complete
             await loadOrganizationsForBundle();
             
-            // Add first equipment item (will now have orgs available)
+            // Load existing equipment for selection
+            await loadExistingEquipmentForBundle();
+            
+            // Add first equipment item (will now have orgs and equipment available)
             addBundleEquipmentItem();
             
             // Initialize GIF storage type handler (will now have orgs available)
@@ -16118,30 +16121,49 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <strong>Equipment Details</strong>
                     </div>
                     
-                    <div style="margin-bottom: 8px;">
-                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Equipment Name:</label>
-                        <div style="display: flex; gap: 6px; align-items: stretch;">
-                            <input type="text" class="equip-name" placeholder="e.g., Barbell" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                            <button type="button" class="equip-copy-btn btn-small btn-secondary" onclick="copyEquipmentFromLatest('${itemId}')" title="Copy from latest matching equipment" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
-                                📋 Copy
-                            </button>
-                            <button type="button" class="equip-ai-btn btn-small" onclick="fillEquipmentWithAI('${itemId}')" title="Fill with AI" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
-                                🤖 AI
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 8px;">
-                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Description:</label>
-                        <textarea class="equip-description" rows="2" placeholder="Brief description..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"></textarea>
-                    </div>
-                    
-                    <div>
-                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Storage Type:</label>
-                        <select class="equip-storage" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                            <option value="arweave">Arweave (Permanent)</option>
-                            <option value="gun">GUN + BitTorrent</option>
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Mode:</label>
+                        <select class="equip-mode" onchange="toggleEquipmentMode('${itemId}')" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <option value="create">Create New Equipment</option>
+                            <option value="existing">Select Existing Equipment</option>
                         </select>
+                    </div>
+                    
+                    <!-- Select Existing Equipment (hidden by default) -->
+                    <div class="equip-existing-section hidden" style="margin-bottom: 8px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Select Equipment:</label>
+                        <select class="equip-existing-select equipment-select-bundle" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <option value="">Loading equipment...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Create New Equipment Fields (shown by default) -->
+                    <div class="equip-create-section">
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Equipment Name:</label>
+                            <div style="display: flex; gap: 6px; align-items: stretch;">
+                                <input type="text" class="equip-name" placeholder="e.g., Barbell" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <button type="button" class="equip-copy-btn btn-small btn-secondary" onclick="copyEquipmentFromLatest('${itemId}')" title="Copy from latest matching equipment" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
+                                    📋 Copy
+                                </button>
+                                <button type="button" class="equip-ai-btn btn-small" onclick="fillEquipmentWithAI('${itemId}')" title="Fill with AI" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
+                                    🤖 AI
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Description:</label>
+                            <textarea class="equip-description" rows="2" placeholder="Brief description..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Storage Type:</label>
+                            <select class="equip-storage" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="arweave">Arweave (Permanent)</option>
+                                <option value="gun">GUN + BitTorrent</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             `;
@@ -16199,6 +16221,93 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             } else {
                 orgGroup?.classList.add('hidden');
             }
+        }
+
+        /**
+         * Toggle equipment mode (create new vs select existing)
+         */
+        function toggleEquipmentMode(itemId) {
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const mode = item.querySelector('.equip-mode')?.value;
+            const existingSection = item.querySelector('.equip-existing-section');
+            const createSection = item.querySelector('.equip-create-section');
+            const iconSection = item.previousElementSibling; // The icon section div
+            
+            if (mode === 'existing') {
+                existingSection?.classList.remove('hidden');
+                createSection?.classList.add('hidden');
+                if (iconSection) iconSection.classList.add('hidden'); // Hide icon when selecting existing
+            } else {
+                existingSection?.classList.add('hidden');
+                createSection?.classList.remove('hidden');
+                if (iconSection) iconSection.classList.remove('hidden'); // Show icon when creating new
+            }
+        }
+
+        /**
+         * Load existing equipment for bundle
+         */
+        let bundleExistingEquipment = [];
+        
+        async function loadExistingEquipmentForBundle() {
+            try {
+                console.log('📋 [Bundle] Loading existing equipment from API...');
+                
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=fitnessEquipment&noDuplicates=true`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    bundleExistingEquipment = result.records || [];
+                    console.log(`✅ [Bundle] Loaded ${bundleExistingEquipment.length} equipment records`);
+                    updateBundleEquipmentDropdowns();
+                } else {
+                    console.warn('⚠️ [Bundle] Failed to load equipment from API');
+                    updateBundleEquipmentDropdowns();
+                }
+            } catch (error) {
+                console.warn('⚠️ [Bundle] Error loading equipment:', error);
+                updateBundleEquipmentDropdowns();
+            }
+        }
+        
+        /**
+         * Update all bundle equipment dropdowns
+         */
+        function updateBundleEquipmentDropdowns() {
+            const selects = document.querySelectorAll('.equipment-select-bundle');
+            selects.forEach(select => {
+                // Clear existing options except the first one
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                // Set placeholder
+                if (select.children.length > 0) {
+                    select.children[0].textContent = bundleExistingEquipment.length > 0 
+                        ? 'Select Equipment' 
+                        : 'No equipment found';
+                }
+                
+                // Add equipment options
+                bundleExistingEquipment.forEach(equipment => {
+                    const option = document.createElement('option');
+                    const did = equipment.oip?.did || equipment.oip?.didTx || '';
+                    const name = equipment.data?.basic?.name || 'Unknown Equipment';
+                    
+                    option.value = did;
+                    option.textContent = name;
+                    select.appendChild(option);
+                });
+                
+                console.log(`[Bundle] Populated equipment dropdown with ${bundleExistingEquipment.length} items`);
+            });
         }
 
         /**
@@ -16840,32 +16949,40 @@ Return ONLY a JSON object with this structure:
                 }
 
                 const uploadResult = await uploadResponse.json();
-                const mediaId = uploadResult.mediaId;
 
-                if (!mediaId) {
+                if (!uploadResult.mediaId) {
                     throw new Error('No mediaId returned from upload');
                 }
 
-                // Step 2: Create OIP record for the image
+                // Step 2: Create OIP record for the image with all network addresses
                 const recordData = {
-                    storageType,
                     basic: {
                         name,
                         description: `Icon for equipment`,
-                        language: 'en'
+                        language: 'en',
+                        webUrl: uploadResult.httpUrl
                     },
                     image: {
-                        media_ref: mediaId
+                        webUrl: uploadResult.httpUrl,
+                        bittorrentAddress: uploadResult.magnetURI || '',
+                        ipfsAddress: '',
+                        arweaveAddress: '',
+                        filename: uploadResult.originalName,
+                        size: uploadResult.size,
+                        contentType: uploadResult.mime
                     }
                 };
 
                 if (storageType === 'gun') {
+                    recordData.storage = 'gun';
                     recordData.accessControl = {
                         access_level: accessLevel
                     };
                     if (accessLevel === 'organization' && orgDID) {
                         recordData.accessControl.shared_with = orgDID;
                     }
+                } else {
+                    recordData.blockchain = storageType;
                 }
 
                 const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image`, {
@@ -16910,7 +17027,6 @@ Return ONLY a JSON object with this structure:
                 const storageType = document.getElementById('bundle-equipment-storage')?.value || 'arweave';
 
                 const equipmentData = {
-                    storageType,
                     basic: {
                         name,
                         description: description || `Equipment: ${name}`,
@@ -16926,6 +17042,13 @@ Return ONLY a JSON object with this structure:
                 // Add icon DID if available
                 if (iconDID) {
                     equipmentData.basic.avatar = iconDID;
+                }
+
+                // Set storage/blockchain type
+                if (storageType === 'gun') {
+                    equipmentData.storage = 'gun';
+                } else {
+                    equipmentData.blockchain = storageType;
                 }
 
                 const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=fitnessEquipment`, {
@@ -17001,32 +17124,42 @@ Return ONLY a JSON object with this structure:
                         }
 
                         const uploadResult = await uploadResponse.json();
-                        const mediaId = uploadResult.mediaId;
 
-                        if (!mediaId) {
+                        if (!uploadResult.mediaId) {
                             throw new Error(`No mediaId returned for ${resolution} GIF`);
                         }
 
-                        // Step 2: Create image record for this GIF
+                        // Step 2: Create image record for this GIF with all network addresses
                         const imageData = {
-                            storageType,
                             basic: {
                                 name: `${name} - ${resolution}`,
                                 description: `GIF resolution: ${resolution}`,
-                                language: 'en'
+                                language: 'en',
+                                webUrl: uploadResult.httpUrl
                             },
                             image: {
-                                media_ref: mediaId
+                                webUrl: uploadResult.httpUrl,
+                                bittorrentAddress: uploadResult.magnetURI || '',
+                                ipfsAddress: '',  // IPFS optional for GIFs
+                                arweaveAddress: '',
+                                filename: uploadResult.originalName,
+                                size: uploadResult.size,
+                                contentType: uploadResult.mime,
+                                width: parseInt(width) || 0,
+                                height: parseInt(height) || 0
                             }
                         };
 
                         if (storageType === 'gun') {
+                            imageData.storage = 'gun';
                             imageData.accessControl = {
                                 access_level: accessLevel
                             };
                             if (accessLevel === 'organization' && orgDID) {
                                 imageData.accessControl.shared_with = orgDID;
                             }
+                        } else {
+                            imageData.blockchain = storageType;
                         }
 
                         const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image`, {
@@ -17063,7 +17196,6 @@ Return ONLY a JSON object with this structure:
                 const duration = parseInt(document.getElementById('bundle-gif-duration')?.value) || 3;
 
                 const gifCollectionData = {
-                    storageType,
                     basic: {
                         name,
                         description: document.getElementById('bundle-gif-description')?.value || `Multi-resolution GIF for ${name}`,
@@ -17080,12 +17212,15 @@ Return ONLY a JSON object with this structure:
                 };
 
                 if (storageType === 'gun') {
+                    gifCollectionData.storage = 'gun';
                     gifCollectionData.accessControl = {
                         access_level: accessLevel
                     };
                     if (accessLevel === 'organization' && orgDID) {
                         gifCollectionData.accessControl.shared_with = orgDID;
                     }
+                } else {
+                    gifCollectionData.blockchain = storageType;
                 }
 
                 const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=multiResolutionGif`, {
@@ -17139,7 +17274,6 @@ Return ONLY a JSON object with this structure:
                 const muscleGroups = muscleGroupsText.split(',').map(m => m.trim()).filter(m => m);
 
                 const exerciseData = {
-                    storageType,
                     basic: {
                         name,
                         description: document.getElementById('bundle-exercise-description')?.value || `Exercise: ${name}`,
@@ -17184,6 +17318,13 @@ Return ONLY a JSON object with this structure:
                     if (estDuration) exerciseData.exercise.est_duration_minutes = parseInt(estDuration);
                 }
 
+                // Set storage/blockchain type
+                if (storageType === 'gun') {
+                    exerciseData.storage = 'gun';
+                } else {
+                    exerciseData.blockchain = storageType;
+                }
+
                 const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=exercise`, {
                     method: 'POST',
                     headers: {
@@ -17225,7 +17366,22 @@ Return ONLY a JSON object with this structure:
             for (const item of equipmentItems) {
                 const itemId = item.id;
                 
-                // Get icon data
+                // Check mode: create new vs select existing
+                const mode = item.querySelector('.equip-mode')?.value || 'create';
+                
+                if (mode === 'existing') {
+                    // Use existing equipment
+                    const existingDID = item.querySelector('.equip-existing-select')?.value;
+                    if (existingDID) {
+                        equipmentDIDs.push(existingDID);
+                        console.log(`✅ Using existing equipment: ${existingDID}`);
+                    } else {
+                        console.warn('Skipping equipment item: no existing equipment selected');
+                    }
+                    continue; // Skip to next item
+                }
+                
+                // Mode is "create" - get data for creating new equipment
                 const iconName = item.querySelector('.equip-icon-name')?.value;
                 const iconFile = item.querySelector('.equip-icon-file')?.files[0];
                 const iconStorage = item.querySelector('.equip-icon-storage')?.value || 'gun';
@@ -17280,32 +17436,40 @@ Return ONLY a JSON object with this structure:
                         }
                         
                         const uploadResult = await uploadResponse.json();
-                        const mediaId = uploadResult.mediaId;
                         
-                        if (!mediaId) {
+                        if (!uploadResult.mediaId) {
                             throw new Error('No mediaId returned from icon upload');
                         }
                         
-                        // Step 2: Create image record
+                        // Step 2: Create image record with all network addresses
                         const imageData = {
-                            storageType: iconStorage,
                             basic: {
                                 name: iconName || `${equipName} Icon`,
                                 description: `Icon for ${equipName}`,
-                                language: 'en'
+                                language: 'en',
+                                webUrl: uploadResult.httpUrl
                             },
                             image: {
-                                media_ref: mediaId
+                                webUrl: uploadResult.httpUrl,
+                                bittorrentAddress: uploadResult.magnetURI || '',
+                                ipfsAddress: '',
+                                arweaveAddress: '',
+                                filename: uploadResult.originalName,
+                                size: uploadResult.size,
+                                contentType: uploadResult.mime
                             }
                         };
                         
                         if (iconStorage === 'gun') {
+                            imageData.storage = 'gun';
                             imageData.accessControl = {
                                 access_level: iconAccess
                             };
                             if (iconAccess === 'organization' && iconOrg) {
                                 imageData.accessControl.shared_with = iconOrg;
                             }
+                        } else {
+                            imageData.blockchain = iconStorage;
                         }
                         
                         const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image`, {
@@ -17336,7 +17500,6 @@ Return ONLY a JSON object with this structure:
                 updateBundleProgress(`Publishing equipment (${currentStep}/${totalSteps})...`, (currentStep / totalSteps) * 100);
                 
                 const equipmentData = {
-                    storageType: equipStorage,
                     basic: {
                         name: equipName,
                         description: equipDesc || `Equipment: ${equipName}`,
@@ -17351,6 +17514,13 @@ Return ONLY a JSON object with this structure:
                 
                 if (iconDID) {
                     equipmentData.basic.avatar = iconDID;
+                }
+                
+                // Set storage/blockchain type
+                if (equipStorage === 'gun') {
+                    equipmentData.storage = 'gun';
+                } else {
+                    equipmentData.blockchain = equipStorage;
                 }
                 
                 try {
