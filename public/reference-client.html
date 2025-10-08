@@ -11449,7 +11449,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 <label for="bundle-gif-access">Access Level:</label>
                                 <select id="bundle-gif-access" onchange="updateBundleGifAccess()">
                                     <option value="public">Public</option>
-                                    <option value="organization">Organization</option>
+                                    <option value="organization" selected>Organization</option>
                                     <option value="private">Private</option>
                                 </select>
                             </div>
@@ -15998,10 +15998,24 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             const storageType = document.getElementById('bundle-gif-storage')?.value;
             const accessGroup = document.getElementById('bundle-gif-access-group');
             
+            console.log('[Bundle GIF] Storage type:', storageType, 'Orgs loaded:', bundleOrganizations.length);
+            
             if (storageType === 'gun') {
                 accessGroup?.classList.remove('hidden');
-                // Trigger access update to show org dropdown if needed
-                updateBundleGifAccess();
+                // Force populate org dropdown immediately when storage is GUN and access is Organization
+                setTimeout(() => {
+                    const accessLevel = document.getElementById('bundle-gif-access')?.value;
+                    console.log('[Bundle GIF] Current access level after show:', accessLevel);
+                    if (accessLevel === 'organization') {
+                        const orgSelect = document.getElementById('bundle-gif-org');
+                        const orgGroup = document.getElementById('bundle-gif-org-group');
+                        if (orgGroup) orgGroup.classList.remove('hidden');
+                        if (orgSelect && bundleOrganizations.length > 0) {
+                            console.log('[Bundle GIF] Force populating org dropdown on init');
+                            populateBundleOrgDropdown(orgSelect);
+                        }
+                    }
+                }, 100);
             } else {
                 accessGroup?.classList.add('hidden');
             }
