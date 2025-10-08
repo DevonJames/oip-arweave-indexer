@@ -16878,9 +16878,10 @@ Return ONLY a JSON object with this structure:
 
                 // Step 2: Process Equipment Items (10-80% progress)
                 equipmentDIDs = await processEquipmentItems();
-                console.log(`✅ Equipment processed: ${equipmentDIDs.length} items`);
+                console.log(`✅ Equipment processed: ${equipmentDIDs.length} items`, equipmentDIDs);
 
                 // Step 3: Publish Exercise (90-100% progress)
+                console.log(`🏋️ About to publish exercise with equipment DIDs:`, equipmentDIDs);
                 const exerciseDID = await publishBundleExercise(gifDID, equipmentDIDs);
                 if (!exerciseDID) {
                     throw new Error('Failed to publish exercise');
@@ -17256,6 +17257,7 @@ Return ONLY a JSON object with this structure:
          */
         async function publishBundleExercise(gifDID, equipmentDIDs) {
             try {
+                console.log(`📝 publishBundleExercise called with:`, { gifDID, equipmentDIDs, equipmentCount: equipmentDIDs?.length || 0 });
                 updateBundleProgress('Publishing exercise record...', 90);
                 
                 const name = document.getElementById('bundle-exercise-name')?.value;
@@ -17300,8 +17302,12 @@ Return ONLY a JSON object with this structure:
                 }
 
                 // Add equipment DIDs if available
+                console.log(`🔍 Checking equipment DIDs:`, { has: !!equipmentDIDs, length: equipmentDIDs?.length, dids: equipmentDIDs });
                 if (equipmentDIDs && equipmentDIDs.length > 0) {
                     exerciseData.exercise.equipmentRequired = equipmentDIDs;
+                    console.log(`✅ Added equipmentRequired to exercise data:`, exerciseData.exercise.equipmentRequired);
+                } else {
+                    console.warn(`⚠️  No equipment DIDs to add (equipmentDIDs:`, equipmentDIDs, `)`);
                 }
 
                 // Add measurement-specific fields
@@ -17324,6 +17330,8 @@ Return ONLY a JSON object with this structure:
                 } else {
                     exerciseData.blockchain = storageType;
                 }
+
+                console.log(`📤 About to POST exercise record:`, JSON.stringify(exerciseData, null, 2));
 
                 const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=exercise`, {
                     method: 'POST',
@@ -17538,15 +17546,20 @@ Return ONLY a JSON object with this structure:
                     }
                     
                     const equipmentResult = await equipmentResponse.json();
-                    if (equipmentResult.did) {
-                        equipmentDIDs.push(equipmentResult.did);
-                        console.log(`✅ Equipment published: ${equipmentResult.did}`);
+                    // Handle both GUN (did) and Arweave (didTx) response formats
+                    const equipmentDID = equipmentResult.did || equipmentResult.didTx || equipmentResult.oip?.did || equipmentResult.oip?.didTx;
+                    if (equipmentDID) {
+                        equipmentDIDs.push(equipmentDID);
+                        console.log(`✅ Equipment published: ${equipmentDID}`);
+                    } else {
+                        console.error('❌ No DID found in equipment response:', equipmentResult);
                     }
                 } catch (error) {
                     console.error('Error publishing equipment:', error);
                 }
             }
             
+            console.log(`🔧 processEquipmentItems complete. Returning ${equipmentDIDs.length} DIDs:`, equipmentDIDs);
             return equipmentDIDs;
         }
 
