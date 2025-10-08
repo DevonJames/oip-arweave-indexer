@@ -185,6 +185,7 @@ services:
       
       # Existing settings
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
+      - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT:-9200}
       - OLLAMA_HOST=http://ollama:11434
       - DEFAULT_LLM_MODEL=llama3.2:3b
       

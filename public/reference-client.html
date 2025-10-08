@@ -11842,6 +11842,37 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <small>Which resolution to use as the default/primary</small>
                     </div>
 
+                    <!-- Network Distribution Options -->
+                    <div class="form-group" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <h4>🌐 Network Distribution Options</h4>
+                        <p style="margin: 10px 0; color: #666; font-size: 14px;">Choose which networks to distribute your GIF files to. Each individual GIF will be uploaded to the selected networks.</p>
+                        
+                        <div style="display: flex; gap: 20px; margin-top: 15px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="gif-enable-ipfs" checked>
+                                <span>🌐 IPFS</span>
+                                <small style="color: #666;">(Decentralized storage)</small>
+                            </label>
+                            
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="gif-enable-web" checked>
+                                <span>🌍 Web Server</span>
+                                <small style="color: #666;">(Fast HTTP access)</small>
+                            </label>
+                            
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="gif-enable-arweave" disabled>
+                                <span>⛓️ Arweave</span>
+                                <small style="color: #999;">(Disabled for GIFs - costs AR tokens)</small>
+                            </label>
+                        </div>
+                        
+                        <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 4px; font-size: 13px;">
+                            <strong>💡 Note:</strong> BitTorrent distribution is always enabled for P2P sharing. 
+                            IPFS and Web Server options provide additional access methods for better performance and availability.
+                        </div>
+                    </div>
+
                     <!-- Access Level -->
                     <div class="form-group">
                         <label for="gif-access-level">Access Level:</label>
@@ -17040,7 +17071,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         return;
                     }
 
-                    // Upload each GIF file and create image records
+                    // Upload each GIF file and create image records with multi-network support
                     for (let i = 0; i < uploadTasks.length; i++) {
                         const task = uploadTasks[i];
                         const progress = Math.floor((i / uploadTasks.length) * 50); // First 50% for uploads
@@ -17049,7 +17080,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         showMessage('publish-status', `Uploading ${task.file.name} (${i + 1}/${uploadTasks.length})...`, 'info');
                         
                         try {
-                            // Step 1: Upload file
+                            // Step 1: Upload file (creates BitTorrent)
                             const formData = new FormData();
                             formData.append('file', task.file);
                             formData.append('name', `${collectionName} - ${task.label}`);
@@ -17069,27 +17100,96 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 throw new Error(`Upload failed: ${uploadResult.error}`);
                             }
 
-                            // Step 2: Create image record
+                            console.log(`✅ Step 1 complete for ${task.label} - mediaId: ${uploadResult.mediaId}`);
+
+                            // Step 2a: Upload to IPFS (if enabled)
+                            let ipfsAddress = '';
+                            const enableIPFS = document.getElementById('gif-enable-ipfs')?.checked || false;
+                            if (enableIPFS) {
+                                try {
+                                    publishBtn.textContent = `🌐 Uploading ${task.file.name} to IPFS...`;
+                                    const ipfsResponse = await fetch('/api/media/ipfs-upload', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${authToken}`
+                                        },
+                                        body: JSON.stringify({ mediaId: uploadResult.mediaId })
+                                    });
+                                    
+                                    const ipfsResult = await ipfsResponse.json();
+                                    if (ipfsResponse.ok) {
+                                        ipfsAddress = ipfsResult.ipfsHash;
+                                        console.log(`✅ Step 2a complete for ${task.label} - IPFS: ${ipfsAddress}`);
+                                    }
+                                } catch (error) {
+                                    console.warn(`⚠️ IPFS upload failed for ${task.label}:`, error);
+                                }
+                            }
+
+                            // Step 2b: Setup web server access (if enabled)
+                            let webUrl = '';
+                            const enableWeb = document.getElementById('gif-enable-web')?.checked || false;
+                            if (enableWeb) {
+                                try {
+                                    publishBtn.textContent = `🌍 Setting up web access for ${task.file.name}...`;
+                                    const webResponse = await fetch('/api/media/web-setup', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${authToken}`
+                                        },
+                                        body: JSON.stringify({ 
+                                            mediaId: uploadResult.mediaId,
+                                            filename: uploadResult.originalName
+                                        })
+                                    });
+                                    
+                                    const webResult = await webResponse.json();
+                                    if (webResponse.ok) {
+                                        webUrl = webResult.webUrl;
+                                        console.log(`✅ Step 2b complete for ${task.label} - Web URL: ${webUrl}`);
+                                    }
+                                } catch (error) {
+                                    console.warn(`⚠️ Web setup failed for ${task.label}:`, error);
+                                }
+                            }
+
+                            // Step 3: Build complete OIP record with all network addresses
                             const recordData = {
-                                mediaId: uploadResult.mediaId,
-                                recordType: 'image',
-                                basicInfo: {
+                                basic: {
                                     name: `${collectionName} - ${task.label}`,
                                     description: `GIF resolution: ${task.label}`,
                                     language: 'en',
+                                    date: Math.floor(Date.now() / 1000),
                                     nsfw: false,
-                                    tagItems: ['gif', 'multi-resolution', task.label]
+                                    tagItems: ['gif', 'multi-resolution', task.label],
+                                    webUrl: webUrl || uploadResult.httpUrl  // Prefer web URL, fallback to httpUrl
                                 },
-                                accessControl: storageType === 'gun' ? {
+                                image: {
+                                    webUrl: webUrl || uploadResult.httpUrl,
+                                    bittorrentAddress: uploadResult.magnetURI,
+                                    ipfsAddress: ipfsAddress,
+                                    arweaveAddress: "",  // Not uploading to Arweave for GIFs
+                                    filename: uploadResult.originalName,
+                                    size: uploadResult.size,
+                                    contentType: uploadResult.mime,
+                                    width: task.width,
+                                    height: task.height
+                                },
+                                accessControl: {
                                     access_level: accessLevel,
-                                    shared_with: selectedOrganizationDid // Organization's DID if selected
-                                } : undefined,
-                                width: task.width,
-                                height: task.height,
-                                duration: 0
+                                    owner_public_key: getUserPublicKeyFromJWT(),
+                                    created_by: getUserPublicKeyFromJWT(),
+                                    shared_with: selectedOrganizationDid || undefined
+                                }
                             };
 
-                            const recordResponse = await fetch('/api/media/createRecord', {
+                            console.log(`📋 Step 3: Built record structure for ${task.label}`);
+
+                            // Step 4: Publish complete OIP record to GUN
+                            publishBtn.textContent = `📋 Creating record for ${task.file.name}...`;
+                            const recordResponse = await fetch('/api/records/newRecord?recordType=image&storage=gun', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -17103,6 +17203,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 throw new Error(`Record creation failed: ${recordResult.error}`);
                             }
 
+                            console.log(`✅ Step 4 complete for ${task.label} - OIP Record: ${recordResult.did}`);
+
                             // Store the results
                             gifRefs.push(recordResult.did);
                             resolutionLabels.push(task.label);
@@ -17110,7 +17212,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             widths.push(task.width);
                             heights.push(task.height);
 
-                            console.log(`✅ Created image record for ${task.label}: ${recordResult.did}`);
+                            console.log(`✅ Created multi-network image record for ${task.label}: ${recordResult.did}`);
+                            console.log(`📊 Networks enabled: BitTorrent: ✅, IPFS: ${enableIPFS ? '✅' : '❌'}, Web: ${enableWeb ? '✅' : '❌'}`);
                             
                         } catch (error) {
                             showMessage('publish-status', `Error uploading ${task.file.name}: ${error.message}`, 'error');
@@ -17144,7 +17247,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
 
                 // Create the multiResolutionGif record
                 publishBtn.textContent = '📋 Creating Collection Record...';
-                showMessage('publish-status', 'Creating multi-resolution GIF collection record...', 'info');
+                const ipfsEnabled = document.getElementById('gif-enable-ipfs')?.checked || false;
+                const webEnabled = document.getElementById('gif-enable-web')?.checked || false;
+                showMessage('publish-status', `Creating multi-resolution GIF collection record... (Networks: BitTorrent ✅, IPFS ${ipfsEnabled ? '✅' : '❌'}, Web ${webEnabled ? '✅' : '❌'})`, 'info');
 
                 const gifData = {
                     basic: {
