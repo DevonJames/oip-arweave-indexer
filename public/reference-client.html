@@ -11544,10 +11544,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
 
                             <div class="form-group">
                                 <label>Equipment Required:</label>
-                                <div style="padding: 10px; background: #f0f4ff; border: 1px solid #667eea; border-radius: 6px;">
-                                    <span id="bundle-exercise-equipment-status">🔗 Will use equipment from Step 2</span>
+                                <div id="bundle-exercise-equipment-container">
+                                    <!-- Equipment rows will be added here -->
                                 </div>
-                                <small>The equipment DID will be automatically set from Step 2</small>
+                                <button type="button" onclick="addBundleEquipmentRow()" class="btn-small" style="margin-top: 10px;">
+                                    + Add Equipment
+                                </button>
+                                <small>Add required equipment - create new or select existing</small>
                             </div>
 
                             <div class="form-group">
@@ -16068,6 +16071,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             // Load organizations for dropdowns
             loadOrganizationsForBundle();
             
+            // Load existing equipment for dropdowns
+            loadExistingEquipmentForBundle();
+            
+            // Add first equipment row
+            addBundleEquipmentRow();
+            
             // Update section estimate
             updateBundleEstimate();
         }
@@ -16111,6 +16120,171 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 }
             } catch (error) {
                 console.error('Error loading organizations:', error);
+            }
+        }
+
+        /**
+         * Global variable to store existing equipment
+         */
+        let bundleExistingEquipment = [];
+
+        /**
+         * Load existing equipment for bundle dropdowns
+         */
+        async function loadExistingEquipmentForBundle() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/records/search`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        recordTypes: ['fitnessEquipment'],
+                        size: 1000
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    bundleExistingEquipment = data.records || [];
+                    console.log(`Loaded ${bundleExistingEquipment.length} existing equipment items`);
+                }
+            } catch (error) {
+                console.error('Error loading equipment:', error);
+            }
+        }
+
+        /**
+         * Add equipment row to exercise
+         */
+        function addBundleEquipmentRow() {
+            const container = document.getElementById('bundle-exercise-equipment-container');
+            if (!container) return;
+            
+            const rowId = `equipment-row-${Date.now()}`;
+            const row = document.createElement('div');
+            row.id = rowId;
+            row.className = 'equipment-row';
+            row.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #fafafa;';
+            
+            row.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <strong>Equipment Item</strong>
+                    <button type="button" onclick="removeBundleEquipmentRow('${rowId}')" class="btn-small" style="background: #f44336; color: white;">
+                        Remove
+                    </button>
+                </div>
+                
+                <div style="margin-bottom: 10px;">
+                    <label style="display: flex; align-items: center; gap: 10px;">
+                        <input type="radio" name="${rowId}-mode" value="from-step2" onchange="toggleBundleEquipmentMode('${rowId}')" checked>
+                        <span>Use equipment from Step 2</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 10px;">
+                        <input type="radio" name="${rowId}-mode" value="existing" onchange="toggleBundleEquipmentMode('${rowId}')">
+                        <span>Select existing equipment</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 10px;">
+                        <input type="radio" name="${rowId}-mode" value="new" onchange="toggleBundleEquipmentMode('${rowId}')">
+                        <span>Create new equipment</span>
+                    </label>
+                </div>
+                
+                <!-- From Step 2 -->
+                <div id="${rowId}-from-step2" class="equipment-mode-content">
+                    <div style="padding: 10px; background: #f0f4ff; border: 1px solid #667eea; border-radius: 6px;">
+                        🔗 Will automatically use equipment from Step 2
+                    </div>
+                </div>
+                
+                <!-- Select Existing -->
+                <div id="${rowId}-existing" class="equipment-mode-content hidden">
+                    <label>Select Equipment:</label>
+                    <select class="equipment-existing-select" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">Loading equipment...</option>
+                    </select>
+                </div>
+                
+                <!-- Create New -->
+                <div id="${rowId}-new" class="equipment-mode-content hidden">
+                    <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #ddd;">
+                        <div style="margin-bottom: 10px;">
+                            <label>Equipment Name:</label>
+                            <input type="text" class="equipment-new-name" placeholder="e.g., Resistance Band" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        </div>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label>Description:</label>
+                            <textarea class="equipment-new-description" rows="2" placeholder="Brief description..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                        </div>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label>Icon File (optional):</label>
+                            <input type="file" class="equipment-new-icon" accept="image/*" style="width: 100%;">
+                            <small>Upload an icon for this equipment</small>
+                        </div>
+                        
+                        <div>
+                            <label>Storage Type:</label>
+                            <select class="equipment-new-storage" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="arweave">Arweave (Permanent)</option>
+                                <option value="gun">GUN + BitTorrent</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(row);
+            
+            // Populate existing equipment dropdown
+            populateEquipmentDropdown(rowId);
+        }
+
+        /**
+         * Populate equipment dropdown for a specific row
+         */
+        function populateEquipmentDropdown(rowId) {
+            const select = document.querySelector(`#${rowId} .equipment-existing-select`);
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">Select Equipment</option>';
+            
+            bundleExistingEquipment.forEach(equipment => {
+                const option = document.createElement('option');
+                option.value = equipment.oip?.did || '';
+                option.textContent = equipment.data?.basic?.name || 'Unnamed Equipment';
+                select.appendChild(option);
+            });
+        }
+
+        /**
+         * Toggle equipment mode
+         */
+        function toggleBundleEquipmentMode(rowId) {
+            const modes = ['from-step2', 'existing', 'new'];
+            const selectedMode = document.querySelector(`input[name="${rowId}-mode"]:checked`)?.value;
+            
+            modes.forEach(mode => {
+                const content = document.getElementById(`${rowId}-${mode}`);
+                if (content) {
+                    if (mode === selectedMode) {
+                        content.classList.remove('hidden');
+                    } else {
+                        content.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        /**
+         * Remove equipment row
+         */
+        function removeBundleEquipmentRow(rowId) {
+            const row = document.getElementById(rowId);
+            if (row) {
+                row.remove();
             }
         }
 
@@ -16673,7 +16847,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         /**
          * Publish Bundle Exercise
          */
-        async function publishBundleExercise(equipmentDID, gifDID) {
+        async function publishBundleExercise(equipmentDIDFromStep2, gifDID) {
             try {
                 const name = document.getElementById('bundle-exercise-name')?.value;
                 if (!name) {
@@ -16703,9 +16877,10 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     exerciseData.basic.avatar = gifDID;
                 }
 
-                // Add equipment if available
-                if (equipmentDID) {
-                    exerciseData.exercise.equipmentRequired = [equipmentDID];
+                // Process equipment rows
+                const equipmentDIDs = await processEquipmentRows(equipmentDIDFromStep2);
+                if (equipmentDIDs.length > 0) {
+                    exerciseData.exercise.equipmentRequired = equipmentDIDs;
                 }
 
                 // Add measurement-specific fields
@@ -16742,6 +16917,105 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 console.error('Exercise publishing error:', error);
                 throw error;
             }
+        }
+
+        /**
+         * Process equipment rows and return DIDs
+         */
+        async function processEquipmentRows(equipmentDIDFromStep2) {
+            const equipmentDIDs = [];
+            const equipmentRows = document.querySelectorAll('.equipment-row');
+            
+            for (const row of equipmentRows) {
+                const rowId = row.id;
+                const mode = document.querySelector(`input[name="${rowId}-mode"]:checked`)?.value;
+                
+                if (mode === 'from-step2') {
+                    // Use equipment from Step 2
+                    if (equipmentDIDFromStep2) {
+                        equipmentDIDs.push(equipmentDIDFromStep2);
+                    }
+                } else if (mode === 'existing') {
+                    // Use selected existing equipment
+                    const select = row.querySelector('.equipment-existing-select');
+                    const did = select?.value;
+                    if (did) {
+                        equipmentDIDs.push(did);
+                    }
+                } else if (mode === 'new') {
+                    // Create new equipment
+                    const nameInput = row.querySelector('.equipment-new-name');
+                    const descInput = row.querySelector('.equipment-new-description');
+                    const iconInput = row.querySelector('.equipment-new-icon');
+                    const storageSelect = row.querySelector('.equipment-new-storage');
+                    
+                    const equipmentName = nameInput?.value;
+                    if (!equipmentName) {
+                        console.warn('Skipping new equipment row with no name');
+                        continue;
+                    }
+                    
+                    // First, upload icon if provided
+                    let iconDID = null;
+                    if (iconInput?.files && iconInput.files[0]) {
+                        const iconFile = iconInput.files[0];
+                        const iconFormData = new FormData();
+                        iconFormData.append('file', iconFile);
+                        iconFormData.append('name', `${equipmentName} Icon`);
+                        iconFormData.append('description', `Icon for ${equipmentName}`);
+                        iconFormData.append('language', 'en');
+                        iconFormData.append('storageType', storageSelect?.value || 'arweave');
+                        
+                        const iconResponse = await fetch(`${API_BASE_URL}/api/publish/media`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: iconFormData
+                        });
+                        
+                        const iconResult = await iconResponse.json();
+                        if (iconResponse.ok && iconResult.did) {
+                            iconDID = iconResult.did;
+                        }
+                    }
+                    
+                    // Create equipment
+                    const equipmentData = {
+                        storageType: storageSelect?.value || 'arweave',
+                        basic: {
+                            name: equipmentName,
+                            description: descInput?.value || `Equipment: ${equipmentName}`,
+                            language: 'en',
+                            date: Math.floor(Date.now() / 1000)
+                        },
+                        fitnessEquipment: {
+                            category: 'General',
+                            subcategory: 'Training Equipment'
+                        }
+                    };
+                    
+                    if (iconDID) {
+                        equipmentData.basic.avatar = iconDID;
+                    }
+                    
+                    const equipmentResponse = await fetch(`${API_BASE_URL}/api/publish/fitnessEquipment`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify(equipmentData)
+                    });
+                    
+                    const equipmentResult = await equipmentResponse.json();
+                    if (equipmentResponse.ok && equipmentResult.did) {
+                        equipmentDIDs.push(equipmentResult.did);
+                    }
+                }
+            }
+            
+            return equipmentDIDs;
         }
 
         // ==================== END EXERCISE BUNDLE FUNCTIONS ====================
