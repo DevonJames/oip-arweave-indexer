@@ -7204,8 +7204,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     },
                     body: JSON.stringify({
                         text: prompt,
-                        model: 'gpt-4o-mini',
-                        processing_mode: 'llm-gpt-4o-mini',
+                        model: 'grok-beta',
+                        processing_mode: 'llm-grok-4',
                         return_audio: false,
                         conversation_history: []
                     })
@@ -11283,8 +11283,11 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                     <div style="flex: 1;">
                                         <input type="text" id="bundle-exercise-name" placeholder="e.g., Roll Lat Foam Rolling" style="width: 100%;">
                                     </div>
-                                    <button type="button" class="btn-small" onclick="copyBundleFromLatestExercise()">
+                                    <button type="button" class="btn-small btn-secondary" onclick="copyBundleFromLatestExercise()">
                                         📋 Copy From Latest
+                                    </button>
+                                    <button type="button" class="btn-small" onclick="fillBundleExerciseWithAI()">
+                                        🤖 Fill In With AI
                                     </button>
                                 </div>
                             </div>
@@ -11297,6 +11300,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             <div class="form-group">
                                 <label for="bundle-exercise-instructions">Instructions:</label>
                                 <textarea id="bundle-exercise-instructions" rows="4" placeholder="Step-by-step exercise instructions..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bundle-exercise-muscle-groups">Muscle Groups (comma-separated):</label>
+                                <input type="text" id="bundle-exercise-muscle-groups" placeholder="chest, triceps, shoulders">
+                                <small>Primary muscle groups targeted by this exercise</small>
                             </div>
 
                             <div class="form-group">
@@ -11354,6 +11363,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             <div class="form-group hidden" id="bundle-exercise-est-duration-group">
                                 <label for="bundle-exercise-est-duration">Estimated Duration (minutes):</label>
                                 <input type="number" id="bundle-exercise-est-duration" min="0">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Exercise Properties:</label>
+                                <div style="margin-top: 10px;">
+                                    <label><input type="checkbox" id="bundle-exercise-bodyweight"> Bodyweight Exercise</label>
+                                </div>
                             </div>
 
                             <div class="form-group">
@@ -15966,13 +15982,29 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             
             if (storageType === 'gun') {
                 accessGroup?.classList.remove('hidden');
-                // Initialize organization dropdown
-                const orgSelect = document.getElementById('bundle-gif-org');
-                if (orgSelect && bundleOrganizations.length > 0) {
+                // Trigger access update to show org dropdown if needed
+                updateBundleGifAccess();
+            } else {
+                accessGroup?.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Update GIF access level to show/hide organization dropdown
+         */
+        function updateBundleGifAccess() {
+            const accessLevel = document.getElementById('bundle-gif-access')?.value;
+            const orgGroup = document.getElementById('bundle-gif-org-group');
+            const orgSelect = document.getElementById('bundle-gif-org');
+            
+            if (accessLevel === 'organization') {
+                orgGroup?.classList.remove('hidden');
+                // Populate organization dropdown
+                if (orgSelect) {
                     populateBundleOrgDropdown(orgSelect);
                 }
             } else {
-                accessGroup?.classList.add('hidden');
+                orgGroup?.classList.add('hidden');
             }
         }
 
@@ -16053,7 +16085,15 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     
                     <div style="margin-bottom: 8px;">
                         <label style="display: block; margin-bottom: 4px; font-size: 13px;">Equipment Name:</label>
-                        <input type="text" class="equip-name" placeholder="e.g., Barbell" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                        <div style="display: flex; gap: 6px; align-items: stretch;">
+                            <input type="text" class="equip-name" placeholder="e.g., Barbell" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <button type="button" class="equip-copy-btn btn-small btn-secondary" onclick="copyEquipmentFromLatest('${itemId}')" title="Copy from latest matching equipment" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
+                                📋 Copy
+                            </button>
+                            <button type="button" class="equip-ai-btn btn-small" onclick="fillEquipmentWithAI('${itemId}')" title="Fill with AI" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
+                                🤖 AI
+                            </button>
+                        </div>
                     </div>
                     
                     <div style="margin-bottom: 8px;">
@@ -16306,39 +16346,302 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         /**
          * Copy from latest exercise
          */
+        /**
+         * Copy from latest exercise (Bundle)
+         */
         async function copyBundleFromLatestExercise() {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/records/search`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({
-                        recordTypes: ['exercise'],
-                        size: 1,
-                        sort: [{ 'oip.indexedAt': 'desc' }]
-                    })
+                const nameValue = document.getElementById('bundle-exercise-name')?.value.trim();
+                
+                if (!nameValue) {
+                    alert('Please enter an exercise name first to search for matching records');
+                    return;
+                }
+
+                const params = new URLSearchParams({
+                    recordType: 'exercise',
+                    search: nameValue,
+                    noDuplicates: 'true',
+                    limit: '1',
+                    sortBy: 'date:desc',
+                    resolveDepth: '2'
                 });
 
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.records && data.records.length > 0) {
-                        const exercise = data.records[0];
-                        
-                        // Populate fields
-                        document.getElementById('bundle-exercise-difficulty').value = exercise.data?.exercise?.difficulty || 'beginner';
-                        document.getElementById('bundle-exercise-category').value = exercise.data?.exercise?.category || 'strength';
-                        document.getElementById('bundle-exercise-type').value = exercise.data?.exercise?.exercise_type || 'main';
-                        document.getElementById('bundle-exercise-measurement').value = exercise.data?.exercise?.measurement_type || 'reps';
-                        
-                        updateBundleExerciseMeasurement();
-                        alert('📋 Latest exercise data copied!');
-                    }
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
                 }
+
+                console.log(`Searching for latest exercise matching: "${nameValue}"`);
+
+                const response = await fetch(`${API_BASE_URL}/api/records?${params}`, {
+                    method: 'GET',
+                    headers: headers
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch records');
+                }
+
+                const data = await response.json();
+                
+                if (!data.records || data.records.length === 0) {
+                    alert(`No existing exercises found matching "${nameValue}"`);
+                    return;
+                }
+
+                const record = data.records[0];
+                const exerciseData = record.data?.exercise;
+                const basicData = record.data?.basic;
+                
+                // Populate fields
+                if (basicData?.description) {
+                    document.getElementById('bundle-exercise-description').value = basicData.description;
+                }
+                if (exerciseData?.instructions && Array.isArray(exerciseData.instructions)) {
+                    document.getElementById('bundle-exercise-instructions').value = exerciseData.instructions.join('\n');
+                }
+                if (exerciseData?.muscleGroups && Array.isArray(exerciseData.muscleGroups)) {
+                    document.getElementById('bundle-exercise-muscle-groups').value = exerciseData.muscleGroups.join(', ');
+                }
+                if (exerciseData?.difficulty) {
+                    document.getElementById('bundle-exercise-difficulty').value = exerciseData.difficulty;
+                }
+                if (exerciseData?.category) {
+                    document.getElementById('bundle-exercise-category').value = exerciseData.category;
+                }
+                if (exerciseData?.exercise_type) {
+                    document.getElementById('bundle-exercise-type').value = exerciseData.exercise_type;
+                }
+                if (exerciseData?.measurement_type) {
+                    document.getElementById('bundle-exercise-measurement').value = exerciseData.measurement_type;
+                    updateBundleExerciseMeasurement();
+                }
+                if (exerciseData?.recommended_sets) {
+                    document.getElementById('bundle-exercise-sets').value = exerciseData.recommended_sets;
+                }
+                if (exerciseData?.recommended_reps) {
+                    document.getElementById('bundle-exercise-reps').value = exerciseData.recommended_reps;
+                }
+                if (exerciseData?.target_duration_seconds) {
+                    document.getElementById('bundle-exercise-duration').value = exerciseData.target_duration_seconds;
+                }
+                if (exerciseData?.est_duration_minutes) {
+                    document.getElementById('bundle-exercise-est-duration').value = exerciseData.est_duration_minutes;
+                }
+                if (exerciseData?.isBodyweight !== undefined) {
+                    document.getElementById('bundle-exercise-bodyweight').checked = exerciseData.isBodyweight;
+                }
+                
+                alert('📋 Exercise data copied successfully!');
             } catch (error) {
                 console.error('Error copying from latest:', error);
                 alert('Failed to copy from latest exercise');
+            }
+        }
+
+        /**
+         * Fill exercise with AI (Bundle)
+         */
+        async function fillBundleExerciseWithAI() {
+            try {
+                const nameValue = document.getElementById('bundle-exercise-name')?.value.trim();
+                
+                if (!nameValue) {
+                    alert('Please enter an exercise name first to provide context for AI');
+                    return;
+                }
+
+                console.log(`[Bundle AI] Filling in exercise fields for: "${nameValue}"`);
+
+                // Build a simple prompt for the AI
+                const prompt = `You are an expert fitness assistant. Given the exercise name "${nameValue}", please provide:
+1. A brief description (2-3 sentences)
+2. Step-by-step instructions (3-5 steps, one per line)
+3. Primary muscle groups targeted (comma-separated list)
+4. Appropriate difficulty level (beginner/intermediate/advanced)
+5. Exercise category (strength/cardio/flexibility)
+
+Return ONLY a JSON object with this structure:
+{
+  "description": "...",
+  "instructions": "step1\\nstep2\\nstep3",
+  "muscleGroups": "muscle1, muscle2, muscle3",
+  "difficulty": "beginner",
+  "category": "strength"
+}`;
+
+                const response = await fetch(`${API_BASE_URL}/api/voice/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                    },
+                    body: JSON.stringify({
+                        text: prompt,
+                        model: 'grok-beta',
+                        processing_mode: 'llm-grok-4',
+                        return_audio: false,
+                        conversation_history: []
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.response_text) {
+                    // Try to parse the AI response as JSON
+                    const aiData = JSON.parse(data.response_text);
+                    
+                    // Populate fields
+                    if (aiData.description) {
+                        document.getElementById('bundle-exercise-description').value = aiData.description;
+                    }
+                    if (aiData.instructions) {
+                        document.getElementById('bundle-exercise-instructions').value = aiData.instructions;
+                    }
+                    if (aiData.muscleGroups) {
+                        document.getElementById('bundle-exercise-muscle-groups').value = aiData.muscleGroups;
+                    }
+                    if (aiData.difficulty) {
+                        document.getElementById('bundle-exercise-difficulty').value = aiData.difficulty;
+                    }
+                    if (aiData.category) {
+                        document.getElementById('bundle-exercise-category').value = aiData.category;
+                    }
+                    
+                    alert('🤖 AI successfully filled in exercise fields!');
+                } else {
+                    throw new Error('No response from AI');
+                }
+            } catch (error) {
+                console.error('Error with AI fill:', error);
+                alert('Failed to fill with AI. Please try again or fill manually.');
+            }
+        }
+
+        /**
+         * Copy equipment from latest (Bundle)
+         */
+        async function copyEquipmentFromLatest(itemId) {
+            try {
+                const item = document.getElementById(itemId);
+                if (!item) return;
+                
+                const nameInput = item.querySelector('.equip-name');
+                const nameValue = nameInput?.value.trim();
+                
+                if (!nameValue) {
+                    alert('Please enter an equipment name first to search for matching records');
+                    return;
+                }
+
+                const params = new URLSearchParams({
+                    recordType: 'fitnessEquipment',
+                    search: nameValue,
+                    noDuplicates: 'true',
+                    limit: '1',
+                    sortBy: 'date:desc'
+                });
+
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                console.log(`Searching for latest equipment matching: "${nameValue}"`);
+
+                const response = await fetch(`${API_BASE_URL}/api/records?${params}`, {
+                    method: 'GET',
+                    headers: headers
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch records');
+                }
+
+                const data = await response.json();
+                
+                if (!data.records || data.records.length === 0) {
+                    alert(`No existing equipment found matching "${nameValue}"`);
+                    return;
+                }
+
+                const record = data.records[0];
+                const basicData = record.data?.basic;
+                
+                // Populate description
+                const descTextarea = item.querySelector('.equip-description');
+                if (basicData?.description && descTextarea) {
+                    descTextarea.value = basicData.description;
+                }
+                
+                alert('📋 Equipment data copied successfully!');
+            } catch (error) {
+                console.error('Error copying equipment:', error);
+                alert('Failed to copy from latest equipment');
+            }
+        }
+
+        /**
+         * Fill equipment with AI (Bundle)
+         */
+        async function fillEquipmentWithAI(itemId) {
+            try {
+                const item = document.getElementById(itemId);
+                if (!item) return;
+                
+                const nameInput = item.querySelector('.equip-name');
+                const nameValue = nameInput?.value.trim();
+                
+                if (!nameValue) {
+                    alert('Please enter an equipment name first to provide context for AI');
+                    return;
+                }
+
+                console.log(`[Bundle AI] Filling in equipment fields for: "${nameValue}"`);
+
+                // Build a simple prompt for the AI
+                const prompt = `You are an expert fitness equipment specialist. Given the equipment name "${nameValue}", please provide a brief, informative description (2-3 sentences) about this equipment, including what it's used for and its key benefits.
+
+Return ONLY a JSON object with this structure:
+{
+  "description": "..."
+}`;
+
+                const response = await fetch(`${API_BASE_URL}/api/voice/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                    },
+                    body: JSON.stringify({
+                        text: prompt,
+                        model: 'grok-beta',
+                        processing_mode: 'llm-grok-4',
+                        return_audio: false,
+                        conversation_history: []
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.response_text) {
+                    // Try to parse the AI response as JSON
+                    const aiData = JSON.parse(data.response_text);
+                    
+                    // Populate description
+                    const descTextarea = item.querySelector('.equip-description');
+                    if (aiData.description && descTextarea) {
+                        descTextarea.value = aiData.description;
+                    }
+                    
+                    alert('🤖 AI successfully filled in equipment description!');
+                } else {
+                    throw new Error('No response from AI');
+                }
+            } catch (error) {
+                console.error('Error with AI fill:', error);
+                alert('Failed to fill with AI. Please try again or fill manually.');
             }
         }
 
@@ -16664,6 +16967,14 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
 
                 const storageType = document.getElementById('bundle-exercise-storage')?.value || 'arweave';
 
+                // Get instructions
+                const instructionsText = document.getElementById('bundle-exercise-instructions')?.value || '';
+                const instructions = instructionsText.split('\n').map(i => i.trim()).filter(i => i);
+
+                // Get muscle groups
+                const muscleGroupsText = document.getElementById('bundle-exercise-muscle-groups')?.value || '';
+                const muscleGroups = muscleGroupsText.split(',').map(m => m.trim()).filter(m => m);
+
                 const exerciseData = {
                     storageType,
                     basic: {
@@ -16672,13 +16983,19 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         language: 'en'
                     },
                     exercise: {
-                        instructions: [document.getElementById('bundle-exercise-instructions')?.value || ''],
+                        instructions: instructions.length > 0 ? instructions : [''],
                         difficulty: document.getElementById('bundle-exercise-difficulty')?.value || 'beginner',
                         category: document.getElementById('bundle-exercise-category')?.value || 'strength',
                         exercise_type: document.getElementById('bundle-exercise-type')?.value || 'main',
-                        measurement_type: document.getElementById('bundle-exercise-measurement')?.value || 'reps'
+                        measurement_type: document.getElementById('bundle-exercise-measurement')?.value || 'reps',
+                        isBodyweight: document.getElementById('bundle-exercise-bodyweight')?.checked || false
                     }
                 };
+
+                // Add muscle groups if provided
+                if (muscleGroups.length > 0) {
+                    exerciseData.exercise.muscleGroups = muscleGroups;
+                }
 
                 // Add avatar (GIF) if available
                 if (gifDID) {
