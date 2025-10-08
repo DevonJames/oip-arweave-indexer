@@ -7378,7 +7378,10 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 setFieldValue('exercise-category', exerciseData.category);
             }
             if (exerciseData.equipmentRequired && Array.isArray(exerciseData.equipmentRequired)) {
-                setFieldValue('exercise-equipment', exerciseData.equipmentRequired.join(', '));
+                populateEquipmentField('equipment-required-container', exerciseData.equipmentRequired);
+            }
+            if (exerciseData.alternativeEquipment && Array.isArray(exerciseData.alternativeEquipment)) {
+                populateEquipmentField('alternative-equipment-container', exerciseData.alternativeEquipment);
             }
             if (exerciseData.exercise_type) {
                 setFieldValue('exercise-type', exerciseData.exercise_type);
@@ -7395,8 +7398,38 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             if (exerciseData.recommended_reps) {
                 setFieldValue('exercise-recommended-reps', exerciseData.recommended_reps);
             }
+            if (exerciseData.target_duration_seconds) {
+                setFieldValue('exercise-target-duration', exerciseData.target_duration_seconds);
+            }
             if (exerciseData.isBodyweight) {
                 setCheckboxValue('exercise-bodyweight', exerciseData.isBodyweight);
+            }
+        }
+
+        // Helper function to populate equipment fields
+        function populateEquipmentField(containerId, equipmentList) {
+            const container = document.getElementById(containerId);
+            if (!container || !equipmentList || equipmentList.length === 0) return;
+            
+            // Clear existing rows except the first one
+            const existingRows = container.querySelectorAll('.equipment-row');
+            for (let i = 1; i < existingRows.length; i++) {
+                existingRows[i].remove();
+            }
+            
+            // Populate the first row
+            const firstSelect = container.querySelector('.equipment-select');
+            if (firstSelect && equipmentList[0]) {
+                firstSelect.value = equipmentList[0];
+            }
+            
+            // Add additional rows for remaining equipment
+            for (let i = 1; i < equipmentList.length; i++) {
+                addEquipmentRow(containerId);
+                const newSelect = container.lastElementChild.querySelector('.equipment-select');
+                if (newSelect && equipmentList[i]) {
+                    newSelect.value = equipmentList[i];
+                }
             }
         }
 
@@ -9934,6 +9967,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         initializeStorageTypeHandler();
                         // Initialize exercise access level
                         updateExerciseAccessLevel();
+                        // Load equipment data
+                        loadEquipment();
                     }, 100);
                     break;
                 case 'fitnessEquipment':
@@ -11269,9 +11304,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     <div class="form-group">
                         <label for="exercise-difficulty">Difficulty:</label>
                         <select id="exercise-difficulty">
-                            <option value="Beginner">Beginner</option>
-                            <option value="Intermediate" selected>Intermediate</option>
-                            <option value="Advanced">Advanced</option>
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate" selected>Intermediate</option>
+                            <option value="advanced">Advanced</option>
                         </select>
                     </div>
 
@@ -11279,39 +11314,58 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     <div class="form-group">
                         <label for="exercise-category">Category:</label>
                         <select id="exercise-category">
-                            <option value="Strength" selected>Strength</option>
-                            <option value="Cardio">Cardio</option>
-                            <option value="Flexibility">Flexibility</option>
-                            <option value="Balance">Balance</option>
-                            <option value="Functional">Functional</option>
-                            <option value="Rehabilitation">Rehabilitation</option>
+                            <option value="strength" selected>Strength</option>
+                            <option value="cardio">Cardio</option>
+                            <option value="flexibility">Flexibility</option>
                         </select>
                     </div>
 
                     <!-- Equipment Required -->
                     <div class="form-group">
-                        <label for="exercise-equipment">Equipment Required (comma-separated):</label>
-                        <input type="text" id="exercise-equipment" placeholder="barbell, weight bench">
+                        <label>Equipment Required:</label>
+                        <div id="equipment-required-container">
+                            <div class="equipment-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: end;">
+                                <select class="equipment-select" style="flex: 1;">
+                                    <option value="">Loading equipment...</option>
+                                </select>
+                                <button type="button" onclick="addEquipmentRow('equipment-required-container')" class="btn-small" title="Add another equipment">+</button>
+                            </div>
+                        </div>
                         <small>Equipment needed to perform this exercise</small>
+                    </div>
+
+                    <!-- Alternative Equipment -->
+                    <div class="form-group">
+                        <label>Alternative Equipment:</label>
+                        <div id="alternative-equipment-container">
+                            <div class="equipment-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: end;">
+                                <select class="equipment-select" style="flex: 1;">
+                                    <option value="">Loading equipment...</option>
+                                </select>
+                                <button type="button" onclick="addEquipmentRow('alternative-equipment-container')" class="btn-small" title="Add another equipment">+</button>
+                            </div>
+                        </div>
+                        <small>Alternative equipment that can be used for this exercise</small>
                     </div>
 
                     <!-- Exercise Type -->
                     <div class="form-group">
                         <label for="exercise-type">Exercise Type:</label>
                         <select id="exercise-type">
-                            <option value="Main" selected>Main</option>
-                            <option value="Warmup">Warmup</option>
-                            <option value="Cooldown">Cooldown</option>
+                            <option value="main" selected>Main</option>
+                            <option value="warmup">Warm-Up</option>
+                            <option value="cooldown">Cool-Down</option>
                         </select>
                     </div>
 
                     <!-- Exercise Settings -->
                     <div class="form-group">
                         <label for="exercise-measurement-type">Measurement Type:</label>
-                        <select id="exercise-measurement-type">
-                            <option value="Reps" selected>Reps</option>
-                            <option value="Time">Time (seconds)</option>
-                            <option value="Distance">Distance</option>
+                        <select id="exercise-measurement-type" onchange="updateExerciseMeasurementFields()">
+                            <option value="reps" selected>Reps</option>
+                            <option value="timed">Time (seconds)</option>
+                            <option value="hold">Hold</option>
+                            <option value="maxdur">Maximum Duration</option>
                         </select>
                     </div>
 
@@ -11320,7 +11374,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <input type="number" id="exercise-duration" min="1" max="60" value="5">
                     </div>
 
-                    <div class="form-group" style="display: flex; gap: 15px;">
+                    <!-- Conditional fields based on measurement type -->
+                    <div id="exercise-reps-fields" class="form-group" style="display: flex; gap: 15px;">
                         <div style="flex: 1;">
                             <label for="exercise-recommended-sets">Recommended Sets:</label>
                             <input type="number" id="exercise-recommended-sets" min="1" max="10" value="3">
@@ -11329,6 +11384,11 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             <label for="exercise-recommended-reps">Recommended Reps:</label>
                             <input type="number" id="exercise-recommended-reps" min="1" max="100" value="8">
                         </div>
+                    </div>
+
+                    <div id="exercise-time-fields" class="form-group" style="display: none;">
+                        <label for="exercise-target-duration">Target Duration (seconds):</label>
+                        <input type="number" id="exercise-target-duration" min="1" max="3600" value="30">
                     </div>
 
                     <!-- Exercise Flags -->
@@ -14922,6 +14982,102 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             button.parentElement.remove();
         }
 
+        // Equipment management functions
+        let availableEquipment = [];
+
+        async function loadEquipment() {
+            try {
+                console.log('📋 Loading equipment from API...');
+                
+                // Get the API base URL from environment variable or use current host as fallback
+                const apiBaseUrl = window.API_BASE_URL || window.location.origin;
+                const equipmentUrl = `${apiBaseUrl}/api/records?resolveDepth=0&recordType=fitnessEquipment&noDuplicates=true`;
+                
+                console.log(`🔗 Using API base URL: ${apiBaseUrl}`);
+                
+                const response = await fetch(equipmentUrl);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    availableEquipment = data.records || [];
+                    console.log(`✅ Loaded ${availableEquipment.length} equipment items`);
+                    updateEquipmentDropdowns();
+                } else {
+                    console.warn('⚠️ Failed to load equipment from API');
+                    updateEquipmentDropdowns();
+                }
+            } catch (error) {
+                console.warn('⚠️ Error loading equipment:', error);
+                updateEquipmentDropdowns();
+            }
+        }
+
+        function updateEquipmentDropdowns() {
+            const selects = document.querySelectorAll('.equipment-select');
+            selects.forEach(select => {
+                // Clear existing options except the first one
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                // Add equipment options
+                availableEquipment.forEach(equipment => {
+                    const option = document.createElement('option');
+                    option.value = equipment.oip?.did || '';
+                    option.textContent = equipment.data?.basic?.name || 'Unknown Equipment';
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        function addEquipmentRow(containerId) {
+            const container = document.getElementById(containerId);
+            const newRow = document.createElement('div');
+            newRow.className = 'equipment-row';
+            newRow.style = 'display: flex; gap: 10px; margin-bottom: 10px; align-items: end;';
+            newRow.innerHTML = `
+                <select class="equipment-select" style="flex: 1;">
+                    <option value="">Select equipment...</option>
+                </select>
+                <button type="button" onclick="removeEquipmentRow(this)" class="btn-small" title="Remove equipment">✕</button>
+            `;
+            container.appendChild(newRow);
+            updateEquipmentDropdowns();
+        }
+
+        function removeEquipmentRow(button) {
+            button.parentElement.remove();
+        }
+
+        function getEquipmentValues(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return [];
+            
+            const selects = container.querySelectorAll('.equipment-select');
+            const values = [];
+            selects.forEach(select => {
+                if (select.value && select.value.trim()) {
+                    values.push(select.value.trim());
+                }
+            });
+            return values;
+        }
+
+        // Exercise measurement type handler
+        function updateExerciseMeasurementFields() {
+            const measurementType = document.getElementById('exercise-measurement-type').value;
+            const repsFields = document.getElementById('exercise-reps-fields');
+            const timeFields = document.getElementById('exercise-time-fields');
+            
+            if (measurementType === 'timed' || measurementType === 'hold' || measurementType === 'maxdur') {
+                repsFields.style.display = 'none';
+                timeFields.style.display = 'block';
+            } else {
+                repsFields.style.display = 'flex';
+                timeFields.style.display = 'none';
+            }
+        }
+
         // X Post Scraping Functions
         async function scrapeXPost() {
             const url = document.getElementById('x-post-url').value;
@@ -16226,13 +16382,15 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         muscleGroups: document.getElementById('exercise-muscle-groups').value.split(',').map(t => t.trim()).filter(t => t),
                         difficulty: document.getElementById('exercise-difficulty').value,
                         category: document.getElementById('exercise-category').value,
-                        equipmentRequired: document.getElementById('exercise-equipment').value.split(',').map(t => t.trim()).filter(t => t),
+                        equipmentRequired: getEquipmentValues('equipment-required-container'),
+                        alternativeEquipment: getEquipmentValues('alternative-equipment-container'),
                         isBodyweight: document.getElementById('exercise-bodyweight').checked,
                         exercise_type: document.getElementById('exercise-type').value,
                         measurement_type: document.getElementById('exercise-measurement-type').value,
                         est_duration_minutes: parseInt(document.getElementById('exercise-duration').value) || 5,
                         recommended_sets: parseInt(document.getElementById('exercise-recommended-sets').value) || 3,
-                        recommended_reps: parseInt(document.getElementById('exercise-recommended-reps').value) || 8
+                        recommended_reps: parseInt(document.getElementById('exercise-recommended-reps').value) || 8,
+                        target_duration_seconds: parseInt(document.getElementById('exercise-target-duration').value) || 30
                     }
                 };
 
