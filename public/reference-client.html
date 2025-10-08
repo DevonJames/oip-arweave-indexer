@@ -15917,16 +15917,16 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         /**
          * Initialize Exercise Bundle Interface
          */
-        function initializeExerciseBundleInterface() {
+        async function initializeExerciseBundleInterface() {
             console.log('🎯 Initializing Exercise Bundle Interface');
             
-            // Load organizations for dropdowns
-            loadOrganizationsForBundle();
+            // Load organizations FIRST and wait for it to complete
+            await loadOrganizationsForBundle();
             
-            // Add first equipment item
+            // Add first equipment item (will now have orgs available)
             addBundleEquipmentItem();
             
-            // Initialize GIF storage type handler
+            // Initialize GIF storage type handler (will now have orgs available)
             updateBundleGifStorageType();
         }
 
@@ -15970,17 +15970,25 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
          * Populate organization dropdown for a specific element
          */
         function populateBundleOrgDropdown(selectElement) {
-            if (!selectElement) return;
+            if (!selectElement) {
+                console.warn('[Bundle] populateBundleOrgDropdown called with null selectElement');
+                return;
+            }
+            
+            console.log('[Bundle] Populating dropdown with', bundleOrganizations.length, 'organizations');
             
             selectElement.innerHTML = '<option value="">Select Organization</option>';
             
-            bundleOrganizations.forEach(org => {
+            bundleOrganizations.forEach((org, index) => {
                 const option = document.createElement('option');
                 option.value = org.did || '';
                 // Show handle (name)
                 option.textContent = org.handle ? `${org.handle} (${org.name || 'Unnamed'})` : (org.name || 'Unnamed Organization');
                 selectElement.appendChild(option);
+                console.log(`[Bundle] Added option ${index + 1}:`, option.textContent, '=', option.value);
             });
+            
+            console.log('[Bundle] Dropdown now has', selectElement.options.length, 'total options');
         }
 
         /**
@@ -16007,10 +16015,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             const orgGroup = document.getElementById('bundle-gif-org-group');
             const orgSelect = document.getElementById('bundle-gif-org');
             
+            console.log('[Bundle GIF] Access level changed to:', accessLevel, 'Orgs loaded:', bundleOrganizations.length);
+            
             if (accessLevel === 'organization') {
                 orgGroup?.classList.remove('hidden');
                 // Populate organization dropdown
                 if (orgSelect) {
+                    console.log('[Bundle GIF] Populating org dropdown with', bundleOrganizations.length, 'orgs');
                     populateBundleOrgDropdown(orgSelect);
                 }
             } else {
@@ -16132,18 +16143,20 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
          */
         function updateEquipIconStorageType(itemId) {
             const item = document.getElementById(itemId);
-            if (!item) return;
+            if (!item) {
+                console.warn('[Bundle Equipment] updateEquipIconStorageType called with invalid itemId:', itemId);
+                return;
+            }
             
             const storageType = item.querySelector('.equip-icon-storage')?.value;
             const accessGroup = item.querySelector('.equip-icon-access-group');
             
+            console.log('[Bundle Equipment] Storage type for', itemId, ':', storageType, 'Orgs loaded:', bundleOrganizations.length);
+            
             if (storageType === 'gun') {
                 accessGroup?.classList.remove('hidden');
-                // Initialize organization dropdown
-                const orgSelect = item.querySelector('.equip-icon-org');
-                if (orgSelect && bundleOrganizations.length > 0) {
-                    populateBundleOrgDropdown(orgSelect);
-                }
+                // Trigger access update to populate org dropdown if needed
+                updateEquipIconAccess(itemId);
             } else {
                 accessGroup?.classList.add('hidden');
             }
@@ -16158,9 +16171,17 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             
             const accessLevel = item.querySelector('.equip-icon-access')?.value;
             const orgGroup = item.querySelector('.equip-icon-org-group');
+            const orgSelect = item.querySelector('.equip-icon-org');
+            
+            console.log('[Bundle Equipment] Access level for', itemId, ':', accessLevel, 'Orgs loaded:', bundleOrganizations.length);
             
             if (accessLevel === 'organization') {
                 orgGroup?.classList.remove('hidden');
+                // Populate organization dropdown
+                if (orgSelect) {
+                    console.log('[Bundle Equipment] Populating org dropdown for', itemId);
+                    populateBundleOrgDropdown(orgSelect);
+                }
             } else {
                 orgGroup?.classList.add('hidden');
             }
