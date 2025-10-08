@@ -16824,7 +16824,8 @@ Return ONLY a JSON object with this structure:
                     }
                 }
 
-                const response = await fetch(`${API_BASE_URL}/api/publish/media`, {
+                // Step 1: Upload file to get mediaId
+                const uploadResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${authToken}`
@@ -16832,9 +16833,59 @@ Return ONLY a JSON object with this structure:
                     body: formData
                 });
 
-                const result = await response.json();
+                if (!uploadResponse.ok) {
+                    const errorText = await uploadResponse.text();
+                    console.error('Icon upload error response:', errorText);
+                    throw new Error(`File upload failed: ${uploadResponse.status}: ${errorText.substring(0, 200)}`);
+                }
+
+                const uploadResult = await uploadResponse.json();
+                const mediaId = uploadResult.mediaId;
+
+                if (!mediaId) {
+                    throw new Error('No mediaId returned from upload');
+                }
+
+                // Step 2: Create OIP record for the image
+                const recordData = {
+                    storageType,
+                    basic: {
+                        name,
+                        description: `Icon for equipment`,
+                        language: 'en'
+                    },
+                    image: {
+                        media_ref: mediaId
+                    }
+                };
+
+                if (storageType === 'gun') {
+                    recordData.accessControl = {
+                        access_level: accessLevel
+                    };
+                    if (accessLevel === 'organization' && orgDID) {
+                        recordData.accessControl.shared_with = orgDID;
+                    }
+                }
+
+                const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(recordData)
+                });
+
+                if (!recordResponse.ok) {
+                    const errorText = await recordResponse.text();
+                    console.error('Icon record error response:', errorText);
+                    throw new Error(`Record creation failed: ${recordResponse.status}: ${errorText.substring(0, 200)}`);
+                }
+
+                const result = await recordResponse.json();
                 
-                if (response.ok && result.did) {
+                if (result.did) {
                     return result.did;
                 } else {
                     throw new Error(result.error || 'Failed to publish icon');
@@ -16877,7 +16928,7 @@ Return ONLY a JSON object with this structure:
                     equipmentData.basic.avatar = iconDID;
                 }
 
-                const response = await fetch(`${API_BASE_URL}/api/publish/fitnessEquipment`, {
+                const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=fitnessEquipment`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -16886,9 +16937,15 @@ Return ONLY a JSON object with this structure:
                     body: JSON.stringify(equipmentData)
                 });
 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Equipment publish error response:', errorText);
+                    throw new Error(`Server returned ${response.status}: ${errorText.substring(0, 200)}`);
+                }
+
                 const result = await response.json();
                 
-                if (response.ok && result.did) {
+                if (result.did) {
                     return result.did;
                 } else {
                     throw new Error(result.error || 'Failed to publish equipment');
@@ -16925,22 +16982,11 @@ Return ONLY a JSON object with this structure:
                         const width = row.querySelector('.bundle-gif-width').value;
                         const height = row.querySelector('.bundle-gif-height').value;
 
-                        // Publish each GIF as a media file
+                        // Step 1: Upload file to get mediaId
                         const formData = new FormData();
                         formData.append('file', file);
-                        formData.append('name', `${name} - ${resolution}`);
-                        formData.append('description', `GIF resolution: ${resolution}`);
-                        formData.append('language', 'en');
-                        formData.append('storageType', storageType);
-                        
-                        if (storageType === 'gun') {
-                            formData.append('accessLevel', accessLevel);
-                            if (accessLevel === 'organization' && orgDID) {
-                                formData.append('organizationDID', orgDID);
-                            }
-                        }
 
-                        const mediaResponse = await fetch(`${API_BASE_URL}/api/publish/media`, {
+                        const uploadResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${authToken}`
@@ -16948,12 +16994,62 @@ Return ONLY a JSON object with this structure:
                             body: formData
                         });
 
-                        const mediaResult = await mediaResponse.json();
+                        if (!uploadResponse.ok) {
+                            const errorText = await uploadResponse.text();
+                            console.error(`GIF ${resolution} upload error:`, errorText);
+                            throw new Error(`Failed to upload ${resolution} GIF: ${uploadResponse.status}`);
+                        }
+
+                        const uploadResult = await uploadResponse.json();
+                        const mediaId = uploadResult.mediaId;
+
+                        if (!mediaId) {
+                            throw new Error(`No mediaId returned for ${resolution} GIF`);
+                        }
+
+                        // Step 2: Create image record for this GIF
+                        const imageData = {
+                            storageType,
+                            basic: {
+                                name: `${name} - ${resolution}`,
+                                description: `GIF resolution: ${resolution}`,
+                                language: 'en'
+                            },
+                            image: {
+                                media_ref: mediaId
+                            }
+                        };
+
+                        if (storageType === 'gun') {
+                            imageData.accessControl = {
+                                access_level: accessLevel
+                            };
+                            if (accessLevel === 'organization' && orgDID) {
+                                imageData.accessControl.shared_with = orgDID;
+                            }
+                        }
+
+                        const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: JSON.stringify(imageData)
+                        });
+
+                        if (!recordResponse.ok) {
+                            const errorText = await recordResponse.text();
+                            console.error(`GIF ${resolution} record error:`, errorText);
+                            throw new Error(`Failed to create ${resolution} GIF record: ${recordResponse.status}`);
+                        }
+
+                        const recordResult = await recordResponse.json();
                         
-                        if (mediaResponse.ok && mediaResult.did) {
-                            gifMediaRefs.push(mediaResult.did);
+                        if (recordResult.did) {
+                            gifMediaRefs.push(recordResult.did);
                         } else {
-                            throw new Error(`Failed to publish ${resolution} GIF`);
+                            throw new Error(`No DID returned for ${resolution} GIF`);
                         }
                     }
                 }
@@ -16992,7 +17088,7 @@ Return ONLY a JSON object with this structure:
                     }
                 }
 
-                const response = await fetch(`${API_BASE_URL}/api/publish/multiResolutionGif`, {
+                const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=multiResolutionGif`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -17000,6 +17096,12 @@ Return ONLY a JSON object with this structure:
                     },
                     body: JSON.stringify(gifCollectionData)
                 });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('GIF publish error response:', errorText);
+                    throw new Error(`Server returned ${response.status}: ${errorText.substring(0, 200)}`);
+                }
 
                 const result = await response.json();
                 
@@ -17082,7 +17184,7 @@ Return ONLY a JSON object with this structure:
                     if (estDuration) exerciseData.exercise.est_duration_minutes = parseInt(estDuration);
                 }
 
-                const response = await fetch(`${API_BASE_URL}/api/publish/exercise`, {
+                const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=exercise`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -17091,9 +17193,15 @@ Return ONLY a JSON object with this structure:
                     body: JSON.stringify(exerciseData)
                 });
 
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Exercise publish error response:', errorText);
+                    throw new Error(`Server returned ${response.status}: ${errorText.substring(0, 200)}`);
+                }
+
                 const result = await response.json();
                 
-                if (response.ok && result.did) {
+                if (result.did) {
                     return result.did;
                 } else {
                     throw new Error(result.error || 'Failed to publish exercise');
@@ -17155,16 +17263,66 @@ Return ONLY a JSON object with this structure:
                     }
                     
                     try {
-                        const iconResponse = await fetch(`${API_BASE_URL}/api/publish/media`, {
+                        // Step 1: Upload icon file
+                        const uploadFormData = new FormData();
+                        uploadFormData.append('file', iconFile);
+                        
+                        const uploadResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${authToken}`
                             },
-                            body: iconFormData
+                            body: uploadFormData
                         });
                         
-                        const iconResult = await iconResponse.json();
-                        if (iconResponse.ok && iconResult.did) {
+                        if (!uploadResponse.ok) {
+                            throw new Error(`Icon upload failed: ${uploadResponse.status}`);
+                        }
+                        
+                        const uploadResult = await uploadResponse.json();
+                        const mediaId = uploadResult.mediaId;
+                        
+                        if (!mediaId) {
+                            throw new Error('No mediaId returned from icon upload');
+                        }
+                        
+                        // Step 2: Create image record
+                        const imageData = {
+                            storageType: iconStorage,
+                            basic: {
+                                name: iconName || `${equipName} Icon`,
+                                description: `Icon for ${equipName}`,
+                                language: 'en'
+                            },
+                            image: {
+                                media_ref: mediaId
+                            }
+                        };
+                        
+                        if (iconStorage === 'gun') {
+                            imageData.accessControl = {
+                                access_level: iconAccess
+                            };
+                            if (iconAccess === 'organization' && iconOrg) {
+                                imageData.accessControl.shared_with = iconOrg;
+                            }
+                        }
+                        
+                        const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: JSON.stringify(imageData)
+                        });
+                        
+                        if (!recordResponse.ok) {
+                            throw new Error(`Icon record creation failed: ${recordResponse.status}`);
+                        }
+                        
+                        const iconResult = await recordResponse.json();
+                        if (iconResult.did) {
                             iconDID = iconResult.did;
                             console.log(`✅ Icon published: ${iconDID}`);
                         }
@@ -17196,7 +17354,7 @@ Return ONLY a JSON object with this structure:
                 }
                 
                 try {
-                    const equipmentResponse = await fetch(`${API_BASE_URL}/api/publish/fitnessEquipment`, {
+                    const equipmentResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=fitnessEquipment`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -17205,8 +17363,12 @@ Return ONLY a JSON object with this structure:
                         body: JSON.stringify(equipmentData)
                     });
                     
+                    if (!equipmentResponse.ok) {
+                        throw new Error(`Equipment publish failed: ${equipmentResponse.status}`);
+                    }
+                    
                     const equipmentResult = await equipmentResponse.json();
-                    if (equipmentResponse.ok && equipmentResult.did) {
+                    if (equipmentResult.did) {
                         equipmentDIDs.push(equipmentResult.did);
                         console.log(`✅ Equipment published: ${equipmentResult.did}`);
                     }
