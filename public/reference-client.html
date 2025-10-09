@@ -11396,6 +11396,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 <select id="bundle-gif-mode" onchange="toggleBundleGifMode()">
                                     <option value="create">Create New GIF Collection</option>
                                     <option value="existing">Select Existing GIF Collection</option>
+                                    <option value="did">Provide a DID</option>
                                 </select>
                             </div>
 
@@ -11405,6 +11406,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 <select id="bundle-gif-existing-select">
                                     <option value="">Loading GIFs...</option>
                                 </select>
+                            </div>
+
+                            <!-- Provide DID (hidden by default) -->
+                            <div class="form-group hidden" id="bundle-gif-did-group">
+                                <label for="bundle-gif-did-input">GIF Collection DID:</label>
+                                <input type="text" id="bundle-gif-did-input" placeholder="e.g., did:gun:... or did:arweave:..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 13px;">
+                                <small>Enter the DID of an existing GIF collection</small>
                             </div>
 
                             <!-- Create New GIF Fields (shown by default) -->
@@ -16126,14 +16134,21 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         function toggleBundleGifMode() {
             const mode = document.getElementById('bundle-gif-mode')?.value;
             const existingGroup = document.getElementById('bundle-gif-existing-group');
+            const didGroup = document.getElementById('bundle-gif-did-group');
             const createSection = document.getElementById('bundle-gif-create-section');
             
             if (mode === 'existing') {
                 existingGroup?.classList.remove('hidden');
+                didGroup?.classList.add('hidden');
                 createSection?.classList.add('hidden');
                 updateBundleGifDropdown();
+            } else if (mode === 'did') {
+                existingGroup?.classList.add('hidden');
+                didGroup?.classList.remove('hidden');
+                createSection?.classList.add('hidden');
             } else {
                 existingGroup?.classList.add('hidden');
+                didGroup?.classList.add('hidden');
                 createSection?.classList.remove('hidden');
             }
         }
@@ -16422,6 +16437,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <select class="equip-icon-mode" onchange="toggleEquipIconMode('${itemId}')" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                             <option value="create">Create New Icon</option>
                             <option value="existing">Select Existing Icon</option>
+                            <option value="did">Provide a DID</option>
                             <option value="none">No Icon</option>
                         </select>
                     </div>
@@ -16432,6 +16448,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <select class="equip-icon-existing-select" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                             <option value="">Loading icons...</option>
                         </select>
+                    </div>
+                    
+                    <!-- Provide DID (hidden by default) -->
+                    <div class="equip-icon-did-section hidden" style="margin-bottom: 8px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Icon DID:</label>
+                        <input type="text" class="equip-icon-did-input" placeholder="e.g., did:gun:... or did:arweave:..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 12px;">
+                        <small style="font-size: 11px; color: #666;">Enter the DID of an existing icon</small>
                     </div>
                     
                     <!-- Create New Icon Fields (shown by default) -->
@@ -16493,17 +16516,25 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             
             const mode = item.querySelector('.equip-icon-mode')?.value;
             const existingSection = item.querySelector('.equip-icon-existing-section');
+            const didSection = item.querySelector('.equip-icon-did-section');
             const createSection = item.querySelector('.equip-icon-create-section');
             
             if (mode === 'existing') {
                 existingSection?.classList.remove('hidden');
+                didSection?.classList.add('hidden');
                 createSection?.classList.add('hidden');
                 updateEquipIconDropdowns();
+            } else if (mode === 'did') {
+                existingSection?.classList.add('hidden');
+                didSection?.classList.remove('hidden');
+                createSection?.classList.add('hidden');
             } else if (mode === 'create') {
                 existingSection?.classList.add('hidden');
+                didSection?.classList.add('hidden');
                 createSection?.classList.remove('hidden');
             } else { // none
                 existingSection?.classList.add('hidden');
+                didSection?.classList.add('hidden');
                 createSection?.classList.add('hidden');
             }
         }
@@ -17713,7 +17744,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
          */
         async function publishBundleGif() {
             try {
-                // Check if using existing GIF
+                // Check if using existing GIF or providing a DID
                 const mode = document.getElementById('bundle-gif-mode')?.value;
                 if (mode === 'existing') {
                     const existingDID = document.getElementById('bundle-gif-existing-select')?.value;
@@ -17722,6 +17753,13 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                     console.log(`📦 Using existing GIF collection: ${existingDID}`);
                     return existingDID;
+                } else if (mode === 'did') {
+                    const providedDID = document.getElementById('bundle-gif-did-input')?.value?.trim();
+                    if (!providedDID) {
+                        throw new Error('Please enter a GIF collection DID');
+                    }
+                    console.log(`📦 Using provided GIF DID: ${providedDID}`);
+                    return providedDID;
                 }
                 
                 // Create new GIF collection
@@ -18180,6 +18218,12 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     iconDID = item.querySelector('.equip-icon-existing-select')?.value;
                     if (iconDID) {
                         console.log(`📦 Using existing icon: ${iconDID}`);
+                    }
+                } else if (iconMode === 'did') {
+                    // Use provided DID
+                    iconDID = item.querySelector('.equip-icon-did-input')?.value?.trim();
+                    if (iconDID) {
+                        console.log(`📦 Using provided icon DID: ${iconDID}`);
                     }
                 } else if (iconMode === 'create') {
                     // Create new icon
