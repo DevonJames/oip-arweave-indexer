@@ -17326,11 +17326,17 @@ Return ONLY a JSON object with this structure:
                 }
 
                 const result = await recordResponse.json();
+                console.log(`📥 Icon publish response:`, result);
                 
-                if (result.did) {
-                    return result.did;
+                // Handle both GUN (did) and Arweave (didTx) response formats
+                const did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                
+                if (did) {
+                    console.log(`✅ Icon published successfully: ${did}`);
+                    return did;
                 } else {
-                    throw new Error(result.error || 'Failed to publish icon');
+                    console.error('❌ No DID in icon response:', result);
+                    throw new Error(result.error || 'Failed to publish icon - no DID in response');
                 }
             } catch (error) {
                 console.error('Icon publishing error:', error);
@@ -17392,11 +17398,17 @@ Return ONLY a JSON object with this structure:
                 }
 
                 const result = await response.json();
+                console.log(`📥 Equipment publish response:`, result);
                 
-                if (result.did) {
-                    return result.did;
+                // Handle both GUN (did) and Arweave (didTx) response formats
+                const did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                
+                if (did) {
+                    console.log(`✅ Equipment published successfully: ${did}`);
+                    return did;
                 } else {
-                    throw new Error(result.error || 'Failed to publish equipment');
+                    console.error('❌ No DID in equipment response:', result);
+                    throw new Error(result.error || 'Failed to publish equipment - no DID in response');
                 }
             } catch (error) {
                 console.error('Equipment publishing error:', error);
@@ -17515,10 +17527,16 @@ Return ONLY a JSON object with this structure:
                         }
 
                         const recordResult = await recordResponse.json();
+                        console.log(`📥 GIF ${resolution} publish response:`, recordResult);
                         
-                        if (recordResult.did) {
-                            gifMediaRefs.push(recordResult.did);
+                        // Handle both GUN (did) and Arweave (didTx) response formats
+                        const gifDID = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                        
+                        if (gifDID) {
+                            gifMediaRefs.push(gifDID);
+                            console.log(`✅ GIF ${resolution} published: ${gifDID}`);
                         } else {
+                            console.error(`❌ No DID in ${resolution} GIF response:`, recordResult);
                             throw new Error(`No DID returned for ${resolution} GIF`);
                         }
                     }
@@ -17576,11 +17594,17 @@ Return ONLY a JSON object with this structure:
                 }
 
                 const result = await response.json();
+                console.log(`📥 GIF collection publish response:`, result);
                 
-                if (response.ok && result.did) {
-                    return result.did;
+                // Handle both GUN (did) and Arweave (didTx) response formats
+                const did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                
+                if (did) {
+                    console.log(`✅ GIF collection published successfully: ${did}`);
+                    return did;
                 } else {
-                    throw new Error(result.error || 'Failed to publish GIF collection');
+                    console.error('❌ No DID in GIF collection response:', result);
+                    throw new Error(result.error || 'Failed to publish GIF collection - no DID in response');
                 }
             } catch (error) {
                 console.error('GIF publishing error:', error);
@@ -17685,11 +17709,17 @@ Return ONLY a JSON object with this structure:
                 }
 
                 const result = await response.json();
+                console.log(`📥 Exercise publish response:`, result);
                 
-                if (result.did) {
-                    return result.did;
+                // Extract DID from response (handle both GUN and Arweave)
+                const did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                
+                if (did) {
+                    console.log(`✅ Exercise published successfully: ${did}`);
+                    return did;
                 } else {
-                    throw new Error(result.error || 'Failed to publish exercise');
+                    console.error('❌ No DID in response:', result);
+                    throw new Error(result.error || 'Failed to publish exercise - no DID in response');
                 }
             } catch (error) {
                 console.error('Exercise publishing error:', error);
@@ -17850,9 +17880,16 @@ Return ONLY a JSON object with this structure:
                         }
                         
                         const iconResult = await recordResponse.json();
-                        if (iconResult.did) {
-                            iconDID = iconResult.did;
+                        console.log('🔧 [processEquipmentItems] Icon API response:', iconResult);
+                        
+                        // Handle both GUN (did) and Arweave (didTx) response formats
+                        iconDID = iconResult.did || iconResult.didTx || iconResult.oip?.did || iconResult.oip?.didTx;
+                        console.log('🔧 [processEquipmentItems] Extracted icon DID:', iconDID);
+                        
+                        if (iconDID) {
                             console.log(`✅ Icon published: ${iconDID}`);
+                        } else {
+                            console.error('❌ No DID found in icon response:', iconResult);
                         }
                     } catch (error) {
                         console.error('Error publishing icon:', error);
