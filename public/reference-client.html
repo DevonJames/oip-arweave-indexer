@@ -16869,18 +16869,19 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             const estDurationGroup = document.getElementById('bundle-exercise-est-duration-group');
             const setsInput = document.getElementById('bundle-exercise-sets');
             
+            // Always show Estimated Duration (needed for workout time calculations)
+            estDurationGroup?.classList.remove('hidden');
+            
             // Show/hide fields based on measurement type
             if (measurementType === 'reps') {
                 setsGroup?.classList.remove('hidden');
                 repsGroup?.classList.remove('hidden');
                 durationGroup?.classList.add('hidden');
-                estDurationGroup?.classList.add('hidden');
             } else if (measurementType === 'timed') {
                 // For timed exercises, show sets and duration fields
                 setsGroup?.classList.remove('hidden');
                 repsGroup?.classList.add('hidden');
                 durationGroup?.classList.remove('hidden');
-                estDurationGroup?.classList.remove('hidden');
                 // Clear the sets value so it's optional
                 if (setsInput) setsInput.value = '';
             } else if (measurementType === 'hold' || measurementType === 'maxdur') {
@@ -16888,7 +16889,6 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 setsGroup?.classList.add('hidden');
                 repsGroup?.classList.add('hidden');
                 durationGroup?.classList.remove('hidden');
-                estDurationGroup?.classList.remove('hidden');
             }
         }
 
@@ -18033,25 +18033,26 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
 
                 // Add measurement-specific fields
                 const measurementType = exerciseData.exercise.measurement_type;
+                
+                // Always include estimated duration if provided (for workout time calculations)
+                const estDuration = document.getElementById('bundle-exercise-est-duration')?.value;
+                if (estDuration) exerciseData.exercise.est_duration_minutes = parseInt(estDuration);
+                
                 if (measurementType === 'reps') {
                     const sets = document.getElementById('bundle-exercise-sets')?.value;
                     const reps = document.getElementById('bundle-exercise-reps')?.value;
                     if (sets) exerciseData.exercise.recommended_sets = parseInt(sets);
                     if (reps) exerciseData.exercise.recommended_reps = parseInt(reps);
                 } else if (measurementType === 'timed') {
-                    // For timed exercises, include sets (if provided), duration, and estimated duration
+                    // For timed exercises, include sets (if provided) and duration
                     const sets = document.getElementById('bundle-exercise-sets')?.value;
                     const duration = document.getElementById('bundle-exercise-duration')?.value;
-                    const estDuration = document.getElementById('bundle-exercise-est-duration')?.value;
                     if (sets) exerciseData.exercise.recommended_sets = parseInt(sets);
                     if (duration) exerciseData.exercise.target_duration_seconds = parseInt(duration);
-                    if (estDuration) exerciseData.exercise.est_duration_minutes = parseInt(estDuration);
                 } else {
                     // For hold and maxdur
                     const duration = document.getElementById('bundle-exercise-duration')?.value;
-                    const estDuration = document.getElementById('bundle-exercise-est-duration')?.value;
                     if (duration) exerciseData.exercise.target_duration_seconds = parseInt(duration);
-                    if (estDuration) exerciseData.exercise.est_duration_minutes = parseInt(estDuration);
                 }
 
                 // Set storage/blockchain type
