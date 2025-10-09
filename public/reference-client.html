@@ -15948,12 +15948,22 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 loadExistingIconsForBundle()
             ]);
             
+            console.log('📊 Data loaded:', {
+                orgs: bundleOrganizations.length,
+                equipment: bundleExistingEquipment.length,
+                gifs: bundleExistingGifs.length,
+                icons: bundleExistingIcons.length
+            });
+            
             // Add first equipment item (will now have orgs and equipment available)
             addBundleEquipmentItem();
             
-            // Initialize GIF storage type handler and dropdown (will now have orgs and GIFs available)
+            // Initialize GIF storage type handler and dropdowns (will now have orgs and GIFs available)
             updateBundleGifStorageType();
             updateBundleGifDropdown();
+            updateEquipIconDropdowns();  // Make sure icon dropdowns are populated
+            
+            console.log('✅ Exercise Bundle Interface initialized');
         }
 
         /**
@@ -16012,8 +16022,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     const result = await response.json();
                     bundleExistingGifs = result.records || [];
                     console.log(`✅ [Bundle] Loaded ${bundleExistingGifs.length} GIF records`);
+                    if (bundleExistingGifs.length > 0) {
+                        console.log('[Bundle] Sample GIF:', bundleExistingGifs[0]);
+                        console.log('[Bundle] Sample GIF DID:', bundleExistingGifs[0].oip?.did || bundleExistingGifs[0].oip?.didTx);
+                        console.log('[Bundle] Sample GIF name:', bundleExistingGifs[0].data?.basic?.name);
+                    }
                 } else {
-                    console.warn('⚠️ [Bundle] Failed to load GIFs from API');
+                    console.warn('⚠️ [Bundle] Failed to load GIFs from API:', response.status);
                 }
             } catch (error) {
                 console.warn('⚠️ [Bundle] Error loading GIFs:', error);
@@ -16038,8 +16053,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     const result = await response.json();
                     bundleExistingIcons = result.records || [];
                     console.log(`✅ [Bundle] Loaded ${bundleExistingIcons.length} icon records`);
+                    if (bundleExistingIcons.length > 0) {
+                        console.log('[Bundle] Sample icon:', bundleExistingIcons[0]);
+                        console.log('[Bundle] Sample icon DID:', bundleExistingIcons[0].oip?.did || bundleExistingIcons[0].oip?.didTx);
+                        console.log('[Bundle] Sample icon name:', bundleExistingIcons[0].data?.basic?.name);
+                    }
                 } else {
-                    console.warn('⚠️ [Bundle] Failed to load icons from API');
+                    console.warn('⚠️ [Bundle] Failed to load icons from API:', response.status);
                 }
             } catch (error) {
                 console.warn('⚠️ [Bundle] Error loading icons:', error);
@@ -16097,7 +16117,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
          */
         function updateBundleGifDropdown() {
             const select = document.getElementById('bundle-gif-existing-select');
-            if (!select) return;
+            if (!select) {
+                console.warn('[Bundle] GIF dropdown not found in DOM');
+                return;
+            }
+            
+            console.log(`[Bundle] Populating GIF dropdown with ${bundleExistingGifs.length} items`);
             
             select.innerHTML = '';
             
@@ -16108,17 +16133,21 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 : 'No GIF collections found';
             select.appendChild(placeholder);
             
-            bundleExistingGifs.forEach(gif => {
+            bundleExistingGifs.forEach((gif, idx) => {
                 const option = document.createElement('option');
                 const did = gif.oip?.did || gif.oip?.didTx || '';
                 const name = gif.data?.basic?.name || 'Unknown GIF';
+                
+                if (idx < 3) {
+                    console.log(`[Bundle] GIF ${idx}: DID=${did}, name=${name}`);
+                }
                 
                 option.value = did;
                 option.textContent = name;
                 select.appendChild(option);
             });
             
-            console.log(`[Bundle] Populated GIF dropdown with ${bundleExistingGifs.length} items`);
+            console.log(`✅ [Bundle] GIF dropdown populated with ${bundleExistingGifs.length} items`);
         }
 
         function updateBundleGifStorageType() {
@@ -16352,7 +16381,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
          */
         function updateEquipIconDropdowns() {
             const selects = document.querySelectorAll('.equip-icon-existing-select');
-            selects.forEach(select => {
+            console.log(`[Bundle] Updating ${selects.length} icon dropdowns with ${bundleExistingIcons.length} icons`);
+            
+            selects.forEach((select, selectIdx) => {
                 select.innerHTML = '';
                 
                 const placeholder = document.createElement('option');
@@ -16362,17 +16393,21 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     : 'No icons found';
                 select.appendChild(placeholder);
                 
-                bundleExistingIcons.forEach(icon => {
+                bundleExistingIcons.forEach((icon, idx) => {
                     const option = document.createElement('option');
                     const did = icon.oip?.did || icon.oip?.didTx || '';
                     const name = icon.data?.basic?.name || 'Unknown Icon';
+                    
+                    if (selectIdx === 0 && idx < 3) {
+                        console.log(`[Bundle] Icon ${idx}: DID=${did}, name=${name}`);
+                    }
                     
                     option.value = did;
                     option.textContent = name;
                     select.appendChild(option);
                 });
                 
-                console.log(`[Bundle] Populated icon dropdown with ${bundleExistingIcons.length} items`);
+                console.log(`[Bundle] Populated icon dropdown ${selectIdx + 1} with ${bundleExistingIcons.length} items`);
             });
         }
 
@@ -16468,9 +16503,14 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     const result = await response.json();
                     bundleExistingEquipment = result.records || [];
                     console.log(`✅ [Bundle] Loaded ${bundleExistingEquipment.length} equipment records`);
+                    if (bundleExistingEquipment.length > 0) {
+                        console.log('[Bundle] Sample equipment:', bundleExistingEquipment[0]);
+                        console.log('[Bundle] Sample equipment DID:', bundleExistingEquipment[0].oip?.did || bundleExistingEquipment[0].oip?.didTx);
+                        console.log('[Bundle] Sample equipment name:', bundleExistingEquipment[0].data?.basic?.name);
+                    }
                     updateBundleEquipmentDropdowns();
                 } else {
-                    console.warn('⚠️ [Bundle] Failed to load equipment from API');
+                    console.warn('⚠️ [Bundle] Failed to load equipment from API:', response.status);
                     updateBundleEquipmentDropdowns();
                 }
             } catch (error) {
@@ -16484,7 +16524,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
          */
         function updateBundleEquipmentDropdowns() {
             const selects = document.querySelectorAll('.equipment-select-bundle');
-            selects.forEach(select => {
+            console.log(`[Bundle] Updating ${selects.length} equipment dropdowns with ${bundleExistingEquipment.length} equipment`);
+            
+            selects.forEach((select, selectIdx) => {
                 // Clear all existing options
                 select.innerHTML = '';
                 
@@ -16497,17 +16539,21 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 select.appendChild(placeholder);
                 
                 // Add equipment options
-                bundleExistingEquipment.forEach(equipment => {
+                bundleExistingEquipment.forEach((equipment, idx) => {
                     const option = document.createElement('option');
                     const did = equipment.oip?.did || equipment.oip?.didTx || '';
                     const name = equipment.data?.basic?.name || 'Unknown Equipment';
+                    
+                    if (selectIdx === 0 && idx < 3) {
+                        console.log(`[Bundle] Equipment ${idx}: DID=${did}, name=${name}`);
+                    }
                     
                     option.value = did;
                     option.textContent = name;
                     select.appendChild(option);
                 });
                 
-                console.log(`[Bundle] Populated equipment dropdown with ${bundleExistingEquipment.length} items`);
+                console.log(`[Bundle] Populated equipment dropdown ${selectIdx + 1} with ${bundleExistingEquipment.length} items`);
             });
         }
 
@@ -17578,26 +17624,32 @@ Return ONLY a JSON object with this structure:
          * Process equipment items and return DIDs
          */
         async function processEquipmentItems() {
+            console.log('🔧 [processEquipmentItems] Starting...');
             const equipmentDIDs = [];
             const equipmentItems = document.querySelectorAll('.equipment-item');
+            console.log(`🔧 [processEquipmentItems] Found ${equipmentItems.length} equipment items`);
             
             let totalSteps = equipmentItems.length * 2; // icon + equipment for each
             let currentStep = 0;
             
             for (const item of equipmentItems) {
                 const itemId = item.id;
+                console.log(`\n🔧 [processEquipmentItems] Processing item: ${itemId}`);
                 
                 // Check mode: create new vs select existing
                 const mode = item.querySelector('.equip-mode')?.value || 'create';
+                console.log(`🔧 [processEquipmentItems] Mode: ${mode}`);
                 
                 if (mode === 'existing') {
                     // Use existing equipment
                     const existingDID = item.querySelector('.equip-existing-select')?.value;
+                    console.log(`🔧 [processEquipmentItems] Existing DID selected: ${existingDID}`);
                     if (existingDID) {
                         equipmentDIDs.push(existingDID);
                         console.log(`✅ Using existing equipment: ${existingDID}`);
+                        console.log(`🔧 [processEquipmentItems] equipmentDIDs now: [${equipmentDIDs.join(', ')}]`);
                     } else {
-                        console.warn('Skipping equipment item: no existing equipment selected');
+                        console.warn('⚠️ Skipping equipment item: no existing equipment selected');
                     }
                     continue; // Skip to next item
                 }
@@ -17605,14 +17657,16 @@ Return ONLY a JSON object with this structure:
                 // Mode is "create" - get data for creating new equipment
                 // Check icon mode
                 const iconMode = item.querySelector('.equip-icon-mode')?.value || 'create';
+                console.log(`🔧 [processEquipmentItems] Icon mode: ${iconMode}`);
                 
                 // Get equipment data
                 const equipName = item.querySelector('.equip-name')?.value;
                 const equipDesc = item.querySelector('.equip-description')?.value;
                 const equipStorage = item.querySelector('.equip-storage')?.value || 'arweave';
+                console.log(`🔧 [processEquipmentItems] Equipment data: name="${equipName}", storage="${equipStorage}"`);
                 
                 if (!equipName) {
-                    console.warn('Skipping equipment item with no name');
+                    console.warn('⚠️ Skipping equipment item with no name');
                     continue;
                 }
                 
@@ -17773,20 +17827,25 @@ Return ONLY a JSON object with this structure:
                     }
                     
                     const equipmentResult = await equipmentResponse.json();
+                    console.log('🔧 [processEquipmentItems] Equipment API response:', equipmentResult);
+                    
                     // Handle both GUN (did) and Arweave (didTx) response formats
                     const equipmentDID = equipmentResult.did || equipmentResult.didTx || equipmentResult.oip?.did || equipmentResult.oip?.didTx;
+                    console.log('🔧 [processEquipmentItems] Extracted DID:', equipmentDID);
+                    
                     if (equipmentDID) {
                         equipmentDIDs.push(equipmentDID);
                         console.log(`✅ Equipment published: ${equipmentDID}`);
+                        console.log(`🔧 [processEquipmentItems] equipmentDIDs now: [${equipmentDIDs.join(', ')}]`);
                     } else {
                         console.error('❌ No DID found in equipment response:', equipmentResult);
                     }
                 } catch (error) {
-                    console.error('Error publishing equipment:', error);
+                    console.error('❌ Error publishing equipment:', error);
                 }
             }
             
-            console.log(`🔧 processEquipmentItems complete. Returning ${equipmentDIDs.length} DIDs:`, equipmentDIDs);
+            console.log(`\n🔧 [processEquipmentItems] COMPLETE. Returning ${equipmentDIDs.length} DIDs:`, equipmentDIDs);
             return equipmentDIDs;
         }
 
