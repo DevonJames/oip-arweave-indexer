@@ -17478,18 +17478,69 @@ Return ONLY a JSON object with this structure:
                             throw new Error(`No mediaId returned for ${resolution} GIF`);
                         }
 
-                        // Step 2: Create image record for this GIF with all network addresses
+                        console.log(`✅ Step 1 complete for ${resolution} - mediaId: ${uploadResult.mediaId}`);
+
+                        // Step 2: Upload to IPFS (optional but recommended)
+                        let ipfsAddress = '';
+                        try {
+                            const ipfsResponse = await fetch(`${API_BASE_URL}/api/media/ipfs-upload`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${authToken}`
+                                },
+                                body: JSON.stringify({ mediaId: uploadResult.mediaId })
+                            });
+                            
+                            if (ipfsResponse.ok) {
+                                const ipfsResult = await ipfsResponse.json();
+                                ipfsAddress = ipfsResult.ipfsHash || '';
+                                console.log(`✅ Step 2 complete for ${resolution} - IPFS: ${ipfsAddress}`);
+                            } else {
+                                console.warn(`⚠️ IPFS upload failed for ${resolution}, continuing without IPFS`);
+                            }
+                        } catch (ipfsError) {
+                            console.warn(`⚠️ IPFS upload error for ${resolution}:`, ipfsError);
+                        }
+
+                        // Step 3: Setup web server access (filename-based URL)
+                        let webUrl = uploadResult.httpUrl; // Fallback to mediaId-based URL
+                        try {
+                            const webResponse = await fetch(`${API_BASE_URL}/api/media/web-setup`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${authToken}`
+                                },
+                                body: JSON.stringify({ 
+                                    mediaId: uploadResult.mediaId,
+                                    filename: uploadResult.originalName
+                                })
+                            });
+                            
+                            if (webResponse.ok) {
+                                const webResult = await webResponse.json();
+                                webUrl = webResult.webUrl || uploadResult.httpUrl;
+                                console.log(`✅ Step 3 complete for ${resolution} - Web URL: ${webUrl}`);
+                            } else {
+                                console.warn(`⚠️ Web setup failed for ${resolution}, using fallback URL`);
+                            }
+                        } catch (webError) {
+                            console.warn(`⚠️ Web setup error for ${resolution}:`, webError);
+                        }
+
+                        // Step 4: Create image record for this GIF with all network addresses
                         const imageData = {
                             basic: {
                                 name: `${name} - ${resolution}`,
                                 description: `GIF resolution: ${resolution}`,
                                 language: 'en',
-                                webUrl: uploadResult.httpUrl
+                                webUrl: webUrl
                             },
                             image: {
-                                webUrl: uploadResult.httpUrl,
+                                webUrl: webUrl,
                                 bittorrentAddress: uploadResult.magnetURI || '',
-                                ipfsAddress: '',  // IPFS optional for GIFs
+                                ipfsAddress: ipfsAddress,
                                 arweaveAddress: '',
                                 filename: uploadResult.originalName,
                                 size: uploadResult.size,
@@ -17529,8 +17580,14 @@ Return ONLY a JSON object with this structure:
                         const recordResult = await recordResponse.json();
                         console.log(`📥 GIF ${resolution} publish response:`, recordResult);
                         
-                        // Handle both GUN (did) and Arweave (didTx) response formats
-                        const gifDID = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                        // Handle both GUN (did) and Arweave (transactionId) response formats
+                        let gifDID = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                        
+                        // Handle Arweave transactionId
+                        if (!gifDID && recordResult.transactionId) {
+                            gifDID = `did:arweave:${recordResult.transactionId}`;
+                            console.log(`🔄 Converted transactionId to DID for ${resolution}: ${gifDID}`);
+                        }
                         
                         if (gifDID) {
                             gifMediaRefs.push(gifDID);
@@ -17596,8 +17653,14 @@ Return ONLY a JSON object with this structure:
                 const result = await response.json();
                 console.log(`📥 GIF collection publish response:`, result);
                 
-                // Handle both GUN (did) and Arweave (didTx) response formats
-                const did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                // Handle both GUN (did) and Arweave (transactionId) response formats
+                let did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                
+                // Handle Arweave transactionId
+                if (!did && result.transactionId) {
+                    did = `did:arweave:${result.transactionId}`;
+                    console.log(`🔄 Converted transactionId to DID: ${did}`);
+                }
                 
                 if (did) {
                     console.log(`✅ GIF collection published successfully: ${did}`);
@@ -17711,8 +17774,16 @@ Return ONLY a JSON object with this structure:
                 const result = await response.json();
                 console.log(`📥 Exercise publish response:`, result);
                 
-                // Extract DID from response (handle both GUN and Arweave)
-                const did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                // Extract DID from response (handle both GUN and Arweave formats)
+                // GUN returns: { did: "did:gun:..." }
+                // Arweave returns: { transactionId: "..." } which needs to be converted to "did:arweave:..."
+                let did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                
+                // Handle Arweave transactionId
+                if (!did && result.transactionId) {
+                    did = `did:arweave:${result.transactionId}`;
+                    console.log(`🔄 Converted transactionId to DID: ${did}`);
+                }
                 
                 if (did) {
                     console.log(`✅ Exercise published successfully: ${did}`);
@@ -17835,18 +17906,65 @@ Return ONLY a JSON object with this structure:
                             throw new Error('No mediaId returned from icon upload');
                         }
                         
-                        // Step 2: Create image record with all network addresses
+                        console.log(`✅ Icon upload complete - mediaId: ${uploadResult.mediaId}`);
+                        
+                        // Step 2: Upload to IPFS (optional but recommended)
+                        let ipfsAddress = '';
+                        try {
+                            const ipfsResponse = await fetch(`${API_BASE_URL}/api/media/ipfs-upload`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${authToken}`
+                                },
+                                body: JSON.stringify({ mediaId: uploadResult.mediaId })
+                            });
+                            
+                            if (ipfsResponse.ok) {
+                                const ipfsResult = await ipfsResponse.json();
+                                ipfsAddress = ipfsResult.ipfsHash || '';
+                                console.log(`✅ Icon IPFS upload complete: ${ipfsAddress}`);
+                            }
+                        } catch (ipfsError) {
+                            console.warn(`⚠️ Icon IPFS upload error:`, ipfsError);
+                        }
+                        
+                        // Step 3: Setup web server access (filename-based URL)
+                        let webUrl = uploadResult.httpUrl; // Fallback
+                        try {
+                            const webResponse = await fetch(`${API_BASE_URL}/api/media/web-setup`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${authToken}`
+                                },
+                                body: JSON.stringify({ 
+                                    mediaId: uploadResult.mediaId,
+                                    filename: uploadResult.originalName
+                                })
+                            });
+                            
+                            if (webResponse.ok) {
+                                const webResult = await webResponse.json();
+                                webUrl = webResult.webUrl || uploadResult.httpUrl;
+                                console.log(`✅ Icon web setup complete: ${webUrl}`);
+                            }
+                        } catch (webError) {
+                            console.warn(`⚠️ Icon web setup error:`, webError);
+                        }
+                        
+                        // Step 4: Create image record with all network addresses
                         const imageData = {
                             basic: {
                                 name: iconName || `${equipName} Icon`,
                                 description: `Icon for ${equipName}`,
                                 language: 'en',
-                                webUrl: uploadResult.httpUrl
+                                webUrl: webUrl
                             },
                             image: {
-                                webUrl: uploadResult.httpUrl,
+                                webUrl: webUrl,
                                 bittorrentAddress: uploadResult.magnetURI || '',
-                                ipfsAddress: '',
+                                ipfsAddress: ipfsAddress,
                                 arweaveAddress: '',
                                 filename: uploadResult.originalName,
                                 size: uploadResult.size,
@@ -17882,8 +18000,15 @@ Return ONLY a JSON object with this structure:
                         const iconResult = await recordResponse.json();
                         console.log('🔧 [processEquipmentItems] Icon API response:', iconResult);
                         
-                        // Handle both GUN (did) and Arweave (didTx) response formats
+                        // Handle both GUN (did) and Arweave (transactionId) response formats
                         iconDID = iconResult.did || iconResult.didTx || iconResult.oip?.did || iconResult.oip?.didTx;
+                        
+                        // Handle Arweave transactionId
+                        if (!iconDID && iconResult.transactionId) {
+                            iconDID = `did:arweave:${iconResult.transactionId}`;
+                            console.log('🔧 [processEquipmentItems] Converted transactionId to icon DID:', iconDID);
+                        }
+                        
                         console.log('🔧 [processEquipmentItems] Extracted icon DID:', iconDID);
                         
                         if (iconDID) {
@@ -17943,8 +18068,15 @@ Return ONLY a JSON object with this structure:
                     const equipmentResult = await equipmentResponse.json();
                     console.log('🔧 [processEquipmentItems] Equipment API response:', equipmentResult);
                     
-                    // Handle both GUN (did) and Arweave (didTx) response formats
-                    const equipmentDID = equipmentResult.did || equipmentResult.didTx || equipmentResult.oip?.did || equipmentResult.oip?.didTx;
+                    // Handle both GUN (did) and Arweave (transactionId) response formats
+                    let equipmentDID = equipmentResult.did || equipmentResult.didTx || equipmentResult.oip?.did || equipmentResult.oip?.didTx;
+                    
+                    // Handle Arweave transactionId
+                    if (!equipmentDID && equipmentResult.transactionId) {
+                        equipmentDID = `did:arweave:${equipmentResult.transactionId}`;
+                        console.log('🔧 [processEquipmentItems] Converted transactionId to equipment DID:', equipmentDID);
+                    }
+                    
                     console.log('🔧 [processEquipmentItems] Extracted DID:', equipmentDID);
                     
                     if (equipmentDID) {
