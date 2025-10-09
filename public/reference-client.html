@@ -16300,6 +16300,106 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             <textarea class="equip-description" rows="2" placeholder="Brief description..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"></textarea>
                         </div>
                         
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Category:</label>
+                            <select class="equip-category" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="Weights">Weights</option>
+                                <option value="Cardio">Cardio</option>
+                                <option value="Bodyweight">Bodyweight</option>
+                                <option value="Flexibility">Flexibility</option>
+                                <option value="Functional">Functional</option>
+                                <option value="Accessories">Accessories</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Subcategory:</label>
+                            <input type="text" class="equip-subcategory" placeholder="e.g., Free Weights, Resistance Bands" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Muscle Groups (comma-separated):</label>
+                            <input type="text" class="equip-muscle-groups" placeholder="chest, back, shoulders, arms, legs" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <small style="font-size: 11px; color: #666;">Muscle groups this equipment can target</small>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Difficulty Level:</label>
+                            <select class="equip-difficulty" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="Beginner">Beginner</option>
+                                <option value="Intermediate">Intermediate</option>
+                                <option value="Advanced">Advanced</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Space Required:</label>
+                            <select class="equip-space" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="Minimal Space">Minimal Space</option>
+                                <option value="Small Space">Small Space</option>
+                                <option value="Medium Space">Medium Space</option>
+                                <option value="Large Space">Large Space</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Portability:</label>
+                            <select class="equip-portability" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="Portable">Portable</option>
+                                <option value="Semi-Portable">Semi-Portable</option>
+                                <option value="Stationary">Stationary</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Price Range:</label>
+                            <select class="equip-price" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="Budget ($0-50)">Budget ($0-50)</option>
+                                <option value="Mid-Range ($50-200)">Mid-Range ($50-200)</option>
+                                <option value="Premium ($200-500)">Premium ($200-500)</option>
+                                <option value="Professional ($500+)">Professional ($500+)</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Alternatives (comma-separated):</label>
+                            <input type="text" class="equip-alternatives" placeholder="kettlebell, resistance band, medicine ball" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <small style="font-size: 11px; color: #666;">Alternative equipment that can be used</small>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Maintenance Level:</label>
+                            <select class="equip-maintenance" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="No Maintenance">No Maintenance</option>
+                                <option value="Low Maintenance">Low Maintenance</option>
+                                <option value="Medium Maintenance">Medium Maintenance</option>
+                                <option value="High Maintenance">High Maintenance</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Safety Considerations:</label>
+                            <textarea class="equip-safety" rows="2" placeholder="Important safety notes..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"></textarea>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600;">Equipment Properties:</label>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" class="equip-beginner-friendly" style="cursor: pointer;">
+                                    <span>Beginner Friendly</span>
+                                </label>
+                                <label style="font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" class="equip-home-gym" style="cursor: pointer;">
+                                    <span>Home Gym Suitable</span>
+                                </label>
+                                <label style="font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" class="equip-commercial" style="cursor: pointer;">
+                                    <span>Commercial Grade</span>
+                                </label>
+                            </div>
+                        </div>
+                        
                         <div>
                             <label style="display: block; margin-bottom: 4px; font-size: 13px;">Storage Type:</label>
                             <select class="equip-storage" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
@@ -17062,11 +17162,93 @@ Return ONLY a JSON object with this structure:
 
                 const record = data.records[0];
                 const basicData = record.data?.basic;
+                const equipData = record.data?.fitnessEquipment;
+                
+                console.log('Copying equipment data:', { basicData, equipData });
                 
                 // Populate description
                 const descTextarea = item.querySelector('.equip-description');
                 if (basicData?.description && descTextarea) {
                     descTextarea.value = basicData.description;
+                }
+                
+                // Populate all new equipment fields
+                if (equipData) {
+                    // Category
+                    const categorySelect = item.querySelector('.equip-category');
+                    if (equipData.category && categorySelect) {
+                        categorySelect.value = equipData.category;
+                    }
+                    
+                    // Subcategory
+                    const subcategoryInput = item.querySelector('.equip-subcategory');
+                    if (equipData.subcategory && subcategoryInput) {
+                        subcategoryInput.value = equipData.subcategory;
+                    }
+                    
+                    // Muscle groups (array to comma-separated string)
+                    const muscleGroupsInput = item.querySelector('.equip-muscle-groups');
+                    if (equipData.muscle_groups && Array.isArray(equipData.muscle_groups) && muscleGroupsInput) {
+                        muscleGroupsInput.value = equipData.muscle_groups.join(', ');
+                    }
+                    
+                    // Difficulty level
+                    const difficultySelect = item.querySelector('.equip-difficulty');
+                    if (equipData.difficulty_level && difficultySelect) {
+                        difficultySelect.value = equipData.difficulty_level;
+                    }
+                    
+                    // Space required
+                    const spaceSelect = item.querySelector('.equip-space');
+                    if (equipData.space_required && spaceSelect) {
+                        spaceSelect.value = equipData.space_required;
+                    }
+                    
+                    // Portability
+                    const portabilitySelect = item.querySelector('.equip-portability');
+                    if (equipData.portability && portabilitySelect) {
+                        portabilitySelect.value = equipData.portability;
+                    }
+                    
+                    // Price range
+                    const priceSelect = item.querySelector('.equip-price');
+                    if (equipData.price_range && priceSelect) {
+                        priceSelect.value = equipData.price_range;
+                    }
+                    
+                    // Alternatives (array to comma-separated string)
+                    const alternativesInput = item.querySelector('.equip-alternatives');
+                    if (equipData.alternatives && Array.isArray(equipData.alternatives) && alternativesInput) {
+                        alternativesInput.value = equipData.alternatives.join(', ');
+                    }
+                    
+                    // Maintenance level
+                    const maintenanceSelect = item.querySelector('.equip-maintenance');
+                    if (equipData.maintenance_level && maintenanceSelect) {
+                        maintenanceSelect.value = equipData.maintenance_level;
+                    }
+                    
+                    // Safety considerations
+                    const safetyTextarea = item.querySelector('.equip-safety');
+                    if (equipData.safety_considerations && safetyTextarea) {
+                        safetyTextarea.value = equipData.safety_considerations;
+                    }
+                    
+                    // Boolean checkboxes
+                    const beginnerCheckbox = item.querySelector('.equip-beginner-friendly');
+                    if (beginnerCheckbox) {
+                        beginnerCheckbox.checked = !!equipData.beginner_friendly;
+                    }
+                    
+                    const homeGymCheckbox = item.querySelector('.equip-home-gym');
+                    if (homeGymCheckbox) {
+                        homeGymCheckbox.checked = !!equipData.home_gym_suitable;
+                    }
+                    
+                    const commercialCheckbox = item.querySelector('.equip-commercial');
+                    if (commercialCheckbox) {
+                        commercialCheckbox.checked = !!equipData.commercial_grade;
+                    }
                 }
                 
                 alert('📋 Equipment data copied successfully!');
@@ -17094,13 +17276,28 @@ Return ONLY a JSON object with this structure:
 
                 console.log(`[Bundle AI] Filling in equipment fields for: "${nameValue}"`);
 
-                // Build a simple prompt for the AI
-                const prompt = `You are an expert fitness equipment specialist. Given the equipment name "${nameValue}", please provide a brief, informative description (2-3 sentences) about this equipment, including what it's used for and its key benefits.
+                // Build a comprehensive prompt for the AI
+                const prompt = `You are an expert fitness equipment specialist. Given the equipment name "${nameValue}", please provide comprehensive information about this equipment.
 
-Return ONLY a JSON object with this structure:
+Return ONLY a valid JSON object with this exact structure (all fields required):
 {
-  "description": "..."
-}`;
+  "description": "Brief 2-3 sentence description of the equipment",
+  "category": "one of: Weights, Cardio, Bodyweight, Flexibility, Functional, Accessories",
+  "subcategory": "specific subcategory like 'Free Weights', 'Resistance Bands', etc.",
+  "muscle_groups": ["list", "of", "muscles"],
+  "difficulty_level": "one of: Beginner, Intermediate, Advanced",
+  "space_required": "one of: Minimal Space, Small Space, Medium Space, Large Space",
+  "portability": "one of: Portable, Semi-Portable, Stationary",
+  "price_range": "one of: Budget ($0-50), Mid-Range ($50-200), Premium ($200-500), Professional ($500+)",
+  "alternatives": ["alternative", "equipment", "options"],
+  "maintenance_level": "one of: No Maintenance, Low Maintenance, Medium Maintenance, High Maintenance",
+  "safety_considerations": "important safety notes and precautions",
+  "beginner_friendly": true or false,
+  "home_gym_suitable": true or false,
+  "commercial_grade": true or false
+}
+
+Ensure all enum values match EXACTLY as shown (case-sensitive).`;
 
                 const response = await fetch(`${API_BASE_URL}/api/voice/chat`, {
                     method: 'POST',
@@ -17121,7 +17318,14 @@ Return ONLY a JSON object with this structure:
                 
                 if (data.response_text) {
                     // Try to parse the AI response as JSON
-                    const aiData = JSON.parse(data.response_text);
+                    let responseText = data.response_text.trim();
+                    
+                    // Remove markdown code blocks if present
+                    responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+                    
+                    const aiData = JSON.parse(responseText);
+                    
+                    console.log('[Bundle AI] Received data:', aiData);
                     
                     // Populate description
                     const descTextarea = item.querySelector('.equip-description');
@@ -17129,7 +17333,85 @@ Return ONLY a JSON object with this structure:
                         descTextarea.value = aiData.description;
                     }
                     
-                    alert('🤖 AI successfully filled in equipment description!');
+                    // Populate all new equipment fields
+                    
+                    // Category
+                    const categorySelect = item.querySelector('.equip-category');
+                    if (aiData.category && categorySelect) {
+                        categorySelect.value = aiData.category;
+                    }
+                    
+                    // Subcategory
+                    const subcategoryInput = item.querySelector('.equip-subcategory');
+                    if (aiData.subcategory && subcategoryInput) {
+                        subcategoryInput.value = aiData.subcategory;
+                    }
+                    
+                    // Muscle groups (array to comma-separated string)
+                    const muscleGroupsInput = item.querySelector('.equip-muscle-groups');
+                    if (aiData.muscle_groups && Array.isArray(aiData.muscle_groups) && muscleGroupsInput) {
+                        muscleGroupsInput.value = aiData.muscle_groups.join(', ');
+                    }
+                    
+                    // Difficulty level
+                    const difficultySelect = item.querySelector('.equip-difficulty');
+                    if (aiData.difficulty_level && difficultySelect) {
+                        difficultySelect.value = aiData.difficulty_level;
+                    }
+                    
+                    // Space required
+                    const spaceSelect = item.querySelector('.equip-space');
+                    if (aiData.space_required && spaceSelect) {
+                        spaceSelect.value = aiData.space_required;
+                    }
+                    
+                    // Portability
+                    const portabilitySelect = item.querySelector('.equip-portability');
+                    if (aiData.portability && portabilitySelect) {
+                        portabilitySelect.value = aiData.portability;
+                    }
+                    
+                    // Price range
+                    const priceSelect = item.querySelector('.equip-price');
+                    if (aiData.price_range && priceSelect) {
+                        priceSelect.value = aiData.price_range;
+                    }
+                    
+                    // Alternatives (array to comma-separated string)
+                    const alternativesInput = item.querySelector('.equip-alternatives');
+                    if (aiData.alternatives && Array.isArray(aiData.alternatives) && alternativesInput) {
+                        alternativesInput.value = aiData.alternatives.join(', ');
+                    }
+                    
+                    // Maintenance level
+                    const maintenanceSelect = item.querySelector('.equip-maintenance');
+                    if (aiData.maintenance_level && maintenanceSelect) {
+                        maintenanceSelect.value = aiData.maintenance_level;
+                    }
+                    
+                    // Safety considerations
+                    const safetyTextarea = item.querySelector('.equip-safety');
+                    if (aiData.safety_considerations && safetyTextarea) {
+                        safetyTextarea.value = aiData.safety_considerations;
+                    }
+                    
+                    // Boolean checkboxes
+                    const beginnerCheckbox = item.querySelector('.equip-beginner-friendly');
+                    if (beginnerCheckbox && typeof aiData.beginner_friendly === 'boolean') {
+                        beginnerCheckbox.checked = aiData.beginner_friendly;
+                    }
+                    
+                    const homeGymCheckbox = item.querySelector('.equip-home-gym');
+                    if (homeGymCheckbox && typeof aiData.home_gym_suitable === 'boolean') {
+                        homeGymCheckbox.checked = aiData.home_gym_suitable;
+                    }
+                    
+                    const commercialCheckbox = item.querySelector('.equip-commercial');
+                    if (commercialCheckbox && typeof aiData.commercial_grade === 'boolean') {
+                        commercialCheckbox.checked = aiData.commercial_grade;
+                    }
+                    
+                    alert('🤖 AI successfully filled in all equipment fields!');
                 } else {
                     throw new Error('No response from AI');
                 }
@@ -17445,6 +17727,8 @@ Return ONLY a JSON object with this structure:
                 // Get all GIF files
                 const gifFileInputs = document.querySelectorAll('.bundle-gif-file-input');
                 const gifMediaRefs = [];
+                const resolutionLabels = [];
+                const resolutionWidths = [];
 
                 for (const input of gifFileInputs) {
                     if (input.files && input.files[0]) {
@@ -17591,6 +17875,8 @@ Return ONLY a JSON object with this structure:
                         
                         if (gifDID) {
                             gifMediaRefs.push(gifDID);
+                            resolutionLabels.push(resolution);
+                            resolutionWidths.push(width.toString());
                             console.log(`✅ GIF ${resolution} published: ${gifDID}`);
                         } else {
                             console.error(`❌ No DID in ${resolution} GIF response:`, recordResult);
@@ -17616,6 +17902,8 @@ Return ONLY a JSON object with this structure:
                     },
                     multiResolutionGif: {
                         gif_media_refs: gifMediaRefs,
+                        resolution_labels: resolutionLabels,
+                        resolution_widths: resolutionWidths,
                         frame_rate: frameRate,
                         duration_seconds: duration,
                         primary_resolution_index: 2,
@@ -17841,7 +18129,23 @@ Return ONLY a JSON object with this structure:
                 const equipName = item.querySelector('.equip-name')?.value;
                 const equipDesc = item.querySelector('.equip-description')?.value;
                 const equipStorage = item.querySelector('.equip-storage')?.value || 'arweave';
-                console.log(`🔧 [processEquipmentItems] Equipment data: name="${equipName}", storage="${equipStorage}"`);
+                
+                // Get all new equipment fields
+                const equipCategory = item.querySelector('.equip-category')?.value || 'General';
+                const equipSubcategory = item.querySelector('.equip-subcategory')?.value || '';
+                const equipMuscleGroups = item.querySelector('.equip-muscle-groups')?.value || '';
+                const equipDifficulty = item.querySelector('.equip-difficulty')?.value || '';
+                const equipSpace = item.querySelector('.equip-space')?.value || '';
+                const equipPortability = item.querySelector('.equip-portability')?.value || '';
+                const equipPrice = item.querySelector('.equip-price')?.value || '';
+                const equipAlternatives = item.querySelector('.equip-alternatives')?.value || '';
+                const equipMaintenance = item.querySelector('.equip-maintenance')?.value || '';
+                const equipSafety = item.querySelector('.equip-safety')?.value || '';
+                const equipBeginnerFriendly = item.querySelector('.equip-beginner-friendly')?.checked || false;
+                const equipHomeGym = item.querySelector('.equip-home-gym')?.checked || false;
+                const equipCommercial = item.querySelector('.equip-commercial')?.checked || false;
+                
+                console.log(`🔧 [processEquipmentItems] Equipment data: name="${equipName}", category="${equipCategory}", storage="${equipStorage}"`);
                 
                 if (!equipName) {
                     console.warn('⚠️ Skipping equipment item with no name');
@@ -18035,8 +18339,19 @@ Return ONLY a JSON object with this structure:
                         date: Math.floor(Date.now() / 1000)
                     },
                     fitnessEquipment: {
-                        category: 'General',
-                        subcategory: 'Training Equipment'
+                        category: equipCategory,
+                        subcategory: equipSubcategory || 'Training Equipment',
+                        muscle_groups: equipMuscleGroups ? equipMuscleGroups.split(',').map(m => m.trim()).filter(m => m) : [],
+                        difficulty_level: equipDifficulty,
+                        space_required: equipSpace,
+                        portability: equipPortability,
+                        price_range: equipPrice,
+                        alternatives: equipAlternatives ? equipAlternatives.split(',').map(a => a.trim()).filter(a => a) : [],
+                        maintenance_level: equipMaintenance,
+                        safety_considerations: equipSafety,
+                        beginner_friendly: equipBeginnerFriendly,
+                        home_gym_suitable: equipHomeGym,
+                        commercial_grade: equipCommercial
                     }
                 };
                 
