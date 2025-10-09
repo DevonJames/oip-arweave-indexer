@@ -16014,9 +16014,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         async function loadExistingGifsForBundle() {
             try {
                 console.log('📋 [Bundle] Loading existing GIFs from API...');
-                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=multiResolutionGif&source=gun&noDuplicates=true`);
+                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=multiResolutionGif&noDuplicates=true`);
                 
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=multiResolutionGif&source=gun&noDuplicates=true`, {
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=multiResolutionGif&noDuplicates=true`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`
@@ -16056,9 +16056,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         async function loadExistingIconsForBundle() {
             try {
                 console.log('📋 [Bundle] Loading existing icons from API...');
-                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=image&source=gun&noDuplicates=true&search=icon`);
+                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=image&noDuplicates=true&search=icon`);
                 
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=image&source=gun&noDuplicates=true&search=icon`, {
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=image&noDuplicates=true&search=icon`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`
@@ -16161,17 +16161,17 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 : 'No GIF collections found';
             select.appendChild(placeholder);
             
-            bundleExistingGifs.forEach((gif, idx) => {
+            bundleExistingGifs.forEach((record, idx) => {
                 const option = document.createElement('option');
-                const did = gif.oip?.did || gif.oip?.didTx || gif.did || '';
-                const name = gif.data?.basic?.name || gif.basic?.name || gif.name || 'Unknown GIF';
+                const did = record.oip?.did || record.oip?.didTx || '';
+                const name = record.data?.basic?.name || 'Unknown GIF';
                 
                 if (idx < 3) {
-                    console.log(`[Bundle] GIF ${idx}: DID=${did}, name=${name}, full record:`, gif);
+                    console.log(`[Bundle] GIF ${idx}: DID=${did}, name=${name}, full record:`, record);
                 }
                 
                 if (!did) {
-                    console.warn(`[Bundle] ⚠️ GIF ${idx} has no DID!`, gif);
+                    console.warn(`[Bundle] ⚠️ GIF ${idx} has no DID!`, record);
                 }
                 
                 option.value = did;
@@ -16257,8 +16257,61 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     </button>
                 </div>
                 
-                <!-- Icon Section -->
-                <div style="border: 1px solid #e3f2fd; border-radius: 6px; padding: 12px; margin-bottom: 12px; background: white;">
+                <!-- Equipment Section (MOVED TO TOP) -->
+                <div style="border: 1px solid #f3e5f5; border-radius: 6px; padding: 12px; margin-bottom: 12px; background: white;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                        <span style="background: #9c27b0; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">🏋️</span>
+                        <strong>Equipment Details</strong>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Mode:</label>
+                        <select class="equip-mode" onchange="toggleEquipmentMode('${itemId}')" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <option value="create">Create New Equipment</option>
+                            <option value="existing">Select Existing Equipment</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Select Existing Equipment (hidden by default) -->
+                    <div class="equip-existing-section hidden" style="margin-bottom: 8px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Select Equipment:</label>
+                        <select class="equip-existing-select equipment-select-bundle" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <option value="">Loading equipment...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Create New Equipment Fields (shown by default) -->
+                    <div class="equip-create-section">
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Equipment Name:</label>
+                            <div style="display: flex; gap: 6px; align-items: stretch;">
+                                <input type="text" class="equip-name" placeholder="e.g., Barbell" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <button type="button" class="equip-copy-btn btn-small btn-secondary" onclick="copyEquipmentFromLatest('${itemId}')" title="Copy from latest matching equipment" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
+                                    📋 Copy
+                                </button>
+                                <button type="button" class="equip-ai-btn btn-small" onclick="fillEquipmentWithAI('${itemId}')" title="Fill with AI" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
+                                    🤖 AI
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Description:</label>
+                            <textarea class="equip-description" rows="2" placeholder="Brief description..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Storage Type:</label>
+                            <select class="equip-storage" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="arweave">Arweave (Permanent)</option>
+                                <option value="gun">GUN + BitTorrent</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Icon Section (MOVED AFTER EQUIPMENT) -->
+                <div class="equip-icon-section-wrapper" style="border: 1px solid #e3f2fd; border-radius: 6px; padding: 12px; background: white;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                         <span style="background: #2196f3; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">📁</span>
                         <strong>Equipment Icon</strong>
@@ -16318,59 +16371,6 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     </div>
                     </div>
                     <!-- End of equip-icon-create-section -->
-                </div>
-                
-                <!-- Equipment Section -->
-                <div style="border: 1px solid #f3e5f5; border-radius: 6px; padding: 12px; background: white;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                        <span style="background: #9c27b0; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">🏋️</span>
-                        <strong>Equipment Details</strong>
-                    </div>
-                    
-                    <div style="margin-bottom: 12px;">
-                        <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Mode:</label>
-                        <select class="equip-mode" onchange="toggleEquipmentMode('${itemId}')" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                            <option value="create">Create New Equipment</option>
-                            <option value="existing">Select Existing Equipment</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Select Existing Equipment (hidden by default) -->
-                    <div class="equip-existing-section hidden" style="margin-bottom: 8px;">
-                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Select Equipment:</label>
-                        <select class="equip-existing-select equipment-select-bundle" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                            <option value="">Loading equipment...</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Create New Equipment Fields (shown by default) -->
-                    <div class="equip-create-section">
-                        <div style="margin-bottom: 8px;">
-                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Equipment Name:</label>
-                            <div style="display: flex; gap: 6px; align-items: stretch;">
-                                <input type="text" class="equip-name" placeholder="e.g., Barbell" style="flex: 1; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <button type="button" class="equip-copy-btn btn-small btn-secondary" onclick="copyEquipmentFromLatest('${itemId}')" title="Copy from latest matching equipment" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
-                                    📋 Copy
-                                </button>
-                                <button type="button" class="equip-ai-btn btn-small" onclick="fillEquipmentWithAI('${itemId}')" title="Fill with AI" style="font-size: 11px; padding: 4px 8px; white-space: nowrap;">
-                                    🤖 AI
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div style="margin-bottom: 8px;">
-                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Description:</label>
-                            <textarea class="equip-description" rows="2" placeholder="Brief description..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"></textarea>
-                        </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Storage Type:</label>
-                            <select class="equip-storage" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="arweave">Arweave (Permanent)</option>
-                                <option value="gun">GUN + BitTorrent</option>
-                            </select>
-                        </div>
-                    </div>
                 </div>
             `;
             
@@ -16434,17 +16434,17 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     : 'No icons found';
                 select.appendChild(placeholder);
                 
-                bundleExistingIcons.forEach((icon, idx) => {
+                bundleExistingIcons.forEach((record, idx) => {
                     const option = document.createElement('option');
-                    const did = icon.oip?.did || icon.oip?.didTx || icon.did || '';
-                    const name = icon.data?.basic?.name || icon.basic?.name || icon.name || 'Unknown Icon';
+                    const did = record.oip?.did || record.oip?.didTx || '';
+                    const name = record.data?.basic?.name || 'Unknown Icon';
                     
                     if (selectIdx === 0 && idx < 3) {
-                        console.log(`[Bundle] Icon ${idx}: DID=${did}, name=${name}, full record:`, icon);
+                        console.log(`[Bundle] Icon ${idx}: DID=${did}, name=${name}, full record:`, record);
                     }
                     
                     if (!did) {
-                        console.warn(`[Bundle] ⚠️ Icon ${idx} has no DID!`, icon);
+                        console.warn(`[Bundle] ⚠️ Icon ${idx} has no DID!`, record);
                     }
                     
                     option.value = did;
@@ -16515,16 +16515,24 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             const mode = item.querySelector('.equip-mode')?.value;
             const existingSection = item.querySelector('.equip-existing-section');
             const createSection = item.querySelector('.equip-create-section');
-            const iconSection = item.previousElementSibling; // The icon section div
+            const iconSection = item.querySelector('.equip-icon-section-wrapper'); // The icon section wrapper
+            
+            console.log(`[Bundle] toggleEquipmentMode(${itemId}): mode=${mode}, iconSection exists=${!!iconSection}`);
             
             if (mode === 'existing') {
                 existingSection?.classList.remove('hidden');
                 createSection?.classList.add('hidden');
-                if (iconSection) iconSection.classList.add('hidden'); // Hide icon when selecting existing
+                if (iconSection) {
+                    iconSection.classList.add('hidden'); // Hide icon when selecting existing equipment (icon is embedded in equipment record)
+                    console.log(`[Bundle] Hiding icon section (using existing equipment)`);
+                }
             } else {
                 existingSection?.classList.add('hidden');
                 createSection?.classList.remove('hidden');
-                if (iconSection) iconSection.classList.remove('hidden'); // Show icon when creating new
+                if (iconSection) {
+                    iconSection.classList.remove('hidden'); // Show icon when creating new equipment
+                    console.log(`[Bundle] Showing icon section (creating new equipment)`);
+                }
             }
         }
 
@@ -16604,17 +16612,17 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 select.appendChild(placeholder);
                 
                 // Add equipment options
-                bundleExistingEquipment.forEach((equipment, idx) => {
+                bundleExistingEquipment.forEach((record, idx) => {
                     const option = document.createElement('option');
-                    const did = equipment.oip?.did || equipment.oip?.didTx || equipment.did || '';
-                    const name = equipment.data?.basic?.name || equipment.basic?.name || equipment.name || 'Unknown Equipment';
+                    const did = record.oip?.did || record.oip?.didTx || '';
+                    const name = record.data?.basic?.name || 'Unknown Equipment';
                     
                     if (selectIdx === 0 && idx < 3) {
-                        console.log(`[Bundle] Equipment ${idx}: DID=${did}, name=${name}, full record:`, equipment);
+                        console.log(`[Bundle] Equipment ${idx}: DID=${did}, name=${name}, full record:`, record);
                     }
                     
                     if (!did) {
-                        console.warn(`[Bundle] ⚠️ Equipment ${idx} has no DID!`, equipment);
+                        console.warn(`[Bundle] ⚠️ Equipment ${idx} has no DID!`, record);
                     }
                     
                     option.value = did;
