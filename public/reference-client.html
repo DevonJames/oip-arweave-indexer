@@ -11309,6 +11309,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             </div>
 
                             <div class="form-group">
+                                <label for="bundle-exercise-tags">Tags (comma-separated):</label>
+                                <input type="text" id="bundle-exercise-tags" placeholder="strength, upper body, push">
+                                <small>Tags to help categorize and search for this exercise</small>
+                            </div>
+
+                            <div class="form-group">
                                 <label for="bundle-exercise-difficulty">Difficulty:</label>
                                 <select id="bundle-exercise-difficulty">
                                     <option value="beginner">Beginner</option>
@@ -18034,11 +18040,16 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const muscleGroupsText = document.getElementById('bundle-exercise-muscle-groups')?.value || '';
                 const muscleGroups = muscleGroupsText.split(',').map(m => m.trim()).filter(m => m);
 
+                // Get tags
+                const tagsText = document.getElementById('bundle-exercise-tags')?.value || '';
+                const tags = tagsText.split(',').map(t => t.trim()).filter(t => t);
+
                 const exerciseData = {
                     basic: {
                         name,
                         description: document.getElementById('bundle-exercise-description')?.value || `Exercise: ${name}`,
-                        language: 'en'
+                        language: 'en',
+                        tagItems: tags
                     },
                     exercise: {
                         instructions: instructions.length > 0 ? instructions : [''],
