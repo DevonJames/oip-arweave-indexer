@@ -9,6 +9,8 @@ config/google-service-account-key.json
 speech-synthesizer/myenv
 speech-synthesizer/packages
 media
+data/media/*
+!data/media/.gitkeep
 **-fromOlderServer.js
 **-fromOldServer.js
 **-fromOlderServer.yml

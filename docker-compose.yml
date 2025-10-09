@@ -83,7 +83,7 @@ services:
       - "${PORT:-3005}:${PORT:-3005}"
       - "${DEBUG_PORT:-9229}:9229"
     volumes:
-      - ./media:/usr/src/app/media
+      - ./data:/usr/src/app/data  # Media files and other data
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
@@ -120,7 +120,7 @@ services:
       - "${PORT:-3005}:${PORT:-3005}"
       - "${DEBUG_PORT:-9229}:9229"
     volumes:
-      - ./media:/usr/src/app/media
+      - ./data:/usr/src/app/data  # Media files and other data
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
@@ -149,7 +149,7 @@ services:
       - "${PORT:-3005}:${PORT:-3005}"
       - "${DEBUG_PORT:-9229}:9229"
     volumes:
-      - ./media:/usr/src/app/media
+      - ./data:/usr/src/app/data  # Media files and other data
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
@@ -181,7 +181,7 @@ services:
       - "${SPEECH_SYNTHESIZER_PORT:-8082}:8082"  # Speech synthesizer
       - "${NGROK_DASHBOARD_PORT:-4040}:4040"  # Ngrok dashboard
     volumes:
-      - ./media:/usr/src/app/media
+      - ./data:/usr/src/app/data  # Media files and other data
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
@@ -211,7 +211,7 @@ services:
       - "${PORT:-3005}:${PORT:-3005}"  # Express API
       - "${DEBUG_PORT:-9229}:9229"
     volumes:
-      - ./media:/usr/src/app/media
+      - ./data:/usr/src/app/data  # Media files and other data
       - ./helpers:/usr/src/app/helpers
       - ./routes:/usr/src/app/routes
       - ./voices:/usr/src/app/voices
