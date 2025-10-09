@@ -8,9 +8,10 @@ config/arweave-keyfile**
 config/google-service-account-key.json
 speech-synthesizer/myenv
 speech-synthesizer/packages
-media
+/media
 data/media/*
 !data/media/.gitkeep
+!data/media/web/.gitkeep
 **-fromOlderServer.js
 **-fromOldServer.js
 **-fromOlderServer.yml

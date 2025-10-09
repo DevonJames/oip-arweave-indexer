@@ -4,37 +4,42 @@
 
 ### 🎯 **Essential for Exercise Bundle Feature**
 
-1. **EXERCISE_BUNDLE_FEATURE_GUIDE.md** ⭐ **START HERE**
-   - Complete guide to the Exercise Bundle workflow
-   - All functions, data structures, and API calls
-   - Troubleshooting and testing checklist
+1. **EXERCISE_BUNDLE_READING_LIST.md** ⭐ **START HERE**
+   - Quick reading list (5 docs)
+   - Essential knowledge summary
+   - Critical implementation patterns
 
-2. **OIP_TECHNICAL_OVERVIEW.md**
+2. **EXERCISE_BUNDLE_FEATURE_GUIDE.md** 
+   - Technical reference guide
+   - Code examples and patterns
+   - All functions and data structures
+
+3. **OIP_TECHNICAL_OVERVIEW.md**
    - Core OIP concepts (templates, records, drefs)
    - Data flow pipeline
    - Template-record paradigm
 
-3. **API_PUBLISH_DOCUMENTATION.md**
+4. **API_PUBLISH_DOCUMENTATION.md**
    - Publishing API endpoints for both GUN and Arweave
    - Authentication system (JWT, HD wallets)
    - Request/response structures
 
-4. **OIP_GUN_SECURITY_AND_SYNC_ARCHITECTURE.md**
+5. **OIP_GUN_SECURITY_AND_SYNC_ARCHITECTURE.md**
    - GUN storage encryption (public, private, organization)
    - Organization access control
    - Cross-node synchronization
 
-5. **Organizations.md**
+6. **Organizations.md**
    - Organization record structure
    - Unique handle generation
    - Membership policies (Auto-Enroll, Invite-Only, etc.)
 
-6. **MEDIA_PUBLISHING.md**
+7. **MEDIA_PUBLISHING.md**
    - Media file upload process
    - Multi-network storage (Arweave, IPFS, BitTorrent)
    - Image/GIF record creation
 
-7. **user_wallets_documentation.md**
+8. **user_wallets_documentation.md**
    - User authentication & JWT tokens
    - HD wallet system
    - Mnemonic recovery phrases
@@ -84,7 +89,8 @@
 
 | Document | Purpose |
 |----------|---------|
-| **EXERCISE_BUNDLE_FEATURE_GUIDE.md** | Exercise Bundle workflow (fitness) |
+| **EXERCISE_BUNDLE_READING_LIST.md** | Quick start for Exercise Bundle feature |
+| **EXERCISE_BUNDLE_FEATURE_GUIDE.md** | Exercise Bundle technical reference |
 | **PHOTO_ANALYSIS_IMPLEMENTATION.md** | Photo analysis features |
 | **RAG_Implementation_Guide.md** | RAG (retrieval-augmented generation) |
 | **PODCAST_DIDTX_USAGE.md** | Podcast record handling |
@@ -145,12 +151,13 @@
 
 **Read in this order:**
 
-1. ✅ **EXERCISE_BUNDLE_FEATURE_GUIDE.md** - Complete feature guide
-2. ✅ **OIP_TECHNICAL_OVERVIEW.md** - Understand OIP basics
-3. ✅ **API_PUBLISH_DOCUMENTATION.md** - Publishing API details
-4. ✅ **OIP_GUN_SECURITY_AND_SYNC_ARCHITECTURE.md** - Storage & security
-5. ✅ **Organizations.md** - Organization system
-6. ✅ **MEDIA_PUBLISHING.md** - Media handling
+1. ✅ **EXERCISE_BUNDLE_READING_LIST.md** - Start here, tells you what to read
+2. ✅ **EXERCISE_BUNDLE_FEATURE_GUIDE.md** - Technical reference
+3. ✅ **OIP_TECHNICAL_OVERVIEW.md** - Understand OIP basics (lines 1-200)
+4. ✅ **API_PUBLISH_DOCUMENTATION.md** - Publishing API details (lines 1-150)
+5. ✅ **OIP_GUN_SECURITY_AND_SYNC_ARCHITECTURE.md** - Storage & security (lines 1-200)
+6. ✅ **Organizations.md** - Organization system (lines 1-150)
+7. ✅ **MEDIA_PUBLISHING.md** - Media handling (lines 1-150)
 
 ### Working on Other Features?
 
@@ -210,9 +217,9 @@ When making changes to the codebase:
 
 If you're an AI agent working on OIP and need clarification:
 
-1. Check the EXERCISE_BUNDLE_FEATURE_GUIDE.md first
+1. Check the feature-specific reading list first (e.g., EXERCISE_BUNDLE_READING_LIST.md)
 2. Cross-reference with API_PUBLISH_DOCUMENTATION.md
-3. Look at actual code in `/public/reference-client.html`
+3. Look at actual code in the relevant files
 4. Check browser console logs (they're very detailed)
 5. Review recent git commits for context
 
@@ -232,7 +239,7 @@ If you're an AI agent working on OIP and need clarification:
 | Storage & Data | 6 | ✅ Complete |
 | Media & Publishing | 5 | ✅ Complete |
 | Organizations & Users | 2 | ✅ Complete |
-| Feature Guides | 5 | 🟡 Growing |
+| Feature Guides | 5 | ✅ Complete |
 | Alfred AI | 4 | ✅ Complete |
 | Deployment | 3 | ✅ Complete |
 | Maintenance | 3 | ✅ Complete |
@@ -246,7 +253,8 @@ If you're an AI agent working on OIP and need clarification:
 
 ## 🆕 Recent Additions
 
-- **2025-10-09**: EXERCISE_BUNDLE_FEATURE_GUIDE.md created
+- **2025-10-09**: EXERCISE_BUNDLE_READING_LIST.md created (quick start guide)
+- **2025-10-09**: EXERCISE_BUNDLE_FEATURE_GUIDE.md created (technical reference)
 - **2025-10-09**: DOCUMENTATION_INDEX.md created
 
 ---
