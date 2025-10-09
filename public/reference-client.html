@@ -11392,9 +11392,27 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         
                         <div id="bundle-section-gif-content">
                             <div class="form-group">
-                                <label for="bundle-gif-name">Collection Name:</label>
-                                <input type="text" id="bundle-gif-name" placeholder="e.g., Exercise Name Demonstration">
+                                <label for="bundle-gif-mode">Mode:</label>
+                                <select id="bundle-gif-mode" onchange="toggleBundleGifMode()">
+                                    <option value="create">Create New GIF Collection</option>
+                                    <option value="existing">Select Existing GIF Collection</option>
+                                </select>
                             </div>
+
+                            <!-- Select Existing GIF (hidden by default) -->
+                            <div class="form-group hidden" id="bundle-gif-existing-group">
+                                <label for="bundle-gif-existing-select">Select GIF Collection:</label>
+                                <select id="bundle-gif-existing-select">
+                                    <option value="">Loading GIFs...</option>
+                                </select>
+                            </div>
+
+                            <!-- Create New GIF Fields (shown by default) -->
+                            <div id="bundle-gif-create-section">
+                                <div class="form-group">
+                                    <label for="bundle-gif-name">Collection Name:</label>
+                                    <input type="text" id="bundle-gif-name" placeholder="e.g., Exercise Name Demonstration">
+                                </div>
 
                             <div class="form-group">
                                 <label for="bundle-gif-description">Description:</label>
@@ -11458,6 +11476,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 <label for="bundle-gif-org">Organization:</label>
                                 <select id="bundle-gif-org"></select>
                             </div>
+                            </div>
+                            <!-- End of bundle-gif-create-section -->
                         </div>
                     </div>
 
@@ -15920,23 +15940,28 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         async function initializeExerciseBundleInterface() {
             console.log('🎯 Initializing Exercise Bundle Interface');
             
-            // Load organizations FIRST and wait for it to complete
-            await loadOrganizationsForBundle();
-            
-            // Load existing equipment for selection
-            await loadExistingEquipmentForBundle();
+            // Load all data in parallel
+            await Promise.all([
+                loadOrganizationsForBundle(),
+                loadExistingEquipmentForBundle(),
+                loadExistingGifsForBundle(),
+                loadExistingIconsForBundle()
+            ]);
             
             // Add first equipment item (will now have orgs and equipment available)
             addBundleEquipmentItem();
             
-            // Initialize GIF storage type handler (will now have orgs available)
+            // Initialize GIF storage type handler and dropdown (will now have orgs and GIFs available)
             updateBundleGifStorageType();
+            updateBundleGifDropdown();
         }
 
         /**
-         * Global variable to store organizations
+         * Global variables to store organizations and existing records
          */
         let bundleOrganizations = [];
+        let bundleExistingGifs = [];
+        let bundleExistingIcons = [];
 
         /**
          * Load organizations for bundle dropdowns
@@ -15970,6 +15995,58 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         }
 
         /**
+         * Load existing GIFs for bundle
+         */
+        async function loadExistingGifsForBundle() {
+            try {
+                console.log('📋 [Bundle] Loading existing GIFs from API...');
+                
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=multiResolutionGif&source=gun&noDuplicates=true`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    bundleExistingGifs = result.records || [];
+                    console.log(`✅ [Bundle] Loaded ${bundleExistingGifs.length} GIF records`);
+                } else {
+                    console.warn('⚠️ [Bundle] Failed to load GIFs from API');
+                }
+            } catch (error) {
+                console.warn('⚠️ [Bundle] Error loading GIFs:', error);
+            }
+        }
+
+        /**
+         * Load existing icons for bundle
+         */
+        async function loadExistingIconsForBundle() {
+            try {
+                console.log('📋 [Bundle] Loading existing icons from API...');
+                
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=image&source=gun&noDuplicates=true&search=icon`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    bundleExistingIcons = result.records || [];
+                    console.log(`✅ [Bundle] Loaded ${bundleExistingIcons.length} icon records`);
+                } else {
+                    console.warn('⚠️ [Bundle] Failed to load icons from API');
+                }
+            } catch (error) {
+                console.warn('⚠️ [Bundle] Error loading icons:', error);
+            }
+        }
+
+        /**
          * Populate organization dropdown for a specific element
          */
         function populateBundleOrgDropdown(selectElement) {
@@ -15997,6 +16074,53 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         /**
          * Update GIF storage type to show/hide access level
          */
+        /**
+         * Toggle bundle GIF mode (create vs existing)
+         */
+        function toggleBundleGifMode() {
+            const mode = document.getElementById('bundle-gif-mode')?.value;
+            const existingGroup = document.getElementById('bundle-gif-existing-group');
+            const createSection = document.getElementById('bundle-gif-create-section');
+            
+            if (mode === 'existing') {
+                existingGroup?.classList.remove('hidden');
+                createSection?.classList.add('hidden');
+                updateBundleGifDropdown();
+            } else {
+                existingGroup?.classList.add('hidden');
+                createSection?.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Update bundle GIF dropdown
+         */
+        function updateBundleGifDropdown() {
+            const select = document.getElementById('bundle-gif-existing-select');
+            if (!select) return;
+            
+            select.innerHTML = '';
+            
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = bundleExistingGifs.length > 0 
+                ? 'Select GIF Collection' 
+                : 'No GIF collections found';
+            select.appendChild(placeholder);
+            
+            bundleExistingGifs.forEach(gif => {
+                const option = document.createElement('option');
+                const did = gif.oip?.did || gif.oip?.didTx || '';
+                const name = gif.data?.basic?.name || 'Unknown GIF';
+                
+                option.value = did;
+                option.textContent = name;
+                select.appendChild(option);
+            });
+            
+            console.log(`[Bundle] Populated GIF dropdown with ${bundleExistingGifs.length} items`);
+        }
+
         function updateBundleGifStorageType() {
             const storageType = document.getElementById('bundle-gif-storage')?.value;
             const accessGroup = document.getElementById('bundle-gif-access-group');
@@ -16079,10 +16203,29 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <strong>Equipment Icon</strong>
                     </div>
                     
-                    <div style="margin-bottom: 8px;">
-                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Icon Name:</label>
-                        <input type="text" class="equip-icon-name" placeholder="e.g., Barbell Icon" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Icon Mode:</label>
+                        <select class="equip-icon-mode" onchange="toggleEquipIconMode('${itemId}')" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <option value="create">Create New Icon</option>
+                            <option value="existing">Select Existing Icon</option>
+                            <option value="none">No Icon</option>
+                        </select>
                     </div>
+                    
+                    <!-- Select Existing Icon (hidden by default) -->
+                    <div class="equip-icon-existing-section hidden" style="margin-bottom: 8px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Select Icon:</label>
+                        <select class="equip-icon-existing-select" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <option value="">Loading icons...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Create New Icon Fields (shown by default) -->
+                    <div class="equip-icon-create-section">
+                        <div style="margin-bottom: 8px;">
+                            <label style="display: block; margin-bottom: 4px; font-size: 13px;">Icon Name:</label>
+                            <input type="text" class="equip-icon-name" placeholder="e.g., Barbell Icon" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                        </div>
                     
                     <div style="margin-bottom: 8px;">
                         <label style="display: block; margin-bottom: 4px; font-size: 13px;">Icon File:</label>
@@ -16112,6 +16255,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             <option value="">Select Organization</option>
                         </select>
                     </div>
+                    </div>
+                    <!-- End of equip-icon-create-section -->
                 </div>
                 
                 <!-- Equipment Section -->
@@ -16172,6 +16317,63 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             
             // Initialize icon storage type
             updateEquipIconStorageType(itemId);
+            
+            // Populate the equipment and icon dropdowns for this item
+            updateBundleEquipmentDropdowns();
+            updateEquipIconDropdowns();
+        }
+
+        /**
+         * Toggle equipment icon mode (create vs existing vs none)
+         */
+        function toggleEquipIconMode(itemId) {
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const mode = item.querySelector('.equip-icon-mode')?.value;
+            const existingSection = item.querySelector('.equip-icon-existing-section');
+            const createSection = item.querySelector('.equip-icon-create-section');
+            
+            if (mode === 'existing') {
+                existingSection?.classList.remove('hidden');
+                createSection?.classList.add('hidden');
+                updateEquipIconDropdowns();
+            } else if (mode === 'create') {
+                existingSection?.classList.add('hidden');
+                createSection?.classList.remove('hidden');
+            } else { // none
+                existingSection?.classList.add('hidden');
+                createSection?.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Update all equipment icon dropdowns
+         */
+        function updateEquipIconDropdowns() {
+            const selects = document.querySelectorAll('.equip-icon-existing-select');
+            selects.forEach(select => {
+                select.innerHTML = '';
+                
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = bundleExistingIcons.length > 0 
+                    ? 'Select Icon' 
+                    : 'No icons found';
+                select.appendChild(placeholder);
+                
+                bundleExistingIcons.forEach(icon => {
+                    const option = document.createElement('option');
+                    const did = icon.oip?.did || icon.oip?.didTx || '';
+                    const name = icon.data?.basic?.name || 'Unknown Icon';
+                    
+                    option.value = did;
+                    option.textContent = name;
+                    select.appendChild(option);
+                });
+                
+                console.log(`[Bundle] Populated icon dropdown with ${bundleExistingIcons.length} items`);
+            });
         }
 
         /**
@@ -16283,17 +16485,16 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         function updateBundleEquipmentDropdowns() {
             const selects = document.querySelectorAll('.equipment-select-bundle');
             selects.forEach(select => {
-                // Clear existing options except the first one
-                while (select.children.length > 1) {
-                    select.removeChild(select.lastChild);
-                }
+                // Clear all existing options
+                select.innerHTML = '';
                 
-                // Set placeholder
-                if (select.children.length > 0) {
-                    select.children[0].textContent = bundleExistingEquipment.length > 0 
-                        ? 'Select Equipment' 
-                        : 'No equipment found';
-                }
+                // Add placeholder
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = bundleExistingEquipment.length > 0 
+                    ? 'Select Equipment' 
+                    : 'No equipment found';
+                select.appendChild(placeholder);
                 
                 // Add equipment options
                 bundleExistingEquipment.forEach(equipment => {
@@ -17085,6 +17286,18 @@ Return ONLY a JSON object with this structure:
          */
         async function publishBundleGif() {
             try {
+                // Check if using existing GIF
+                const mode = document.getElementById('bundle-gif-mode')?.value;
+                if (mode === 'existing') {
+                    const existingDID = document.getElementById('bundle-gif-existing-select')?.value;
+                    if (!existingDID) {
+                        throw new Error('Please select a GIF collection');
+                    }
+                    console.log(`📦 Using existing GIF collection: ${existingDID}`);
+                    return existingDID;
+                }
+                
+                // Create new GIF collection
                 const name = document.getElementById('bundle-gif-name')?.value;
                 if (!name) {
                     throw new Error('Please enter GIF collection name');
@@ -17390,11 +17603,8 @@ Return ONLY a JSON object with this structure:
                 }
                 
                 // Mode is "create" - get data for creating new equipment
-                const iconName = item.querySelector('.equip-icon-name')?.value;
-                const iconFile = item.querySelector('.equip-icon-file')?.files[0];
-                const iconStorage = item.querySelector('.equip-icon-storage')?.value || 'gun';
-                const iconAccess = item.querySelector('.equip-icon-access')?.value || 'public';
-                const iconOrg = item.querySelector('.equip-icon-org')?.value;
+                // Check icon mode
+                const iconMode = item.querySelector('.equip-icon-mode')?.value || 'create';
                 
                 // Get equipment data
                 const equipName = item.querySelector('.equip-name')?.value;
@@ -17406,9 +17616,24 @@ Return ONLY a JSON object with this structure:
                     continue;
                 }
                 
-                // Step 1: Publish icon if file is provided
+                // Step 1: Handle icon based on mode
                 let iconDID = null;
-                if (iconFile) {
+                
+                if (iconMode === 'existing') {
+                    // Use existing icon
+                    iconDID = item.querySelector('.equip-icon-existing-select')?.value;
+                    if (iconDID) {
+                        console.log(`📦 Using existing icon: ${iconDID}`);
+                    }
+                } else if (iconMode === 'create') {
+                    // Create new icon
+                    const iconName = item.querySelector('.equip-icon-name')?.value;
+                    const iconFile = item.querySelector('.equip-icon-file')?.files[0];
+                    const iconStorage = item.querySelector('.equip-icon-storage')?.value || 'gun';
+                    const iconAccess = item.querySelector('.equip-icon-access')?.value || 'public';
+                    const iconOrg = item.querySelector('.equip-icon-org')?.value;
+                    
+                    if (iconFile) {
                     currentStep++;
                     updateBundleProgress(`Publishing equipment icon (${currentStep}/${totalSteps})...`, (currentStep / totalSteps) * 100);
                     
@@ -17501,7 +17726,9 @@ Return ONLY a JSON object with this structure:
                     } catch (error) {
                         console.error('Error publishing icon:', error);
                     }
+                    }
                 }
+                // icon mode 'none' or any other value: iconDID stays null
                 
                 // Step 2: Publish equipment
                 currentStep++;
