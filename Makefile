@@ -406,6 +406,10 @@ clean-orphans: ## Remove orphaned containers (like old ngrok containers)
 	docker-compose down --remove-orphans
 	@echo "$(GREEN)✅ Orphaned containers removed$(NC)"
 
+fix-permissions: ## Fix file permissions for data directory (Linux servers)
+	@echo "$(BLUE)🔧 Fixing permissions for data directory...$(NC)"
+	@./fix-permissions.sh
+
 # Quick deployment targets for common scenarios
 minimal: ## Quick deploy: Core services only (elasticsearch, kibana, oip - no canvas) + Docker Compose ngrok
 	@make up-no-makefile-ngrok PROFILE=minimal
