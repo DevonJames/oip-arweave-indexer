@@ -17103,7 +17103,18 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
 1. A brief description (2-3 sentences)
 2. Step-by-step instructions (3-5 steps, one per line)
 3. Primary muscle groups targeted (comma-separated list)
-4. Relevant tags for categorization (comma-separated list, e.g., "strength, upper body, push, compound")
+4. Relevant tags for categorization - IMPORTANT: You must ONLY use tags from this exact list (comma-separated, choose 1-4 most relevant):
+   - general fitness
+   - get stronger
+   - gain muscle
+   - improve endurance
+   - lean up
+   - yoga
+   - flexibility
+   - glute activation
+   - core stability
+   - injury prevention
+   - agility
 5. Appropriate difficulty level (beginner/intermediate/advanced)
 6. Exercise category (strength/cardio/flexibility)
 
@@ -17112,10 +17123,12 @@ Return ONLY a valid JSON object with this exact structure:
   "description": "...",
   "instructions": "step1\\nstep2\\nstep3",
   "muscleGroups": "muscle1, muscle2, muscle3",
-  "tags": "tag1, tag2, tag3, tag4",
+  "tags": "tag1, tag2, tag3",
   "difficulty": "beginner",
   "category": "strength"
-}`;
+}
+
+CRITICAL: For the tags field, only use values from the provided list above. Do not create new tags.`;
 
                 // Retry logic: Try up to 3 times
                 let lastError = null;
