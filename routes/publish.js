@@ -707,7 +707,7 @@ router.post('/newRecipe', async (req, res) => {
                 ingredientSource: bestMatch.data.basic.webUrl,
                 ingredientDidRef: bestMatch.oip.did || bestMatch.oip.didTx
             });
-            console.log(`  ✅ Match found: "${bestMatch.data.basic.name}" (${bestMatch.oip.didTx})`);
+            console.log(`  ✅ Match found: "${bestMatch.data.basic.name}" (${bestMatch.oip.did || bestMatch.oip.didTx})`);
         } else {
             ingredientDidRefs[originalName] = null;
             console.log(`  ❌ No match found`);
@@ -974,12 +974,12 @@ router.post('/newRecipe', async (req, res) => {
       if (newRecord) {
         const originalName = missingIngredientNames[index];
         const cleanedName = nameMapping[originalName];
-        ingredientRecords.ingredientDidRefs[originalName] = newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`;
+        ingredientRecords.ingredientDidRefs[originalName] = newRecord.oip?.did || `did:arweave:${newRecord.transactionId}`;
         ingredientRecords.nutritionalInfo.push({
           ingredientName: newRecord.data?.basic?.name || cleanedName,
           nutritionalInfo: newRecord.data?.nutritionalInfo || {},
           ingredientSource: newRecord.data?.basic?.webUrl || '',
-          ingredientDidRef: newRecord.oip?.didTx || `did:arweave:${newRecord.transactionId}`
+          ingredientDidRef: newRecord.oip?.did || `did:arweave:${newRecord.transactionId}`
         });
       }
     });

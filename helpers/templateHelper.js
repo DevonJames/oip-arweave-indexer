@@ -511,7 +511,7 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                 {...record
                 },
                 "oip": {
-                    "didTx": "did:arweave:"+ transactionId,
+                    "did": "did:arweave:"+ transactionId,
                     "inArweaveBlock": currentblock,
                     "recordType": recordType,
                     "indexedAt": new Date().toISOString(),

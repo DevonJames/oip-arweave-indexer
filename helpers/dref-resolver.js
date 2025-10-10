@@ -83,8 +83,8 @@ async function resolveDrefsInRecord(recordJson, templateName, fieldToSubTemplate
       
       console.log(`Publishing new ${subTemplateName} record:`, JSON.stringify(enhancedObj, null, 2));
       const newRecord = await publishNewRecord(enhancedObj, subTemplateName, false, false, false, null, blockchain);
-      console.log(`Created new record:`, newRecord.recordToIndex.oip.didTx);
-      return newRecord.recordToIndex.oip.didTx;
+      console.log(`Created new record:`, newRecord.recordToIndex.oip.did);
+      return newRecord.recordToIndex.oip.did;
     }
   }
 
