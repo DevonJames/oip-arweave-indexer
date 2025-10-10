@@ -11366,7 +11366,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 <input type="number" id="bundle-exercise-duration" min="0">
                             </div>
 
-                            <div class="form-group hidden" id="bundle-exercise-est-duration-group">
+                            <div class="form-group" id="bundle-exercise-est-duration-group">
                                 <label for="bundle-exercise-est-duration">Estimated Duration (minutes):</label>
                                 <input type="number" id="bundle-exercise-est-duration" min="0">
                             </div>
@@ -17117,18 +17117,31 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
    - agility
 5. Appropriate difficulty level (beginner/intermediate/advanced)
 6. Exercise category (strength/cardio/flexibility)
+7. Measurement type and associated values:
+   - If "reps": provide recommended_sets (number), recommended_reps (number), and est_duration_minutes (number)
+   - If "timed": provide recommended_sets (number), target_duration_seconds (number), and est_duration_minutes (number)
+   - If "hold": provide target_duration_seconds (number) and est_duration_minutes (number)
+   - If "maxdur": provide target_duration_seconds (number) and est_duration_minutes (number)
 
-Return ONLY a valid JSON object with this exact structure:
+Return ONLY a valid JSON object with this exact structure (include only the fields relevant to the measurement type):
 {
   "description": "...",
   "instructions": "step1\\nstep2\\nstep3",
   "muscleGroups": "muscle1, muscle2, muscle3",
   "tags": "tag1, tag2, tag3",
   "difficulty": "beginner",
-  "category": "strength"
+  "category": "strength",
+  "measurement_type": "reps|timed|hold|maxdur",
+  "recommended_sets": 3,
+  "recommended_reps": 10,
+  "target_duration_seconds": 30,
+  "est_duration_minutes": 5
 }
 
-CRITICAL: For the tags field, only use values from the provided list above. Do not create new tags.`;
+CRITICAL: 
+- For the tags field, only use values from the provided list above. Do not create new tags.
+- Include only the measurement fields that apply to the chosen measurement_type.
+- est_duration_minutes should always be provided regardless of measurement type.`;
 
                 // Retry logic: Try up to 3 times
                 let lastError = null;
@@ -17196,6 +17209,27 @@ CRITICAL: For the tags field, only use values from the provided list above. Do n
                             }
                             if (aiData.category) {
                                 document.getElementById('bundle-exercise-category').value = aiData.category;
+                            }
+                            
+                            // Populate measurement type and associated fields
+                            if (aiData.measurement_type) {
+                                document.getElementById('bundle-exercise-measurement').value = aiData.measurement_type;
+                                // Trigger the change event to show/hide appropriate fields
+                                updateBundleExerciseMeasurement();
+                            }
+                            
+                            // Populate measurement-specific fields
+                            if (aiData.recommended_sets !== undefined) {
+                                document.getElementById('bundle-exercise-sets').value = aiData.recommended_sets;
+                            }
+                            if (aiData.recommended_reps !== undefined) {
+                                document.getElementById('bundle-exercise-reps').value = aiData.recommended_reps;
+                            }
+                            if (aiData.target_duration_seconds !== undefined) {
+                                document.getElementById('bundle-exercise-duration').value = aiData.target_duration_seconds;
+                            }
+                            if (aiData.est_duration_minutes !== undefined) {
+                                document.getElementById('bundle-exercise-est-duration').value = aiData.est_duration_minutes;
                             }
                             
                             console.log(`[Bundle AI] ✅ Success on attempt ${attempts}`);
