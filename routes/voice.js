@@ -543,7 +543,7 @@ async function callOpenAI(conversation, modelName = 'gpt-4o-mini') {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 15000
+            timeout: 45000  // Increased from 15s to 45s for complex JSON generation
         });
         
         return {
@@ -571,7 +571,7 @@ async function callGrok(conversation, modelName = 'grok-4') {
                 'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 15000
+            timeout: 45000  // Increased from 15s to 45s for complex JSON generation
         });
         
         return {

@@ -17023,6 +17023,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 if (basicData?.description) {
                     document.getElementById('bundle-exercise-description').value = basicData.description;
                 }
+                if (basicData?.tagItems && Array.isArray(basicData.tagItems)) {
+                    document.getElementById('bundle-exercise-tags').value = basicData.tagItems.join(', ');
+                }
                 if (exerciseData?.instructions && Array.isArray(exerciseData.instructions)) {
                     document.getElementById('bundle-exercise-instructions').value = exerciseData.instructions.join('\n');
                 }
@@ -17095,68 +17098,122 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
 
                 console.log(`[Bundle AI] Filling in exercise fields for: "${nameValue}"`);
 
-                // Build a simple prompt for the AI
+                // Build a comprehensive prompt for the AI
                 const prompt = `You are an expert fitness assistant. Given the exercise name "${nameValue}", please provide:
 1. A brief description (2-3 sentences)
 2. Step-by-step instructions (3-5 steps, one per line)
 3. Primary muscle groups targeted (comma-separated list)
-4. Appropriate difficulty level (beginner/intermediate/advanced)
-5. Exercise category (strength/cardio/flexibility)
+4. Relevant tags for categorization (comma-separated list, e.g., "strength, upper body, push, compound")
+5. Appropriate difficulty level (beginner/intermediate/advanced)
+6. Exercise category (strength/cardio/flexibility)
 
-Return ONLY a JSON object with this structure:
+Return ONLY a valid JSON object with this exact structure:
 {
   "description": "...",
   "instructions": "step1\\nstep2\\nstep3",
   "muscleGroups": "muscle1, muscle2, muscle3",
+  "tags": "tag1, tag2, tag3, tag4",
   "difficulty": "beginner",
   "category": "strength"
 }`;
 
-                const response = await fetch(`${API_BASE_URL}/api/voice/chat`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
-                    },
-                    body: JSON.stringify({
-                        text: prompt,
-                        model: 'grok-beta',
-                        processing_mode: 'llm-grok-4',
-                        return_audio: false,
-                        conversation_history: []
-                    })
-                });
-
-                const data = await response.json();
+                // Retry logic: Try up to 3 times
+                let lastError = null;
+                let attempts = 0;
+                const maxAttempts = 3;
                 
-                if (data.response_text) {
-                    // Try to parse the AI response as JSON
-                    const aiData = JSON.parse(data.response_text);
+                while (attempts < maxAttempts) {
+                    attempts++;
+                    console.log(`[Bundle AI] Attempt ${attempts}/${maxAttempts}`);
                     
-                    // Populate fields
-                    if (aiData.description) {
-                        document.getElementById('bundle-exercise-description').value = aiData.description;
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/voice/chat`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                            },
+                            body: JSON.stringify({
+                                text: prompt,
+                                model: 'grok-beta',
+                                processing_mode: 'llm-grok-4',
+                                return_audio: false,
+                                conversation_history: [],
+                                timeout: 45000  // 45 second timeout
+                            })
+                        });
+
+                        const data = await response.json();
+                        
+                        if (data.response_text) {
+                            // Check if response is an error message
+                            if (data.response_text.includes('error') || data.response_text.includes('Error') || data.response_text.includes('timeout')) {
+                                throw new Error(`AI service error: ${data.response_text}`);
+                            }
+                            
+                            // Try to parse the AI response as JSON
+                            let responseText = data.response_text.trim();
+                            
+                            // Remove markdown code blocks if present
+                            responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+                            
+                            let aiData;
+                            try {
+                                aiData = JSON.parse(responseText);
+                            } catch (parseError) {
+                                console.error(`[Bundle AI] Attempt ${attempts} - Failed to parse response as JSON:`, responseText);
+                                throw new Error('AI returned invalid JSON');
+                            }
+                            
+                            // Success! Populate fields
+                            if (aiData.description) {
+                                document.getElementById('bundle-exercise-description').value = aiData.description;
+                            }
+                            if (aiData.instructions) {
+                                document.getElementById('bundle-exercise-instructions').value = aiData.instructions;
+                            }
+                            if (aiData.muscleGroups) {
+                                document.getElementById('bundle-exercise-muscle-groups').value = aiData.muscleGroups;
+                            }
+                            if (aiData.tags) {
+                                document.getElementById('bundle-exercise-tags').value = aiData.tags;
+                            }
+                            if (aiData.difficulty) {
+                                document.getElementById('bundle-exercise-difficulty').value = aiData.difficulty;
+                            }
+                            if (aiData.category) {
+                                document.getElementById('bundle-exercise-category').value = aiData.category;
+                            }
+                            
+                            console.log(`[Bundle AI] ✅ Success on attempt ${attempts}`);
+                            alert(`🤖 AI successfully filled in exercise fields!${attempts > 1 ? ` (succeeded on attempt ${attempts})` : ''}`);
+                            return; // Success - exit function
+                        } else {
+                            throw new Error('No response from AI');
+                        }
+                    } catch (error) {
+                        lastError = error;
+                        console.warn(`[Bundle AI] Attempt ${attempts} failed:`, error.message);
+                        
+                        // If we have more attempts, wait a bit before retrying
+                        if (attempts < maxAttempts) {
+                            console.log(`[Bundle AI] Retrying in 2 seconds...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        }
                     }
-                    if (aiData.instructions) {
-                        document.getElementById('bundle-exercise-instructions').value = aiData.instructions;
-                    }
-                    if (aiData.muscleGroups) {
-                        document.getElementById('bundle-exercise-muscle-groups').value = aiData.muscleGroups;
-                    }
-                    if (aiData.difficulty) {
-                        document.getElementById('bundle-exercise-difficulty').value = aiData.difficulty;
-                    }
-                    if (aiData.category) {
-                        document.getElementById('bundle-exercise-category').value = aiData.category;
-                    }
-                    
-                    alert('🤖 AI successfully filled in exercise fields!');
+                }
+                
+                // If we get here, all attempts failed
+                console.error('[Bundle AI] All attempts failed. Last error:', lastError);
+                const errorMsg = lastError?.message || 'Unknown error';
+                if (errorMsg.includes('timeout') || errorMsg.includes('invalid JSON')) {
+                    alert(`⚠️ AI service failed after ${maxAttempts} attempts.\n\nThe grok-4 model is currently slow/overloaded. Please try again later or fill fields manually.`);
                 } else {
-                    throw new Error('No response from AI');
+                    alert(`Failed to fill with AI after ${maxAttempts} attempts: ${errorMsg}\n\nPlease try again later or fill manually.`);
                 }
             } catch (error) {
                 console.error('Error with AI fill:', error);
-                alert('Failed to fill with AI. Please try again or fill manually.');
+                alert(`Failed to fill with AI: ${error.message}\n\nPlease try again or fill manually.`);
             }
         }
 
