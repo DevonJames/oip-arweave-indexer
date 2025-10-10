@@ -19203,16 +19203,16 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         if (!userChoice) {
                             // User wants to switch to Select Existing mode
                             // Find the mode dropdown and switch it
-                            const modeSelect = item.querySelector('.recipe-ingredient-mode');
+                            const modeSelect = item.querySelector('.ingredient-mode');
                             if (modeSelect) {
-                                modeSelect.value = 'select';
+                                modeSelect.value = 'existing';
                                 // Trigger change event to update the UI
                                 const event = new Event('change');
                                 modeSelect.dispatchEvent(event);
                                 
                                 // Pre-populate the select dropdown with this ingredient
                                 setTimeout(async () => {
-                                    const selectDropdown = item.querySelector('.recipe-ingredient-select');
+                                    const selectDropdown = item.querySelector('.ingredient-select');
                                     if (selectDropdown) {
                                         // Add the option if it doesn't exist
                                         let optionExists = false;
@@ -20109,7 +20109,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 
                 console.log('📋 Copying from latest recipe matching:', recipeName);
                 
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=recipe&fieldName=basic.name&fieldSearch=${encodeURIComponent(recipeName)}&limit=1&sortBy=date:desc`, {
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=recipe&fieldName=basic.name&fieldSearch=${encodeURIComponent(recipeName)}&limit=1&sortBy=date:desc&resolveDepth=1`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`,
@@ -20147,7 +20147,116 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 
                 updateRecipeBundleTotalTime();
                 
-                alert(`✅ Copied data from recipe "${basic.name}"!`);
+                // Clear existing ingredients
+                document.getElementById('recipe-bundle-ingredients-container').innerHTML = '';
+                
+                // Add ingredients from recipe
+                const ingredients = recipe.ingredient || [];
+                const amounts = recipe.ingredient_amount || [];
+                const units = recipe.ingredient_unit || [];
+                const comments = recipe.ingredient_comment || [];
+                
+                if (ingredients.length > 0) {
+                    console.log(`📋 Copying ${ingredients.length} ingredients`);
+                    
+                    ingredients.forEach((ingredient, idx) => {
+                        addRecipeBundleIngredientItem();
+                        
+                        // Get the last added ingredient item
+                        const container = document.getElementById('recipe-bundle-ingredients-container');
+                        const items = container.querySelectorAll('.ingredient-item');
+                        const lastItem = items[items.length - 1];
+                        
+                        if (lastItem) {
+                            const modeSelect = lastItem.querySelector('.ingredient-mode');
+                            const nameInput = lastItem.querySelector('.ingredient-name');
+                            const amountInput = lastItem.querySelector('.ingredient-amount');
+                            const unitInput = lastItem.querySelector('.ingredient-unit');
+                            const commentInput = lastItem.querySelector('.ingredient-comment');
+                            
+                            // Check if ingredient is a resolved object or a DID string
+                            if (typeof ingredient === 'object' && ingredient.data) {
+                                // Resolved ingredient - use "Select Existing" mode
+                                const ingredientName = ingredient.data?.basic?.name || 'Unknown';
+                                const ingredientDID = ingredient.oip?.did || ingredient.oip?.didTx;
+                                
+                                if (modeSelect) modeSelect.value = 'existing';
+                                if (nameInput) nameInput.value = ingredientName;
+                                
+                                // Trigger mode change to show the select dropdown
+                                if (modeSelect) {
+                                    const event = new Event('change');
+                                    modeSelect.dispatchEvent(event);
+                                    
+                                    // Pre-populate the select dropdown
+                                    setTimeout(() => {
+                                        const selectDropdown = lastItem.querySelector('.ingredient-select');
+                                        if (selectDropdown && ingredientDID) {
+                                            const option = document.createElement('option');
+                                            option.value = ingredientDID;
+                                            option.textContent = ingredientName;
+                                            selectDropdown.innerHTML = '';
+                                            selectDropdown.appendChild(option);
+                                            selectDropdown.value = ingredientDID;
+                                        }
+                                    }, 100);
+                                }
+                                
+                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredientName} (${ingredientDID})`);
+                            } else if (typeof ingredient === 'string' && ingredient.startsWith('did:')) {
+                                // DID reference - use "Select Existing" mode
+                                if (modeSelect) modeSelect.value = 'existing';
+                                
+                                // Trigger mode change
+                                if (modeSelect) {
+                                    const event = new Event('change');
+                                    modeSelect.dispatchEvent(event);
+                                }
+                                
+                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient}`);
+                            } else {
+                                // Plain text - use "New Ingredient" mode
+                                if (modeSelect) modeSelect.value = 'new';
+                                if (nameInput) nameInput.value = ingredient || '';
+                                
+                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient}`);
+                            }
+                            
+                            // Set amount, unit, and comment for all types
+                            if (amountInput) amountInput.value = amounts[idx] || 1;
+                            if (unitInput) unitInput.value = units[idx] || 'whole';
+                            if (commentInput) commentInput.value = comments[idx] || '';
+                        }
+                    });
+                }
+                
+                // Clear existing instructions
+                document.getElementById('recipe-bundle-instructions-container').innerHTML = '';
+                
+                // Add instructions from recipe
+                const instructions = recipe.instructions || [];
+                if (instructions.length > 0) {
+                    console.log(`📋 Copying ${instructions.length} instructions`);
+                    
+                    instructions.forEach((step, idx) => {
+                        addRecipeBundleInstructionStep();
+                        
+                        // Get the last added instruction item
+                        const container = document.getElementById('recipe-bundle-instructions-container');
+                        const items = container.querySelectorAll('.instruction-item');
+                        const lastItem = items[items.length - 1];
+                        
+                        if (lastItem) {
+                            const instructionInput = lastItem.querySelector('.instruction-text');
+                            if (instructionInput) {
+                                instructionInput.value = step;
+                                console.log(`📋 Copied instruction ${idx + 1}: ${step.substring(0, 50)}...`);
+                            }
+                        }
+                    });
+                }
+                
+                alert(`✅ Copied complete recipe "${basic.name}" with ${ingredients.length} ingredients and ${instructions.length} steps!`);
                 console.log('✅ Copied from recipe:', basic.name);
                 
             } catch (error) {
@@ -20345,10 +20454,12 @@ CRITICAL:
                                     const lastItem = items[items.length - 1];
                                     
                                     if (lastItem) {
-                                        const textarea = lastItem.querySelector('textarea');
-                                        if (textarea) {
-                                            textarea.value = step;
-                                            console.log(`[Recipe AI] Added instruction ${idx + 1}`);
+                                        const instructionInput = lastItem.querySelector('.instruction-text');
+                                        if (instructionInput) {
+                                            instructionInput.value = step;
+                                            console.log(`[Recipe AI] Added instruction ${idx + 1}: ${step.substring(0, 50)}...`);
+                                        } else {
+                                            console.warn(`[Recipe AI] Could not find instruction input for step ${idx + 1}`);
                                         }
                                     }
                                 });
