@@ -4082,6 +4082,7 @@
                             <option value="music">Music</option>
                             <option value="image">Image</option>
                             <option value="recipe">Recipe</option>
+                            <option value="recipeBundle">🍽️ Recipe Bundle (Complete Workflow)</option>
                             <option value="workout">Workout</option>
                             <option value="exercise">Exercise</option>
                             <option value="exerciseBundle">🎯 Exercise Bundle (Complete Workflow)</option>
@@ -10012,6 +10013,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         initializeExerciseBundleInterface();
                     }, 100);
                     break;
+                case 'recipeBundle':
+                    interfaceContainer.innerHTML = createRecipeBundleInterface();
+                    setTimeout(() => {
+                        initializeRecipeBundleInterface();
+                    }, 100);
+                    break;
                 default:
                     interfaceContainer.innerHTML = '<div class="loading">Unknown record type</div>';
             }
@@ -11518,6 +11525,237 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         </button>
                         <div style="text-align: center; margin-top: 10px; font-size: 14px; color: #666;">
                             <span id="bundle-publish-estimate">Includes exercise, demo GIFs, and equipment</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createRecipeBundleInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>🍽️ Recipe Bundle - Complete Workflow</h3>
+                    
+                    <div class="info-box" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);">
+                        <h4 style="margin: 0 0 12px 0; color: white;">🧑‍🍳 Multi-Record Publishing</h4>
+                        <p style="margin: 0 0 12px 0; opacity: 0.95;">Publish a complete recipe with all dependencies in one workflow:</p>
+                        <ol style="margin: 10px 0 10px 20px; opacity: 0.95;">
+                            <li><strong>Recipe</strong> - Define your recipe with instructions</li>
+                            <li><strong>Ingredients</strong> - Link or create nutritional info records</li>
+                            <li><strong>Recipe Image</strong> - Upload or AI-generate recipe photo</li>
+                        </ol>
+                        <p style="margin: 15px 0 0 0; font-size: 14px; opacity: 0.9;">
+                            ✨ <strong>Smart DID Passing:</strong> Ingredients are linked automatically!
+                        </p>
+                    </div>
+
+                    <!-- Progress Tracker -->
+                    <div id="recipe-bundle-progress" class="hidden" style="background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 10px 0;">📊 Publishing Progress</h4>
+                        <div id="recipe-bundle-progress-message" style="margin-bottom: 10px; font-weight: 500;"></div>
+                        <div class="progress-bar" style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                            <div id="recipe-bundle-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff6b6b, #ee5a6f); transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Section 1: Recipe Details -->
+                    <div id="recipe-bundle-section-recipe" class="bundle-section" style="border: 2px solid #ffe5e5; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">1</div>
+                            <h4 style="margin: 0; flex: 1;">🍽️ Recipe Details</h4>
+                            <button type="button" onclick="toggleSection('recipe-bundle-section-recipe-content')" class="btn-small">Toggle</button>
+                        </div>
+                        
+                        <div id="recipe-bundle-section-recipe-content">
+                            <div class="form-group">
+                                <label for="recipe-bundle-name">Recipe Name:</label>
+                                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                                    <div style="flex: 1;">
+                                        <input type="text" id="recipe-bundle-name" placeholder="e.g., Grilled Chicken Salad" style="width: 100%;">
+                                    </div>
+                                    <button type="button" class="btn-small btn-secondary" onclick="copyRecipeBundleFromLatest()">
+                                        📋 Copy From Latest
+                                    </button>
+                                    <button type="button" class="btn-small" onclick="fillRecipeBundleWithAI()">
+                                        🤖 Fill In With AI
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="recipe-bundle-description">Description:</label>
+                                <textarea id="recipe-bundle-description" rows="3" placeholder="Brief description of the recipe..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="recipe-bundle-tags">Tags (comma-separated):</label>
+                                <input type="text" id="recipe-bundle-tags" placeholder="healthy, gluten-free, high-protein">
+                                <small>Tags to help categorize and search for this recipe</small>
+                            </div>
+
+                            <div class="form-group" style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                                <label for="recipe-bundle-date">Date:</label>
+                                <input type="text" id="recipe-bundle-date" readonly style="background: #e9ecef; cursor: not-allowed;">
+                                <small>Auto-filled with current Unix timestamp</small>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                <div class="form-group">
+                                    <label for="recipe-bundle-prep-time">Prep Time (mins):</label>
+                                    <input type="number" id="recipe-bundle-prep-time" min="0" placeholder="15" onchange="updateRecipeBundleTotalTime()">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="recipe-bundle-cook-time">Cook Time (mins):</label>
+                                    <input type="number" id="recipe-bundle-cook-time" min="0" placeholder="30" onchange="updateRecipeBundleTotalTime()">
+                                </div>
+
+                                <div class="form-group" style="background: #f8f9fa; padding: 10px; border-radius: 6px;">
+                                    <label for="recipe-bundle-total-time">Total Time (mins):</label>
+                                    <input type="number" id="recipe-bundle-total-time" readonly style="background: #e9ecef; cursor: not-allowed;">
+                                    <small>Auto-calculated</small>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="recipe-bundle-servings">Servings:</label>
+                                <input type="number" id="recipe-bundle-servings" min="1" placeholder="4">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="recipe-bundle-course">Course:</label>
+                                <select id="recipe-bundle-course">
+                                    <option value="">Select a course...</option>
+                                    <option value="Breakfast">Breakfast</option>
+                                    <option value="Lunch">Lunch</option>
+                                    <option value="Dinner">Dinner</option>
+                                    <option value="Snack">Snack</option>
+                                    <option value="Workout Meal">Workout Meal</option>
+                                    <option value="Brunch">Brunch</option>
+                                    <option value="Afternoon Snack">Afternoon Snack</option>
+                                    <option value="Nighttime Snack">Nighttime Snack</option>
+                                    <option value="Pre-Workout Meal">Pre-Workout Meal</option>
+                                    <option value="Post-Workout Meal">Post-Workout Meal</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="recipe-bundle-cuisine">Cuisine:</label>
+                                <input type="text" id="recipe-bundle-cuisine" placeholder="e.g., Italian, Mexican, Asian">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="recipe-bundle-notes">Notes:</label>
+                                <textarea id="recipe-bundle-notes" rows="2" placeholder="Additional notes, tips, or variations..."></textarea>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+                                <div class="form-group">
+                                    <label for="recipe-bundle-author">Author:</label>
+                                    <input type="text" id="recipe-bundle-author" placeholder="Recipe author name">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="recipe-bundle-author-did">Author DID:</label>
+                                    <input type="text" id="recipe-bundle-author-did" placeholder="did:arweave:..." style="font-family: monospace; font-size: 12px;">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="recipe-bundle-storage">Storage Type:</label>
+                                <select id="recipe-bundle-storage">
+                                    <option value="arweave">Arweave (Permanent)</option>
+                                    <option value="gun">GUN + BitTorrent</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Ingredients -->
+                    <div class="bundle-section" style="border: 2px solid #e8f5e9; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">2</div>
+                            <h4 style="margin: 0; flex: 1;">🥗 Ingredients</h4>
+                        </div>
+                        
+                        <div id="recipe-bundle-ingredients-container">
+                            <!-- Ingredient items will be added here -->
+                        </div>
+                        
+                        <button type="button" onclick="addRecipeBundleIngredientItem()" class="btn-small" style="margin-top: 10px;">
+                            + Add Ingredient
+                        </button>
+                    </div>
+
+                    <!-- Section 3: Instructions -->
+                    <div class="bundle-section" style="border: 2px solid #fff3e0; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">3</div>
+                            <h4 style="margin: 0; flex: 1;">📝 Instructions</h4>
+                        </div>
+                        
+                        <div id="recipe-bundle-instructions-container">
+                            <!-- Instruction steps will be added here -->
+                        </div>
+                        
+                        <button type="button" onclick="addRecipeBundleInstructionStep()" class="btn-small" style="margin-top: 10px;">
+                            + Add Step
+                        </button>
+                    </div>
+
+                    <!-- Section 4: Recipe Image -->
+                    <div class="bundle-section" style="border: 2px solid #e1f5fe; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #03a9f4 0%, #0288d1 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">4</div>
+                            <h4 style="margin: 0; flex: 1;">📷 Recipe Image</h4>
+                            <button type="button" onclick="toggleSection('recipe-bundle-section-image-content')" class="btn-small">Toggle</button>
+                        </div>
+                        
+                        <div id="recipe-bundle-section-image-content">
+                            <div class="form-group">
+                                <label for="recipe-bundle-image-mode">Image Mode:</label>
+                                <select id="recipe-bundle-image-mode" onchange="updateRecipeBundleImageMode()">
+                                    <option value="upload">Upload Image</option>
+                                    <option value="ai">Generate with AI</option>
+                                    <option value="none">No Image</option>
+                                </select>
+                            </div>
+
+                            <!-- Upload Image Mode -->
+                            <div id="recipe-bundle-image-upload-section">
+                                <div class="form-group">
+                                    <label for="recipe-bundle-image-file">Select Image File:</label>
+                                    <input type="file" id="recipe-bundle-image-file" accept="image/*" onchange="previewRecipeBundleImage(this)">
+                                    <small>Image will be analyzed for content safety</small>
+                                </div>
+
+                                <div id="recipe-bundle-image-preview" class="hidden" style="margin-top: 15px; padding: 15px; border: 2px dashed #ddd; border-radius: 8px; text-align: center;">
+                                    <img id="recipe-bundle-image-preview-img" style="max-width: 100%; max-height: 300px; border-radius: 8px;">
+                                    <div id="recipe-bundle-image-preview-info" style="margin-top: 10px; font-size: 13px; color: #666;"></div>
+                                </div>
+                            </div>
+
+                            <!-- AI Generation Mode -->
+                            <div id="recipe-bundle-image-ai-section" class="hidden">
+                                <div class="info-box" style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin-bottom: 15px;">
+                                    <strong>🤖 AI Image Generation</strong><br>
+                                    <small>An image will be generated based on your recipe name and description using AI.</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Preview will be generated when you publish the recipe.</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Publish All Button -->
+                    <div style="position: sticky; bottom: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1); margin-top: 30px;">
+                        <button onclick="publishRecipeBundle()" class="btn-primary" id="recipe-bundle-publish-btn" style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600;">
+                            🚀 Publish Complete Recipe Bundle
+                        </button>
+                        <div style="text-align: center; margin-top: 10px; font-size: 14px; color: #666;">
+                            <span id="recipe-bundle-publish-estimate">Includes recipe, ingredients, and image</span>
                         </div>
                     </div>
                 </div>
@@ -18611,6 +18849,1031 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
         }
 
         // ==================== END EXERCISE BUNDLE FUNCTIONS ====================
+
+        // ==================== RECIPE BUNDLE FUNCTIONS ====================
+        
+        /**
+         * Initialize Recipe Bundle Interface
+         */
+        async function initializeRecipeBundleInterface() {
+            console.log('🍽️ Initializing Recipe Bundle Interface');
+            
+            // Set current date
+            document.getElementById('recipe-bundle-date').value = Math.floor(Date.now() / 1000);
+            
+            // Add first ingredient and instruction
+            addRecipeBundleIngredientItem();
+            addRecipeBundleInstructionStep();
+            
+            // Initialize image mode
+            updateRecipeBundleImageMode();
+            
+            console.log('✅ Recipe Bundle Interface initialized');
+        }
+
+        /**
+         * Update total time when prep or cook time changes
+         */
+        function updateRecipeBundleTotalTime() {
+            const prepTime = parseInt(document.getElementById('recipe-bundle-prep-time').value) || 0;
+            const cookTime = parseInt(document.getElementById('recipe-bundle-cook-time').value) || 0;
+            document.getElementById('recipe-bundle-total-time').value = prepTime + cookTime;
+        }
+
+        /**
+         * Update Recipe Bundle image mode visibility
+         */
+        function updateRecipeBundleImageMode() {
+            const mode = document.getElementById('recipe-bundle-image-mode').value;
+            const uploadSection = document.getElementById('recipe-bundle-image-upload-section');
+            const aiSection = document.getElementById('recipe-bundle-image-ai-section');
+            
+            if (mode === 'upload') {
+                uploadSection?.classList.remove('hidden');
+                aiSection?.classList.add('hidden');
+            } else if (mode === 'ai') {
+                uploadSection?.classList.add('hidden');
+                aiSection?.classList.remove('hidden');
+            } else {
+                uploadSection?.classList.add('hidden');
+                aiSection?.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Preview uploaded recipe image
+         */
+        function previewRecipeBundleImage(input) {
+            const preview = document.getElementById('recipe-bundle-image-preview');
+            const img = document.getElementById('recipe-bundle-image-preview-img');
+            const info = document.getElementById('recipe-bundle-image-preview-info');
+            
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    img.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    
+                    // Show file info
+                    const sizeKB = (file.size / 1024).toFixed(2);
+                    info.textContent = `${file.name} (${sizeKB} KB)`;
+                    
+                    console.log('📷 Image preview loaded:', file.name);
+                };
+                
+                reader.readAsDataURL(file);
+            }
+        }
+
+        /**
+         * Add a new ingredient item to the bundle
+         */
+        let recipeIngredientCounter = 0;
+        function addRecipeBundleIngredientItem() {
+            const container = document.getElementById('recipe-bundle-ingredients-container');
+            const itemId = `recipe-ingredient-${recipeIngredientCounter++}`;
+            
+            const itemHTML = `
+                <div class="ingredient-item" id="${itemId}" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #fafafa;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <strong>Ingredient #${recipeIngredientCounter}</strong>
+                        <button type="button" class="btn-small btn-danger" onclick="removeRecipeBundleIngredient('${itemId}')">Remove</button>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label>Mode:</label>
+                            <select class="ingredient-mode" onchange="updateRecipeIngredientMode('${itemId}')">
+                                <option value="new">New Ingredient Record</option>
+                                <option value="existing">Select Existing Ingredient Record</option>
+                            </select>
+                        </div>
+                        
+                        <!-- New Ingredient Section (visible by default) -->
+                        <div class="ingredient-new-section">
+                            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                                <div style="flex: 1;">
+                                    <label>Ingredient Name:</label>
+                                    <input type="text" class="ingredient-name" placeholder="e.g., Chicken Breast">
+                                </div>
+                                <button type="button" class="btn-small" onclick="lookupRecipeIngredient('${itemId}')">
+                                    🔍 Lookup Nutritional Info
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Existing Ingredient Section (hidden by default) -->
+                        <div class="ingredient-existing-section hidden">
+                            <div class="form-group">
+                                <label>Search Ingredient:</label>
+                                <input type="text" class="ingredient-search" placeholder="Type to search..." oninput="filterRecipeIngredients('${itemId}', this.value)">
+                            </div>
+                            <div class="form-group">
+                                <label>Select Ingredient:</label>
+                                <select class="ingredient-select" style="width: 100%;">
+                                    <option value="">Loading ingredients...</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>Amount:</label>
+                                <input type="number" class="ingredient-amount" step="0.1" min="0" placeholder="2">
+                            </div>
+                            <div class="form-group">
+                                <label>Unit:</label>
+                                <select class="ingredient-unit">
+                                    <option value="whole">whole</option>
+                                    <option value="cup">cup</option>
+                                    <option value="cups">cups</option>
+                                    <option value="tbsp">tbsp</option>
+                                    <option value="tsp">tsp</option>
+                                    <option value="oz">oz</option>
+                                    <option value="lb">lb</option>
+                                    <option value="g">g</option>
+                                    <option value="kg">kg</option>
+                                    <option value="ml">ml</option>
+                                    <option value="l">l</option>
+                                    <option value="piece">piece</option>
+                                    <option value="slice">slice</option>
+                                    <option value="clove">clove</option>
+                                    <option value="pinch">pinch</option>
+                                    <option value="dash">dash</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Comment:</label>
+                                <input type="text" class="ingredient-comment" placeholder="e.g., diced, chopped">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', itemHTML);
+            
+            // Load existing ingredients for this item
+            loadExistingIngredientsForItem(itemId);
+        }
+
+        /**
+         * Remove an ingredient item
+         */
+        function removeRecipeBundleIngredient(itemId) {
+            const item = document.getElementById(itemId);
+            if (item) {
+                item.remove();
+            }
+        }
+
+        /**
+         * Update ingredient mode (New vs Existing)
+         */
+        function updateRecipeIngredientMode(itemId) {
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const mode = item.querySelector('.ingredient-mode').value;
+            const newSection = item.querySelector('.ingredient-new-section');
+            const existingSection = item.querySelector('.ingredient-existing-section');
+            
+            if (mode === 'new') {
+                newSection.classList.remove('hidden');
+                existingSection.classList.add('hidden');
+            } else {
+                newSection.classList.add('hidden');
+                existingSection.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Load existing ingredients for an ingredient item
+         */
+        async function loadExistingIngredientsForItem(itemId) {
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const selectElement = item.querySelector('.ingredient-select');
+            if (!selectElement) return;
+            
+            try {
+                selectElement.innerHTML = '<option value="">Loading...</option>';
+                
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&noDuplicates=true&limit=1000&sortBy=basic.name:asc`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const records = data.records || [];
+                
+                console.log(`📦 Loaded ${records.length} nutritional info records for ${itemId}`);
+                
+                // Store all records for filtering
+                item.setAttribute('data-all-ingredients', JSON.stringify(records));
+                
+                // Populate dropdown
+                selectElement.innerHTML = '<option value="">Select an ingredient...</option>';
+                records.forEach(record => {
+                    const name = record.data?.basic?.name || 'Unnamed';
+                    const did = record.oip?.did || record.oip?.didTx;
+                    if (did) {
+                        const option = document.createElement('option');
+                        option.value = did;
+                        option.textContent = name;
+                        selectElement.appendChild(option);
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading ingredients:', error);
+                selectElement.innerHTML = '<option value="">Error loading ingredients</option>';
+            }
+        }
+
+        /**
+         * Filter ingredients based on search input
+         */
+        function filterRecipeIngredients(itemId, searchTerm) {
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const selectElement = item.querySelector('.ingredient-select');
+            const allIngredientsJSON = item.getAttribute('data-all-ingredients');
+            
+            if (!allIngredientsJSON) return;
+            
+            try {
+                const allIngredients = JSON.parse(allIngredientsJSON);
+                const searchLower = searchTerm.toLowerCase().trim();
+                
+                // Filter ingredients
+                const filtered = searchLower === '' 
+                    ? allIngredients 
+                    : allIngredients.filter(record => {
+                        const name = (record.data?.basic?.name || '').toLowerCase();
+                        return name.includes(searchLower);
+                    });
+                
+                // Update dropdown
+                selectElement.innerHTML = '<option value="">Select an ingredient...</option>';
+                filtered.forEach(record => {
+                    const name = record.data?.basic?.name || 'Unnamed';
+                    const did = record.oip?.did || record.oip?.didTx;
+                    if (did) {
+                        const option = document.createElement('option');
+                        option.value = did;
+                        option.textContent = name;
+                        selectElement.appendChild(option);
+                    }
+                });
+                
+                console.log(`🔍 Filtered to ${filtered.length} ingredients matching "${searchTerm}"`);
+                
+            } catch (error) {
+                console.error('Error filtering ingredients:', error);
+            }
+        }
+
+        /**
+         * Lookup nutritional info for a new ingredient
+         */
+        async function lookupRecipeIngredient(itemId) {
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const nameInput = item.querySelector('.ingredient-name');
+            const ingredientName = nameInput.value.trim();
+            
+            if (!ingredientName) {
+                alert('Please enter an ingredient name first');
+                return;
+            }
+            
+            try {
+                console.log(`🔍 Looking up ingredient: ${ingredientName}`);
+                
+                // First check if it already exists
+                const searchResponse = await fetch(
+                    `${API_BASE_URL}/api/records?recordType=nutritionalInfo&noDuplicates=true&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+                
+                if (searchResponse.ok) {
+                    const searchData = await searchResponse.json();
+                    const existingRecords = searchData.records || [];
+                    
+                    if (existingRecords.length > 0) {
+                        // Found existing record
+                        const record = existingRecords[0];
+                        const did = record.oip?.did || record.oip?.didTx;
+                        const name = record.data?.basic?.name;
+                        
+                        alert(`✅ Found existing ingredient: "${name}"\nDID: ${did}\n\nSwitch to "Select Existing" mode to use it.`);
+                        console.log('✅ Found existing ingredient:', did);
+                        return;
+                    }
+                }
+                
+                // Ingredient doesn't exist, show message
+                alert(`ℹ️ Ingredient "${ingredientName}" not found in database.\n\nIt will be created automatically when you publish the recipe.`);
+                console.log('ℹ️ Ingredient will be created during publish');
+                
+            } catch (error) {
+                console.error('Error looking up ingredient:', error);
+                alert('Error looking up ingredient. Please check console for details.');
+            }
+        }
+
+        /**
+         * Add a new instruction step
+         */
+        let recipeInstructionCounter = 0;
+        function addRecipeBundleInstructionStep() {
+            const container = document.getElementById('recipe-bundle-instructions-container');
+            const stepNumber = recipeInstructionCounter++;
+            const itemId = `recipe-instruction-${stepNumber}`;
+            
+            const itemHTML = `
+                <div class="instruction-item" id="${itemId}" style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <div style="min-width: 30px; text-align: center; font-weight: bold; color: #666;">
+                        ${stepNumber + 1}.
+                    </div>
+                    <input type="text" class="instruction-text" placeholder="Describe this step..." style="flex: 1;">
+                    <button type="button" class="btn-small btn-danger" onclick="removeRecipeBundleInstruction('${itemId}')">×</button>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', itemHTML);
+        }
+
+        /**
+         * Remove an instruction step
+         */
+        function removeRecipeBundleInstruction(itemId) {
+            const item = document.getElementById(itemId);
+            if (item) {
+                item.remove();
+                // Renumber remaining steps
+                renumberRecipeInstructions();
+            }
+        }
+
+        /**
+         * Renumber instruction steps after removal
+         */
+        function renumberRecipeInstructions() {
+            const container = document.getElementById('recipe-bundle-instructions-container');
+            const items = container.querySelectorAll('.instruction-item');
+            items.forEach((item, index) => {
+                const numberDiv = item.querySelector('div');
+                if (numberDiv) {
+                    numberDiv.textContent = `${index + 1}.`;
+                }
+            });
+        }
+
+        /**
+         * Update recipe bundle progress
+         */
+        function updateRecipeBundleProgress(message, percent) {
+            const progressDiv = document.getElementById('recipe-bundle-progress');
+            const messageDiv = document.getElementById('recipe-bundle-progress-message');
+            const progressBar = document.getElementById('recipe-bundle-progress-bar');
+            
+            if (progressDiv) progressDiv.classList.remove('hidden');
+            if (messageDiv) messageDiv.textContent = message;
+            if (progressBar) progressBar.style.width = `${percent}%`;
+            
+            console.log(`📊 Progress: ${percent}% - ${message}`);
+        }
+
+        // ==================== END RECIPE BUNDLE FUNCTIONS (PART 1) ====================
+
+        // ==================== RECIPE BUNDLE FUNCTIONS (PART 2) ====================
+
+        /**
+         * Main Recipe Bundle Publishing Function
+         */
+        async function publishRecipeBundle() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for publishing. Please log in first.', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById('recipe-bundle-publish-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '🚀 Publishing...';
+                }
+
+                let imageDID = null;
+                let ingredientDIDs = [];
+
+                // Step 1: Handle Recipe Image (10% progress)
+                updateRecipeBundleProgress('Processing recipe image...', 10);
+                imageDID = await publishRecipeBundleImage();
+                console.log(`📷 Image DID: ${imageDID || 'None'}`);
+
+                // Step 2: Process Ingredients (40% progress)
+                updateRecipeBundleProgress('Processing ingredients...', 40);
+                ingredientDIDs = await processRecipeBundleIngredients();
+                console.log(`🥗 Processed ${ingredientDIDs.length} ingredients`);
+
+                // Step 3: Publish Recipe (70% progress)
+                updateRecipeBundleProgress('Publishing recipe...', 70);
+                const recipeDID = await publishRecipeBundleRecipe(imageDID, ingredientDIDs);
+                if (!recipeDID) {
+                    throw new Error('Failed to publish recipe');
+                }
+                
+                updateRecipeBundleProgress('✅ Recipe Bundle published successfully!', 100);
+                showMessage('publish-success', `🎉 Recipe published! DID: ${recipeDID}`, 'success');
+                console.log(`✅ Final Recipe DID: ${recipeDID}`);
+
+            } catch (error) {
+                console.error('Error publishing recipe bundle:', error);
+                updateRecipeBundleProgress(`❌ Error: ${error.message}`, 0);
+                showMessage('publish-status', `Error: ${error.message}`, 'error');
+            } finally {
+                const btn = document.getElementById('recipe-bundle-publish-btn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Publish Complete Recipe Bundle';
+                }
+            }
+        }
+
+        /**
+         * Publish Recipe Image (Upload or AI Generated)
+         */
+        async function publishRecipeBundleImage() {
+            const imageMode = document.getElementById('recipe-bundle-image-mode').value;
+            
+            if (imageMode === 'none') {
+                console.log('ℹ️ No image selected');
+                return null;
+            }
+            
+            if (imageMode === 'upload') {
+                return await uploadRecipeBundleImage();
+            } else if (imageMode === 'ai') {
+                return await generateRecipeBundleAIImage();
+            }
+            
+            return null;
+        }
+
+        /**
+         * Upload Recipe Image with Content Safety Check
+         */
+        async function uploadRecipeBundleImage() {
+            const fileInput = document.getElementById('recipe-bundle-image-file');
+            const file = fileInput?.files[0];
+            
+            if (!file) {
+                console.log('ℹ️ No image file selected');
+                return null;
+            }
+            
+            try {
+                console.log('📤 Uploading image...');
+                
+                // First, analyze image for content safety using Grok
+                const imageData = await fileToBase64(file);
+                const analysisResponse = await fetch(`${API_BASE_URL}/api/photo/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        imageData: imageData,
+                        question: 'Analyze this image for content safety. Is this image appropriate for a recipe/food app? Does it contain any inappropriate, pornographic, or non-food content? Respond with YES (appropriate) or NO (inappropriate).'
+                    })
+                });
+                
+                if (analysisResponse.ok) {
+                    const analysisResult = await analysisResponse.json();
+                    const analysis = (analysisResult.analysis || '').toLowerCase();
+                    
+                    if (analysis.includes('no') || analysis.includes('inappropriate') || analysis.includes('pornographic')) {
+                        throw new Error('Image failed content safety check. Please upload a food-appropriate image.');
+                    }
+                    
+                    console.log('✅ Image passed content safety check');
+                } else {
+                    console.warn('⚠️ Could not analyze image, proceeding anyway');
+                }
+                
+                // Upload to media endpoint
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('name', `Recipe Image - ${document.getElementById('recipe-bundle-name').value}`);
+                
+                const uploadResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error('Failed to upload image');
+                }
+                
+                const uploadResult = await uploadResponse.json();
+                const mediaId = uploadResult.mediaId;
+                
+                // Create image record
+                const dimensions = await getImageDimensions(file);
+                const imageRecord = {
+                    basic: {
+                        name: `Recipe Image - ${document.getElementById('recipe-bundle-name').value}`,
+                        date: Math.floor(Date.now() / 1000),
+                        language: 'en'
+                    },
+                    image: {
+                        webUrl: uploadResult.httpUrl,
+                        bittorrentAddress: uploadResult.magnetURI,
+                        filename: uploadResult.originalName,
+                        size: uploadResult.size,
+                        contentType: uploadResult.mime,
+                        width: dimensions.width,
+                        height: dimensions.height
+                    }
+                };
+                
+                const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image&storage=gun`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(imageRecord)
+                });
+                
+                if (!recordResponse.ok) {
+                    throw new Error('Failed to create image record');
+                }
+                
+                const recordResult = await recordResponse.json();
+                const did = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                
+                console.log(`✅ Image uploaded: ${did}`);
+                return did;
+                
+            } catch (error) {
+                console.error('Error uploading image:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Generate Recipe Image using AI
+         */
+        async function generateRecipeBundleAIImage() {
+            try {
+                console.log('🤖 Generating AI image...');
+                
+                const recipeName = document.getElementById('recipe-bundle-name').value;
+                const recipeDescription = document.getElementById('recipe-bundle-description').value;
+                
+                if (!recipeName) {
+                    console.warn('⚠️ No recipe name provided for AI generation');
+                    return null;
+                }
+                
+                // Call AI image generation endpoint
+                const response = await fetch(`${API_BASE_URL}/api/recipes/generate-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        recipeId: `recipe_${Date.now()}`,
+                        recipeTitle: recipeName,
+                        description: recipeDescription
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to generate AI image');
+                }
+                
+                const result = await response.json();
+                const imageUrl = result.imageUrl;
+                
+                console.log(`✅ AI image generated: ${imageUrl}`);
+                
+                // Download the generated image
+                const imageResponse = await fetch(imageUrl);
+                const imageBlob = await imageResponse.blob();
+                const imageFile = new File([imageBlob], `${recipeName.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
+                
+                // Upload as image record (similar to upload flow, but skip content safety check since it's AI-generated)
+                const formData = new FormData();
+                formData.append('file', imageFile);
+                formData.append('name', `AI Generated - ${recipeName}`);
+                
+                const uploadResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error('Failed to upload AI-generated image');
+                }
+                
+                const uploadResult = await uploadResponse.json();
+                
+                // Create image record
+                const imageRecord = {
+                    basic: {
+                        name: `AI Generated - ${recipeName}`,
+                        date: Math.floor(Date.now() / 1000),
+                        language: 'en'
+                    },
+                    image: {
+                        webUrl: uploadResult.httpUrl,
+                        bittorrentAddress: uploadResult.magnetURI,
+                        filename: uploadResult.originalName,
+                        size: uploadResult.size,
+                        contentType: uploadResult.mime,
+                        width: 1024,
+                        height: 1024
+                    }
+                };
+                
+                const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image&storage=gun`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(imageRecord)
+                });
+                
+                if (!recordResponse.ok) {
+                    throw new Error('Failed to create AI image record');
+                }
+                
+                const recordResult = await recordResponse.json();
+                const did = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                
+                console.log(`✅ AI image uploaded: ${did}`);
+                return did;
+                
+            } catch (error) {
+                console.error('Error generating AI image:', error);
+                // Don't throw - allow recipe to be published without image
+                console.warn('⚠️ Continuing without AI image');
+                return null;
+            }
+        }
+
+        /**
+         * Helper function to convert file to base64
+         */
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        /**
+         * Helper function to get image dimensions
+         */
+        function getImageDimensions(file) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    resolve({ width: img.width, height: img.height });
+                    URL.revokeObjectURL(img.src);
+                };
+                img.onerror = () => resolve({ width: 0, height: 0 });
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        /**
+         * Process all ingredients (create new or use existing)
+         */
+        async function processRecipeBundleIngredients() {
+            const container = document.getElementById('recipe-bundle-ingredients-container');
+            const items = container.querySelectorAll('.ingredient-item');
+            const processedIngredients = [];
+            
+            for (const item of items) {
+                const mode = item.querySelector('.ingredient-mode').value;
+                const amount = parseFloat(item.querySelector('.ingredient-amount').value) || 0;
+                const unit = item.querySelector('.ingredient-unit').value;
+                const comment = item.querySelector('.ingredient-comment').value.trim();
+                
+                let ingredientDID = null;
+                
+                if (mode === 'existing') {
+                    // Use existing ingredient
+                    const selectElement = item.querySelector('.ingredient-select');
+                    ingredientDID = selectElement.value;
+                    
+                    if (!ingredientDID) {
+                        console.warn('⚠️ No ingredient selected for existing mode, skipping');
+                        continue;
+                    }
+                } else {
+                    // Create new ingredient
+                    const nameInput = item.querySelector('.ingredient-name');
+                    const ingredientName = nameInput.value.trim();
+                    
+                    if (!ingredientName) {
+                        console.warn('⚠️ No ingredient name provided, skipping');
+                        continue;
+                    }
+                    
+                    // Check if it already exists first
+                    const searchResponse = await fetch(
+                        `${API_BASE_URL}/api/records?recordType=nutritionalInfo&noDuplicates=true&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}`,
+                        {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json'
+                            }
+                        }
+                    );
+                    
+                    if (searchResponse.ok) {
+                        const searchData = await searchResponse.json();
+                        const existingRecords = searchData.records || [];
+                        
+                        if (existingRecords.length > 0) {
+                            ingredientDID = existingRecords[0].oip?.did || existingRecords[0].oip?.didTx;
+                            console.log(`✅ Found existing ingredient: ${ingredientName} (${ingredientDID})`);
+                        }
+                    }
+                    
+                    // If still not found, use the server's newRecipe endpoint to create it
+                    if (!ingredientDID) {
+                        console.log(`📝 Creating new ingredient: ${ingredientName}`);
+                        // We'll let the server create it via the publish/newRecipe endpoint
+                        // For now, just return the name and let the backend handle it
+                        processedIngredients.push({
+                            name: ingredientName,
+                            amount: amount,
+                            unit: unit,
+                            comment: comment,
+                            isNew: true
+                        });
+                        continue;
+                    }
+                }
+                
+                processedIngredients.push({
+                    did: ingredientDID,
+                    amount: amount,
+                    unit: unit,
+                    comment: comment,
+                    isNew: false
+                });
+            }
+            
+            return processedIngredients;
+        }
+
+        /**
+         * Publish the final recipe record
+         */
+        async function publishRecipeBundleRecipe(imageDID, processedIngredients) {
+            try {
+                // Gather recipe data
+                const recipeName = document.getElementById('recipe-bundle-name').value.trim();
+                const description = document.getElementById('recipe-bundle-description').value.trim();
+                const tagsString = document.getElementById('recipe-bundle-tags').value.trim();
+                const tags = tagsString ? tagsString.split(',').map(t => t.trim()).filter(t => t) : [];
+                const prepTime = parseInt(document.getElementById('recipe-bundle-prep-time').value) || 0;
+                const cookTime = parseInt(document.getElementById('recipe-bundle-cook-time').value) || 0;
+                const totalTime = prepTime + cookTime;
+                const servings = parseInt(document.getElementById('recipe-bundle-servings').value) || 0;
+                const course = document.getElementById('recipe-bundle-course').value;
+                const cuisine = document.getElementById('recipe-bundle-cuisine').value.trim();
+                const notes = document.getElementById('recipe-bundle-notes').value.trim();
+                const author = document.getElementById('recipe-bundle-author').value.trim();
+                const authorDID = document.getElementById('recipe-bundle-author-did').value.trim();
+                const storage = document.getElementById('recipe-bundle-storage').value;
+                
+                if (!recipeName) {
+                    throw new Error('Recipe name is required');
+                }
+                
+                // Gather instructions
+                const instructionContainer = document.getElementById('recipe-bundle-instructions-container');
+                const instructionItems = instructionContainer.querySelectorAll('.instruction-item');
+                const instructions = Array.from(instructionItems)
+                    .map(item => item.querySelector('.instruction-text').value.trim())
+                    .filter(text => text);
+                
+                // Build parallel arrays for ingredients
+                const ingredientArray = [];
+                const ingredientCommentArray = [];
+                const ingredientAmountArray = [];
+                const ingredientUnitArray = [];
+                
+                processedIngredients.forEach(ing => {
+                    if (ing.isNew) {
+                        ingredientArray.push(ing.name);
+                    } else {
+                        ingredientArray.push(ing.did);
+                    }
+                    ingredientCommentArray.push(ing.comment || '');
+                    ingredientAmountArray.push(ing.amount);
+                    ingredientUnitArray.push(ing.unit);
+                });
+                
+                // Build recipe record
+                const recipeRecord = {
+                    basic: {
+                        name: recipeName,
+                        description: description,
+                        date: Math.floor(Date.now() / 1000),
+                        language: 'en',
+                        tagItems: tags,
+                        avatar: imageDID || undefined
+                    },
+                    recipe: {
+                        ingredient: ingredientArray,
+                        ingredient_comment: ingredientCommentArray,
+                        ingredient_amount: ingredientAmountArray,
+                        ingredient_unit: ingredientUnitArray,
+                        instructions: instructions,
+                        prep_time_mins: prepTime,
+                        cook_time_mins: cookTime,
+                        total_time_mins: totalTime,
+                        servings: servings,
+                        course: course,
+                        cuisine: cuisine,
+                        notes: notes,
+                        author: author,
+                        authorDRef: authorDID || undefined
+                    }
+                };
+                
+                console.log('📝 Publishing recipe:', recipeRecord);
+                
+                // Determine endpoint based on whether we have new ingredients
+                const hasNewIngredients = processedIngredients.some(ing => ing.isNew);
+                
+                if (hasNewIngredients) {
+                    // Use the specialized newRecipe endpoint to auto-create ingredients
+                    console.log('🔄 Using publish/newRecipe endpoint (has new ingredients)');
+                    const response = await fetch(`${API_BASE_URL}/api/publish/newRecipe`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify(recipeRecord)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to publish recipe');
+                    }
+                    
+                    const result = await response.json();
+                    const did = result.recordToIndex?.oip?.didTx || result.recordToIndex?.oip?.did || result.transactionId;
+                    return did;
+                    
+                } else {
+                    // Use the general newRecord endpoint (all ingredients already exist)
+                    console.log('🔄 Using records/newRecord endpoint (all ingredients exist)');
+                    const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=recipe&storage=${storage}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify(recipeRecord)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to publish recipe');
+                    }
+                    
+                    const result = await response.json();
+                    const did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                    return did;
+                }
+                
+            } catch (error) {
+                console.error('Error publishing recipe:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Copy from latest recipe
+         */
+        async function copyRecipeBundleFromLatest() {
+            try {
+                console.log('📋 Copying from latest recipe...');
+                
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=recipe&limit=1&sortBy=date:desc`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch recipes');
+                }
+                
+                const data = await response.json();
+                const records = data.records || [];
+                
+                if (records.length === 0) {
+                    alert('No recipes found to copy from');
+                    return;
+                }
+                
+                const latestRecipe = records[0];
+                const basic = latestRecipe.data?.basic || {};
+                const recipe = latestRecipe.data?.recipe || {};
+                
+                // Fill in fields
+                document.getElementById('recipe-bundle-description').value = basic.description || '';
+                document.getElementById('recipe-bundle-tags').value = (basic.tagItems || []).join(', ');
+                document.getElementById('recipe-bundle-prep-time').value = recipe.prep_time_mins || '';
+                document.getElementById('recipe-bundle-cook-time').value = recipe.cook_time_mins || '';
+                document.getElementById('recipe-bundle-servings').value = recipe.servings || '';
+                document.getElementById('recipe-bundle-course').value = recipe.course || '';
+                document.getElementById('recipe-bundle-cuisine').value = recipe.cuisine || '';
+                document.getElementById('recipe-bundle-notes').value = recipe.notes || '';
+                document.getElementById('recipe-bundle-author').value = recipe.author || '';
+                document.getElementById('recipe-bundle-author-did').value = recipe.authorDRef || '';
+                
+                updateRecipeBundleTotalTime();
+                
+                alert('✅ Copied data from latest recipe! Remember to update the recipe name.');
+                console.log('✅ Copied from recipe:', basic.name);
+                
+            } catch (error) {
+                console.error('Error copying from latest recipe:', error);
+                alert('Error copying from latest recipe. See console for details.');
+            }
+        }
+
+        /**
+         * Fill in recipe with AI
+         */
+        async function fillRecipeBundleWithAI() {
+            const recipeName = document.getElementById('recipe-bundle-name').value.trim();
+            
+            if (!recipeName) {
+                alert('Please enter a recipe name first');
+                return;
+            }
+            
+            try {
+                console.log(`🤖 Generating AI content for: ${recipeName}`);
+                alert('🤖 AI Fill-In feature coming soon!\n\nThis will automatically generate recipe details including:\n• Description\n• Ingredients with amounts\n• Step-by-step instructions\n• Estimated cooking times\n\nStay tuned!');
+                
+                // TODO: Implement AI generation endpoint
+                // This would call an AI service to generate recipe details
+                
+            } catch (error) {
+                console.error('Error generating AI content:', error);
+                alert('Error generating AI content. See console for details.');
+            }
+        }
+
+        // ==================== END RECIPE BUNDLE FUNCTIONS (PART 2) ====================
 
         // Publishing functions for each record type
         async function publishPost() {
