@@ -20169,10 +20169,9 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         
                         if (lastItem) {
                             const modeSelect = lastItem.querySelector('.ingredient-mode');
-                            const nameInput = lastItem.querySelector('.ingredient-name');
-                            const amountInput = lastItem.querySelector('.ingredient-amount');
-                            const unitInput = lastItem.querySelector('.ingredient-unit');
-                            const commentInput = lastItem.querySelector('.ingredient-comment');
+                            const currentAmount = amounts[idx] || 1;
+                            const currentUnit = units[idx] || 'whole';
+                            const currentComment = comments[idx] || '';
                             
                             // Check if ingredient is a resolved object or a DID string
                             if (typeof ingredient === 'object' && ingredient.data) {
@@ -20181,14 +20180,13 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 const ingredientDID = ingredient.oip?.did || ingredient.oip?.didTx;
                                 
                                 if (modeSelect) modeSelect.value = 'existing';
-                                if (nameInput) nameInput.value = ingredientName;
                                 
                                 // Trigger mode change to show the select dropdown
                                 if (modeSelect) {
                                     const event = new Event('change');
                                     modeSelect.dispatchEvent(event);
                                     
-                                    // Pre-populate the select dropdown
+                                    // Pre-populate the select dropdown AND set amount/unit/comment after mode change
                                     setTimeout(() => {
                                         const selectDropdown = lastItem.querySelector('.ingredient-select');
                                         if (selectDropdown && ingredientDID) {
@@ -20199,10 +20197,19 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                             selectDropdown.appendChild(option);
                                             selectDropdown.value = ingredientDID;
                                         }
-                                    }, 100);
+                                        
+                                        // Set amount, unit, and comment after mode has changed
+                                        const amountInput = lastItem.querySelector('.ingredient-amount');
+                                        const unitInput = lastItem.querySelector('.ingredient-unit');
+                                        const commentInput = lastItem.querySelector('.ingredient-comment');
+                                        
+                                        if (amountInput) amountInput.value = currentAmount;
+                                        if (unitInput) unitInput.value = currentUnit;
+                                        if (commentInput) commentInput.value = currentComment;
+                                    }, 150);
                                 }
                                 
-                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredientName} (${ingredientDID})`);
+                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredientName} (${ingredientDID}) - ${currentAmount} ${currentUnit}`);
                             } else if (typeof ingredient === 'string' && ingredient.startsWith('did:')) {
                                 // DID reference - use "Select Existing" mode
                                 if (modeSelect) modeSelect.value = 'existing';
@@ -20211,21 +20218,37 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 if (modeSelect) {
                                     const event = new Event('change');
                                     modeSelect.dispatchEvent(event);
+                                    
+                                    // Set amount/unit/comment after mode change
+                                    setTimeout(() => {
+                                        const amountInput = lastItem.querySelector('.ingredient-amount');
+                                        const unitInput = lastItem.querySelector('.ingredient-unit');
+                                        const commentInput = lastItem.querySelector('.ingredient-comment');
+                                        
+                                        if (amountInput) amountInput.value = currentAmount;
+                                        if (unitInput) unitInput.value = currentUnit;
+                                        if (commentInput) commentInput.value = currentComment;
+                                    }, 150);
                                 }
                                 
-                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient}`);
+                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient} - ${currentAmount} ${currentUnit}`);
                             } else {
                                 // Plain text - use "New Ingredient" mode
                                 if (modeSelect) modeSelect.value = 'new';
-                                if (nameInput) nameInput.value = ingredient || '';
                                 
-                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient}`);
+                                // For "new" mode, we can set values immediately
+                                const nameInput = lastItem.querySelector('.ingredient-name');
+                                const amountInput = lastItem.querySelector('.ingredient-amount');
+                                const unitInput = lastItem.querySelector('.ingredient-unit');
+                                const commentInput = lastItem.querySelector('.ingredient-comment');
+                                
+                                if (nameInput) nameInput.value = ingredient || '';
+                                if (amountInput) amountInput.value = currentAmount;
+                                if (unitInput) unitInput.value = currentUnit;
+                                if (commentInput) commentInput.value = currentComment;
+                                
+                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient} - ${currentAmount} ${currentUnit}`);
                             }
-                            
-                            // Set amount, unit, and comment for all types
-                            if (amountInput) amountInput.value = amounts[idx] || 1;
-                            if (unitInput) unitInput.value = units[idx] || 'whole';
-                            if (commentInput) commentInput.value = comments[idx] || '';
                         }
                     });
                 }

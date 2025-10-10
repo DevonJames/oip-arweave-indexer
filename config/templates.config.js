@@ -32,6 +32,7 @@ module.exports = {
         shoppingList: "pBI0qarLBP6zPIxBPsl7-ZhzPo0VBqoQ0OFEwZQCUxQ",
         userFitnessAchievment: "-sC601MieajKTLtJfe0ZyT8zxC9SiDrOa8HTP9aOiU0",
         accessControl: "aaZpleo8blkm72kL96UYjTyBPp4F4Wux-Yo3Lu6luvQ",
-        music: "rBv4wFs5LUJuMlTkIwXBuZRe3bwZ0KpIoEo3JDsK7ys"
+        music: "rBv4wFs5LUJuMlTkIwXBuZRe3bwZ0KpIoEo3JDsK7ys",
+        summaryNutritionalInfoPerServing: "LoPPKxOMOna6tN_ikNQB-jV1ys34noq425hSzCPfnz0"
     },
 };
