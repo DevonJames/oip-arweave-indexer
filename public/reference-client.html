@@ -11743,7 +11743,19 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 </div>
 
                                 <div class="form-group">
-                                    <label>Preview will be generated when you publish the recipe.</label>
+                                    <button type="button" id="recipe-bundle-generate-image-btn" class="btn-secondary" onclick="previewGenerateRecipeBundleAIImage()">
+                                        🎨 Generate Image Preview
+                                    </button>
+                                    <small style="margin-left: 10px;">Generate and preview the AI image before publishing</small>
+                                </div>
+                                
+                                <!-- AI Image Preview -->
+                                <div id="recipe-bundle-ai-image-preview" class="hidden" style="margin-top: 15px; padding: 15px; border: 2px dashed #ddd; border-radius: 8px; text-align: center;">
+                                    <img id="recipe-bundle-ai-image-preview-img" style="max-width: 100%; max-height: 300px; border-radius: 8px;">
+                                    <div id="recipe-bundle-ai-image-preview-info" style="margin-top: 10px; font-size: 13px; color: #666;"></div>
+                                    <button type="button" class="btn-small btn-secondary" onclick="previewGenerateRecipeBundleAIImage()" style="margin-top: 10px;">
+                                        🔄 Regenerate Image
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -19180,20 +19192,60 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     const existingRecords = searchData.records || [];
                     
                     if (existingRecords.length > 0) {
-                        // Found existing record
+                        // Found existing record - offer options
                         const record = existingRecords[0];
                         const did = record.oip?.did || record.oip?.didTx;
                         const name = record.data?.basic?.name;
                         
-                        alert(`✅ Found existing ingredient: "${name}"\nDID: ${did}\n\nSwitch to "Select Existing" mode to use it.`);
+                        const userChoice = confirm(`✅ Found existing ingredient: "${name}"\nDID: ${did}\n\nClick OK to lookup nutritional info anyway (create a new variant)\nClick Cancel to switch to "Select Existing" mode to use this record`);
                         console.log('✅ Found existing ingredient:', did);
-                        return;
+                        
+                        if (!userChoice) {
+                            // User wants to switch to Select Existing mode
+                            // Find the mode dropdown and switch it
+                            const modeSelect = item.querySelector('.recipe-ingredient-mode');
+                            if (modeSelect) {
+                                modeSelect.value = 'select';
+                                // Trigger change event to update the UI
+                                const event = new Event('change');
+                                modeSelect.dispatchEvent(event);
+                                
+                                // Pre-populate the select dropdown with this ingredient
+                                setTimeout(async () => {
+                                    const selectDropdown = item.querySelector('.recipe-ingredient-select');
+                                    if (selectDropdown) {
+                                        // Add the option if it doesn't exist
+                                        let optionExists = false;
+                                        for (let option of selectDropdown.options) {
+                                            if (option.value === did) {
+                                                optionExists = true;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (!optionExists) {
+                                            const option = document.createElement('option');
+                                            option.value = did;
+                                            option.textContent = name;
+                                            selectDropdown.appendChild(option);
+                                        }
+                                        
+                                        // Select it
+                                        selectDropdown.value = did;
+                                    }
+                                }, 200);
+                            }
+                            return;
+                        }
+                        // Otherwise, continue with lookup (fall through to nutritionix API call)
                     }
                 }
                 
-                // Ingredient doesn't exist, show message
-                alert(`ℹ️ Ingredient "${ingredientName}" not found in database.\n\nIt will be created automatically when you publish the recipe.`);
-                console.log('ℹ️ Ingredient will be created during publish');
+                // Ingredient doesn't exist or user wants to create new anyway
+                if (!searchResponse.ok || (searchResponse.ok && existingRecords.length === 0)) {
+                    alert(`ℹ️ Ingredient "${ingredientName}" not found in database.\n\nLooking up nutritional info...`);
+                    console.log('ℹ️ Looking up nutritional info for new ingredient');
+                }
                 
             } catch (error) {
                 console.error('Error looking up ingredient:', error);
@@ -19383,10 +19435,10 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     console.warn('⚠️ Could not analyze image, proceeding anyway');
                 }
                 
-                // Upload to media endpoint
+                // Step 1: Upload file to server (BitTorrent + local storage)
                 const formData = new FormData();
                 formData.append('file', file);
-                formData.append('name', `Recipe Image - ${document.getElementById('recipe-bundle-name').value}`);
+                formData.append('access_level', 'public');  // Make it publicly accessible
                 
                 const uploadResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
                     method: 'POST',
@@ -19397,13 +19449,37 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 });
                 
                 if (!uploadResponse.ok) {
-                    throw new Error('Failed to upload image');
+                    throw new Error('Failed to upload image file');
                 }
                 
                 const uploadResult = await uploadResponse.json();
                 const mediaId = uploadResult.mediaId;
+                console.log('✅ File uploaded to server and BitTorrent:', mediaId);
                 
-                // Create image record
+                // Step 2: Upload to IPFS
+                let ipfsCID = null;
+                try {
+                    const ipfsResponse = await fetch(`${API_BASE_URL}/api/media/ipfs-upload`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify({ mediaId })
+                    });
+                    
+                    if (ipfsResponse.ok) {
+                        const ipfsResult = await ipfsResponse.json();
+                        ipfsCID = ipfsResult.cid;
+                        console.log('✅ File uploaded to IPFS:', ipfsCID);
+                    } else {
+                        console.warn('⚠️ IPFS upload failed, continuing without IPFS');
+                    }
+                } catch (ipfsError) {
+                    console.warn('⚠️ IPFS upload error:', ipfsError);
+                }
+                
+                // Step 3: Create image record with all addresses
                 const dimensions = await getImageDimensions(file);
                 const imageRecord = {
                     basic: {
@@ -19412,8 +19488,9 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         language: 'en'
                     },
                     image: {
-                        webUrl: uploadResult.httpUrl,
-                        bittorrentAddress: uploadResult.magnetURI,
+                        webUrl: uploadResult.httpUrl,                    // Server URL
+                        bittorrentAddress: uploadResult.magnetURI,       // BitTorrent magnet link
+                        ipfsAddress: ipfsCID ? `ipfs://${ipfsCID}` : undefined,  // IPFS address
                         filename: uploadResult.originalName,
                         size: uploadResult.size,
                         contentType: uploadResult.mime,
@@ -19422,7 +19499,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                 };
                 
-                const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image&storage=gun`, {
+                const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image&storage=arweave`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -19448,12 +19525,179 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
         }
 
         /**
-         * Generate Recipe Image using AI
+         * Preview Generate Recipe AI Image
+         */
+        async function previewGenerateRecipeBundleAIImage() {
+            try {
+                const recipeName = document.getElementById('recipe-bundle-name').value.trim();
+                const recipeDescription = document.getElementById('recipe-bundle-description').value.trim();
+                
+                if (!recipeName) {
+                    alert('Please enter a recipe name first');
+                    return;
+                }
+                
+                const btn = document.getElementById('recipe-bundle-generate-image-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '🎨 Generating...';
+                }
+                
+                console.log('🤖 Generating AI image preview...');
+                showMessage('publish-status', '🎨 Generating AI image...', 'info');
+                
+                // Call AI image generation endpoint
+                const response = await fetch(`${API_BASE_URL}/api/recipes/generate-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        recipeId: `recipe_${Date.now()}`,
+                        recipeTitle: recipeName,
+                        description: recipeDescription
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to generate AI image');
+                }
+                
+                const result = await response.json();
+                const imageUrl = result.imageUrl;
+                
+                console.log(`✅ AI image generated: ${imageUrl}`);
+                
+                // Show preview
+                const previewDiv = document.getElementById('recipe-bundle-ai-image-preview');
+                const previewImg = document.getElementById('recipe-bundle-ai-image-preview-img');
+                const previewInfo = document.getElementById('recipe-bundle-ai-image-preview-info');
+                
+                if (previewImg && previewDiv && previewInfo) {
+                    previewImg.src = imageUrl;
+                    previewDiv.classList.remove('hidden');
+                    previewInfo.textContent = `Generated image for "${recipeName}"`;
+                }
+                
+                // Store the URL for later use during publishing
+                window.recipeBundleGeneratedImageUrl = imageUrl;
+                
+                showMessage('publish-status', '✅ AI image generated successfully!', 'success');
+                alert('✅ Image generated! You can regenerate if you want a different version.');
+                
+            } catch (error) {
+                console.error('Error generating AI image:', error);
+                showMessage('publish-status', `❌ Error: ${error.message}`, 'error');
+                alert(`❌ Failed to generate AI image: ${error.message}`);
+            } finally {
+                const btn = document.getElementById('recipe-bundle-generate-image-btn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '🎨 Generate Image Preview';
+                }
+            }
+        }
+        
+        /**
+         * Generate Recipe Image using AI (called during publishing)
          */
         async function generateRecipeBundleAIImage() {
             try {
                 console.log('🤖 Generating AI image...');
                 
+                // Check if we already generated a preview
+                if (window.recipeBundleGeneratedImageUrl) {
+                    console.log('✅ Using pre-generated image:', window.recipeBundleGeneratedImageUrl);
+                    const recipeName = document.getElementById('recipe-bundle-name').value;
+                    
+                    // Download the generated image
+                    const imageResponse = await fetch(window.recipeBundleGeneratedImageUrl);
+                    const imageBlob = await imageResponse.blob();
+                    const imageFile = new File([imageBlob], `${recipeName.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
+                    
+                    // Step 1: Upload file to server (BitTorrent + local storage)
+                    const formData = new FormData();
+                    formData.append('file', imageFile);
+                    formData.append('access_level', 'public');
+                    
+                    const uploadResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: formData
+                    });
+                    
+                    if (!uploadResponse.ok) {
+                        throw new Error('Failed to upload AI-generated image file');
+                    }
+                    
+                    const uploadResult = await uploadResponse.json();
+                    const mediaId = uploadResult.mediaId;
+                    console.log('✅ AI image file uploaded to server and BitTorrent:', mediaId);
+                    
+                    // Step 2: Upload to IPFS
+                    let ipfsCID = null;
+                    try {
+                        const ipfsResponse = await fetch(`${API_BASE_URL}/api/media/ipfs-upload`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: JSON.stringify({ mediaId })
+                        });
+                        
+                        if (ipfsResponse.ok) {
+                            const ipfsResult = await ipfsResponse.json();
+                            ipfsCID = ipfsResult.cid;
+                            console.log('✅ AI image uploaded to IPFS:', ipfsCID);
+                        }
+                    } catch (ipfsError) {
+                        console.warn('⚠️ IPFS upload error:', ipfsError);
+                    }
+                    
+                    // Step 3: Create image record on Arweave
+                    const imageRecord = {
+                        basic: {
+                            name: `AI Generated - ${recipeName}`,
+                            date: Math.floor(Date.now() / 1000),
+                            language: 'en'
+                        },
+                        image: {
+                            webUrl: uploadResult.httpUrl,
+                            bittorrentAddress: uploadResult.magnetURI,
+                            ipfsAddress: ipfsCID ? `ipfs://${ipfsCID}` : undefined,
+                            filename: uploadResult.originalName,
+                            size: uploadResult.size,
+                            contentType: uploadResult.mime,
+                            width: 1024,
+                            height: 1024
+                        }
+                    };
+                    
+                    const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image&storage=arweave`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify(imageRecord)
+                    });
+                    
+                    if (!recordResponse.ok) {
+                        throw new Error('Failed to create AI image record');
+                    }
+                    
+                    const recordResult = await recordResponse.json();
+                    const imageDID = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                    
+                    console.log(`✅ AI image record created: ${imageDID}`);
+                    return imageDID;
+                }
+                
+                // Otherwise, generate new image
                 const recipeName = document.getElementById('recipe-bundle-name').value;
                 const recipeDescription = document.getElementById('recipe-bundle-description').value;
                 
@@ -19490,10 +19734,10 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const imageBlob = await imageResponse.blob();
                 const imageFile = new File([imageBlob], `${recipeName.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
                 
-                // Upload as image record (similar to upload flow, but skip content safety check since it's AI-generated)
+                // Step 1: Upload file to server (BitTorrent + local storage)
                 const formData = new FormData();
                 formData.append('file', imageFile);
-                formData.append('name', `AI Generated - ${recipeName}`);
+                formData.append('access_level', 'public');
                 
                 const uploadResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
                     method: 'POST',
@@ -19504,12 +19748,35 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 });
                 
                 if (!uploadResponse.ok) {
-                    throw new Error('Failed to upload AI-generated image');
+                    throw new Error('Failed to upload AI-generated image file');
                 }
                 
                 const uploadResult = await uploadResponse.json();
+                const mediaId = uploadResult.mediaId;
+                console.log('✅ AI image file uploaded to server and BitTorrent:', mediaId);
                 
-                // Create image record
+                // Step 2: Upload to IPFS
+                let ipfsCID = null;
+                try {
+                    const ipfsResponse = await fetch(`${API_BASE_URL}/api/media/ipfs-upload`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify({ mediaId })
+                    });
+                    
+                    if (ipfsResponse.ok) {
+                        const ipfsResult = await ipfsResponse.json();
+                        ipfsCID = ipfsResult.cid;
+                        console.log('✅ AI image uploaded to IPFS:', ipfsCID);
+                    }
+                } catch (ipfsError) {
+                    console.warn('⚠️ IPFS upload error:', ipfsError);
+                }
+                
+                // Step 3: Create image record on Arweave
                 const imageRecord = {
                     basic: {
                         name: `AI Generated - ${recipeName}`,
@@ -19519,6 +19786,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     image: {
                         webUrl: uploadResult.httpUrl,
                         bittorrentAddress: uploadResult.magnetURI,
+                        ipfsAddress: ipfsCID ? `ipfs://${ipfsCID}` : undefined,
                         filename: uploadResult.originalName,
                         size: uploadResult.size,
                         contentType: uploadResult.mime,
@@ -19527,7 +19795,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                 };
                 
-                const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image&storage=gun`, {
+                const recordResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=image&storage=arweave`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -19543,7 +19811,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const recordResult = await recordResponse.json();
                 const did = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
                 
-                console.log(`✅ AI image uploaded: ${did}`);
+                console.log(`✅ AI image record created: ${did}`);
                 return did;
                 
             } catch (error) {
@@ -19761,11 +20029,27 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     });
                     
                     if (!response.ok) {
-                        throw new Error('Failed to publish recipe');
+                        const errorText = await response.text();
+                        throw new Error(`Failed to publish recipe: ${errorText}`);
                     }
                     
                     const result = await response.json();
-                    const did = result.recordToIndex?.oip?.didTx || result.recordToIndex?.oip?.did || result.transactionId;
+                    console.log('✅ Recipe publish response:', result);
+                    
+                    // Extract DID from the result - try multiple possible locations
+                    const did = result.recordToIndex?.oip?.did || 
+                               result.recordToIndex?.oip?.didTx ||
+                               result.did || 
+                               result.didTx || 
+                               result.oip?.did || 
+                               result.oip?.didTx ||
+                               `did:arweave:${result.transactionId}`;
+                    
+                    if (!did) {
+                        console.error('Could not extract DID from result:', result);
+                        throw new Error('Recipe published but could not extract DID');
+                    }
+                    
                     return did;
                     
                 } else {
@@ -19781,11 +20065,27 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     });
                     
                     if (!response.ok) {
-                        throw new Error('Failed to publish recipe');
+                        const errorText = await response.text();
+                        throw new Error(`Failed to publish recipe: ${errorText}`);
                     }
                     
                     const result = await response.json();
-                    const did = result.did || result.didTx || result.oip?.did || result.oip?.didTx;
+                    console.log('✅ Recipe publish response:', result);
+                    
+                    // Extract DID from the result - try multiple possible locations
+                    const did = result.recordToIndex?.oip?.did || 
+                               result.recordToIndex?.oip?.didTx ||
+                               result.did || 
+                               result.didTx || 
+                               result.oip?.did || 
+                               result.oip?.didTx ||
+                               `did:arweave:${result.transactionId}`;
+                    
+                    if (!did) {
+                        console.error('Could not extract DID from result:', result);
+                        throw new Error('Recipe published but could not extract DID');
+                    }
+                    
                     return did;
                 }
                 
@@ -19800,9 +20100,16 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
          */
         async function copyRecipeBundleFromLatest() {
             try {
-                console.log('📋 Copying from latest recipe...');
+                const recipeName = document.getElementById('recipe-bundle-name').value.trim();
                 
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=recipe&limit=1&sortBy=date:desc`, {
+                if (!recipeName) {
+                    alert('Please enter a recipe name first to search for similar recipes');
+                    return;
+                }
+                
+                console.log('📋 Copying from latest recipe matching:', recipeName);
+                
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=recipe&fieldName=basic.name&fieldSearch=${encodeURIComponent(recipeName)}&limit=1&sortBy=date:desc`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`,
@@ -19818,7 +20125,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const records = data.records || [];
                 
                 if (records.length === 0) {
-                    alert('No recipes found to copy from');
+                    alert(`No recipes found matching "${recipeName}"`);
                     return;
                 }
                 
@@ -19826,7 +20133,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const basic = latestRecipe.data?.basic || {};
                 const recipe = latestRecipe.data?.recipe || {};
                 
-                // Fill in fields
+                // Fill in fields (but don't overwrite the name they're searching by)
                 document.getElementById('recipe-bundle-description').value = basic.description || '';
                 document.getElementById('recipe-bundle-tags').value = (basic.tagItems || []).join(', ');
                 document.getElementById('recipe-bundle-prep-time').value = recipe.prep_time_mins || '';
@@ -19840,7 +20147,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 
                 updateRecipeBundleTotalTime();
                 
-                alert('✅ Copied data from latest recipe! Remember to update the recipe name.');
+                alert(`✅ Copied data from recipe "${basic.name}"!`);
                 console.log('✅ Copied from recipe:', basic.name);
                 
             } catch (error) {
@@ -19862,14 +20169,218 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             
             try {
                 console.log(`🤖 Generating AI content for: ${recipeName}`);
-                alert('🤖 AI Fill-In feature coming soon!\n\nThis will automatically generate recipe details including:\n• Description\n• Ingredients with amounts\n• Step-by-step instructions\n• Estimated cooking times\n\nStay tuned!');
+                showMessage('publish-status', '🤖 AI is generating recipe details...', 'info');
                 
-                // TODO: Implement AI generation endpoint
-                // This would call an AI service to generate recipe details
+                const prompt = `You are an expert chef and recipe writer. Given the recipe name "${recipeName}", please provide:
+1. A descriptive overview (2-3 sentences)
+2. List of ingredients with amounts and units (be specific, use standard units like tbsp, tsp, cup, oz, g, etc.)
+3. Step-by-step cooking instructions (numbered, clear and concise)
+4. Prep time in minutes
+5. Cook time in minutes
+6. Number of servings
+7. Course type (Breakfast/Lunch/Dinner/Snack/Dessert)
+8. Cuisine type (American/Italian/Mexican/Asian/Mediterranean/etc.)
+9. Optional cooking notes or tips
+10. Relevant tags (comma-separated, e.g., "quick meal", "healthy", "vegetarian", "gluten-free", etc.)
+
+Return ONLY a valid JSON object with this exact structure:
+{
+  "description": "...",
+  "prep_time_mins": 15,
+  "cook_time_mins": 30,
+  "servings": 4,
+  "course": "Dinner",
+  "cuisine": "American",
+  "notes": "...",
+  "tags": "tag1, tag2, tag3",
+  "ingredients": [
+    {"name": "ingredient 1", "amount": 2, "unit": "cups", "comment": ""},
+    {"name": "ingredient 2", "amount": 1, "unit": "tbsp", "comment": "optional: diced"}
+  ],
+  "instructions": [
+    "Step 1 description",
+    "Step 2 description"
+  ]
+}
+
+CRITICAL: 
+- Be realistic with cooking times and amounts
+- Use common, accessible ingredients when possible
+- Make sure amounts and units are appropriate for the number of servings
+- Instructions should be clear and in proper cooking order`;
+
+                // Retry logic: Try up to 3 times
+                let lastError = null;
+                let attempts = 0;
+                const maxAttempts = 3;
+                
+                while (attempts < maxAttempts) {
+                    attempts++;
+                    console.log(`[Recipe AI] Attempt ${attempts}/${maxAttempts}`);
+                    
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/voice/chat`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                            },
+                            body: JSON.stringify({
+                                text: prompt,
+                                model: 'grok-beta',
+                                processing_mode: 'llm-grok-4',
+                                return_audio: false,
+                                conversation_history: [],
+                                timeout: 45000  // 45 second timeout
+                            })
+                        });
+
+                        const data = await response.json();
+                        
+                        if (data.response_text) {
+                            // Check if response is an error message
+                            if (data.response_text.includes('error') || data.response_text.includes('Error') || data.response_text.includes('timeout')) {
+                                throw new Error(`AI service error: ${data.response_text}`);
+                            }
+                            
+                            // Try to parse the AI response as JSON
+                            let responseText = data.response_text.trim();
+                            
+                            // Remove markdown code blocks if present
+                            responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+                            
+                            let aiData;
+                            try {
+                                aiData = JSON.parse(responseText);
+                            } catch (parseError) {
+                                console.error(`[Recipe AI] Attempt ${attempts} - Failed to parse response as JSON:`, responseText);
+                                throw new Error('AI returned invalid JSON format');
+                            }
+                            
+                            console.log(`[Recipe AI] Successfully parsed AI response:`, aiData);
+                            
+                            // Fill in the form fields
+                            if (aiData.description) {
+                                document.getElementById('recipe-bundle-description').value = aiData.description;
+                            }
+                            
+                            if (aiData.prep_time_mins) {
+                                document.getElementById('recipe-bundle-prep-time').value = aiData.prep_time_mins;
+                            }
+                            
+                            if (aiData.cook_time_mins) {
+                                document.getElementById('recipe-bundle-cook-time').value = aiData.cook_time_mins;
+                            }
+                            
+                            if (aiData.servings) {
+                                document.getElementById('recipe-bundle-servings').value = aiData.servings;
+                            }
+                            
+                            if (aiData.course) {
+                                document.getElementById('recipe-bundle-course').value = aiData.course;
+                            }
+                            
+                            if (aiData.cuisine) {
+                                document.getElementById('recipe-bundle-cuisine').value = aiData.cuisine;
+                            }
+                            
+                            if (aiData.notes) {
+                                document.getElementById('recipe-bundle-notes').value = aiData.notes;
+                            }
+                            
+                            if (aiData.tags) {
+                                document.getElementById('recipe-bundle-tags').value = aiData.tags;
+                            }
+                            
+                            // Update total time
+                            updateRecipeBundleTotalTime();
+                            
+                            // Clear existing ingredients
+                            document.getElementById('recipe-bundle-ingredients-container').innerHTML = '';
+                            
+                            // Add ingredients from AI
+                            if (aiData.ingredients && Array.isArray(aiData.ingredients)) {
+                                aiData.ingredients.forEach((ing, idx) => {
+                                    addRecipeBundleIngredientItem();
+                                    
+                                    // Get the last added ingredient item
+                                    const container = document.getElementById('recipe-bundle-ingredients-container');
+                                    const items = container.querySelectorAll('.ingredient-item');
+                                    const lastItem = items[items.length - 1];
+                                    
+                                    if (lastItem) {
+                                        // Set mode to "New Ingredient Record"
+                                        const modeSelect = lastItem.querySelector('.ingredient-mode');
+                                        if (modeSelect) {
+                                            modeSelect.value = 'new';
+                                        }
+                                        
+                                        // Set ingredient values
+                                        const nameInput = lastItem.querySelector('.ingredient-name');
+                                        const amountInput = lastItem.querySelector('.ingredient-amount');
+                                        const unitInput = lastItem.querySelector('.ingredient-unit');
+                                        const commentInput = lastItem.querySelector('.ingredient-comment');
+                                        
+                                        if (nameInput) nameInput.value = ing.name || '';
+                                        if (amountInput) amountInput.value = ing.amount || 1;
+                                        if (unitInput) unitInput.value = ing.unit || 'whole';
+                                        if (commentInput) commentInput.value = ing.comment || '';
+                                        
+                                        console.log(`[Recipe AI] Added ingredient ${idx + 1}: ${ing.name}`);
+                                    }
+                                });
+                            }
+                            
+                            // Clear existing instructions
+                            document.getElementById('recipe-bundle-instructions-container').innerHTML = '';
+                            
+                            // Add instructions from AI
+                            if (aiData.instructions && Array.isArray(aiData.instructions)) {
+                                aiData.instructions.forEach((step, idx) => {
+                                    addRecipeBundleInstructionStep();
+                                    
+                                    // Get the last added instruction item
+                                    const container = document.getElementById('recipe-bundle-instructions-container');
+                                    const items = container.querySelectorAll('.instruction-item');
+                                    const lastItem = items[items.length - 1];
+                                    
+                                    if (lastItem) {
+                                        const textarea = lastItem.querySelector('textarea');
+                                        if (textarea) {
+                                            textarea.value = step;
+                                            console.log(`[Recipe AI] Added instruction ${idx + 1}`);
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            showMessage('publish-status', '✅ AI successfully filled in recipe details!', 'success');
+                            alert('✅ AI has filled in the recipe details! Please review and adjust as needed.');
+                            console.log('[Recipe AI] Successfully filled in all fields');
+                            return;  // Success, exit retry loop
+                            
+                        } else {
+                            throw new Error('No response text from AI service');
+                        }
+                        
+                    } catch (attemptError) {
+                        lastError = attemptError;
+                        console.error(`[Recipe AI] Attempt ${attempts} failed:`, attemptError);
+                        
+                        if (attempts < maxAttempts) {
+                            console.log(`[Recipe AI] Retrying in 2 seconds...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                        }
+                    }
+                }
+                
+                // If we got here, all attempts failed
+                throw new Error(`Failed after ${maxAttempts} attempts. Last error: ${lastError?.message || 'Unknown error'}`);
                 
             } catch (error) {
                 console.error('Error generating AI content:', error);
-                alert('Error generating AI content. See console for details.');
+                showMessage('publish-status', `❌ Error: ${error.message}`, 'error');
+                alert(`❌ Failed to generate AI content: ${error.message}`);
             }
         }
 
