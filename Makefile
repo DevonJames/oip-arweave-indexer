@@ -16,6 +16,13 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(YELLOW)Usage:$(NC) make [target] [PROFILE=profile_name]"
 	@echo ""
+	@echo "$(YELLOW)Memory Configuration (for 128GB+ systems):$(NC)"
+	@echo "  $(GREEN)set-memory-8gb$(NC)       - Set Node.js heap to 8GB"
+	@echo "  $(GREEN)set-memory-16gb$(NC)      - Set Node.js heap to 16GB (recommended)"
+	@echo "  $(GREEN)set-memory-32gb$(NC)      - Set Node.js heap to 32GB"
+	@echo "  $(GREEN)set-memory-64gb$(NC)      - Set Node.js heap to 64GB (high-volume)"
+	@echo "  $(GREEN)check-memory-config$(NC)  - Show current memory configuration"
+	@echo ""
 	@echo "$(YELLOW)Available targets:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
@@ -1123,4 +1130,56 @@ mac-logs-all: ## Show all Mac STT service logs (multiplexed)
 		echo "$(YELLOW)Some log files missing. Start services with: make mac-stt-services$(NC)"; \
 		echo "$(BLUE)Available logs:$(NC)"; \
 		ls -la logs/*.log 2>/dev/null || echo "  No logs found"; \
-	fi 
+	fi
+
+# Memory Configuration Management
+set-memory-8gb: ## Set Node.js heap to 8GB
+	@echo "$(BLUE)Setting memory allocation to 8GB...$(NC)"
+	@./set-memory.sh 8192
+
+set-memory-16gb: ## Set Node.js heap to 16GB (recommended for 128GB systems)
+	@echo "$(BLUE)Setting memory allocation to 16GB...$(NC)"
+	@./set-memory.sh 16384
+
+set-memory-32gb: ## Set Node.js heap to 32GB
+	@echo "$(BLUE)Setting memory allocation to 32GB...$(NC)"
+	@./set-memory.sh 32768
+
+set-memory-64gb: ## Set Node.js heap to 64GB (for high-volume indexing)
+	@echo "$(BLUE)Setting memory allocation to 64GB...$(NC)"
+	@./set-memory.sh 65536
+
+check-memory-config: ## Check current memory configuration from .env
+	@echo "$(BLUE)Current Memory Configuration:$(NC)"
+	@if [ -f .env ]; then \
+		if grep -q "NODE_OPTIONS=" .env; then \
+			HEAP_SIZE=$$(grep "NODE_OPTIONS=" .env | grep -oP 'max-old-space-size=\K[0-9]+' 2>/dev/null || grep "NODE_OPTIONS=" .env | sed -n 's/.*max-old-space-size=\([0-9]*\).*/\1/p'); \
+			if [ -n "$$HEAP_SIZE" ]; then \
+				HEAP_SIZE_GB=$$(echo "scale=2; $$HEAP_SIZE / 1024" | bc); \
+				echo "$(GREEN)✓ Heap Size: $$HEAP_SIZE MB ($${HEAP_SIZE_GB}GB)$(NC)"; \
+				NODE_OPTS=$$(grep "NODE_OPTIONS=" .env | cut -d'=' -f2-); \
+				echo "$(BLUE)  Full Options: $$NODE_OPTS$(NC)"; \
+			else \
+				echo "$(YELLOW)⚠️  NODE_OPTIONS set but no heap size found$(NC)"; \
+				grep "NODE_OPTIONS=" .env; \
+			fi; \
+		else \
+			echo "$(YELLOW)⚠️  NODE_OPTIONS not configured in .env$(NC)"; \
+			echo "$(BLUE)Default Node.js heap will be used (~4GB on 64-bit systems)$(NC)"; \
+			echo ""; \
+			echo "$(YELLOW)To configure memory:$(NC)"; \
+			echo "  make set-memory-16gb    # Recommended for your 128GB system"; \
+		fi; \
+	else \
+		echo "$(RED)❌ .env file not found$(NC)"; \
+	fi; \
+	echo ""; \
+	if command -v free >/dev/null 2>&1; then \
+		TOTAL_MEM=$$(free -m | awk '/^Mem:/{print $$2}'); \
+		echo "$(BLUE)System Memory: $${TOTAL_MEM}MB$(NC)"; \
+	elif command -v sysctl >/dev/null 2>&1; then \
+		TOTAL_MEM=$$(sysctl -n hw.memsize 2>/dev/null | awk '{print int($$1/1024/1024)}'); \
+		if [ -n "$$TOTAL_MEM" ]; then \
+			echo "$(BLUE)System Memory: $${TOTAL_MEM}MB$(NC)"; \
+		fi; \
+	fi
