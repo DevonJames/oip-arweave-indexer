@@ -36,6 +36,7 @@ const alfredRoutes = require('./routes/alfred');
 const mediaRoutes = require('./routes/media');
 const cleanupRoutes = require('./routes/cleanup');
 const photoRoutes = require('./routes/photo');
+const recipesRoutes = require('./routes/recipes');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 
 dotenv.config();
@@ -215,6 +216,8 @@ app.use('/api/voice', voiceRoutes);
 app.use('/api/photo', photoRoutes);
 // Media storage and distribution routes
 app.use('/api/media', mediaRoutes);
+// Recipe image generation routes
+app.use('/api/recipes', recipesRoutes);
 // Template cleanup routes
 app.use('/api/cleanup', cleanupRoutes);
 

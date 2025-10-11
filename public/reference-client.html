@@ -19561,10 +19561,18 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to generate AI image');
+                    const errorText = await response.text();
+                    console.error('AI image generation failed:', response.status, errorText);
+                    throw new Error(`Failed to generate AI image (${response.status}): ${errorText || 'Unknown error'}`);
                 }
                 
                 const result = await response.json();
+                console.log('AI image generation result:', result);
+                
+                if (!result.imageUrl) {
+                    throw new Error('No image URL returned from AI generation service');
+                }
+                
                 const imageUrl = result.imageUrl;
                 
                 console.log(`✅ AI image generated: ${imageUrl}`);
@@ -19721,10 +19729,18 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to generate AI image');
+                    const errorText = await response.text();
+                    console.error('AI image generation failed:', response.status, errorText);
+                    throw new Error(`Failed to generate AI image (${response.status}): ${errorText || 'Unknown error'}`);
                 }
                 
                 const result = await response.json();
+                console.log('AI image generation result:', result);
+                
+                if (!result.imageUrl) {
+                    throw new Error('No image URL returned from AI generation service');
+                }
+                
                 const imageUrl = result.imageUrl;
                 
                 console.log(`✅ AI image generated: ${imageUrl}`);
@@ -19962,9 +19978,12 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 // Gather instructions
                 const instructionContainer = document.getElementById('recipe-bundle-instructions-container');
                 const instructionItems = instructionContainer.querySelectorAll('.instruction-item');
-                const instructions = Array.from(instructionItems)
+                const instructionsArray = Array.from(instructionItems)
                     .map(item => item.querySelector('.instruction-text').value.trim())
                     .filter(text => text);
+                
+                // Convert instructions array to single string with newlines
+                const instructionsString = instructionsArray.join('\n');
                 
                 // Build parallel arrays for ingredients
                 const ingredientArray = [];
@@ -19998,7 +20017,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         ingredient_comment: ingredientCommentArray,
                         ingredient_amount: ingredientAmountArray,
                         ingredient_unit: ingredientUnitArray,
-                        instructions: instructions,
+                        instructions: instructionsString,
                         prep_time_mins: prepTime,
                         cook_time_mins: cookTime,
                         total_time_mins: totalTime,
@@ -20156,10 +20175,15 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const units = recipe.ingredient_unit || [];
                 const comments = recipe.ingredient_comment || [];
                 
+                // Valid units list
+                const validUnits = ['whole', 'cup', 'cups', 'tbsp', 'tsp', 'oz', 'lb', 'g', 'kg', 'ml', 'l', 'piece', 'slice', 'clove', 'pinch', 'dash'];
+                
                 if (ingredients.length > 0) {
                     console.log(`📋 Copying ${ingredients.length} ingredients`);
                     
-                    ingredients.forEach((ingredient, idx) => {
+                    // Process ingredients sequentially
+                    for (let idx = 0; idx < ingredients.length; idx++) {
+                        const ingredient = ingredients[idx];
                         addRecipeBundleIngredientItem();
                         
                         // Get the last added ingredient item
@@ -20170,7 +20194,14 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         if (lastItem) {
                             const modeSelect = lastItem.querySelector('.ingredient-mode');
                             const currentAmount = amounts[idx] || 1;
-                            const currentUnit = units[idx] || 'whole';
+                            let currentUnit = units[idx] || 'whole';
+                            
+                            // Validate unit - use "whole" if not in valid list
+                            if (!validUnits.includes(currentUnit.toLowerCase())) {
+                                console.warn(`⚠️ Invalid unit "${currentUnit}", using "whole" instead`);
+                                currentUnit = 'whole';
+                            }
+                            
                             const currentComment = comments[idx] || '';
                             
                             // Check if ingredient is a resolved object or a DID string
@@ -20186,8 +20217,15 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                     const event = new Event('change');
                                     modeSelect.dispatchEvent(event);
                                     
-                                    // Pre-populate the select dropdown AND set amount/unit/comment after mode change
+                                    // Pre-populate the search field AND select dropdown AND set amount/unit/comment after mode change
                                     setTimeout(() => {
+                                        // Fill in the search field with ingredient name
+                                        const searchInput = lastItem.querySelector('.ingredient-search');
+                                        if (searchInput) {
+                                            searchInput.value = ingredientName;
+                                        }
+                                        
+                                        // Pre-populate the select dropdown
                                         const selectDropdown = lastItem.querySelector('.ingredient-select');
                                         if (selectDropdown && ingredientDID) {
                                             const option = document.createElement('option');
@@ -20211,7 +20249,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 
                                 console.log(`📋 Copied ingredient ${idx + 1}: ${ingredientName} (${ingredientDID}) - ${currentAmount} ${currentUnit}`);
                             } else if (typeof ingredient === 'string' && ingredient.startsWith('did:')) {
-                                // DID reference - use "Select Existing" mode
+                                // DID reference - use "Select Existing" mode and look it up
                                 if (modeSelect) modeSelect.value = 'existing';
                                 
                                 // Trigger mode change
@@ -20219,8 +20257,47 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                     const event = new Event('change');
                                     modeSelect.dispatchEvent(event);
                                     
-                                    // Set amount/unit/comment after mode change
-                                    setTimeout(() => {
+                                    // Look up the ingredient by DID
+                                    setTimeout(async () => {
+                                        try {
+                                            const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=oip.did&fieldSearch=${encodeURIComponent(ingredient)}&limit=1`, {
+                                                method: 'GET',
+                                                headers: {
+                                                    'Authorization': `Bearer ${authToken}`,
+                                                    'Content-Type': 'application/json'
+                                                }
+                                            });
+                                            
+                                            if (response.ok) {
+                                                const data = await response.json();
+                                                const records = data.records || [];
+                                                
+                                                if (records.length > 0) {
+                                                    const ingredientName = records[0].data?.basic?.name || ingredient;
+                                                    
+                                                    // Fill in the search field
+                                                    const searchInput = lastItem.querySelector('.ingredient-search');
+                                                    if (searchInput) {
+                                                        searchInput.value = ingredientName;
+                                                    }
+                                                    
+                                                    // Pre-populate the select dropdown
+                                                    const selectDropdown = lastItem.querySelector('.ingredient-select');
+                                                    if (selectDropdown) {
+                                                        const option = document.createElement('option');
+                                                        option.value = ingredient;
+                                                        option.textContent = ingredientName;
+                                                        selectDropdown.innerHTML = '';
+                                                        selectDropdown.appendChild(option);
+                                                        selectDropdown.value = ingredient;
+                                                    }
+                                                }
+                                            }
+                                        } catch (error) {
+                                            console.error('Error looking up ingredient:', error);
+                                        }
+                                        
+                                        // Set amount/unit/comment
                                         const amountInput = lastItem.querySelector('.ingredient-amount');
                                         const unitInput = lastItem.querySelector('.ingredient-unit');
                                         const commentInput = lastItem.querySelector('.ingredient-comment');
@@ -20233,35 +20310,105 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 
                                 console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient} - ${currentAmount} ${currentUnit}`);
                             } else {
-                                // Plain text - use "New Ingredient" mode
-                                if (modeSelect) modeSelect.value = 'new';
+                                // Plain text - look up by name and use "Select Existing" mode
+                                const ingredientName = typeof ingredient === 'string' ? ingredient : '';
                                 
-                                // For "new" mode, we can set values immediately
-                                const nameInput = lastItem.querySelector('.ingredient-name');
-                                const amountInput = lastItem.querySelector('.ingredient-amount');
-                                const unitInput = lastItem.querySelector('.ingredient-unit');
-                                const commentInput = lastItem.querySelector('.ingredient-comment');
+                                if (modeSelect) modeSelect.value = 'existing';
                                 
-                                if (nameInput) nameInput.value = ingredient || '';
-                                if (amountInput) amountInput.value = currentAmount;
-                                if (unitInput) unitInput.value = currentUnit;
-                                if (commentInput) commentInput.value = currentComment;
+                                // Trigger mode change
+                                if (modeSelect) {
+                                    const event = new Event('change');
+                                    modeSelect.dispatchEvent(event);
+                                    
+                                    // Look up the ingredient by name
+                                    setTimeout(async () => {
+                                        try {
+                                            const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}&limit=1&noDuplicates=true`, {
+                                                method: 'GET',
+                                                headers: {
+                                                    'Authorization': `Bearer ${authToken}`,
+                                                    'Content-Type': 'application/json'
+                                                }
+                                            });
+                                            
+                                            if (response.ok) {
+                                                const data = await response.json();
+                                                const records = data.records || [];
+                                                
+                                                if (records.length > 0) {
+                                                    const foundIngredient = records[0];
+                                                    const foundName = foundIngredient.data?.basic?.name || ingredientName;
+                                                    const foundDID = foundIngredient.oip?.did || foundIngredient.oip?.didTx;
+                                                    
+                                                    // Fill in the search field
+                                                    const searchInput = lastItem.querySelector('.ingredient-search');
+                                                    if (searchInput) {
+                                                        searchInput.value = foundName;
+                                                    }
+                                                    
+                                                    // Pre-populate the select dropdown
+                                                    const selectDropdown = lastItem.querySelector('.ingredient-select');
+                                                    if (selectDropdown && foundDID) {
+                                                        const option = document.createElement('option');
+                                                        option.value = foundDID;
+                                                        option.textContent = foundName;
+                                                        selectDropdown.innerHTML = '';
+                                                        selectDropdown.appendChild(option);
+                                                        selectDropdown.value = foundDID;
+                                                    }
+                                                } else {
+                                                    // No match found - just fill in the search field
+                                                    const searchInput = lastItem.querySelector('.ingredient-search');
+                                                    if (searchInput) {
+                                                        searchInput.value = ingredientName;
+                                                    }
+                                                }
+                                            }
+                                        } catch (error) {
+                                            console.error('Error looking up ingredient:', error);
+                                            // If lookup fails, just fill in the search field
+                                            const searchInput = lastItem.querySelector('.ingredient-search');
+                                            if (searchInput) {
+                                                searchInput.value = ingredientName;
+                                            }
+                                        }
+                                        
+                                        // Set amount/unit/comment
+                                        const amountInput = lastItem.querySelector('.ingredient-amount');
+                                        const unitInput = lastItem.querySelector('.ingredient-unit');
+                                        const commentInput = lastItem.querySelector('.ingredient-comment');
+                                        
+                                        if (amountInput) amountInput.value = currentAmount;
+                                        if (unitInput) unitInput.value = currentUnit;
+                                        if (commentInput) commentInput.value = currentComment;
+                                    }, 150);
+                                }
                                 
-                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient} - ${currentAmount} ${currentUnit}`);
+                                console.log(`📋 Copied ingredient ${idx + 1}: ${ingredientName} - ${currentAmount} ${currentUnit}`);
                             }
                         }
-                    });
+                    }
                 }
                 
                 // Clear existing instructions
                 document.getElementById('recipe-bundle-instructions-container').innerHTML = '';
                 
-                // Add instructions from recipe
-                const instructions = recipe.instructions || [];
-                if (instructions.length > 0) {
-                    console.log(`📋 Copying ${instructions.length} instructions`);
+                // Add instructions from recipe - handle both string (new format) and array (legacy format)
+                let instructionsArray = [];
+                if (typeof recipe.instructions === 'string') {
+                    // New format: single string with newlines
+                    instructionsArray = recipe.instructions.split('\n').filter(s => s.trim());
+                } else if (Array.isArray(recipe.instructions)) {
+                    // Legacy format: array of strings
+                    instructionsArray = recipe.instructions;
+                } else {
+                    instructionsArray = [];
+                }
+                
+                if (instructionsArray.length > 0) {
+                    console.log(`📋 Copying ${instructionsArray.length} instructions`);
                     
-                    instructions.forEach((step, idx) => {
+                    instructionsArray.forEach((step, idx) => {
                         addRecipeBundleInstructionStep();
                         
                         // Get the last added instruction item
@@ -20279,7 +20426,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     });
                 }
                 
-                alert(`✅ Copied complete recipe "${basic.name}" with ${ingredients.length} ingredients and ${instructions.length} steps!`);
+                alert(`✅ Copied complete recipe "${basic.name}" with ${ingredients.length} ingredients and ${instructionsArray.length} steps!`);
                 console.log('✅ Copied from recipe:', basic.name);
                 
             } catch (error) {
@@ -20430,6 +20577,9 @@ CRITICAL:
                             // Clear existing ingredients
                             document.getElementById('recipe-bundle-ingredients-container').innerHTML = '';
                             
+                            // Valid units list
+                            const validUnits = ['whole', 'cup', 'cups', 'tbsp', 'tsp', 'oz', 'lb', 'g', 'kg', 'ml', 'l', 'piece', 'slice', 'clove', 'pinch', 'dash'];
+                            
                             // Add ingredients from AI
                             if (aiData.ingredients && Array.isArray(aiData.ingredients)) {
                                 aiData.ingredients.forEach((ing, idx) => {
@@ -20447,6 +20597,13 @@ CRITICAL:
                                             modeSelect.value = 'new';
                                         }
                                         
+                                        // Validate unit - use "whole" if not in valid list
+                                        let unit = ing.unit || 'whole';
+                                        if (!validUnits.includes(unit.toLowerCase())) {
+                                            console.warn(`[Recipe AI] Invalid unit "${unit}" for ${ing.name}, using "whole" instead`);
+                                            unit = 'whole';
+                                        }
+                                        
                                         // Set ingredient values
                                         const nameInput = lastItem.querySelector('.ingredient-name');
                                         const amountInput = lastItem.querySelector('.ingredient-amount');
@@ -20455,10 +20612,10 @@ CRITICAL:
                                         
                                         if (nameInput) nameInput.value = ing.name || '';
                                         if (amountInput) amountInput.value = ing.amount || 1;
-                                        if (unitInput) unitInput.value = ing.unit || 'whole';
+                                        if (unitInput) unitInput.value = unit;
                                         if (commentInput) commentInput.value = ing.comment || '';
                                         
-                                        console.log(`[Recipe AI] Added ingredient ${idx + 1}: ${ing.name}`);
+                                        console.log(`[Recipe AI] Added ingredient ${idx + 1}: ${ing.name} (${ing.amount} ${unit})`);
                                     }
                                 });
                             }
