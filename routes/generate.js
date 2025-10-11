@@ -9,7 +9,7 @@ const { authenticateToken } = require('../helpers/utils'); // Import the authent
 const fs = require('fs');
 const crypto = require('crypto');  // For generating a unique hash
 const path = require('path');
-const { generateCombinedSummaryFromArticles, replaceAcronyms, synthesizeSpeech, transcribeAudio, generateStreamingResponse, streamTextToSpeech, getElevenLabsVoices, streamChunkedTextToSpeech, flushRemainingText } = require('../helpers/generators');
+const { generateCombinedSummaryFromArticles, replaceAcronyms, synthesizeSpeech, transcribeAudio, generateStreamingResponse, streamTextToSpeech, getElevenLabsVoices, streamChunkedTextToSpeech, flushRemainingText, generateRecipeImage } = require('../helpers/generators');
 const { generatePodcastFromArticles, generateInvestigativeReportFromDocuments, synthesizeDialogueTurn, getAudioDuration, personalities, convertDidTxRecordsToArticles } = require('../helpers/podcast-generator');
 const e = require('express');
 const multer = require('multer');
@@ -904,6 +904,58 @@ router.post('/converse', async (req, res) => {
             });
         }
     }
+});
+
+// Route to generate recipe images using OpenAI DALL-E 3
+router.post('/recipe-image', async (req, res) => {
+  try {
+    const { recipeTitle, description, ingredients, forceRegenerate } = req.body;
+    
+    if (!recipeTitle) {
+      return res.status(400).json({
+        success: false,
+        error: 'recipeTitle is required'
+      });
+    }
+    
+    console.log(`Recipe image generation request: ${recipeTitle}`);
+    
+    const result = await generateRecipeImage(
+      recipeTitle,
+      description,
+      ingredients,
+      forceRegenerate || false
+    );
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Error in recipe image generation endpoint:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate recipe image'
+    });
+  }
+});
+
+// Route to serve cached recipe images
+router.get('/recipe-images/:filename', (req, res) => {
+  try {
+    const { filename } = req.params;
+    const imagePath = path.join(__dirname, '../generated-recipe-images', filename);
+    
+    if (!fs.existsSync(imagePath)) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    // Set proper content type for images
+    res.setHeader('Content-Type', 'image/png');
+    res.sendFile(imagePath);
+    
+  } catch (error) {
+    console.error('Error serving recipe image:', error);
+    res.status(500).json({ error: 'Failed to serve image' });
+  }
 });
 
 // Route to get available ElevenLabs voices

@@ -2491,6 +2491,116 @@ function getAdaptiveStreamingDiagnostics(sessionId) {
 }
 
 
+/**
+ * Generate a recipe image using OpenAI's DALL-E 3
+ * @param {string} recipeTitle - The name of the recipe
+ * @param {string} description - Optional description of the recipe
+ * @param {Array<string>} ingredients - Optional array of ingredients
+ * @param {boolean} forceRegenerate - Force regeneration even if cached
+ * @returns {Promise<Object>} Result with imageUrl
+ */
+async function generateRecipeImage(recipeTitle, description = '', ingredients = [], forceRegenerate = false) {
+  try {
+    console.log(`Generating recipe image for: ${recipeTitle}`);
+    
+    // Create a cache directory if it doesn't exist
+    const cacheDir = path.join(__dirname, '../generated-recipe-images');
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+    }
+
+    // Create a safe filename from recipe title
+    const safeFilename = recipeTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const cachedImagePath = path.join(cacheDir, `${safeFilename}.png`);
+    
+    // Check if image already exists in cache
+    if (fs.existsSync(cachedImagePath) && !forceRegenerate) {
+      console.log(`Using cached image for recipe: ${recipeTitle}`);
+      return {
+        success: true,
+        imageUrl: `/api/recipes/images/${safeFilename}.png`,
+        cached: true
+      };
+    }
+
+    // Create professional food blog style prompt
+    const ingredientText = ingredients && ingredients.length > 0 
+      ? `Key ingredients: ${ingredients.join(', ')}` 
+      : '';
+    
+    const prompt = `Create a professional food blog style photo of ${recipeTitle}. 
+    ${description ? `Recipe description: ${description}` : ''}
+    ${ingredientText}
+    
+    Style requirements:
+    - High-quality food photography
+    - Hyper-realistic
+    - Professional lighting and composition
+    - Realistic ingredients
+    - Appetizing and visually appealing
+    - Clean, modern plating
+    - Bright, natural lighting
+    - Suitable for a food blog or cookbook
+    - Focus on making the dish look delicious and inviting
+    - NO TEXT, NO WORDS, NO LABELS anywhere in the image
+    - Pure food photography without any overlaid text or writing`;
+
+    console.log(`Calling OpenAI DALL-E 3 API for recipe: ${recipeTitle}`);
+
+    // Call OpenAI's DALL-E 3 API
+    const response = await axios.post(
+      'https://api.openai.com/v1/images/generations',
+      {
+        model: 'dall-e-3',
+        prompt: prompt,
+        size: '1024x1024',
+        quality: 'standard',
+        style: 'natural',
+        n: 1
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000 // 60 seconds
+      }
+    );
+
+    const imageUrl = response.data?.data?.[0]?.url;
+    if (!imageUrl) {
+      throw new Error('No image URL received from OpenAI');
+    }
+
+    console.log(`DALL-E 3 generated image URL: ${imageUrl}`);
+
+    // Download and cache the image
+    const imageResponse = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 30000
+    });
+
+    if (imageResponse.status !== 200) {
+      throw new Error(`Failed to download image: ${imageResponse.statusText}`);
+    }
+
+    const imageBuffer = Buffer.from(imageResponse.data);
+    fs.writeFileSync(cachedImagePath, imageBuffer);
+
+    console.log(`✅ Generated and cached image for recipe: ${recipeTitle}`);
+
+    return {
+      success: true,
+      imageUrl: `/api/recipes/images/${safeFilename}.png`,
+      cached: false
+    };
+
+  } catch (error) {
+    console.error('Error generating recipe image:', error.response?.data || error.message);
+    throw new Error(`Failed to generate recipe image: ${error.message}`);
+  }
+}
+
 module.exports = {
     getVoiceModels,
     replaceAcronyms,
@@ -2519,6 +2629,8 @@ module.exports = {
     // New adaptive streaming functions
     streamAdaptiveTextToSpeech,
     finishAdaptiveTextToSpeech,
-    getAdaptiveStreamingDiagnostics
+    getAdaptiveStreamingDiagnostics,
+    // Recipe image generation
+    generateRecipeImage
 }
 
