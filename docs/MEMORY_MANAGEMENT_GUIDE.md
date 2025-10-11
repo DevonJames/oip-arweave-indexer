@@ -1,0 +1,297 @@
+# Memory Management Guide
+
+This guide explains how to identify, prevent, and resolve memory issues in the OIP Arweave Indexer application.
+
+## 🔍 The Memory Leak Issue
+
+### Root Cause
+The application was experiencing memory leaks primarily from the **GunSyncService**, which maintained an unbounded `processedRecords` Set that grew indefinitely without being cleared.
+
+### Symptoms
+- Node.js heap out of memory errors
+- Application crashes after running for several hours
+- Memory usage steadily increasing over time
+- Garbage collection failures
+
+```
+<--- Last few GCs --->
+FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+```
+
+## ✅ Fixes Implemented
+
+### 1. Automatic Cache Clearing
+The GunSyncService now automatically clears its internal cache every hour (configurable):
+
+```javascript
+// In helpers/gunSyncService.js
+this.cacheMaxAge = parseInt(process.env.GUN_CACHE_MAX_AGE) || 3600000; // 1 hour default
+```
+
+**Environment Variable:**
+```bash
+GUN_CACHE_MAX_AGE=3600000  # Clear cache every hour (in milliseconds)
+```
+
+### 2. Memory Monitoring Endpoints
+
+#### Check Memory Status
+```bash
+curl http://localhost:3005/api/health/memory
+```
+
+Response includes:
+- Heap utilization percentage
+- Memory usage breakdown (RSS, heap, external)
+- Warnings when memory is above 80% or 90%
+- GUN sync cache size and next clear time
+
+#### Check GUN Sync Status
+```bash
+curl http://localhost:3005/api/health/gun-sync
+```
+
+#### Manually Clear Cache (Emergency)
+```bash
+curl -X POST http://localhost:3005/api/health/memory/clear-cache
+```
+
+### 3. Diagnostic Script
+
+Run memory diagnostics:
+
+```bash
+# Quick memory check
+node scripts/diagnose-memory.js
+
+# Take heap snapshot for analysis
+node scripts/diagnose-memory.js snapshot
+
+# Monitor memory growth over time
+node scripts/diagnose-memory.js monitor 10 120
+# (checks every 10 seconds for 120 seconds)
+```
+
+## 🚀 Starting the Application with Increased Heap
+
+### Default Heap Limit
+Node.js defaults to ~1.7GB on 32-bit systems and ~4GB on 64-bit systems.
+
+### Increase Heap Size
+
+#### Option 1: Using NODE_OPTIONS Environment Variable
+```bash
+# Set to 8GB
+export NODE_OPTIONS="--max-old-space-size=8192"
+npm start
+```
+
+#### Option 2: Direct Node Flags
+```bash
+node --max-old-space-size=8192 index.js
+```
+
+#### Option 3: Update package.json
+```json
+{
+  "scripts": {
+    "start": "node --max-old-space-size=8192 index.js",
+    "start:keepdb": "node --max-old-space-size=8192 index.js --keepDBUpToDate"
+  }
+}
+```
+
+#### Option 4: Using Docker
+Update your docker-compose.yml:
+```yaml
+services:
+  oip-arweave:
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=8192
+```
+
+### Recommended Heap Sizes
+
+| Scenario | Heap Size | Flag |
+|----------|-----------|------|
+| Development | 4GB | `--max-old-space-size=4096` |
+| Production (Light) | 8GB | `--max-old-space-size=8192` |
+| Production (Heavy) | 16GB | `--max-old-space-size=16384` |
+| High-Volume Indexing | 32GB | `--max-old-space-size=32768` |
+
+## 📊 Monitoring Best Practices
+
+### 1. Set Up Regular Health Checks
+
+Create a cron job or monitoring service:
+```bash
+*/5 * * * * curl -s http://localhost:3005/api/health/memory | jq '.status, .heap.utilization'
+```
+
+### 2. Alert Thresholds
+
+Set up alerts when:
+- Heap utilization > 80% (warning)
+- Heap utilization > 90% (critical)
+- Detached contexts > 10 (memory leak indicator)
+- Cache size grows beyond expected bounds
+
+### 3. Log Memory Metrics
+
+Add to your monitoring/logging system:
+```javascript
+// Example: Log memory every 10 minutes
+setInterval(() => {
+    const mem = process.memoryUsage();
+    console.log('Memory:', {
+        heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+        heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
+        rssMB: Math.round(mem.rss / 1024 / 1024)
+    });
+}, 600000);
+```
+
+## 🛠️ Troubleshooting
+
+### Application Still Crashing?
+
+1. **Check if GUN_SYNC_ENABLED is causing issues:**
+   ```bash
+   GUN_SYNC_ENABLED=false npm start
+   ```
+
+2. **Reduce cache max age:**
+   ```bash
+   GUN_CACHE_MAX_AGE=1800000 npm start  # 30 minutes
+   ```
+
+3. **Check for other memory leaks:**
+   ```bash
+   node --expose-gc scripts/diagnose-memory.js monitor 10 300
+   ```
+
+4. **Analyze heap snapshot:**
+   - Take a snapshot: `node scripts/diagnose-memory.js snapshot`
+   - Open Chrome DevTools → Memory tab
+   - Load the .heapsnapshot file
+   - Look for objects with high retained size
+
+### Common Memory Leak Patterns
+
+#### 1. Event Listeners
+```javascript
+// BAD: Creates memory leak
+emitter.on('event', handler);
+
+// GOOD: Clean up when done
+emitter.on('event', handler);
+// ... later
+emitter.removeListener('event', handler);
+```
+
+#### 2. Timers
+```javascript
+// BAD: Timer never cleared
+setInterval(() => { /* ... */ }, 1000);
+
+// GOOD: Store reference and clear
+const interval = setInterval(() => { /* ... */ }, 1000);
+// ... later
+clearInterval(interval);
+```
+
+#### 3. Closures Holding References
+```javascript
+// BAD: Large object held in closure
+function createHandler(largeObject) {
+    return () => {
+        // largeObject is retained even if only using small part
+        console.log(largeObject.smallProp);
+    };
+}
+
+// GOOD: Only keep what you need
+function createHandler(largeObject) {
+    const smallProp = largeObject.smallProp;
+    return () => {
+        console.log(smallProp);
+    };
+}
+```
+
+#### 4. Unbounded Caches
+```javascript
+// BAD: Cache grows forever
+const cache = new Map();
+cache.set(key, value);
+
+// GOOD: Use LRU cache or clear periodically
+const LRU = require('lru-cache');
+const cache = new LRU({ max: 500 });
+```
+
+## 🔬 Advanced Debugging
+
+### Enable Garbage Collection Logging
+```bash
+node --trace-gc --trace-gc-verbose index.js 2>&1 | tee gc.log
+```
+
+### Memory Profiling with Clinic.js
+```bash
+npm install -g clinic
+clinic doctor -- node index.js
+```
+
+### V8 Heap Profiler
+```bash
+node --prof index.js
+# After stopping
+node --prof-process isolate-*.log > processed.txt
+```
+
+## 📝 Configuration Reference
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GUN_SYNC_ENABLED` | `true` | Enable/disable GUN sync service |
+| `GUN_SYNC_INTERVAL` | `30000` | Sync interval in ms (30 seconds) |
+| `GUN_CACHE_MAX_AGE` | `3600000` | Cache clear interval in ms (1 hour) |
+| `NODE_OPTIONS` | - | Node.js command-line options |
+
+### Recommended Production Settings
+
+```bash
+# .env
+GUN_SYNC_ENABLED=true
+GUN_SYNC_INTERVAL=30000
+GUN_CACHE_MAX_AGE=1800000  # 30 minutes for high-volume
+NODE_OPTIONS=--max-old-space-size=8192 --expose-gc
+```
+
+## 🎯 Prevention Checklist
+
+- [ ] Set appropriate heap size for your workload
+- [ ] Configure GUN_CACHE_MAX_AGE based on volume
+- [ ] Set up memory monitoring alerts
+- [ ] Review code for unbounded data structures
+- [ ] Clean up event listeners and timers
+- [ ] Use weak references for caches when appropriate
+- [ ] Implement pagination for large data queries
+- [ ] Stream large files instead of loading into memory
+- [ ] Regularly test with memory profiling tools
+
+## 📚 Additional Resources
+
+- [Node.js Memory Management](https://nodejs.org/en/docs/guides/simple-profiling/)
+- [V8 Heap Debugging](https://v8.dev/docs/memory-leaks)
+- [Chrome DevTools Memory Profiling](https://developer.chrome.com/docs/devtools/memory-problems/)
+- [Clinic.js Profiling](https://clinicjs.org/)
+
+---
+
+**Last Updated:** 2025-10-11  
+**Version:** 1.0.0
+

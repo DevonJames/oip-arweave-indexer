@@ -17,8 +17,13 @@ class GunSyncService {
         this.processedRecords = new Set(); // Track processed records to avoid duplicates
         this.healthMonitor = new SyncHealthMonitor();
         
+        // Memory management: Clear cache every hour to prevent memory leaks
+        this.cacheMaxAge = parseInt(process.env.GUN_CACHE_MAX_AGE) || 3600000; // 1 hour default
+        this.lastCacheClear = Date.now();
+        
         console.log('🚀 GUN Sync Service initialized:', {
             syncInterval: this.syncInterval,
+            cacheMaxAge: this.cacheMaxAge,
             nodeId: this.registry.nodeId
         });
     }
@@ -83,6 +88,15 @@ class GunSyncService {
         const startTime = Date.now();
         
         try {
+            // Memory management: Periodically clear the cache to prevent memory leaks
+            const timeSinceLastClear = Date.now() - this.lastCacheClear;
+            if (timeSinceLastClear >= this.cacheMaxAge) {
+                const cacheSize = this.processedRecords.size;
+                this.clearProcessedCache();
+                this.lastCacheClear = Date.now();
+                console.log(`🗑️ Auto-cleared GUN cache (${cacheSize} records) after ${Math.round(timeSinceLastClear / 60000)} minutes`);
+            }
+            
             // console.log('🔄 Starting GUN record sync cycle...'); // Commented out - too verbose
             
             // Discover records from other nodes (includes both public and private)
@@ -280,6 +294,9 @@ class GunSyncService {
      * @returns {Object} Status information
      */
     getStatus() {
+        const memUsage = process.memoryUsage();
+        const timeSinceLastClear = Date.now() - this.lastCacheClear;
+        
         return {
             isRunning: this.isRunning,
             syncInterval: this.syncInterval,
@@ -288,7 +305,18 @@ class GunSyncService {
             health: this.healthMonitor.getHealthStatus(),
             configuration: {
                 privateRecordsEnabled: this.privateHandler.decryptionEnabled,
-                trustedNodes: this.privateHandler.trustedNodes
+                trustedNodes: this.privateHandler.trustedNodes,
+                cacheMaxAge: this.cacheMaxAge,
+                cacheMaxAgeMinutes: Math.round(this.cacheMaxAge / 60000)
+            },
+            memory: {
+                heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
+                heapTotalMB: Math.round(memUsage.heapTotal / 1024 / 1024),
+                rssMB: Math.round(memUsage.rss / 1024 / 1024),
+                externalMB: Math.round(memUsage.external / 1024 / 1024),
+                cacheSize: this.processedRecords.size,
+                timeSinceLastClearMinutes: Math.round(timeSinceLastClear / 60000),
+                nextClearInMinutes: Math.round((this.cacheMaxAge - timeSinceLastClear) / 60000)
             }
         };
     }
