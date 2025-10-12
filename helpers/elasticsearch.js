@@ -1408,7 +1408,8 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
 };
 
 // Function to add nutritional summary to recipe records
-const addRecipeNutritionalSummary = async (record, recordsInDB) => {
+// fieldPrefix: 'summary' (default, for publish-time) or 'calculatedSummary' (for on-demand recalculation)
+const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 'summary') => {
     try {
         const recipe = record.data.recipe;
         
@@ -1583,7 +1584,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
         // Round values to reasonable precision
         const roundToDecimal = (num, decimals = 2) => Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
         
-        const summaryNutritionalInfo = {
+        const nutritionalInfoTotal = {
             calories: roundToDecimal(totals.calories, 0),
             proteinG: roundToDecimal(totals.proteinG),
             fatG: roundToDecimal(totals.fatG),
@@ -1597,7 +1598,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
         // Calculate per-serving values using the correct formula
         // Per-serving values are already calculated correctly by dividing totals by servings
         // since totals represent the entire recipe's nutritional content
-        const summaryNutritionalInfoPerServing = {
+        const nutritionalInfoPerServing = {
             calories: roundToDecimal(totals.calories / servings, 0),
             proteinG: roundToDecimal(totals.proteinG / servings),
             fatG: roundToDecimal(totals.fatG / servings),
@@ -1609,19 +1610,22 @@ const addRecipeNutritionalSummary = async (record, recordsInDB) => {
         };
         
         console.log(`\n📊 Per-serving nutritional values (1 of ${servings} servings):`);
-        console.log(`   Calories: ${summaryNutritionalInfoPerServing.calories}`);
-        console.log(`   Protein: ${summaryNutritionalInfoPerServing.proteinG}g`);
-        console.log(`   Fat: ${summaryNutritionalInfoPerServing.fatG}g`);
-        console.log(`   Carbs: ${summaryNutritionalInfoPerServing.carbohydratesG}g`);
+        console.log(`   Calories: ${nutritionalInfoPerServing.calories}`);
+        console.log(`   Protein: ${nutritionalInfoPerServing.proteinG}g`);
+        console.log(`   Fat: ${nutritionalInfoPerServing.fatG}g`);
+        console.log(`   Carbs: ${nutritionalInfoPerServing.carbohydratesG}g`);
         console.log(`Successfully calculated nutritional summary for recipe ${record.oip?.didTx || 'unknown'} using ${processedIngredients}/${totalIngredients} ingredients`);
         
-        // Add the summaries to the record
+        // Add the summaries to the record using the specified field prefix
+        const totalFieldName = `${fieldPrefix}NutritionalInfo`;
+        const perServingFieldName = `${fieldPrefix}NutritionalInfoPerServing`;
+        
         return {
             ...record,
             data: {
                 ...record.data,
-                summaryNutritionalInfo,
-                summaryNutritionalInfoPerServing
+                [totalFieldName]: nutritionalInfoTotal,
+                [perServingFieldName]: nutritionalInfoPerServing
             }
         };
         
@@ -1986,6 +1990,74 @@ async function getRecords(queryParams) {
             }
         }
         
+        // Helper function to calculate string similarity score
+        const calculateSimilarityScore = (fieldValue, searchValue) => {
+            const fieldLower = String(fieldValue).toLowerCase().trim();
+            const searchLower = String(searchValue).toLowerCase().trim();
+            
+            // Exact match (case-insensitive) gets highest score
+            if (fieldLower === searchLower) {
+                return 1000;
+            }
+            
+            // Starts with search term gets very high score
+            if (fieldLower.startsWith(searchLower)) {
+                return 900;
+            }
+            
+            // Ends with search term gets high score
+            if (fieldLower.endsWith(searchLower)) {
+                return 800;
+            }
+            
+            // Contains search term as whole word gets high score
+            const wordBoundaryRegex = new RegExp(`\\b${searchLower}\\b`, 'i');
+            if (wordBoundaryRegex.test(fieldLower)) {
+                return 700;
+            }
+            
+            // Contains search term anywhere gets medium score
+            if (fieldLower.includes(searchLower)) {
+                return 600;
+            }
+            
+            // Calculate Levenshtein distance for remaining cases
+            const levenshteinDistance = (str1, str2) => {
+                const matrix = [];
+                
+                for (let i = 0; i <= str2.length; i++) {
+                    matrix[i] = [i];
+                }
+                
+                for (let j = 0; j <= str1.length; j++) {
+                    matrix[0][j] = j;
+                }
+                
+                for (let i = 1; i <= str2.length; i++) {
+                    for (let j = 1; j <= str1.length; j++) {
+                        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                            matrix[i][j] = matrix[i - 1][j - 1];
+                        } else {
+                            matrix[i][j] = Math.min(
+                                matrix[i - 1][j - 1] + 1, // substitution
+                                matrix[i][j - 1] + 1,     // insertion
+                                matrix[i - 1][j] + 1      // deletion
+                            );
+                        }
+                    }
+                }
+                
+                return matrix[str2.length][str1.length];
+            };
+            
+            const distance = levenshteinDistance(fieldLower, searchLower);
+            const maxLength = Math.max(fieldLower.length, searchLower.length);
+            const similarity = 1 - (distance / maxLength);
+            
+            // Scale similarity to 0-500 range for low matches
+            return Math.floor(similarity * 500);
+        };
+        
         // Add flexible field search filtering
         if (fieldSearch !== undefined && fieldName !== undefined) {
             console.log(`Filtering by fieldName="${fieldName}" with value="${fieldSearch}" (mode: ${fieldMatchMode})`);
@@ -2006,6 +2078,7 @@ async function getRecords(queryParams) {
                 return currentValue;
             };
             
+            // Filter and add similarity scores
             records = records.filter(record => {
                 const fieldValue = getNestedValue(record.data, fieldName);
                 
@@ -2021,14 +2094,48 @@ async function getRecords(queryParams) {
                 // Perform matching based on mode
                 if (fieldMatchMode.toLowerCase() === 'exact') {
                     // Exact match (case-sensitive)
-                    return fieldValueStr === searchValueStr;
+                    const matches = fieldValueStr === searchValueStr;
+                    if (matches) {
+                        record.fieldSearchScore = 1000; // Max score for exact match
+                    }
+                    return matches;
                 } else {
                     // Partial match (case-insensitive) - default
-                    return fieldValueStr.toLowerCase().includes(searchValueStr.toLowerCase());
+                    const matches = fieldValueStr.toLowerCase().includes(searchValueStr.toLowerCase());
+                    if (matches) {
+                        // Calculate similarity score for sorting
+                        record.fieldSearchScore = calculateSimilarityScore(fieldValueStr, searchValueStr);
+                    }
+                    return matches;
                 }
             });
             
             console.log(`After filtering by fieldName="${fieldName}", there are ${records.length} records`);
+            
+            // If no explicit sortBy is provided, sort by similarity score
+            if (!sortBy || sortBy === 'inArweaveBlock:desc') {
+                records.sort((a, b) => {
+                    const scoreA = a.fieldSearchScore || 0;
+                    const scoreB = b.fieldSearchScore || 0;
+                    
+                    if (scoreB !== scoreA) {
+                        return scoreB - scoreA; // Higher score first
+                    }
+                    
+                    // Secondary sort by block height if scores are equal
+                    return (b.oip?.inArweaveBlock || 0) - (a.oip?.inArweaveBlock || 0);
+                });
+                console.log(`Sorted ${records.length} records by fieldSearch similarity score`);
+                
+                // Log top 5 matches for debugging
+                if (records.length > 0) {
+                    console.log('Top matches:');
+                    records.slice(0, 5).forEach((record, idx) => {
+                        const fieldValue = getNestedValue(record.data, fieldName);
+                        console.log(`  ${idx + 1}. "${fieldValue}" (score: ${record.fieldSearchScore})`);
+                    });
+                }
+            }
         }
         
         if (url !== undefined) {
@@ -2931,10 +3038,11 @@ async function getRecords(queryParams) {
         };
 
         // Add nutritional summaries for recipe records if summarizeRecipe is true
+        // Use 'calculatedSummary' prefix to distinguish from publish-time 'summary' fields
         if (summarizeRecipe === 'true' || summarizeRecipe === true) {
             resolvedRecords = await Promise.all(resolvedRecords.map(async (record) => {
                 if (record.oip.recordType === 'recipe' && record.data.recipe) {
-                    return await addRecipeNutritionalSummary(record, recordsInDB);
+                    return await addRecipeNutritionalSummary(record, recordsInDB, 'calculatedSummary');
                 }
                 return record;
             }));
@@ -4923,5 +5031,6 @@ module.exports = {
     findOrganizationsByHandle,
     getRecordTypesSummary,
     processRecordForElasticsearch,
+    addRecipeNutritionalSummary,
     elasticClient
 };
