@@ -12,7 +12,7 @@ const {
 } = require('../helpers/lit-protocol');
 const fs = require('fs').promises;
 const path = require('path');
-const { getRecords, searchTemplateByTxId } = require('../helpers/elasticsearch');
+const { getRecords, searchTemplateByTxId, addRecipeNutritionalSummary } = require('../helpers/elasticsearch');
 const { publishNewRecord} = require('../helpers/templateHelper');
 const arweaveWallet = require('../helpers/arweave-wallet');
 const paymentManager = require('../helpers/payment-manager');
@@ -660,8 +660,9 @@ router.post('/newRecipe', async (req, res) => {
             const queryParams = {
                 recordType: 'nutritionalInfo',
                 template: 'nutritionalInfo',
-                search: searchTerm,
-                sortBy: 'inArweaveBlock:desc',
+                fieldName: 'basic.name',
+                fieldSearch: searchTerm,
+                // Don't provide sortBy to enable similarity-based sorting
                 limit: 20
             };
             
@@ -669,11 +670,14 @@ router.post('/newRecipe', async (req, res) => {
             const recordsInDB = await getRecords(queryParams);
             console.log(`Found ${recordsInDB.searchResults} results for "${searchTerm}"`);
             
-            // Add results to recordMap
+            // Add results to recordMap (results are now sorted by similarity)
+            // Preserve the fieldSearchScore from elasticsearch for quality checking
             recordsInDB.records.forEach(record => {
                 const recordName = record.data.basic.name.toLowerCase();
                 if (!recordMap[recordName]) {  // Avoid duplicates
+                    // Preserve the fieldSearchScore for quality threshold checking
                     recordMap[recordName] = record;
+                    console.log(`  Added "${record.data.basic.name}" with fieldSearchScore: ${record.fieldSearchScore || 'N/A'}`);
                     totalRecordsFound++;
                 }
             });
@@ -765,14 +769,31 @@ router.post('/newRecipe', async (req, res) => {
     // Check if the ingredient has a predefined synonym
     const synonym = synonymMap[ingredientName];
     if (synonym && recordMap[synonym]) {
-        console.log(`Found synonym match for ${ingredientName}: ${synonym}`);
-        return recordMap[synonym];
+        const synonymRecord = recordMap[synonym];
+        const fieldSearchScore = synonymRecord.fieldSearchScore || 0;
+        
+        // Check if synonym match has high enough quality score
+        if (fieldSearchScore >= 900) {
+            console.log(`Found high-quality synonym match for ${ingredientName}: ${synonym} (fieldSearchScore: ${fieldSearchScore})`);
+            return synonymRecord;
+        } else {
+            console.log(`Synonym match "${synonym}" has low fieldSearchScore (${fieldSearchScore} < 900), will search for better match or create new record`);
+        }
     }
 
     // Direct exact match
     if (recordMap[ingredientName]) {
-        console.log(`Direct match found for ${ingredientName}, nutritionalInfo:`, recordMap[ingredientName].data.nutritionalInfo);
-        return recordMap[ingredientName];
+        const directMatch = recordMap[ingredientName];
+        const fieldSearchScore = directMatch.fieldSearchScore || 0;
+        
+        // Check if direct match has high enough quality score
+        if (fieldSearchScore >= 900) {
+            console.log(`Direct high-quality match found for ${ingredientName} (fieldSearchScore: ${fieldSearchScore}), nutritionalInfo:`, directMatch.data.nutritionalInfo);
+            return directMatch;
+        } else {
+            console.log(`Direct match for "${ingredientName}" has low fieldSearchScore (${fieldSearchScore} < 900), will create new record`);
+            return null; // Reject low-quality matches
+        }
     }
 
     // Define descriptor words that are less important for matching
@@ -865,26 +886,38 @@ router.post('/newRecipe', async (req, res) => {
     if (scoredMatches.length > 0) {
         const bestMatch = scoredMatches[0];
         
+        // Check fieldSearchScore from elasticsearch similarity scoring
+        const fieldSearchScore = bestMatch.record.fieldSearchScore || 0;
+        
         // Calculate minimum score threshold based on ingredient complexity
         const minScoreThreshold = calculateMinimumScoreThreshold(searchTerms.length, bestMatch.matchedTerms);
         
-        console.log(`Best candidate for "${ingredientName}": "${bestMatch.recordName}" (score: ${bestMatch.score}, threshold: ${minScoreThreshold})`);
+        console.log(`Best candidate for "${ingredientName}": "${bestMatch.recordName}"`);
+        console.log(`   - Internal score: ${bestMatch.score} (threshold: ${minScoreThreshold})`);
+        console.log(`   - fieldSearchScore: ${fieldSearchScore} (threshold: 900)`);
         console.log(`   - Matched ${bestMatch.matchedTerms}/${bestMatch.totalTerms} terms (${bestMatch.coreMatchedTerms}/${bestMatch.totalCoreTerms} core)`);
         console.log(`   - Exact sequence match: ${bestMatch.exactSequence}`);
         
         // Log other close matches for debugging
         if (scoredMatches.length > 1) {
             console.log(`   Other candidates:`, 
-                scoredMatches.slice(1, 3).map(m => `"${m.recordName}" (${m.score})`)
+                scoredMatches.slice(1, 3).map(m => `"${m.recordName}" (internal: ${m.score}, fieldSearch: ${m.record.fieldSearchScore || 'N/A'})`)
             );
         }
         
-        // Only accept the match if it meets the quality threshold
+        // First check fieldSearchScore - must be >= 900 for high-quality match
+        if (fieldSearchScore < 900) {
+            console.log(`❌ Match rejected: fieldSearchScore ${fieldSearchScore} < 900 (not similar enough to "${ingredientName}"). Will create new record.`);
+            return null;
+        }
+        
+        // Then check internal score threshold
         if (bestMatch.score >= minScoreThreshold) {
-            console.log(`✅ Match accepted: "${bestMatch.recordName}" (score ${bestMatch.score} >= threshold ${minScoreThreshold})`);
+            console.log(`✅ Match accepted: "${bestMatch.recordName}" (fieldSearchScore: ${fieldSearchScore} >= 900, internal score: ${bestMatch.score} >= ${minScoreThreshold})`);
             return bestMatch.record;
         } else {
-            console.log(`❌ Match rejected: score ${bestMatch.score} below threshold ${minScoreThreshold}. Will create new record.`);
+            console.log(`❌ Match rejected: internal score ${bestMatch.score} below threshold ${minScoreThreshold}. Will create new record.`);
+            return null;
         }
     }
 
@@ -1178,6 +1211,52 @@ console.log('- Original ingredients:', originalIngredientNames);
 console.log('- Ingredients for nutrition lookup:', ingredientNames);
 console.log('- Ingredient comments:', ingredientComments);
 console.log('- Ingredient DID references:', ingredientDRefs);
+
+// Calculate nutritional summaries before publishing
+try {
+  console.log('Calculating nutritional summary for recipe...');
+  
+  // Fetch all records from database to resolve ingredient nutritional data
+  const recordsResult = await getRecords({ 
+    recordType: 'nutritionalInfo',
+    limit: 5000  // Get all nutritional info records
+  });
+  const recordsInDB = recordsResult.records || [];
+  
+  console.log(`Found ${recordsInDB.length} nutritional info records in database for calculation`);
+  
+  // Create a temporary record structure for calculation
+  const tempRecordForCalculation = {
+    data: recipeData,
+    oip: {
+      didTx: 'temp-recipe-for-calculation',
+      recordType: 'recipe'
+    }
+  };
+  
+  // Calculate nutritional summaries using the same function as read-time calculation
+  // Use default 'summary' prefix for publish-time calculation
+  const recordWithNutrition = await addRecipeNutritionalSummary(
+    tempRecordForCalculation, 
+    recordsInDB,
+    'summary'  // Use 'summary' prefix for publish-time data
+  );
+  
+  // Extract the calculated nutritional data and add it to recipeData
+  if (recordWithNutrition.data.summaryNutritionalInfo) {
+    recipeData.summaryNutritionalInfo = recordWithNutrition.data.summaryNutritionalInfo;
+    recipeData.summaryNutritionalInfoPerServing = recordWithNutrition.data.summaryNutritionalInfoPerServing;
+    
+    console.log('✅ Nutritional summary calculated and added to recipe:');
+    console.log(`   Total: ${recipeData.summaryNutritionalInfo.calories} cal, ${recipeData.summaryNutritionalInfo.proteinG}g protein`);
+    console.log(`   Per serving: ${recipeData.summaryNutritionalInfoPerServing.calories} cal, ${recipeData.summaryNutritionalInfoPerServing.proteinG}g protein`);
+  } else {
+    console.log('⚠️ Unable to calculate nutritional summary (insufficient ingredient data)');
+  }
+} catch (nutritionError) {
+  console.error('Error calculating nutritional summary (continuing with publish):', nutritionError);
+  // Don't fail the publish if nutrition calculation fails
+}
 
 try {
   console.log('Attempting to publish recipe...');

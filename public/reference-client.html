@@ -20032,81 +20032,51 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 
                 console.log('📝 Publishing recipe:', recipeRecord);
                 
-                // Determine endpoint based on whether we have new ingredients
+                // Always use the specialized newRecipe endpoint for:
+                // 1. Auto-creating new ingredient records
+                // 2. Calculating nutritional summaries at publish-time
+                // 3. High-quality ingredient matching with score threshold
                 const hasNewIngredients = processedIngredients.some(ing => ing.isNew);
+                console.log(`🔄 Using publish/newRecipe endpoint (${hasNewIngredients ? 'has new ingredients' : 'all ingredients exist, but benefits from nutritional calculation'})`);
                 
-                if (hasNewIngredients) {
-                    // Use the specialized newRecipe endpoint to auto-create ingredients
-                    console.log('🔄 Using publish/newRecipe endpoint (has new ingredients)');
-                    const response = await fetch(`${API_BASE_URL}/api/publish/newRecipe`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}`
-                        },
-                        body: JSON.stringify(recipeRecord)
-                    });
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Failed to publish recipe: ${errorText}`);
-                    }
-                    
-                    const result = await response.json();
-                    console.log('✅ Recipe publish response:', result);
-                    
-                    // Extract DID from the result - try multiple possible locations
-                    const did = result.recordToIndex?.oip?.did || 
-                               result.recordToIndex?.oip?.didTx ||
-                               result.did || 
-                               result.didTx || 
-                               result.oip?.did || 
-                               result.oip?.didTx ||
-                               `did:arweave:${result.transactionId}`;
-                    
-                    if (!did) {
-                        console.error('Could not extract DID from result:', result);
-                        throw new Error('Recipe published but could not extract DID');
-                    }
-                    
-                    return did;
-                    
-                } else {
-                    // Use the general newRecord endpoint (all ingredients already exist)
-                    console.log('🔄 Using records/newRecord endpoint (all ingredients exist)');
-                    const response = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=recipe&storage=${storage}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}`
-                        },
-                        body: JSON.stringify(recipeRecord)
-                    });
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Failed to publish recipe: ${errorText}`);
-                    }
-                    
-                    const result = await response.json();
-                    console.log('✅ Recipe publish response:', result);
-                    
-                    // Extract DID from the result - try multiple possible locations
-                    const did = result.recordToIndex?.oip?.did || 
-                               result.recordToIndex?.oip?.didTx ||
-                               result.did || 
-                               result.didTx || 
-                               result.oip?.did || 
-                               result.oip?.didTx ||
-                               `did:arweave:${result.transactionId}`;
-                    
-                    if (!did) {
-                        console.error('Could not extract DID from result:', result);
-                        throw new Error('Recipe published but could not extract DID');
-                    }
-                    
-                    return did;
+                // Add blockchain parameter from storage selection
+                const recipePayload = {
+                    ...recipeRecord,
+                    blockchain: storage
+                };
+                
+                const response = await fetch(`${API_BASE_URL}/api/publish/newRecipe`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(recipePayload)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to publish recipe: ${errorText}`);
                 }
+                
+                const result = await response.json();
+                console.log('✅ Recipe publish response:', result);
+                
+                // Extract DID from the result - try multiple possible locations
+                const did = result.recordToIndex?.oip?.did || 
+                           result.recordToIndex?.oip?.didTx ||
+                           result.did || 
+                           result.didTx || 
+                           result.oip?.did || 
+                           result.oip?.didTx ||
+                           `did:arweave:${result.transactionId}`;
+                
+                if (!did) {
+                    console.error('Could not extract DID from result:', result);
+                    throw new Error('Recipe published but could not extract DID');
+                }
+                
+                return did;
                 
             } catch (error) {
                 console.error('Error publishing recipe:', error);
