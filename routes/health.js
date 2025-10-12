@@ -197,12 +197,12 @@ router.post('/memory/clear-cache', async (req, res) => {
         const beforeSize = global.gunSyncService.processedRecords.size;
         global.gunSyncService.clearProcessedCache();
         
-        // Force garbage collection if exposed
+        // Force garbage collection if exposed (optional, not required)
         if (global.gc) {
             console.log('🗑️ Forcing garbage collection...');
             global.gc();
         } else {
-            console.log('ℹ️ GC not exposed. Start Node with --expose-gc flag for manual GC');
+            console.log('ℹ️ GC not exposed (optional feature, not required)');
         }
         
         const memUsage = process.memoryUsage();
