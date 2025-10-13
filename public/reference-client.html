@@ -19826,6 +19826,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
          */
         async function previewGenerateRecipeBundleAIImage(forceRegenerate = false) {
             try {
+                console.log(`🔧 DEBUG: previewGenerateRecipeBundleAIImage called with forceRegenerate=${forceRegenerate}, type=${typeof forceRegenerate}`);
+                
                 const recipeName = document.getElementById('recipe-bundle-name').value.trim();
                 const recipeDescription = document.getElementById('recipe-bundle-description').value.trim();
                 
@@ -19844,18 +19846,22 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 showMessage('publish-status', `🎨 ${forceRegenerate ? 'Regenerating' : 'Generating'} AI image...`, 'info');
                 
                 // Call AI image generation endpoint
+                const requestPayload = {
+                    recipeId: `recipe_${Date.now()}`,
+                    recipeTitle: recipeName,
+                    description: recipeDescription,
+                    forceRegenerate: forceRegenerate  // Tell backend to skip cache
+                };
+                
+                console.log(`🔧 DEBUG: Sending request payload:`, requestPayload);
+                
                 const response = await fetch(`${API_BASE_URL}/api/recipes/generate-image`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${authToken}`
                     },
-                    body: JSON.stringify({
-                        recipeId: `recipe_${Date.now()}`,
-                        recipeTitle: recipeName,
-                        description: recipeDescription,
-                        forceRegenerate: forceRegenerate  // Tell backend to skip cache
-                    })
+                    body: JSON.stringify(requestPayload)
                 });
                 
                 if (!response.ok) {
