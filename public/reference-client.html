@@ -11288,7 +11288,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 <label for="bundle-exercise-name">Exercise Name:</label>
                                 <div style="display: flex; gap: 10px; align-items: flex-end;">
                                     <div style="flex: 1;">
-                                        <input type="text" id="bundle-exercise-name" placeholder="e.g., Roll Lat Foam Rolling" style="width: 100%;">
+                                        <input type="text" id="bundle-exercise-name" placeholder="e.g., Roll Lat Foam Rolling" style="width: 100%;" onblur="autofillGifCollectionName()">
                                     </div>
                                     <button type="button" class="btn-small btn-secondary" onclick="copyBundleFromLatestExercise()">
                                         📋 Copy From Latest
@@ -17219,6 +17219,23 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         }
 
         /**
+         * Auto-fill GIF Collection Name from Exercise Name
+         */
+        function autofillGifCollectionName() {
+            const exerciseName = document.getElementById('bundle-exercise-name')?.value.trim();
+            const gifCollectionNameInput = document.getElementById('bundle-gif-name');
+            
+            if (exerciseName && gifCollectionNameInput) {
+                // Only auto-fill if the GIF collection name is empty or unchanged from a previous auto-fill
+                const currentValue = gifCollectionNameInput.value.trim();
+                if (!currentValue || currentValue.endsWith(' Demonstration')) {
+                    gifCollectionNameInput.value = `${exerciseName} Demonstration`;
+                    console.log(`✨ Auto-filled GIF Collection Name: "${exerciseName} Demonstration"`);
+                }
+            }
+        }
+
+        /**
          * Copy from latest exercise
          */
         /**
@@ -17482,8 +17499,8 @@ CRITICAL:
                                 document.getElementById('bundle-exercise-est-duration').value = aiData.est_duration_minutes;
                             }
                             
-                            console.log(`[Bundle AI] ✅ Success on attempt ${attempts}`);
-                            alert(`🤖 AI successfully filled in exercise fields!${attempts > 1 ? ` (succeeded on attempt ${attempts})` : ''}`);
+                            // Success - log but don't show dialog
+                            console.log(`[Bundle AI] ✅ Success on attempt ${attempts}${attempts > 1 ? ` (succeeded on attempt ${attempts})` : ''}`);
                             return; // Success - exit function
                         } else {
                             throw new Error('No response from AI');
@@ -17812,7 +17829,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         commercialCheckbox.checked = aiData.commercial_grade;
                     }
                     
-                    alert('🤖 AI successfully filled in all equipment fields!');
+                    // Success - log but don't show dialog
+                    console.log('🤖 AI successfully filled in all equipment fields!');
                 } else {
                     throw new Error('No response from AI');
                 }
@@ -20396,8 +20414,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     });
                 }
                 
-                alert(`✅ Copied complete recipe "${basic.name}" with ${ingredients.length} ingredients and ${instructionsArray.length} steps!`);
-                console.log('✅ Copied from recipe:', basic.name);
+                // Success - log but don't show dialog
+                console.log(`✅ Copied complete recipe "${basic.name}" with ${ingredients.length} ingredients and ${instructionsArray.length} steps!`);
                 
             } catch (error) {
                 console.error('Error copying from latest recipe:', error);
@@ -20615,8 +20633,8 @@ CRITICAL:
                                 });
                             }
                             
+                            // Success - show status message but don't show dialog
                             showMessage('publish-status', '✅ AI successfully filled in recipe details!', 'success');
-                            alert('✅ AI has filled in the recipe details! Please review and adjust as needed.');
                             console.log('[Recipe AI] Successfully filled in all fields');
                             return;  // Success, exit retry loop
                             
