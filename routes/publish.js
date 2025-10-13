@@ -1138,6 +1138,7 @@ const recipeData = {
     webUrl: record.basic.webUrl,
     nsfw: record.basic.nsfw || false,
     tagItems: record.basic.tagItems || [],
+    avatar: record.basic.avatar || undefined  // Preserve the avatar DID (image reference)
   },
   recipe: {
     prep_time_mins: record.recipe.prep_time_mins,
@@ -1153,11 +1154,7 @@ const recipeData = {
     cuisine: record.basic.cuisine || record.recipe.cuisine || '',
     course: record.basic.course || record.recipe.course || '',
     author: record.recipe.author || ''
-  },
-  image: {
-    webUrl: record.image?.webUrl,
-    contentType: record.image?.contentType
-  },
+  }
 };
 
 // Debug: Check array lengths before filtering
