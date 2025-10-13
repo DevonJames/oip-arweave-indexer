@@ -2501,7 +2501,7 @@ function getAdaptiveStreamingDiagnostics(sessionId) {
  */
 async function generateRecipeImage(recipeTitle, description = '', ingredients = [], forceRegenerate = false) {
   try {
-    console.log(`Generating recipe image for: ${recipeTitle}`);
+    console.log(`Generating recipe image for: ${recipeTitle}, forceRegenerate: ${forceRegenerate}`);
     
     // Create a cache directory if it doesn't exist
     const cacheDir = path.join(__dirname, '../generated-recipe-images');
@@ -2514,13 +2514,20 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
     const cachedImagePath = path.join(cacheDir, `${safeFilename}.png`);
     
     // Check if image already exists in cache
-    if (fs.existsSync(cachedImagePath) && !forceRegenerate) {
-      console.log(`Using cached image for recipe: ${recipeTitle}`);
+    const cacheExists = fs.existsSync(cachedImagePath);
+    console.log(`Cache check - File exists: ${cacheExists}, forceRegenerate: ${forceRegenerate}, will use cache: ${cacheExists && !forceRegenerate}`);
+    
+    if (cacheExists && !forceRegenerate) {
+      console.log(`✅ Using cached image for recipe: ${recipeTitle}`);
       return {
         success: true,
         imageUrl: `/api/recipes/images/${safeFilename}.png`,
         cached: true
       };
+    }
+    
+    if (forceRegenerate && cacheExists) {
+      console.log(`🔄 Regenerating image (cache exists but forceRegenerate=true)`);
     }
 
     // Create professional food blog style prompt

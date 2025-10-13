@@ -11753,7 +11753,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                                 <div id="recipe-bundle-ai-image-preview" class="hidden" style="margin-top: 15px; padding: 15px; border: 2px dashed #ddd; border-radius: 8px; text-align: center;">
                                     <img id="recipe-bundle-ai-image-preview-img" style="max-width: 100%; max-height: 300px; border-radius: 8px;">
                                     <div id="recipe-bundle-ai-image-preview-info" style="margin-top: 10px; font-size: 13px; color: #666;"></div>
-                                    <button type="button" class="btn-small btn-secondary" onclick="previewGenerateRecipeBundleAIImage()" style="margin-top: 10px;">
+                                    <button type="button" class="btn-small btn-secondary" onclick="previewGenerateRecipeBundleAIImage(true)" style="margin-top: 10px;">
                                         🔄 Regenerate Image
                                     </button>
                                 </div>
@@ -19824,7 +19824,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
         /**
          * Preview Generate Recipe AI Image
          */
-        async function previewGenerateRecipeBundleAIImage() {
+        async function previewGenerateRecipeBundleAIImage(forceRegenerate = false) {
             try {
                 const recipeName = document.getElementById('recipe-bundle-name').value.trim();
                 const recipeDescription = document.getElementById('recipe-bundle-description').value.trim();
@@ -19837,11 +19837,11 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const btn = document.getElementById('recipe-bundle-generate-image-btn');
                 if (btn) {
                     btn.disabled = true;
-                    btn.textContent = '🎨 Generating...';
+                    btn.textContent = forceRegenerate ? '🔄 Regenerating...' : '🎨 Generating...';
                 }
                 
-                console.log('🤖 Generating AI image preview...');
-                showMessage('publish-status', '🎨 Generating AI image...', 'info');
+                console.log(`🤖 ${forceRegenerate ? 'Regenerating' : 'Generating'} AI image preview...`);
+                showMessage('publish-status', `🎨 ${forceRegenerate ? 'Regenerating' : 'Generating'} AI image...`, 'info');
                 
                 // Call AI image generation endpoint
                 const response = await fetch(`${API_BASE_URL}/api/recipes/generate-image`, {
@@ -19853,7 +19853,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     body: JSON.stringify({
                         recipeId: `recipe_${Date.now()}`,
                         recipeTitle: recipeName,
-                        description: recipeDescription
+                        description: recipeDescription,
+                        forceRegenerate: forceRegenerate  // Tell backend to skip cache
                     })
                 });
                 

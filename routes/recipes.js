@@ -19,7 +19,7 @@ router.post('/generate-image', async (req, res) => {
       });
     }
     
-    console.log(`Recipe image generation request: ${recipeTitle}`);
+    console.log(`Recipe image generation request: ${recipeTitle}, forceRegenerate: ${forceRegenerate}`);
     
     // Parse ingredients if provided as string
     let ingredientArray = ingredients;
@@ -31,7 +31,7 @@ router.post('/generate-image', async (req, res) => {
       recipeTitle,
       description,
       ingredientArray,
-      forceRegenerate || false
+      forceRegenerate === true  // Explicitly check for true
     );
     
     res.json(result);
