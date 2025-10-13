@@ -19792,10 +19792,28 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 }
                 
                 const recordResult = await recordResponse.json();
-                const did = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
                 
-                console.log(`✅ Image uploaded: ${did}`);
-                return did;
+                // Extract DID from response (handle both GUN and Arweave formats)
+                let imageDID = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                
+                // Handle recordToIndex structure (Arweave)
+                if (!imageDID && recordResult.recordToIndex) {
+                    imageDID = recordResult.recordToIndex.oip?.did || recordResult.recordToIndex.oip?.didTx;
+                }
+                
+                // Handle Arweave transactionId
+                if (!imageDID && recordResult.transactionId) {
+                    imageDID = `did:arweave:${recordResult.transactionId}`;
+                    console.log(`🔄 Converted transactionId to DID: ${imageDID}`);
+                }
+                
+                if (!imageDID) {
+                    console.error('❌ No DID in image record response:', recordResult);
+                    throw new Error('No DID returned for image record');
+                }
+                
+                console.log(`✅ Image uploaded: ${imageDID}`);
+                return imageDID;
                 
             } catch (error) {
                 console.error('Error uploading image:', error);
@@ -19978,7 +19996,25 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                     
                     const recordResult = await recordResponse.json();
-                    const imageDID = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                    
+                    // Extract DID from response (handle both GUN and Arweave formats)
+                    let imageDID = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                    
+                    // Handle recordToIndex structure (Arweave)
+                    if (!imageDID && recordResult.recordToIndex) {
+                        imageDID = recordResult.recordToIndex.oip?.did || recordResult.recordToIndex.oip?.didTx;
+                    }
+                    
+                    // Handle Arweave transactionId
+                    if (!imageDID && recordResult.transactionId) {
+                        imageDID = `did:arweave:${recordResult.transactionId}`;
+                        console.log(`🔄 Converted transactionId to DID: ${imageDID}`);
+                    }
+                    
+                    if (!imageDID) {
+                        console.error('❌ No DID in AI image record response:', recordResult);
+                        throw new Error('No DID returned for AI image record');
+                    }
                     
                     console.log(`✅ AI image record created: ${imageDID}`);
                     return imageDID;
@@ -20104,10 +20140,28 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 }
                 
                 const recordResult = await recordResponse.json();
-                const did = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
                 
-                console.log(`✅ AI image record created: ${did}`);
-                return did;
+                // Extract DID from response (handle both GUN and Arweave formats)
+                let imageDID = recordResult.did || recordResult.didTx || recordResult.oip?.did || recordResult.oip?.didTx;
+                
+                // Handle recordToIndex structure (Arweave)
+                if (!imageDID && recordResult.recordToIndex) {
+                    imageDID = recordResult.recordToIndex.oip?.did || recordResult.recordToIndex.oip?.didTx;
+                }
+                
+                // Handle Arweave transactionId
+                if (!imageDID && recordResult.transactionId) {
+                    imageDID = `did:arweave:${recordResult.transactionId}`;
+                    console.log(`🔄 Converted transactionId to DID: ${imageDID}`);
+                }
+                
+                if (!imageDID) {
+                    console.error('❌ No DID in AI image record response:', recordResult);
+                    throw new Error('No DID returned for AI image record');
+                }
+                
+                console.log(`✅ AI image record created: ${imageDID}`);
+                return imageDID;
                 
             } catch (error) {
                 console.error('Error generating AI image:', error);
