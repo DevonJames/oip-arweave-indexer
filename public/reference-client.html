@@ -19159,7 +19159,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             try {
                 selectElement.innerHTML = '<option value="">Loading...</option>';
                 
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&noDuplicates=true&limit=1000&sortBy=basic.name:asc`, {
+                // Remove noDuplicates=true to get ALL records, we'll deduplicate smartly on the client side
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&limit=1000&sortBy=basic.name:asc`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`,
@@ -19174,14 +19175,48 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const data = await response.json();
                 const allRecords = data.records || [];
                 
-                // Filter to only include records that have nutritionalInfo data
-                const records = allRecords.filter(record => {
+                // STEP 1: Filter to only include records that have nutritionalInfo data
+                const recordsWithNutrition = allRecords.filter(record => {
                     const hasNutritionalInfo = record.data?.nutritionalInfo && 
                                               Object.keys(record.data.nutritionalInfo).length > 0;
                     return hasNutritionalInfo;
                 });
                 
-                console.log(`📦 Loaded ${records.length} ingredients with nutritional info (filtered from ${allRecords.length} total records) for ${itemId}`);
+                console.log(`📦 Step 1: Filtered to ${recordsWithNutrition.length} records with nutritional info (from ${allRecords.length} total)`);
+                
+                // STEP 2: Smart deduplication - keep the best quality record for each unique name
+                const nameMap = new Map();
+                recordsWithNutrition.forEach(record => {
+                    const name = record.data?.basic?.name?.toLowerCase().trim() || '';
+                    if (!name) return;
+                    
+                    const existing = nameMap.get(name);
+                    if (!existing) {
+                        nameMap.set(name, record);
+                    } else {
+                        // Compare records - prefer higher fieldSearchScore, then newer date
+                        const existingScore = existing.fieldSearchScore || 0;
+                        const currentScore = record.fieldSearchScore || 0;
+                        const existingDate = existing.data?.basic?.date || 0;
+                        const currentDate = record.data?.basic?.date || 0;
+                        
+                        if (currentScore > existingScore || (currentScore === existingScore && currentDate > existingDate)) {
+                            nameMap.set(name, record);
+                            console.log(`🔄 Replacing duplicate "${name}": keeping better record (score: ${currentScore} vs ${existingScore}, date: ${currentDate} vs ${existingDate})`);
+                        }
+                    }
+                });
+                
+                const records = Array.from(nameMap.values());
+                
+                // Sort by name for display
+                records.sort((a, b) => {
+                    const nameA = a.data?.basic?.name?.toLowerCase() || '';
+                    const nameB = b.data?.basic?.name?.toLowerCase() || '';
+                    return nameA.localeCompare(nameB);
+                });
+                
+                console.log(`📦 Step 2: Deduplicated to ${records.length} unique ingredients`);
                 
                 // Store all records for filtering
                 item.setAttribute('data-all-ingredients', JSON.stringify(records));
@@ -19340,9 +19375,9 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             try {
                 console.log(`🔍 Looking up ingredient: ${ingredientName}`);
                 
-                // First check if it already exists
+                // First check if it already exists (remove noDuplicates, we'll filter smartly)
                 const searchResponse = await fetch(
-                    `${API_BASE_URL}/api/records?recordType=nutritionalInfo&noDuplicates=true&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}`,
+                    `${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}`,
                     {
                         method: 'GET',
                         headers: {
@@ -19358,11 +19393,28 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     const searchData = await searchResponse.json();
                     const allExistingRecords = searchData.records || [];
                     
-                    // Filter to only records with nutritional info
-                    const existingRecords = allExistingRecords.filter(record => {
+                    // Filter to only records with nutritional info, then pick the best one
+                    const recordsWithNutrition = allExistingRecords.filter(record => {
                         return record.data?.nutritionalInfo && 
                                Object.keys(record.data.nutritionalInfo).length > 0;
                     });
+                    
+                    // If multiple records exist, pick the one with the best match score or newest date
+                    let existingRecords = [];
+                    if (recordsWithNutrition.length > 0) {
+                        const best = recordsWithNutrition.reduce((prev, current) => {
+                            const prevScore = prev.fieldSearchScore || 0;
+                            const currentScore = current.fieldSearchScore || 0;
+                            const prevDate = prev.data?.basic?.date || 0;
+                            const currentDate = current.data?.basic?.date || 0;
+                            
+                            if (currentScore > prevScore || (currentScore === prevScore && currentDate > prevDate)) {
+                                return current;
+                            }
+                            return prev;
+                        });
+                        existingRecords = [best];
+                    }
                     
                     if (existingRecords.length > 0) {
                         foundExistingIngredient = true;
@@ -20127,9 +20179,9 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         continue;
                     }
                     
-                    // Check if it already exists first
+                    // Check if it already exists first (remove noDuplicates, filter smartly)
                     const searchResponse = await fetch(
-                        `${API_BASE_URL}/api/records?recordType=nutritionalInfo&noDuplicates=true&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}`,
+                        `${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}`,
                         {
                             method: 'GET',
                             headers: {
@@ -20143,14 +20195,27 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         const searchData = await searchResponse.json();
                         const allExistingRecords = searchData.records || [];
                         
-                        // Filter to only records with nutritional info
-                        const existingRecords = allExistingRecords.filter(record => {
+                        // Filter to only records with nutritional info, then pick the best one
+                        const recordsWithNutrition = allExistingRecords.filter(record => {
                             return record.data?.nutritionalInfo && 
                                    Object.keys(record.data.nutritionalInfo).length > 0;
                         });
                         
-                        if (existingRecords.length > 0) {
-                            ingredientDID = existingRecords[0].oip?.did || existingRecords[0].oip?.didTx;
+                        if (recordsWithNutrition.length > 0) {
+                            // Pick the best match (highest score or newest)
+                            const best = recordsWithNutrition.reduce((prev, current) => {
+                                const prevScore = prev.fieldSearchScore || 0;
+                                const currentScore = current.fieldSearchScore || 0;
+                                const prevDate = prev.data?.basic?.date || 0;
+                                const currentDate = current.data?.basic?.date || 0;
+                                
+                                if (currentScore > prevScore || (currentScore === prevScore && currentDate > prevDate)) {
+                                    return current;
+                                }
+                                return prev;
+                            });
+                            
+                            ingredientDID = best.oip?.did || best.oip?.didTx;
                             console.log(`✅ Found existing ingredient with nutritional info: ${ingredientName} (${ingredientDID})`);
                         }
                     }
@@ -20523,10 +20588,10 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                     const event = new Event('change');
                                     modeSelect.dispatchEvent(event);
                                     
-                                    // Look up the ingredient by name
+                                    // Look up the ingredient by name (remove noDuplicates, filter smartly)
                                     setTimeout(async () => {
                                         try {
-                                            const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}&limit=1&noDuplicates=true`, {
+                                            const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}`, {
                                                 method: 'GET',
                                                 headers: {
                                                     'Authorization': `Bearer ${authToken}`,
@@ -20538,14 +20603,29 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                 const data = await response.json();
                                                 const allRecords = data.records || [];
                                                 
-                                                // Filter to only records with nutritional info
-                                                const records = allRecords.filter(record => {
+                                                // Filter to only records with nutritional info, then pick the best one
+                                                const recordsWithNutrition = allRecords.filter(record => {
                                                     return record.data?.nutritionalInfo && 
                                                            Object.keys(record.data.nutritionalInfo).length > 0;
                                                 });
                                                 
-                                                if (records.length > 0) {
-                                                    const foundIngredient = records[0];
+                                                let foundIngredient = null;
+                                                if (recordsWithNutrition.length > 0) {
+                                                    // Pick the best match (highest score or newest)
+                                                    foundIngredient = recordsWithNutrition.reduce((prev, current) => {
+                                                        const prevScore = prev.fieldSearchScore || 0;
+                                                        const currentScore = current.fieldSearchScore || 0;
+                                                        const prevDate = prev.data?.basic?.date || 0;
+                                                        const currentDate = current.data?.basic?.date || 0;
+                                                        
+                                                        if (currentScore > prevScore || (currentScore === prevScore && currentDate > prevDate)) {
+                                                            return current;
+                                                        }
+                                                        return prev;
+                                                    });
+                                                }
+                                                
+                                                if (foundIngredient) {
                                                     const foundName = foundIngredient.data?.basic?.name || ingredientName;
                                                     const foundDID = foundIngredient.oip?.did || foundIngredient.oip?.didTx;
                                                     
