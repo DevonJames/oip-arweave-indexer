@@ -33,7 +33,8 @@ RUN pip3 install --no-cache-dir \
 
 # Pre-install av separately with extended timeout (most problematic package)
 # This creates a separate cached Docker layer
-RUN pip3 install --timeout=300 --retries=5 av==10.0.0
+# Note: Using av>=11.0.0 for Cython 3.x compatibility (av 10.x has build issues)
+RUN pip3 install --timeout=300 --retries=5 'av>=11.0.0,<13.0.0'
 
 # Install stable dependencies (cached layer if av doesn't change)
 RUN pip3 install --no-cache-dir \
