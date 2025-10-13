@@ -18992,6 +18992,32 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                     🔍 Lookup Nutritional Info
                                 </button>
                             </div>
+                            
+                            <!-- Nutritional Info Display (hidden until lookup) -->
+                            <div class="nutritional-info-display hidden" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6;">
+                                <h5 style="margin: 0 0 10px 0; color: #28a745;">📊 Nutritional Information</h5>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 13px;">
+                                    <div><strong>Standard Amount:</strong> <span class="nutri-standard-amount"></span></div>
+                                    <div><strong>Calories:</strong> <span class="nutri-calories"></span></div>
+                                    <div><strong>Protein:</strong> <span class="nutri-protein"></span>g</div>
+                                    <div><strong>Fat:</strong> <span class="nutri-fat"></span>g</div>
+                                    <div><strong>Saturated Fat:</strong> <span class="nutri-saturated-fat"></span>g</div>
+                                    <div><strong>Carbs:</strong> <span class="nutri-carbs"></span>g</div>
+                                    <div><strong>Fiber:</strong> <span class="nutri-fiber"></span>g</div>
+                                    <div><strong>Sugars:</strong> <span class="nutri-sugars"></span>g</div>
+                                    <div><strong>Sodium:</strong> <span class="nutri-sodium"></span>mg</div>
+                                    <div><strong>Cholesterol:</strong> <span class="nutri-cholesterol"></span>mg</div>
+                                    <div><strong>Potassium:</strong> <span class="nutri-potassium"></span>mg</div>
+                                    <div><strong>Calcium:</strong> <span class="nutri-calcium"></span>mg</div>
+                                    <div><strong>Iron:</strong> <span class="nutri-iron"></span>mg</div>
+                                    <div><strong>Vitamin A:</strong> <span class="nutri-vitamin-a"></span>mcg</div>
+                                    <div><strong>Vitamin C:</strong> <span class="nutri-vitamin-c"></span>mg</div>
+                                    <div><strong>Vitamin D:</strong> <span class="nutri-vitamin-d"></span>mcg</div>
+                                </div>
+                                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6;">
+                                    <small style="color: #6c757d;">✅ Data retrieved and ready to publish</small>
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Existing Ingredient Section (hidden by default) -->
@@ -19278,10 +19304,62 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                 }
                 
-                // Ingredient doesn't exist or user wants to create new anyway
+                // Ingredient doesn't exist or user wants to create new anyway - fetch nutritional data
                 if (!foundExistingIngredient) {
-                    alert(`ℹ️ Ingredient "${ingredientName}" not found in database.\n\nLooking up nutritional info...`);
-                    console.log('ℹ️ Looking up nutritional info for new ingredient');
+                    console.log('ℹ️ Looking up nutritional info for new ingredient:', ingredientName);
+                }
+                
+                // Call the lookup endpoint to get nutritional data
+                const lookupResponse = await fetch(`${API_BASE_URL}/api/publish/lookupNutritionalInfo`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ingredientName })
+                });
+                
+                if (!lookupResponse.ok) {
+                    throw new Error(`Failed to lookup nutritional info: ${lookupResponse.statusText}`);
+                }
+                
+                const lookupData = await lookupResponse.json();
+                
+                if (lookupData.success && lookupData.data) {
+                    console.log('✅ Nutritional data retrieved:', lookupData.data);
+                    
+                    // Store the nutritional data on the item for later use
+                    item.setAttribute('data-nutritional-info', JSON.stringify(lookupData.data));
+                    
+                    // Display the nutritional information in the UI
+                    const nutriDisplay = item.querySelector('.nutritional-info-display');
+                    const nutriInfo = lookupData.data.nutritionalInfo;
+                    
+                    if (nutriDisplay && nutriInfo) {
+                        nutriDisplay.classList.remove('hidden');
+                        
+                        // Populate all the nutritional values
+                        nutriDisplay.querySelector('.nutri-standard-amount').textContent = `${nutriInfo.standardAmount} ${nutriInfo.standardUnit}`;
+                        nutriDisplay.querySelector('.nutri-calories').textContent = nutriInfo.calories.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-protein').textContent = nutriInfo.proteinG.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-fat').textContent = nutriInfo.fatG.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-saturated-fat').textContent = nutriInfo.saturatedFatG.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-carbs').textContent = nutriInfo.carbohydratesG.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-fiber').textContent = nutriInfo.dietaryFiberG.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-sugars').textContent = nutriInfo.sugarsG.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-sodium').textContent = nutriInfo.sodiumMg.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-cholesterol').textContent = nutriInfo.cholesterolMg.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-potassium').textContent = nutriInfo.potassiumMg.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-calcium').textContent = nutriInfo.calciumMg.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-iron').textContent = nutriInfo.ironMg.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-vitamin-a').textContent = nutriInfo.vitaminAMcg.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-vitamin-c').textContent = nutriInfo.vitaminCMg.toFixed(2);
+                        nutriDisplay.querySelector('.nutri-vitamin-d').textContent = nutriInfo.vitaminDMcg.toFixed(2);
+                        
+                        console.log('✅ Nutritional info displayed in UI');
+                    }
+                } else {
+                    throw new Error('Failed to retrieve nutritional data');
                 }
                 
             } catch (error) {
