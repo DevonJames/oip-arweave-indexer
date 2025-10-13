@@ -19028,9 +19028,35 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                             </div>
                             <div class="form-group">
                                 <label>Select Ingredient:</label>
-                                <select class="ingredient-select" style="width: 100%;">
+                                <select class="ingredient-select" style="width: 100%;" onchange="displayExistingIngredientNutritionalInfo('${itemId}')">
                                     <option value="">Loading ingredients...</option>
                                 </select>
+                            </div>
+                            
+                            <!-- Nutritional Info Display for Existing Ingredients -->
+                            <div class="nutritional-info-display-existing hidden" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6;">
+                                <h5 style="margin: 0 0 10px 0; color: #28a745;">📊 Nutritional Information</h5>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 13px;">
+                                    <div><strong>Standard Amount:</strong> <span class="nutri-standard-amount"></span></div>
+                                    <div><strong>Calories:</strong> <span class="nutri-calories"></span></div>
+                                    <div><strong>Protein:</strong> <span class="nutri-protein"></span>g</div>
+                                    <div><strong>Fat:</strong> <span class="nutri-fat"></span>g</div>
+                                    <div><strong>Saturated Fat:</strong> <span class="nutri-saturated-fat"></span>g</div>
+                                    <div><strong>Carbs:</strong> <span class="nutri-carbs"></span>g</div>
+                                    <div><strong>Fiber:</strong> <span class="nutri-fiber"></span>g</div>
+                                    <div><strong>Sugars:</strong> <span class="nutri-sugars"></span>g</div>
+                                    <div><strong>Sodium:</strong> <span class="nutri-sodium"></span>mg</div>
+                                    <div><strong>Cholesterol:</strong> <span class="nutri-cholesterol"></span>mg</div>
+                                    <div><strong>Potassium:</strong> <span class="nutri-potassium"></span>mg</div>
+                                    <div><strong>Calcium:</strong> <span class="nutri-calcium"></span>mg</div>
+                                    <div><strong>Iron:</strong> <span class="nutri-iron"></span>mg</div>
+                                    <div><strong>Vitamin A:</strong> <span class="nutri-vitamin-a"></span>mcg</div>
+                                    <div><strong>Vitamin C:</strong> <span class="nutri-vitamin-c"></span>mg</div>
+                                    <div><strong>Vitamin D:</strong> <span class="nutri-vitamin-d"></span>mcg</div>
+                                </div>
+                                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6;">
+                                    <small style="color: #6c757d;">✅ Existing ingredient record</small>
+                                </div>
                             </div>
                         </div>
                         
@@ -19099,9 +19125,24 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             if (mode === 'new') {
                 newSection.classList.remove('hidden');
                 existingSection.classList.add('hidden');
+                
+                // Hide the existing ingredient nutritional display
+                const existingNutriDisplay = item.querySelector('.nutritional-info-display-existing');
+                if (existingNutriDisplay) {
+                    existingNutriDisplay.classList.add('hidden');
+                }
             } else {
                 newSection.classList.add('hidden');
                 existingSection.classList.remove('hidden');
+                
+                // Hide the new ingredient nutritional display
+                const newNutriDisplay = item.querySelector('.nutritional-info-display');
+                if (newNutriDisplay) {
+                    newNutriDisplay.classList.add('hidden');
+                }
+                
+                // Load ingredients if not already loaded
+                loadExistingIngredientsForItem(itemId);
             }
         }
 
@@ -19207,6 +19248,77 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 
             } catch (error) {
                 console.error('Error filtering ingredients:', error);
+            }
+        }
+
+        /**
+         * Display nutritional info for a selected existing ingredient
+         */
+        function displayExistingIngredientNutritionalInfo(itemId) {
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const selectElement = item.querySelector('.ingredient-select');
+            const selectedDID = selectElement.value;
+            
+            if (!selectedDID) {
+                // No ingredient selected, hide the display
+                const nutriDisplay = item.querySelector('.nutritional-info-display-existing');
+                if (nutriDisplay) {
+                    nutriDisplay.classList.add('hidden');
+                }
+                return;
+            }
+            
+            try {
+                // Get the stored ingredient data
+                const allIngredientsJSON = item.getAttribute('data-all-ingredients');
+                if (!allIngredientsJSON) {
+                    console.warn('No ingredient data available');
+                    return;
+                }
+                
+                const allIngredients = JSON.parse(allIngredientsJSON);
+                
+                // Find the selected ingredient by DID
+                const selectedIngredient = allIngredients.find(record => {
+                    const did = record.oip?.did || record.oip?.didTx;
+                    return did === selectedDID;
+                });
+                
+                if (!selectedIngredient || !selectedIngredient.data?.nutritionalInfo) {
+                    console.warn('Selected ingredient has no nutritional info');
+                    return;
+                }
+                
+                const nutriInfo = selectedIngredient.data.nutritionalInfo;
+                const nutriDisplay = item.querySelector('.nutritional-info-display-existing');
+                
+                if (nutriDisplay) {
+                    nutriDisplay.classList.remove('hidden');
+                    
+                    // Populate all the nutritional values
+                    nutriDisplay.querySelector('.nutri-standard-amount').textContent = `${nutriInfo.standardAmount} ${nutriInfo.standardUnit}`;
+                    nutriDisplay.querySelector('.nutri-calories').textContent = nutriInfo.calories.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-protein').textContent = nutriInfo.proteinG.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-fat').textContent = nutriInfo.fatG.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-saturated-fat').textContent = nutriInfo.saturatedFatG.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-carbs').textContent = nutriInfo.carbohydratesG.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-fiber').textContent = nutriInfo.dietaryFiberG.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-sugars').textContent = nutriInfo.sugarsG.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-sodium').textContent = nutriInfo.sodiumMg.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-cholesterol').textContent = nutriInfo.cholesterolMg.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-potassium').textContent = nutriInfo.potassiumMg.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-calcium').textContent = nutriInfo.calciumMg.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-iron').textContent = nutriInfo.ironMg.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-vitamin-a').textContent = nutriInfo.vitaminAMcg.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-vitamin-c').textContent = nutriInfo.vitaminCMg.toFixed(2);
+                    nutriDisplay.querySelector('.nutri-vitamin-d').textContent = nutriInfo.vitaminDMcg.toFixed(2);
+                    
+                    console.log('✅ Displaying nutritional info for existing ingredient:', selectedIngredient.data.basic.name);
+                }
+            } catch (error) {
+                console.error('Error displaying existing ingredient nutritional info:', error);
             }
         }
 
