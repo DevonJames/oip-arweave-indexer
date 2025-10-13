@@ -46,10 +46,11 @@ RUN pip3 install --no-cache-dir \
     numpy
 
 # Install faster-whisper and audio processing libs (depends on av)
+# Using newer faster-whisper that supports av>=11.x (no av 10.x requirement)
 RUN pip3 install --no-cache-dir \
     --timeout=300 \
     --retries=5 \
-    faster-whisper==0.9.0 \
+    faster-whisper>=1.0.0 \
     librosa
 
 # Create models directory
