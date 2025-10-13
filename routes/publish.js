@@ -672,13 +672,19 @@ router.post('/newRecipe', async (req, res) => {
             
             // Add results to recordMap (results are now sorted by similarity)
             // Preserve the fieldSearchScore from elasticsearch for quality checking
+            // ONLY include records that have nutritional information
             recordsInDB.records.forEach(record => {
                 const recordName = record.data.basic.name.toLowerCase();
-                if (!recordMap[recordName]) {  // Avoid duplicates
+                const hasNutritionalInfo = record.data?.nutritionalInfo && 
+                                          Object.keys(record.data.nutritionalInfo).length > 0;
+                
+                if (!recordMap[recordName] && hasNutritionalInfo) {  // Avoid duplicates and records without nutritional info
                     // Preserve the fieldSearchScore for quality threshold checking
                     recordMap[recordName] = record;
                     console.log(`  Added "${record.data.basic.name}" with fieldSearchScore: ${record.fieldSearchScore || 'N/A'}`);
                     totalRecordsFound++;
+                } else if (!hasNutritionalInfo) {
+                    console.log(`  Skipped "${record.data.basic.name}" (no nutritional info)`);
                 }
             });
         } catch (error) {
@@ -1221,9 +1227,15 @@ try {
     recordType: 'nutritionalInfo',
     limit: 5000  // Get all nutritional info records
   });
-  const recordsInDB = recordsResult.records || [];
+  const allRecordsInDB = recordsResult.records || [];
   
-  console.log(`Found ${recordsInDB.length} nutritional info records in database for calculation`);
+  // Filter to only include records with actual nutritional information
+  const recordsInDB = allRecordsInDB.filter(record => {
+    return record.data?.nutritionalInfo && 
+           Object.keys(record.data.nutritionalInfo).length > 0;
+  });
+  
+  console.log(`Found ${recordsInDB.length} nutritional info records with data (filtered from ${allRecordsInDB.length} total) in database for calculation`);
   
   // Create a temporary record structure for calculation
   const tempRecordForCalculation = {
