@@ -27,19 +27,28 @@ WORKDIR /app
 # Install Python dependencies with GPU support
 RUN pip3 install --upgrade pip
 
-# Install PyTorch with CUDA support
+# Install PyTorch with CUDA support (cached layer)
 RUN pip3 install --no-cache-dir \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 
-# Install Python dependencies with GPU-optimized Whisper
+# Pre-install av separately with extended timeout (most problematic package)
+# This creates a separate cached Docker layer
+RUN pip3 install --timeout=300 --retries=5 av==10.0.0
+
+# Install stable dependencies (cached layer if av doesn't change)
 RUN pip3 install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn==0.24.0 \
-    faster-whisper==0.9.0 \
     python-multipart==0.0.6 \
     httpx==0.25.2 \
     pydantic==2.5.0 \
-    numpy \
+    numpy
+
+# Install faster-whisper and audio processing libs (depends on av)
+RUN pip3 install --no-cache-dir \
+    --timeout=300 \
+    --retries=5 \
+    faster-whisper==0.9.0 \
     librosa
 
 # Create models directory
