@@ -19214,6 +19214,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                 );
                 
+                let foundExistingIngredient = false;
+                
                 if (searchResponse.ok) {
                     const searchData = await searchResponse.json();
                     const allExistingRecords = searchData.records || [];
@@ -19225,6 +19227,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     });
                     
                     if (existingRecords.length > 0) {
+                        foundExistingIngredient = true;
+                        
                         // Found existing record with nutritional info - offer options
                         const record = existingRecords[0];
                         const did = record.oip?.did || record.oip?.didTx;
@@ -19275,7 +19279,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 }
                 
                 // Ingredient doesn't exist or user wants to create new anyway
-                if (!searchResponse.ok || (searchResponse.ok && existingRecords.length === 0)) {
+                if (!foundExistingIngredient) {
                     alert(`ℹ️ Ingredient "${ingredientName}" not found in database.\n\nLooking up nutritional info...`);
                     console.log('ℹ️ Looking up nutritional info for new ingredient');
                 }
