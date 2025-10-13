@@ -19105,9 +19105,16 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 }
                 
                 const data = await response.json();
-                const records = data.records || [];
+                const allRecords = data.records || [];
                 
-                console.log(`📦 Loaded ${records.length} nutritional info records for ${itemId}`);
+                // Filter to only include records that have nutritionalInfo data
+                const records = allRecords.filter(record => {
+                    const hasNutritionalInfo = record.data?.nutritionalInfo && 
+                                              Object.keys(record.data.nutritionalInfo).length > 0;
+                    return hasNutritionalInfo;
+                });
+                
+                console.log(`📦 Loaded ${records.length} ingredients with nutritional info (filtered from ${allRecords.length} total records) for ${itemId}`);
                 
                 // Store all records for filtering
                 item.setAttribute('data-all-ingredients', JSON.stringify(records));
@@ -19147,12 +19154,14 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const allIngredients = JSON.parse(allIngredientsJSON);
                 const searchLower = searchTerm.toLowerCase().trim();
                 
-                // Filter ingredients
+                // Filter ingredients (also ensure they have nutritionalInfo)
                 const filtered = searchLower === '' 
                     ? allIngredients 
                     : allIngredients.filter(record => {
                         const name = (record.data?.basic?.name || '').toLowerCase();
-                        return name.includes(searchLower);
+                        const hasNutritionalInfo = record.data?.nutritionalInfo && 
+                                                  Object.keys(record.data.nutritionalInfo).length > 0;
+                        return name.includes(searchLower) && hasNutritionalInfo;
                     });
                 
                 // Update dropdown
@@ -19207,16 +19216,22 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 
                 if (searchResponse.ok) {
                     const searchData = await searchResponse.json();
-                    const existingRecords = searchData.records || [];
+                    const allExistingRecords = searchData.records || [];
+                    
+                    // Filter to only records with nutritional info
+                    const existingRecords = allExistingRecords.filter(record => {
+                        return record.data?.nutritionalInfo && 
+                               Object.keys(record.data.nutritionalInfo).length > 0;
+                    });
                     
                     if (existingRecords.length > 0) {
-                        // Found existing record - offer options
+                        // Found existing record with nutritional info - offer options
                         const record = existingRecords[0];
                         const did = record.oip?.did || record.oip?.didTx;
                         const name = record.data?.basic?.name;
                         
-                        const userChoice = confirm(`✅ Found existing ingredient: "${name}"\nDID: ${did}\n\nClick OK to lookup nutritional info anyway (create a new variant)\nClick Cancel to switch to "Select Existing" mode to use this record`);
-                        console.log('✅ Found existing ingredient:', did);
+                        const userChoice = confirm(`✅ Found existing ingredient with nutritional info: "${name}"\nDID: ${did}\n\nClick OK to lookup nutritional info anyway (create a new variant)\nClick Cancel to switch to "Select Existing" mode to use this record`);
+                        console.log('✅ Found existing ingredient with nutritional info:', did);
                         
                         if (!userChoice) {
                             // User wants to switch to Select Existing mode
@@ -19932,11 +19947,17 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     
                     if (searchResponse.ok) {
                         const searchData = await searchResponse.json();
-                        const existingRecords = searchData.records || [];
+                        const allExistingRecords = searchData.records || [];
+                        
+                        // Filter to only records with nutritional info
+                        const existingRecords = allExistingRecords.filter(record => {
+                            return record.data?.nutritionalInfo && 
+                                   Object.keys(record.data.nutritionalInfo).length > 0;
+                        });
                         
                         if (existingRecords.length > 0) {
                             ingredientDID = existingRecords[0].oip?.did || existingRecords[0].oip?.didTx;
-                            console.log(`✅ Found existing ingredient: ${ingredientName} (${ingredientDID})`);
+                            console.log(`✅ Found existing ingredient with nutritional info: ${ingredientName} (${ingredientDID})`);
                         }
                     }
                     
@@ -20321,7 +20342,13 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                             
                                             if (response.ok) {
                                                 const data = await response.json();
-                                                const records = data.records || [];
+                                                const allRecords = data.records || [];
+                                                
+                                                // Filter to only records with nutritional info
+                                                const records = allRecords.filter(record => {
+                                                    return record.data?.nutritionalInfo && 
+                                                           Object.keys(record.data.nutritionalInfo).length > 0;
+                                                });
                                                 
                                                 if (records.length > 0) {
                                                     const foundIngredient = records[0];
