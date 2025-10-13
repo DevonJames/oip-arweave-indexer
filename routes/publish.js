@@ -2488,6 +2488,36 @@ router.get('/newVideo/schema', async (req, res) => {
     }
 });
 
+// Lookup nutritional info without publishing (for preview)
+router.post('/lookupNutritionalInfo', authenticateToken, async (req, res) => {
+    try {
+        const { ingredientName } = req.body;
+        
+        if (!ingredientName) {
+            return res.status(400).json({ error: 'ingredientName is required' });
+        }
+        
+        console.log(`Looking up nutritional info for: ${ingredientName}`);
+        
+        // Fetch nutritional data using the helper
+        const nutritionalData = await fetchNutritionalData(ingredientName);
+        
+        // Return just the nutritional info part (not publishing yet)
+        res.status(200).json({
+            success: true,
+            ingredientName,
+            data: nutritionalData
+        });
+    } catch (error) {
+        console.error('Error looking up nutritional info:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to lookup nutritional information',
+            details: error.message 
+        });
+    }
+});
+
 // Add newNutritionalInfo endpoint for publishing nutritional info records
 router.post('/newNutritionalInfo', authenticateToken, async (req, res) => {
     try {
