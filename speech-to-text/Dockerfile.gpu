@@ -45,11 +45,15 @@ RUN pip3 install --no-cache-dir \
     pydantic==2.5.0 \
     numpy
 
+# Pre-install tokenizers (prevents broken 0.21.x source build with puccinialin error)
+RUN pip3 install --no-cache-dir 'tokenizers>=0.13,<0.20'
+
 # Install faster-whisper and audio processing libs (depends on av)
 # Pin to known stable version (1.0.3) - avoids broken dependencies in newer versions
 RUN pip3 install --no-cache-dir \
     --timeout=300 \
     --retries=5 \
+    --only-binary=:all: \
     faster-whisper==1.0.3 \
     librosa
 
