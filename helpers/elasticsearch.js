@@ -2191,7 +2191,44 @@ async function getRecords(queryParams) {
         // Filter exercises by equipment required if equipmentRequired parameter is provided
         if (equipmentRequired && recordType === 'exercise') {
             console.log('Filtering exercises by equipment required:', equipmentRequired, 'match mode:', equipmentMatchMode);
-            const equipmentArray = equipmentRequired.split(',').map(equipment => equipment.trim().toLowerCase());
+            const equipmentArray = equipmentRequired.split(',').map(equipment => equipment.trim());
+            
+            // Helper function to check if a string is a DID
+            const isDID = (str) => {
+                return str && typeof str === 'string' && (str.startsWith('did:arweave:') || str.startsWith('did:gun:'));
+            };
+            
+            // Helper function to extract equipment name from resolved equipment record
+            const getEquipmentName = (equipment) => {
+                // If it's a resolved object with data.basic.name
+                if (equipment && typeof equipment === 'object' && equipment.data && equipment.data.basic && equipment.data.basic.name) {
+                    return equipment.data.basic.name.toLowerCase();
+                }
+                // If it's a simple object with name property
+                if (equipment && typeof equipment === 'object' && equipment.name) {
+                    return equipment.name.toLowerCase();
+                }
+                // If it's a string (DID or simple name)
+                if (typeof equipment === 'string') {
+                    return equipment.toLowerCase();
+                }
+                return '';
+            };
+            
+            // Helper function to check if equipment matches
+            const equipmentMatches = (exerciseEq, requiredEq) => {
+                // For DIDs, use exact match (case-sensitive)
+                if (isDID(exerciseEq) && isDID(requiredEq)) {
+                    return exerciseEq === requiredEq;
+                }
+                
+                // For simple names, match against resolved equipment names
+                const exerciseName = getEquipmentName(exerciseEq);
+                const requiredName = requiredEq.toLowerCase();
+                
+                // Use fuzzy matching for simple names
+                return exerciseName.includes(requiredName) || requiredName.includes(exerciseName);
+            };
             
             // Filter records based on match mode (AND vs OR)
             if (equipmentMatchMode.toUpperCase() === 'OR') {
@@ -2203,20 +2240,20 @@ async function getRecords(queryParams) {
                     
                     // Handle different equipment data structures
                     if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
-                        exerciseEquipment = record.data.exercise.equipmentRequired.map(eq => eq.toLowerCase());
+                        exerciseEquipment = record.data.exercise.equipmentRequired;
                     } else if (record.data.exercise.equipment) {
                         // Handle single equipment string
                         if (typeof record.data.exercise.equipment === 'string') {
-                            exerciseEquipment = [record.data.exercise.equipment.toLowerCase()];
+                            exerciseEquipment = [record.data.exercise.equipment];
                         } else if (Array.isArray(record.data.exercise.equipment)) {
-                            exerciseEquipment = record.data.exercise.equipment.map(eq => eq.toLowerCase());
+                            exerciseEquipment = record.data.exercise.equipment;
                         }
                     }
                     
                     // Check if ANY required equipment is present
                     return equipmentArray.some(requiredEquipment => 
                         exerciseEquipment.some(exerciseEq => 
-                            exerciseEq.includes(requiredEquipment) || requiredEquipment.includes(exerciseEq)
+                            equipmentMatches(exerciseEq, requiredEquipment)
                         )
                     );
                 });
@@ -2230,20 +2267,20 @@ async function getRecords(queryParams) {
                     
                     // Handle different equipment data structures
                     if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
-                        exerciseEquipment = record.data.exercise.equipmentRequired.map(eq => eq.toLowerCase());
+                        exerciseEquipment = record.data.exercise.equipmentRequired;
                     } else if (record.data.exercise.equipment) {
                         // Handle single equipment string
                         if (typeof record.data.exercise.equipment === 'string') {
-                            exerciseEquipment = [record.data.exercise.equipment.toLowerCase()];
+                            exerciseEquipment = [record.data.exercise.equipment];
                         } else if (Array.isArray(record.data.exercise.equipment)) {
-                            exerciseEquipment = record.data.exercise.equipment.map(eq => eq.toLowerCase());
+                            exerciseEquipment = record.data.exercise.equipment;
                         }
                     }
                     
                     // Check if ALL required equipment is present
                     return equipmentArray.every(requiredEquipment => 
                         exerciseEquipment.some(exerciseEq => 
-                            exerciseEq.includes(requiredEquipment) || requiredEquipment.includes(exerciseEq)
+                            equipmentMatches(exerciseEq, requiredEquipment)
                         )
                     );
                 });
@@ -2257,18 +2294,18 @@ async function getRecords(queryParams) {
                     
                     let exerciseEquipment = [];
                     if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
-                        exerciseEquipment = record.data.exercise.equipmentRequired.map(eq => eq.toLowerCase());
+                        exerciseEquipment = record.data.exercise.equipmentRequired;
                     } else if (record.data.exercise.equipment) {
                         if (typeof record.data.exercise.equipment === 'string') {
-                            exerciseEquipment = [record.data.exercise.equipment.toLowerCase()];
+                            exerciseEquipment = [record.data.exercise.equipment];
                         } else if (Array.isArray(record.data.exercise.equipment)) {
-                            exerciseEquipment = record.data.exercise.equipment.map(eq => eq.toLowerCase());
+                            exerciseEquipment = record.data.exercise.equipment;
                         }
                     }
                     
                     return equipmentArray.filter(requiredEquipment => 
                         exerciseEquipment.some(exerciseEq => 
-                            exerciseEq.includes(requiredEquipment) || requiredEquipment.includes(exerciseEq)
+                            equipmentMatches(exerciseEq, requiredEquipment)
                         )
                     ).length;
                 };
