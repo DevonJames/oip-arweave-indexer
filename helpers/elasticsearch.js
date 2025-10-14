@@ -1590,9 +1590,9 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
             fatG: roundToDecimal(totals.fatG),
             cholesterolMg: roundToDecimal(totals.cholesterolMg),
             sodiumMg: roundToDecimal(totals.sodiumMg),
-            carbohydratesG: roundToDecimal(totals.carbohydratesG),
-            ingredientsProcessed: processedIngredients,
-            totalIngredients: totalIngredients
+            carbohydratesG: roundToDecimal(totals.carbohydratesG)
+            // Note: ingredientsProcessed and totalIngredients are NOT part of the template
+            // and are excluded to prevent indexing errors
         };
         
         // Calculate per-serving values using the correct formula
@@ -1604,9 +1604,9 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
             fatG: roundToDecimal(totals.fatG / servings),
             cholesterolMg: roundToDecimal(totals.cholesterolMg / servings),
             sodiumMg: roundToDecimal(totals.sodiumMg / servings),
-            carbohydratesG: roundToDecimal(totals.carbohydratesG / servings),
-            ingredientsProcessed: processedIngredients,
-            totalIngredients: totalIngredients
+            carbohydratesG: roundToDecimal(totals.carbohydratesG / servings)
+            // Note: ingredientsProcessed and totalIngredients are NOT part of the template
+            // and are excluded to prevent indexing errors
         };
         
         console.log(`\n📊 Per-serving nutritional values (1 of ${servings} servings):`);
@@ -1615,6 +1615,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
         console.log(`   Fat: ${nutritionalInfoPerServing.fatG}g`);
         console.log(`   Carbs: ${nutritionalInfoPerServing.carbohydratesG}g`);
         console.log(`Successfully calculated nutritional summary for recipe ${record.oip?.didTx || 'unknown'} using ${processedIngredients}/${totalIngredients} ingredients`);
+        console.log(`   (Note: ingredientsProcessed and totalIngredients excluded from published data to match template)`);
         
         // Add the summaries to the record using the specified field prefix
         const totalFieldName = `${fieldPrefix}NutritionalInfo`;
