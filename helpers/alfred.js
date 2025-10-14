@@ -1153,12 +1153,26 @@ JSON Response:`;
                     content.instructions = specificData.instructions || specificData.method || '';
                     
                     // Include nutritional information (from summarizeRecipe=true)
-                    if (record.data.summaryNutritionalInfo) {
-                        content.nutrition = record.data.summaryNutritionalInfo;
-                        console.log(`[ALFRED] Included nutritional info for recipe: ${content.title}`);
-                    }
+                    // NOTE: Only summaryNutritionalInfoPerServing is published in Arweave
+                    // Calculate total nutrition from per-serving if needed
                     if (record.data.summaryNutritionalInfoPerServing) {
                         content.nutritionPerServing = record.data.summaryNutritionalInfoPerServing;
+                        
+                        // Calculate total nutrition by multiplying per-serving by servings
+                        const servings = specificData.servings || specificData.serves || 1;
+                        content.nutrition = {
+                            calories: Math.round((content.nutritionPerServing.calories || 0) * servings),
+                            proteinG: Math.round((content.nutritionPerServing.proteinG || 0) * servings * 100) / 100,
+                            fatG: Math.round((content.nutritionPerServing.fatG || 0) * servings * 100) / 100,
+                            cholesterolMg: Math.round((content.nutritionPerServing.cholesterolMg || 0) * servings * 100) / 100,
+                            sodiumMg: Math.round((content.nutritionPerServing.sodiumMg || 0) * servings * 100) / 100,
+                            carbohydratesG: Math.round((content.nutritionPerServing.carbohydratesG || 0) * servings * 100) / 100
+                        };
+                        console.log(`[ALFRED] Included nutritional info for recipe: ${content.title}`);
+                    } else if (record.data.summaryNutritionalInfo) {
+                        // Legacy support: if old records have summaryNutritionalInfo
+                        content.nutrition = record.data.summaryNutritionalInfo;
+                        console.log(`[ALFRED] Included legacy nutritional info for recipe: ${content.title}`);
                     }
                     
                     // Include serving information

@@ -1252,12 +1252,14 @@ try {
   );
   
   // Extract the calculated nutritional data and add it to recipeData
+  // NOTE: Only summaryNutritionalInfoPerServing is added because it's the only template defined in templates.config.js
+  // The total nutritional info is calculated but not published as a separate template
   if (recordWithNutrition.data.summaryNutritionalInfo) {
-    recipeData.summaryNutritionalInfo = recordWithNutrition.data.summaryNutritionalInfo;
+    // Only add the per-serving template (which is defined in templates.config.js)
     recipeData.summaryNutritionalInfoPerServing = recordWithNutrition.data.summaryNutritionalInfoPerServing;
     
     console.log('✅ Nutritional summary calculated and added to recipe:');
-    console.log(`   Total: ${recipeData.summaryNutritionalInfo.calories} cal, ${recipeData.summaryNutritionalInfo.proteinG}g protein`);
+    console.log(`   Total: ${recordWithNutrition.data.summaryNutritionalInfo.calories} cal, ${recordWithNutrition.data.summaryNutritionalInfo.proteinG}g protein`);
     console.log(`   Per serving: ${recipeData.summaryNutritionalInfoPerServing.calories} cal, ${recipeData.summaryNutritionalInfoPerServing.proteinG}g protein`);
   } else {
     console.log('⚠️ Unable to calculate nutritional summary (insufficient ingredient data)');
