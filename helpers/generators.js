@@ -2608,6 +2608,229 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
   }
 }
 
+/**
+ * Document Narration Generator using ElevenLabs
+ */
+
+/**
+ * Strip markdown formatting and prepare text for narration
+ */
+function prepareTextForNarration(markdown) {
+    let text = markdown;
+    
+    // Remove HTML comments
+    text = text.replace(/<!--[\s\S]*?-->/g, '');
+    
+    // Detect and replace tables with "skipping over this table"
+    text = text.replace(/\|.*\|[\s\S]*?\n(?:\|[-:\s|]*\|)\n(?:\|.*\|[\s\S]*?\n)*/g, '\n\nSkipping over this table.\n\n');
+    
+    // Remove headers but keep content
+    text = text.replace(/^#{1,6}\s+(.*)$/gm, '$1');
+    
+    // Remove bold markers
+    text = text.replace(/\*\*(.*?)\*\*/g, '$1');
+    
+    // Remove italic markers
+    text = text.replace(/\*(.*?)\*/g, '$1');
+    
+    // Remove inline code backticks
+    text = text.replace(/`([^`]+)`/g, '$1');
+    
+    // Remove code blocks
+    text = text.replace(/```[\s\S]*?```/g, '\n\nSkipping code block.\n\n');
+    
+    // Remove images
+    text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, '');
+    
+    // Remove links but keep text
+    text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    
+    // Remove horizontal rules
+    text = text.replace(/^[-*_]{3,}$/gm, '');
+    
+    // Remove blockquotes marker but keep content
+    text = text.replace(/^>\s+/gm, '');
+    
+    // Remove list markers but keep content
+    text = text.replace(/^\s*[-*+]\s+/gm, '');
+    text = text.replace(/^\s*\d+\.\s+/gm, '');
+    
+    // Clean up extra whitespace
+    text = text.replace(/\n{3,}/g, '\n\n');
+    text = text.trim();
+    
+    return text;
+}
+
+/**
+ * Generate a unique filename based on document name and content hash
+ */
+function generateNarrationFilename(docName, contentHash) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const shortHash = contentHash.substring(0, 8);
+    const safeName = docName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `${safeName}_${timestamp}_${shortHash}.mp3`;
+}
+
+/**
+ * Check if narration already exists for this document
+ */
+async function findExistingNarration(docName, contentHash) {
+    const projectName = process.env.COMPOSE_PROJECT_NAME || 'oip-arweave-indexer';
+    const narrationsDir = path.join(__dirname, '../data/media/web', projectName);
+    
+    try {
+        // Ensure directory exists
+        if (!fs.existsSync(narrationsDir)) {
+            await fs.promises.mkdir(narrationsDir, { recursive: true });
+        }
+        
+        const files = await fs.promises.readdir(narrationsDir);
+        const safeName = docName.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const shortHash = contentHash.substring(0, 8);
+        
+        // Look for files matching the pattern
+        for (const file of files) {
+            if (file.startsWith(safeName) && file.includes(shortHash) && file.endsWith('.mp3')) {
+                return file;
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Error checking for existing narrations:', error);
+        return null;
+    }
+}
+
+/**
+ * Generate TTS using ElevenLabs API
+ */
+async function generateTTS(text, voiceId, apiKey) {
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+    
+    const response = await axios.post(url, {
+        text: text,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75
+        }
+    }, {
+        headers: {
+            'Accept': 'audio/mpeg',
+            'Content-Type': 'application/json',
+            'xi-api-key': apiKey
+        },
+        responseType: 'arraybuffer'
+    });
+    
+    if (response.status !== 200) {
+        throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
+    }
+    
+    return Buffer.from(response.data);
+}
+
+/**
+ * Main narration generation function
+ */
+async function generateNarration(docName, markdown) {
+    // Check for required environment variables
+    if (!process.env.ELEVENLABS_API_KEY || !process.env.ELEVENLABS_VOICE_ID) {
+        throw new Error('ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID must be set in environment');
+    }
+    
+    // Prepare text for narration
+    const text = prepareTextForNarration(markdown);
+    
+    if (!text || text.length < 10) {
+        throw new Error('Document text is too short or empty after processing');
+    }
+    
+    // Create content hash for caching
+    const contentHash = crypto.createHash('md5').update(text).digest('hex');
+    
+    // Check if narration already exists
+    const existingFile = await findExistingNarration(docName, contentHash);
+    
+    if (existingFile) {
+        console.log(`✅ Found existing narration: ${existingFile}`);
+        return {
+            success: true,
+            filename: existingFile,
+            url: `/media/${projectName}/${existingFile}`,
+            cached: true
+        };
+    }
+    
+    console.log(`🎤 Generating new narration (${text.length} characters)...`);
+    
+    // Split text into chunks if it's too long (ElevenLabs has a character limit)
+    const MAX_CHARS = 5000;
+    const chunks = [];
+    
+    if (text.length > MAX_CHARS) {
+        // Split by paragraphs
+        const paragraphs = text.split(/\n\n+/);
+        let currentChunk = '';
+        
+        for (const para of paragraphs) {
+            if (currentChunk.length + para.length > MAX_CHARS && currentChunk) {
+                chunks.push(currentChunk.trim());
+                currentChunk = para;
+            } else {
+                currentChunk += (currentChunk ? '\n\n' : '') + para;
+            }
+        }
+        
+        if (currentChunk) {
+            chunks.push(currentChunk.trim());
+        }
+    } else {
+        chunks.push(text);
+    }
+    
+    console.log(`📝 Split into ${chunks.length} chunk(s)`);
+    
+    // Generate TTS for each chunk
+    const audioBuffers = [];
+    for (let i = 0; i < chunks.length; i++) {
+        console.log(`🎙️ Generating chunk ${i + 1}/${chunks.length}...`);
+        const audioBuffer = await generateTTS(
+            chunks[i],
+            process.env.ELEVENLABS_VOICE_ID,
+            process.env.ELEVENLABS_API_KEY
+        );
+        audioBuffers.push(audioBuffer);
+    }
+    
+    // Concatenate audio buffers (simple concatenation for MP3)
+    const finalAudio = Buffer.concat(audioBuffers);
+    
+    // Save to file
+    const filename = generateNarrationFilename(docName, contentHash);
+    const projectName = process.env.COMPOSE_PROJECT_NAME || 'oip-arweave-indexer';
+    const narrationsDir = path.join(__dirname, '../data/media/web', projectName);
+    const filepath = path.join(narrationsDir, filename);
+    
+    // Ensure directory exists
+    await fs.promises.mkdir(narrationsDir, { recursive: true });
+    
+    await fs.promises.writeFile(filepath, finalAudio);
+    
+    console.log(`✅ Saved narration: ${filename} (${finalAudio.length} bytes)`);
+    
+    return {
+        success: true,
+        filename: filename,
+        url: `/media/${projectName}/${filename}`,
+        cached: false,
+        chunks: chunks.length,
+        size: finalAudio.length
+    };
+}
+
 module.exports = {
     getVoiceModels,
     replaceAcronyms,
@@ -2638,6 +2861,11 @@ module.exports = {
     finishAdaptiveTextToSpeech,
     getAdaptiveStreamingDiagnostics,
     // Recipe image generation
-    generateRecipeImage
+    generateRecipeImage,
+    // Document narration functions
+    generateNarration,
+    findExistingNarration,
+    prepareTextForNarration,
+    generateTTS
 }
 

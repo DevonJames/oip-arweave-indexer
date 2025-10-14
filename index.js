@@ -37,6 +37,7 @@ const mediaRoutes = require('./routes/media');
 const cleanupRoutes = require('./routes/cleanup');
 const photoRoutes = require('./routes/photo');
 const recipesRoutes = require('./routes/recipes');
+const narrationRoutes = require('./routes/narration');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 
 dotenv.config();
@@ -220,6 +221,8 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/recipes', recipesRoutes);
 // Template cleanup routes
 app.use('/api/cleanup', cleanupRoutes);
+// Document narration routes
+app.use('/api', narrationRoutes);
 
 // Make io available to routes
 app.set('io', io);
