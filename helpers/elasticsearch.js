@@ -2232,7 +2232,7 @@ async function getRecords(queryParams) {
             
             // Filter records based on match mode (AND vs OR)
             if (equipmentMatchMode.toUpperCase() === 'OR') {
-                // OR behavior: exercise must have at least ONE of the specified equipment
+                // OR behavior: exercise must have at least ONE of the specified equipment OR no equipment required
                 records = records.filter(record => {
                     if (!record.data.exercise) return false;
                     
@@ -2248,6 +2248,11 @@ async function getRecords(queryParams) {
                         } else if (Array.isArray(record.data.exercise.equipment)) {
                             exerciseEquipment = record.data.exercise.equipment;
                         }
+                    }
+                    
+                    // If no equipment is required (empty array or missing), include the exercise
+                    if (exerciseEquipment.length === 0) {
+                        return true;
                     }
                     
                     // Check if ANY required equipment is present
@@ -2301,6 +2306,11 @@ async function getRecords(queryParams) {
                         } else if (Array.isArray(record.data.exercise.equipment)) {
                             exerciseEquipment = record.data.exercise.equipment;
                         }
+                    }
+                    
+                    // For exercises with no equipment required, give them a perfect score in OR mode
+                    if (exerciseEquipment.length === 0 && equipmentMatchMode.toUpperCase() === 'OR') {
+                        return equipmentArray.length; // Perfect match - can be done with any equipment
                     }
                     
                     return equipmentArray.filter(requiredEquipment => 
