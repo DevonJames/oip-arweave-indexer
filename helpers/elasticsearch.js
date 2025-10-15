@@ -1678,6 +1678,7 @@ async function getRecords(queryParams) {
         includePubKeys = true,
         exactMatch,
         exerciseNames, // New parameter for workout exercise filtering
+        exerciseDIDs, // New parameter for workout exercise filtering by DID
         ingredientNames, // New parameter for recipe ingredient filtering
         equipmentRequired, // New parameter for exercise equipment filtering
         equipmentMatchMode = 'AND', // New parameter for equipment match behavior (AND/OR)
@@ -3186,6 +3187,93 @@ async function getRecords(queryParams) {
             });
             
             console.log('After filtering by exercise names, there are', resolvedRecords.length, 'workout records');
+        }
+
+        // Filter workouts by exercise DIDs if exerciseDIDs parameter is provided
+        if (exerciseDIDs && recordType === 'workout') {
+            console.log('Filtering workouts by exercise DIDs:', exerciseDIDs);
+            const requestedExerciseDIDs = exerciseDIDs.split(',').map(did => did.trim());
+            
+            // Helper function to calculate order similarity score for DIDs
+            const calculateDIDOrderSimilarity = (workoutExercises, requestedExerciseDIDs) => {
+                // Extract exercise DIDs from various data structures
+                const workoutExerciseDIDs = workoutExercises.map(ex => {
+                    if (typeof ex === 'string' && (ex.startsWith('did:arweave:') || ex.startsWith('did:gun:'))) {
+                        return ex; // Direct DID string
+                    } else if (ex && typeof ex === 'object' && ex.oip && ex.oip.didTx) {
+                        return ex.oip.didTx; // Resolved record with DID
+                    } else if (ex && typeof ex === 'object' && ex.did) {
+                        return ex.did; // Object with DID property
+                    } else {
+                        console.warn('Unexpected exercise data structure for DID matching:', ex);
+                        return '';
+                    }
+                }).filter(did => did); // Remove empty strings
+                
+                let score = 0;
+                let matchedCount = 0;
+                
+                // Check how many requested exercise DIDs are present
+                for (const requestedDID of requestedExerciseDIDs) {
+                    if (workoutExerciseDIDs.includes(requestedDID)) {
+                        matchedCount++;
+                    }
+                }
+                
+                // Base score is the ratio of matched exercises
+                const matchRatio = matchedCount / requestedExerciseDIDs.length;
+                
+                // Bonus points for maintaining order
+                let orderBonus = 0;
+                let lastFoundIndex = -1;
+                
+                for (const requestedDID of requestedExerciseDIDs) {
+                    const foundIndex = workoutExerciseDIDs.indexOf(requestedDID);
+                    if (foundIndex > lastFoundIndex) {
+                        orderBonus += 0.1; // Small bonus for maintaining order
+                        lastFoundIndex = foundIndex;
+                    }
+                }
+                
+                score = matchRatio + (orderBonus / requestedExerciseDIDs.length);
+                return { score, matchedCount };
+            };
+            
+            // Filter and score workout records
+            resolvedRecords = resolvedRecords.filter(record => {
+                if (record.oip.recordType !== 'workout' || !record.data.workout || !record.data.workout.exercise) {
+                    return false;
+                }
+                
+                const workoutExercises = record.data.workout.exercise;
+                
+                // Ensure workoutExercises is an array
+                if (!Array.isArray(workoutExercises) || workoutExercises.length === 0) {
+                    return false;
+                }
+                
+                const { score, matchedCount } = calculateDIDOrderSimilarity(workoutExercises, requestedExerciseDIDs);
+                
+                // Only include workouts that have at least one matching exercise
+                if (matchedCount > 0) {
+                    record.exerciseScore = score;
+                    record.exerciseMatchedCount = matchedCount;
+                    return true;
+                }
+                
+                return false;
+            });
+            
+            // Sort by exercise score (best matches first)
+            resolvedRecords.sort((a, b) => {
+                // Sort by exercise score descending, then by matched count descending
+                if (b.exerciseScore !== a.exerciseScore) {
+                    return b.exerciseScore - a.exerciseScore;
+                }
+                return b.exerciseMatchedCount - a.exerciseMatchedCount;
+            });
+            
+            console.log('After filtering by exercise DIDs, there are', resolvedRecords.length, 'workout records');
         }
 
         // Filter recipes by ingredient names if ingredientNames parameter is provided
