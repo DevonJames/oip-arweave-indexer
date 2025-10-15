@@ -23,7 +23,7 @@ module.exports = {
         multiResolutionGif: "5lqxoSI7DLsl9Q5nqCIsH53r2TUz_Eg6Z56nXc5pk4I",
         organization: "NQi19GjOw-Iv8PzjZ5P-XcFkAYu50cl5V_qceT2xlGM",
         fitnessEquipment: "VEz6iYZ8XpsOHQCOriv7gxyvY0OqyBXrNANCVHEgIsk",
-        userFitnessProfile: "cnPBMdYxd0eHbF4hEhJCHbqWktvkg-ajHQKb1gKfg5A",
+        userFitnessProfile: "wZs4nUUuGnpUyRYM72QYailPb3zfqb4tPsxEE2XWNDk",
         workoutSchedule: "ACgUZxpsxhvy1TaXoOBMBgduje3-d8__gs9nPFSGXWM",
         mealPlan: "-roCasok1eDw_sjBec9KrGtzuCN5WqpKE15GNfYqsJ8",
         exerciseResult: "eZFqXh4O5zVqCEs2oNvhi5K3fi8VrTJ9kROVjYmEuxc",
