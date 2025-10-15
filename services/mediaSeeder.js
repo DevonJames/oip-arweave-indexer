@@ -34,8 +34,14 @@ class MediaSeeder {
 
   async initialize() {
     try {
+      console.log('🔄 Initializing MediaSeeder...');
+      
       // Load WebTorrent when needed
       const WebTorrent = await this.loadWebTorrent();
+      
+      if (!WebTorrent) {
+        throw new Error('WebTorrent module could not be loaded');
+      }
       
       // Initialize WebTorrent client
       this.client = new WebTorrent({
@@ -43,6 +49,12 @@ class MediaSeeder {
           announce: this.trackers
         }
       });
+
+      if (!this.client) {
+        throw new Error('WebTorrent client creation failed');
+      }
+
+      console.log('✅ WebTorrent client created successfully');
 
       // Ensure media directory exists
       if (!fs.existsSync(this.mediaDir)) {
@@ -61,7 +73,9 @@ class MediaSeeder {
 
       return true;
     } catch (error) {
-      console.warn('⚠️ MediaSeeder initialization failed, media features will be disabled:', error.message);
+      console.error('❌ MediaSeeder initialization failed:', error.message);
+      console.error('📝 Full error:', error);
+      this.client = null; // Ensure client is null on failure
       return false;
     }
   }
@@ -167,6 +181,15 @@ class MediaSeeder {
         const existing = this.seedingState.get(mediaId);
         console.log(`📦 Already seeding ${mediaId}: ${existing.magnetURI}`);
         return existing;
+      }
+
+      // Ensure client is initialized
+      if (!this.client) {
+        console.log('⚠️ MediaSeeder client not initialized, attempting to initialize now...');
+        const initialized = await this.initialize();
+        if (!initialized || !this.client) {
+          throw new Error('MediaSeeder client is not initialized and initialization failed. WebTorrent may not be available.');
+        }
       }
 
       // Create torrent and start seeding
