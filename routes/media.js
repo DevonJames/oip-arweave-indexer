@@ -102,11 +102,23 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
     const stats = fs.statSync(finalFilePath);
     const mimeType = req.file.mimetype || 'application/octet-stream';
 
-    // Start seeding with MediaSeeder
-    const mediaSeeder = getMediaSeeder();
-    const seedInfo = await mediaSeeder.seedFile(finalFilePath, mediaId);
-
-    console.log('🌱 Seeding started:', seedInfo.magnetURI);
+    // Start seeding with MediaSeeder (with graceful fallback)
+    let seedInfo = null;
+    let magnetURI = '';
+    let infoHash = '';
+    
+    try {
+      const mediaSeeder = getMediaSeeder();
+      seedInfo = await mediaSeeder.seedFile(finalFilePath, mediaId);
+      magnetURI = seedInfo.magnetURI;
+      infoHash = seedInfo.infoHash;
+      console.log('🌱 Seeding started:', seedInfo.magnetURI);
+    } catch (seedError) {
+      console.warn('⚠️ Failed to seed file with MediaSeeder:', seedError.message);
+      console.warn('⚠️ File uploaded successfully but BitTorrent seeding is unavailable');
+      console.warn('⚠️ The file can still be accessed via HTTP, but P2P distribution will not work');
+      // Continue without BitTorrent - file is still accessible via HTTP
+    }
 
     // Prepare access control
     const accessLevel = req.body.access_level || 'private';
@@ -122,8 +134,8 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
       originalName: originalName,
       mimeType: mimeType,
       fileSize: fileSize,
-      magnetURI: seedInfo.magnetURI,
-      infoHash: seedInfo.infoHash,
+      magnetURI: magnetURI,
+      infoHash: infoHash,
       httpUrl: getMediaFileUrl(mediaId, req),
       createdAt: new Date().toISOString(),
       userPublicKey: userPublicKey,
@@ -140,15 +152,18 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
     res.json({
       success: true,
       mediaId,
-      magnetURI: seedInfo.magnetURI,
-      infoHash: seedInfo.infoHash,
+      magnetURI: magnetURI,
+      infoHash: infoHash,
       httpUrl: getMediaFileUrl(mediaId, req),
       size: fileSize,
       mime: mimeType,
       originalName: originalName,
       access_level: accessLevel,
       owner: userPublicKey,
-      message: 'File uploaded and BitTorrent created. Use /api/records/newRecord to create proper OIP record.'
+      message: seedInfo ? 
+        'File uploaded and BitTorrent created. Use /api/records/newRecord to create proper OIP record.' :
+        'File uploaded successfully (BitTorrent unavailable - HTTP streaming only). Use /api/records/newRecord to create proper OIP record.',
+      torrentAvailable: !!seedInfo
     });
 
   } catch (error) {
