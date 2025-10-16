@@ -15531,7 +15531,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 
                 // Get the API base URL from environment variable or use current host as fallback
                 const apiBaseUrl = window.API_BASE_URL || window.location.origin;
-                const equipmentUrl = `${apiBaseUrl}/api/records?resolveDepth=0&recordType=fitnessEquipment&noDuplicates=true`;
+                const equipmentUrl = `${apiBaseUrl}/api/records?resolveDepth=0&recordType=fitnessEquipment&noDuplicates=true&limit=100`;
                 
                 console.log(`🔗 Using API base URL: ${apiBaseUrl}`);
                 
@@ -16278,9 +16278,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         async function loadExistingGifsForBundle() {
             try {
                 console.log('📋 [Bundle] Loading existing GIFs from API...');
-                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=multiResolutionGif&noDuplicates=true`);
+                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=multiResolutionGif&noDuplicates=true&limit=100`);
                 
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=multiResolutionGif&noDuplicates=true`, {
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=multiResolutionGif&noDuplicates=true&limit=100`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`
@@ -16320,9 +16320,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         async function loadExistingIconsForBundle() {
             try {
                 console.log('📋 [Bundle] Loading existing icons from API...');
-                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=image&noDuplicates=true&search=icon`);
+                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=image&noDuplicates=true&search=icon&limit=100`);
                 
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=image&noDuplicates=true&search=icon`, {
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=image&noDuplicates=true&search=icon&limit=100`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`
@@ -16931,9 +16931,9 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         async function loadExistingEquipmentForBundle() {
             try {
                 console.log('📋 [Bundle] Loading existing equipment from API...');
-                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=fitnessEquipment&noDuplicates=true`);
+                console.log('[Bundle] API URL:', `${API_BASE_URL}/api/records?recordType=fitnessEquipment&noDuplicates=true&limit=100`);
                 
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=fitnessEquipment&noDuplicates=true`, {
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=fitnessEquipment&noDuplicates=true&limit=100`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`
