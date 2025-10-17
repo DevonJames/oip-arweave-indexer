@@ -38,7 +38,73 @@ class ALFRED {
         // RAG Service properties
         this.maxContextLength = 8000; // Increased for full text content
         this.maxResults = 5; // Max search results to include
+        
+        // MEMORY LEAK FIX: LRU cache with size limits instead of unbounded Map
         this.fullTextCache = new Map(); // Cache for fetched full text content
+        this.maxCacheSize = parseInt(process.env.ALFRED_CACHE_MAX_SIZE) || 1000; // Max 1000 entries
+        this.cacheAccessOrder = []; // Track access order for LRU eviction
+        this.lastCacheClear = Date.now();
+        this.cacheMaxAge = parseInt(process.env.ALFRED_CACHE_MAX_AGE) || 1800000; // 30 minutes default
+    }
+
+    /**
+     * MEMORY LEAK FIX: Add item to cache with LRU eviction
+     * @param {string} key - Cache key
+     * @param {any} value - Cache value
+     */
+    setCacheItem(key, value) {
+        // Remove if already exists (to update access order)
+        if (this.fullTextCache.has(key)) {
+            const index = this.cacheAccessOrder.indexOf(key);
+            if (index > -1) {
+                this.cacheAccessOrder.splice(index, 1);
+            }
+        }
+
+        // Add to cache and track access
+        this.fullTextCache.set(key, value);
+        this.cacheAccessOrder.push(key);
+
+        // Evict oldest if cache exceeds max size
+        while (this.fullTextCache.size > this.maxCacheSize) {
+            const oldestKey = this.cacheAccessOrder.shift();
+            this.fullTextCache.delete(oldestKey);
+            console.log(`[ALFRED Cache] Evicted oldest entry: ${oldestKey.substring(0, 50)}...`);
+        }
+    }
+
+    /**
+     * MEMORY LEAK FIX: Get item from cache and update LRU
+     * @param {string} key - Cache key
+     * @returns {any} Cached value or undefined
+     */
+    getCacheItem(key) {
+        if (!this.fullTextCache.has(key)) {
+            return undefined;
+        }
+
+        // Update access order (move to end)
+        const index = this.cacheAccessOrder.indexOf(key);
+        if (index > -1) {
+            this.cacheAccessOrder.splice(index, 1);
+            this.cacheAccessOrder.push(key);
+        }
+
+        return this.fullTextCache.get(key);
+    }
+
+    /**
+     * MEMORY LEAK FIX: Clear cache if it's too old
+     */
+    clearCacheIfNeeded() {
+        const timeSinceLastClear = Date.now() - this.lastCacheClear;
+        if (timeSinceLastClear >= this.cacheMaxAge) {
+            const cacheSize = this.fullTextCache.size;
+            this.fullTextCache.clear();
+            this.cacheAccessOrder = [];
+            this.lastCacheClear = Date.now();
+            console.log(`[ALFRED Cache] Auto-cleared cache (${cacheSize} entries) after ${Math.round(timeSinceLastClear / 60000)} minutes`);
+        }
     }
 
     /**
@@ -2552,10 +2618,14 @@ Please provide a helpful, conversational answer starting with "I didn't find any
     async fetchFullTextContent(url, recordTitle = 'Unknown') {
         if (!url) return null;
         
-        // Check cache first
-        if (this.fullTextCache.has(url)) {
+        // MEMORY LEAK FIX: Check for cache expiration
+        this.clearCacheIfNeeded();
+        
+        // Check cache first using LRU-aware getter
+        const cached = this.getCacheItem(url);
+        if (cached !== undefined) {
             console.log(`[RAG] Using cached full text for: ${recordTitle}`);
-            return this.fullTextCache.get(url);
+            return cached;
         }
         
         try {
@@ -2568,13 +2638,8 @@ Please provide a helpful, conversational answer starting with "I didn't find any
             if (response.status === 200 && response.data) {
                 const content = typeof response.data === 'string' ? response.data : String(response.data);
                 
-                // Cache the content (limit cache size to prevent memory issues)
-                if (this.fullTextCache.size > 50) {
-                    // Clear oldest entries
-                    const firstKey = this.fullTextCache.keys().next().value;
-                    this.fullTextCache.delete(firstKey);
-                }
-                this.fullTextCache.set(url, content);
+                // MEMORY LEAK FIX: Use LRU cache setter with automatic eviction
+                this.setCacheItem(url, content);
                 
                 console.log(`[RAG] Successfully fetched ${content.length} characters of full text for: ${recordTitle}`);
                 return content;
