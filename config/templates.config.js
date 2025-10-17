@@ -33,6 +33,7 @@ module.exports = {
         userFitnessAchievment: "-sC601MieajKTLtJfe0ZyT8zxC9SiDrOa8HTP9aOiU0",
         accessControl: "aaZpleo8blkm72kL96UYjTyBPp4F4Wux-Yo3Lu6luvQ",
         music: "rBv4wFs5LUJuMlTkIwXBuZRe3bwZ0KpIoEo3JDsK7ys",
-        summaryNutritionalInfoPerServing: "y6Bx-UUGxti0x_o9bni74nA5ykFY2qYyzrzTAoF05rA"
+        summaryNutritionalInfoPerServing: "y6Bx-UUGxti0x_o9bni74nA5ykFY2qYyzrzTAoF05rA",
+        exerciseMETvalues: "VNMiuJdCoVvQ_5BkCXIySzksCQLqTOs1MogSmmgcNhc"
     },
 };
