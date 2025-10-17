@@ -378,13 +378,11 @@ const authenticateToken = (req, res, next) => {
  * Adds user info to req.user if token is valid, otherwise req.user remains undefined
  */
 const optionalAuthenticateToken = (req, res, next) => {
-    console.log('Optional authentication check...', req.headers.authorization ? 'Token provided' : 'No token');
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
         // No token provided - continue as unauthenticated user
-        console.log('No token provided - proceeding as unauthenticated user');
         req.isAuthenticated = false;
         req.user = null;
         return next();
@@ -412,7 +410,6 @@ const optionalAuthenticateToken = (req, res, next) => {
         
         req.user = verified;
         req.isAuthenticated = true;
-        console.log('Token verified - proceeding as authenticated user:', verified.email);
         
         // For GUN record requests, verify user owns the record (only for specific soul requests)
         if (req.params.soul || req.query.soul) {

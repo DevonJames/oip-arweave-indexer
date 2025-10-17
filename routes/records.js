@@ -71,16 +71,6 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
         }
         
         const records = await getRecords(queryParams);
-        console.log('records.js enhanced with GUN support, records:', {
-            ...records,
-            records: `${records.records?.length || 0} records` // Don't log full records, just count
-        });
-        
-        // Debug: Log if we found records but they're being filtered out
-        if (records.searchResults > 0 && (!records.records || records.records.length === 0)) {
-            console.log('🚨 DEBUG: Found', records.searchResults, 'records but final records array is empty!');
-            console.log('🚨 DEBUG: This suggests pagination or filtering issue');
-        }
         
         // NEW: Add authentication status to response for client awareness
         const response = {
@@ -105,7 +95,6 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
 router.get('/recordTypes', async (req, res) => {
     try {
         const recordTypesSummary = await getRecordTypesSummary();
-        console.log('records.js recordTypes endpoint, summary:', recordTypesSummary);
         res.status(200).json(recordTypesSummary);
     } catch (error) {
         console.error('Error at /api/records/recordTypes:', error);
@@ -114,9 +103,7 @@ router.get('/recordTypes', async (req, res) => {
 });
 
 router.post('/newRecord', authenticateToken, async (req, res) => {
-// router.post('/newRecord', authenticateToken, async (req, res) => {
     try {
-        console.log('POST /api/records/newRecord', req.body)
         const record = req.body;
         const blockchain = req.body.blockchain || req.query.blockchain || 'arweave'; // Accept blockchain from body or query
         const storage = req.body.storage || req.query.storage || blockchain; // Support storage parameter
