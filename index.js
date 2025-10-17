@@ -367,6 +367,40 @@ initializeIndices()
         }
       }
 
+      // MEMORY LEAK FIX: Start memory monitor for long-running processes
+      const memoryMonitorInterval = parseInt(process.env.MEMORY_MONITOR_INTERVAL) || 300000; // 5 minutes default
+      const memoryWarningThreshold = parseInt(process.env.MEMORY_WARNING_THRESHOLD) || 80; // 80% threshold
+      
+      setInterval(() => {
+        const memUsage = process.memoryUsage();
+        const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+        const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+        const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+        const heapUtilization = ((memUsage.heapUsed / memUsage.heapTotal) * 100).toFixed(2);
+        
+        console.log(`[Memory Monitor] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${heapUtilization}%), RSS: ${rssMB}MB`);
+        
+        // Warning if heap utilization is high
+        if (parseFloat(heapUtilization) > memoryWarningThreshold) {
+          console.warn(`⚠️  [Memory Monitor] HIGH MEMORY USAGE: ${heapUtilization}% heap utilization`);
+          
+          // Force garbage collection if available and heap is critically high
+          if (global.gc && parseFloat(heapUtilization) > 90) {
+            console.log('[Memory Monitor] Forcing garbage collection...');
+            global.gc();
+            
+            // Log memory after GC
+            const afterGC = process.memoryUsage();
+            const afterHeapUsedMB = Math.round(afterGC.heapUsed / 1024 / 1024);
+            const afterHeapTotalMB = Math.round(afterGC.heapTotal / 1024 / 1024);
+            const freedMB = heapUsedMB - afterHeapUsedMB;
+            console.log(`[Memory Monitor] After GC: ${afterHeapUsedMB}MB / ${afterHeapTotalMB}MB (freed ${freedMB}MB)`);
+          }
+        }
+      }, memoryMonitorInterval);
+      
+      console.log(`✅ Memory monitor started (interval: ${memoryMonitorInterval/1000}s, warning threshold: ${memoryWarningThreshold}%)`);
+
       // Initialize remapTemplates
       let remapTemplates = [];
       if (args.remapTemplates) {

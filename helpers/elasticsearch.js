@@ -4227,10 +4227,13 @@ async function keepDBUpToDate(remapTemplates) {
         await ensureIndexExists();
         let { qtyCreatorsInDB, maxArweaveCreatorRegBlockInDB, creatorsInDB } = await getCreatorsInDB();
         let { qtyOrganizationsInDB, maxArweaveOrgBlockInDB, organizationsInDB } = await getOrganizationsInDB();
+        
+        // MEMORY LEAK FIX: Only store counts and block heights, not full record data
         foundInDB = {
             qtyRecordsInDB: qtyCreatorsInDB,
             maxArweaveBlockInDB: maxArweaveCreatorRegBlockInDB
         };
+        
         if (qtyCreatorsInDB === 0) {
             const hardCodedTxId = 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y';
             const block = 1463761
@@ -4298,19 +4301,32 @@ async function keepDBUpToDate(remapTemplates) {
             templates: qtyTemplatesInDB,
             records: qtyRecordsInDB
         };
+        
+        // MEMORY LEAK FIX: Don't store full record data - only store what's needed
+        // This prevents accumulation of large objects in memory
         foundInDB.recordsInDB = {
-            creators: creatorsInDB,
-            organizations: organizationsInDB,  // Include organizations
-            templates: templatesInDB,
-            records: records
+            creators: creatorsInDB ? creatorsInDB.length : 0,
+            organizations: organizationsInDB ? organizationsInDB.length : 0,
+            templates: templatesInDB ? templatesInDB.length : 0,
+            records: records ? records.length : 0
         };
+        
+        // MEMORY LEAK FIX: Explicitly null out large arrays to help GC
+        creatorsInDB = null;
+        organizationsInDB = null;
+        templatesInDB = null;
+        records = null;
+        
         // console.log(getFileInfo(), getLineNumber(), 'Found in DB:', foundInDB);
 
         const newTransactions = await searchArweaveForNewTransactions(foundInDB);
         if (newTransactions && newTransactions.length > 0) {
+            console.log(`[keepDBUpToDate] Processing ${newTransactions.length} new transactions`);
             for (const tx of newTransactions) {
                 await processTransaction(tx, remapTemplates);
             }
+            // MEMORY LEAK FIX: Clear transaction array after processing
+            newTransactions.length = 0;
         }
         else {
             // console.log('No new transactions found, waiting...', getFileInfo(), getLineNumber());
@@ -4325,6 +4341,11 @@ async function keepDBUpToDate(remapTemplates) {
         // return [];
     } finally {
         setIsProcessing(false);
+        
+        // MEMORY LEAK FIX: Trigger GC if available (requires --expose-gc flag)
+        if (global.gc) {
+            global.gc();
+        }
     }
 }
 
@@ -4338,13 +4359,14 @@ async function searchArweaveForNewTransactions(foundInDB) {
 
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
-
+    // MEMORY LEAK FIX: Limit maximum transactions to prevent unbounded growth
+    const MAX_TRANSACTIONS_PER_CYCLE = parseInt(process.env.MAX_TRANSACTIONS_PER_CYCLE) || 1000;
     let allTransactions = [];
     let hasNextPage = true;
     let afterCursor = null;  // Cursor for pagination
     const endpoint = 'https://arweave.net/graphql';
 
-    while (hasNextPage) {
+    while (hasNextPage && allTransactions.length < MAX_TRANSACTIONS_PER_CYCLE) {
         const query = gql`
             query {
                 transactions(
@@ -4406,6 +4428,12 @@ async function searchArweaveForNewTransactions(foundInDB) {
         afterCursor = response.transactions.edges.length > 0
             ? response.transactions.edges[response.transactions.edges.length - 1].cursor
             : null;
+
+        // MEMORY LEAK FIX: Check if we've reached the limit
+        if (allTransactions.length >= MAX_TRANSACTIONS_PER_CYCLE) {
+            console.log(`[searchArweaveForNewTransactions] Reached transaction limit (${MAX_TRANSACTIONS_PER_CYCLE}), will fetch more in next cycle`);
+            hasNextPage = false;
+        }
 
         // console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
     }

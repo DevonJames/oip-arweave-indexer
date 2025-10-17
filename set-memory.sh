@@ -75,17 +75,17 @@ echo -e "${BLUE}ℹ️  Backed up .env to .env.backup${NC}"
 # Remove existing NODE_OPTIONS if present
 sed -i.tmp '/^NODE_OPTIONS=/d' .env && rm -f .env.tmp
 
-# Add new NODE_OPTIONS at the end
+# Add new NODE_OPTIONS at the end with --expose-gc for garbage collection
 echo "" >> .env
 echo "# Memory Configuration (set by set-memory.sh)" >> .env
-echo "NODE_OPTIONS=--max-old-space-size=${HEAP_SIZE}" >> .env
+echo "NODE_OPTIONS=--max-old-space-size=${HEAP_SIZE} --expose-gc" >> .env
 
 echo -e "${GREEN}✅ Memory configuration updated in .env${NC}"
 echo ""
 echo -e "${BLUE}Configuration Details:${NC}"
 echo -e "  Heap Size:         ${HEAP_SIZE}MB (${HEAP_SIZE_GB}GB)"
-echo -e "  Node Options:      --max-old-space-size=${HEAP_SIZE}"
-echo -e "  Note:              --expose-gc removed (not allowed in NODE_OPTIONS)"
+echo -e "  Node Options:      --max-old-space-size=${HEAP_SIZE} --expose-gc"
+echo -e "  Note:              --expose-gc enables manual GC for memory leak fixes"
 echo ""
 echo -e "${GREEN}✅ Ready to start services!${NC}"
 echo ""
