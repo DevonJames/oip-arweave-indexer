@@ -1719,7 +1719,7 @@ async function getRecords(queryParams) {
                 if (source === 'irys') return did.startsWith('did:irys:');
                 return true;
             });
-            console.log(`after filtering by source=${source}, there are`, records.length, 'records');
+            // console.log(`after filtering by source=${source}, there are`, records.length, 'records');
         }
         if (storage && storage !== 'all') {
             records = records.filter(record => {
@@ -1731,7 +1731,7 @@ async function getRecords(queryParams) {
                 if (storage === 'irys') return did.startsWith('did:irys:');
                 return true;
             });
-            console.log(`after filtering by storage=${storage}, there are`, records.length, 'records');
+            // console.log(`after filtering by storage=${storage}, there are`, records.length, 'records');
         }
 
         // console.log('before filtering, there are', qtyRecordsInDB, 'records');
@@ -1907,7 +1907,7 @@ async function getRecords(queryParams) {
                 const recordDid = record.oip?.did || record.oip?.didTx;
                 return recordDid === normalizedDid;
             });
-            console.log(`after filtering by DID=${normalizedDid}, there are`, records.length, 'records');
+            // console.log(`after filtering by DID=${normalizedDid}, there are`, records.length, 'records');
         }
 
         if (template != undefined) {
@@ -2263,7 +2263,7 @@ async function getRecords(queryParams) {
                         )
                     );
                 });
-                console.log('after filtering by equipment (OR mode), there are', records.length, 'records');
+                // console.log('after filtering by equipment (OR mode), there are', records.length, 'records');
             } else {
                 // AND behavior: exercise must have ALL specified equipment (default)
                 records = records.filter(record => {
@@ -2290,7 +2290,7 @@ async function getRecords(queryParams) {
                         )
                     );
                 });
-                console.log('after filtering by equipment (AND mode), there are', records.length, 'records');
+                // console.log('after filtering by equipment (AND mode), there are', records.length, 'records');
             }
             
             // Add equipment match scores to all filtered records
@@ -2365,7 +2365,7 @@ async function getRecords(queryParams) {
                         exerciseTypeValue === requestedType
                     );
                 });
-                console.log('after filtering by exercise type (AND mode), there are', records.length, 'records');
+                // console.log('after filtering by exercise type (AND mode), there are', records.length, 'records');
             } else {
                 // OR behavior: exercise must have ANY of the specified types (default)
                 records = records.filter(record => {
@@ -2378,7 +2378,7 @@ async function getRecords(queryParams) {
                         exerciseTypeValue === requestedType
                     );
                 });
-                console.log('after filtering by exercise type (OR mode), there are', records.length, 'records');
+                // console.log('after filtering by exercise type (OR mode), there are', records.length, 'records');
             }
             
             // Add exercise type match scores to all filtered records
@@ -2424,7 +2424,7 @@ async function getRecords(queryParams) {
                         recipeCuisine.includes(requestedCuisine)
                     );
                 });
-                console.log('after filtering by cuisine (AND mode), there are', records.length, 'records');
+                // console.log('after filtering by cuisine (AND mode), there are', records.length, 'records');
             } else {
                 // OR behavior: recipe must have ANY of the specified cuisines (default)
                 records = records.filter(record => {
@@ -2437,7 +2437,7 @@ async function getRecords(queryParams) {
                         recipeCuisine.includes(requestedCuisine)
                     );
                 });
-                console.log('after filtering by cuisine (OR mode), there are', records.length, 'records');
+                // console.log('after filtering by cuisine (OR mode), there are', records.length, 'records');
             }
             
             // Add cuisine match scores to all filtered records
@@ -2493,7 +2493,7 @@ async function getRecords(queryParams) {
                         )
                     );
                 });
-                console.log('after filtering by models (AND mode), there are', records.length, 'records');
+                // console.log('after filtering by models (AND mode), there are', records.length, 'records');
             } else {
                 // OR behavior: model provider must support ANY of the specified models (default)
                 records = records.filter(record => {
@@ -2516,7 +2516,7 @@ async function getRecords(queryParams) {
                         )
                     );
                 });
-                console.log('after filtering by models (OR mode), there are', records.length, 'records');
+                // console.log('after filtering by models (OR mode), there are', records.length, 'records');
             }
 
             // Add model match scores to all filtered records
@@ -2626,19 +2626,19 @@ async function getRecords(queryParams) {
                 
                 // Exclude non-public records for unauthenticated users
                 if (accessLevel && accessLevel !== 'public') {
-                    console.log('Filtering out non-public record for unauthenticated user:', record.oip?.did, 'access_level:', accessLevel);
+                    // console.log('Filtering out non-public record for unauthenticated user:', record.oip?.did, 'access_level:', accessLevel);
                     return false;
                 }
                 
                 // Legacy fallback: treat old private fields as access_level: 'private'
                 if (legacySessionPrivate) {
-                    console.log('Filtering out legacy private conversation session for unauthenticated user (treating as access_level: private):', record.oip?.did);
+                    // console.log('Filtering out legacy private conversation session for unauthenticated user (treating as access_level: private):', record.oip?.did);
                     return false;
                 }
                 
                 return true;
             });
-            console.log(`after filtering non-public records for unauthenticated user, there are ${records.length} records`);
+            // console.log(`after filtering non-public records for unauthenticated user, there are ${records.length} records`);
         } else {
             // Authenticated users see public records + their own private/shared records
             // Use async filter for organization membership checking
@@ -2662,7 +2662,7 @@ async function getRecords(queryParams) {
                     if (recordOwnerPubKey && userPubKey) {
                         // Check direct ownership
                         if (recordOwnerPubKey === userPubKey) {
-                            console.log('Including owned record for user:', record.oip?.did, 'access_level:', accessLevel, 'owner:', recordOwnerPubKey.slice(0, 12));
+                            // console.log('Including owned record for user:', record.oip?.did, 'access_level:', accessLevel, 'owner:', recordOwnerPubKey.slice(0, 12));
                             return true;
                         }
                         
@@ -2670,7 +2670,7 @@ async function getRecords(queryParams) {
                         // For now, we only support private/public access levels
                     }
                     
-                    console.log('Excluding private/shared record (not owner/shared):', record.oip?.did, 'user:', userPubKey?.slice(0, 12), 'owner:', recordOwnerPubKey?.slice(0, 12));
+                    // console.log('Excluding private/shared record (not owner/shared):', record.oip?.did, 'user:', userPubKey?.slice(0, 12), 'owner:', recordOwnerPubKey?.slice(0, 12));
                     return false;
                 }
                 
@@ -2730,10 +2730,10 @@ async function getRecords(queryParams) {
                 // Default: include record
                 return true;
             });
-            console.log(`after filtering records for authenticated user ${user?.email}, there are ${records.length} records`);
+            // console.log(`after filtering records for authenticated user ${user?.email}, there are ${records.length} records`);
         }
 
-        console.log('all filters complete, there are', records.length, 'records');
+        // console.log('all filters complete, there are', records.length, 'records');
         
         
     // remove the signature and public key hash data if requested        
@@ -2770,7 +2770,7 @@ async function getRecords(queryParams) {
         // Helper function to sort records based on sortBy parameter
         const applySorting = (recordsToSort, sortByParam) => {
             if (sortByParam != undefined) {
-                console.log('sorting by:', sortByParam);
+                // console.log('sorting by:', sortByParam);
                 const fieldToSortBy = sortByParam.split(':')[0];
                 const order = sortByParam.split(':')[1];
                 
@@ -3014,7 +3014,7 @@ async function getRecords(queryParams) {
 
         // Apply noDuplicates filtering if requested (after applySorting is defined)
         if (noDuplicates === true || noDuplicates === 'true') {
-            console.log('Applying noDuplicates filtering...');
+            // console.log('Applying noDuplicates filtering...');
             
             // If no sortBy is specified, use default for duplicate resolution
             const duplicateSortBy = sortBy || 'inArweaveBlock:desc';
@@ -3042,7 +3042,7 @@ async function getRecords(queryParams) {
                     const sortedDuplicates = [...duplicateRecords];
                     applySorting(sortedDuplicates, duplicateSortBy);
                     uniqueRecords.push(sortedDuplicates[0]);
-                    console.log(`Filtered ${duplicateRecords.length - 1} duplicate(s) for name "${name}", kept record with DID: ${sortedDuplicates[0].oip?.did || sortedDuplicates[0].oip?.didTx}`);
+                    // console.log(`Filtered ${duplicateRecords.length - 1} duplicate(s) for name "${name}", kept record with DID: ${sortedDuplicates[0].oip?.did || sortedDuplicates[0].oip?.didTx}`);
                 }
             });
             
@@ -3434,7 +3434,7 @@ async function getRecords(queryParams) {
             let sortedRecords;
             if (tags && tags.trim()) {
                 // User applied tag filters - filter and sort by tag matches
-                console.log(`🔍 DEBUG: Applying tag-based filtering with tags: ${tags}`);
+                // console.log(`🔍 DEBUG: Applying tag-based filtering with tags: ${tags}`);
                 const tagArray = paginatedTagSummary.map(summary => summary.tag);
                 const filteredRecords = resolvedRecords.filter(record => {
                     return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
@@ -3452,27 +3452,27 @@ async function getRecords(queryParams) {
                     const score = (matches / tagArray.length).toFixed(3); // Calculate the score as a ratio of matches to total tags and trim to three decimal places
                     return { ...record, score }; // Attach the score to the record
                 });
-                console.log(`🔍 DEBUG: After tag filtering - sortedRecords.length=${sortedRecords.length}`);
+                // console.log(`🔍 DEBUG: After tag filtering - sortedRecords.length=${sortedRecords.length}`);
             } else {
                 // No tag filters applied - use all resolved records with default score
-                console.log(`🔍 DEBUG: No tag filters applied - using all ${resolvedRecords.length} resolved records`);
+                // console.log(`🔍 DEBUG: No tag filters applied - using all ${resolvedRecords.length} resolved records`);
                 sortedRecords = resolvedRecords.map(record => {
                     return { ...record, score: 1.0 }; // Default score for non-tag-filtered records
                 });
             }
 
             // Apply sorting - use sortBy parameter if provided, otherwise sort by score
-            console.log(`🔍 DEBUG: Before sorting - sortedRecords.length=${sortedRecords.length}, sortBy=${sortBy}`);
+            // console.log(`🔍 DEBUG: Before sorting - sortedRecords.length=${sortedRecords.length}, sortBy=${sortBy}`);
             if (sortBy != undefined) {
                 applySorting(sortedRecords, sortBy);
-                console.log(`🔍 DEBUG: After applySorting - sortedRecords.length=${sortedRecords.length}`);
+                // console.log(`🔍 DEBUG: After applySorting - sortedRecords.length=${sortedRecords.length}`);
             } else {
                 sortedRecords.sort((a, b) => b.score - a.score); // Sort in descending order by score
-                console.log(`🔍 DEBUG: After score sorting - sortedRecords.length=${sortedRecords.length}`);
+                // console.log(`🔍 DEBUG: After score sorting - sortedRecords.length=${sortedRecords.length}`);
             }
 
             const finalRecords = sortedRecords.slice(startIndex, endIndex);
-            console.log(`🔍 DEBUG: Final pagination - sortedRecords.length=${sortedRecords.length}, startIndex=${startIndex}, endIndex=${endIndex}, finalRecords.length=${finalRecords.length}`);
+            // console.log(`🔍 DEBUG: Final pagination - sortedRecords.length=${sortedRecords.length}, startIndex=${startIndex}, endIndex=${endIndex}, finalRecords.length=${finalRecords.length}`);
             
             return {
                 message: "Records retrieved successfully",
@@ -3500,7 +3500,7 @@ async function getRecords(queryParams) {
         const paginatedRecords = resolvedRecords.slice(startIndex, endIndex);
         resolvedRecords = paginatedRecords;
         
-        console.log(`🔍 DEBUG: Second pagination - resolvedRecords.length=${resolvedRecords.length}, startIndex=${startIndex}, endIndex=${endIndex}, paginatedRecords.length=${paginatedRecords.length}`);
+        // console.log(`🔍 DEBUG: Second pagination - resolvedRecords.length=${resolvedRecords.length}, startIndex=${startIndex}, endIndex=${endIndex}, paginatedRecords.length=${paginatedRecords.length}`);
 
         return {
             message: "Records retrieved successfully",

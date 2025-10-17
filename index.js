@@ -10,6 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const socketIo = require('socket.io');
+const apiLogger = require('./middleware/apiLogger');
 const { createSwapsIndex, initializeIndices } = require('./config/createIndices');
 const { validateEnvironment } = require('./config/checkEnvironment');
 const dotenv = require('dotenv');
@@ -67,6 +68,9 @@ socket.init(server);
 // Set higher body size limit (e.g., 50MB)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Clean API logging
+app.use(apiLogger);
 
 // CORS middleware configuration
 const corsOptions = {
