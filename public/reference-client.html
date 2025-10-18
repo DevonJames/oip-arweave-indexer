@@ -20552,27 +20552,30 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                         const searchInput = lastItem.querySelector('.ingredient-search');
                                         if (searchInput) {
                                             searchInput.value = ingredientName;
+                                            // Trigger filtering to populate the dropdown properly
+                                            filterRecipeIngredients(lastItem.id, ingredientName);
                                         }
                                         
-                                        // Pre-populate the select dropdown
-                                        const selectDropdown = lastItem.querySelector('.ingredient-select');
-                                        if (selectDropdown && ingredientDID) {
-                                            const option = document.createElement('option');
-                                            option.value = ingredientDID;
-                                            option.textContent = ingredientName;
-                                            selectDropdown.innerHTML = '';
-                                            selectDropdown.appendChild(option);
-                                            selectDropdown.value = ingredientDID;
-                                        }
-                                        
-                                        // Set amount, unit, and comment after mode has changed
-                                        const amountInput = lastItem.querySelector('.ingredient-amount');
-                                        const unitInput = lastItem.querySelector('.ingredient-unit');
-                                        const commentInput = lastItem.querySelector('.ingredient-comment');
-                                        
-                                        if (amountInput) amountInput.value = currentAmount;
-                                        if (unitInput) unitInput.value = currentUnit;
-                                        if (commentInput) commentInput.value = currentComment;
+                                        // After filtering, select the specific ingredient in the dropdown
+                                        setTimeout(() => {
+                                            const selectDropdown = lastItem.querySelector('.ingredient-select');
+                                            if (selectDropdown && ingredientDID) {
+                                                // The dropdown should now be populated by filterRecipeIngredients
+                                                // Just set the value to the ingredientDID
+                                                selectDropdown.value = ingredientDID;
+                                                // Trigger the display of nutritional info
+                                                displayExistingIngredientNutritionalInfo(lastItem.id);
+                                            }
+                                            
+                                            // Set amount, unit, and comment after dropdown is populated
+                                            const amountInput = lastItem.querySelector('.ingredient-amount');
+                                            const unitInput = lastItem.querySelector('.ingredient-unit');
+                                            const commentInput = lastItem.querySelector('.ingredient-comment');
+                                            
+                                            if (amountInput) amountInput.value = currentAmount;
+                                            if (unitInput) unitInput.value = currentUnit;
+                                            if (commentInput) commentInput.value = currentComment;
+                                        }, 100);
                                     }, 150);
                                 }
                                 

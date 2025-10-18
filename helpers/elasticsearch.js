@@ -1407,6 +1407,14 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     return null;
 };
 
+// Function to parse and clean units (handles "4 oz, cooked" -> "4 oz")
+const parseUnit = (unit) => {
+    if (!unit) return unit;
+    // Handle cases like "4 oz, cooked" -> "4 oz"
+    // Split on comma and take the first part
+    return unit.includes(',') ? unit.split(',')[0].trim() : unit;
+};
+
 // Function to add nutritional summary to recipe records
 // fieldPrefix: 'summary' (default, for publish-time) or 'calculatedSummary' (for on-demand recalculation)
 const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 'summary') => {
@@ -1461,12 +1469,16 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
                 
                 const nutritionalInfo = ingredientRecord.data.nutritionalInfo;
                 const standardAmount = nutritionalInfo.standardAmount;
-                const standardUnit = nutritionalInfo.standardUnit;
+                const rawStandardUnit = nutritionalInfo.standardUnit;
                 
-                if (!standardAmount || !standardUnit) {
+                if (!standardAmount || !rawStandardUnit) {
                     console.warn(`Missing standard amount/unit for ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'}`);
                     continue;
                 }
+                
+                // Parse and clean units to handle cases like "4 oz, cooked" -> "4 oz"
+                const cleanRecipeUnit = parseUnit(recipeUnit);
+                const standardUnit = parseUnit(rawStandardUnit);
                 
                 // Step 1: Calculate multiplier = AmountOfIngredientInRecipe / NutritionalInfoStandardAmount
                 // Following the IFERROR logic from the spreadsheet formula
@@ -1474,7 +1486,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
                 
                 const ingredientName = ingredientRecord.data.basic?.name || `ingredient ${i}`;
                 console.log(`\n=== Processing ${ingredientName} ===`);
-                console.log(`Recipe: ${recipeAmount} ${recipeUnit} | Standard: ${standardAmount} ${standardUnit}`);
+                console.log(`Recipe: ${recipeAmount} ${cleanRecipeUnit} | Standard: ${standardAmount} ${standardUnit} (cleaned from "${rawStandardUnit}")`);
                 
                 // Validate that we have valid amounts
                 if (!recipeAmount || recipeAmount <= 0) {
@@ -1488,43 +1500,43 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
                 }
                 
                 // First, try direct unit conversion using enhanced convertUnits function
-                const convertedAmount = convertUnits(recipeAmount, recipeUnit, standardUnit);
+                const convertedAmount = convertUnits(recipeAmount, cleanRecipeUnit, standardUnit);
                 
                 if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
                     // Direct conversion successful
                     multiplier = convertedAmount / standardAmount;
-                    console.log(`✅ Converted: ${recipeAmount} ${recipeUnit} → ${convertedAmount} ${standardUnit} | Multiplier: ${multiplier.toFixed(4)}`);
+                    console.log(`✅ Converted: ${recipeAmount} ${cleanRecipeUnit} → ${convertedAmount} ${standardUnit} | Multiplier: ${multiplier.toFixed(4)}`);
                 } else {
                     // Direct conversion failed, use fallback logic
                     // console.log(`❌ Direct conversion failed, trying fallback logic...`);
                     
                     // Normalize units for comparison
-                    const normalizedRecipeUnit = recipeUnit.toLowerCase().trim();
+                    const normalizedRecipeUnit = cleanRecipeUnit.toLowerCase().trim();
                     const normalizedStandardUnit = standardUnit.toLowerCase().trim();
                     
                     if (normalizedRecipeUnit === normalizedStandardUnit) {
                         // Units are identical, use simple ratio
                         multiplier = recipeAmount / standardAmount;
                         console.log(`🔄 Same unit: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
-                    } else if (isCountUnit(recipeUnit) && isCountUnit(standardUnit)) {
+                    } else if (isCountUnit(cleanRecipeUnit) && isCountUnit(standardUnit)) {
                         // Both are count-based units, use simple ratio
                         multiplier = recipeAmount / standardAmount;
                         console.log(`📊 Both count units: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
-                    } else if (isCountUnit(recipeUnit) && !isCountUnit(standardUnit)) {
+                    } else if (isCountUnit(cleanRecipeUnit) && !isCountUnit(standardUnit)) {
                         // Recipe uses count, standard uses weight/volume - can't convert without conversion factor
-                        console.warn(`Cannot convert count-based unit '${recipeUnit}' to weight/volume unit '${standardUnit}' for ingredient ${i} - no conversion factor available`);
+                        console.warn(`Cannot convert count-based unit '${cleanRecipeUnit}' to weight/volume unit '${standardUnit}' for ingredient ${i} - no conversion factor available`);
                         continue;
-                    } else if (!isCountUnit(recipeUnit) && isCountUnit(standardUnit)) {
+                    } else if (!isCountUnit(cleanRecipeUnit) && isCountUnit(standardUnit)) {
                         // Recipe uses weight/volume, standard uses count - can't convert without conversion factor
-                        console.warn(`Cannot convert weight/volume unit '${recipeUnit}' to count-based unit '${standardUnit}' for ingredient ${i} - no conversion factor available`);
+                        console.warn(`Cannot convert weight/volume unit '${cleanRecipeUnit}' to count-based unit '${standardUnit}' for ingredient ${i} - no conversion factor available`);
                         continue;
                     } else {
                         // Both are weight/volume but different - try converting both to grams
-                        const recipeAmountInGrams = convertToGrams(recipeAmount, recipeUnit);
+                        const recipeAmountInGrams = convertToGrams(recipeAmount, cleanRecipeUnit);
                         const standardAmountInGrams = convertToGrams(standardAmount, standardUnit);
                         
                         if (recipeAmountInGrams === null || recipeAmountInGrams === undefined) {
-                            console.warn(`Could not convert recipe unit '${recipeUnit}' to grams for ingredient ${i}`);
+                            console.warn(`Could not convert recipe unit '${cleanRecipeUnit}' to grams for ingredient ${i}`);
                             continue;
                         }
                         
