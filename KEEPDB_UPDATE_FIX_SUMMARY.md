@@ -4,7 +4,7 @@
 
 Records published to Arweave were getting indexed with `recordStatus: "pending confirmation in Arweave"` but were never being updated to `recordStatus: "original"` even after being confirmed on the blockchain. This was happening because:
 
-### Root Cause
+### Root Cause - The ONLY Issue
 
 **Critical Logic Error in `processNewRecord` function** (lines 4936-4942 in `helpers/elasticsearch.js`):
 
@@ -23,12 +23,15 @@ This logic prevented `indexRecord` from being called for records that already ex
 
 ### How the System Should Work
 
-1. **Publishing Phase**: When a record is published to Arweave, it's immediately indexed locally with `recordStatus: "pending confirmation in Arweave"`
+1. **Publishing Phase**: When a record is published to Arweave, it's immediately indexed locally with `recordStatus: "pending confirmation in Arweave"` and an **estimated** block height
 2. **Confirmation Phase**: The `keepDBUpToDate` function runs periodically (every 30 seconds) and:
-   - Queries Arweave GraphQL for transactions with OIP tags (`Index-Method: "OIP"`, `Ver: "0.8.0"`)
-   - Fetches full transaction data from the blockchain
-   - Processes each transaction and indexes it with `recordStatus: "original"`
-   - **Should replace** any existing "pending confirmation" record with the same DID
+   - Calculates `maxArweaveBlockInDB` by **excluding** pending records (this is intentional!)
+   - Queries Arweave GraphQL for transactions with OIP tags **after** that max block
+   - When it finds the confirmed transaction, it fetches full transaction data from the blockchain
+   - Processes the transaction with the **actual** block height and `recordStatus: "original"`
+   - Calls `indexRecord` which **updates** the existing pending record to "original" status
+
+**Why pending records are excluded from max block**: This ensures the system will re-process them when they appear confirmed on the blockchain. The pending record has an estimated block, but when confirmed, the transaction will be found at its actual block height and properly updated.
 
 ## Fixes Implemented
 
