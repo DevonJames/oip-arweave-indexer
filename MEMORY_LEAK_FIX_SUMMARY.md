@@ -143,18 +143,23 @@ Start with custom heap size:
 
 ## 🚀 Quick Start - Restart Your Application
 
-### ⚠️ IMPORTANT: Enable Garbage Collection
+### ⚠️ IMPORTANT: Configure Memory Allocation
 
-For the memory fixes to work optimally, you MUST enable the `--expose-gc` flag:
+For the memory fixes to work optimally, you should configure an appropriate heap size:
 
-**Option 1: Add to NODE_OPTIONS in .env**
+**Option 1: Using make command (Recommended)**
 ```bash
-NODE_OPTIONS=--max-old-space-size=16384 --expose-gc
+make set-memory-16gb
 ```
 
-**Option 2: Using set-memory.sh (Automatically adds --expose-gc)**
+**Option 2: Using set-memory.sh directly**
 ```bash
 ./set-memory.sh 16384
+```
+
+**Option 3: Add to NODE_OPTIONS in .env manually**
+```bash
+NODE_OPTIONS=--max-old-space-size=16384
 ```
 
 ### Memory Configuration (Choose based on your workload)
@@ -204,7 +209,7 @@ make set-memory-64gb          # 64GB heap (high-volume)
 ### Option 5: Direct Environment Variable (Alternative)
 Add to your `.env` file:
 ```bash
-NODE_OPTIONS=--max-old-space-size=16384 --expose-gc
+NODE_OPTIONS=--max-old-space-size=16384
 ```
 
 Then start with make:
@@ -250,7 +255,7 @@ Run every 5 minutes via cron:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NODE_OPTIONS` | - | **REQUIRED:** Node.js options with --expose-gc flag |
+| `NODE_OPTIONS` | - | **REQUIRED:** Node.js heap size (e.g., `--max-old-space-size=16384`) |
 | `GUN_CACHE_MAX_AGE` | `3600000` (1 hour) | How often to clear GUN cache (ms) |
 | `GUN_SYNC_INTERVAL` | `30000` (30 sec) | Sync frequency (ms) |
 | `GUN_SYNC_ENABLED` | `true` | Enable/disable GUN sync |
@@ -264,8 +269,8 @@ Run every 5 minutes via cron:
 
 For high-volume production (with continuous Arweave indexing):
 ```bash
-# Memory Management (CRITICAL - must include --expose-gc)
-NODE_OPTIONS=--max-old-space-size=16384 --expose-gc
+# Memory Management
+NODE_OPTIONS=--max-old-space-size=16384
 
 # GUN Sync Configuration
 GUN_CACHE_MAX_AGE=1800000           # Clear GUN cache every 30 minutes
@@ -287,7 +292,7 @@ MEMORY_WARNING_THRESHOLD=75         # Warn at 75% heap usage
 For development:
 ```bash
 # Memory Management
-NODE_OPTIONS=--max-old-space-size=4096 --expose-gc
+NODE_OPTIONS=--max-old-space-size=4096
 
 # Cache Configuration (more aggressive cleanup)
 GUN_CACHE_MAX_AGE=1800000           # Clear every 30 minutes
@@ -428,7 +433,7 @@ If the issue persists:
 3. **index.js** - Automatic memory monitoring and GC triggers
 
 ### Configuration
-4. **set-memory.sh** - Already configured (adds --expose-gc by default)
+4. **set-memory.sh** - Memory configuration script
 5. **.env** - Add new environment variables (see above)
 
 ### Documentation

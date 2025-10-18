@@ -36,7 +36,7 @@ make check-memory-config
 
 # Example output:
 # ✓ Heap Size: 16384 MB (16.00GB)
-#   Full Options: --max-old-space-size=16384 --expose-gc
+#   Full Options: --max-old-space-size=16384
 # System Memory: 131072MB
 ```
 
