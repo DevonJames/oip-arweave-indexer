@@ -11761,6 +11761,28 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         </div>
                     </div>
 
+                    <!-- Nutritional Summary Calculator -->
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; border: 2px solid #dee2e6; margin-top: 30px;">
+                        <h4 style="margin: 0 0 15px 0; color: #495057;">📊 Nutritional Summary (Per Serving)</h4>
+                        <button type="button" onclick="calculateRecipeBundleNutritionalSummary()" class="btn-secondary" style="width: 100%; margin-bottom: 15px;">
+                            🧮 Calculate Nutritional Summary
+                        </button>
+                        
+                        <div id="recipe-bundle-nutrition-summary" class="hidden" style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #ced4da;">
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 14px;">
+                                <div><strong>Calories:</strong> <span id="nutrition-calories">-</span></div>
+                                <div><strong>Protein:</strong> <span id="nutrition-protein">-</span>g</div>
+                                <div><strong>Fat:</strong> <span id="nutrition-fat">-</span>g</div>
+                                <div><strong>Carbs:</strong> <span id="nutrition-carbs">-</span>g</div>
+                                <div><strong>Sodium:</strong> <span id="nutrition-sodium">-</span>mg</div>
+                                <div><strong>Cholesterol:</strong> <span id="nutrition-cholesterol">-</span>mg</div>
+                            </div>
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d;">
+                                <span id="nutrition-info-text">-</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Publish All Button -->
                     <div style="position: sticky; bottom: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1); margin-top: 30px;">
                         <button onclick="publishRecipeBundle()" class="btn-primary" id="recipe-bundle-publish-btn" style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600;">
@@ -19600,6 +19622,180 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
         // ==================== RECIPE BUNDLE FUNCTIONS (PART 2) ====================
 
         /**
+         * Calculate Nutritional Summary for Recipe Bundle
+         */
+        async function calculateRecipeBundleNutritionalSummary() {
+            try {
+                console.log('🧮 Calculating nutritional summary...');
+                
+                const servings = parseInt(document.getElementById('recipe-bundle-servings').value) || 1;
+                
+                if (servings <= 0) {
+                    alert('Please enter a valid number of servings first');
+                    return;
+                }
+                
+                // Gather all ingredient items
+                const container = document.getElementById('recipe-bundle-ingredients-container');
+                const ingredientItems = container.querySelectorAll('.ingredient-item');
+                
+                if (ingredientItems.length === 0) {
+                    alert('Please add ingredients first');
+                    return;
+                }
+                
+                // Initialize totals
+                const totals = {
+                    calories: 0,
+                    proteinG: 0,
+                    fatG: 0,
+                    carbohydratesG: 0,
+                    sodiumMg: 0,
+                    cholesterolMg: 0
+                };
+                
+                let processedCount = 0;
+                
+                // Process each ingredient
+                for (const item of ingredientItems) {
+                    const mode = item.querySelector('.ingredient-mode').value;
+                    const amount = parseFloat(item.querySelector('.ingredient-amount').value) || 0;
+                    const unit = item.querySelector('.ingredient-unit').value || '';
+                    
+                    if (amount <= 0) continue;
+                    
+                    let nutritionalInfo = null;
+                    
+                    if (mode === 'existing') {
+                        // Get from selected existing ingredient
+                        const selectElement = item.querySelector('.ingredient-select');
+                        const selectedDID = selectElement.value;
+                        
+                        if (!selectedDID) continue;
+                        
+                        // Find the ingredient data from stored data
+                        const allIngredientsJSON = item.getAttribute('data-all-ingredients');
+                        if (allIngredientsJSON) {
+                            const allIngredients = JSON.parse(allIngredientsJSON);
+                            const ingredient = allIngredients.find(r => (r.oip?.did || r.oip?.didTx) === selectedDID);
+                            if (ingredient && ingredient.data?.nutritionalInfo) {
+                                nutritionalInfo = ingredient.data.nutritionalInfo;
+                            }
+                        }
+                    } else {
+                        // Get from new ingredient fields
+                        const calories = parseFloat(item.querySelector('.new-ingredient-calories').value) || 0;
+                        const protein = parseFloat(item.querySelector('.new-ingredient-protein').value) || 0;
+                        const fat = parseFloat(item.querySelector('.new-ingredient-fat').value) || 0;
+                        const carbs = parseFloat(item.querySelector('.new-ingredient-carbs').value) || 0;
+                        const sodium = parseFloat(item.querySelector('.new-ingredient-sodium').value) || 0;
+                        const cholesterol = parseFloat(item.querySelector('.new-ingredient-cholesterol').value) || 0;
+                        const standardAmount = parseFloat(item.querySelector('.new-ingredient-standard-amount').value) || 1;
+                        const standardUnit = item.querySelector('.new-ingredient-standard-unit').value || 'whole';
+                        
+                        nutritionalInfo = {
+                            calories,
+                            proteinG: protein,
+                            fatG: fat,
+                            carbohydratesG: carbs,
+                            sodiumMg: sodium,
+                            cholesterolMg: cholesterol,
+                            standardAmount,
+                            standardUnit
+                        };
+                    }
+                    
+                    if (!nutritionalInfo) continue;
+                    
+                    // Calculate multiplier (similar to backend logic)
+                    const standardAmount = nutritionalInfo.standardAmount || 1;
+                    const standardUnit = (nutritionalInfo.standardUnit || '').split(',')[0].trim(); // Parse unit
+                    const recipeUnit = unit.split(',')[0].trim(); // Parse unit
+                    
+                    let multiplier = 1;
+                    
+                    // Simple unit matching (for now, can be enhanced)
+                    if (recipeUnit.toLowerCase() === standardUnit.toLowerCase()) {
+                        multiplier = amount / standardAmount;
+                    } else {
+                        // Try basic conversions
+                        const recipeInOz = convertToOunces(amount, recipeUnit);
+                        const standardInOz = convertToOunces(standardAmount, standardUnit);
+                        
+                        if (recipeInOz !== null && standardInOz !== null) {
+                            multiplier = recipeInOz / standardInOz;
+                        } else {
+                            console.warn(`Cannot convert ${amount} ${recipeUnit} to ${standardUnit}`);
+                            continue;
+                        }
+                    }
+                    
+                    // Add to totals
+                    totals.calories += (nutritionalInfo.calories || 0) * multiplier;
+                    totals.proteinG += (nutritionalInfo.proteinG || 0) * multiplier;
+                    totals.fatG += (nutritionalInfo.fatG || 0) * multiplier;
+                    totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * multiplier;
+                    totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * multiplier;
+                    totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * multiplier;
+                    
+                    processedCount++;
+                }
+                
+                if (processedCount === 0) {
+                    alert('No ingredients with nutritional information found');
+                    return;
+                }
+                
+                // Calculate per-serving values
+                const perServing = {
+                    calories: Math.round(totals.calories / servings),
+                    proteinG: Math.round((totals.proteinG / servings) * 10) / 10,
+                    fatG: Math.round((totals.fatG / servings) * 10) / 10,
+                    carbohydratesG: Math.round((totals.carbohydratesG / servings) * 10) / 10,
+                    sodiumMg: Math.round(totals.sodiumMg / servings),
+                    cholesterolMg: Math.round(totals.cholesterolMg / servings)
+                };
+                
+                // Display results
+                document.getElementById('nutrition-calories').textContent = perServing.calories;
+                document.getElementById('nutrition-protein').textContent = perServing.proteinG;
+                document.getElementById('nutrition-fat').textContent = perServing.fatG;
+                document.getElementById('nutrition-carbs').textContent = perServing.carbohydratesG;
+                document.getElementById('nutrition-sodium').textContent = perServing.sodiumMg;
+                document.getElementById('nutrition-cholesterol').textContent = perServing.cholesterolMg;
+                document.getElementById('nutrition-info-text').textContent = 
+                    `Based on ${processedCount} of ${ingredientItems.length} ingredients • ${servings} serving${servings > 1 ? 's' : ''}`;
+                
+                document.getElementById('recipe-bundle-nutrition-summary').classList.remove('hidden');
+                
+                console.log('✅ Nutritional summary calculated:', perServing);
+                
+            } catch (error) {
+                console.error('Error calculating nutritional summary:', error);
+                alert(`Error calculating summary: ${error.message}`);
+            }
+        }
+        
+        /**
+         * Simple unit conversion to ounces for nutritional calculations
+         */
+        function convertToOunces(value, unit) {
+            const unitLower = unit.toLowerCase();
+            if (unitLower.includes('lb') || unitLower.includes('pound')) {
+                return value * 16;
+            } else if (unitLower.includes('oz')) {
+                return value;
+            } else if (unitLower.includes('cup')) {
+                return value * 8;
+            } else if (unitLower.includes('tbsp')) {
+                return value * 0.5;
+            } else if (unitLower.includes('tsp')) {
+                return value * 0.17;
+            }
+            return null; // Cannot convert
+        }
+
+        /**
          * Main Recipe Bundle Publishing Function
          */
         async function publishRecipeBundle() {
@@ -19887,12 +20083,14 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const previewInfo = document.getElementById('recipe-bundle-ai-image-preview-info');
                 
                 if (previewImg && previewDiv && previewInfo) {
-                    previewImg.src = imageUrl;
+                    // Add cache-busting parameter to force reload of the image
+                    const cacheBustedUrl = imageUrl + (imageUrl.includes('?') ? '&' : '?') + `_t=${Date.now()}`;
+                    previewImg.src = cacheBustedUrl;
                     previewDiv.classList.remove('hidden');
-                    previewInfo.textContent = `Generated image for "${recipeName}"`;
+                    previewInfo.textContent = `Generated image for "${recipeName}" ${forceRegenerate ? '(regenerated)' : ''}`;
                 }
                 
-                // Store the URL for later use during publishing
+                // Store the URL (without cache buster) for later use during publishing
                 window.recipeBundleGeneratedImageUrl = imageUrl;
                 
                 showMessage('publish-status', '✅ AI image generated successfully!', 'success');
@@ -20541,41 +20739,61 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 
                                 if (modeSelect) modeSelect.value = 'existing';
                                 
-                                // Trigger mode change to show the select dropdown
+                                // Trigger mode change to show the select dropdown and load ingredients
                                 if (modeSelect) {
-                                    const event = new Event('change');
-                                    modeSelect.dispatchEvent(event);
+                                    // Change mode and wait for ingredients to load
+                                    modeSelect.value = 'existing';
                                     
-                                    // Pre-populate the search field AND select dropdown AND set amount/unit/comment after mode change
-                                    setTimeout(() => {
-                                        // Fill in the search field with ingredient name
-                                        const searchInput = lastItem.querySelector('.ingredient-search');
-                                        if (searchInput) {
-                                            searchInput.value = ingredientName;
-                                            // Trigger filtering to populate the dropdown properly
-                                            filterRecipeIngredients(lastItem.id, ingredientName);
-                                        }
+                                    // Wait for loadExistingIngredientsForItem to complete (triggered by mode change)
+                                    updateRecipeIngredientMode(lastItem.id);
+                                    
+                                    // Wait a bit for the async load to complete, then populate fields
+                                    setTimeout(async () => {
+                                        // Check if ingredients are loaded by checking for data-all-ingredients attribute
+                                        let retries = 0;
+                                        const maxRetries = 20; // Wait up to 2 seconds
                                         
-                                        // After filtering, select the specific ingredient in the dropdown
-                                        setTimeout(() => {
-                                            const selectDropdown = lastItem.querySelector('.ingredient-select');
-                                            if (selectDropdown && ingredientDID) {
-                                                // The dropdown should now be populated by filterRecipeIngredients
-                                                // Just set the value to the ingredientDID
-                                                selectDropdown.value = ingredientDID;
-                                                // Trigger the display of nutritional info
-                                                displayExistingIngredientNutritionalInfo(lastItem.id);
+                                        while (retries < maxRetries) {
+                                            const dataAttr = lastItem.getAttribute('data-all-ingredients');
+                                            if (dataAttr && dataAttr !== '') {
+                                                // Ingredients are loaded, now we can filter
+                                                const searchInput = lastItem.querySelector('.ingredient-search');
+                                                if (searchInput) {
+                                                    searchInput.value = ingredientName;
+                                                    // Trigger filtering to populate the dropdown properly
+                                                    filterRecipeIngredients(lastItem.id, ingredientName);
+                                                }
+                                                
+                                                // After filtering, select the specific ingredient in the dropdown
+                                                setTimeout(() => {
+                                                    const selectDropdown = lastItem.querySelector('.ingredient-select');
+                                                    if (selectDropdown && ingredientDID) {
+                                                        selectDropdown.value = ingredientDID;
+                                                        // Trigger the display of nutritional info
+                                                        displayExistingIngredientNutritionalInfo(lastItem.id);
+                                                    }
+                                                    
+                                                    // Set amount, unit, and comment after dropdown is populated
+                                                    const amountInput = lastItem.querySelector('.ingredient-amount');
+                                                    const unitInput = lastItem.querySelector('.ingredient-unit');
+                                                    const commentInput = lastItem.querySelector('.ingredient-comment');
+                                                    
+                                                    if (amountInput) amountInput.value = currentAmount;
+                                                    if (unitInput) unitInput.value = currentUnit;
+                                                    if (commentInput) commentInput.value = currentComment;
+                                                }, 100);
+                                                
+                                                break; // Exit the retry loop
                                             }
                                             
-                                            // Set amount, unit, and comment after dropdown is populated
-                                            const amountInput = lastItem.querySelector('.ingredient-amount');
-                                            const unitInput = lastItem.querySelector('.ingredient-unit');
-                                            const commentInput = lastItem.querySelector('.ingredient-comment');
-                                            
-                                            if (amountInput) amountInput.value = currentAmount;
-                                            if (unitInput) unitInput.value = currentUnit;
-                                            if (commentInput) commentInput.value = currentComment;
-                                        }, 100);
+                                            // Wait 100ms before retrying
+                                            await new Promise(resolve => setTimeout(resolve, 100));
+                                            retries++;
+                                        }
+                                        
+                                        if (retries >= maxRetries) {
+                                            console.warn(`⚠️ Timed out waiting for ingredients to load for item ${lastItem.id}`);
+                                        }
                                     }, 150);
                                 }
                                 
