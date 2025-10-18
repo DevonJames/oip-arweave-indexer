@@ -4354,7 +4354,7 @@ async function keepDBUpToDate(remapTemplates) {
     } finally {
         setIsProcessing(false);
         
-        // MEMORY LEAK FIX: Trigger GC if available (requires --expose-gc flag)
+        // MEMORY LEAK FIX: Trigger GC if available (optional - gc() is not available by default)
         if (global.gc) {
             global.gc();
         }

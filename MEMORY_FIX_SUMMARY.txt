@@ -42,8 +42,8 @@ Root causes identified:
    ✓ Logs memory freed by GC
 
 4. CONFIGURATION (set-memory.sh)
-   ✓ Now adds --expose-gc automatically
    ✓ Proper heap size configuration
+   ✓ Easy memory allocation setup
 
 ═══════════════════════════════════════════════════════════════════════
 
@@ -55,7 +55,7 @@ Step 1: Configure Memory
 
 Step 2: Verify Configuration
   $ make check-memory-config
-  Expected output should include: --expose-gc
+  Expected: Heap Size: 16384 MB (16.00GB)
 
 Step 3: Start Services
   $ make standard
@@ -87,7 +87,7 @@ Core Fixes:
   ✓ helpers/alfred.js              (LRU cache)
   ✓ helpers/elasticsearch.js       (Array cleanup)
   ✓ index.js                       (Memory monitor)
-  ✓ set-memory.sh                  (Add --expose-gc)
+  ✓ set-memory.sh                  (Memory configuration)
 
 Documentation:
   ✓ MEMORY_LEAK_FIX_SUMMARY.md     (Comprehensive guide)

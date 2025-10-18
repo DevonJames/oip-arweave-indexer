@@ -12,13 +12,13 @@ Your application was crashing at **26.5 GB heap usage**. We've identified and fi
 
 ## 🔧 Step-by-Step Restart Instructions
 
-### Step 1: Configure Memory (IMPORTANT - Includes --expose-gc)
+### Step 1: Configure Memory
 
 ```bash
 # Navigate to your project directory
 cd /Users/devon/Documents/CODE-local/oip-arweave-indexer
 
-# Set memory to 16GB (recommended) - This automatically adds --expose-gc
+# Set memory to 16GB (recommended)
 make set-memory-16gb
 
 # Or use the script directly
@@ -28,12 +28,12 @@ make set-memory-16gb
 ### Step 2: Verify Configuration
 
 ```bash
-# Check that --expose-gc was added
+# Check memory configuration
 make check-memory-config
 
 # You should see:
 # ✓ Heap Size: 16384 MB (16.00GB)
-#   Full Options: --max-old-space-size=16384 --expose-gc
+#   Full Options: --max-old-space-size=16384
 ```
 
 ### Step 3: Start Services
@@ -143,7 +143,7 @@ After 24 hours, verify:
 
 **Check:**
 ```bash
-# Verify --expose-gc is enabled
+# Verify memory configuration
 make check-memory-config
 
 # Force manual cache clear
@@ -151,7 +151,7 @@ curl -X POST http://localhost:3005/api/health/memory/clear-cache
 ```
 
 **Solution:**
-If --expose-gc is missing, reconfigure:
+If heap size is too small, reconfigure:
 ```bash
 make set-memory-16gb
 make down
@@ -174,19 +174,22 @@ docker exec oip node -e "console.log(process.memoryUsage())"
 ### Issue: Seeing "Ineffective mark-compacts" Again
 
 **This means:**
-- Either --expose-gc is not enabled, OR
+- Heap size is too small for your workload, OR
 - There's another memory leak we haven't found
 
 **Action:**
 ```bash
-# 1. Verify GC is enabled
-docker exec oip node -e "console.log(typeof global.gc)"
-# Should output: "function"
+# 1. Check current heap size
+make check-memory-config
 
-# 2. Check logs for GC triggers
-docker logs oip | grep "Forcing garbage collection"
+# 2. Increase heap size if needed
+make set-memory-32gb  # or higher
 
-# 3. If no GC logs, restart with --expose-gc
+# 3. Check memory usage patterns
+curl -s http://localhost:3005/api/health/memory | jq
+
+# 4. Restart services
+make down && make standard
 ```
 
 ---
@@ -263,7 +266,7 @@ If memory issues persist after 24 hours:
 1. `helpers/alfred.js` - LRU cache implementation
 2. `helpers/elasticsearch.js` - Array cleanup + transaction limits  
 3. `index.js` - Automatic memory monitoring
-4. `set-memory.sh` - Now adds --expose-gc automatically
+4. `set-memory.sh` - Memory configuration script
 5. `MEMORY_LEAK_FIX_SUMMARY.md` - Comprehensive documentation
 
 ---

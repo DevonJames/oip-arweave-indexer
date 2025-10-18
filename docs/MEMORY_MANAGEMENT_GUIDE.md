@@ -268,7 +268,7 @@ node --prof-process isolate-*.log > processed.txt
 GUN_SYNC_ENABLED=true
 GUN_SYNC_INTERVAL=30000
 GUN_CACHE_MAX_AGE=1800000  # 30 minutes for high-volume
-NODE_OPTIONS=--max-old-space-size=8192 --expose-gc
+NODE_OPTIONS=--max-old-space-size=8192
 ```
 
 ## 🎯 Prevention Checklist

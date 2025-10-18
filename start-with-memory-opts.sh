@@ -58,7 +58,7 @@ if [ ! -z "$TOTAL_MEM" ] && [ $HEAP_SIZE -gt $((TOTAL_MEM * 3 / 4)) ]; then
 fi
 
 # Set Node.js options
-export NODE_OPTIONS="--max-old-space-size=${HEAP_SIZE} --expose-gc"
+export NODE_OPTIONS="--max-old-space-size=${HEAP_SIZE}"
 
 echo ""
 echo -e "${BLUE}Memory Management Settings:${NC}"
