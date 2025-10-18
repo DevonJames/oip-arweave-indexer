@@ -1215,58 +1215,66 @@ console.log('- Ingredients for nutrition lookup:', ingredientNames);
 console.log('- Ingredient comments:', ingredientComments);
 console.log('- Ingredient DID references:', ingredientDRefs);
 
-// Calculate nutritional summaries before publishing
-try {
-  console.log('Calculating nutritional summary for recipe...');
-  
-  // Fetch all records from database to resolve ingredient nutritional data
-  const recordsResult = await getRecords({ 
-    recordType: 'nutritionalInfo',
-    limit: 5000  // Get all nutritional info records
-  });
-  const allRecordsInDB = recordsResult.records || [];
-  
-  // Filter to only include records with actual nutritional information
-  const recordsInDB = allRecordsInDB.filter(record => {
-    return record.data?.nutritionalInfo && 
-           Object.keys(record.data.nutritionalInfo).length > 0;
-  });
-  
-  console.log(`Found ${recordsInDB.length} nutritional info records with data (filtered from ${allRecordsInDB.length} total) in database for calculation`);
-  
-  // Create a temporary record structure for calculation
-  const tempRecordForCalculation = {
-    data: recipeData,
-    oip: {
-      didTx: 'temp-recipe-for-calculation',
-      recordType: 'recipe'
-    }
-  };
-  
-  // Calculate nutritional summaries using the same function as read-time calculation
-  // Use default 'summary' prefix for publish-time calculation
-  const recordWithNutrition = await addRecipeNutritionalSummary(
-    tempRecordForCalculation, 
-    recordsInDB,
-    'summary'  // Use 'summary' prefix for publish-time data
-  );
-  
-  // Extract the calculated nutritional data and add it to recipeData
-  // NOTE: Only summaryNutritionalInfoPerServing is added because it's the only template defined in templates.config.js
-  // The total nutritional info is calculated but not published as a separate template
-  if (recordWithNutrition.data.summaryNutritionalInfo) {
-    // Only add the per-serving template (which is defined in templates.config.js)
-    recipeData.summaryNutritionalInfoPerServing = recordWithNutrition.data.summaryNutritionalInfoPerServing;
+// Calculate nutritional summaries before publishing (unless already provided)
+// Check if summaryNutritionalInfoPerServing was already included in the request
+if (record.summaryNutritionalInfoPerServing && Object.keys(record.summaryNutritionalInfoPerServing).length > 0) {
+  console.log('✅ Using pre-calculated summaryNutritionalInfoPerServing from request:');
+  console.log(`   Per serving: ${record.summaryNutritionalInfoPerServing.calories} cal, ${record.summaryNutritionalInfoPerServing.proteinG}g protein`);
+  recipeData.summaryNutritionalInfoPerServing = record.summaryNutritionalInfoPerServing;
+} else {
+  // Calculate nutritional summaries
+  try {
+    console.log('Calculating nutritional summary for recipe...');
     
-    console.log('✅ Nutritional summary calculated and added to recipe:');
-    console.log(`   Total: ${recordWithNutrition.data.summaryNutritionalInfo.calories} cal, ${recordWithNutrition.data.summaryNutritionalInfo.proteinG}g protein`);
-    console.log(`   Per serving: ${recipeData.summaryNutritionalInfoPerServing.calories} cal, ${recipeData.summaryNutritionalInfoPerServing.proteinG}g protein`);
-  } else {
-    console.log('⚠️ Unable to calculate nutritional summary (insufficient ingredient data)');
+    // Fetch all records from database to resolve ingredient nutritional data
+    const recordsResult = await getRecords({ 
+      recordType: 'nutritionalInfo',
+      limit: 5000  // Get all nutritional info records
+    });
+    const allRecordsInDB = recordsResult.records || [];
+    
+    // Filter to only include records with actual nutritional information
+    const recordsInDB = allRecordsInDB.filter(record => {
+      return record.data?.nutritionalInfo && 
+             Object.keys(record.data.nutritionalInfo).length > 0;
+    });
+    
+    console.log(`Found ${recordsInDB.length} nutritional info records with data (filtered from ${allRecordsInDB.length} total) in database for calculation`);
+    
+    // Create a temporary record structure for calculation
+    const tempRecordForCalculation = {
+      data: recipeData,
+      oip: {
+        didTx: 'temp-recipe-for-calculation',
+        recordType: 'recipe'
+      }
+    };
+    
+    // Calculate nutritional summaries using the same function as read-time calculation
+    // Use default 'summary' prefix for publish-time calculation
+    const recordWithNutrition = await addRecipeNutritionalSummary(
+      tempRecordForCalculation, 
+      recordsInDB,
+      'summary'  // Use 'summary' prefix for publish-time data
+    );
+    
+    // Extract the calculated nutritional data and add it to recipeData
+    // NOTE: Only summaryNutritionalInfoPerServing is added because it's the only template defined in templates.config.js
+    // The total nutritional info is calculated but not published as a separate template
+    if (recordWithNutrition.data.summaryNutritionalInfo) {
+      // Only add the per-serving template (which is defined in templates.config.js)
+      recipeData.summaryNutritionalInfoPerServing = recordWithNutrition.data.summaryNutritionalInfoPerServing;
+      
+      console.log('✅ Nutritional summary calculated and added to recipe:');
+      console.log(`   Total: ${recordWithNutrition.data.summaryNutritionalInfo.calories} cal, ${recordWithNutrition.data.summaryNutritionalInfo.proteinG}g protein`);
+      console.log(`   Per serving: ${recipeData.summaryNutritionalInfoPerServing.calories} cal, ${recipeData.summaryNutritionalInfoPerServing.proteinG}g protein`);
+    } else {
+      console.log('⚠️ Unable to calculate nutritional summary (insufficient ingredient data)');
+    }
+  } catch (nutritionError) {
+    console.error('Error calculating nutritional summary (continuing with publish):', nutritionError);
+    // Don't fail the publish if nutrition calculation fails
   }
-} catch (nutritionError) {
-  console.error('Error calculating nutritional summary (continuing with publish):', nutritionError);
-  // Don't fail the publish if nutrition calculation fails
 }
 
 try {
