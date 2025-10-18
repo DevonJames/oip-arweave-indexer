@@ -775,11 +775,13 @@ const getTemplatesInDB = async () => {
         const qtyTemplatesInDB = templatesInDB.length;
         
         // Filter out templates with "pending confirmation in Arweave" status when calculating max block height
+        // This ensures pending templates get re-processed when found confirmed on chain
         const confirmedTemplates = templatesInDB.filter(template => 
             template.oip.recordStatus !== "pending confirmation in Arweave"
         );
         const pendingTemplatesCount = templatesInDB.length - confirmedTemplates.length;
         if (pendingTemplatesCount > 0) {
+            console.log(getFileInfo(), getLineNumber(), `Found ${pendingTemplatesCount} pending templates (will re-process when confirmed)`);
         }
         const maxArweaveBlockInDB = confirmedTemplates.length > 0 
             ? Math.max(...confirmedTemplates.map(template => template.oip.inArweaveBlock)) || 0
@@ -3597,12 +3599,13 @@ const getCreatorsInDB = async () => {
             const qtyCreatorsInDB = creatorsInDB.length;
             
             // Filter out creators with "pending confirmation in Arweave" status when calculating max block height
+            // This ensures pending creators get re-processed when found confirmed on chain
             const confirmedCreators = creatorsInDB.filter(creator => 
                 creator.oip.recordStatus !== "pending confirmation in Arweave"
             );
             const pendingCreatorsCount = creatorsInDB.length - confirmedCreators.length;
             if (pendingCreatorsCount > 0) {
-                console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingCreatorsCount} pending creators from max block calculation`);
+                console.log(getFileInfo(), getLineNumber(), `Found ${pendingCreatorsCount} pending creators (will re-process when confirmed)`);
             }
             const maxArweaveCreatorRegBlockInDB = confirmedCreators.length > 0 
                 ? Math.max(...confirmedCreators.map(creator => creator.oip.inArweaveBlock))
@@ -3668,12 +3671,13 @@ const getRecordsInDB = async () => {
                 const qtyRecordsInDB = records.length;
                 
                 // Filter out records with "pending confirmation in Arweave" status when calculating max block height
+                // This ensures pending records get re-processed when found confirmed on chain
                 const confirmedRecords = records.filter(record => 
                     record.oip.recordStatus !== "pending confirmation in Arweave"
                 );
                 const pendingRecordsCount = records.length - confirmedRecords.length;
                 if (pendingRecordsCount > 0) {
-                    // console.log(getFileInfo(), getLineNumber(), `Excluding ${pendingRecordsCount} pending records from max block calculation`);
+                    console.log(getFileInfo(), getLineNumber(), `Found ${pendingRecordsCount} pending records (will re-process when confirmed on chain)`);
                 }
                 const maxArweaveBlockInDB = confirmedRecords.length > 0 
                     ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
@@ -4952,11 +4956,21 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 
                 console.log(getFileInfo(), getLineNumber(), `${record.oip.didTx} is missing required data, cannot be indexed.`);
             } else {
-                console.log(getFileInfo(), getLineNumber(), '✅ Record validated, indexing/updating...');
-                // Always call indexRecord - it handles both creating new records and updating existing ones
-                // This is critical for replacing "pending confirmation" records with "original" status
-                await indexRecord(record);
-                console.log(getFileInfo(), getLineNumber(), `✅ Record indexed/updated: ${record.oip.didTx} with status: ${record.oip.recordStatus}`);
+                console.log(getFileInfo(), getLineNumber(), '🔍 Checking if record exists in DB...');
+                const existingRecord = await elasticClient.exists({
+                    index: 'records',
+                    id: record.oip.didTx
+                });
+                
+                console.log(getFileInfo(), getLineNumber(), `   📊 Record ${record.oip.didTx} exists: ${existingRecord.body}, Status will be: ${record.oip.recordStatus}`);
+                
+                if (!existingRecord.body) {
+                    console.log(getFileInfo(), getLineNumber(), '   ➕ Creating NEW record...');
+                    await indexRecord(record);
+                } else {
+                    console.log(getFileInfo(), getLineNumber(), `   ⚠️  Record ALREADY EXISTS - SKIPPING indexRecord call (THIS MAY BE THE BUG!)`);
+                    console.log(getFileInfo(), getLineNumber(), `   💡 Pending records won't get updated to "original" because indexRecord is not called`);
+                }
             }
         }
     }
