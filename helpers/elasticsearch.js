@@ -703,17 +703,18 @@ const processRecordForElasticsearch = (record) => {
 };
 
 const indexRecord = async (record) => {
-    console.log(getFileInfo(), getLineNumber(), 'indexing this record:', record);
+    const recordId = record?.oip?.did || record?.oip?.didTx;
+    console.log(`\n      💾 [indexRecord] Attempting to index/update record: ${recordId}`);
+    console.log(`      📊 [indexRecord] Record status: ${record?.oip?.recordStatus}`);
     try {
         // Enforce record type indexing policy as a safety net
         const typeForIndex = record?.oip?.recordType;
         if (typeForIndex && !shouldIndexRecordType(typeForIndex)) {
-            console.log(getFileInfo(), getLineNumber(), `Skipping indexing for recordType '${typeForIndex}' per configuration.`);
+            console.log(`      ⏭️  [indexRecord] Skipping indexing for recordType '${typeForIndex}' per configuration.`);
             return;
         }
         
         // Use unified DID field as primary identifier, fallback to didTx for backward compatibility
-        const recordId = record.oip.did || record.oip.didTx;
         if (!recordId) {
             throw new Error('Record must have either oip.did or oip.didTx field');
         }
@@ -724,6 +725,7 @@ const indexRecord = async (record) => {
         });
         
         if (existingRecord.body) {
+            console.log(`      🔄 [indexRecord] Found existing record, UPDATING it with confirmed blockchain data...`);
             // Update existing record - process for Elasticsearch compatibility
             const processedRecord = processRecordForElasticsearch(record);
             
@@ -738,8 +740,9 @@ const indexRecord = async (record) => {
                 },
                 refresh: 'wait_for'
             });
-            console.log(getFileInfo(), getLineNumber(),`Record updated successfully: ${recordId}`, response.result);    
+            console.log(`      ✅ [indexRecord] Record UPDATED successfully: ${recordId} → status changed to "original" (${response.result})`);    
         } else {
+            console.log(`      ➕ [indexRecord] No existing record found, CREATING new record...`);
             // Create new record - but first process any JSON string arrays for Elasticsearch compatibility
             const processedRecord = processRecordForElasticsearch(record);
             
@@ -749,11 +752,11 @@ const indexRecord = async (record) => {
                 body: processedRecord,
                 refresh: 'wait_for' // Wait for indexing to be complete before returning
             });
-            console.log(getFileInfo(), getLineNumber(), `Record indexed successfully: ${recordId} (storage: ${record.oip?.storage || 'unknown'})`, response.result);
+            console.log(`      ✅ [indexRecord] Record CREATED successfully: ${recordId} (storage: ${record.oip?.storage || 'unknown'}) (${response.result})`);
         }
 
     } catch (error) {
-        console.error(getFileInfo(), getLineNumber(), `Error indexing record ${record.oip?.did || record.oip?.didTx}:`, error);
+        console.error(`      ❌ [indexRecord] Error indexing record ${recordId}:`, error.message);
     }
 };
 
@@ -4333,15 +4336,18 @@ async function keepDBUpToDate(remapTemplates) {
 
         const newTransactions = await searchArweaveForNewTransactions(foundInDB);
         if (newTransactions && newTransactions.length > 0) {
-            console.log(`[keepDBUpToDate] Processing ${newTransactions.length} new transactions`);
-            for (const tx of newTransactions) {
+            console.log(`\n🔍 [keepDBUpToDate] Found ${newTransactions.length} new OIP transactions to process`);
+            for (let i = 0; i < newTransactions.length; i++) {
+                const tx = newTransactions[i];
+                console.log(`\n📦 [Transaction ${i+1}/${newTransactions.length}] Processing: ${tx.id}`);
                 await processTransaction(tx, remapTemplates);
             }
+            console.log(`\n✅ [keepDBUpToDate] Completed processing ${newTransactions.length} transactions`);
             // MEMORY LEAK FIX: Clear transaction array after processing
             newTransactions.length = 0;
         }
         else {
-            // console.log('No new transactions found, waiting...', getFileInfo(), getLineNumber());
+            console.log(`⏳ [keepDBUpToDate] No new OIP transactions found (checking from block ${foundInDB.maxArweaveBlockInDB + 1})`);
         }
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error fetching new transactions:', {
@@ -4450,16 +4456,16 @@ async function searchArweaveForNewTransactions(foundInDB) {
         // console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
     }
 
-    // console.log('Total transactions fetched:', allTransactions.length, getFileInfo(), getLineNumber());
+    console.log(`🔎 [searchArweaveForNewTransactions] GraphQL query completed. Found ${allTransactions.length} transactions with OIP tags (Index-Method:OIP, Ver:0.8.0) from block ${min} onwards`);
     return allTransactions.reverse(); // Returning reversed transactions as per your original code
 }
 
 async function processTransaction(tx, remapTemplates) {
     try {
-    // console.log(getFileInfo(), getLineNumber(),'processing transaction:', tx.id, 'block:', tx)
+    console.log(`   📡 Fetching transaction data from blockchain: ${tx.id}`);
     const transaction = await getTransaction(tx.id);
     if (!transaction || !transaction.tags) {
-        console.log(getFileInfo(), getLineNumber(),'CANT FIND TX OR TAGS IN CHAIN, skipping:', tx.id);
+        console.log(`   ⚠️  SKIPPED: Cannot find transaction or tags in chain: ${tx.id}`);
         return;
     }
     const tags = transaction.tags.reduce((acc, tag) => {
@@ -4467,14 +4473,25 @@ async function processTransaction(tx, remapTemplates) {
         return acc;
     }, {});
 
+    console.log(`   🏷️  Transaction tags:`, {
+        'Type': tags['Type'],
+        'RecordType': tags['RecordType'],
+        'Index-Method': tags['Index-Method'],
+        'Ver': tags['Ver']
+    });
+
     // { name: "Ver", values: ["0.8.0"] }
     if (tags['Type'] === 'Record' && tags['Index-Method'] === 'OIP' && semver.gte(tags['Ver'], '0.8.0')) {
+            console.log(`   ✅ IDENTIFIED AS: OIP Record (${tags['RecordType'] || 'unknown type'})`);
             await processNewRecord(transaction, remapTemplates);
     } else if (tags['Type'] === 'Template' && tags['Index-Method'] === 'OIP' && semver.gte(tags['Ver'], '0.8.0')) {
+        console.log(`   ✅ IDENTIFIED AS: OIP Template`);
         await processNewTemplate(transaction);
+    } else {
+        console.log(`   ⏭️  SKIPPED: Not an OIP Record or Template with Ver >= 0.8.0`);
     }
 } catch (error) {
-    console.error(getFileInfo(), getLineNumber(),'Error processing transaction:', tx.id);
+    console.error(`   ❌ ERROR processing transaction ${tx.id}:`, error.message);
 }
 }
 
@@ -4670,18 +4687,18 @@ async function processNewTemplate(transaction) {
 }
 
 async function processNewRecord(transaction, remapTemplates = []) {
-    console.log(getFileInfo(), getLineNumber(), 'Processing record:', transaction.transactionId);
+    console.log(`\n   📝 [processNewRecord] Starting to process record: ${transaction.transactionId}`);
     const newRecords = [];
     const recordsToDelete = [];
     if (!transaction || !transaction.tags) {
-        console.log(getFileInfo(), getLineNumber(), 'Cannot find transaction (or data or tags) in chain, skipping:', transaction.transactionId);
+        console.log(`   ⚠️  [processNewRecord] Cannot find transaction or tags, skipping: ${transaction.transactionId}`);
         return { records: newRecords, recordsToDelete };
     }
 
     const transactionId = transaction.transactionId;
     const tags = transaction.tags.slice(0, -1);
     const recordType = tags.find(tag => tag.name === 'RecordType')?.value;
-    console.log(getFileInfo(), getLineNumber(), 'Record type:', recordType);
+    console.log(`   📋 [processNewRecord] Record type: ${recordType}`);
     // handle creator registration
     let creatorInfo;
     if (recordType && recordType === 'creatorRegistration') {
@@ -4745,8 +4762,10 @@ async function processNewRecord(transaction, remapTemplates = []) {
     // Continue with normal record processing (for both creators, organizations, and other records)
     if (recordType && (recordType === 'creatorRegistration' || recordType === 'organization')) {
         // Skip normal record processing for these special types since they're handled above
+        console.log(`   ✅ [processNewRecord] Special record type processed: ${recordType}`);
         return { records: newRecords, recordsToDelete };
     } else {
+        console.log(`   🔨 [processNewRecord] Processing as standard record...`);
     // handle records
     dataForSignature = JSON.stringify(tags) + transaction.data;
     let creatorDid = txidToDid(transaction.creator);
@@ -4757,9 +4776,10 @@ async function processNewRecord(transaction, remapTemplates = []) {
     
     // If creator is not found, skip this record for now
     if (!creatorInfo) {
-        console.log(getFileInfo(), getLineNumber(), `Skipping record ${transaction.transactionId} - creator ${creatorDid} not found in database yet`);
+        console.log(`   ⚠️  [processNewRecord] SKIPPING record ${transaction.transactionId} - creator ${creatorDid} not found in database yet`);
         return { records: newRecords, recordsToDelete };
     }
+    console.log(`   👤 [processNewRecord] Creator found: ${creatorInfo.data.creatorHandle || creatorInfo.data.didAddress}`);
     let transactionData;
     let isDeleteMessageFound = false;
 
@@ -4932,14 +4952,11 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 
                 console.log(getFileInfo(), getLineNumber(), `${record.oip.didTx} is missing required data, cannot be indexed.`);
             } else {
-                console.log(getFileInfo(), getLineNumber());
-                const existingRecord = await elasticClient.exists({
-                    index: 'records',
-                    id: record.oip.didTx
-                });
-                if (!existingRecord.body) {
-                    await indexRecord(record);
-                }
+                console.log(getFileInfo(), getLineNumber(), '✅ Record validated, indexing/updating...');
+                // Always call indexRecord - it handles both creating new records and updating existing ones
+                // This is critical for replacing "pending confirmation" records with "original" status
+                await indexRecord(record);
+                console.log(getFileInfo(), getLineNumber(), `✅ Record indexed/updated: ${record.oip.didTx} with status: ${record.oip.recordStatus}`);
             }
         }
     }
