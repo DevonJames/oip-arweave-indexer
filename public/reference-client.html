@@ -19017,7 +19017,12 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                             
                             <!-- Nutritional Info Display (hidden until lookup) -->
                             <div class="nutritional-info-display hidden" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6;">
-                                <h5 style="margin: 0 0 10px 0; color: #28a745;">📊 Nutritional Information</h5>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <h5 style="margin: 0; color: #28a745;">📊 Nutritional Information</h5>
+                                    <button type="button" class="btn-small" onclick="findStandardUnit('${itemId}')" style="font-size: 12px; padding: 4px 8px;">
+                                        🤖 Find Standard Unit
+                                    </button>
+                                </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                                     <div>
                                         <label style="font-weight: bold; display: block; margin-bottom: 5px;">Standard Amount:</label>
@@ -19848,6 +19853,95 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
         }
         
         /**
+         * Use AI to find a better standard unit for nutritional info
+         */
+        async function findStandardUnit(itemId) {
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const nutriDisplay = item.querySelector('.nutritional-info-display');
+            if (!nutriDisplay || nutriDisplay.classList.contains('hidden')) {
+                alert('Please lookup nutritional info first');
+                return;
+            }
+            
+            try {
+                // Get the ingredient name
+                const ingredientName = item.querySelector('.ingredient-name').value.trim();
+                
+                // Get current standard amount and unit
+                const currentAmount = parseFloat(nutriDisplay.querySelector('.nutri-standard-amount-input').value) || 1;
+                const currentUnit = nutriDisplay.querySelector('.nutri-standard-unit-input').value || '';
+                
+                // Get all nutritional values
+                const nutritionalInfo = {
+                    standardAmount: currentAmount,
+                    standardUnit: currentUnit,
+                    calories: parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0,
+                    proteinG: parseFloat(nutriDisplay.querySelector('.nutri-protein')?.textContent) || 0,
+                    fatG: parseFloat(nutriDisplay.querySelector('.nutri-fat')?.textContent) || 0,
+                    saturatedFatG: parseFloat(nutriDisplay.querySelector('.nutri-saturated-fat')?.textContent) || 0,
+                    carbohydratesG: parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0,
+                    dietaryFiberG: parseFloat(nutriDisplay.querySelector('.nutri-fiber')?.textContent) || 0,
+                    sugarsG: parseFloat(nutriDisplay.querySelector('.nutri-sugars')?.textContent) || 0,
+                    sodiumMg: parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0,
+                    cholesterolMg: parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0,
+                    potassiumMg: parseFloat(nutriDisplay.querySelector('.nutri-potassium')?.textContent) || 0
+                };
+                
+                console.log('🤖 Requesting AI to find standard unit for:', ingredientName, nutritionalInfo);
+                
+                // Show loading state
+                const button = event.target;
+                const originalText = button.textContent;
+                button.disabled = true;
+                button.textContent = '⏳ Analyzing...';
+                
+                // Call backend API
+                const response = await fetch(`${API_BASE_URL}/api/recipes/find-standard-unit`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        ingredientName: ingredientName,
+                        nutritionalInfo: nutritionalInfo
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.suggestion) {
+                    console.log('✅ AI suggestion:', data.suggestion);
+                    
+                    // Update the input fields with the suggestion
+                    nutriDisplay.querySelector('.nutri-standard-amount-input').value = data.suggestion.amount;
+                    nutriDisplay.querySelector('.nutri-standard-unit-input').value = data.suggestion.unit;
+                    
+                    alert(`AI suggests: ${data.suggestion.amount} ${data.suggestion.unit}\n\nReasoning: ${data.suggestion.reasoning || 'Standard unit for easier conversions'}`);
+                } else {
+                    throw new Error('No suggestion received from AI');
+                }
+                
+                button.disabled = false;
+                button.textContent = originalText;
+                
+            } catch (error) {
+                console.error('Error finding standard unit:', error);
+                alert(`Error: ${error.message}`);
+                const button = event.target;
+                button.disabled = false;
+                button.textContent = '🤖 Find Standard Unit';
+            }
+        }
+        
+        /**
          * Check if a unit is count-based (whole, piece, roast, etc.)
          */
         function isCountUnit(unit) {
@@ -20569,52 +20663,73 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         }
                     }
                     
-                    // If still not found, use the server's newRecipe endpoint to create it
+                    // If still not found, publish a new nutritionalInfo record
                     if (!ingredientDID) {
-                        console.log(`📝 Creating new ingredient: ${ingredientName}`);
+                        console.log(`📝 Publishing new nutritionalInfo record: ${ingredientName}`);
                         
                         // Get the nutritional info from the UI (if looked up)
                         const nutriDisplay = item.querySelector('.nutritional-info-display');
-                        let nutritionalInfo = null;
                         
-                        if (nutriDisplay && !nutriDisplay.classList.contains('hidden')) {
-                            // Read from the editable input fields
-                            const standardAmount = parseFloat(nutriDisplay.querySelector('.nutri-standard-amount-input')?.value) || 1;
-                            const standardUnit = nutriDisplay.querySelector('.nutri-standard-unit-input')?.value || 'whole';
-                            
-                            nutritionalInfo = {
-                                standardAmount: standardAmount,
-                                standardUnit: standardUnit,
-                                calories: parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0,
-                                proteinG: parseFloat(nutriDisplay.querySelector('.nutri-protein')?.textContent) || 0,
-                                fatG: parseFloat(nutriDisplay.querySelector('.nutri-fat')?.textContent) || 0,
-                                saturatedFatG: parseFloat(nutriDisplay.querySelector('.nutri-saturated-fat')?.textContent) || 0,
-                                carbohydratesG: parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0,
-                                dietaryFiberG: parseFloat(nutriDisplay.querySelector('.nutri-fiber')?.textContent) || 0,
-                                sugarsG: parseFloat(nutriDisplay.querySelector('.nutri-sugars')?.textContent) || 0,
-                                sodiumMg: parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0,
-                                cholesterolMg: parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0,
-                                potassiumMg: parseFloat(nutriDisplay.querySelector('.nutri-potassium')?.textContent) || 0,
-                                calciumMg: parseFloat(nutriDisplay.querySelector('.nutri-calcium')?.textContent) || 0,
-                                ironMg: parseFloat(nutriDisplay.querySelector('.nutri-iron')?.textContent) || 0,
-                                vitaminAMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-a')?.textContent) || 0,
-                                vitaminCMg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-c')?.textContent) || 0,
-                                vitaminDMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-d')?.textContent) || 0
-                            };
-                            
-                            console.log(`📊 Including nutritional info with standardAmount=${standardAmount} ${standardUnit}`);
+                        if (!nutriDisplay || nutriDisplay.classList.contains('hidden')) {
+                            console.warn(`⚠️ No nutritional info looked up for ${ingredientName}, skipping`);
+                            continue;
                         }
                         
-                        // We'll let the server create it via the publish/newRecipe endpoint
-                        processedIngredients.push({
-                            name: ingredientName,
-                            amount: amount,
-                            unit: unit,
-                            comment: comment,
-                            nutritionalInfo: nutritionalInfo, // Include the nutritional info
-                            isNew: true
+                        // Read from the editable input fields
+                        const standardAmount = parseFloat(nutriDisplay.querySelector('.nutri-standard-amount-input')?.value) || 1;
+                        const standardUnit = nutriDisplay.querySelector('.nutri-standard-unit-input')?.value || 'whole';
+                        
+                        const nutritionalInfo = {
+                            standardAmount: standardAmount,
+                            standardUnit: standardUnit,
+                            calories: parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0,
+                            proteinG: parseFloat(nutriDisplay.querySelector('.nutri-protein')?.textContent) || 0,
+                            fatG: parseFloat(nutriDisplay.querySelector('.nutri-fat')?.textContent) || 0,
+                            saturatedFatG: parseFloat(nutriDisplay.querySelector('.nutri-saturated-fat')?.textContent) || 0,
+                            carbohydratesG: parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0,
+                            dietaryFiberG: parseFloat(nutriDisplay.querySelector('.nutri-fiber')?.textContent) || 0,
+                            sugarsG: parseFloat(nutriDisplay.querySelector('.nutri-sugars')?.textContent) || 0,
+                            sodiumMg: parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0,
+                            cholesterolMg: parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0,
+                            potassiumMg: parseFloat(nutriDisplay.querySelector('.nutri-potassium')?.textContent) || 0,
+                            calciumMg: parseFloat(nutriDisplay.querySelector('.nutri-calcium')?.textContent) || 0,
+                            ironMg: parseFloat(nutriDisplay.querySelector('.nutri-iron')?.textContent) || 0,
+                            vitaminAMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-a')?.textContent) || 0,
+                            vitaminCMg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-c')?.textContent) || 0,
+                            vitaminDMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-d')?.textContent) || 0
+                        };
+                        
+                        console.log(`📊 Publishing nutritionalInfo with standardAmount=${standardAmount} ${standardUnit}`);
+                        
+                        // Publish the nutritionalInfo record
+                        const publishResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=nutritionalInfo&storage=arweave`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                basic: {
+                                    name: ingredientName,
+                                    date: Math.floor(Date.now() / 1000),
+                                    language: 'en'
+                                },
+                                nutritionalInfo: nutritionalInfo
+                            })
                         });
-                        continue;
+                        
+                        if (!publishResponse.ok) {
+                            throw new Error(`Failed to publish nutritionalInfo record for ${ingredientName}`);
+                        }
+                        
+                        const publishData = await publishResponse.json();
+                        ingredientDID = publishData.did || publishData.didTx;
+                        
+                        if (!ingredientDID) {
+                            throw new Error(`No DID returned from nutritionalInfo publish for ${ingredientName}`);
+                        }
+                        
+                        console.log(`✅ Published new nutritionalInfo record: ${ingredientName} (${ingredientDID})`);
                     }
                 }
                 
