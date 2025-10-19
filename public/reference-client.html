@@ -20688,9 +20688,16 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                     
                     const publishData = await publishResponse.json();
-                    ingredientDID = publishData.did || publishData.didTx;
+                    
+                    // Extract DID from response - try multiple possible locations
+                    ingredientDID = publishData.recordToIndex?.oip?.did || 
+                                   publishData.recordToIndex?.oip?.didTx ||
+                                   publishData.did || 
+                                   publishData.didTx ||
+                                   (publishData.transactionId ? `did:arweave:${publishData.transactionId}` : null);
                     
                     if (!ingredientDID) {
+                        console.error('Failed to extract DID from response:', publishData);
                         throw new Error(`No DID returned from nutritionalInfo publish for ${ingredientName}`);
                     }
                     
