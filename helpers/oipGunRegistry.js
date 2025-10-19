@@ -43,7 +43,7 @@ class OIPGunRegistry {
      */
     async registerOIPRecord(recordDid, soul, recordType, creatorPubKey) {
         try {
-            console.log(`📝 Registering OIP record in GUN registry: ${recordDid}`);
+            // console.log(`📝 Registering OIP record in GUN registry: ${recordDid}`);
             
             const registryEntry = {
                 did: recordDid,
@@ -68,7 +68,7 @@ class OIPGunRegistry {
             };
             await this.gunHelper.putRecord(indexEntry, `${globalIndexKey}:${soul}`);
             
-            console.log('✅ Registered OIP record in GUN registry:', recordDid);
+            // console.log('✅ Registered OIP record in GUN registry:', recordDid);
             
         } catch (error) {
             console.error('❌ Failed to register OIP record in registry:', error);

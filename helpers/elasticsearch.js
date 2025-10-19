@@ -2705,7 +2705,7 @@ async function getRecords(queryParams) {
                     }
                     
                     if (!sharedWith || sharedWithArray.length === 0) {
-                        console.log('Excluding organization record (no shared_with):', record.oip?.did);
+                        // console.log('Excluding organization record (no shared_with):', record.oip?.did);
                         return false;
                     }
                     
@@ -2719,11 +2719,11 @@ async function getRecords(queryParams) {
                         const isMember = await checkOrganizationMembershipForRecord(userPubKey, sharedWithArray, requestInfo);
                         if (isMember) {
                             console.log('Including organization record for member:', record.oip?.did, 'user:', userPubKey.slice(0, 12));
-                            return true;
-                        } else {
-                            console.log('Excluding organization record (not member):', record.oip?.did, 'user:', userPubKey.slice(0, 12));
-                            return false;
-                        }
+                        return true;
+                    } else {
+                        // console.log('Excluding organization record (not member):', record.oip?.did, 'user:', userPubKey.slice(0, 12));
+                        return false;
+                    }
                     } catch (error) {
                         console.error('Error checking organization membership:', error);
                         return false;

@@ -100,7 +100,7 @@ class OrganizationEncryption {
                 return true;
                 
             } else {
-                console.warn(`⚠️ Unknown membership policy: ${membershipPolicy} for ${organizationDid}`);
+                // console.warn(`⚠️ Unknown membership policy: ${membershipPolicy} for ${organizationDid}`);
                 return false;
             }
             
