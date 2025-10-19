@@ -20737,54 +20737,57 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 const ingredientName = ingredient.data?.basic?.name || 'Unknown';
                                 const ingredientDID = ingredient.oip?.did || ingredient.oip?.didTx;
                                 
-                                if (modeSelect) modeSelect.value = 'existing';
-                                
-                                // Trigger mode change to show the select dropdown and load ingredients
+                                // Set mode to 'existing' - this will trigger onchange which loads ingredients
                                 if (modeSelect) {
-                                    // Change mode and wait for ingredients to load
                                     modeSelect.value = 'existing';
                                     
-                                    // Wait for loadExistingIngredientsForItem to complete (triggered by mode change)
-                                    updateRecipeIngredientMode(lastItem.id);
-                                    
-                                    // Wait a bit for the async load to complete, then populate fields
+                                    // The onchange event will trigger updateRecipeIngredientMode and loadExistingIngredientsForItem
+                                    // Wait for that async operation to complete before filtering
                                     setTimeout(async () => {
-                                        // Check if ingredients are loaded by checking for data-all-ingredients attribute
+                                        // Wait for ingredients to be loaded by checking data-all-ingredients attribute
                                         let retries = 0;
-                                        const maxRetries = 20; // Wait up to 2 seconds
+                                        const maxRetries = 30; // Wait up to 3 seconds
                                         
                                         while (retries < maxRetries) {
                                             const dataAttr = lastItem.getAttribute('data-all-ingredients');
                                             if (dataAttr && dataAttr !== '') {
-                                                // Ingredients are loaded, now populate and filter
+                                                // Ingredients are loaded, now filter them
                                                 const searchInput = lastItem.querySelector('.ingredient-search');
                                                 if (searchInput) {
-                                                    // Set the search value
                                                     searchInput.value = ingredientName;
-                                                    // Manually trigger the filter function since programmatic value changes don't trigger oninput
+                                                    // Manually trigger filtering
                                                     filterRecipeIngredients(lastItem.id, ingredientName);
                                                 }
                                                 
-                                                // Wait a moment for filtering to complete, then select and set other fields
+                                                // Wait for filtering to update the DOM, then check results
                                                 setTimeout(() => {
                                                     const selectDropdown = lastItem.querySelector('.ingredient-select');
                                                     
-                                                    // Check if filtering resulted in 0 matches (only "Select an ingredient..." option remains)
+                                                    // Check if filtering resulted in 0 matches (only "Select an ingredient..." option)
                                                     if (selectDropdown && selectDropdown.options.length === 1) {
                                                         console.log(`⚠️ No matching ingredients found for "${ingredientName}" - switching to New Ingredient mode`);
                                                         
-                                                        // Switch to "New Ingredient Record" mode
+                                                        // Switch to "New Ingredient Record" mode without triggering onchange
                                                         const modeSelect = lastItem.querySelector('.ingredient-mode');
                                                         if (modeSelect) {
+                                                            // Remove the onchange listener temporarily to avoid recursive calls
+                                                            const originalOnchange = modeSelect.onchange;
+                                                            modeSelect.onchange = null;
                                                             modeSelect.value = 'new';
+                                                            // Manually call the mode update
                                                             updateRecipeIngredientMode(lastItem.id);
+                                                            // Restore the onchange listener
+                                                            modeSelect.onchange = originalOnchange;
                                                         }
                                                         
                                                         // Populate the new ingredient name field with the preserved name
                                                         setTimeout(() => {
-                                                            const newIngredientNameInput = lastItem.querySelector('.new-ingredient-name');
+                                                            const newIngredientNameInput = lastItem.querySelector('.ingredient-name');
                                                             if (newIngredientNameInput) {
                                                                 newIngredientNameInput.value = ingredientName;
+                                                                console.log(`✅ Set ingredient name to: ${ingredientName}`);
+                                                            } else {
+                                                                console.warn('⚠️ Could not find .ingredient-name input');
                                                             }
                                                             
                                                             // Set amount, unit, and comment
@@ -20796,12 +20799,11 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                             if (unitInput) unitInput.value = currentUnit;
                                                             if (commentInput) commentInput.value = currentComment;
                                                         }, 50);
-                                                    } else {
+                                                    } else if (selectDropdown) {
                                                         // Found matching ingredient(s), select by DID
-                                                        if (selectDropdown && ingredientDID) {
+                                                        if (ingredientDID) {
                                                             selectDropdown.value = ingredientDID;
                                                             if (selectDropdown.value === ingredientDID) {
-                                                                // Trigger the display of nutritional info
                                                                 displayExistingIngredientNutritionalInfo(lastItem.id);
                                                             }
                                                         }
@@ -20815,7 +20817,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                         if (unitInput) unitInput.value = currentUnit;
                                                         if (commentInput) commentInput.value = currentComment;
                                                     }
-                                                }, 100);
+                                                }, 150);
                                                 
                                                 break; // Exit the retry loop
                                             }
@@ -20828,7 +20830,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                         if (retries >= maxRetries) {
                                             console.warn(`⚠️ Timed out waiting for ingredients to load for item ${lastItem.id}`);
                                         }
-                                    }, 150);
+                                    }, 200);
                                 }
                                 
                                 console.log(`📋 Copied ingredient ${idx + 1}: ${ingredientName} (${ingredientDID}) - ${currentAmount} ${currentUnit}`);
