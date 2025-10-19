@@ -171,7 +171,7 @@ class GunHelper {
                 console.log(`✅ Encrypted record using ${encryptionStrategy.encryptionType} encryption`);
             }
 
-            console.log('📡 Sending HTTP PUT request to GUN API...');
+            // console.log('📡 Sending HTTP PUT request to GUN API...');
             
             // Use HTTP API instead of GUN peer protocol
             const response = await axios.post(`${this.apiUrl}/put`, {
@@ -339,7 +339,7 @@ class GunHelper {
                     };
                 }
 
-                console.log('✅ GUN record retrieved successfully via HTTP API');
+                // console.log('✅ GUN record retrieved successfully via HTTP API');
 
                 // Handle GUN reference objects - GUN sometimes returns { '#': 'path' } instead of actual data
                 // This can happen with nested data structures or when data isn't fully loaded
