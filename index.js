@@ -357,24 +357,27 @@ initializeIndices()
     const serverInstance = server.listen(port, async () => {
       console.log(`Server is running on port ${port}`);
 
-      // Initialize MediaSeeder for server mode
-      try {
-        const mediaSeeder = getMediaSeeder();
-        await mediaSeeder.initialize();
-        console.log('🌱 MediaSeeder initialized successfully');
-      } catch (error) {
-        console.error('❌ Failed to initialize MediaSeeder:', error);
-      }
+      // Initialize MediaSeeder for server mode (non-blocking)
+      // Don't await - let it initialize in the background so it doesn't block keepDBUpToDate
+      const mediaSeeder = getMediaSeeder();
+      mediaSeeder.initialize()
+        .then(() => {
+          console.log('🌱 MediaSeeder initialized successfully');
+        })
+        .catch((error) => {
+          console.error('❌ Failed to initialize MediaSeeder:', error);
+        });
 
-      // Start GUN sync service after server is ready
+      // Start GUN sync service after server is ready (non-blocking)
       if (gunSyncService) {
-        try {
-          await gunSyncService.start();
-          global.gunSyncService = gunSyncService; // Make globally accessible for health endpoint
-          console.log('🔄 GUN Record Sync Service started successfully');
-        } catch (error) {
-          console.error('❌ Failed to start GUN Sync Service:', error);
-        }
+        gunSyncService.start()
+          .then(() => {
+            global.gunSyncService = gunSyncService; // Make globally accessible for health endpoint
+            console.log('🔄 GUN Record Sync Service started successfully');
+          })
+          .catch((error) => {
+            console.error('❌ Failed to start GUN Sync Service:', error);
+          });
       }
 
       console.log('🔍 [DEBUG] About to start memory monitor...');
