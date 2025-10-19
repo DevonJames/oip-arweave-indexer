@@ -377,10 +377,13 @@ initializeIndices()
         }
       }
 
+      console.log('🔍 [DEBUG] About to start memory monitor...');
+      
       // MEMORY LEAK FIX: Start memory monitor for long-running processes
       const memoryMonitorInterval = parseInt(process.env.MEMORY_MONITOR_INTERVAL) || 300000; // 5 minutes default
       const memoryWarningThreshold = parseInt(process.env.MEMORY_WARNING_THRESHOLD) || 80; // 80% threshold
       
+      console.log('🔍 [DEBUG] Setting up memory monitor setInterval...');
       setInterval(() => {
         const memUsage = process.memoryUsage();
         const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
@@ -411,16 +414,21 @@ initializeIndices()
       
       console.log(`✅ Memory monitor started (interval: ${memoryMonitorInterval/1000}s, warning threshold: ${memoryWarningThreshold}%)`);
 
+      console.log('🔍 [DEBUG] Checking for remapTemplates...');
       // Initialize remapTemplates
       let remapTemplates = [];
       if (args.remapTemplates) {
           remapTemplates = args.remapTemplates.split(',');
           console.log(`Remap templates enabled for: ${remapTemplates.join(', ')}`);
           await remapExistingRecords(remapTemplates);
+      } else {
+          console.log('🔍 [DEBUG] No remapTemplates specified');
       }
 
+      console.log('🔍 [DEBUG] Checking args.keepDBUpToDate:', args.keepDBUpToDate, 'Type:', typeof args.keepDBUpToDate);
       // Periodically keep DB up to date
       if (args.keepDBUpToDate) {
+          console.log('🔍 [DEBUG] ✅ INSIDE keepDBUpToDate block! Setting up parameters...');
           const wait = args._[0] ? parseInt(args._[0], 10) : 0; // Delay in seconds
           // const interval = args._[1] ? parseInt(args._[1], 10) : 600; // Interval in seconds
           const interval = 300;
@@ -478,7 +486,11 @@ initializeIndices()
                   }
               }, interval * 1000);
           }, wait * 1000);
+      } else {
+          console.log('⏭️  [DEBUG] keepDBUpToDate block SKIPPED - args.keepDBUpToDate is:', args.keepDBUpToDate);
       }
+      
+      console.log('🔍 [DEBUG] Finished server.listen callback');
     });
   })
   .catch(error => {
