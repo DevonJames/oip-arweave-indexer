@@ -248,6 +248,12 @@ initializeIndices()
     // Parse command-line arguments first
     const args = minimist(process.argv.slice(2));
     
+    console.log('\n🔍 [DEBUG] Command line arguments:');
+    console.log('   process.argv:', process.argv);
+    console.log('   Parsed args:', JSON.stringify(args, null, 2));
+    console.log('   args.keepDBUpToDate:', args.keepDBUpToDate);
+    console.log('');
+    
     // CLI functionality for deleting records by block
     if (args.deleteRecords && args.index && args.blockThreshold) {
         const index = args.index;
