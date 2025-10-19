@@ -19703,26 +19703,38 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                             }
                         }
                     } else {
-                        // Get from new ingredient fields
-                        const calories = parseFloat(item.querySelector('.new-ingredient-calories').value) || 0;
-                        const protein = parseFloat(item.querySelector('.new-ingredient-protein').value) || 0;
-                        const fat = parseFloat(item.querySelector('.new-ingredient-fat').value) || 0;
-                        const carbs = parseFloat(item.querySelector('.new-ingredient-carbs').value) || 0;
-                        const sodium = parseFloat(item.querySelector('.new-ingredient-sodium').value) || 0;
-                        const cholesterol = parseFloat(item.querySelector('.new-ingredient-cholesterol').value) || 0;
-                        const standardAmount = parseFloat(item.querySelector('.new-ingredient-standard-amount').value) || 1;
-                        const standardUnit = item.querySelector('.new-ingredient-standard-unit').value || 'whole';
-                        
-                        nutritionalInfo = {
-                            calories,
-                            proteinG: protein,
-                            fatG: fat,
-                            carbohydratesG: carbs,
-                            sodiumMg: sodium,
-                            cholesterolMg: cholesterol,
-                            standardAmount,
-                            standardUnit
-                        };
+                        // Get from new ingredient fields - check if nutritional info was looked up
+                        const nutriDisplay = item.querySelector('.nutritional-info-display');
+                        if (nutriDisplay && !nutriDisplay.classList.contains('hidden')) {
+                            // Nutritional info was looked up and is displayed
+                            const calories = parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0;
+                            const protein = parseFloat(nutriDisplay.querySelector('.nutri-protein')?.textContent) || 0;
+                            const fat = parseFloat(nutriDisplay.querySelector('.nutri-fat')?.textContent) || 0;
+                            const carbs = parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0;
+                            const sodium = parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0;
+                            const cholesterol = parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0;
+                            const standardAmountText = nutriDisplay.querySelector('.nutri-standard-amount')?.textContent || '1 whole';
+                            
+                            // Parse "X unit" format
+                            const parts = standardAmountText.split(' ');
+                            const standardAmount = parseFloat(parts[0]) || 1;
+                            const standardUnit = parts.slice(1).join(' ') || 'whole';
+                            
+                            nutritionalInfo = {
+                                calories,
+                                proteinG: protein,
+                                fatG: fat,
+                                carbohydratesG: carbs,
+                                sodiumMg: sodium,
+                                cholesterolMg: cholesterol,
+                                standardAmount,
+                                standardUnit
+                            };
+                        } else {
+                            // No nutritional info available for this new ingredient
+                            console.warn(`⚠️ No nutritional info available for new ingredient in item ${itemId}`);
+                            continue;
+                        }
                     }
                     
                     if (!nutritionalInfo) continue;
