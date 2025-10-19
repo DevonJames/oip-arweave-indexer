@@ -19132,8 +19132,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             
             container.insertAdjacentHTML('beforeend', itemHTML);
             
-            // Load existing ingredients for this item
-            loadExistingIngredientsForItem(itemId);
+            // Don't load ingredients by default - let mode changes handle it
+            // loadExistingIngredientsForItem(itemId);
         }
 
         /**
@@ -20761,19 +20761,20 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 if (modeSelect) {
                                     console.log(`🎯 Setting mode to 'existing' for ${lastItem.id}`);
                                     
-                                    // Wait a tick to ensure DOM is ready, then set mode
-                                    await new Promise(resolveMode => setTimeout(resolveMode, 50));
+                                    // Wait to ensure DOM is ready, then set mode
+                                    await new Promise(resolveMode => setTimeout(resolveMode, 100));
                                     
                                     modeSelect.value = 'existing';
                                     console.log(`   Mode value set to: ${modeSelect.value}`);
                                     
                                     // Manually trigger the mode change - onchange may not fire programmatically
+                                    console.log(`   🔄 Calling updateRecipeIngredientMode to switch UI to EXISTING mode`);
                                     updateRecipeIngredientMode(lastItem.id);
                                     
                                     // Wait for the async operations to complete before moving to next ingredient
                                     await new Promise(resolve => {
                                         // updateRecipeIngredientMode will call loadExistingIngredientsForItem
-                                        // Wait for that async operation to complete before filtering
+                                        // Wait for that async operation to complete before filtering (give it more time)
                                         setTimeout(async () => {
                                             // Wait for ingredients to be loaded by checking data-all-ingredients attribute
                                             let retries = 0;
@@ -20799,14 +20800,16 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                             if (selectDropdown && selectDropdown.options.length === 1) {
                                                                 console.log(`⚠️ No matching ingredients found for "${ingredientName}" - switching to New Ingredient mode`);
                                                                 
-                                                                // Switch to "New Ingredient Record" mode - let onchange fire naturally
+                                                                // Switch to "New Ingredient Record" mode - manually trigger UI update
                                                                 const modeSelect = lastItem.querySelector('.ingredient-mode');
                                                                 if (modeSelect) {
                                                                     modeSelect.value = 'new';
-                                                                    // The onchange event will fire and call updateRecipeIngredientMode automatically
+                                                                    console.log(`   🔄 Calling updateRecipeIngredientMode to switch UI to NEW mode`);
+                                                                    // Manually call updateRecipeIngredientMode since onchange doesn't fire programmatically
+                                                                    updateRecipeIngredientMode(lastItem.id);
                                                                 }
                                                                 
-                                                                // Wait for the mode switch UI update to complete, then populate fields
+                                                                // Wait longer for the mode switch UI update to complete (DOM manipulation takes time)
                                                                 setTimeout(() => {
                                                                     const newIngredientNameInput = lastItem.querySelector('.ingredient-name');
                                                                     if (newIngredientNameInput) {
@@ -20826,7 +20829,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                                     if (commentInput) commentInput.value = currentComment;
                                                                     
                                                                     resolveInner();
-                                                                }, 100);
+                                                                }, 300);
                                                             } else if (selectDropdown) {
                                                                 // Found matching ingredient(s), select by DID
                                                                 if (ingredientDID) {
@@ -20849,7 +20852,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                             } else {
                                                                 resolveInner();
                                                             }
-                                                        }, 150);
+                                                        }, 300);
                                                     });
                                                     
                                                     break; // Exit the retry loop
@@ -20865,7 +20868,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                             }
                                             
                                             resolve();
-                                        }, 200);
+                                        }, 500);
                                     });
                                 }
                                 
