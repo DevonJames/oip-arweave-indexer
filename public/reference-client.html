@@ -19700,10 +19700,19 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     const amount = parseFloat(item.querySelector('.ingredient-amount').value) || 0;
                     const unit = item.querySelector('.ingredient-unit').value || '';
                     
-                    console.log(`   Processing ${itemId}: mode="${mode}", amount=${amount}, unit="${unit}"`);
+                    // Get ingredient name for better logging
+                    let ingredientName = 'Unknown';
+                    if (mode === 'existing') {
+                        const selectElement = item.querySelector('.ingredient-select');
+                        ingredientName = selectElement.options[selectElement.selectedIndex]?.text || 'Unknown';
+                    } else {
+                        ingredientName = item.querySelector('.ingredient-name')?.value || 'Unknown';
+                    }
+                    
+                    console.log(`   Processing ${itemId} (${ingredientName}): mode="${mode}", amount=${amount}, unit="${unit}"`);
                     
                     if (amount <= 0) {
-                        console.log(`   ⚠️ Skipping ${itemId} - amount is 0`);
+                        console.log(`   ⚠️ Skipping ${itemId} (${ingredientName}) - amount is 0`);
                         continue;
                     }
                     
@@ -19764,7 +19773,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                     
                     if (!nutritionalInfo) {
-                        console.warn(`   ⚠️ No nutritionalInfo extracted for ${itemId}`);
+                        console.warn(`   ⚠️ SKIPPED ${ingredientName}: No nutritionalInfo found`);
                         continue;
                     }
                     
@@ -19798,7 +19807,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                             multiplier = recipeInOz / standardInOz;
                             console.log(`   Converted to oz: ${recipeInOz} oz / ${standardInOz} oz = ${multiplier}`);
                         } else {
-                            console.warn(`Cannot convert ${amount} ${recipeUnit} to ${standardUnit}`);
+                            console.warn(`   ⚠️ SKIPPED ${ingredientName}: Cannot convert ${amount} ${recipeUnit} to ${standardAmount} ${standardUnit}`);
                             continue;
                         }
                     }
@@ -19833,13 +19842,13 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 };
                 
                 // Display results
-                document.getElementById('nutrition-calories').textContent = perServing.calories;
-                document.getElementById('nutrition-protein').textContent = perServing.proteinG;
-                document.getElementById('nutrition-fat').textContent = perServing.fatG;
-                document.getElementById('nutrition-carbs').textContent = perServing.carbohydratesG;
-                document.getElementById('nutrition-sodium').textContent = perServing.sodiumMg;
-                document.getElementById('nutrition-cholesterol').textContent = perServing.cholesterolMg;
-                document.getElementById('nutrition-info-text').textContent = 
+                document.getElementById('recipe-bundle-summary-calories').textContent = perServing.calories;
+                document.getElementById('recipe-bundle-summary-protein').textContent = perServing.proteinG;
+                document.getElementById('recipe-bundle-summary-fat').textContent = perServing.fatG;
+                document.getElementById('recipe-bundle-summary-carbs').textContent = perServing.carbohydratesG;
+                document.getElementById('recipe-bundle-summary-sodium').textContent = perServing.sodiumMg;
+                document.getElementById('recipe-bundle-summary-cholesterol').textContent = perServing.cholesterolMg;
+                document.getElementById('recipe-bundle-summary-info-text').textContent = 
                     `Based on ${processedCount} of ${ingredientItems.length} ingredients • ${servings} serving${servings > 1 ? 's' : ''}`;
                 
                 document.getElementById('recipe-bundle-nutrition-summary').classList.remove('hidden');
@@ -19967,14 +19976,24 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             const unitLower = unit.toLowerCase();
             if (unitLower.includes('lb') || unitLower.includes('pound')) {
                 return value * 16;
-            } else if (unitLower.includes('oz')) {
+            } else if (unitLower.includes('oz') || unitLower.includes('ounce')) {
                 return value;
             } else if (unitLower.includes('cup')) {
                 return value * 8;
-            } else if (unitLower.includes('tbsp')) {
+            } else if (unitLower.includes('tbsp') || unitLower.includes('tablespoon')) {
                 return value * 0.5;
-            } else if (unitLower.includes('tsp')) {
+            } else if (unitLower.includes('tsp') || unitLower.includes('teaspoon')) {
                 return value * 0.17;
+            } else if (unitLower.includes('g') && !unitLower.includes('mg')) {
+                // Grams to ounces
+                return value * 0.035274;
+            } else if (unitLower.includes('kg') || unitLower.includes('kilogram')) {
+                return value * 35.274;
+            } else if (unitLower.includes('ml') || unitLower.includes('milliliter')) {
+                // Approximate: 1 ml ≈ 0.034 fl oz (for water/liquids)
+                return value * 0.034;
+            } else if (unitLower.includes('l') || unitLower.includes('liter')) {
+                return value * 33.814;
             }
             return null; // Cannot convert
         }
@@ -20764,6 +20783,25 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     ingredientUnitArray.push(ing.unit);
                 });
                 
+                // Check if nutritional summary has been calculated
+                const summaryCalories = document.getElementById('recipe-bundle-summary-calories')?.textContent;
+                let summaryNutritionalInfo = null;
+                
+                if (summaryCalories && summaryCalories.trim() !== '') {
+                    // Read the calculated nutritional summary from the UI
+                    summaryNutritionalInfo = {
+                        calories: parseInt(document.getElementById('recipe-bundle-summary-calories')?.textContent) || 0,
+                        proteinG: parseFloat(document.getElementById('recipe-bundle-summary-protein')?.textContent) || 0,
+                        fatG: parseFloat(document.getElementById('recipe-bundle-summary-fat')?.textContent) || 0,
+                        carbohydratesG: parseFloat(document.getElementById('recipe-bundle-summary-carbs')?.textContent) || 0,
+                        sodiumMg: parseInt(document.getElementById('recipe-bundle-summary-sodium')?.textContent) || 0,
+                        cholesterolMg: parseInt(document.getElementById('recipe-bundle-summary-cholesterol')?.textContent) || 0
+                    };
+                    console.log('✅ Including pre-calculated nutritional summary:', summaryNutritionalInfo);
+                } else {
+                    console.log('ℹ️ No pre-calculated nutritional summary found - backend will calculate');
+                }
+                
                 // Build recipe record
                 const recipeRecord = {
                     basic: {
@@ -20791,6 +20829,11 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         authorDRef: authorDID || undefined
                     }
                 };
+                
+                // Add pre-calculated nutritional summary if available
+                if (summaryNutritionalInfo) {
+                    recipeRecord.summaryNutritionalInfoPerServing = summaryNutritionalInfo;
+                }
                 
                 console.log('📝 Publishing recipe:', recipeRecord);
                 
