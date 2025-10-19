@@ -185,7 +185,7 @@ class GunHelper {
             });
 
             if (response.data.success) {
-                console.log('✅ GUN record stored successfully via HTTP API');
+                // console.log('✅ GUN record stored successfully via HTTP API');
                 return { 
                     soul, 
                     did: `did:gun:${soul}`,
