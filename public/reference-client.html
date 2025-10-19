@@ -20767,9 +20767,12 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                     modeSelect.value = 'existing';
                                     console.log(`   Mode value set to: ${modeSelect.value}`);
                                     
+                                    // Manually trigger the mode change - onchange may not fire programmatically
+                                    updateRecipeIngredientMode(lastItem.id);
+                                    
                                     // Wait for the async operations to complete before moving to next ingredient
                                     await new Promise(resolve => {
-                                        // The onchange event will trigger updateRecipeIngredientMode and loadExistingIngredientsForItem
+                                        // updateRecipeIngredientMode will call loadExistingIngredientsForItem
                                         // Wait for that async operation to complete before filtering
                                         setTimeout(async () => {
                                             // Wait for ingredients to be loaded by checking data-all-ingredients attribute
