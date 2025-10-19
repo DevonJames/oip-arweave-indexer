@@ -20825,7 +20825,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                                     const commentInput = lastItem.querySelector('.ingredient-comment');
                                                                     
                                                                     if (amountInput) amountInput.value = currentAmount;
-                                                                    if (unitInput) unitInput.value = currentUnit;
+                                                                    if (unitInput) unitInput.value = currentUnit.toLowerCase(); // Normalize to lowercase
                                                                     if (commentInput) commentInput.value = currentComment;
                                                                     
                                                                     resolveInner();
@@ -20845,7 +20845,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                                 const commentInput = lastItem.querySelector('.ingredient-comment');
                                                                 
                                                                 if (amountInput) amountInput.value = currentAmount;
-                                                                if (unitInput) unitInput.value = currentUnit;
+                                                                if (unitInput) unitInput.value = currentUnit.toLowerCase(); // Normalize to lowercase
                                                                 if (commentInput) commentInput.value = currentComment;
                                                                 
                                                                 resolveInner();
