@@ -20596,7 +20596,12 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             const processedIngredients = [];
             
             for (const item of items) {
-                const mode = item.querySelector('.ingredient-mode').value;
+                const modeSelect = item.querySelector('.ingredient-mode');
+                const mode = modeSelect.value;
+                const ingredientName = item.querySelector('.ingredient-name')?.value?.trim() || 'N/A';
+                
+                console.log(`🔍 Processing ingredient: "${ingredientName}", mode="${mode}"`);
+                
                 const amount = parseFloat(item.querySelector('.ingredient-amount').value) || 0;
                 const unit = item.querySelector('.ingredient-unit').value;
                 const comment = item.querySelector('.ingredient-comment').value.trim();
@@ -20604,6 +20609,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 let ingredientDID = null;
                 
                 if (mode === 'existing') {
+                    console.log(`   → Mode is EXISTING for ${ingredientName}`);
                     // Use existing ingredient
                     const selectElement = item.querySelector('.ingredient-select');
                     ingredientDID = selectElement.value;
@@ -20613,132 +20619,89 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         continue;
                     }
                 } else {
-                    // Create new ingredient
-                    const nameInput = item.querySelector('.ingredient-name');
-                    const ingredientName = nameInput.value.trim();
+                    // Mode is NOT "existing", so create new ingredient - publish a new nutritionalInfo record
+                    console.log(`   → Mode is NEW (value="${mode}") for ${ingredientName}`);
                     
-                    if (!ingredientName) {
+                    const nameInput = item.querySelector('.ingredient-name');
+                    const ingredientNameFromInput = nameInput.value.trim();
+                    
+                    if (!ingredientNameFromInput) {
                         console.warn('⚠️ No ingredient name provided, skipping');
                         continue;
                     }
                     
-                    // Check if it already exists first (remove noDuplicates, filter smartly)
-                    const searchResponse = await fetch(
-                        `${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=basic.name&fieldSearch=${encodeURIComponent(ingredientName)}`,
-                        {
-                            method: 'GET',
-                            headers: {
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/json'
-                            }
-                        }
-                    );
+                    console.log(`📝 Publishing new nutritionalInfo record: ${ingredientNameFromInput}`);
                     
-                    if (searchResponse.ok) {
-                        const searchData = await searchResponse.json();
-                        const allExistingRecords = searchData.records || [];
-                        
-                        // Filter to only records with nutritional info, then pick the best one
-                        const recordsWithNutrition = allExistingRecords.filter(record => {
-                            return record.data?.nutritionalInfo && 
-                                   Object.keys(record.data.nutritionalInfo).length > 0;
-                        });
-                        
-                        if (recordsWithNutrition.length > 0) {
-                            // Pick the best match (highest score or newest)
-                            const best = recordsWithNutrition.reduce((prev, current) => {
-                                const prevScore = prev.fieldSearchScore || 0;
-                                const currentScore = current.fieldSearchScore || 0;
-                                const prevDate = prev.data?.basic?.date || 0;
-                                const currentDate = current.data?.basic?.date || 0;
-                                
-                                if (currentScore > prevScore || (currentScore === prevScore && currentDate > prevDate)) {
-                                    return current;
-                                }
-                                return prev;
-                            });
-                            
-                            ingredientDID = best.oip?.did || best.oip?.didTx;
-                            console.log(`✅ Found existing ingredient with nutritional info: ${ingredientName} (${ingredientDID})`);
-                        }
+                    // Get the nutritional info from the UI (if looked up)
+                    const nutriDisplay = item.querySelector('.nutritional-info-display');
+                    
+                    if (!nutriDisplay || nutriDisplay.classList.contains('hidden')) {
+                        console.warn(`⚠️ No nutritional info looked up for ${ingredientName}, skipping`);
+                        continue;
                     }
                     
-                    // If still not found, publish a new nutritionalInfo record
-                    if (!ingredientDID) {
-                        console.log(`📝 Publishing new nutritionalInfo record: ${ingredientName}`);
-                        
-                        // Get the nutritional info from the UI (if looked up)
-                        const nutriDisplay = item.querySelector('.nutritional-info-display');
-                        
-                        if (!nutriDisplay || nutriDisplay.classList.contains('hidden')) {
-                            console.warn(`⚠️ No nutritional info looked up for ${ingredientName}, skipping`);
-                            continue;
-                        }
-                        
-                        // Read from the editable input fields
-                        const standardAmount = parseFloat(nutriDisplay.querySelector('.nutri-standard-amount-input')?.value) || 1;
-                        const standardUnit = nutriDisplay.querySelector('.nutri-standard-unit-input')?.value || 'whole';
-                        
-                        const nutritionalInfo = {
-                            standardAmount: standardAmount,
-                            standardUnit: standardUnit,
-                            calories: parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0,
-                            proteinG: parseFloat(nutriDisplay.querySelector('.nutri-protein')?.textContent) || 0,
-                            fatG: parseFloat(nutriDisplay.querySelector('.nutri-fat')?.textContent) || 0,
-                            saturatedFatG: parseFloat(nutriDisplay.querySelector('.nutri-saturated-fat')?.textContent) || 0,
-                            carbohydratesG: parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0,
-                            dietaryFiberG: parseFloat(nutriDisplay.querySelector('.nutri-fiber')?.textContent) || 0,
-                            sugarsG: parseFloat(nutriDisplay.querySelector('.nutri-sugars')?.textContent) || 0,
-                            sodiumMg: parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0,
-                            cholesterolMg: parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0,
-                            potassiumMg: parseFloat(nutriDisplay.querySelector('.nutri-potassium')?.textContent) || 0,
-                            calciumMg: parseFloat(nutriDisplay.querySelector('.nutri-calcium')?.textContent) || 0,
-                            ironMg: parseFloat(nutriDisplay.querySelector('.nutri-iron')?.textContent) || 0,
-                            vitaminAMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-a')?.textContent) || 0,
-                            vitaminCMg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-c')?.textContent) || 0,
-                            vitaminDMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-d')?.textContent) || 0
-                        };
-                        
-                        console.log(`📊 Publishing nutritionalInfo with standardAmount=${standardAmount} ${standardUnit}`);
-                        
-                        // Publish the nutritionalInfo record
-                        const publishResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=nutritionalInfo&storage=arweave`, {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${authToken}`,
-                                'Content-Type': 'application/json'
+                    // Read from the editable input fields
+                    const standardAmount = parseFloat(nutriDisplay.querySelector('.nutri-standard-amount-input')?.value) || 1;
+                    const standardUnit = nutriDisplay.querySelector('.nutri-standard-unit-input')?.value || 'whole';
+                    
+                    const nutritionalInfo = {
+                        standardAmount: standardAmount,
+                        standardUnit: standardUnit,
+                        calories: parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0,
+                        proteinG: parseFloat(nutriDisplay.querySelector('.nutri-protein')?.textContent) || 0,
+                        fatG: parseFloat(nutriDisplay.querySelector('.nutri-fat')?.textContent) || 0,
+                        saturatedFatG: parseFloat(nutriDisplay.querySelector('.nutri-saturated-fat')?.textContent) || 0,
+                        carbohydratesG: parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0,
+                        dietaryFiberG: parseFloat(nutriDisplay.querySelector('.nutri-fiber')?.textContent) || 0,
+                        sugarsG: parseFloat(nutriDisplay.querySelector('.nutri-sugars')?.textContent) || 0,
+                        sodiumMg: parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0,
+                        cholesterolMg: parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0,
+                        potassiumMg: parseFloat(nutriDisplay.querySelector('.nutri-potassium')?.textContent) || 0,
+                        calciumMg: parseFloat(nutriDisplay.querySelector('.nutri-calcium')?.textContent) || 0,
+                        ironMg: parseFloat(nutriDisplay.querySelector('.nutri-iron')?.textContent) || 0,
+                        vitaminAMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-a')?.textContent) || 0,
+                        vitaminCMg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-c')?.textContent) || 0,
+                        vitaminDMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-d')?.textContent) || 0
+                    };
+                    
+                    console.log(`📊 Publishing nutritionalInfo with standardAmount=${standardAmount} ${standardUnit}`);
+                    
+                    // Publish the nutritionalInfo record
+                    const publishResponse = await fetch(`${API_BASE_URL}/api/records/newRecord?recordType=nutritionalInfo&storage=arweave`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            basic: {
+                                name: ingredientName,
+                                date: Math.floor(Date.now() / 1000),
+                                language: 'en'
                             },
-                            body: JSON.stringify({
-                                basic: {
-                                    name: ingredientName,
-                                    date: Math.floor(Date.now() / 1000),
-                                    language: 'en'
-                                },
-                                nutritionalInfo: nutritionalInfo
-                            })
-                        });
-                        
-                        if (!publishResponse.ok) {
-                            throw new Error(`Failed to publish nutritionalInfo record for ${ingredientName}`);
-                        }
-                        
-                        const publishData = await publishResponse.json();
-                        ingredientDID = publishData.did || publishData.didTx;
-                        
-                        if (!ingredientDID) {
-                            throw new Error(`No DID returned from nutritionalInfo publish for ${ingredientName}`);
-                        }
-                        
-                        console.log(`✅ Published new nutritionalInfo record: ${ingredientName} (${ingredientDID})`);
+                            nutritionalInfo: nutritionalInfo
+                        })
+                    });
+                    
+                    if (!publishResponse.ok) {
+                        throw new Error(`Failed to publish nutritionalInfo record for ${ingredientName}`);
                     }
+                    
+                    const publishData = await publishResponse.json();
+                    ingredientDID = publishData.did || publishData.didTx;
+                    
+                    if (!ingredientDID) {
+                        throw new Error(`No DID returned from nutritionalInfo publish for ${ingredientName}`);
+                    }
+                    
+                    console.log(`✅ Published new nutritionalInfo record: ${ingredientName} (${ingredientDID})`);
                 }
                 
                 processedIngredients.push({
                     did: ingredientDID,
                     amount: amount,
                     unit: unit,
-                    comment: comment,
-                    isNew: false
+                    comment: comment
                 });
             }
             
@@ -20787,11 +20750,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const ingredientUnitArray = [];
                 
                 processedIngredients.forEach(ing => {
-                    if (ing.isNew) {
-                        ingredientArray.push(ing.name);
-                    } else {
-                        ingredientArray.push(ing.did);
-                    }
+                    // All ingredients now have DIDs (either existing or newly published)
+                    ingredientArray.push(ing.did);
                     ingredientCommentArray.push(ing.comment || '');
                     ingredientAmountArray.push(ing.amount);
                     ingredientUnitArray.push(ing.unit);
@@ -20827,12 +20787,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 
                 console.log('📝 Publishing recipe:', recipeRecord);
                 
-                // Always use the specialized newRecipe endpoint for:
-                // 1. Auto-creating new ingredient records
-                // 2. Calculating nutritional summaries at publish-time
-                // 3. High-quality ingredient matching with score threshold
-                const hasNewIngredients = processedIngredients.some(ing => ing.isNew);
-                console.log(`🔄 Using publish/newRecipe endpoint (${hasNewIngredients ? 'has new ingredients' : 'all ingredients exist, but benefits from nutritional calculation'})`);
+                // Use the specialized newRecipe endpoint for calculating nutritional summaries
+                console.log('🔄 Using publish/newRecipe endpoint for nutritional calculation');
                 
                 // Add blockchain parameter from storage selection
                 const recipePayload = {
@@ -21092,31 +21048,38 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 
                                 console.log(`📋 Copied ingredient ${idx + 1}: ${ingredientName} (${ingredientDID}) - ${currentAmount} ${currentUnit}`);
                             } else if (typeof ingredient === 'string' && ingredient.startsWith('did:')) {
-                                // DID reference - use "Select Existing" mode and look it up
-                                if (modeSelect) modeSelect.value = 'existing';
+                                // DID reference - look it up and check if it has nutritional info
+                                console.log(`🔍 Looking up ingredient by DID: ${ingredient}`);
                                 
-                                // Trigger mode change
-                                if (modeSelect) {
-                                    const event = new Event('change');
-                                    modeSelect.dispatchEvent(event);
+                                try {
+                                    const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=oip.did&fieldSearch=${encodeURIComponent(ingredient)}&limit=1`, {
+                                        method: 'GET',
+                                        headers: {
+                                            'Authorization': `Bearer ${authToken}`,
+                                            'Content-Type': 'application/json'
+                                        }
+                                    });
                                     
-                                    // Look up the ingredient by DID
-                                    setTimeout(async () => {
-                                        try {
-                                            const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&fieldName=oip.did&fieldSearch=${encodeURIComponent(ingredient)}&limit=1`, {
-                                                method: 'GET',
-                                                headers: {
-                                                    'Authorization': `Bearer ${authToken}`,
-                                                    'Content-Type': 'application/json'
-                                                }
-                                            });
+                                    if (response.ok) {
+                                        const data = await response.json();
+                                        const records = data.records || [];
+                                        
+                                        if (records.length > 0) {
+                                            const record = records[0];
+                                            const ingredientName = record.data?.basic?.name || ingredient;
+                                            const hasNutritionalInfo = record.data?.nutritionalInfo && 
+                                                                      Object.keys(record.data.nutritionalInfo).length > 0;
                                             
-                                            if (response.ok) {
-                                                const data = await response.json();
-                                                const records = data.records || [];
+                                            if (hasNutritionalInfo) {
+                                                // Has nutritional info - use "Select Existing" mode
+                                                console.log(`✅ Found ingredient with nutritional info: ${ingredientName}`);
                                                 
-                                                if (records.length > 0) {
-                                                    const ingredientName = records[0].data?.basic?.name || ingredient;
+                                                if (modeSelect) {
+                                                    modeSelect.value = 'existing';
+                                                    updateRecipeIngredientMode(lastItem.id);
+                                                    
+                                                    // Wait for mode change to complete
+                                                    await new Promise(resolve => setTimeout(resolve, 200));
                                                     
                                                     // Fill in the search field
                                                     const searchInput = lastItem.querySelector('.ingredient-search');
@@ -21124,31 +21087,48 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                         searchInput.value = ingredientName;
                                                     }
                                                     
-                                                    // Pre-populate the select dropdown
+                                                    // Load ingredients list and pre-populate the select dropdown
+                                                    await loadExistingIngredientsForItem(lastItem.id);
+                                                    
                                                     const selectDropdown = lastItem.querySelector('.ingredient-select');
                                                     if (selectDropdown) {
-                                                        const option = document.createElement('option');
-                                                        option.value = ingredient;
-                                                        option.textContent = ingredientName;
-                                                        selectDropdown.innerHTML = '';
-                                                        selectDropdown.appendChild(option);
                                                         selectDropdown.value = ingredient;
+                                                        if (selectDropdown.value === ingredient) {
+                                                            displayExistingIngredientNutritionalInfo(lastItem.id);
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                // No nutritional info - switch to "New Ingredient Record" mode
+                                                console.log(`⚠️ Ingredient ${ingredientName} has no nutritional info - switching to New mode`);
+                                                
+                                                if (modeSelect) {
+                                                    modeSelect.value = 'new';
+                                                    updateRecipeIngredientMode(lastItem.id);
+                                                    
+                                                    // Wait for mode change to complete
+                                                    await new Promise(resolve => setTimeout(resolve, 300));
+                                                    
+                                                    const newIngredientNameInput = lastItem.querySelector('.ingredient-name');
+                                                    if (newIngredientNameInput) {
+                                                        newIngredientNameInput.value = ingredientName;
                                                     }
                                                 }
                                             }
-                                        } catch (error) {
-                                            console.error('Error looking up ingredient:', error);
                                         }
-                                        
-                                        // Set amount/unit/comment
-                                        const amountInput = lastItem.querySelector('.ingredient-amount');
-                                        const unitInput = lastItem.querySelector('.ingredient-unit');
-                                        const commentInput = lastItem.querySelector('.ingredient-comment');
-                                        
-                                        if (amountInput) amountInput.value = currentAmount;
-                                        if (unitInput) unitInput.value = currentUnit;
-                                        if (commentInput) commentInput.value = currentComment;
-                                    }, 150);
+                                    }
+                                    
+                                    // Set amount/unit/comment
+                                    const amountInput = lastItem.querySelector('.ingredient-amount');
+                                    const unitInput = lastItem.querySelector('.ingredient-unit');
+                                    const commentInput = lastItem.querySelector('.ingredient-comment');
+                                    
+                                    if (amountInput) amountInput.value = currentAmount;
+                                    if (unitInput) unitInput.value = currentUnit.toLowerCase();
+                                    if (commentInput) commentInput.value = currentComment;
+                                    
+                                } catch (error) {
+                                    console.error('Error looking up ingredient:', error);
                                 }
                                 
                                 console.log(`📋 Copied ingredient ${idx + 1}: ${ingredient} - ${currentAmount} ${currentUnit}`);
