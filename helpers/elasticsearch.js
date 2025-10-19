@@ -4725,11 +4725,11 @@ async function processNewRecord(transaction, remapTemplates = []) {
             didAddress: 'did:arweave:' + JSON.parse(transaction.data)[0]["0"],
             didTx: 'did:arweave:' + transactionId,
         }
-        console.log(getFileInfo(), getLineNumber(), 'Creator data:', data);
+        // console.log(getFileInfo(), getLineNumber(), 'Creator data:', data);
         creatorInfo = {
             data,
         } 
-        console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
+        // console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
         const creatorRegistrationParams = {
             transaction,
             creatorInfo
@@ -4792,7 +4792,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         console.log(`   ⚠️  [processNewRecord] SKIPPING record ${transaction.transactionId} - creator ${creatorDid} not found in database yet`);
         return { records: newRecords, recordsToDelete };
     }
-    console.log(`   👤 [processNewRecord] Creator found: ${creatorInfo.data.creatorHandle || creatorInfo.data.didAddress}`);
+    // console.log(`   👤 [processNewRecord] Creator found: ${creatorInfo.data.creatorHandle || creatorInfo.data.didAddress}`);
     let transactionData;
     let isDeleteMessageFound = false;
 
@@ -4824,7 +4824,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
     // dataArray.push(transactionData);
     // handle delete message
     if (isDeleteMessageFound) {
-        console.log(getFileInfo(), getLineNumber(), 'Delete template message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
+        // console.log(getFileInfo(), getLineNumber(), 'Delete template message found, processing:', {transaction}, {creatorInfo},{transactionData}, {record});
         
         // Safety check: Skip old-format template deletions
         if (transactionData.hasOwnProperty('delete') && !transactionData.hasOwnProperty('deleteTemplate')) {
@@ -4876,7 +4876,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 }
             }
         };
-        console.log(getFileInfo(), getLineNumber(), 'record:', record);
+        // console.log(getFileInfo(), getLineNumber(), 'record:', record);
 
         if (!record.data || !record.oip) {
             console.log(getFileInfo(), getLineNumber(), `${record.oip.didTx} is missing required data, cannot be indexed.`);
@@ -4889,16 +4889,16 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 await indexRecord(record);
             }
         }
-        console.log(getFileInfo(), getLineNumber(), creatorDid, transaction);
+        // console.log(getFileInfo(), getLineNumber(), creatorDid, transaction);
         await deleteRecordFromDB(creatorDid, transaction);
         console.log(getFileInfo(), getLineNumber(), 'Delete template message indexed:', transaction.transactionId, 'and referenced template deleted', record.data.deleteTemplate?.didTx || record.data.delete?.didTx);
 
     } else {
         // handle new records
-        console.log(getFileInfo(), getLineNumber());
+        // console.log(getFileInfo(), getLineNumber());
         // Apply record type indexing policy early (deleteMessage bypassed above)
         if (recordType && !shouldIndexRecordType(recordType)) {
-            console.log(getFileInfo(), getLineNumber(), `Skipping processing for recordType '${recordType}' per configuration.`);
+            // console.log(getFileInfo(), getLineNumber(), `Skipping processing for recordType '${recordType}' per configuration.`);
             return { records: newRecords, recordsToDelete };
         }
         // Filter for minimum OIP version (0.8.0 or above)
@@ -4908,17 +4908,17 @@ async function processNewRecord(transaction, remapTemplates = []) {
 
         const isVersionValid = versionParts.length >= 3 && versionParts.every((part, index) => part >= (minimumVersionParts[index] || 0));
         if (!isVersionValid) {
-            console.log(getFileInfo(), getLineNumber(), `Skipping transaction ${transactionId} due to OIP version (${version}) below minimum required (0.8.0).`);
+            // console.log(getFileInfo(), getLineNumber(), `Skipping transaction ${transactionId} due to OIP version (${version}) below minimum required (0.8.0).`);
             return { records: newRecords, recordsToDelete };
         }
-        console.log(getFileInfo(), getLineNumber());
+        // console.log(getFileInfo(), getLineNumber());
 
         const templates = await getTemplatesInDB();
         // console.log(getFileInfo(), getLineNumber(), transaction.data);
         const expandedRecordPromises = await expandData(transaction.data, templates.templatesInDB);
         // console.log(getFileInfo(), getLineNumber(), expandedRecordPromises);
         const expandedRecord = await Promise.all(expandedRecordPromises);
-        console.log(getFileInfo(), getLineNumber(), expandedRecord, creatorInfo, transaction, inArweaveBlock );
+        // console.log(getFileInfo(), getLineNumber(), expandedRecord, creatorInfo, transaction, inArweaveBlock );
         const combinedRecords = {};
         
         // Build templates array mapping template names to their transaction IDs
@@ -4938,7 +4938,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
             });
         });
         if (expandedRecord !== null && expandedRecord.length > 0) {
-            console.log(getFileInfo(), getLineNumber(), creatorInfo)
+            // console.log(getFileInfo(), getLineNumber(), creatorInfo)
             record = {
                 data: combinedRecords,
                 oip: {
@@ -4959,7 +4959,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                     }
                 }
             };
-            console.log(getFileInfo(), getLineNumber(), record)
+            // console.log(getFileInfo(), getLineNumber(), record)
 
             if (!record.data || !record.oip) {
                 
@@ -4971,7 +4971,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                     id: record.oip.didTx
                 });
                 
-                console.log(getFileInfo(), getLineNumber(), `   📊 Record ${record.oip.didTx} exists: ${existingRecord.body}, Status will be: ${record.oip.recordStatus}`);
+                // console.log(getFileInfo(), getLineNumber(), `   📊 Record ${record.oip.didTx} exists: ${existingRecord.body}, Status will be: ${record.oip.recordStatus}`);
                 
                 if (!existingRecord.body) {
                     console.log(getFileInfo(), getLineNumber(), '   ➕ Creating NEW record...');
