@@ -19762,16 +19762,26 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     
                     let multiplier = 1;
                     
-                    // Simple unit matching (for now, can be enhanced)
-                    if (recipeUnit.toLowerCase() === standardUnit.toLowerCase()) {
+                    // Check if both units are count-based (whole, piece, roast, etc.)
+                    const recipeIsCount = isCountUnit(recipeUnit);
+                    const standardIsCount = isCountUnit(standardUnit);
+                    
+                    if (recipeIsCount && standardIsCount) {
+                        // Both are count units - use direct ratio
                         multiplier = amount / standardAmount;
+                        console.log(`   Count-based units: ${amount} ${recipeUnit} / ${standardAmount} ${standardUnit} = ${multiplier}`);
+                    } else if (recipeUnit.toLowerCase() === standardUnit.toLowerCase()) {
+                        // Exact unit match - use direct ratio
+                        multiplier = amount / standardAmount;
+                        console.log(`   Exact unit match: ${amount} ${recipeUnit} / ${standardAmount} ${standardUnit} = ${multiplier}`);
                     } else {
-                        // Try basic conversions
+                        // Try to convert both to ounces
                         const recipeInOz = convertToOunces(amount, recipeUnit);
                         const standardInOz = convertToOunces(standardAmount, standardUnit);
                         
                         if (recipeInOz !== null && standardInOz !== null) {
                             multiplier = recipeInOz / standardInOz;
+                            console.log(`   Converted to oz: ${recipeInOz} oz / ${standardInOz} oz = ${multiplier}`);
                         } else {
                             console.warn(`Cannot convert ${amount} ${recipeUnit} to ${standardUnit}`);
                             continue;
@@ -19825,6 +19835,25 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 console.error('Error calculating nutritional summary:', error);
                 alert(`Error calculating summary: ${error.message}`);
             }
+        }
+        
+        /**
+         * Check if a unit is count-based (whole, piece, roast, etc.)
+         */
+        function isCountUnit(unit) {
+            if (!unit) return false;
+            const unitLower = unit.toLowerCase();
+            return unitLower.includes('whole') || 
+                   unitLower.includes('piece') || 
+                   unitLower.includes('slice') || 
+                   unitLower.includes('clove') ||
+                   unitLower.includes('roast') ||
+                   unitLower.includes('breast') ||
+                   unitLower.includes('thigh') ||
+                   unitLower.includes('drumstick') ||
+                   unitLower.includes('fillet') ||
+                   unitLower.includes('steak') ||
+                   unitLower.includes('chop');
         }
         
         /**
