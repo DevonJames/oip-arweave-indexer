@@ -19018,8 +19018,17 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                             <!-- Nutritional Info Display (hidden until lookup) -->
                             <div class="nutritional-info-display hidden" style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6;">
                                 <h5 style="margin: 0 0 10px 0; color: #28a745;">📊 Nutritional Information</h5>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                                    <div>
+                                        <label style="font-weight: bold; display: block; margin-bottom: 5px;">Standard Amount:</label>
+                                        <input type="number" class="nutri-standard-amount-input" step="0.01" style="width: 100%; padding: 5px; border: 1px solid #ced4da; border-radius: 4px;">
+                                    </div>
+                                    <div>
+                                        <label style="font-weight: bold; display: block; margin-bottom: 5px;">Standard Unit:</label>
+                                        <input type="text" class="nutri-standard-unit-input" style="width: 100%; padding: 5px; border: 1px solid #ced4da; border-radius: 4px;">
+                                    </div>
+                                </div>
                                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 13px;">
-                                    <div><strong>Standard Amount:</strong> <span class="nutri-standard-amount"></span></div>
                                     <div><strong>Calories:</strong> <span class="nutri-calories"></span></div>
                                     <div><strong>Protein:</strong> <span class="nutri-protein"></span>g</div>
                                     <div><strong>Fat:</strong> <span class="nutri-fat"></span>g</div>
@@ -19544,8 +19553,11 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     if (nutriDisplay && nutriInfo) {
                         nutriDisplay.classList.remove('hidden');
                         
+                        // Populate the editable standard amount and unit fields
+                        nutriDisplay.querySelector('.nutri-standard-amount-input').value = nutriInfo.standardAmount;
+                        nutriDisplay.querySelector('.nutri-standard-unit-input').value = nutriInfo.standardUnit;
+                        
                         // Populate all the nutritional values
-                        nutriDisplay.querySelector('.nutri-standard-amount').textContent = `${nutriInfo.standardAmount} ${nutriInfo.standardUnit}`;
                         nutriDisplay.querySelector('.nutri-calories').textContent = nutriInfo.calories.toFixed(2);
                         nutriDisplay.querySelector('.nutri-protein').textContent = nutriInfo.proteinG.toFixed(2);
                         nutriDisplay.querySelector('.nutri-fat').textContent = nutriInfo.fatG.toFixed(2);
@@ -19722,14 +19734,12 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                             const carbs = parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0;
                             const sodium = parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0;
                             const cholesterol = parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0;
-                            const standardAmountText = nutriDisplay.querySelector('.nutri-standard-amount')?.textContent || '1 whole';
                             
-                            console.log(`   Read nutritional info: calories=${calories}, protein=${protein}, standardAmount="${standardAmountText}"`);
+                            // Read from the editable input fields
+                            const standardAmount = parseFloat(nutriDisplay.querySelector('.nutri-standard-amount-input')?.value) || 1;
+                            const standardUnit = nutriDisplay.querySelector('.nutri-standard-unit-input')?.value || 'whole';
                             
-                            // Parse "X unit" format
-                            const parts = standardAmountText.split(' ');
-                            const standardAmount = parseFloat(parts[0]) || 1;
-                            const standardUnit = parts.slice(1).join(' ') || 'whole';
+                            console.log(`   Read nutritional info: calories=${calories}, protein=${protein}, standardAmount=${standardAmount}, standardUnit="${standardUnit}"`);
                             
                             nutritionalInfo = {
                                 calories,
@@ -20562,13 +20572,46 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     // If still not found, use the server's newRecipe endpoint to create it
                     if (!ingredientDID) {
                         console.log(`📝 Creating new ingredient: ${ingredientName}`);
+                        
+                        // Get the nutritional info from the UI (if looked up)
+                        const nutriDisplay = item.querySelector('.nutritional-info-display');
+                        let nutritionalInfo = null;
+                        
+                        if (nutriDisplay && !nutriDisplay.classList.contains('hidden')) {
+                            // Read from the editable input fields
+                            const standardAmount = parseFloat(nutriDisplay.querySelector('.nutri-standard-amount-input')?.value) || 1;
+                            const standardUnit = nutriDisplay.querySelector('.nutri-standard-unit-input')?.value || 'whole';
+                            
+                            nutritionalInfo = {
+                                standardAmount: standardAmount,
+                                standardUnit: standardUnit,
+                                calories: parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0,
+                                proteinG: parseFloat(nutriDisplay.querySelector('.nutri-protein')?.textContent) || 0,
+                                fatG: parseFloat(nutriDisplay.querySelector('.nutri-fat')?.textContent) || 0,
+                                saturatedFatG: parseFloat(nutriDisplay.querySelector('.nutri-saturated-fat')?.textContent) || 0,
+                                carbohydratesG: parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0,
+                                dietaryFiberG: parseFloat(nutriDisplay.querySelector('.nutri-fiber')?.textContent) || 0,
+                                sugarsG: parseFloat(nutriDisplay.querySelector('.nutri-sugars')?.textContent) || 0,
+                                sodiumMg: parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0,
+                                cholesterolMg: parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0,
+                                potassiumMg: parseFloat(nutriDisplay.querySelector('.nutri-potassium')?.textContent) || 0,
+                                calciumMg: parseFloat(nutriDisplay.querySelector('.nutri-calcium')?.textContent) || 0,
+                                ironMg: parseFloat(nutriDisplay.querySelector('.nutri-iron')?.textContent) || 0,
+                                vitaminAMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-a')?.textContent) || 0,
+                                vitaminCMg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-c')?.textContent) || 0,
+                                vitaminDMcg: parseFloat(nutriDisplay.querySelector('.nutri-vitamin-d')?.textContent) || 0
+                            };
+                            
+                            console.log(`📊 Including nutritional info with standardAmount=${standardAmount} ${standardUnit}`);
+                        }
+                        
                         // We'll let the server create it via the publish/newRecipe endpoint
-                        // For now, just return the name and let the backend handle it
                         processedIngredients.push({
                             name: ingredientName,
                             amount: amount,
                             unit: unit,
                             comment: comment,
+                            nutritionalInfo: nutritionalInfo, // Include the nutritional info
                             isNew: true
                         });
                         continue;
