@@ -19678,11 +19678,17 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 
                 // Process each ingredient
                 for (const item of ingredientItems) {
+                    const itemId = item.id;
                     const mode = item.querySelector('.ingredient-mode').value;
                     const amount = parseFloat(item.querySelector('.ingredient-amount').value) || 0;
                     const unit = item.querySelector('.ingredient-unit').value || '';
                     
-                    if (amount <= 0) continue;
+                    console.log(`   Processing ${itemId}: mode="${mode}", amount=${amount}, unit="${unit}"`);
+                    
+                    if (amount <= 0) {
+                        console.log(`   ⚠️ Skipping ${itemId} - amount is 0`);
+                        continue;
+                    }
                     
                     let nutritionalInfo = null;
                     
@@ -19704,7 +19710,10 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         }
                     } else {
                         // Get from new ingredient fields - check if nutritional info was looked up
+                        console.log(`   ${itemId} is in NEW mode, looking for .nutritional-info-display`);
                         const nutriDisplay = item.querySelector('.nutritional-info-display');
+                        console.log(`   nutriDisplay found: ${!!nutriDisplay}, hidden: ${nutriDisplay?.classList.contains('hidden')}`);
+                        
                         if (nutriDisplay && !nutriDisplay.classList.contains('hidden')) {
                             // Nutritional info was looked up and is displayed
                             const calories = parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0;
@@ -19714,6 +19723,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                             const sodium = parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0;
                             const cholesterol = parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0;
                             const standardAmountText = nutriDisplay.querySelector('.nutri-standard-amount')?.textContent || '1 whole';
+                            
+                            console.log(`   Read nutritional info: calories=${calories}, protein=${protein}, standardAmount="${standardAmountText}"`);
                             
                             // Parse "X unit" format
                             const parts = standardAmountText.split(' ');
@@ -19737,7 +19748,12 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         }
                     }
                     
-                    if (!nutritionalInfo) continue;
+                    if (!nutritionalInfo) {
+                        console.warn(`   ⚠️ No nutritionalInfo extracted for ${itemId}`);
+                        continue;
+                    }
+                    
+                    console.log(`   ✅ Got nutritionalInfo for ${itemId}:`, nutritionalInfo);
                     
                     // Calculate multiplier (similar to backend logic)
                     const standardAmount = nutritionalInfo.standardAmount || 1;
@@ -19763,7 +19779,10 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                     
                     // Add to totals
-                    totals.calories += (nutritionalInfo.calories || 0) * multiplier;
+                    const caloriesContribution = (nutritionalInfo.calories || 0) * multiplier;
+                    console.log(`   Multiplier: ${multiplier}, Contributing ${caloriesContribution} calories`);
+                    
+                    totals.calories += caloriesContribution;
                     totals.proteinG += (nutritionalInfo.proteinG || 0) * multiplier;
                     totals.fatG += (nutritionalInfo.fatG || 0) * multiplier;
                     totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * multiplier;
