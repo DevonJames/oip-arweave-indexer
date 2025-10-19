@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const { generateRecipeImage } = require('../helpers/generators');
 
 /**
@@ -71,6 +72,111 @@ router.get('/images/:filename', (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'Failed to serve image' 
+    });
+  }
+});
+
+/**
+ * Use AI to find a better standard unit for nutritional info
+ * POST /api/ai/find-standard-unit
+ */
+router.post('/find-standard-unit', async (req, res) => {
+  try {
+    const { ingredientName, nutritionalInfo } = req.body;
+    
+    if (!ingredientName || !nutritionalInfo) {
+      return res.status(400).json({
+        success: false,
+        error: 'ingredientName and nutritionalInfo are required'
+      });
+    }
+    
+    // Standard measurable units (excluding count-based units)
+    const standardUnits = [
+      'lb', 'lbs', 'oz', 'g', 'kg',  // Weight
+      'cup', 'cups', 'tbsp', 'tsp', 'ml', 'l'  // Volume
+    ];
+    
+    // Construct the AI prompt
+    const prompt = `You are a nutrition expert. Analyze this nutritional information for "${ingredientName}".
+
+Current Standard: ${nutritionalInfo.standardAmount} ${nutritionalInfo.standardUnit}
+
+Nutritional Values:
+- Calories: ${nutritionalInfo.calories}
+- Protein: ${nutritionalInfo.proteinG}g
+- Fat: ${nutritionalInfo.fatG}g
+- Carbs: ${nutritionalInfo.carbohydratesG}g
+- Sodium: ${nutritionalInfo.sodiumMg}mg
+
+The current unit "${nutritionalInfo.standardUnit}" is non-standard and makes conversions difficult.
+
+Please suggest a standard unit of measurement from this list: ${standardUnits.join(', ')}
+
+Consider:
+1. The type of food (solid vs liquid)
+2. Common usage in recipes
+3. Ease of conversion
+4. The nutritional values provided
+
+Respond ONLY with a JSON object in this exact format (no other text):
+{
+  "amount": <number>,
+  "unit": "<one of the standard units>",
+  "reasoning": "<brief explanation>"
+}`;
+
+    console.log('🤖 Calling OpenAI GPT-4o to find standard unit for:', ingredientName);
+    
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 200
+    }, {
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const aiResponse = response.data.choices[0].message.content.trim();
+    console.log('✅ AI response:', aiResponse);
+    
+    // Parse the JSON response
+    let suggestion;
+    try {
+      suggestion = JSON.parse(aiResponse);
+    } catch (parseError) {
+      // Try to extract JSON if there's extra text
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        suggestion = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('Failed to parse AI response as JSON');
+      }
+    }
+    
+    // Validate the suggestion
+    if (!suggestion.amount || !suggestion.unit || !standardUnits.includes(suggestion.unit)) {
+      throw new Error('Invalid suggestion format from AI');
+    }
+    
+    res.json({
+      success: true,
+      suggestion: suggestion
+    });
+    
+  } catch (error) {
+    console.error('Error finding standard unit with AI:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to find standard unit'
     });
   }
 });
