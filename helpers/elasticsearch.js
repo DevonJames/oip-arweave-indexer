@@ -4295,9 +4295,9 @@ async function keepDBUpToDate(remapTemplates) {
             }
         };
         // to do standardize these names a bit better
-        const { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
+        let { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
         // console.log(getFileInfo(), getLineNumber(), 'Templates:', { finalMaxArweaveBlock, qtyTemplatesInDB });
-        const { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB();
+        let { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB();
         // console.log(getFileInfo(), getLineNumber(), 'Records:', { finalMaxRecordArweaveBlock, qtyRecordsInDB });
         foundInDB.maxArweaveBlockInDB = Math.max(
             maxArweaveCreatorRegBlockInDB || 0,

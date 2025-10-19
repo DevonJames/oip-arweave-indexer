@@ -137,14 +137,34 @@ After a delay of 10 seconds, will check Arweave for new OIP data every 5 minutes
 
 And after the first cycle, you should see transactions being processed and records being updated to "original" status.
 
+## Additional Fix Required
+
+After making MediaSeeder non-blocking, `keepDBUpToDate` started running but crashed with:
+```
+❌ [keepDBUpToDate] CRITICAL ERROR: Assignment to constant variable.
+```
+
+**Problem:** Lines 4298 and 4300 in `helpers/elasticsearch.js` declared variables as `const` that were later reassigned to `null` for garbage collection.
+
+**Fix:** Changed `const` to `let`:
+```javascript
+// Before:
+const { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
+const { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB();
+
+// After:
+let { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
+let { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB();
+```
+
 ## Related Files
 
 - **Modified:**
   - `index.js` (lines 360-381) - Made MediaSeeder and GUN sync non-blocking
+  - `helpers/elasticsearch.js` (lines 4298, 4300) - Changed `const` to `let` for variables that need to be nulled for GC
   
 - **Investigated but not changed:**
   - `services/mediaSeeder.js` - Identified `resumeSeeding()` as the blocking operation
-  - `helpers/elasticsearch.js` - Confirmed `keepDBUpToDate` and `indexRecord` logic was correct
 
 ## Prevention
 
