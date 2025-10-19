@@ -19842,13 +19842,13 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 };
                 
                 // Display results
-                document.getElementById('recipe-bundle-summary-calories').textContent = perServing.calories;
-                document.getElementById('recipe-bundle-summary-protein').textContent = perServing.proteinG;
-                document.getElementById('recipe-bundle-summary-fat').textContent = perServing.fatG;
-                document.getElementById('recipe-bundle-summary-carbs').textContent = perServing.carbohydratesG;
-                document.getElementById('recipe-bundle-summary-sodium').textContent = perServing.sodiumMg;
-                document.getElementById('recipe-bundle-summary-cholesterol').textContent = perServing.cholesterolMg;
-                document.getElementById('recipe-bundle-summary-info-text').textContent = 
+                document.getElementById('nutrition-calories').textContent = perServing.calories;
+                document.getElementById('nutrition-protein').textContent = perServing.proteinG;
+                document.getElementById('nutrition-fat').textContent = perServing.fatG;
+                document.getElementById('nutrition-carbs').textContent = perServing.carbohydratesG;
+                document.getElementById('nutrition-sodium').textContent = perServing.sodiumMg;
+                document.getElementById('nutrition-cholesterol').textContent = perServing.cholesterolMg;
+                document.getElementById('nutrition-info-text').textContent = 
                     `Based on ${processedCount} of ${ingredientItems.length} ingredients • ${servings} serving${servings > 1 ? 's' : ''}`;
                 
                 document.getElementById('recipe-bundle-nutrition-summary').classList.remove('hidden');
@@ -20784,18 +20784,18 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 });
                 
                 // Check if nutritional summary has been calculated
-                const summaryCalories = document.getElementById('recipe-bundle-summary-calories')?.textContent;
+                const summaryCalories = document.getElementById('nutrition-calories')?.textContent;
                 let summaryNutritionalInfo = null;
                 
-                if (summaryCalories && summaryCalories.trim() !== '') {
+                if (summaryCalories && summaryCalories.trim() !== '' && summaryCalories !== '-') {
                     // Read the calculated nutritional summary from the UI
                     summaryNutritionalInfo = {
-                        calories: parseInt(document.getElementById('recipe-bundle-summary-calories')?.textContent) || 0,
-                        proteinG: parseFloat(document.getElementById('recipe-bundle-summary-protein')?.textContent) || 0,
-                        fatG: parseFloat(document.getElementById('recipe-bundle-summary-fat')?.textContent) || 0,
-                        carbohydratesG: parseFloat(document.getElementById('recipe-bundle-summary-carbs')?.textContent) || 0,
-                        sodiumMg: parseInt(document.getElementById('recipe-bundle-summary-sodium')?.textContent) || 0,
-                        cholesterolMg: parseInt(document.getElementById('recipe-bundle-summary-cholesterol')?.textContent) || 0
+                        calories: parseInt(document.getElementById('nutrition-calories')?.textContent) || 0,
+                        proteinG: parseFloat(document.getElementById('nutrition-protein')?.textContent) || 0,
+                        fatG: parseFloat(document.getElementById('nutrition-fat')?.textContent) || 0,
+                        carbohydratesG: parseFloat(document.getElementById('nutrition-carbs')?.textContent) || 0,
+                        sodiumMg: parseInt(document.getElementById('nutrition-sodium')?.textContent) || 0,
+                        cholesterolMg: parseInt(document.getElementById('nutrition-cholesterol')?.textContent) || 0
                     };
                     console.log('✅ Including pre-calculated nutritional summary:', summaryNutritionalInfo);
                 } else {
