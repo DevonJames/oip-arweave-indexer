@@ -20702,13 +20702,13 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const units = recipe.ingredient_unit || [];
                 const comments = recipe.ingredient_comment || [];
                 
-                // Valid units list
-                const validUnits = ['whole', 'cup', 'cups', 'tbsp', 'tsp', 'oz', 'lb', 'g', 'kg', 'ml', 'l', 'piece', 'slice', 'clove', 'pinch', 'dash'];
+                // Valid units list (including common plural forms)
+                const validUnits = ['whole', 'cup', 'cups', 'tbsp', 'tbsps', 'tsp', 'tsps', 'oz', 'ozs', 'lb', 'lbs', 'g', 'gs', 'kg', 'kgs', 'ml', 'mls', 'l', 'ls', 'piece', 'pieces', 'slice', 'slices', 'clove', 'cloves', 'pinch', 'pinches', 'dash', 'dashes'];
                 
                 if (ingredients.length > 0) {
                     console.log(`📋 Copying ${ingredients.length} ingredients`);
                     
-                    // Process ingredients sequentially
+                    // Process ingredients sequentially with proper async/await
                     for (let idx = 0; idx < ingredients.length; idx++) {
                         const ingredient = ingredients[idx];
                         addRecipeBundleIngredientItem();
@@ -20741,96 +20741,109 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 if (modeSelect) {
                                     modeSelect.value = 'existing';
                                     
-                                    // The onchange event will trigger updateRecipeIngredientMode and loadExistingIngredientsForItem
-                                    // Wait for that async operation to complete before filtering
-                                    setTimeout(async () => {
-                                        // Wait for ingredients to be loaded by checking data-all-ingredients attribute
-                                        let retries = 0;
-                                        const maxRetries = 30; // Wait up to 3 seconds
-                                        
-                                        while (retries < maxRetries) {
-                                            const dataAttr = lastItem.getAttribute('data-all-ingredients');
-                                            if (dataAttr && dataAttr !== '') {
-                                                // Ingredients are loaded, now filter them
-                                                const searchInput = lastItem.querySelector('.ingredient-search');
-                                                if (searchInput) {
-                                                    searchInput.value = ingredientName;
-                                                    // Manually trigger filtering
-                                                    filterRecipeIngredients(lastItem.id, ingredientName);
+                                    // Wait for the async operations to complete before moving to next ingredient
+                                    await new Promise(resolve => {
+                                        // The onchange event will trigger updateRecipeIngredientMode and loadExistingIngredientsForItem
+                                        // Wait for that async operation to complete before filtering
+                                        setTimeout(async () => {
+                                            // Wait for ingredients to be loaded by checking data-all-ingredients attribute
+                                            let retries = 0;
+                                            const maxRetries = 30; // Wait up to 3 seconds
+                                            
+                                            while (retries < maxRetries) {
+                                                const dataAttr = lastItem.getAttribute('data-all-ingredients');
+                                                if (dataAttr && dataAttr !== '') {
+                                                    // Ingredients are loaded, now filter them
+                                                    const searchInput = lastItem.querySelector('.ingredient-search');
+                                                    if (searchInput) {
+                                                        searchInput.value = ingredientName;
+                                                        // Manually trigger filtering
+                                                        filterRecipeIngredients(lastItem.id, ingredientName);
+                                                    }
+                                                    
+                                                    // Wait for filtering to update the DOM, then check results
+                                                    await new Promise(resolveInner => {
+                                                        setTimeout(() => {
+                                                            const selectDropdown = lastItem.querySelector('.ingredient-select');
+                                                            
+                                                            // Check if filtering resulted in 0 matches (only "Select an ingredient..." option)
+                                                            if (selectDropdown && selectDropdown.options.length === 1) {
+                                                                console.log(`⚠️ No matching ingredients found for "${ingredientName}" - switching to New Ingredient mode`);
+                                                                
+                                                                // Switch to "New Ingredient Record" mode without triggering onchange
+                                                                const modeSelect = lastItem.querySelector('.ingredient-mode');
+                                                                if (modeSelect) {
+                                                                    // Remove the onchange listener temporarily to avoid recursive calls
+                                                                    const originalOnchange = modeSelect.onchange;
+                                                                    modeSelect.onchange = null;
+                                                                    modeSelect.value = 'new';
+                                                                    // Manually call the mode update
+                                                                    updateRecipeIngredientMode(lastItem.id);
+                                                                    // Restore the onchange listener
+                                                                    modeSelect.onchange = originalOnchange;
+                                                                }
+                                                                
+                                                                // Populate the new ingredient name field with the preserved name
+                                                                setTimeout(() => {
+                                                                    const newIngredientNameInput = lastItem.querySelector('.ingredient-name');
+                                                                    if (newIngredientNameInput) {
+                                                                        newIngredientNameInput.value = ingredientName;
+                                                                        console.log(`✅ Set ingredient name to: ${ingredientName}`);
+                                                                    } else {
+                                                                        console.warn('⚠️ Could not find .ingredient-name input');
+                                                                    }
+                                                                    
+                                                                    // Set amount, unit, and comment
+                                                                    const amountInput = lastItem.querySelector('.ingredient-amount');
+                                                                    const unitInput = lastItem.querySelector('.ingredient-unit');
+                                                                    const commentInput = lastItem.querySelector('.ingredient-comment');
+                                                                    
+                                                                    if (amountInput) amountInput.value = currentAmount;
+                                                                    if (unitInput) unitInput.value = currentUnit;
+                                                                    if (commentInput) commentInput.value = currentComment;
+                                                                    
+                                                                    resolveInner();
+                                                                }, 50);
+                                                            } else if (selectDropdown) {
+                                                                // Found matching ingredient(s), select by DID
+                                                                if (ingredientDID) {
+                                                                    selectDropdown.value = ingredientDID;
+                                                                    if (selectDropdown.value === ingredientDID) {
+                                                                        displayExistingIngredientNutritionalInfo(lastItem.id);
+                                                                    }
+                                                                }
+                                                                
+                                                                // Set amount, unit, and comment
+                                                                const amountInput = lastItem.querySelector('.ingredient-amount');
+                                                                const unitInput = lastItem.querySelector('.ingredient-unit');
+                                                                const commentInput = lastItem.querySelector('.ingredient-comment');
+                                                                
+                                                                if (amountInput) amountInput.value = currentAmount;
+                                                                if (unitInput) unitInput.value = currentUnit;
+                                                                if (commentInput) commentInput.value = currentComment;
+                                                                
+                                                                resolveInner();
+                                                            } else {
+                                                                resolveInner();
+                                                            }
+                                                        }, 150);
+                                                    });
+                                                    
+                                                    break; // Exit the retry loop
                                                 }
                                                 
-                                                // Wait for filtering to update the DOM, then check results
-                                                setTimeout(() => {
-                                                    const selectDropdown = lastItem.querySelector('.ingredient-select');
-                                                    
-                                                    // Check if filtering resulted in 0 matches (only "Select an ingredient..." option)
-                                                    if (selectDropdown && selectDropdown.options.length === 1) {
-                                                        console.log(`⚠️ No matching ingredients found for "${ingredientName}" - switching to New Ingredient mode`);
-                                                        
-                                                        // Switch to "New Ingredient Record" mode without triggering onchange
-                                                        const modeSelect = lastItem.querySelector('.ingredient-mode');
-                                                        if (modeSelect) {
-                                                            // Remove the onchange listener temporarily to avoid recursive calls
-                                                            const originalOnchange = modeSelect.onchange;
-                                                            modeSelect.onchange = null;
-                                                            modeSelect.value = 'new';
-                                                            // Manually call the mode update
-                                                            updateRecipeIngredientMode(lastItem.id);
-                                                            // Restore the onchange listener
-                                                            modeSelect.onchange = originalOnchange;
-                                                        }
-                                                        
-                                                        // Populate the new ingredient name field with the preserved name
-                                                        setTimeout(() => {
-                                                            const newIngredientNameInput = lastItem.querySelector('.ingredient-name');
-                                                            if (newIngredientNameInput) {
-                                                                newIngredientNameInput.value = ingredientName;
-                                                                console.log(`✅ Set ingredient name to: ${ingredientName}`);
-                                                            } else {
-                                                                console.warn('⚠️ Could not find .ingredient-name input');
-                                                            }
-                                                            
-                                                            // Set amount, unit, and comment
-                                                            const amountInput = lastItem.querySelector('.ingredient-amount');
-                                                            const unitInput = lastItem.querySelector('.ingredient-unit');
-                                                            const commentInput = lastItem.querySelector('.ingredient-comment');
-                                                            
-                                                            if (amountInput) amountInput.value = currentAmount;
-                                                            if (unitInput) unitInput.value = currentUnit;
-                                                            if (commentInput) commentInput.value = currentComment;
-                                                        }, 50);
-                                                    } else if (selectDropdown) {
-                                                        // Found matching ingredient(s), select by DID
-                                                        if (ingredientDID) {
-                                                            selectDropdown.value = ingredientDID;
-                                                            if (selectDropdown.value === ingredientDID) {
-                                                                displayExistingIngredientNutritionalInfo(lastItem.id);
-                                                            }
-                                                        }
-                                                        
-                                                        // Set amount, unit, and comment
-                                                        const amountInput = lastItem.querySelector('.ingredient-amount');
-                                                        const unitInput = lastItem.querySelector('.ingredient-unit');
-                                                        const commentInput = lastItem.querySelector('.ingredient-comment');
-                                                        
-                                                        if (amountInput) amountInput.value = currentAmount;
-                                                        if (unitInput) unitInput.value = currentUnit;
-                                                        if (commentInput) commentInput.value = currentComment;
-                                                    }
-                                                }, 150);
-                                                
-                                                break; // Exit the retry loop
+                                                // Wait 100ms before retrying
+                                                await new Promise(r => setTimeout(r, 100));
+                                                retries++;
                                             }
                                             
-                                            // Wait 100ms before retrying
-                                            await new Promise(resolve => setTimeout(resolve, 100));
-                                            retries++;
-                                        }
-                                        
-                                        if (retries >= maxRetries) {
-                                            console.warn(`⚠️ Timed out waiting for ingredients to load for item ${lastItem.id}`);
-                                        }
-                                    }, 200);
+                                            if (retries >= maxRetries) {
+                                                console.warn(`⚠️ Timed out waiting for ingredients to load for item ${lastItem.id}`);
+                                            }
+                                            
+                                            resolve();
+                                        }, 200);
+                                    });
                                 }
                                 
                                 console.log(`📋 Copied ingredient ${idx + 1}: ${ingredientName} (${ingredientDID}) - ${currentAmount} ${currentUnit}`);
@@ -21184,8 +21197,8 @@ CRITICAL:
                             // Clear existing ingredients
                             document.getElementById('recipe-bundle-ingredients-container').innerHTML = '';
                             
-                            // Valid units list
-                            const validUnits = ['whole', 'cup', 'cups', 'tbsp', 'tsp', 'oz', 'lb', 'g', 'kg', 'ml', 'l', 'piece', 'slice', 'clove', 'pinch', 'dash'];
+                            // Valid units list (including common plural forms)
+                            const validUnits = ['whole', 'cup', 'cups', 'tbsp', 'tbsps', 'tsp', 'tsps', 'oz', 'ozs', 'lb', 'lbs', 'g', 'gs', 'kg', 'kgs', 'ml', 'mls', 'l', 'ls', 'piece', 'pieces', 'slice', 'slices', 'clove', 'cloves', 'pinch', 'pinches', 'dash', 'dashes'];
                             
                             // Add ingredients from AI
                             if (aiData.ingredients && Array.isArray(aiData.ingredients)) {
