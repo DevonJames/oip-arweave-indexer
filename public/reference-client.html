@@ -19094,18 +19094,31 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                     <option value="cup">cup</option>
                                     <option value="cups">cups</option>
                                     <option value="tbsp">tbsp</option>
+                                    <option value="tbsps">tbsps</option>
                                     <option value="tsp">tsp</option>
+                                    <option value="tsps">tsps</option>
                                     <option value="oz">oz</option>
+                                    <option value="ozs">ozs</option>
                                     <option value="lb">lb</option>
+                                    <option value="lbs">lbs</option>
                                     <option value="g">g</option>
+                                    <option value="gs">gs</option>
                                     <option value="kg">kg</option>
+                                    <option value="kgs">kgs</option>
                                     <option value="ml">ml</option>
+                                    <option value="mls">mls</option>
                                     <option value="l">l</option>
+                                    <option value="ls">ls</option>
                                     <option value="piece">piece</option>
+                                    <option value="pieces">pieces</option>
                                     <option value="slice">slice</option>
+                                    <option value="slices">slices</option>
                                     <option value="clove">clove</option>
+                                    <option value="cloves">cloves</option>
                                     <option value="pinch">pinch</option>
+                                    <option value="pinches">pinches</option>
                                     <option value="dash">dash</option>
+                                    <option value="dashes">dashes</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -19138,15 +19151,21 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
          */
         function updateRecipeIngredientMode(itemId) {
             const item = document.getElementById(itemId);
-            if (!item) return;
+            if (!item) {
+                console.warn(`⚠️ updateRecipeIngredientMode: item ${itemId} not found`);
+                return;
+            }
             
             const mode = item.querySelector('.ingredient-mode').value;
             const newSection = item.querySelector('.ingredient-new-section');
             const existingSection = item.querySelector('.ingredient-existing-section');
             
+            console.log(`🔄 updateRecipeIngredientMode(${itemId}): mode="${mode}", newSection=${!!newSection}, existingSection=${!!existingSection}`);
+            
             if (mode === 'new') {
                 newSection.classList.remove('hidden');
                 existingSection.classList.add('hidden');
+                console.log(`   ✅ Switched to NEW mode - showing new section, hiding existing section`);
                 
                 // Hide the existing ingredient nutritional display
                 const existingNutriDisplay = item.querySelector('.nutritional-info-display-existing');
@@ -19156,6 +19175,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             } else {
                 newSection.classList.add('hidden');
                 existingSection.classList.remove('hidden');
+                console.log(`   ✅ Switched to EXISTING mode - hiding new section, showing existing section`);
                 
                 // Hide the new ingredient nutritional display
                 const newNutriDisplay = item.querySelector('.nutritional-info-display');
@@ -20739,7 +20759,13 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 
                                 // Set mode to 'existing' - this will trigger onchange which loads ingredients
                                 if (modeSelect) {
+                                    console.log(`🎯 Setting mode to 'existing' for ${lastItem.id}`);
+                                    
+                                    // Wait a tick to ensure DOM is ready, then set mode
+                                    await new Promise(resolveMode => setTimeout(resolveMode, 50));
+                                    
                                     modeSelect.value = 'existing';
+                                    console.log(`   Mode value set to: ${modeSelect.value}`);
                                     
                                     // Wait for the async operations to complete before moving to next ingredient
                                     await new Promise(resolve => {
@@ -20770,20 +20796,14 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                             if (selectDropdown && selectDropdown.options.length === 1) {
                                                                 console.log(`⚠️ No matching ingredients found for "${ingredientName}" - switching to New Ingredient mode`);
                                                                 
-                                                                // Switch to "New Ingredient Record" mode without triggering onchange
+                                                                // Switch to "New Ingredient Record" mode - let onchange fire naturally
                                                                 const modeSelect = lastItem.querySelector('.ingredient-mode');
                                                                 if (modeSelect) {
-                                                                    // Remove the onchange listener temporarily to avoid recursive calls
-                                                                    const originalOnchange = modeSelect.onchange;
-                                                                    modeSelect.onchange = null;
                                                                     modeSelect.value = 'new';
-                                                                    // Manually call the mode update
-                                                                    updateRecipeIngredientMode(lastItem.id);
-                                                                    // Restore the onchange listener
-                                                                    modeSelect.onchange = originalOnchange;
+                                                                    // The onchange event will fire and call updateRecipeIngredientMode automatically
                                                                 }
                                                                 
-                                                                // Populate the new ingredient name field with the preserved name
+                                                                // Wait for the mode switch UI update to complete, then populate fields
                                                                 setTimeout(() => {
                                                                     const newIngredientNameInput = lastItem.querySelector('.ingredient-name');
                                                                     if (newIngredientNameInput) {
@@ -20803,7 +20823,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                                                     if (commentInput) commentInput.value = currentComment;
                                                                     
                                                                     resolveInner();
-                                                                }, 50);
+                                                                }, 100);
                                                             } else if (selectDropdown) {
                                                                 // Found matching ingredient(s), select by DID
                                                                 if (ingredientDID) {
