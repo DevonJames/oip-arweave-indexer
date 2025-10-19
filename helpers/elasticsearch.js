@@ -4242,6 +4242,9 @@ const reIndexUnconfirmedRecords = async () => {
 };
 
 async function keepDBUpToDate(remapTemplates) {
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔄 [keepDBUpToDate] CYCLE STARTED');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     try {
         await ensureIndexExists();
         let { qtyCreatorsInDB, maxArweaveCreatorRegBlockInDB, creatorsInDB } = await getCreatorsInDB();
@@ -4354,7 +4357,9 @@ async function keepDBUpToDate(remapTemplates) {
             console.log(`⏳ [keepDBUpToDate] No new OIP transactions found (checking from block ${foundInDB.maxArweaveBlockInDB + 1})`);
         }
     } catch (error) {
-        console.error(getFileInfo(), getLineNumber(), 'Error fetching new transactions:', {
+        console.error('\n❌ [keepDBUpToDate] CRITICAL ERROR:', error.message);
+        console.error('❌ [keepDBUpToDate] Stack trace:', error.stack);
+        console.error(getFileInfo(), getLineNumber(), 'Error details:', {
             status: error.response?.status,
             headers: error.response?.headers,
             query: error.request?.query,
@@ -4363,6 +4368,10 @@ async function keepDBUpToDate(remapTemplates) {
         // return [];
     } finally {
         setIsProcessing(false);
+        
+        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🏁 [keepDBUpToDate] CYCLE ENDED');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
         
         // MEMORY LEAK FIX: Trigger GC if available (optional - gc() is not available by default)
         if (global.gc) {

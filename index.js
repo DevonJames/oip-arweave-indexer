@@ -438,25 +438,38 @@ initializeIndices()
             }
           }
 
-          setTimeout(() => {
-              // console.log("Starting first cycle...");
-              keepDBUpToDate(remapTemplates);
-              setIsProcessing(true);
+          setTimeout(async () => {
+              console.log("🚀 [STARTUP] Starting first keepDBUpToDate cycle...");
+              try {
+                  setIsProcessing(true);
+                  await keepDBUpToDate(remapTemplates);
+                  console.log("✅ [STARTUP] First keepDBUpToDate cycle completed successfully");
+              } catch (error) {
+                  console.error("❌ [STARTUP] Error during first keepDBUpToDate:", error);
+              } finally {
+                  setIsProcessing(false);
+              }
+              
+              console.log(`⏰ [STARTUP] Setting up keepDBUpToDate interval (every ${interval} seconds)...`);
               setInterval(async () => {
-                  if (!getIsProcessing()) {
+                  const processing = getIsProcessing();
+                  console.log(`\n⏱️  [INTERVAL] keepDBUpToDate interval triggered (isProcessing: ${processing})`);
+                  
+                  if (!processing) {
                       try {
-                          // console.log("Starting new cycle...");
+                          console.log("▶️  [INTERVAL] Starting new keepDBUpToDate cycle...");
                           setIsProcessing(true);
                           await keepDBUpToDate(remapTemplates);
+                          console.log("✅ [INTERVAL] keepDBUpToDate cycle completed");
                       } catch (error) {
-                          console.error("Error during keepDBUpToDate:", error);
+                          console.error("❌ [INTERVAL] Error during keepDBUpToDate:", error);
+                          console.error("❌ [INTERVAL] Stack trace:", error.stack);
                       } finally {
                           setIsProcessing(false);
                       }
                   } else {
-                      console.log("Skipping new cycle because a previous process is still running.");
+                      console.log("⏭️  [INTERVAL] Skipping cycle - previous process still running");
                   }
-                  // console.log('Interval over, getIsProcessing:', getIsProcessing());
               }, interval * 1000);
           }, wait * 1000);
       }
