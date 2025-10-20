@@ -55,7 +55,7 @@ const getTransaction = async (transactionId) => {
                 const txData = graphqlResponse.data.data.transaction;
                 tags = txData.tags || [];
                 blockHeight = txData.block ? txData.block.height : null;
-                console.log(`GraphQL found ${tags.length} tags for ${transactionId}, block height: ${blockHeight}`);
+                // console.log(`GraphQL found ${tags.length} tags for ${transactionId}, block height: ${blockHeight}`);
             } else {
                 console.log(`GraphQL returned no data for ${transactionId}`);
                 tags = [];
@@ -116,7 +116,7 @@ const getTransaction = async (transactionId) => {
         
         console.log(`Extracted from tags - Creator: ${creator ? 'found' : 'missing'}, CreatorSig: ${creatorSig ? 'found' : 'missing'}, Ver: ${ver || 'missing'}`);
         if (creatorSigRaw && creatorSigRaw !== creatorSig) {
-            console.log(`Fixed CreatorSig format: converted ${creatorSigRaw.split(' ').length - 1} spaces to + characters`);
+            // console.log(`Fixed CreatorSig format: converted ${creatorSigRaw.split(' ').length - 1} spaces to + characters`);
         }
         
         return { 
