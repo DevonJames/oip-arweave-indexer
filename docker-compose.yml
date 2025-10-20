@@ -90,6 +90,7 @@ services:
       - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=${NODE_OPTIONS}
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
@@ -127,6 +128,7 @@ services:
       - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=${NODE_OPTIONS}
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
@@ -156,6 +158,7 @@ services:
       - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=${NODE_OPTIONS}
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
@@ -187,6 +190,7 @@ services:
       - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=${NODE_OPTIONS}
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
@@ -218,6 +222,7 @@ services:
       - ../public:/usr/src/parent-public:ro  # Mount parent directory's public folder
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=${NODE_OPTIONS}
       - ELASTICSEARCH_HOST=${ELASTICSEARCHHOST}
       - ELASTICCLIENTUSERNAME=${ELASTICCLIENTUSERNAME}
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
