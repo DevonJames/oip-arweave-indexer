@@ -1437,6 +1437,159 @@ const parseUnit = (unit) => {
     return cleaned;
 };
 
+// Core calculation function that can be used by both preview and publish
+// ingredients: array of { did, amount, unit, nutritionalInfo? }
+// servings: number
+// recordsInDB: optional array of records to look up DIDs (if not provided, nutritionalInfo must be in each ingredient)
+const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = []) => {
+    try {
+        // Initialize totals
+        const totals = {
+            calories: 0,
+            proteinG: 0,
+            fatG: 0,
+            cholesterolMg: 0,
+            sodiumMg: 0,
+            carbohydratesG: 0
+        };
+        
+        let processedIngredients = 0;
+        let skippedIngredients = [];
+        
+        // Process each ingredient
+        for (let i = 0; i < ingredients.length; i++) {
+            try {
+                const ingredient = ingredients[i];
+                const recipeAmount = ingredient.amount;
+                const recipeUnit = ingredient.unit;
+                
+                if (!recipeAmount || !recipeUnit || recipeAmount <= 0) {
+                    skippedIngredients.push({ index: i, reason: 'Invalid amount or unit', name: ingredient.name });
+                    continue;
+                }
+                
+                // Get nutritional info - either from ingredient object or by looking up DID
+                let nutritionalInfo = ingredient.nutritionalInfo;
+                let ingredientName = ingredient.name || `ingredient ${i}`;
+                
+                if (!nutritionalInfo && ingredient.did && recordsInDB.length > 0) {
+                    // Look up by DID
+                    const record = recordsInDB.find(r => r && r.oip && r.oip.didTx === ingredient.did);
+                    if (record && record.data) {
+                        nutritionalInfo = record.data.nutritionalInfo;
+                        ingredientName = record.data.basic?.name || ingredientName;
+                    }
+                }
+                
+                if (!nutritionalInfo) {
+                    skippedIngredients.push({ index: i, reason: 'No nutritional info', name: ingredientName });
+                    continue;
+                }
+                
+                const standardAmount = nutritionalInfo.standardAmount;
+                const rawStandardUnit = nutritionalInfo.standardUnit;
+                
+                if (!standardAmount || !rawStandardUnit || standardAmount <= 0) {
+                    skippedIngredients.push({ index: i, reason: 'Missing standard amount/unit', name: ingredientName });
+                    continue;
+                }
+                
+                // Parse and clean units
+                const cleanRecipeUnit = parseUnit(recipeUnit);
+                const standardUnit = parseUnit(rawStandardUnit);
+                
+                // Calculate multiplier
+                let multiplier;
+                
+                // Try direct unit conversion first
+                const convertedAmount = convertUnits(recipeAmount, cleanRecipeUnit, standardUnit);
+                
+                if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
+                    multiplier = convertedAmount / standardAmount;
+                } else {
+                    // Fallback logic
+                    const normalizedRecipeUnit = cleanRecipeUnit.toLowerCase().trim();
+                    const normalizedStandardUnit = standardUnit.toLowerCase().trim();
+                    
+                    if (normalizedRecipeUnit === normalizedStandardUnit) {
+                        multiplier = recipeAmount / standardAmount;
+                    } else if (isCountUnit(cleanRecipeUnit) && isCountUnit(standardUnit)) {
+                        multiplier = recipeAmount / standardAmount;
+                    } else if (isCountUnit(cleanRecipeUnit) && !isCountUnit(standardUnit)) {
+                        skippedIngredients.push({ index: i, reason: `Cannot convert count '${cleanRecipeUnit}' to '${standardUnit}'`, name: ingredientName });
+                        continue;
+                    } else if (!isCountUnit(cleanRecipeUnit) && isCountUnit(standardUnit)) {
+                        skippedIngredients.push({ index: i, reason: `Cannot convert '${cleanRecipeUnit}' to count '${standardUnit}'`, name: ingredientName });
+                        continue;
+                    } else {
+                        // Try gram conversion
+                        const recipeAmountInGrams = convertToGrams(recipeAmount, cleanRecipeUnit);
+                        const standardAmountInGrams = convertToGrams(standardAmount, standardUnit);
+                        
+                        if (recipeAmountInGrams === null || recipeAmountInGrams === undefined || 
+                            standardAmountInGrams === null || standardAmountInGrams === undefined) {
+                            skippedIngredients.push({ index: i, reason: `Cannot convert ${cleanRecipeUnit} to ${standardUnit}`, name: ingredientName });
+                            continue;
+                        }
+                        
+                        multiplier = recipeAmountInGrams / standardAmountInGrams;
+                    }
+                }
+                
+                // Validate multiplier
+                if (multiplier === undefined || multiplier === null || isNaN(multiplier) || multiplier < 0) {
+                    skippedIngredients.push({ index: i, reason: `Invalid multiplier: ${multiplier}`, name: ingredientName });
+                    continue;
+                }
+                
+                // Add to totals
+                totals.calories += (nutritionalInfo.calories || 0) * multiplier;
+                totals.proteinG += (nutritionalInfo.proteinG || 0) * multiplier;
+                totals.fatG += (nutritionalInfo.fatG || 0) * multiplier;
+                totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * multiplier;
+                totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * multiplier;
+                totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * multiplier;
+                
+                processedIngredients++;
+                
+            } catch (ingredientError) {
+                const ingredientName = ingredients[i]?.name || `ingredient ${i}`;
+                skippedIngredients.push({ index: i, reason: ingredientError.message, name: ingredientName });
+                continue;
+            }
+        }
+        
+        // Round values
+        const roundToDecimal = (num, decimals = 2) => Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
+        
+        return {
+            perServing: {
+                calories: roundToDecimal(totals.calories / servings, 0),
+                proteinG: roundToDecimal(totals.proteinG / servings, 1),
+                fatG: roundToDecimal(totals.fatG / servings, 1),
+                carbohydratesG: roundToDecimal(totals.carbohydratesG / servings, 1),
+                sodiumMg: roundToDecimal(totals.sodiumMg / servings, 0),
+                cholesterolMg: roundToDecimal(totals.cholesterolMg / servings, 0)
+            },
+            total: {
+                calories: roundToDecimal(totals.calories, 0),
+                proteinG: roundToDecimal(totals.proteinG, 1),
+                fatG: roundToDecimal(totals.fatG, 1),
+                carbohydratesG: roundToDecimal(totals.carbohydratesG, 1),
+                sodiumMg: roundToDecimal(totals.sodiumMg, 0),
+                cholesterolMg: roundToDecimal(totals.cholesterolMg, 0)
+            },
+            processedIngredients,
+            totalIngredients: ingredients.length,
+            skippedIngredients
+        };
+        
+    } catch (error) {
+        console.error('Error in calculateRecipeNutrition:', error);
+        throw error;
+    }
+};
+
 // Function to add nutritional summary to recipe records
 // fieldPrefix: 'summary' (default, for publish-time) or 'calculatedSummary' (for on-demand recalculation)
 const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 'summary') => {
@@ -1448,208 +1601,45 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
             return record;
         }
         
-        // Initialize totals and tracking
-        const totals = {
-            calories: 0,
-            proteinG: 0,
-            fatG: 0,
-            cholesterolMg: 0,
-            sodiumMg: 0,
-            carbohydratesG: 0
-        };
+        // Build ingredients array for the shared calculation function
+        const ingredients = recipe.ingredient.map((ingredientRef, i) => ({
+            did: typeof ingredientRef === 'string' && ingredientRef.startsWith('did:') ? ingredientRef : null,
+            amount: recipe.ingredient_amount[i],
+            unit: recipe.ingredient_unit[i],
+            name: typeof ingredientRef === 'object' && ingredientRef?.data?.basic?.name ? ingredientRef.data.basic.name : `ingredient ${i}`,
+            nutritionalInfo: typeof ingredientRef === 'object' && ingredientRef?.data?.nutritionalInfo ? ingredientRef.data.nutritionalInfo : null
+        }));
         
-        let processedIngredients = 0;
-        let totalIngredients = recipe.ingredient.length;
-        
-        // Get servings for per-serving calculations
         const servings = recipe.servings || 1;
         
-        // Process each ingredient
-        for (let i = 0; i < recipe.ingredient.length; i++) {
-            try {
-                const ingredientRef = recipe.ingredient[i];
-                const recipeAmount = recipe.ingredient_amount[i];
-                const recipeUnit = recipe.ingredient_unit[i];
-                
-                if (!recipeAmount || !recipeUnit) continue;
-                
-                // Get the ingredient record - either resolved object or DID string
-                let ingredientRecord = null;
-                
-                if (typeof ingredientRef === 'string' && ingredientRef.startsWith('did:')) {
-                    // Need to fetch the ingredient record for nutritional info
-                    ingredientRecord = recordsInDB.find(r => r && r.oip && r.oip.didTx === ingredientRef);
-                } else if (typeof ingredientRef === 'object' && ingredientRef && ingredientRef.data) {
-                    // Already resolved
-                    ingredientRecord = ingredientRef;
-                }
-                
-                if (!ingredientRecord || !ingredientRecord.data || !ingredientRecord.data.nutritionalInfo) {
-                    console.warn(`No nutritional info found for ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'} - skipping ingredient`);
-                    continue;
-                }
-                
-                const nutritionalInfo = ingredientRecord.data.nutritionalInfo;
-                const standardAmount = nutritionalInfo.standardAmount;
-                const rawStandardUnit = nutritionalInfo.standardUnit;
-                
-                if (!standardAmount || !rawStandardUnit) {
-                    console.warn(`Missing standard amount/unit for ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'}`);
-                    continue;
-                }
-                
-                // Parse and clean units to handle cases like "4 oz, cooked" -> "4 oz"
-                const cleanRecipeUnit = parseUnit(recipeUnit);
-                const standardUnit = parseUnit(rawStandardUnit);
-                
-                // Step 1: Calculate multiplier = AmountOfIngredientInRecipe / NutritionalInfoStandardAmount
-                // Following the IFERROR logic from the spreadsheet formula
-                let multiplier;
-                
-                const ingredientName = ingredientRecord.data.basic?.name || `ingredient ${i}`;
-                console.log(`\n=== Processing ${ingredientName} ===`);
-                console.log(`Recipe: ${recipeAmount} ${cleanRecipeUnit} | Standard: ${standardAmount} ${standardUnit} (cleaned from "${rawStandardUnit}")`);
-                
-                // Validate that we have valid amounts
-                if (!recipeAmount || recipeAmount <= 0) {
-                    console.warn(`Invalid recipe amount for ingredient ${i}: ${recipeAmount}`);
-                    continue;
-                }
-                
-                if (!standardAmount || standardAmount <= 0) {
-                    console.warn(`Invalid standard amount for ingredient ${i}: ${standardAmount}`);
-                    continue;
-                }
-                
-                // First, try direct unit conversion using enhanced convertUnits function
-                const convertedAmount = convertUnits(recipeAmount, cleanRecipeUnit, standardUnit);
-                
-                if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
-                    // Direct conversion successful
-                    multiplier = convertedAmount / standardAmount;
-                    console.log(`✅ Converted: ${recipeAmount} ${cleanRecipeUnit} → ${convertedAmount} ${standardUnit} | Multiplier: ${multiplier.toFixed(4)}`);
-                } else {
-                    // Direct conversion failed, use fallback logic
-                    // console.log(`❌ Direct conversion failed, trying fallback logic...`);
-                    
-                    // Normalize units for comparison
-                    const normalizedRecipeUnit = cleanRecipeUnit.toLowerCase().trim();
-                    const normalizedStandardUnit = standardUnit.toLowerCase().trim();
-                    
-                    if (normalizedRecipeUnit === normalizedStandardUnit) {
-                        // Units are identical, use simple ratio
-                        multiplier = recipeAmount / standardAmount;
-                        console.log(`🔄 Same unit: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
-                    } else if (isCountUnit(cleanRecipeUnit) && isCountUnit(standardUnit)) {
-                        // Both are count-based units, use simple ratio
-                        multiplier = recipeAmount / standardAmount;
-                        console.log(`📊 Both count units: ${recipeAmount} / ${standardAmount} = ${multiplier}`);
-                    } else if (isCountUnit(cleanRecipeUnit) && !isCountUnit(standardUnit)) {
-                        // Recipe uses count, standard uses weight/volume - can't convert without conversion factor
-                        console.warn(`Cannot convert count-based unit '${cleanRecipeUnit}' to weight/volume unit '${standardUnit}' for ingredient ${i} - no conversion factor available`);
-                        continue;
-                    } else if (!isCountUnit(cleanRecipeUnit) && isCountUnit(standardUnit)) {
-                        // Recipe uses weight/volume, standard uses count - can't convert without conversion factor
-                        console.warn(`Cannot convert weight/volume unit '${cleanRecipeUnit}' to count-based unit '${standardUnit}' for ingredient ${i} - no conversion factor available`);
-                        continue;
-                    } else {
-                        // Both are weight/volume but different - try converting both to grams
-                        const recipeAmountInGrams = convertToGrams(recipeAmount, cleanRecipeUnit);
-                        const standardAmountInGrams = convertToGrams(standardAmount, standardUnit);
-                        
-                        if (recipeAmountInGrams === null || recipeAmountInGrams === undefined) {
-                            console.warn(`Could not convert recipe unit '${cleanRecipeUnit}' to grams for ingredient ${i}`);
-                            continue;
-                        }
-                        
-                        if (standardAmountInGrams === null || standardAmountInGrams === undefined) {
-                            console.warn(`Could not convert standard unit '${standardUnit}' to grams for ingredient ${i}`);
-                            continue;
-                        }
-                        
-                        multiplier = recipeAmountInGrams / standardAmountInGrams;
-                        console.log(`⚖️ Gram conversion: ${recipeAmountInGrams}g / ${standardAmountInGrams}g = ${multiplier}`);
-                    }
-                }
-                
-                // Validate multiplier before using it
-                if (multiplier === undefined || multiplier === null || isNaN(multiplier) || multiplier < 0) {
-                    console.warn(`Invalid multiplier (${multiplier}) calculated for ingredient ${i} (${ingredientName}), skipping`);
-                    continue;
-                }
-                
-                const calorieContribution = (nutritionalInfo.calories || 0) * multiplier;
-                const proteinContribution = (nutritionalInfo.proteinG || 0) * multiplier;
-                console.log(`📊 Contribution: ${Math.round(calorieContribution)} cal, ${proteinContribution.toFixed(1)}g protein`);
-                
-                // Step 2: Calculate multiplier per serving = multiplier / ServingsFromRecipe
-                const multiplierPerServing = multiplier / servings;
-                
-                // Add to totals using the full multiplier (for total recipe nutritional info)
-                totals.calories += (nutritionalInfo.calories || 0) * multiplier;
-                totals.proteinG += (nutritionalInfo.proteinG || 0) * multiplier;
-                totals.fatG += (nutritionalInfo.fatG || 0) * multiplier;
-                totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * multiplier;
-                totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * multiplier;
-                totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * multiplier;
-                
-                processedIngredients++;
-                
-            } catch (ingredientError) {
-                console.error(`Error processing ingredient ${i} in recipe ${record.oip?.didTx || 'unknown'}:`, ingredientError.message);
-                continue;
-            }
-        }
+        // Use the shared calculation function
+        const result = await calculateRecipeNutrition(ingredients, servings, recordsInDB);
         
-        // Only add summary if we processed at least some ingredients (at least 25% or minimum 1)
-        const minimumThreshold = Math.max(1, Math.ceil(totalIngredients * 0.25));
-        if (processedIngredients < minimumThreshold) {
-            console.warn(`Recipe ${record.oip?.didTx || 'unknown'} has insufficient nutritional data (${processedIngredients}/${totalIngredients} ingredients), skipping summary`);
+        // Check if we processed enough ingredients
+        const minimumThreshold = Math.max(1, Math.ceil(result.totalIngredients * 0.25));
+        if (result.processedIngredients < minimumThreshold) {
+            console.warn(`Recipe ${record.oip?.didTx || 'unknown'} has insufficient nutritional data (${result.processedIngredients}/${result.totalIngredients} ingredients), skipping summary`);
             return record;
         }
         
-        console.log(`\n✅ Successfully processed ${processedIngredients}/${totalIngredients} ingredients for recipe ${record.oip?.didTx || 'unknown'}`);
+        console.log(`\n✅ Successfully processed ${result.processedIngredients}/${result.totalIngredients} ingredients for recipe ${record.oip?.didTx || 'unknown'}`);
         console.log(`📊 Total recipe nutritional values (for ${servings} servings):`);
-        console.log(`   Calories: ${totals.calories}`);
-        console.log(`   Protein: ${totals.proteinG}g`);
-        console.log(`   Fat: ${totals.fatG}g`);
-        console.log(`   Carbs: ${totals.carbohydratesG}g`);
-        
-        // Round values to reasonable precision
-        const roundToDecimal = (num, decimals = 2) => Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
-        
-        const nutritionalInfoTotal = {
-            calories: roundToDecimal(totals.calories, 0),
-            proteinG: roundToDecimal(totals.proteinG),
-            fatG: roundToDecimal(totals.fatG),
-            cholesterolMg: roundToDecimal(totals.cholesterolMg),
-            sodiumMg: roundToDecimal(totals.sodiumMg),
-            carbohydratesG: roundToDecimal(totals.carbohydratesG)
-            // Note: ingredientsProcessed and totalIngredients are NOT part of the template
-            // and are excluded to prevent indexing errors
-        };
-        
-        // Calculate per-serving values using the correct formula
-        // Per-serving values are already calculated correctly by dividing totals by servings
-        // since totals represent the entire recipe's nutritional content
-        const nutritionalInfoPerServing = {
-            calories: roundToDecimal(totals.calories / servings, 0),
-            proteinG: roundToDecimal(totals.proteinG / servings),
-            fatG: roundToDecimal(totals.fatG / servings),
-            cholesterolMg: roundToDecimal(totals.cholesterolMg / servings),
-            sodiumMg: roundToDecimal(totals.sodiumMg / servings),
-            carbohydratesG: roundToDecimal(totals.carbohydratesG / servings)
-            // Note: ingredientsProcessed and totalIngredients are NOT part of the template
-            // and are excluded to prevent indexing errors
-        };
-        
+        console.log(`   Calories: ${result.total.calories}`);
+        console.log(`   Protein: ${result.total.proteinG}g`);
+        console.log(`   Fat: ${result.total.fatG}g`);
+        console.log(`   Carbs: ${result.total.carbohydratesG}g`);
         console.log(`\n📊 Per-serving nutritional values (1 of ${servings} servings):`);
-        console.log(`   Calories: ${nutritionalInfoPerServing.calories}`);
-        console.log(`   Protein: ${nutritionalInfoPerServing.proteinG}g`);
-        console.log(`   Fat: ${nutritionalInfoPerServing.fatG}g`);
-        console.log(`   Carbs: ${nutritionalInfoPerServing.carbohydratesG}g`);
-        console.log(`Successfully calculated nutritional summary for recipe ${record.oip?.didTx || 'unknown'} using ${processedIngredients}/${totalIngredients} ingredients`);
-        console.log(`   (Note: ingredientsProcessed and totalIngredients excluded from published data to match template)`);
+        console.log(`   Calories: ${result.perServing.calories}`);
+        console.log(`   Protein: ${result.perServing.proteinG}g`);
+        console.log(`   Fat: ${result.perServing.fatG}g`);
+        console.log(`   Carbs: ${result.perServing.carbohydratesG}g`);
+        
+        if (result.skippedIngredients.length > 0) {
+            console.log(`\n⚠️ Skipped ${result.skippedIngredients.length} ingredients:`);
+            result.skippedIngredients.forEach(skip => {
+                console.log(`   - ${skip.name}: ${skip.reason}`);
+            });
+        }
         
         // Add the summaries to the record using the specified field prefix
         const totalFieldName = `${fieldPrefix}NutritionalInfo`;
@@ -1659,8 +1649,8 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
             ...record,
             data: {
                 ...record.data,
-                [totalFieldName]: nutritionalInfoTotal,
-                [perServingFieldName]: nutritionalInfoPerServing
+                [totalFieldName]: result.total,
+                [perServingFieldName]: result.perServing
             }
         };
         
@@ -5265,5 +5255,6 @@ module.exports = {
     getRecordTypesSummary,
     processRecordForElasticsearch,
     addRecipeNutritionalSummary,
+    calculateRecipeNutrition,
     elasticClient
 };

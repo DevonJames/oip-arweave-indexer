@@ -77,8 +77,42 @@ router.get('/images/:filename', (req, res) => {
 });
 
 /**
+ * Calculate nutritional summary for a recipe (preview before publishing)
+ * POST /api/recipes/calculate-nutrition
+ */
+router.post('/calculate-nutrition', async (req, res) => {
+  try {
+    const { ingredients, servings } = req.body;
+    
+    if (!ingredients || !Array.isArray(ingredients) || !servings) {
+      return res.status(400).json({
+        success: false,
+        error: 'ingredients array and servings are required'
+      });
+    }
+    
+    // Import the elasticsearch helper to use the same calculation logic
+    const { calculateRecipeNutrition } = require('../helpers/elasticsearch');
+    
+    const result = await calculateRecipeNutrition(ingredients, servings);
+    
+    res.json({
+      success: true,
+      ...result
+    });
+    
+  } catch (error) {
+    console.error('Error calculating recipe nutrition:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to calculate nutrition'
+    });
+  }
+});
+
+/**
  * Use AI to find a better standard unit for nutritional info
- * POST /api/ai/find-standard-unit
+ * POST /api/recipes/find-standard-unit
  */
 router.post('/find-standard-unit', async (req, res) => {
   try {
