@@ -19813,12 +19813,57 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 document.getElementById('nutrition-info-text').textContent = 
                     `Based on ${result.processedIngredients} of ${result.totalIngredients} ingredients • ${servings} serving${servings > 1 ? 's' : ''}`;
                 
+                // Display ingredient breakdown
+                if (result.ingredientBreakdown && result.ingredientBreakdown.length > 0) {
+                    let breakdownHTML = '<div style="margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 5px; max-height: 300px; overflow-y: auto;">';
+                    breakdownHTML += '<div style="font-weight: bold; margin-bottom: 10px; font-size: 13px;">Per-Ingredient Breakdown (per serving):</div>';
+                    breakdownHTML += '<table style="width: 100%; font-size: 12px; border-collapse: collapse;">';
+                    breakdownHTML += '<thead><tr style="border-bottom: 2px solid #ddd;">';
+                    breakdownHTML += '<th style="text-align: left; padding: 5px;">Ingredient</th>';
+                    breakdownHTML += '<th style="text-align: left; padding: 5px;">Amount</th>';
+                    breakdownHTML += '<th style="text-align: right; padding: 5px;">Cal</th>';
+                    breakdownHTML += '<th style="text-align: right; padding: 5px;">Protein</th>';
+                    breakdownHTML += '</tr></thead><tbody>';
+                    
+                    result.ingredientBreakdown.forEach(item => {
+                        breakdownHTML += '<tr style="border-bottom: 1px solid #eee;">';
+                        breakdownHTML += `<td style="padding: 5px;" title="${item.conversionMethod}">${item.name}</td>`;
+                        breakdownHTML += `<td style="padding: 5px;">${item.amount} ${item.unit}</td>`;
+                        breakdownHTML += `<td style="text-align: right; padding: 5px;">${item.perServing.calories}</td>`;
+                        breakdownHTML += `<td style="text-align: right; padding: 5px;">${item.perServing.proteinG}g</td>`;
+                        breakdownHTML += '</tr>';
+                    });
+                    
+                    breakdownHTML += '</tbody></table></div>';
+                    
+                    // Find or create breakdown container
+                    let breakdownContainer = document.getElementById('nutrition-breakdown-container');
+                    if (!breakdownContainer) {
+                        breakdownContainer = document.createElement('div');
+                        breakdownContainer.id = 'nutrition-breakdown-container';
+                        document.getElementById('recipe-bundle-nutrition-summary').appendChild(breakdownContainer);
+                    }
+                    breakdownContainer.innerHTML = breakdownHTML;
+                }
+                
                 // Log skipped ingredients if any
                 if (result.skippedIngredients && result.skippedIngredients.length > 0) {
                     console.warn(`\n⚠️ Skipped ${result.skippedIngredients.length} ingredients:`);
                     result.skippedIngredients.forEach(skip => {
                         console.warn(`   - ${skip.name}: ${skip.reason}`);
                     });
+                    
+                    // Also show in UI
+                    let breakdownContainer = document.getElementById('nutrition-breakdown-container');
+                    if (breakdownContainer) {
+                        let skippedHTML = '<div style="margin-top: 10px; padding: 8px; background: #fff3cd; border-radius: 5px; font-size: 12px;">';
+                        skippedHTML += '<strong>⚠️ Skipped Ingredients:</strong><ul style="margin: 5px 0 0 20px; padding: 0;">';
+                        result.skippedIngredients.forEach(skip => {
+                            skippedHTML += `<li>${skip.name}: ${skip.reason}</li>`;
+                        });
+                        skippedHTML += '</ul></div>';
+                        breakdownContainer.innerHTML += skippedHTML;
+                    }
                 }
                 
                 document.getElementById('recipe-bundle-nutrition-summary').classList.remove('hidden');
