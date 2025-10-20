@@ -265,10 +265,10 @@ const translateOIPDataToJSON = async (record, template) => {
         }
     }
 
-    console.log("Index-to-Field Map:", indexToFieldMap);
+    // console.log("Index-to-Field Map:", indexToFieldMap);
 
     const translatedRecord = {};
-    console.log("Translating Record:", record);
+    // console.log("Translating Record:", record);
 
     for (const [key, value] of Object.entries(record)) {
         if (key === "t") {
@@ -319,7 +319,7 @@ const translateOIPDataToJSON = async (record, template) => {
     }
 
     translatedRecord.template = template.data.template;
-    console.log("Translated Record:", translatedRecord);
+    // console.log("Translated Record:", translatedRecord);
     return translatedRecord;
 };
 
@@ -350,7 +350,7 @@ const expandData = async (compressedData, templates) => {
         return expandedRecord;
     }));
 
-    console.log('es 290 expandedRecords:', expandedRecords);
+    // console.log('es 290 expandedRecords:', expandedRecords);
     return expandedRecords.filter(record => record !== null);
 };
 
@@ -367,7 +367,7 @@ const ensureIndexExists = async () => {
         }
         
         if (!templatesExists) {
-            console.log('📝 Creating new templates index with correct mapping...');
+            // console.log('📝 Creating new templates index with correct mapping...');
             try {
                 await elasticClient.indices.create({
                     index: 'templates',
@@ -988,7 +988,7 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
 }
 
 async function searchCreatorByAddress(didAddress) {
-    console.log(getFileInfo(), getLineNumber(), 'searchCreatorByAddress:', didAddress)
+    // console.log(getFileInfo(), getLineNumber(), 'searchCreatorByAddress:', didAddress)
     try {
         const searchResponse = await elasticClient.search({
             index: 'creatorregistrations',
@@ -1003,7 +1003,7 @@ async function searchCreatorByAddress(didAddress) {
 
         if (searchResponse.hits.hits.length > 0) {
             const creatorRecord = searchResponse.hits.hits[0]._source;
-            console.log(getFileInfo(), getLineNumber(), 'Creator found for address:', didAddress);
+            // console.log(getFileInfo(), getLineNumber(), 'Creator found for address:', didAddress);
             const creatorInfo = {
                 data: { 
                     creatorHandle: creatorRecord.oip.creator.creatorHandle,
@@ -1012,7 +1012,7 @@ async function searchCreatorByAddress(didAddress) {
                     publicKey: creatorRecord.oip.creator.publicKey,
                   }
             }
-            console.log(getFileInfo(), getLineNumber(), 'Creator found for address:', didAddress, creatorInfo);
+            // console.log(getFileInfo(), getLineNumber(), 'Creator found for address:', didAddress, creatorInfo);
             return creatorInfo;
         } else {
             console.log(getFileInfo(), getLineNumber(), 'Error - No creator found in db for address:', didAddress);
@@ -4554,14 +4554,14 @@ async function processNewTemplate(transaction) {
     const message = dataForSignature;
     
     const didAddress = 'did:arweave:' + transaction.creator;
-    console.log(getFileInfo(), getLineNumber(), 'Template creator DID:', didAddress);
+    // console.log(getFileInfo(), getLineNumber(), 'Template creator DID:', didAddress);
     
     const creatorInfo = await searchCreatorByAddress(didAddress);
     if (!creatorInfo) {
         console.error(`Creator data not found for DID address: ${didAddress}`);
         return null;
     }
-    console.log(getFileInfo(), getLineNumber(), 'Creator info found:', creatorInfo.data.creatorHandle);
+    // console.log(getFileInfo(), getLineNumber(), 'Creator info found:', creatorInfo.data.creatorHandle);
 
     const publicKey = creatorInfo.data.publicKey;
     console.log(getFileInfo(), getLineNumber(), 'Public key:', publicKey ? 'found' : 'missing');
@@ -4582,13 +4582,13 @@ async function processNewTemplate(transaction) {
     }
     
     const templateIsVerified = await verifySignature(message, templateSignatureBase64, publicKey, didAddress);
-    console.log(getFileInfo(), getLineNumber(), 'Signature verification result:', templateIsVerified);
+    // console.log(getFileInfo(), getLineNumber(), 'Signature verification result:', templateIsVerified);
     
     if (!templateIsVerified) {
         console.error(getFileInfo(), getLineNumber(),`Signature verification failed for template ${transaction.transactionId}`);
         return null;
     } else {
-        console.log(getFileInfo(), getLineNumber(), `✅ Template signature verified successfully for ${transaction.transactionId}`);
+        // console.log(getFileInfo(), getLineNumber(), `✅ Template signature verified successfully for ${transaction.transactionId}`);
         
         // Use the same block height approach as successful creator verification
         const inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
@@ -4653,7 +4653,7 @@ async function processNewTemplate(transaction) {
             for (const [fieldName, fieldValue] of Object.entries(fieldsObject)) {
                 if (fieldValue === 'enum' && fieldsObject[`${fieldName}Values`]) {
                     finalTemplate.data[`${fieldName}Values`] = fieldsObject[`${fieldName}Values`];
-                    console.log(getFileInfo(), getLineNumber(), `📋 Added enum values for ${fieldName}:`, fieldsObject[`${fieldName}Values`].length, 'values');
+                    // console.log(getFileInfo(), getLineNumber(), `📋 Added enum values for ${fieldName}:`, fieldsObject[`${fieldName}Values`].length, 'values');
                 }
             }
             
@@ -4682,14 +4682,14 @@ async function processNewTemplate(transaction) {
                 console.log(`✅ Template indexed successfully: ${finalTemplate.data.TxId}`, indexResult.result);
                 
                 // Log what we attempted to store for debugging
-                console.log(getFileInfo(), getLineNumber(), `📋 Stored template with fields:`, {
-                    TxId: finalTemplate.data.TxId,
-                    hasFields: !!finalTemplate.data.fields,
-                    fieldsLength: finalTemplate.data.fields ? finalTemplate.data.fields.length : 0,
-                    hasFieldsInTemplate: !!finalTemplate.data.fieldsInTemplate,
-                    fieldsInTemplateKeys: Object.keys(finalTemplate.data.fieldsInTemplate || {}),
-                    fieldsInTemplateCount: finalTemplate.data.fieldsInTemplateCount
-                });
+                // console.log(getFileInfo(), getLineNumber(), `📋 Stored template with fields:`, {
+                //     TxId: finalTemplate.data.TxId,
+                //     hasFields: !!finalTemplate.data.fields,
+                //     fieldsLength: finalTemplate.data.fields ? finalTemplate.data.fields.length : 0,
+                //     hasFieldsInTemplate: !!finalTemplate.data.fieldsInTemplate,
+                //     fieldsInTemplateKeys: Object.keys(finalTemplate.data.fieldsInTemplate || {}),
+                    // fieldsInTemplateCount: finalTemplate.data.fieldsInTemplateCount
+                // });
                 
                 // Auto-generate Elasticsearch mapping from template field types
                 try {
@@ -4802,7 +4802,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
     console.log(getFileInfo(), getLineNumber());
     
     creatorInfo = (!creatorInfo) ? await searchCreatorByAddress(creatorDid) : creatorInfo;
-    console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
+    // console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
     
     // If creator is not found, skip this record for now
     if (!creatorInfo) {
@@ -4830,7 +4830,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         console.log(getFileInfo(), getLineNumber(), 'UNSUPPORTED DATA TYPE, skipping:', transaction.transactionId, typeof transaction.data);
         return { records: newRecords, recordsToDelete };
     }
-    console.log(getFileInfo(), getLineNumber());
+    // console.log(getFileInfo(), getLineNumber());
     let record;
     let currentBlockHeight = await getCurrentBlockHeight();
     // Use block height from GraphQL data instead of making additional API calls
