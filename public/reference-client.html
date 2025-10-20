@@ -19660,6 +19660,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
 
         /**
          * Calculate Nutritional Summary for Recipe Bundle
+         * Calls the backend to use the exact same calculation logic as publishing
          */
         async function calculateRecipeBundleNutritionalSummary() {
             try {
@@ -19681,26 +19682,15 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     return;
                 }
                 
-                // Initialize totals
-                const totals = {
-                    calories: 0,
-                    proteinG: 0,
-                    fatG: 0,
-                    carbohydratesG: 0,
-                    sodiumMg: 0,
-                    cholesterolMg: 0
-                };
+                // Build ingredients array for backend
+                const ingredients = [];
                 
-                let processedCount = 0;
-                
-                // Process each ingredient
                 for (const item of ingredientItems) {
-                    const itemId = item.id;
                     const mode = item.querySelector('.ingredient-mode').value;
                     const amount = parseFloat(item.querySelector('.ingredient-amount').value) || 0;
                     const unit = item.querySelector('.ingredient-unit').value || '';
                     
-                    // Get ingredient name for better logging
+                    // Get ingredient name
                     let ingredientName = 'Unknown';
                     if (mode === 'existing') {
                         const selectElement = item.querySelector('.ingredient-select');
@@ -19709,51 +19699,46 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         ingredientName = item.querySelector('.ingredient-name')?.value || 'Unknown';
                     }
                     
-                    console.log(`   Processing ${itemId} (${ingredientName}): mode="${mode}", amount=${amount}, unit="${unit}"`);
+                    console.log(`   Adding ingredient: ${ingredientName}, amount=${amount}, unit="${unit}", mode="${mode}"`);
                     
                     if (amount <= 0) {
-                        console.log(`   ⚠️ Skipping ${itemId} (${ingredientName}) - amount is 0`);
+                        console.log(`   ⚠️ Skipping ${ingredientName} - amount is 0`);
                         continue;
                     }
                     
                     let nutritionalInfo = null;
+                    let did = null;
                     
                     if (mode === 'existing') {
-                        // Get from selected existing ingredient
+                        // Get DID and nutritional info from selected existing ingredient
                         const selectElement = item.querySelector('.ingredient-select');
-                        const selectedDID = selectElement.value;
+                        did = selectElement.value;
                         
-                        if (!selectedDID) continue;
+                        if (!did) continue;
                         
-                        // Find the ingredient data from stored data
+                        // Get nutritional info from stored data
                         const allIngredientsJSON = item.getAttribute('data-all-ingredients');
                         if (allIngredientsJSON) {
                             const allIngredients = JSON.parse(allIngredientsJSON);
-                            const ingredient = allIngredients.find(r => (r.oip?.did || r.oip?.didTx) === selectedDID);
+                            const ingredient = allIngredients.find(r => (r.oip?.did || r.oip?.didTx) === did);
                             if (ingredient && ingredient.data?.nutritionalInfo) {
                                 nutritionalInfo = ingredient.data.nutritionalInfo;
                             }
                         }
                     } else {
-                        // Get from new ingredient fields - check if nutritional info was looked up
-                        console.log(`   ${itemId} is in NEW mode, looking for .nutritional-info-display`);
+                        // Get from new ingredient fields
                         const nutriDisplay = item.querySelector('.nutritional-info-display');
-                        console.log(`   nutriDisplay found: ${!!nutriDisplay}, hidden: ${nutriDisplay?.classList.contains('hidden')}`);
                         
                         if (nutriDisplay && !nutriDisplay.classList.contains('hidden')) {
-                            // Nutritional info was looked up and is displayed
+                            // Read nutritional info from UI
                             const calories = parseFloat(nutriDisplay.querySelector('.nutri-calories')?.textContent) || 0;
                             const protein = parseFloat(nutriDisplay.querySelector('.nutri-protein')?.textContent) || 0;
                             const fat = parseFloat(nutriDisplay.querySelector('.nutri-fat')?.textContent) || 0;
                             const carbs = parseFloat(nutriDisplay.querySelector('.nutri-carbs')?.textContent) || 0;
                             const sodium = parseFloat(nutriDisplay.querySelector('.nutri-sodium')?.textContent) || 0;
                             const cholesterol = parseFloat(nutriDisplay.querySelector('.nutri-cholesterol')?.textContent) || 0;
-                            
-                            // Read from the editable input fields
                             const standardAmount = parseFloat(nutriDisplay.querySelector('.nutri-standard-amount-input')?.value) || 1;
                             const standardUnit = nutriDisplay.querySelector('.nutri-standard-unit-input')?.value || 'whole';
-                            
-                            console.log(`   Read nutritional info: calories=${calories}, protein=${protein}, standardAmount=${standardAmount}, standardUnit="${standardUnit}"`);
                             
                             nutritionalInfo = {
                                 calories,
@@ -19766,8 +19751,7 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                                 standardUnit
                             };
                         } else {
-                            // No nutritional info available for this new ingredient
-                            console.warn(`⚠️ No nutritional info available for new ingredient in item ${itemId}`);
+                            console.warn(`⚠️ No nutritional info available for new ingredient: ${ingredientName}`);
                             continue;
                         }
                     }
@@ -19777,72 +19761,49 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                         continue;
                     }
                     
-                    console.log(`   ✅ Got nutritionalInfo for ${itemId}:`, nutritionalInfo);
-                    
-                    // Calculate multiplier (similar to backend logic)
-                    const standardAmount = nutritionalInfo.standardAmount || 1;
-                    // Parse unit: remove content after comma and content in parentheses
-                    const standardUnit = (nutritionalInfo.standardUnit || '').split(',')[0].replace(/\(.*?\)/g, '').trim();
-                    const recipeUnit = unit.split(',')[0].replace(/\(.*?\)/g, '').trim();
-                    
-                    let multiplier = 1;
-                    
-                    // Check if both units are count-based (whole, piece, roast, etc.)
-                    const recipeIsCount = isCountUnit(recipeUnit);
-                    const standardIsCount = isCountUnit(standardUnit);
-                    
-                    if (recipeIsCount && standardIsCount) {
-                        // Both are count units - use direct ratio
-                        multiplier = amount / standardAmount;
-                        console.log(`   Count-based units: ${amount} ${recipeUnit} / ${standardAmount} ${standardUnit} = ${multiplier}`);
-                    } else if (recipeUnit.toLowerCase() === standardUnit.toLowerCase()) {
-                        // Exact unit match - use direct ratio
-                        multiplier = amount / standardAmount;
-                        console.log(`   Exact unit match: ${amount} ${recipeUnit} / ${standardAmount} ${standardUnit} = ${multiplier}`);
-                    } else {
-                        // Try to convert both to ounces
-                        const recipeInOz = convertToOunces(amount, recipeUnit);
-                        const standardInOz = convertToOunces(standardAmount, standardUnit);
-                        
-                        if (recipeInOz !== null && standardInOz !== null) {
-                            multiplier = recipeInOz / standardInOz;
-                            console.log(`   Converted to oz: ${recipeInOz} oz / ${standardInOz} oz = ${multiplier}`);
-                        } else {
-                            console.warn(`   ⚠️ SKIPPED ${ingredientName}: Cannot convert ${amount} ${recipeUnit} to ${standardAmount} ${standardUnit}`);
-                            continue;
-                        }
-                    }
-                    
-                    // Add to totals
-                    const caloriesContribution = (nutritionalInfo.calories || 0) * multiplier;
-                    console.log(`   Multiplier: ${multiplier}, Contributing ${caloriesContribution} calories`);
-                    
-                    totals.calories += caloriesContribution;
-                    totals.proteinG += (nutritionalInfo.proteinG || 0) * multiplier;
-                    totals.fatG += (nutritionalInfo.fatG || 0) * multiplier;
-                    totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * multiplier;
-                    totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * multiplier;
-                    totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * multiplier;
-                    
-                    processedCount++;
+                    ingredients.push({
+                        did,
+                        amount,
+                        unit,
+                        name: ingredientName,
+                        nutritionalInfo
+                    });
                 }
                 
-                if (processedCount === 0) {
+                if (ingredients.length === 0) {
                     alert('No ingredients with nutritional information found');
                     return;
                 }
                 
-                // Calculate per-serving values
-                const perServing = {
-                    calories: Math.round(totals.calories / servings),
-                    proteinG: Math.round((totals.proteinG / servings) * 10) / 10,
-                    fatG: Math.round((totals.fatG / servings) * 10) / 10,
-                    carbohydratesG: Math.round((totals.carbohydratesG / servings) * 10) / 10,
-                    sodiumMg: Math.round(totals.sodiumMg / servings),
-                    cholesterolMg: Math.round(totals.cholesterolMg / servings)
-                };
+                console.log(`📤 Sending ${ingredients.length} ingredients to backend for calculation`);
+                
+                // Call backend API
+                const response = await fetch('/api/recipes/calculate-nutrition', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                    },
+                    body: JSON.stringify({
+                        ingredients,
+                        servings
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Backend calculation failed: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Calculation failed');
+                }
+                
+                console.log('📊 Backend calculation result:', result);
                 
                 // Display results
+                const perServing = result.perServing;
                 document.getElementById('nutrition-calories').textContent = perServing.calories;
                 document.getElementById('nutrition-protein').textContent = perServing.proteinG;
                 document.getElementById('nutrition-fat').textContent = perServing.fatG;
@@ -19850,11 +19811,19 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 document.getElementById('nutrition-sodium').textContent = perServing.sodiumMg;
                 document.getElementById('nutrition-cholesterol').textContent = perServing.cholesterolMg;
                 document.getElementById('nutrition-info-text').textContent = 
-                    `Based on ${processedCount} of ${ingredientItems.length} ingredients • ${servings} serving${servings > 1 ? 's' : ''}`;
+                    `Based on ${result.processedIngredients} of ${result.totalIngredients} ingredients • ${servings} serving${servings > 1 ? 's' : ''}`;
+                
+                // Log skipped ingredients if any
+                if (result.skippedIngredients && result.skippedIngredients.length > 0) {
+                    console.warn(`\n⚠️ Skipped ${result.skippedIngredients.length} ingredients:`);
+                    result.skippedIngredients.forEach(skip => {
+                        console.warn(`   - ${skip.name}: ${skip.reason}`);
+                    });
+                }
                 
                 document.getElementById('recipe-bundle-nutrition-summary').classList.remove('hidden');
                 
-                console.log('✅ Nutritional summary calculated:', perServing);
+                console.log('✅ Nutritional summary calculated successfully');
                 
             } catch (error) {
                 console.error('Error calculating nutritional summary:', error);
