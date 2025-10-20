@@ -1455,6 +1455,7 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
         
         let processedIngredients = 0;
         let skippedIngredients = [];
+        let ingredientBreakdown = []; // Track per-ingredient contributions
         
         // Process each ingredient
         for (let i = 0; i < ingredients.length; i++) {
@@ -1500,12 +1501,14 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                 
                 // Calculate multiplier
                 let multiplier;
+                let conversionMethod = '';
                 
                 // Try direct unit conversion first
                 const convertedAmount = convertUnits(recipeAmount, cleanRecipeUnit, standardUnit);
                 
                 if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
                     multiplier = convertedAmount / standardAmount;
+                    conversionMethod = 'direct unit conversion';
                 } else {
                     // Fallback logic
                     const normalizedRecipeUnit = cleanRecipeUnit.toLowerCase().trim();
@@ -1513,8 +1516,10 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                     
                     if (normalizedRecipeUnit === normalizedStandardUnit) {
                         multiplier = recipeAmount / standardAmount;
+                        conversionMethod = 'same unit';
                     } else if (isCountUnit(cleanRecipeUnit) && isCountUnit(standardUnit)) {
                         multiplier = recipeAmount / standardAmount;
+                        conversionMethod = 'count units';
                     } else if (isCountUnit(cleanRecipeUnit) && !isCountUnit(standardUnit)) {
                         skippedIngredients.push({ index: i, reason: `Cannot convert count '${cleanRecipeUnit}' to '${standardUnit}'`, name: ingredientName });
                         continue;
@@ -1533,6 +1538,7 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                         }
                         
                         multiplier = recipeAmountInGrams / standardAmountInGrams;
+                        conversionMethod = 'gram conversion';
                     }
                 }
                 
@@ -1542,13 +1548,35 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                     continue;
                 }
                 
+                // Calculate contributions
+                const contribution = {
+                    calories: (nutritionalInfo.calories || 0) * multiplier,
+                    proteinG: (nutritionalInfo.proteinG || 0) * multiplier,
+                    fatG: (nutritionalInfo.fatG || 0) * multiplier,
+                    carbohydratesG: (nutritionalInfo.carbohydratesG || 0) * multiplier,
+                    sodiumMg: (nutritionalInfo.sodiumMg || 0) * multiplier,
+                    cholesterolMg: (nutritionalInfo.cholesterolMg || 0) * multiplier
+                };
+                
                 // Add to totals
-                totals.calories += (nutritionalInfo.calories || 0) * multiplier;
-                totals.proteinG += (nutritionalInfo.proteinG || 0) * multiplier;
-                totals.fatG += (nutritionalInfo.fatG || 0) * multiplier;
-                totals.cholesterolMg += (nutritionalInfo.cholesterolMg || 0) * multiplier;
-                totals.sodiumMg += (nutritionalInfo.sodiumMg || 0) * multiplier;
-                totals.carbohydratesG += (nutritionalInfo.carbohydratesG || 0) * multiplier;
+                totals.calories += contribution.calories;
+                totals.proteinG += contribution.proteinG;
+                totals.fatG += contribution.fatG;
+                totals.cholesterolMg += contribution.cholesterolMg;
+                totals.sodiumMg += contribution.sodiumMg;
+                totals.carbohydratesG += contribution.carbohydratesG;
+                
+                // Track breakdown
+                ingredientBreakdown.push({
+                    name: ingredientName,
+                    amount: recipeAmount,
+                    unit: cleanRecipeUnit,
+                    standardAmount: standardAmount,
+                    standardUnit: standardUnit,
+                    multiplier: multiplier,
+                    conversionMethod: conversionMethod,
+                    contribution: contribution
+                });
                 
                 processedIngredients++;
                 
@@ -1561,6 +1589,19 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
         
         // Round values
         const roundToDecimal = (num, decimals = 2) => Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
+        
+        // Add per-serving values to each ingredient breakdown
+        const ingredientBreakdownPerServing = ingredientBreakdown.map(item => ({
+            ...item,
+            perServing: {
+                calories: roundToDecimal(item.contribution.calories / servings, 0),
+                proteinG: roundToDecimal(item.contribution.proteinG / servings, 1),
+                fatG: roundToDecimal(item.contribution.fatG / servings, 1),
+                carbohydratesG: roundToDecimal(item.contribution.carbohydratesG / servings, 1),
+                sodiumMg: roundToDecimal(item.contribution.sodiumMg / servings, 0),
+                cholesterolMg: roundToDecimal(item.contribution.cholesterolMg / servings, 0)
+            }
+        }));
         
         return {
             perServing: {
@@ -1581,7 +1622,8 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
             },
             processedIngredients,
             totalIngredients: ingredients.length,
-            skippedIngredients
+            skippedIngredients,
+            ingredientBreakdown: ingredientBreakdownPerServing
         };
         
     } catch (error) {
