@@ -4571,10 +4571,10 @@ async function processNewTemplate(transaction) {
     const templateSignatureBase64 = templateCreatorSigRaw ? templateCreatorSigRaw.replace(/ /g, '+') : undefined;
     
     if (templateCreatorSigRaw && templateCreatorSigRaw !== templateSignatureBase64) {
-        console.log(getFileInfo(), getLineNumber(), `Fixed CreatorSig format: converted ${(templateCreatorSigRaw.match(/ /g) || []).length} spaces to + characters`);
+        // console.log(getFileInfo(), getLineNumber(), `Fixed CreatorSig format: converted ${(templateCreatorSigRaw.match(/ /g) || []).length} spaces to + characters`);
     }
     
-    console.log(getFileInfo(), getLineNumber(), 'Signature:', templateSignatureBase64 ? 'found' : 'missing');
+    // console.log(getFileInfo(), getLineNumber(), 'Signature:', templateSignatureBase64 ? 'found' : 'missing');
     
     if (!templateSignatureBase64) {
         console.error(getFileInfo(), getLineNumber(), `No signature found for template ${transaction.transactionId}`);
