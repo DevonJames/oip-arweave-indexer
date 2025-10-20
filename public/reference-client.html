@@ -19781,8 +19781,9 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     
                     // Calculate multiplier (similar to backend logic)
                     const standardAmount = nutritionalInfo.standardAmount || 1;
-                    const standardUnit = (nutritionalInfo.standardUnit || '').split(',')[0].trim(); // Parse unit
-                    const recipeUnit = unit.split(',')[0].trim(); // Parse unit
+                    // Parse unit: remove content after comma and content in parentheses
+                    const standardUnit = (nutritionalInfo.standardUnit || '').split(',')[0].replace(/\(.*?\)/g, '').trim();
+                    const recipeUnit = unit.split(',')[0].replace(/\(.*?\)/g, '').trim();
                     
                     let multiplier = 1;
                     
@@ -19984,6 +19985,15 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 return value * 0.5;
             } else if (unitLower.includes('tsp') || unitLower.includes('teaspoon')) {
                 return value * 0.17;
+            } else if (unitLower.includes('pinch')) {
+                // 1 pinch ≈ 1/16 tsp ≈ 0.0625 tsp ≈ 0.010625 oz
+                return value * 0.010625;
+            } else if (unitLower.includes('dash')) {
+                // 1 dash ≈ 1/8 tsp ≈ 0.125 tsp ≈ 0.02125 oz
+                return value * 0.02125;
+            } else if (unitLower.includes('smidgen') || unitLower.includes('smidge')) {
+                // 1 smidgen ≈ 1/32 tsp ≈ 0.03125 tsp ≈ 0.00531 oz
+                return value * 0.00531;
             } else if (unitLower.includes('g') && !unitLower.includes('mg')) {
                 // Grams to ounces
                 return value * 0.035274;

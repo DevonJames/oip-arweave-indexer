@@ -1138,6 +1138,13 @@ const convertToGrams = (amount, unit) => {
         'tsp': 5,
         'teaspoon': 5,
         'teaspoons': 5,
+        'pinch': 0.3125,  // 1 pinch ≈ 1/16 tsp ≈ 0.3125 g
+        'pinches': 0.3125,
+        'dash': 0.625,    // 1 dash ≈ 1/8 tsp ≈ 0.625 g
+        'dashes': 0.625,
+        'smidgen': 0.15625,  // 1 smidgen ≈ 1/32 tsp ≈ 0.15625 g
+        'smidgens': 0.15625,
+        'smidge': 0.15625,
         'fl oz': 30,
         'fluid ounce': 30,
         'fluid ounces': 30,
@@ -1197,6 +1204,10 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
         'tablespoons': 'tbsp',
         'teaspoon': 'tsp',
         'teaspoons': 'tsp',
+        'pinches': 'pinch',
+        'dashes': 'dash',
+        'smidgens': 'smidgen',
+        'smidge': 'smidgen',
         'cups': 'cup',
         'grams': 'g',
         'gram': 'g',
@@ -1242,7 +1253,7 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     // Handle complex standard units (like "cup spaghetti not packed")
     // Extract the actual unit from complex descriptions
     const extractBaseUnit = (unitString) => {
-        const baseUnits = ['cup', 'tbsp', 'tsp', 'g', 'kg', 'lb', 'oz', 'ml', 'l'];
+        const baseUnits = ['cup', 'tbsp', 'tsp', 'pinch', 'dash', 'smidgen', 'g', 'kg', 'lb', 'oz', 'ml', 'l'];
         for (const baseUnit of baseUnits) {
             if (unitString.includes(baseUnit)) {
                 return baseUnit;
@@ -1261,8 +1272,11 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     
     // Direct volume conversions (more accurate than going through grams)
     const volumeConversions = {
-        'tsp': { 'tbsp': 1/3, 'cup': 1/48, 'ml': 5 },
-        'tbsp': { 'tsp': 3, 'cup': 1/16, 'ml': 15 },
+        'pinch': { 'tsp': 1/16, 'tbsp': 1/48, 'dash': 1/2 },
+        'dash': { 'tsp': 1/8, 'tbsp': 1/24, 'pinch': 2 },
+        'smidgen': { 'tsp': 1/32, 'tbsp': 1/96, 'pinch': 1/2 },
+        'tsp': { 'tbsp': 1/3, 'cup': 1/48, 'ml': 5, 'pinch': 16, 'dash': 8, 'smidgen': 32 },
+        'tbsp': { 'tsp': 3, 'cup': 1/16, 'ml': 15, 'pinch': 48, 'dash': 24 },
         'cup': { 'tsp': 48, 'tbsp': 16, 'ml': 240 },
         'ml': { 'tsp': 1/5, 'tbsp': 1/15, 'cup': 1/240 }
     };
@@ -1412,12 +1426,15 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     return null;
 };
 
-// Function to parse and clean units (handles "4 oz, cooked" -> "4 oz")
+// Function to parse and clean units (handles "4 oz, cooked" -> "4 oz" and "tsp (1g)" -> "tsp")
 const parseUnit = (unit) => {
     if (!unit) return unit;
     // Handle cases like "4 oz, cooked" -> "4 oz"
     // Split on comma and take the first part
-    return unit.includes(',') ? unit.split(',')[0].trim() : unit;
+    let cleaned = unit.includes(',') ? unit.split(',')[0].trim() : unit;
+    // Remove content in parentheses: "tsp (1g)" -> "tsp"
+    cleaned = cleaned.replace(/\(.*?\)/g, '').trim();
+    return cleaned;
 };
 
 // Function to add nutritional summary to recipe records
