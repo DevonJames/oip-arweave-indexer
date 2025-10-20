@@ -7,7 +7,15 @@ echo "Starting OIP services..."
 
 # Start Next.js frontend in background (on configured port)
 echo "Starting Next.js frontend on port ${NEXT_FRONTEND_PORT:-3000}..."
-cd /usr/src/app/frontend && PORT=${NEXT_FRONTEND_PORT:-3000} npm start &
+
+# Extract heap size for frontend (use smaller size since frontend is less memory-intensive)
+if [ -n "$NODE_OPTIONS" ]; then
+    FRONTEND_HEAP_SIZE=$(echo "$NODE_OPTIONS" | sed -n 's/.*max-old-space-size=\([0-9]*\).*/\1/p')
+fi
+FRONTEND_HEAP_SIZE=${FRONTEND_HEAP_SIZE:-4096}
+echo "Setting frontend heap size to: ${FRONTEND_HEAP_SIZE}MB"
+
+cd /usr/src/app/frontend && NODE_OPTIONS="--max-old-space-size=${FRONTEND_HEAP_SIZE}" PORT=${NEXT_FRONTEND_PORT:-3000} npm start &
 FRONTEND_PID=$!
 
 # Ensure we're in the correct directory for the API

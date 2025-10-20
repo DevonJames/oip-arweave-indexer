@@ -392,9 +392,15 @@ initializeIndices()
         const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
         const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
         const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+        const externalMB = Math.round(memUsage.external / 1024 / 1024);
         const heapUtilization = ((memUsage.heapUsed / memUsage.heapTotal) * 100).toFixed(2);
         
-        console.log(`[Memory Monitor] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${heapUtilization}%), RSS: ${rssMB}MB`);
+        console.log(`[Memory Monitor] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${heapUtilization}%), RSS: ${rssMB}MB, External: ${externalMB}MB`);
+        
+        // Warning if external memory is excessive (> 10GB suggests buffer leak)
+        if (externalMB > 10240) {
+          console.warn(`⚠️  [Memory Monitor] HIGH EXTERNAL MEMORY: ${externalMB}MB (possible buffer leak from images/media)`);
+        }
         
         // Warning if heap utilization is high
         if (parseFloat(heapUtilization) > memoryWarningThreshold) {
@@ -409,8 +415,10 @@ initializeIndices()
             const afterGC = process.memoryUsage();
             const afterHeapUsedMB = Math.round(afterGC.heapUsed / 1024 / 1024);
             const afterHeapTotalMB = Math.round(afterGC.heapTotal / 1024 / 1024);
+            const afterExternalMB = Math.round(afterGC.external / 1024 / 1024);
             const freedMB = heapUsedMB - afterHeapUsedMB;
-            console.log(`[Memory Monitor] After GC: ${afterHeapUsedMB}MB / ${afterHeapTotalMB}MB (freed ${freedMB}MB)`);
+            const freedExternalMB = externalMB - afterExternalMB;
+            console.log(`[Memory Monitor] After GC: ${afterHeapUsedMB}MB / ${afterHeapTotalMB}MB (freed ${freedMB}MB heap, ${freedExternalMB}MB external)`);
           }
         }
       }, memoryMonitorInterval);
