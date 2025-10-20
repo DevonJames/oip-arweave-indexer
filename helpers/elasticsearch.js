@@ -4492,7 +4492,7 @@ async function searchArweaveForNewTransactions(foundInDB) {
 
 async function processTransaction(tx, remapTemplates) {
     try {
-    console.log(`   📡 Fetching transaction data from blockchain: ${tx.id}`);
+    // console.log(`   📡 Fetching transaction data from blockchain: ${tx.id}`);
     const transaction = await getTransaction(tx.id);
     if (!transaction || !transaction.tags) {
         console.log(`   ⚠️  SKIPPED: Cannot find transaction or tags in chain: ${tx.id}`);
