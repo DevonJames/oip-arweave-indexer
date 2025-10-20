@@ -75,7 +75,7 @@ const getTransaction = async (transactionId) => {
                 timeout: 30000
             });
             data = dataResponse.data;
-            console.log(`Successfully fetched data from gateway for ${transactionId}`);
+            // console.log(`Successfully fetched data from gateway for ${transactionId}`);
         } catch (gatewayError) {
             console.log(`Gateway fetch failed for ${transactionId}, trying native client...`);
             
@@ -114,7 +114,7 @@ const getTransaction = async (transactionId) => {
         // Fix CreatorSig format - convert spaces back to + characters for proper base64
         const creatorSig = creatorSigRaw ? creatorSigRaw.replace(/ /g, '+') : undefined;
         
-        console.log(`Extracted from tags - Creator: ${creator ? 'found' : 'missing'}, CreatorSig: ${creatorSig ? 'found' : 'missing'}, Ver: ${ver || 'missing'}`);
+        // console.log(`Extracted from tags - Creator: ${creator ? 'found' : 'missing'}, CreatorSig: ${creatorSig ? 'found' : 'missing'}, Ver: ${ver || 'missing'}`);
         if (creatorSigRaw && creatorSigRaw !== creatorSig) {
             // console.log(`Fixed CreatorSig format: converted ${creatorSigRaw.split(' ').length - 1} spaces to + characters`);
         }

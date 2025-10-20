@@ -15,7 +15,15 @@ cd /usr/src/app
 
 # Start Express API (on configured port) with correct working directory
 echo "Starting Express API on port ${PORT:-3005}..."
-node --inspect=0.0.0.0:9229 index.js --keepDBUpToDate 10 10 &
+
+# Extract max-old-space-size from NODE_OPTIONS if set, otherwise use default
+if [ -n "$NODE_OPTIONS" ]; then
+    HEAP_SIZE=$(echo "$NODE_OPTIONS" | sed -n 's/.*max-old-space-size=\([0-9]*\).*/\1/p')
+fi
+HEAP_SIZE=${HEAP_SIZE:-4096}
+echo "Setting heap size to: ${HEAP_SIZE}MB"
+
+node --inspect=0.0.0.0:9229 --max-old-space-size=${HEAP_SIZE} index.js --keepDBUpToDate 10 10 &
 API_PID=$!
 
 # Wait for both processes

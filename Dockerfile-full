@@ -70,12 +70,15 @@ RUN npm rebuild
 # Command to run all services
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["sh", "-c", "\
+  HEAP_SIZE=$(echo \"$NODE_OPTIONS\" | sed -n 's/.*max-old-space-size=\\([0-9]*\\).*/\\1/p'); \
+  HEAP_SIZE=${HEAP_SIZE:-4096}; \
+  echo \"Setting heap size to: ${HEAP_SIZE}MB\"; \
   ./wait-for-it.sh elasticsearch:9200 --timeout=90 --strict -- \
   ./wait-for-it.sh speech-synthesizer:8082 --timeout=600 --strict -- \
   ngrok start --config /usr/src/app/ngrok.yml & \
   python3 text-generator/llama_text_generator.py & \
   python3 speech-synthesizer/coqui_tts.py & \
-  node --inspect=0.0.0.0:9229 index.js --keepDBUpToDate 10 100"]
+  node --inspect=0.0.0.0:9229 --max-old-space-size=${HEAP_SIZE} index.js --keepDBUpToDate 10 100"]
 
 # Add healthcheck for the app
 HEALTHCHECK --interval=75s --timeout=5s --start-period=10s --retries=3 \
