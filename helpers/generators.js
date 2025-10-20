@@ -2596,6 +2596,13 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
 
     console.log(`✅ Generated and cached image for recipe: ${recipeTitle}`);
 
+    // MEMORY CLEANUP: Force GC after writing large image buffer
+    if (global.gc && imageBuffer.length > 1024 * 1024) { // If > 1MB
+      imageResponse.data = null; // Release arraybuffer
+      setImmediate(() => global.gc());
+      console.log(`🧹 Released ${Math.round(imageBuffer.length / 1024 / 1024)}MB image buffer`);
+    }
+
     return {
       success: true,
       imageUrl: `/api/recipes/images/${safeFilename}.png`,
