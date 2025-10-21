@@ -15,7 +15,8 @@ fi
 FRONTEND_HEAP_SIZE=${FRONTEND_HEAP_SIZE:-4096}
 echo "Setting frontend heap size to: ${FRONTEND_HEAP_SIZE}MB"
 
-cd /usr/src/app/frontend && NODE_OPTIONS="--max-old-space-size=${FRONTEND_HEAP_SIZE}" PORT=${NEXT_FRONTEND_PORT:-3000} npm start &
+# Call node directly with heap size instead of npm start (npm doesn't pass NODE_OPTIONS correctly)
+cd /usr/src/app/frontend && PORT=${NEXT_FRONTEND_PORT:-3000} node --max-old-space-size=${FRONTEND_HEAP_SIZE} ./node_modules/.bin/next start &
 FRONTEND_PID=$!
 
 # Ensure we're in the correct directory for the API
