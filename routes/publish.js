@@ -12,7 +12,7 @@ const {
 } = require('../helpers/lit-protocol');
 const fs = require('fs').promises;
 const path = require('path');
-const { getRecords, searchTemplateByTxId, addRecipeNutritionalSummary } = require('../helpers/elasticsearch');
+const { getRecords, searchTemplateByTxId, addRecipeNutritionalSummary, calculateRecipeNutrition } = require('../helpers/elasticsearch');
 const { publishNewRecord} = require('../helpers/templateHelper');
 const arweaveWallet = require('../helpers/arweave-wallet');
 const paymentManager = require('../helpers/payment-manager');
@@ -20,6 +20,7 @@ const publisherManager = require('../helpers/publisher-manager');
 const mediaManager = require('../helpers/media-manager');
 const { resolveDrefsInRecord } = require('../helpers/dref-resolver');
 const { fetchNutritionalData } = require('../helpers/nutritional-helper');
+const recipesRouter = require('./recipes');
 
 // Kaggle integration for exercise data
 let kaggleDataset = null;
@@ -1215,9 +1216,108 @@ console.log('- Ingredients for nutrition lookup:', ingredientNames);
 console.log('- Ingredient comments:', ingredientComments);
 console.log('- Ingredient DID references:', ingredientDRefs);
 
-// Calculate nutritional summaries before publishing (unless already provided)
-// Check if summaryNutritionalInfoPerServing was already included in the request
-if (record.summaryNutritionalInfoPerServing && Object.keys(record.summaryNutritionalInfoPerServing).length > 0) {
+// ====== INTELLIGENT INGREDIENT RESOLUTION ======
+// If recipe has ingredient names (not all DIDs) and no pre-calculated nutrition, resolve them intelligently
+const hasIngredientNames = recipeData.recipe.ingredient.some(ing => 
+  typeof ing === 'string' && !ing.startsWith('did:')
+);
+const hasNoNutrition = !record.summaryNutritionalInfoPerServing || 
+  Object.keys(record.summaryNutritionalInfoPerServing).length === 0;
+
+if (hasIngredientNames && hasNoNutrition) {
+  console.log('\n🤖 Intelligent Ingredient Resolution: Detected ingredient names without nutritional summary');
+  console.log('   Resolving ingredients, fixing standard units, and calculating nutrition...');
+  
+  try {
+    // Step 1: Resolve all ingredients (search existing, fetch from Nutritionix, fix standard units)
+    const resolvedIngredients = await recipesRouter.resolveRecipeIngredients(
+      recipeData.recipe.ingredient,
+      recipeData.recipe.ingredient_amount,
+      recipeData.recipe.ingredient_unit,
+      req.user.publicKey
+    );
+    
+    console.log(`\n✅ Resolved ${resolvedIngredients.length} ingredients`);
+    
+    // Step 2: Publish any new ingredients
+    const newIngredientDIDs = [];
+    for (const resolved of resolvedIngredients) {
+      if (resolved.isNew && resolved.data) {
+        console.log(`\n📝 Publishing new ingredient: ${resolved.name}`);
+        
+        try {
+          // Publish the new nutritionalInfo record
+          const publishResult = await publishNewRecord(
+            'nutritionalInfo',
+            resolved.data,
+            req.user.publicKey,
+            req.user.privateKey,
+            'arweave'
+          );
+          
+          if (publishResult && publishResult.didTx) {
+            resolved.did = publishResult.didTx;
+            newIngredientDIDs.push(publishResult.didTx);
+            console.log(`   ✅ Published new ingredient with DID: ${publishResult.didTx}`);
+          } else {
+            console.error(`   ❌ Failed to get DID for new ingredient: ${resolved.name}`);
+          }
+        } catch (publishError) {
+          console.error(`   ❌ Failed to publish new ingredient ${resolved.name}:`, publishError.message);
+        }
+      }
+    }
+    
+    if (newIngredientDIDs.length > 0) {
+      console.log(`\n✅ Published ${newIngredientDIDs.length} new ingredients`);
+    }
+    
+    // Step 3: Update recipeData with resolved DIDs
+    recipeData.recipe.ingredient = resolvedIngredients.map(r => r.did || r.ingredientRef);
+    
+    // Step 4: Calculate nutritional summary using the backend calculation function
+    console.log('\n🧮 Calculating nutritional summary with resolved ingredients...');
+    
+    const ingredientsForCalc = resolvedIngredients.map(r => ({
+      did: r.did,
+      amount: r.amount,
+      unit: r.unit,
+      name: r.name,
+      nutritionalInfo: r.data?.nutritionalInfo
+    }));
+    
+    const servings = recipeData.recipe.servings || 1;
+    const nutritionResult = await calculateRecipeNutrition(ingredientsForCalc, servings);
+    
+    if (nutritionResult && nutritionResult.perServing) {
+      recipeData.summaryNutritionalInfoPerServing = nutritionResult.perServing;
+      console.log('✅ Nutritional summary calculated via intelligent resolution:');
+      console.log(`   Per serving: ${nutritionResult.perServing.calories} cal, ${nutritionResult.perServing.proteinG}g protein`);
+      console.log(`   Processed ${nutritionResult.processedIngredients}/${nutritionResult.totalIngredients} ingredients`);
+      
+      if (nutritionResult.skippedIngredients && nutritionResult.skippedIngredients.length > 0) {
+        console.warn('   ⚠️ Skipped ingredients:');
+        nutritionResult.skippedIngredients.forEach(skip => {
+          console.warn(`      - ${skip.name}: ${skip.reason}`);
+        });
+      }
+    } else {
+      console.log('⚠️ Unable to calculate nutritional summary (insufficient ingredient data)');
+    }
+    
+  } catch (resolutionError) {
+    console.error('❌ Error during intelligent ingredient resolution:', resolutionError);
+    console.log('   Falling back to standard processing...');
+    // Continue with normal processing
+  }
+}
+// ====== END INTELLIGENT INGREDIENT RESOLUTION ======
+
+// Calculate nutritional summaries before publishing (unless already provided or calculated above)
+// Check if summaryNutritionalInfoPerServing was already included in the request OR calculated via intelligent resolution
+if (recipeData.summaryNutritionalInfoPerServing && Object.keys(recipeData.summaryNutritionalInfoPerServing).length > 0) {
+  console.log('✅ Using summaryNutritionalInfoPerServing (already calculated)');
+} else if (record.summaryNutritionalInfoPerServing && Object.keys(record.summaryNutritionalInfoPerServing).length > 0) {
   console.log('✅ Using pre-calculated summaryNutritionalInfoPerServing from request:');
   console.log(`   Per serving: ${record.summaryNutritionalInfoPerServing.calories} cal, ${record.summaryNutritionalInfoPerServing.proteinG}g protein`);
   recipeData.summaryNutritionalInfoPerServing = record.summaryNutritionalInfoPerServing;
