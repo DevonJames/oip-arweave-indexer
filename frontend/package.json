@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node --max-old-space-size=${HEAP_SIZE:-4096} ./node_modules/.bin/next start",
+    "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
