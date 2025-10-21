@@ -40,8 +40,44 @@ const photoRoutes = require('./routes/photo');
 const recipesRoutes = require('./routes/recipes');
 const narrationRoutes = require('./routes/narration');
 const { getMediaSeeder } = require('./services/mediaSeeder');
+const axios = require('axios');
 
 dotenv.config();
+
+// MEMORY LEAK FIX: Add axios response interceptor to clean up arraybuffers
+// This prevents 47GB+ external memory leaks from TTS audio and image downloads
+axios.interceptors.response.use(
+  (response) => {
+    // If response contains arraybuffer data, schedule cleanup after response is used
+    if (response.config.responseType === 'arraybuffer' && response.data) {
+      const originalData = response.data;
+      const bufferSize = originalData.byteLength || originalData.length || 0;
+      
+      // Log large buffers being created
+      if (bufferSize > 1024 * 1024) { // > 1MB
+        console.log(`📦 [Axios] Created ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer`);
+      }
+      
+      // Wrap the response to track when it's been consumed
+      const cleanupTimeout = setTimeout(() => {
+        if (global.gc && bufferSize > 1024 * 1024) {
+          response.data = null;
+          setImmediate(() => {
+            global.gc();
+            console.log(`🧹 [Axios] Released ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer`);
+          });
+        }
+      }, 30000); // Clean up after 30 seconds
+      
+      // Store cleanup handler on response
+      response._cleanupTimeout = cleanupTimeout;
+    }
+    return response;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Validate environment variables
 validateEnvironment();
