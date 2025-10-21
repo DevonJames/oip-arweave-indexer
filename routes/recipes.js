@@ -199,7 +199,7 @@ Respond ONLY with a JSON object in this exact format (no other text):
     }
     
     // Validate the suggestion
-    if (!suggestion.amount || !suggestion.unit || !standardUnits.includes(suggestion.unit)) {
+    if (!suggestion.amount || !suggestion.unit || !allStandardUnits.includes(suggestion.unit)) {
       throw new Error('Invalid suggestion format from AI');
     }
     
