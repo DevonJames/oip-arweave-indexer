@@ -180,7 +180,8 @@ const corsOptions = {
       'https://librairian.net',
       'https://oip.fitnessally.io',
       'https://app.fitnessally.io',
-      'https://mini.fitnessally.io'
+      'https://mini.fitnessally.io',
+      'https://mobile.fitnessally.io'
     ];
     
     // Allow any localhost origin in development
