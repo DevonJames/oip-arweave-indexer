@@ -48,7 +48,7 @@ dotenv.config();
 // This prevents 47GB+ external memory leaks from TTS audio and image downloads
 axios.interceptors.response.use(
   (response) => {
-    // If response contains arraybuffer data, schedule cleanup after response is used
+    // If response contains arraybuffer data, implement immediate cleanup
     if (response.config.responseType === 'arraybuffer' && response.data) {
       const originalData = response.data;
       const bufferSize = originalData.byteLength || originalData.length || 0;
@@ -58,19 +58,52 @@ axios.interceptors.response.use(
         console.log(`📦 [Axios] Created ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer`);
       }
       
-      // Wrap the response to track when it's been consumed
-      const cleanupTimeout = setTimeout(() => {
-        if (global.gc && bufferSize > 1024 * 1024) {
-          response.data = null;
-          setImmediate(() => {
-            global.gc();
-            console.log(`🧹 [Axios] Released ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer`);
-          });
+      // Create a proxy to track when the data is accessed
+      let dataAccessed = false;
+      const dataProxy = new Proxy(originalData, {
+        get(target, prop) {
+          dataAccessed = true;
+          return target[prop];
         }
-      }, 30000); // Clean up after 30 seconds
+      });
       
-      // Store cleanup handler on response
-      response._cleanupTimeout = cleanupTimeout;
+      // Override the response data with our proxy
+      Object.defineProperty(response, 'data', {
+        get() {
+          return dataProxy;
+        },
+        set(value) {
+          // Allow setting to null for cleanup
+          if (value === null) {
+            response._data = null;
+            return;
+          }
+          response._data = value;
+        }
+      });
+      
+      // Immediate cleanup after data is accessed
+      const cleanup = () => {
+        if (dataAccessed && response._data) {
+          response._data = null;
+          if (global.gc && bufferSize > 1024 * 1024) {
+            setImmediate(() => {
+              global.gc();
+              console.log(`🧹 [Axios] Released ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer`);
+            });
+          }
+        }
+      };
+      
+      // Clean up after a short delay to allow the data to be processed
+      setTimeout(cleanup, 1000); // 1 second instead of 30 seconds
+      
+      // Also clean up on next tick if data was accessed
+      setImmediate(() => {
+        if (dataAccessed) {
+          cleanup();
+        }
+      });
     }
     return response;
   },
@@ -436,6 +469,18 @@ initializeIndices()
         // Warning if external memory is excessive (> 10GB suggests buffer leak)
         if (externalMB > 10240) {
           console.warn(`⚠️  [Memory Monitor] HIGH EXTERNAL MEMORY: ${externalMB}MB (possible buffer leak from images/media)`);
+          
+          // Force aggressive cleanup when external memory is too high
+          if (global.gc) {
+            console.log('[Memory Monitor] Forcing aggressive garbage collection for external memory...');
+            global.gc();
+            
+            // Check memory after GC
+            const afterGC = process.memoryUsage();
+            const afterExternalMB = Math.round(afterGC.external / 1024 / 1024);
+            const freedExternalMB = externalMB - afterExternalMB;
+            console.log(`[Memory Monitor] After aggressive GC: ${afterExternalMB}MB external (freed ${freedExternalMB}MB)`);
+          }
         }
         
         // Warning if heap utilization is high
