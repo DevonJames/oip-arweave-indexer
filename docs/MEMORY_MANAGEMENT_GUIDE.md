@@ -52,7 +52,27 @@ GUN_CACHE_MAX_AGE=3600000  # Clear cache every hour (in milliseconds)
 - `helpers/generators.js` - Fixed image generation cleanup
 - `helpers/media-manager.js` - Fixed media download cleanup
 
-### 3. Emergency Memory Cleanup Script
+### 3. Elasticsearch Memory Leak Fix
+**CRITICAL FIX**: Fixed the major memory leak in Elasticsearch queries that was causing steady heap growth.
+
+**The Problem:**
+- `getRecordsInDB()` was loading up to 5000 records on **every single API request**
+- No caching mechanism - each request created new memory allocations
+- Records were not being properly cleaned up between requests
+- This caused steady memory growth even without image generation
+
+**The Solution:**
+- Added **30-second caching** to `getRecordsInDB()` function
+- Prevents repeated loading of 5000 records on every API call
+- Added cache clearing mechanism for memory management
+- Integrated cache clearing into memory monitor and emergency cleanup
+
+**Files Modified:**
+- `helpers/elasticsearch.js` - Added caching and cache clearing
+- `index.js` - Added cache clearing to memory monitor
+- `scripts/emergency-memory-cleanup.js` - Added cache clearing to emergency cleanup
+
+### 4. Emergency Memory Cleanup Script
 Added a new emergency cleanup script for immediate memory relief:
 
 ```bash
@@ -66,7 +86,7 @@ node scripts/emergency-memory-cleanup.js monitor 120
 node scripts/emergency-memory-cleanup.js stats
 ```
 
-### 4. Memory Monitoring Endpoints
+### 5. Memory Monitoring Endpoints
 
 #### Check Memory Status
 ```bash
