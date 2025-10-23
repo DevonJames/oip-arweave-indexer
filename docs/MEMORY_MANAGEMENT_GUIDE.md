@@ -33,7 +33,40 @@ this.cacheMaxAge = parseInt(process.env.GUN_CACHE_MAX_AGE) || 3600000; // 1 hour
 GUN_CACHE_MAX_AGE=3600000  # Clear cache every hour (in milliseconds)
 ```
 
-### 2. Memory Monitoring Endpoints
+### 2. Axios Buffer Leak Fix
+**CRITICAL FIX**: Fixed the major memory leak in axios arraybuffer responses that was causing 60GB+ external memory usage.
+
+**The Problem:**
+- Axios responses with `responseType: 'arraybuffer'` were not being properly cleaned up
+- Each image download (several MB) was accumulating in external memory
+- The 30-second timeout cleanup was unreliable
+
+**The Solution:**
+- Implemented immediate buffer cleanup using Proxy objects
+- Added aggressive garbage collection for large buffers (>1MB)
+- Reduced cleanup timeout from 30 seconds to 1 second
+- Added immediate cleanup in image generation and media download functions
+
+**Files Modified:**
+- `index.js` - Fixed axios interceptor
+- `helpers/generators.js` - Fixed image generation cleanup
+- `helpers/media-manager.js` - Fixed media download cleanup
+
+### 3. Emergency Memory Cleanup Script
+Added a new emergency cleanup script for immediate memory relief:
+
+```bash
+# Run emergency cleanup
+node scripts/emergency-memory-cleanup.js cleanup
+
+# Monitor memory for 2 minutes
+node scripts/emergency-memory-cleanup.js monitor 120
+
+# Show current memory stats
+node scripts/emergency-memory-cleanup.js stats
+```
+
+### 4. Memory Monitoring Endpoints
 
 #### Check Memory Status
 ```bash

@@ -2596,11 +2596,16 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
 
     console.log(`✅ Generated and cached image for recipe: ${recipeTitle}`);
 
-    // MEMORY CLEANUP: Force GC after writing large image buffer
-    if (global.gc && imageBuffer.length > 1024 * 1024) { // If > 1MB
-      imageResponse.data = null; // Release arraybuffer
-      setImmediate(() => global.gc());
-      console.log(`🧹 Released ${Math.round(imageBuffer.length / 1024 / 1024)}MB image buffer`);
+    // MEMORY CLEANUP: Immediately release the arraybuffer and force GC
+    if (imageBuffer.length > 1024 * 1024) { // If > 1MB
+      // Clear the response data immediately
+      imageResponse.data = null;
+      
+      // Force garbage collection to free the external memory
+      if (global.gc) {
+        global.gc();
+        console.log(`🧹 Released ${Math.round(imageBuffer.length / 1024 / 1024)}MB image buffer immediately`);
+      }
     }
 
     return {

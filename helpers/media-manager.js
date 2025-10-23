@@ -126,7 +126,16 @@ class MediaManager {
     async downloadFromUrl(url) {
         console.log('Downloading media from URL:', url);
         const response = await axios.get(url, { responseType: 'arraybuffer' });
-        return Buffer.from(response.data);
+        const buffer = Buffer.from(response.data);
+        
+        // MEMORY CLEANUP: Immediately release the arraybuffer
+        response.data = null;
+        if (global.gc && buffer.length > 1024 * 1024) { // > 1MB
+            global.gc();
+            console.log(`🧹 [MediaManager] Released ${Math.round(buffer.length / 1024 / 1024)}MB buffer`);
+        }
+        
+        return buffer;
     }
 
     /**
