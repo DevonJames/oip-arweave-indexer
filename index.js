@@ -474,6 +474,16 @@ initializeIndices()
           // Force aggressive cleanup when external memory is too high
           if (global.gc) {
             console.log('[Memory Monitor] Forcing aggressive garbage collection for external memory...');
+            
+            // Clear Elasticsearch records cache to free memory
+            try {
+              const { clearRecordsCache } = require('./helpers/elasticsearch');
+              clearRecordsCache();
+              console.log('[Memory Monitor] Cleared Elasticsearch records cache');
+            } catch (error) {
+              console.log('[Memory Monitor] Could not clear records cache:', error.message);
+            }
+            
             global.gc();
             
             // Check memory after GC

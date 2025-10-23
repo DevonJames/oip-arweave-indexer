@@ -82,6 +82,15 @@ async function emergencyCleanup() {
         global.gunSyncService.clearCache();
     }
     
+    // Clear Elasticsearch records cache
+    try {
+        const { clearRecordsCache } = require('../helpers/elasticsearch');
+        clearRecordsCache();
+        console.log('   Cleared Elasticsearch records cache...');
+    } catch (error) {
+        console.log('   Could not clear Elasticsearch cache:', error.message);
+    }
+    
     // Step 4: Final garbage collection
     console.log('\n🧹 Step 4: Final cleanup...');
     global.gc();

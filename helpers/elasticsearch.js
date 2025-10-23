@@ -3684,10 +3684,24 @@ async function searchRecordInDB(didTx) {
     }
 }
 
-// move this into GetRecords() ?
-const getRecordsInDB = async () => {
-    try {
+// MEMORY LEAK FIX: Add caching to prevent loading 5000 records on every API call
+let recordsCache = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 30000; // 30 seconds cache
 
+// move this into GetRecords() ?
+const getRecordsInDB = async (forceRefresh = false) => {
+    try {
+        const now = Date.now();
+        
+        // Return cached data if it's still fresh and not forcing refresh
+        if (!forceRefresh && recordsCache && (now - cacheTimestamp) < CACHE_DURATION) {
+            console.log(getFileInfo(), getLineNumber(), 'Using cached records data');
+            return recordsCache;
+        }
+
+        console.log(getFileInfo(), getLineNumber(), 'Fetching fresh records from Elasticsearch...');
+        
         const searchResponse = await elasticClient.search({
             index: 'records',
             body: {
@@ -3698,13 +3712,17 @@ const getRecordsInDB = async () => {
             }
         });
         const records = searchResponse.hits.hits.map(hit => hit._source);
+        
         // records.forEach(record => {
         //     console.log(getFileInfo(), getLineNumber(), 'record.oip:', record.oip.creator, record.oip.recordType, record.oip.didTx);
         //     // console.log(record.oip.creator);
         // });
         if (records.length === 0) {
             console.log(getFileInfo(), getLineNumber(), 'no records found in DB');
-            return { qtyRecordsInDB: 0, finalMaxRecordArweaveBlock: 0, records: [] };
+            const result = { qtyRecordsInDB: 0, finalMaxRecordArweaveBlock: 0, records: [] };
+            recordsCache = result;
+            cacheTimestamp = now;
+            return result;
         } else {
             for (const record of records) {
                 const creatorHandle = record.oip.creator.creatorHandle || '';
@@ -3717,31 +3735,46 @@ const getRecordsInDB = async () => {
                     didTx,
                     publicKey
                 };
-                const qtyRecordsInDB = records.length;
-                
-                // Filter out records with "pending confirmation in Arweave" status when calculating max block height
-                // This ensures pending records get re-processed when found confirmed on chain
-                const confirmedRecords = records.filter(record => 
-                    record.oip.recordStatus !== "pending confirmation in Arweave"
-                );
-                const pendingRecordsCount = records.length - confirmedRecords.length;
-                if (pendingRecordsCount > 0) {
-                    console.log(getFileInfo(), getLineNumber(), `Found ${pendingRecordsCount} pending records (will re-process when confirmed on chain)`);
-                }
-                const maxArweaveBlockInDB = confirmedRecords.length > 0 
-                    ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
-                    : 0;
-                // console.log(getFileInfo(), getLineNumber(), 'maxArweaveBlockInDB for records:', maxArweaveBlockInDB);
-                const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity) || (maxArweaveBlockInDB === -0) || (maxArweaveBlockInDB === null);
-                const finalMaxRecordArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
-                return { qtyRecordsInDB, finalMaxRecordArweaveBlock, records };
             }
+            
+            const qtyRecordsInDB = records.length;
+            
+            // Filter out records with "pending confirmation in Arweave" status when calculating max block height
+            // This ensures pending records get re-processed when found confirmed on chain
+            const confirmedRecords = records.filter(record => 
+                record.oip.recordStatus !== "pending confirmation in Arweave"
+            );
+            const pendingRecordsCount = records.length - confirmedRecords.length;
+            if (pendingRecordsCount > 0) {
+                console.log(getFileInfo(), getLineNumber(), `Found ${pendingRecordsCount} pending records (will re-process when confirmed on chain)`);
+            }
+            const maxArweaveBlockInDB = confirmedRecords.length > 0 
+                ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
+                : 0;
+            // console.log(getFileInfo(), getLineNumber(), 'maxArweaveBlockInDB for records:', maxArweaveBlockInDB);
+            const maxArweaveBlockInDBisNull = (maxArweaveBlockInDB === -Infinity) || (maxArweaveBlockInDB === -0) || (maxArweaveBlockInDB === null);
+            const finalMaxRecordArweaveBlock = maxArweaveBlockInDBisNull ? 0 : maxArweaveBlockInDB;
+            
+            const result = { qtyRecordsInDB, finalMaxRecordArweaveBlock, records };
+            
+            // Cache the result
+            recordsCache = result;
+            cacheTimestamp = now;
+            
+            return result;
         }
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error retrieving records from database:', error);
         return { qtyRecordsInDB: 0, maxArweaveBlockInDB: 0, records: [] };
     }
 
+};
+
+// Function to clear the records cache (useful for memory management)
+const clearRecordsCache = () => {
+    recordsCache = null;
+    cacheTimestamp = 0;
+    console.log(getFileInfo(), getLineNumber(), 'Records cache cleared');
 };
 
 const findCreatorsByHandle = async (handle) => {
@@ -4346,7 +4379,7 @@ async function keepDBUpToDate(remapTemplates) {
         // to do standardize these names a bit better
         let { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
         // console.log(getFileInfo(), getLineNumber(), 'Templates:', { finalMaxArweaveBlock, qtyTemplatesInDB });
-        let { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB();
+        let { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB(true); // Force refresh for keepDBUpToDate
         // console.log(getFileInfo(), getLineNumber(), 'Records:', { finalMaxRecordArweaveBlock, qtyRecordsInDB });
         foundInDB.maxArweaveBlockInDB = Math.max(
             maxArweaveCreatorRegBlockInDB || 0,
@@ -5297,6 +5330,7 @@ module.exports = {
     getRecordTypesSummary,
     processRecordForElasticsearch,
     addRecipeNutritionalSummary,
+    clearRecordsCache,
     calculateRecipeNutrition,
     elasticClient
 };
