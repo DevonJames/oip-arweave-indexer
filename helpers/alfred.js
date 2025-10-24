@@ -2186,10 +2186,10 @@ Please provide a helpful, conversational answer starting with "I didn't find any
             console.log(`[ALFRED] 🔍 Processing query: "${question}"`);
             const { include_filter_analysis = false, searchParams = {} } = options;
             
-            // New JSON object mode: if a pinnedJsonData is provided, bypass search and answer about that JSON data
+            // New pinned data mode: if pinnedJsonData is provided, bypass search and answer about that data
             if (options.pinnedJsonData && typeof options.pinnedJsonData === 'object') {
-                console.log(`[ALFRED] 📄 Pinned JSON data detected, answering about provided JSON object`);
-                const singleResult = await this.answerQuestionAboutJsonData(options.pinnedJsonData, question, options);
+                console.log(`[ALFRED] 📄 Pinned data detected, answering about provided content`);
+                const singleResult = await this.answerQuestionAboutPinnedData(options.pinnedJsonData, question, options);
                 // Conform to legacy return shape
                 return {
                     answer: singleResult.answer,
@@ -3148,6 +3148,78 @@ Answer the question directly and conversationally:`;
             return this.extractAndFormatContent(question, records, appliedFilters, [], options);
         } catch (error) {
             console.error('[ALFRED] Error in answerQuestionAboutRecord:', error);
+            return this.formatErrorResult(question, error.message);
+        }
+    }
+
+    /**
+     * Answer a question about pinned data (JSON or markdown) provided directly.
+     * Handles both JSON data and markdown content.
+     */
+    async answerQuestionAboutPinnedData(pinnedData, question, options = {}) {
+        try {
+            console.log(`[ALFRED] 📄 Processing pinned data for question: "${question}"`);
+            console.log(`[ALFRED] 📄 Data type: ${pinnedData.recordType || 'unknown'}, Content length: ${pinnedData.content ? pinnedData.content.length : 'N/A'}`);
+            
+            // Determine if this is JSON data or markdown content
+            const isJsonData = pinnedData.recordType === 'json' || (pinnedData.data && typeof pinnedData.data === 'object');
+            const isMarkdownData = pinnedData.recordType === 'documentation' || pinnedData.content;
+            
+            let mockRecord;
+            
+            if (isJsonData) {
+                // Handle JSON data
+                console.log(`[ALFRED] 📄 Processing as JSON data`);
+                mockRecord = {
+                    data: pinnedData.data || pinnedData,
+                    oip: {
+                        didTx: 'json-data-provided',
+                        recordType: pinnedData.recordType || 'json',
+                        storage: 'json'
+                    }
+                };
+            } else if (isMarkdownData) {
+                // Handle markdown content
+                console.log(`[ALFRED] 📄 Processing as markdown content`);
+                mockRecord = {
+                    data: {
+                        content: pinnedData.content,
+                        title: pinnedData.title || pinnedData.fileName || 'Documentation',
+                        type: 'markdown'
+                    },
+                    oip: {
+                        didTx: 'documentation-provided',
+                        recordType: 'documentation',
+                        storage: 'markdown'
+                    }
+                };
+            } else {
+                // Fallback: treat as general content
+                console.log(`[ALFRED] 📄 Processing as general content`);
+                mockRecord = {
+                    data: pinnedData,
+                    oip: {
+                        didTx: 'pinned-data-provided',
+                        recordType: pinnedData.recordType || 'documentation',
+                        storage: 'general'
+                    }
+                };
+            }
+
+            // Applied filters metadata
+            const appliedFilters = {
+                search: isJsonData ? 'json-data-provided' : 'documentation-provided',
+                recordType: pinnedData.recordType || 'documentation',
+                resolveDepth: 0, // No resolution needed for direct data
+                summarizeRecipe: false,
+                rationale: isJsonData ? 'Answered about pinned JSON data (json-data mode)' : 'Answered about pinned documentation (documentation mode)',
+                timestamp: new Date().toISOString()
+            };
+
+            // Build rich content and generate response
+            return this.extractAndFormatContent(question, [mockRecord], appliedFilters, [], options);
+        } catch (error) {
+            console.error('[ALFRED] Error in answerQuestionAboutPinnedData:', error);
             return this.formatErrorResult(question, error.message);
         }
     }
