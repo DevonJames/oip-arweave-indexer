@@ -1166,6 +1166,82 @@ JSON Response:`;
     }
 
     /**
+     * Extract relevant sections from markdown content based on the question
+     */
+    extractRelevantMarkdownSections(markdownContent, question) {
+        const sections = [];
+        const lines = markdownContent.split('\n');
+        let currentSection = '';
+        let inRelevantSection = false;
+        let sectionTitle = '';
+        
+        // Keywords from the question to match against content
+        const questionKeywords = question.toLowerCase()
+            .replace(/[^\w\s]/g, ' ')
+            .split(/\s+/)
+            .filter(word => word.length > 2);
+        
+        console.log(`[ALFRED] Searching for keywords in documentation: ${questionKeywords.join(', ')}`);
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            
+            // Check if this is a heading
+            if (line.startsWith('#')) {
+                // Save previous section if it was relevant
+                if (inRelevantSection && currentSection.trim()) {
+                    sections.push({
+                        title: sectionTitle,
+                        content: currentSection.trim()
+                    });
+                }
+                
+                // Start new section
+                sectionTitle = line.replace(/^#+\s*/, '').trim();
+                currentSection = line + '\n';
+                inRelevantSection = false;
+                
+                // Check if this section title is relevant to the question
+                const titleLower = sectionTitle.toLowerCase();
+                if (questionKeywords.some(keyword => titleLower.includes(keyword))) {
+                    inRelevantSection = true;
+                    console.log(`[ALFRED] Found relevant section: ${sectionTitle}`);
+                }
+            } else {
+                currentSection += line + '\n';
+                
+                // Check if this line contains relevant keywords
+                if (!inRelevantSection) {
+                    const lineLower = line.toLowerCase();
+                    if (questionKeywords.some(keyword => lineLower.includes(keyword))) {
+                        inRelevantSection = true;
+                        console.log(`[ALFRED] Found relevant content in line: ${line.substring(0, 100)}...`);
+                    }
+                }
+            }
+        }
+        
+        // Add the last section if it was relevant
+        if (inRelevantSection && currentSection.trim()) {
+            sections.push({
+                title: sectionTitle,
+                content: currentSection.trim()
+            });
+        }
+        
+        // If no specific sections were found, return the first few paragraphs
+        if (sections.length === 0) {
+            const paragraphs = markdownContent.split('\n\n').slice(0, 3);
+            sections.push({
+                title: 'Introduction',
+                content: paragraphs.join('\n\n')
+            });
+        }
+        
+        return sections;
+    }
+
+    /**
      * Extract content from records and format for RAG consumption
      */
     async extractAndFormatContent(question, records, appliedFilters, modifiers = [], options = {}) {
@@ -1185,6 +1261,25 @@ JSON Response:`;
                     type: recordType,
                     did: record.oip?.didTx || ''
                 };
+
+                // Handle markdown documentation content
+                if (recordType === 'documentation' && record.data?.content) {
+                    console.log(`[ALFRED] Processing markdown documentation: ${record.data.title || 'Documentation'}`);
+                    
+                    // Extract relevant sections from markdown content based on the question
+                    const markdownContent = record.data.content;
+                    const relevantSections = this.extractRelevantMarkdownSections(markdownContent, question);
+                    
+                    content = {
+                        title: record.data.title || 'Documentation',
+                        description: record.data.description || '',
+                        type: 'documentation',
+                        content: relevantSections,
+                        fullContent: markdownContent.substring(0, 8000) // Limit to prevent overflow
+                    };
+                    
+                    console.log(`[ALFRED] Extracted ${relevantSections.length} relevant sections from documentation`);
+                }
                 
                 // Extract full text for post records
                 if (recordType === 'post') {
@@ -1473,6 +1568,18 @@ JSON Response:`;
                 if (item.description) context += `Description: ${item.description}\n`;
                 if (item.fullText) context += `Full Content: ${item.fullText}\n`;
                 if (item.articleText) context += `Article: ${item.articleText}\n`;
+                
+                // Include documentation-specific information
+                if (item.type === 'documentation') {
+                    if (item.content && Array.isArray(item.content)) {
+                        context += `Documentation Content:\n`;
+                        item.content.forEach((section, sectionIndex) => {
+                            context += `\n## ${section.title}\n${section.content}\n`;
+                        });
+                    } else if (item.fullContent) {
+                        context += `Documentation Content: ${item.fullContent}\n`;
+                    }
+                }
                 
                 // Include recipe-specific information
                 if (item.type === 'recipe') {
