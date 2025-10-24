@@ -218,40 +218,27 @@ async function fetchNutritionalData(ingredientName) {
       messages: [
         {
           role: 'system',
-          content: 'You are a nutritional data expert. Find comprehensive nutritional information from reliable sources and provide accurate data in the requested format.'
+          content: 'You are a nutritional data expert. Find comprehensive nutritional information from reliable sources and provide accurate data.'
         },
         {
           role: 'user',
-          content: `Find comprehensive nutritional information for "${ingredientName}". I need detailed nutritional facts including calories, protein, fat, carbohydrates, fiber, sugars, sodium, cholesterol, vitamins, and minerals. Please provide data for the most common serving size used in recipes - typically 1 cup for liquids and bulk ingredients, 1 tablespoon for spices and condiments, or 1 piece for whole items like fruits.`
+          content: `What is the nutritional information for "${ingredientName}"? I'll need calories, protein, and fat.`
         }
       ],
       response_format: {
         type: 'json_schema',
         json_schema: {
-          name: 'nutritional_data',
+          name: 'simple_nutritional_data',
           strict: true,
           schema: {
             type: 'object',
             properties: {
-              nutritionalInfo: {
-                type: 'object',
-                properties: {
-                  standardAmount: { type: 'number' },
-                  standardUnit: { type: 'string' },
-                  calories: { type: 'number' },
-                  proteinG: { type: 'number' },
-                  fatG: { type: 'number' },
-                  saturatedFatG: { type: 'number' },
-                  transFatG: { type: 'number' },
-                  cholesterolMg: { type: 'number' },
-                  sodiumMg: { type: 'number' },
-                  carbohydratesG: { type: 'number' },
-                  dietaryFiberG: { type: 'number' },
-                  sugarsG: { type: 'number' },
-                  addedSugarsG: { type: 'number' },
-                }
-              }
-            }
+              calories: { type: 'number' },
+              proteinG: { type: 'number' },
+              fatG: { type: 'number' }
+            },
+            required: ['calories', 'proteinG', 'fatG'],
+            additionalProperties: false
           }
         }
       }
