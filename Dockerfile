@@ -78,6 +78,7 @@ RUN sed -i 's/\r$//' wait-for-it.sh && chmod +x wait-for-it.sh
 
 # Copy specific application directories and config
 COPY config ./config
+COPY docs ./docs
 COPY helpers ./helpers
 COPY lib ./lib
 COPY media ./media
