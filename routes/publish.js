@@ -663,11 +663,13 @@ router.post('/newRecipe', async (req, res) => {
                 template: 'nutritionalInfo',
                 fieldName: 'basic.name',
                 fieldSearch: searchTerm,
+                fieldMatchMode: 'exact',
+                noDuplicates: true,
                 // Don't provide sortBy to enable similarity-based sorting
                 limit: 20
             };
             
-            console.log(`Searching for: "${searchTerm}"`);
+            console.log(`Searching for: "${searchTerm}" (exact match, no duplicates)`);
             const recordsInDB = await getRecords(queryParams);
             console.log(`Found ${recordsInDB.searchResults} results for "${searchTerm}"`);
             

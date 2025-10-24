@@ -19636,8 +19636,8 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
             try {
                 selectElement.innerHTML = '<option value="">Loading...</option>';
                 
-                // Remove noDuplicates=true to get ALL records, we'll deduplicate smartly on the client side
-                const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&limit=1000&sortBy=basic.name:asc`, {
+                // Use fieldSearch with exact matching and server-side deduplication for better performance
+                const response = await fetch(`${API_BASE_URL}/api/records?recordType=nutritionalInfo&limit=1000&noDuplicates=true&sortBy=fieldSearchScore:desc`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${authToken}`,
@@ -19652,48 +19652,16 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                 const data = await response.json();
                 const allRecords = data.records || [];
                 
-                // STEP 1: Filter to only include records that have nutritionalInfo data
+                // Filter to only include records that have nutritionalInfo data
                 const recordsWithNutrition = allRecords.filter(record => {
                     const hasNutritionalInfo = record.data?.nutritionalInfo && 
                                               Object.keys(record.data.nutritionalInfo).length > 0;
                     return hasNutritionalInfo;
                 });
                 
-                console.log(`📦 Step 1: Filtered to ${recordsWithNutrition.length} records with nutritional info (from ${allRecords.length} total)`);
+                console.log(`📦 Loaded ${recordsWithNutrition.length} unique ingredients with nutritional info (from ${allRecords.length} total)`);
                 
-                // STEP 2: Smart deduplication - keep the best quality record for each unique name
-                const nameMap = new Map();
-                recordsWithNutrition.forEach(record => {
-                    const name = record.data?.basic?.name?.toLowerCase().trim() || '';
-                    if (!name) return;
-                    
-                    const existing = nameMap.get(name);
-                    if (!existing) {
-                        nameMap.set(name, record);
-                    } else {
-                        // Compare records - prefer higher fieldSearchScore, then newer date
-                        const existingScore = existing.fieldSearchScore || 0;
-                        const currentScore = record.fieldSearchScore || 0;
-                        const existingDate = existing.data?.basic?.date || 0;
-                        const currentDate = record.data?.basic?.date || 0;
-                        
-                        if (currentScore > existingScore || (currentScore === existingScore && currentDate > existingDate)) {
-                            nameMap.set(name, record);
-                            console.log(`🔄 Replacing duplicate "${name}": keeping better record (score: ${currentScore} vs ${existingScore}, date: ${currentDate} vs ${existingDate})`);
-                        }
-                    }
-                });
-                
-                const records = Array.from(nameMap.values());
-                
-                // Sort by name for display
-                records.sort((a, b) => {
-                    const nameA = a.data?.basic?.name?.toLowerCase() || '';
-                    const nameB = b.data?.basic?.name?.toLowerCase() || '';
-                    return nameA.localeCompare(nameB);
-                });
-                
-                console.log(`📦 Step 2: Deduplicated to ${records.length} unique ingredients`);
+                const records = recordsWithNutrition;
                 
                 // Store all records for filtering
                 item.setAttribute('data-all-ingredients', JSON.stringify(records));
@@ -19718,30 +19686,54 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
         }
 
         /**
-         * Filter ingredients based on search input
+         * Filter ingredients based on search input using server-side fieldSearch
          */
-        function filterRecipeIngredients(itemId, searchTerm) {
+        async function filterRecipeIngredients(itemId, searchTerm) {
             const item = document.getElementById(itemId);
             if (!item) return;
             
             const selectElement = item.querySelector('.ingredient-select');
-            const allIngredientsJSON = item.getAttribute('data-all-ingredients');
-            
-            if (!allIngredientsJSON) return;
+            const searchTrimmed = searchTerm.trim();
             
             try {
-                const allIngredients = JSON.parse(allIngredientsJSON);
-                const searchLower = searchTerm.toLowerCase().trim();
+                selectElement.innerHTML = '<option value="">Searching...</option>';
                 
-                // Filter ingredients (also ensure they have nutritionalInfo)
-                const filtered = searchLower === '' 
-                    ? allIngredients 
-                    : allIngredients.filter(record => {
-                        const name = (record.data?.basic?.name || '').toLowerCase();
-                        const hasNutritionalInfo = record.data?.nutritionalInfo && 
-                                                  Object.keys(record.data.nutritionalInfo).length > 0;
-                        return name.includes(searchLower) && hasNutritionalInfo;
-                    });
+                // Build API URL with fieldSearch parameters for partial matching
+                let apiUrl = `${API_BASE_URL}/api/records?recordType=nutritionalInfo&limit=1000&noDuplicates=true`;
+                
+                if (searchTrimmed !== '') {
+                    // Use fieldSearch with partial match mode (default) for flexible ingredient matching
+                    apiUrl += `&fieldSearch=${encodeURIComponent(searchTrimmed)}&fieldName=basic.name`;
+                    apiUrl += `&sortBy=fieldSearchScore:desc`;
+                } else {
+                    // No search term, just sort by name
+                    apiUrl += `&sortBy=basic.name:asc`;
+                }
+                
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const allRecords = data.records || [];
+                
+                // Filter to only include records that have nutritionalInfo data
+                const filtered = allRecords.filter(record => {
+                    const hasNutritionalInfo = record.data?.nutritionalInfo && 
+                                              Object.keys(record.data.nutritionalInfo).length > 0;
+                    return hasNutritionalInfo;
+                });
+                
+                // Store filtered results for later use
+                item.setAttribute('data-all-ingredients', JSON.stringify(filtered));
                 
                 // Update dropdown
                 selectElement.innerHTML = '<option value="">Select an ingredient...</option>';
@@ -19756,10 +19748,11 @@ Ensure all enum values match EXACTLY as shown (case-sensitive).`;
                     }
                 });
                 
-                console.log(`🔍 Filtered to ${filtered.length} ingredients matching "${searchTerm}"`);
+                console.log(`🔍 Filtered to ${filtered.length} ingredients matching "${searchTerm}" (using fieldSearch with exact matching)`);
                 
             } catch (error) {
                 console.error('Error filtering ingredients:', error);
+                selectElement.innerHTML = '<option value="">Error loading ingredients</option>';
             }
         }
 
