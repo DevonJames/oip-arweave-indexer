@@ -70,6 +70,13 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
             queryParams.storage = queryParams.source; // maps to oip.storage field
         }
         
+        // CACHE BYPASS: Check for forceRefresh parameter
+        const forceRefresh = queryParams.forceRefresh === 'true' || queryParams.forceRefresh === true;
+        if (forceRefresh) {
+            console.log('🔄 [Records API] Force refresh requested - bypassing cache');
+            queryParams.forceRefresh = true;
+        }
+        
         const records = await getRecords(queryParams);
         
         // NEW: Add authentication status to response for client awareness
@@ -99,6 +106,23 @@ router.get('/recordTypes', async (req, res) => {
     } catch (error) {
         console.error('Error at /api/records/recordTypes:', error);
         res.status(500).json({ error: 'Failed to retrieve record types summary' });
+    }
+});
+
+// Cache management endpoints
+router.post('/clear-cache', async (req, res) => {
+    try {
+        const { clearRecordsCache } = require('../helpers/elasticsearch');
+        clearRecordsCache();
+        console.log('🧹 [Records API] Cache cleared manually');
+        res.status(200).json({ 
+            status: 'success', 
+            message: 'Records cache cleared successfully',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error clearing records cache:', error);
+        res.status(500).json({ error: 'Failed to clear records cache' });
     }
 });
 

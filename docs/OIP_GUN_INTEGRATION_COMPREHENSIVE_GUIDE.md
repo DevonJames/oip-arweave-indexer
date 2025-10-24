@@ -49,21 +49,99 @@ const userKey = masterKey.derivePath("m/44'/0'/0'/0/0");
 - **Wallet Import**: Users can import their wallet on any OIP node
 - **Same Identity**: Same mnemonic = same wallet = same organization access
 
-### **Per-User Encryption**
-Each user gets unique encryption capabilities:
+### **Per-User Encryption System**
+
+Each user gets unique encryption capabilities with AES-256-GCM encryption:
+
+#### **User Registration Process**
 ```javascript
-// 1. User registration generates unique salt
+// 1. Generate unique 32-byte encryption salt for each user
 const gunEncryptionSalt = crypto.randomBytes(32).toString('hex');
 
-// 2. Salt encrypted with user's password
+// 2. Encrypt salt with user's password using AES-256-GCM
 const encryptedGunSalt = encryptSaltWithPassword(gunEncryptionSalt, password);
 
-// 3. Encryption key derived from public key + salt
+// 3. Store encrypted salt in user database
+const userDoc = {
+  email: email,
+  passwordHash: passwordHash,
+  publicKey: publicKey,
+  encryptedPrivateKey: encryptedPrivateKey,
+  encryptedMnemonic: encryptedMnemonic,
+  encryptedGunSalt: encryptedGunSalt,  // User's unique encryption salt
+  keyDerivationPath: "m/44'/0'/0'/0/0"
+};
+```
+
+#### **Per-User Encryption Key Generation**
+```javascript
+// For each GUN record encryption/decryption:
+// 1. Get user's public key from JWT token
+const userPublicKey = req.user.publicKey;
+
+// 2. Decrypt user's GUN salt using their password
+const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
+
+// 3. Combine user's public key with their unique salt
+const keyMaterial = userPublicKey + ':' + userSalt;
+
+// 4. Derive encryption key using PBKDF2
 const encryptionKey = crypto.pbkdf2Sync(
-    userPublicKey + ':' + gunSalt,
+    keyMaterial,
     'oip-gun-encryption', 100000, 32, 'sha256'
 );
 ```
+
+#### **Encryption Process**
+```javascript
+// User publishes private record
+const recordData = { /* user's private data */ };
+
+// Get user's encryption key
+const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
+const encryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
+
+// Encrypt with AES-256-GCM
+const encrypted = encryptWithUserKey(recordData, encryptionKey);
+
+// Store with ownership metadata
+const gunRecord = {
+  data: encrypted,
+  meta: {
+    encrypted: true,
+    encryptionMethod: 'aes-256-gcm',
+    encryptedBy: userPublicKey  // Track who encrypted it
+  },
+  oip: { /* record metadata */ }
+};
+```
+
+#### **Decryption Process**
+```javascript
+// User retrieves their private record
+const encryptedRecord = await gunHelper.getRecord(soul, {
+  userPublicKey: userPublicKey,
+  userPassword: userPassword
+});
+
+// System checks ownership
+if (encryptedRecord.meta.encryptedBy !== userPublicKey) {
+  throw new Error('Cannot decrypt: not your record');
+}
+
+// Decrypt with user's key
+const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
+const decryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
+const decryptedData = decryptWithUserKey(encryptedRecord, decryptionKey);
+```
+
+#### **Security Benefits**
+✅ **True Privacy**: Only the record creator can decrypt their private records  
+✅ **Unique Keys**: Each user has different encryption keys derived from their HD wallet  
+✅ **Salt Security**: User-specific salts prevent rainbow table attacks  
+✅ **Cross-User Isolation**: Users cannot decrypt each other's private records  
+✅ **Password Protection**: Encryption salt is protected by user's password  
+✅ **Key Rotation**: New users get fresh salts, existing users can regenerate
 
 ## 🏢 **Organization Access Control**
 
