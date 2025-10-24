@@ -212,10 +212,10 @@ async function fetchNutritionalData(ingredientName) {
   try {
     console.log(`🔍 Fetching nutritional data for: ${ingredientName}`);
     
-    // Use OpenAI's Responses API with web search and structured outputs
-    const response = await axios.post('https://api.openai.com/v1/responses', {
-      model: 'gpt-5-mini',
-      input: [
+    // Use OpenAI's Chat Completions API with structured outputs
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: 'gpt-4o-mini',
+      messages: [
         {
           role: 'system',
           content: 'You are a nutritional data expert. Find comprehensive nutritional information from reliable sources and provide accurate data in the requested format.'
@@ -225,12 +225,9 @@ async function fetchNutritionalData(ingredientName) {
           content: `Find comprehensive nutritional information for "${ingredientName}". I need detailed nutritional facts including calories, protein, fat, carbohydrates, fiber, sugars, sodium, cholesterol, vitamins, and minerals. Please provide data for the most common serving size used in recipes - typically 1 cup for liquids and bulk ingredients, 1 tablespoon for spices and condiments, or 1 piece for whole items like fruits.`
         }
       ],
-      tools: [{
-        type: 'web_search'
-      }],
-      text: {
-        format: {
-          type: 'json_schema',
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
           name: 'nutritional_data',
           strict: true,
           schema: {
@@ -278,16 +275,17 @@ async function fetchNutritionalData(ingredientName) {
       }
     });
 
-    if (!response.data || !response.data.output_text) {
+    if (!response.data || !response.data.choices || !response.data.choices[0]) {
       throw new Error('No response from OpenAI');
     }
 
     // Extract nutritional data from the structured response
+    const message = response.data.choices[0].message;
     let openaiData;
     
     try {
-      // Parse the JSON content from the output_text
-      openaiData = JSON.parse(response.data.output_text);
+      // Parse the JSON content from the message
+      openaiData = JSON.parse(message.content);
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
       throw new Error('Invalid JSON response from OpenAI');

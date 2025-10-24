@@ -2186,6 +2186,25 @@ Please provide a helpful, conversational answer starting with "I didn't find any
             console.log(`[ALFRED] 🔍 Processing query: "${question}"`);
             const { include_filter_analysis = false, searchParams = {} } = options;
             
+            // New JSON object mode: if a pinnedJsonData is provided, bypass search and answer about that JSON data
+            if (options.pinnedJsonData && typeof options.pinnedJsonData === 'object') {
+                console.log(`[ALFRED] 📄 Pinned JSON data detected, answering about provided JSON object`);
+                const singleResult = await this.answerQuestionAboutJsonData(options.pinnedJsonData, question, options);
+                // Conform to legacy return shape
+                return {
+                    answer: singleResult.answer,
+                    sources: this.formatSources(singleResult.search_results),
+                    context_used: singleResult.context_used,
+                    model: options.model || this.defaultModel,
+                    search_results_count: singleResult.search_results_count,
+                    search_results: singleResult.search_results,
+                    applied_filters: singleResult.applied_filters,
+                    extracted_subject: singleResult.extracted_subject,
+                    extracted_keywords: singleResult.extracted_keywords,
+                    rationale: singleResult.rationale
+                };
+            }
+            
             // New single-record mode: if a pinnedDidTx is provided, bypass search and answer about that record
             if (options.pinnedDidTx && typeof options.pinnedDidTx === 'string') {
                 console.log(`[ALFRED] 📌 Pinned DID detected, answering about a single record: ${options.pinnedDidTx}`);
@@ -3129,6 +3148,43 @@ Answer the question directly and conversationally:`;
             return this.extractAndFormatContent(question, records, appliedFilters, [], options);
         } catch (error) {
             console.error('[ALFRED] Error in answerQuestionAboutRecord:', error);
+            return this.formatErrorResult(question, error.message);
+        }
+    }
+
+    /**
+     * Answer a question about JSON data provided directly.
+     * Converts JSON data to record format and builds rich context before calling the LLM.
+     */
+    async answerQuestionAboutJsonData(jsonData, question, options = {}) {
+        try {
+            console.log(`[ALFRED] 📄 Processing JSON data for question: "${question}"`);
+            
+            // Convert JSON data to record format for compatibility with extractAndFormatContent
+            const mockRecord = {
+                data: jsonData,
+                oip: {
+                    didTx: 'json-data-provided',
+                    recordType: jsonData.recordType || 'documentation',
+                    storage: 'json'
+                }
+            };
+
+            // Applied filters metadata
+            const appliedFilters = {
+                search: 'json-data-provided',
+                recordType: jsonData.recordType || 'documentation',
+                resolveDepth: 0, // No resolution needed for direct JSON
+                summarizeRecipe: false,
+                rationale: 'Answered about pinned JSON data (json-data mode)',
+                singleRecordMode: true,
+                jsonDataMode: true
+            };
+
+            // Build rich content and generate response
+            return this.extractAndFormatContent(question, [mockRecord], appliedFilters, [], options);
+        } catch (error) {
+            console.error('[ALFRED] Error in answerQuestionAboutJsonData:', error);
             return this.formatErrorResult(question, error.message);
         }
     }
