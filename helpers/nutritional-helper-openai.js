@@ -235,9 +235,14 @@ async function fetchNutritionalData(ingredientName) {
             properties: {
               calories: { type: 'number' },
               proteinG: { type: 'number' },
-              fatG: { type: 'number' }
+              fatG: { type: 'number' },
+              saturatedFatG: { type: 'number' },
+              sodiumMg: { type: 'number' },
+              carbohydratesG: { type: 'number' },
+              dietaryFiberG: { type: 'number' },
+              sugarsG: { type: 'number' }
             },
-            required: ['calories', 'proteinG', 'fatG'],
+            required: ['calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG'],
             additionalProperties: false
           }
         }

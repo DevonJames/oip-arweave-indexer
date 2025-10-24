@@ -5469,7 +5469,8 @@
                 recordType: 'documentation',
                 title: fileName,
                 description: content.substring(0, 500) + (content.length > 500 ? '...' : ''),
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                type: 'markdown' // Explicitly mark as markdown content
             };
             
             // Simple markdown to HTML conversion
