@@ -241,6 +241,18 @@ Due to GUN's limitations with arrays, certain fields are stored differently:
   - Automatically sorts by order similarity (how closely the exercise order matches the request)
   - Adds `exerciseScore` and `exerciseMatchedCount` fields to matching records
 
+#### `exerciseDIDs`
+- **Type:** String (comma-separated)
+- **Description:** Filter workout records by exercise DIDs they contain
+- **Example:** `exerciseDIDs=did:arweave:abc123,did:arweave:def456`
+- **Behavior:** 
+  - Only works with `recordType=workout`
+  - Searches the `data.workout.exercise` array for specific exercise DIDs
+  - Returns workouts that contain ANY of the specified exercise DIDs
+  - More precise than `exerciseNames` for exact exercise matching
+  - Automatically sorts by DID match score (best matches first)
+  - Adds `exerciseDIDScore` and `exerciseDIDMatchedCount` fields to matching records
+
 #### `sortBy=exerciseScore`
 - **Type:** String
 - **Description:** Sort results by exercise matching score
@@ -370,6 +382,76 @@ Due to GUN's limitations with arrays, certain fields are stored differently:
   - `exerciseTypeScore:asc` - Worst matches first
 - **Example:** `exerciseType=warmup,main&sortBy=exerciseTypeScore:desc`
 - **Note:** Only works when `exerciseType` parameter is provided
+
+### 🤖 **Model Provider Filtering**
+
+#### `model`
+- **Type:** String (comma-separated)
+- **Description:** Filter records by AI model provider
+- **Example:** `model=gpt-4o-mini,grok-4`
+- **Behavior:** 
+  - Searches for model providers in conversation sessions and other AI-generated content
+  - Default behavior: Returns records that use ANY of the specified models (OR behavior)
+  - Case-insensitive matching
+  - Automatically sorts by model match score (best matches first)
+  - Adds `modelScore` and `modelMatchedCount` fields to matching records
+
+#### `modelMatchMode`
+- **Type:** String
+- **Description:** Controls model matching behavior
+- **Values:** 
+  - `OR` (default) - Records that use ANY of the specified models
+  - `AND` - Records that use ALL of the specified models (unusual for model fields)
+- **Example:** `model=gpt-4o-mini,grok-4&modelMatchMode=OR`
+
+#### `sortBy=modelScore`
+- **Type:** String
+- **Description:** Sort results by model matching score
+- **Values:** 
+  - `modelScore:desc` (default) - Best matches first
+  - `modelScore:asc` - Worst matches first
+- **Example:** `model=gpt-4o-mini&sortBy=modelScore:desc`
+- **Note:** Only works when `model` parameter is provided
+
+### 📅 **Scheduled Workout Filtering**
+
+#### `scheduledOn`
+- **Type:** String (YYYY-MM-DD format)
+- **Description:** Filter workout schedule records by specific date
+- **Example:** `scheduledOn=2024-01-15`
+- **Behavior:** 
+  - Only works with `recordType=workoutSchedule`
+  - Searches for workouts scheduled on the specified date
+  - Date format must be YYYY-MM-DD
+  - Automatically sorts by date relevance
+
+### 🔍 **Field-Specific Search**
+
+#### `fieldSearch`
+- **Type:** String
+- **Description:** Search for a specific value within a specific field path
+- **Example:** `fieldSearch=Mediterranean&fieldName=recipe.cuisine`
+- **Behavior:** 
+  - Works with any record type
+  - Searches within the specified field path
+  - Supports both exact and partial matching via `fieldMatchMode`
+  - More precise than general search for specific field values
+
+#### `fieldName`
+- **Type:** String (dot-notation path)
+- **Description:** Specify the field path to search within
+- **Example:** `fieldName=recipe.cuisine` or `fieldName=data.basic.name`
+- **Format:** Use dot notation to navigate nested object structures
+- **Note:** Must be used with `fieldSearch` parameter
+
+#### `fieldMatchMode`
+- **Type:** String
+- **Description:** Controls field search matching behavior
+- **Values:** 
+  - `partial` (default) - Partial string matching
+  - `exact` - Exact string matching
+- **Example:** `fieldSearch=Mediterranean&fieldName=recipe.cuisine&fieldMatchMode=exact`
+- **Note:** Only works when both `fieldSearch` and `fieldName` parameters are provided
 
 ### 🏷️ **Tag Filtering**
 
@@ -702,6 +784,26 @@ GET /api/records?recordType=workout&exerciseNames=Deadlifts,Plank,High%20Knees&r
 ### Exercise Search with Custom Sorting
 ```
 GET /api/records?recordType=workout&exerciseNames=Squats,Push-ups&sortBy=exerciseScore:desc&resolveDepth=1&limit=5
+```
+
+### Exercise Search by DIDs
+```
+GET /api/records?recordType=workout&exerciseDIDs=did:arweave:abc123,did:arweave:def456&limit=10
+```
+
+### Model Provider Search
+```
+GET /api/records?model=gpt-4o-mini,grok-4&recordType=conversationSession&limit=10
+```
+
+### Scheduled Workout Search
+```
+GET /api/records?recordType=workoutSchedule&scheduledOn=2024-01-15&limit=10
+```
+
+### Field-Specific Search
+```
+GET /api/records?fieldSearch=Mediterranean&fieldName=recipe.cuisine&fieldMatchMode=exact&limit=10
 ```
 
 ### Ingredient Search in Recipes

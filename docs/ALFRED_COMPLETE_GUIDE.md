@@ -93,8 +93,9 @@ User Input (Voice/Text)
 
 **Whisper-based transcription service** with multiple configurations:
 
+#### **Remote STT Service (RTX 4090)**
 ```javascript
-// STT Service Configuration
+// Remote STT Service Configuration
 {
   service_url: "http://localhost:8003",
   model: "whisper-large-v3",
@@ -114,55 +115,253 @@ User Input (Voice/Text)
 }
 ```
 
-### Text-to-Speech (TTS)
-
-**Multiple TTS engines** with adaptive streaming:
-
-#### 1. **ElevenLabs** (Premium)
+#### **Apple Silicon STT Service (Local Mac)**
 ```javascript
+// Apple Silicon STT Service Configuration
 {
-  engine: "elevenlabs",
-  voice_id: "onwK4e9ZLuTAKqWW03F9",
-  stability: 0.5,
-  similarity_boost: 0.75,
-  style: 0.0,
-  use_speaker_boost: true
+  service_url: "http://localhost:8013",
+  model: "mlx-community/whisper-large-v3-mlx-4bit",
+  device: "mps", // Metal Performance Shaders
+  quantization: "int4", // 4-bit quantization
+  vad_enabled: true, // Voice Activity Detection
+  phantom_detection: true, // Skip transcription when no speech
+  webm_support: true, // Native WebM audio support
+  corruption_detection: true // Audio data integrity validation
 }
 ```
 
-#### 2. **Edge TTS** (Fast)
+### Text-to-Speech (TTS)
+
+**Multiple TTS engines** with comprehensive fallback hierarchy:
+
+#### **TTS Service Architecture**
+```
+Browser → /api/alfred/synthesize → routes/voice.js → TTS Service GPU (port 5002) → Audio Response
+```
+
+#### **API Endpoints**
+
+**Synthesis Endpoint:**
+```javascript
+POST /api/alfred/synthesize
+Content-Type: application/x-www-form-urlencoded
+
+// Required Parameters
+{
+  text: "Text to synthesize",
+  engine: "kokoro", // TTS engine to use
+  voice_id: "en", // Voice identifier
+  speed: 1.0, // Speech speed (default: 1.0)
+  gender: "female", // Voice gender (default: "female")
+  emotion: "neutral", // Emotional tone (default: "neutral")
+  exaggeration: 0.5, // Emotion intensity 0.0-1.0 (default: 0.5)
+  cfg_weight: 0.5, // Configuration weight 0.0-1.0 (default: 0.5)
+  voice_cloning: false // Enable voice cloning (default: false)
+}
+
+// Response Format
+{
+  "audio_data": "base64_encoded_wav_audio",
+  "engine": "engine_used",
+  "voice": "voice_used", 
+  "processing_time_ms": 1250,
+  "cached": false
+}
+```
+
+**Health Endpoint:**
+```javascript
+GET /api/alfred/health
+
+// Response
+{
+  "status": "healthy",
+  "services": {
+    "tts": {
+      "status": "healthy",
+      "details": {
+        "engines": [
+          {"name": "kokoro", "available": true, "primary": true},
+          {"name": "chatterbox", "available": false, "primary": false},
+          {"name": "silero", "available": true, "primary": false},
+          {"name": "edge_tts", "available": true, "primary": false},
+          {"name": "gtts", "available": true, "primary": false},
+          {"name": "espeak", "available": true, "primary": false}
+        ]
+      }
+    }
+  }
+}
+```
+
+#### **Available TTS Engines**
+
+##### **1. Kokoro TTS** (Primary - GPU-Accelerated)
+```javascript
+{
+  engine: "kokoro",
+  voice_id: "en", // Language-based voices
+  // Available voices:
+  // "en" / "a" - American English
+  // "en-gb" / "b" - British English  
+  // "es" / "e" - Spanish
+  // "fr" / "f" - French
+  // "de" / "d" - German
+  // "it" / "i" - Italian
+  // "pt" / "p" - Portuguese
+  // "ja" / "j" - Japanese
+  // "ko" / "k" - Korean
+  // "zh" / "z" - Chinese
+  // "default" - American English
+}
+```
+- **Status**: ✅ Available (Official Python package)
+- **Quality**: High neural synthesis with 82M parameters
+- **Speed**: Fast (GPU-accelerated when available)
+- **Sample Rate**: 24kHz
+- **Models**: Auto-downloaded on first use
+
+##### **2. Silero Neural TTS** (GPU-Accelerated)
+```javascript
+{
+  engine: "silero",
+  voice_id: "chatterbox", // Available voices:
+  // "chatterbox" - Default voice
+  // "female_1" - Female voice variant 1
+  // "female_2" - Female voice variant 2
+  // "male_1" - Male voice variant 1
+  // "male_2" - Male voice variant 2
+  // "expressive" - Expressive voice
+  // "calm" - Calm voice
+  // "announcer" - Announcer style
+  // "storyteller" - Storytelling voice
+}
+```
+- **Status**: ✅ Available (GPU-accelerated)
+- **Quality**: High neural synthesis
+- **Speed**: Fast (CUDA-accelerated)
+- **Sample Rate**: 48000Hz
+
+##### **3. ElevenLabs TTS** (Premium)
+```javascript
+{
+  engine: "elevenlabs",
+  voice_id: "pNInz6obpgDQGcFmaJgB", // Available voices:
+  // "pNInz6obpgDQGcFmaJgB" - Adam (Male, Deep)
+  // "EXAVITQu4vr4xnSDxMaL" - Bella (Female, Sweet)
+  // "VR6AewLTigWG4xSOukaG" - Arnold (Male, Crisp)
+  // "pMsXgVXv3BLzUgSXRplE" - Freya (Female, Conversational)
+  // "onwK4e9ZLuTAKqWW03F9" - Daniel (Male, British)
+  // "rrnzWnb1k1hLVqzwuuGl" - Jeremy (Male, American)
+  // "cgSgspJ2msm6clMCkdW9" - Jessica (Female, Expressive)
+  // "JBFqnCBsd6RMkjVDRZzb" - George (Male, Raspy)
+  // "YEUXwZHP2c25CNI7A3tf" - Charlotte (Female, Seductive)
+  // "oWAxZDx7w5VEj9dCyTzz" - Grace (Female, Calm)
+  stability: 0.5,
+  similarity_boost: 0.75,
+  style: 0.2,
+  use_speaker_boost: true
+}
+```
+- **Status**: ✅ Available (API key required)
+- **Quality**: Excellent (premium)
+- **Speed**: Fast
+- **Requires**: ELEVENLABS_API_KEY environment variable
+
+##### **4. Edge TTS** (Microsoft)
 ```javascript
 {
   engine: "edge_tts",
-  voice: "en-GB-RyanNeural",
+  voice_id: "en-GB-RyanNeural", // Available voices:
+  // "en-GB-RyanNeural" - British male
+  // "en-GB-GeorgeNeural" - British male (older)
+  // "en-GB-SoniaNeural" - British female
+  // "en-US-GuyNeural" - American male
+  // "en-US-JennyNeural" - American female
   rate: "+0%",
   pitch: "+0Hz"
 }
 ```
+- **Status**: ⚠️ Intermittent (403 rate limiting)
+- **Quality**: High neural voices
+- **Speed**: Fast
+- **Quirks**: Microsoft rate limiting, IP-based restrictions possible
 
-#### 3. **Chatterbox** (Local)
+##### **5. Google Text-to-Speech (gTTS)**
 ```javascript
 {
-  engine: "chatterbox",
-  voice: "female_1",
-  speed: 1.0,
-  emotion: "neutral",
-  exaggeration: 1.0
+  engine: "gtts",
+  voice_id: "en", // Language-based voices
+  // "en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", etc.
 }
 ```
+- **Status**: ✅ Available
+- **Quality**: Good
+- **Speed**: Moderate (network dependent)
+- **Requires**: Internet connection
+
+##### **6. eSpeak TTS** (Fallback)
+```javascript
+{
+  engine: "espeak",
+  voice_id: "en", // System eSpeak voices (language-based)
+}
+```
+- **Status**: ✅ Available (Offline)
+- **Quality**: Low (robotic but reliable)
+- **Speed**: Very fast
+- **Quirks**: Completely offline, robotic sound quality, very reliable fallback
+
+#### **Engine Selection Logic**
+
+The system attempts engines in this order:
+
+1. **Requested Engine** - Try the specifically requested engine first
+2. **Fallback Chain** - If primary fails:
+   - Kokoro → Silero → Edge TTS → gTTS → eSpeak
+3. **Final Fallback** - Browser TTS if all engines fail
+
+#### **Performance Characteristics**
+
+| Engine | Processing Time | Quality | Network Required |
+|--------|----------------|---------|------------------|
+| Kokoro | 1-3 seconds | High | No |
+| Silero | 1-3 seconds | High | No |
+| ElevenLabs | 2-5 seconds | Excellent | Yes |
+| Edge TTS | 2-5 seconds | High | Yes |
+| gTTS | 2-5 seconds | Good | Yes |
+| eSpeak | <1 second | Low | No |
+
+**Audio Format**: WAV, 48kHz sample rate (Silero), variable for other engines
 
 ### Smart Turn Detection
 
 **AI-powered endpoint detection** for natural conversations:
 
+#### **Remote Smart Turn Service (RTX 4090)**
 ```javascript
-// Smart Turn Service Configuration
+// Remote Smart Turn Service Configuration
 {
   service_url: "http://localhost:8004",
   model_path: "./models/smart_turn/",
   min_probability: 0.55,
   window_size: 1024,
   hop_length: 512
+}
+```
+
+#### **Apple Silicon Smart Turn Service (Local Mac)**
+```javascript
+// Apple Silicon Smart Turn Service Configuration
+{
+  service_url: "http://localhost:8014",
+  algorithm: "probabilistic_endpoint_detection",
+  threshold: 0.5,
+  response_time: "100-200ms",
+  real_time_processing: true,
+  confidence_scoring: true,
+  adaptive_thresholds: true,
+  low_latency_optimized: true
 }
 ```
 
@@ -174,6 +373,221 @@ User Input (Voice/Text)
 - **Multiple Engines**: Fallback hierarchy (ElevenLabs → Edge TTS → Chatterbox)
 - **Voice Cloning**: Support for custom voice training
 - **Performance Optimization**: Cached TTS results per session
+
+---
+
+## Apple Silicon Services
+
+### Local Mac Services Architecture
+
+ALFRED supports **Apple Silicon-optimized local services** that provide high-performance speech processing on Mac hardware:
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Mac Client    │    │  Remote Backend  │    │   Mac Services  │
+│                 │    │  (RTX 4090)      │    │                 │
+│ • Voice UI      │◄──►│ • LLM/RAG        │    │ • STT Service   │
+│ • Audio Capture │    │ • TTS (ElevenLabs│    │ • Smart Turn    │
+│ • Playback      │    │ • Response Gen   │    │ • VAD           │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+### Service Management
+
+#### **Quick Start Commands**
+```bash
+# Start all Mac STT services with logging
+make mac-stt-services
+
+# Check service status
+make mac-status
+
+# Stop all services
+make mac-stop
+
+# Restart all services
+make mac-restart
+```
+
+#### **Service Status Monitoring**
+```bash
+# Monitor individual service logs
+make mac-logs-stt              # STT Service logs
+make mac-logs-smart-turn       # Smart Turn Service logs  
+make mac-logs-interface        # Interface Server logs
+make mac-logs-all              # All services simultaneously
+```
+
+#### **Health Check Examples**
+```bash
+# Healthy Services
+$ make mac-status
+Mac STT Services Status:
+🧠 Smart Turn Service: ✅ Running (PID: 12345)
+🎤 STT Service: ✅ Running (PID: 12346)  
+🌐 Interface Server: ✅ Running (PID: 12347)
+
+Port Status:
+  Port 8014 (Smart Turn): ✅ Active
+  Port 8013 (STT): ✅ Active
+  Port 3001 (Interface): ✅ Active
+```
+
+### Apple Silicon STT Service
+
+#### **MLX Whisper Integration**
+```javascript
+// Apple Silicon STT Configuration
+{
+  model: "mlx-community/whisper-large-v3-mlx-4bit",
+  device: "mps", // Metal Performance Shaders
+  quantization: "int4", // 4-bit quantization for efficiency
+  vad_enabled: true, // Silero VAD integration
+  phantom_detection: true, // Skip transcription when no speech
+  webm_support: true, // Native WebM audio support
+  corruption_detection: true // Audio data integrity validation
+}
+```
+
+#### **Performance Characteristics**
+- **Processing Speed**: 2-5x faster than CPU-only implementations
+- **Memory Usage**: 2-4GB RAM during active transcription
+- **GPU Utilization**: Efficient Metal Performance Shaders usage
+- **Latency**: 200-800ms (depending on audio length)
+- **Power Efficiency**: Optimized for laptop battery life
+
+#### **Model Installation**
+```bash
+# Navigate to mac-client directory
+cd mac-client
+
+# Create Python virtual environment
+python3 -m venv mac-client-env
+source mac-client-env/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Models auto-download on first run:
+# - MLX Whisper Large V3 (4-bit): ~1.5GB
+# - Silero VAD Model: ~50MB
+```
+
+### Apple Silicon Smart Turn Service
+
+#### **Endpoint Detection Features**
+```javascript
+// Smart Turn Service Features
+{
+  algorithm: "probabilistic_endpoint_detection",
+  threshold: 0.5, // Configurable detection threshold
+  response_time: "100-200ms", // Detection latency
+  real_time_processing: true, // Analyzes audio chunks as they arrive
+  confidence_scoring: true, // Returns probability scores
+  adaptive_thresholds: true, // Adjusts sensitivity based on audio
+  low_latency_optimized: true // Optimized for conversational response times
+}
+```
+
+### Voice Interface Server
+
+#### **Service Coordination**
+```javascript
+// Interface Server Configuration
+{
+  port: 3001,
+  backend_proxy: true, // Routes requests to remote RTX 4090 backend
+  service_coordination: true, // Manages STT and Smart Turn communication
+  websocket_streaming: true, // Handles real-time audio/text streaming
+  error_handling: true, // Provides fallback mechanisms
+  health_endpoints: true // Service health monitoring
+}
+```
+
+### Troubleshooting Apple Silicon Services
+
+#### **Common Issues & Solutions**
+
+**1. Services Won't Start**
+```bash
+# Check if ports are in use
+lsof -i :8014 :8013 :3001
+
+# Kill conflicting processes
+make mac-stop
+
+# Restart services
+make mac-stt-services
+```
+
+**2. STT Model Download Issues**
+```bash
+# Check internet connection and try manual download
+cd mac-client
+source mac-client-env/bin/activate
+python -c "import mlx_whisper; mlx_whisper.load_model('mlx-community/whisper-large-v3-mlx-4bit')"
+```
+
+**3. Audio Processing Errors**
+```bash
+# Check STT service logs for audio format issues
+make mac-logs-stt
+
+# Common issues: corrupted WebM data, unsupported formats
+```
+
+**4. Smart Turn Detection Not Working**
+```bash
+# Check Smart Turn service logs
+make mac-logs-smart-turn
+
+# Verify audio is reaching the service
+# Check threshold settings (default: 0.5)
+```
+
+#### **Debug Mode**
+```bash
+# Enable verbose logging
+export DEBUG=1
+export LOG_LEVEL=DEBUG
+make mac-stt-services
+```
+
+#### **Health Checks**
+```bash
+# Test individual services
+curl http://localhost:8013/health  # STT Service
+curl http://localhost:8014/health  # Smart Turn Service  
+curl http://localhost:3001/health  # Interface Server
+```
+
+### Integration Benefits
+
+The Apple Silicon services provide:
+
+1. **Low-latency local processing** for speech recognition
+2. **High-performance remote processing** for AI responses  
+3. **Optimized resource utilization** across both systems
+4. **Battery efficiency** for laptop usage
+5. **Native WebM support** for browser audio capture
+
+### Configuration
+
+#### **Environment Variables**
+```bash
+# STT Service Configuration
+STT_MODEL="mlx-community/whisper-large-v3-mlx-4bit"
+STT_DEVICE="mps"
+STT_PORT="8013"
+
+# Smart Turn Service Configuration  
+SMART_TURN_PORT="8014"
+SMART_TURN_THRESHOLD="0.5"
+
+# Interface Server Configuration
+INTERFACE_PORT="3001"
+BACKEND_URL="https://api.oip.onl/api"
+```
 
 ---
 
@@ -1365,6 +1779,11 @@ STT_SERVICE_URL=http://localhost:8003
 TTS_SERVICE_URL=http://localhost:5002
 ELEVENLABS_API_KEY=... # Optional for premium TTS
 
+# TTS Engine Configuration
+KOKORO_MODEL_PATH=/app/models/kokoro
+SILERO_MODEL_PATH=/app/models/silero
+ESPEAK_VOICE_PATH=/usr/share/espeak-ng-data
+
 # Smart Turn Service
 SMART_TURN_SERVICE_URL=http://localhost:8004
 SMART_TURN_ENABLED=true
@@ -1404,6 +1823,48 @@ class ALFRED {
     this.cacheMaxAge = parseInt(process.env.ALFRED_CACHE_MAX_AGE) || 1800000;
   }
 }
+```
+
+### TTS Installation & Setup
+
+#### **Kokoro TTS Installation**
+```bash
+# Package Installation (already done in Dockerfile)
+pip install kokoro==0.3.1 soundfile
+
+# Dependencies
+# ✅ kokoro Python package (0.3.1)
+# ✅ soundfile for audio I/O
+# ✅ Models automatically downloaded on first use
+
+# No manual setup required:
+# - Models are downloaded automatically by the package
+# - No ONNX files needed
+# - No manual configuration required
+
+# Note: The first synthesis request may take longer as the model downloads automatically
+```
+
+#### **ElevenLabs Setup**
+```bash
+# Add your ElevenLabs API key to environment variables
+export ELEVENLABS_API_KEY=your_api_key_here
+
+# Verify API key works
+curl -H "xi-api-key: $ELEVENLABS_API_KEY" https://api.elevenlabs.io/v1/voices
+```
+
+#### **TTS Service Health Monitoring**
+```bash
+# Check TTS service status
+curl http://localhost:5002/health
+
+# Monitor TTS service logs
+docker logs -f oip-arweave-indexer-tts-service-gpu-1
+
+# Test individual engines
+curl -X POST http://localhost:5002/synthesize \
+  -d "text=Hello world&engine=kokoro&voice_id=en"
 ```
 
 ---
@@ -1591,6 +2052,50 @@ console.log(`Cache hit rate: ${cacheHitRate.toFixed(1)}%`);
 - **Check**: TTS service health (`curl http://localhost:5002/health`)
 - **Verify**: ElevenLabs API key if using premium voices
 - **Fallback**: Edge TTS → Chatterbox → eSpeak
+
+#### **TTS-Specific Troubleshooting**
+
+**1. "All TTS engines failed"**
+```bash
+# Check if TTS service is running on port 5002
+curl http://localhost:5002/health
+
+# Verify Docker containers are healthy
+docker ps | grep tts
+
+# Check network connectivity for cloud engines
+curl -I https://api.elevenlabs.io
+```
+
+**2. "Invalid response from Kokoro TTS service"**
+```bash
+# Check TTS service logs for detailed errors
+docker logs -f oip-arweave-indexer-tts-service-gpu-1
+
+# Usually indicates TTS service returned wrong response format
+```
+
+**3. Edge TTS 403 Errors**
+```bash
+# Microsoft rate limiting - try again later
+# Or use different engine in fallback chain
+```
+
+**4. Robotic voice on all engines**
+```bash
+# Likely falling back to eSpeak
+# Check individual engine availability in health endpoint
+curl http://localhost:5002/health | jq '.services.tts.details.engines'
+```
+
+**5. ElevenLabs API Issues**
+```bash
+# Verify API key is set
+echo $ELEVENLABS_API_KEY
+
+# Check API key validity
+curl -H "xi-api-key: $ELEVENLABS_API_KEY" https://api.elevenlabs.io/v1/voices
+```
 
 #### 3. **Model Timeouts**
 - **Cloud models**: Verify API keys are valid

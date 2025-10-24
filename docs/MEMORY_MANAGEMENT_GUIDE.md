@@ -72,7 +72,25 @@ GUN_CACHE_MAX_AGE=3600000  # Clear cache every hour (in milliseconds)
 - `index.js` - Added cache clearing to memory monitor
 - `scripts/emergency-memory-cleanup.js` - Added cache clearing to emergency cleanup
 
-### 4. Emergency Memory Cleanup Script
+### 4. Critical keepDBUpToDate Memory Leak Fix
+**CRITICAL FIX**: Fixed the most severe memory leak in `keepDBUpToDate` function that was bypassing cache completely.
+
+**The Problem:**
+- `keepDBUpToDate` was calling `getRecordsInDB(true)` with **force refresh** on every cycle
+- This bypassed the cache completely and loaded 5000 records every 5 minutes
+- External memory was growing by ~2GB every few minutes (383GB → 385GB → 387GB...)
+- This was the primary cause of the 400GB+ memory usage
+
+**The Solution:**
+- Removed force refresh from `keepDBUpToDate` - now uses cache
+- Extended cache duration from 30 seconds to **5 minutes**
+- Added cycle counter to refresh cache only every **10 cycles (50 minutes)**
+- Added logging to show when cache is refreshed
+
+**Files Modified:**
+- `helpers/elasticsearch.js` - Fixed keepDBUpToDate cache bypass
+
+### 5. Emergency Memory Cleanup Script
 Added a new emergency cleanup script for immediate memory relief:
 
 ```bash
@@ -86,7 +104,7 @@ node scripts/emergency-memory-cleanup.js monitor 120
 node scripts/emergency-memory-cleanup.js stats
 ```
 
-### 5. Memory Monitoring Endpoints
+### 6. Memory Monitoring Endpoints
 
 #### Check Memory Status
 ```bash

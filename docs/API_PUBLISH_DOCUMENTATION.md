@@ -377,10 +377,14 @@ Authorization: Bearer <jwt-token>  # Required for private media
 #### Private Records (GUN)
 - **`conversationSession`**: Private AI conversation history
 - **`media`**: Private media files with torrent distribution
-
 - **`note`**: Private user notes (future)
 - **`calendar`**: Private calendar events (future)
 - **`webHistory`**: Private browsing history (future)
+
+#### Additional Record Types
+- **`text`**: Text document records
+- **`template`**: Schema template records
+- **`nutritionalInfo`**: Nutritional information records
 
 ### Access Control Levels
 
@@ -1027,6 +1031,99 @@ Each user has a unique HD wallet with:
 - **Documents**: PDF, TXT, MD
 - **Archives**: ZIP, TAR, GZ
 - **Any Binary**: Generic file support with MIME detection
+
+## Additional Publish Endpoints
+
+### Text Document Publishing
+
+**Endpoint**: `POST /api/publish/newText`
+
+**Headers**:
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt-token>  # Optional but recommended
+```
+
+**Request Body**:
+```json
+{
+  "basic": {
+    "name": "My Text Document",
+    "description": "A sample text document",
+    "language": "en",
+    "date": 1757789547,
+    "nsfw": false,
+    "tagItems": ["document", "text", "example"]
+  },
+  "text": {
+    "content": "This is the main content of my text document...",
+    "format": "markdown",
+    "wordCount": 150
+  },
+  "blockchain": "arweave"
+}
+```
+
+### Template Publishing
+
+**Endpoint**: `POST /api/publish/newTemplate`
+
+**Headers**:
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt-token>  # Required
+```
+
+**Request Body**:
+```json
+{
+  "template": {
+    "myRecordType": {
+      "name": "string",
+      "description": "string",
+      "date": "number",
+      "category": "enum",
+      "categoryValues": ["option1", "option2", "option3"]
+    }
+  },
+  "blockchain": "arweave"
+}
+```
+
+### Nutritional Information Publishing
+
+**Endpoint**: `POST /api/publish/newNutritionalInfo`
+
+**Headers**:
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt-token>  # Required
+```
+
+**Request Body**:
+```json
+{
+  "data": {
+    "basic": {
+      "name": "Chicken Breast Nutritional Info",
+      "date": 1757789547,
+      "language": "en",
+      "tagItems": ["nutrition", "chicken", "protein"]
+    },
+    "nutritionalInfo": {
+      "calories": 165,
+      "proteinG": 31,
+      "fatG": 3.6,
+      "cholesterolMg": 85,
+      "sodiumMg": 74,
+      "carbohydratesG": 0,
+      "servingSize": "100g",
+      "servingUnit": "grams"
+    }
+  },
+  "blockchain": "arweave"
+}
+```
 
 ## Advanced Features
 
