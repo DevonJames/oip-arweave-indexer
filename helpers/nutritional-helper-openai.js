@@ -214,60 +214,17 @@ async function fetchNutritionalData(ingredientName) {
     
     // Use OpenAI's Chat Completions API with structured outputs
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages: [
         {
           role: 'system',
-          content: 'You are a nutritional data expert. Find comprehensive nutritional information from reliable sources and provide accurate data in the requested format.'
+          content: 'You provide nutritional data based on known information.'
         },
         {
           role: 'user',
-          content: `Find comprehensive nutritional information for "${ingredientName}". I need detailed nutritional facts including calories, protein, fat, carbohydrates, fiber, sugars, sodium, cholesterol, vitamins, and minerals. Please provide data for the most common serving size used in recipes - typically 1 cup for liquids and bulk ingredients, 1 tablespoon for spices and condiments, or 1 piece for whole items like fruits.`
+          content: `What are the nutritional facts for "${ingredientName}"?`
         }
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'nutritional_data',
-          strict: true,
-          schema: {
-            type: 'object',
-            properties: {
-              nutritionalInfo: {
-                type: 'object',
-                properties: {
-                  standardAmount: { type: 'number' },
-                  standardUnit: { type: 'string' },
-                  calories: { type: 'number' },
-                  proteinG: { type: 'number' },
-                  fatG: { type: 'number' },
-                  saturatedFatG: { type: 'number' },
-                  transFatG: { type: 'number' },
-                  cholesterolMg: { type: 'number' },
-                  sodiumMg: { type: 'number' },
-                  carbohydratesG: { type: 'number' },
-                  dietaryFiberG: { type: 'number' },
-                  sugarsG: { type: 'number' },
-                  addedSugarsG: { type: 'number' },
-                  vitaminDMcg: { type: 'number' },
-                  calciumMg: { type: 'number' },
-                  ironMg: { type: 'number' },
-                  potassiumMg: { type: 'number' },
-                  vitaminAMcg: { type: 'number' },
-                  vitaminCMg: { type: 'number' },
-                  allergens: { type: 'array', items: { type: 'string' } },
-                  glutenFree: { type: 'boolean' },
-                  organic: { type: 'boolean' }
-                },
-                required: ['standardAmount', 'standardUnit', 'calories', 'proteinG', 'fatG', 'saturatedFatG', 'cholesterolMg', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG'],
-                additionalProperties: false
-              }
-            },
-            required: ['nutritionalInfo'],
-            additionalProperties: false
-          }
-        }
-      }
+      ]
     }, {
       headers: {
         'Authorization': `Bearer ${openaiApiKey}`,
@@ -279,46 +236,9 @@ async function fetchNutritionalData(ingredientName) {
       throw new Error('No response from OpenAI');
     }
 
-    // Extract nutritional data from the structured response
-    const message = response.data.choices[0].message;
-    let openaiData;
-    
-    try {
-      // Parse the JSON content from the message
-      openaiData = JSON.parse(message.content);
-    } catch (parseError) {
-      console.error('Error parsing OpenAI response:', parseError);
-      throw new Error('Invalid JSON response from OpenAI');
-    }
-    
-    // Construct the full OIP record structure
-    const nutritionalData = {
-      basic: {
-        name: ingredientName,
-        date: Math.floor(Date.now() / 1000),
-        language: 'en',
-        nsfw: false,
-        webUrl: `https://www.nutritionix.com/food/${ingredientName.replace(/\s+/g, '-').toLowerCase()}`
-      },
-      nutritionalInfo: openaiData.nutritionalInfo,
-      image: {
-        webUrl: '',
-        contentType: 'image/jpeg'
-      }
-    };
-    
-    // Apply standard unit conversion
-    const standardUnit = findStandardUnit(ingredientName, nutritionalData.standardAmount, nutritionalData.standardUnit);
-    const convertedData = convertNutritionalValues(
-      nutritionalData,
-      nutritionalData.standardAmount,
-      nutritionalData.standardUnit,
-      standardUnit.amount,
-      standardUnit.unit
-    );
-
-    console.log(`✅ Successfully fetched nutritional data for ${ingredientName}`);
-    return convertedData;
+    const result = response.data.choices[0].message.content;
+    console.log('Nutritional Info Response:', result);
+    return result;
 
   } catch (error) {
     console.error(`❌ Error fetching nutritional data for ${ingredientName}:`, error);
