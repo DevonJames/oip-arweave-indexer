@@ -67,32 +67,102 @@ function findStandardUnit(ingredientName, currentAmount, currentUnit) {
     };
   }
   
+  // Smart unit selection based on ingredient type
+  if (isLiquidIngredient(nameLower)) {
+    // For liquids, prefer cups (most common in recipes)
+    if (STANDARD_UNITS.volume[unitLower]) {
+      const cups = currentAmount * STANDARD_UNITS.volume[unitLower] / STANDARD_UNITS.volume['cup'];
+      return {
+        amount: Math.round(cups * 100) / 100,
+        unit: 'cup',
+        reasoning: 'Liquid ingredient - converted to cups for recipe compatibility'
+      };
+    }
+    return {
+      amount: currentAmount,
+      unit: 'cup',
+      reasoning: 'Liquid ingredient - using cup as standard unit'
+    };
+  }
+  
+  if (isSpiceOrCondiment(nameLower)) {
+    // For spices/condiments, prefer tablespoons
+    if (STANDARD_UNITS.volume[unitLower]) {
+      const tbsp = currentAmount * STANDARD_UNITS.volume[unitLower] / STANDARD_UNITS.volume['tbsp'];
+      return {
+        amount: Math.round(tbsp * 100) / 100,
+        unit: 'tbsp',
+        reasoning: 'Spice/condiment - converted to tablespoons for recipe compatibility'
+      };
+    }
+    return {
+      amount: currentAmount,
+      unit: 'tbsp',
+      reasoning: 'Spice/condiment - using tablespoon as standard unit'
+    };
+  }
+  
+  if (isBulkIngredient(nameLower)) {
+    // For bulk ingredients (flour, sugar, etc.), prefer cups
+    if (STANDARD_UNITS.volume[unitLower]) {
+      const cups = currentAmount * STANDARD_UNITS.volume[unitLower] / STANDARD_UNITS.volume['cup'];
+      return {
+        amount: Math.round(cups * 100) / 100,
+        unit: 'cup',
+        reasoning: 'Bulk ingredient - converted to cups for recipe compatibility'
+      };
+    }
+    return {
+      amount: currentAmount,
+      unit: 'cup',
+      reasoning: 'Bulk ingredient - using cup as standard unit'
+    };
+  }
+  
   // For weight-based ingredients, prefer grams
   if (STANDARD_UNITS.weight[unitLower]) {
     const grams = currentAmount * STANDARD_UNITS.weight[unitLower];
     return {
-      amount: Math.round(grams * 100) / 100, // Round to 2 decimal places
+      amount: Math.round(grams * 100) / 100,
       unit: 'g',
-      reasoning: 'Converted to grams for standard nutritional calculations'
+      reasoning: 'Weight-based ingredient - converted to grams for standard nutritional calculations'
     };
   }
   
-  // For volume-based ingredients, prefer ml
-  if (STANDARD_UNITS.volume[unitLower]) {
-    const ml = currentAmount * STANDARD_UNITS.volume[unitLower];
-    return {
-      amount: Math.round(ml * 100) / 100,
-      unit: 'ml',
-      reasoning: 'Converted to milliliters for standard nutritional calculations'
-    };
+  // Default fallback - try to determine best unit from ingredient name
+  if (isLiquidIngredient(nameLower)) {
+    return { amount: currentAmount, unit: 'cup', reasoning: 'Liquid ingredient - using cup as standard unit' };
+  } else if (isSpiceOrCondiment(nameLower)) {
+    return { amount: currentAmount, unit: 'tbsp', reasoning: 'Spice/condiment - using tablespoon as standard unit' };
+  } else if (isBulkIngredient(nameLower)) {
+    return { amount: currentAmount, unit: 'cup', reasoning: 'Bulk ingredient - using cup as standard unit' };
+  } else {
+    return { amount: currentAmount, unit: currentUnit || 'g', reasoning: 'Using original unit as fallback' };
   }
-  
-  // Default fallback
-  return {
-    amount: currentAmount,
-    unit: currentUnit || 'g',
-    reasoning: 'Using original unit as fallback'
-  };
+}
+
+/**
+ * Check if ingredient is a liquid
+ */
+function isLiquidIngredient(name) {
+  const liquidKeywords = ['oil', 'milk', 'water', 'broth', 'stock', 'juice', 'vinegar', 'wine', 'beer', 'sauce', 'syrup', 'honey', 'cream', 'buttermilk', 'yogurt', 'kefir'];
+  return liquidKeywords.some(keyword => name.includes(keyword));
+}
+
+/**
+ * Check if ingredient is a spice or condiment
+ */
+function isSpiceOrCondiment(name) {
+  const spiceKeywords = ['salt', 'pepper', 'garlic', 'onion', 'herb', 'spice', 'seasoning', 'paprika', 'cumin', 'oregano', 'basil', 'thyme', 'rosemary', 'parsley', 'cilantro', 'ginger', 'cinnamon', 'nutmeg', 'vanilla', 'extract', 'powder', 'flakes', 'seeds', 'chili', 'cayenne', 'mustard', 'ketchup', 'mayo', 'relish', 'pickle'];
+  return spiceKeywords.some(keyword => name.includes(keyword));
+}
+
+/**
+ * Check if ingredient is a bulk ingredient (flour, sugar, etc.)
+ */
+function isBulkIngredient(name) {
+  const bulkKeywords = ['flour', 'sugar', 'rice', 'pasta', 'noodles', 'oats', 'cereal', 'breadcrumbs', 'cornmeal', 'semolina', 'quinoa', 'barley', 'lentils', 'beans', 'chickpeas', 'nuts', 'seeds', 'coconut', 'chocolate', 'chips', 'crumbs', 'powder', 'mix'];
+  return bulkKeywords.some(keyword => name.includes(keyword));
 }
 
 /**
@@ -162,51 +232,7 @@ async function fetchNutritionalData(ingredientName) {
         }
       }],
       tool_choice: 'auto',
-      input: `Find comprehensive nutritional information for "${ingredientName}". I need detailed nutritional facts including calories, protein, fat, carbohydrates, fiber, sugars, sodium, cholesterol, vitamins, and minerals. Please provide data per 100g or standard serving size.`
-    }, {
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.data || !response.data.output) {
-      throw new Error('No response from OpenAI');
-    }
-
-    // Extract nutritional data from the response
-    const nutritionalData = await extractNutritionalDataFromResponse(response.data, ingredientName);
-    
-    // Apply standard unit conversion
-    const standardUnit = findStandardUnit(ingredientName, nutritionalData.standardAmount, nutritionalData.standardUnit);
-    const convertedData = convertNutritionalValues(
-      nutritionalData,
-      nutritionalData.standardAmount,
-      nutritionalData.standardUnit,
-      standardUnit.amount,
-      standardUnit.unit
-    );
-
-    console.log(`✅ Successfully fetched nutritional data for ${ingredientName}`);
-    return convertedData;
-
-  } catch (error) {
-    console.error(`❌ Error fetching nutritional data for ${ingredientName}:`, error);
-    
-    // Return fallback data structure
-    return createFallbackNutritionalData(ingredientName);
-  }
-}
-
-/**
- * Extract and structure nutritional data from OpenAI response
- */
-async function extractNutritionalDataFromResponse(response, ingredientName) {
-  try {
-    // Use OpenAI's structured outputs to parse the nutritional data
-    const structuredResponse = await axios.post('https://api.openai.com/v1/responses', {
-      model: 'gpt-5-mini',
-      input: `Extract nutritional information from this text and format it as JSON: ${response.output_text || response.output}`,
+      input: `Find comprehensive nutritional information for "${ingredientName}". I need detailed nutritional facts including calories, protein, fat, carbohydrates, fiber, sugars, sodium, cholesterol, vitamins, and minerals. Please provide data for the most common serving size used in recipes - typically 1 cup for liquids and bulk ingredients, 1 tablespoon for spices and condiments, or 1 piece for whole items like fruits.`,
       text: {
         format: {
           type: 'json_schema',
@@ -214,18 +240,6 @@ async function extractNutritionalDataFromResponse(response, ingredientName) {
           schema: {
             type: 'object',
             properties: {
-              basic: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  date: { type: 'number' },
-                  language: { type: 'string' },
-                  nsfw: { type: 'boolean' },
-                  webUrl: { type: 'string' }
-                },
-                required: ['name', 'date', 'language', 'nsfw'],
-                additionalProperties: false
-              },
               nutritionalInfo: {
                 type: 'object',
                 properties: {
@@ -254,41 +268,64 @@ async function extractNutritionalDataFromResponse(response, ingredientName) {
                 },
                 required: ['standardAmount', 'standardUnit', 'calories', 'proteinG', 'fatG', 'saturatedFatG', 'cholesterolMg', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG'],
                 additionalProperties: false
-              },
-              image: {
-                type: 'object',
-                properties: {
-                  webUrl: { type: 'string' },
-                  contentType: { type: 'string' }
-                },
-                required: ['webUrl', 'contentType'],
-                additionalProperties: false
               }
             },
-            required: ['basic', 'nutritionalInfo', 'image'],
+            required: ['nutritionalInfo'],
             additionalProperties: false
           }
         }
       }
     }, {
       headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json'
       }
     });
 
-    if (structuredResponse.data && structuredResponse.data.output_parsed) {
-      return structuredResponse.data.output_parsed;
+    if (!response.data || !response.data.output_parsed) {
+      throw new Error('No structured response from OpenAI');
     }
 
-    // Fallback to manual parsing if structured output fails
-    return parseNutritionalDataManually(response.output_text || response.output, ingredientName);
+    // Extract nutritional data from the structured response
+    const openaiData = response.data.output_parsed;
+    
+    // Construct the full OIP record structure
+    const nutritionalData = {
+      basic: {
+        name: ingredientName,
+        date: Math.floor(Date.now() / 1000),
+        language: 'en',
+        nsfw: false,
+        webUrl: `https://www.nutritionix.com/food/${ingredientName.replace(/\s+/g, '-').toLowerCase()}`
+      },
+      nutritionalInfo: openaiData.nutritionalInfo,
+      image: {
+        webUrl: '',
+        contentType: 'image/jpeg'
+      }
+    };
+    
+    // Apply standard unit conversion
+    const standardUnit = findStandardUnit(ingredientName, nutritionalData.standardAmount, nutritionalData.standardUnit);
+    const convertedData = convertNutritionalValues(
+      nutritionalData,
+      nutritionalData.standardAmount,
+      nutritionalData.standardUnit,
+      standardUnit.amount,
+      standardUnit.unit
+    );
+
+    console.log(`✅ Successfully fetched nutritional data for ${ingredientName}`);
+    return convertedData;
 
   } catch (error) {
-    console.error('Error extracting nutritional data:', error);
+    console.error(`❌ Error fetching nutritional data for ${ingredientName}:`, error);
+    
+    // Return fallback data structure
     return createFallbackNutritionalData(ingredientName);
   }
 }
+
 
 /**
  * Manual parsing fallback when structured outputs fail
