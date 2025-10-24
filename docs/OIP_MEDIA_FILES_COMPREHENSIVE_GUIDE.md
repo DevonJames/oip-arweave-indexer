@@ -93,6 +93,16 @@ Form Fields:
 }
 ```
 
+**Response**:
+```json
+{
+  "success": true,
+  "webUrl": "https://domain.com/media/project_name/filename.jpg",
+  "filename": "original_filename.jpg",
+  "message": "Web access setup successfully"
+}
+```
+
 **Arweave Upload**: `POST /api/media/arweave-upload`
 ```json
 {
@@ -106,7 +116,7 @@ Form Fields:
 |---------|---------|---------------|-------------|
 | **BitTorrent** | P2P Distribution | Magnet URI | Server-dependent |
 | **HTTP API** | Direct Access | `/api/media/:mediaId` | Server-dependent |
-| **Web Server** | Public HTTP | `/media/project/filename` | Server-dependent |
+| **Web Server** | Public HTTP | `/media/{COMPOSE_PROJECT_NAME}/filename` | Server-dependent |
 | **IPFS** | Decentralized | `https://ipfs.io/ipfs/hash` | Network-dependent |
 | **Arweave** | Permanent | `https://arweave.net/txid` | Blockchain permanent |
 
@@ -197,6 +207,8 @@ Form Fields:
 }
 ```
 
+**Note**: The `webUrl` field is populated from the `/api/media/web-setup` endpoint, which creates the URL pattern `/media/{COMPOSE_PROJECT_NAME}/{filename}` based on the `COMPOSE_PROJECT_NAME` environment variable. This provides direct HTTP access to media files through the Express static middleware.
+
 ## Media Seeding Service
 
 ### MediaSeeder Architecture
@@ -252,7 +264,7 @@ magnet:?xt=urn:btih:info_hash&dn=filename&tr=wss://tracker.openwebtorrent.com&tr
 │   ├── original                        # Original uploaded file
 │   └── manifest.json                   # File metadata and access control
 ├── web/                                # Web server distribution
-│   ├── <project_name>/                 # Project-specific folder
+│   ├── <COMPOSE_PROJECT_NAME>/         # Project-specific folder (from .env)
 │   │   ├── filename1.jpg
 │   │   └── filename2.mp4
 │   └── another-project/
@@ -279,6 +291,81 @@ magnet:?xt=urn:btih:info_hash&dn=filename&tr=wss://tracker.openwebtorrent.com&tr
   "arweaveTransactionId": "tx_id"       // Added by Arweave upload
 }
 ```
+
+### Web Server Distribution
+
+The web server distribution system provides direct HTTP access to media files through a project-specific directory structure.
+
+#### Directory Organization
+Files are organized by `COMPOSE_PROJECT_NAME` environment variable:
+```
+/data/media/web/
+├── oip-arweave-indexer/              # Default project name
+│   ├── image1.jpg
+│   ├── video1.mp4
+│   └── audio1.mp3
+├── fitnessally/                      # Custom project name
+│   ├── workout-video.mp4
+│   └── nutrition-guide.pdf
+└── another-project/                  # Another deployment
+    └── files-here.png
+```
+
+#### URL Generation
+The system generates URLs dynamically based on environment configuration:
+
+**Environment Variables**:
+```bash
+COMPOSE_PROJECT_NAME=my-project        # Project-specific folder name
+NGROK_DOMAIN=abc123.ngrok.io          # Optional: Custom domain
+```
+
+**URL Examples**:
+```
+# Default (localhost:3005)
+http://localhost:3005/media/oip-arweave-indexer/filename.jpg
+
+# With custom project name
+http://localhost:3005/media/fitnessally/workout-video.mp4
+
+# With ngrok domain
+https://abc123.ngrok.io/media/my-project/image.jpg
+
+# With reverse proxy (production)
+https://oip.fitnessally.io/media/fitnessally/image.jpg
+```
+
+#### Static File Serving
+The Express server serves web media files using static middleware:
+
+```javascript
+// In index.js
+app.use('/media', express.static(path.join(__dirname, 'data', 'media', 'web')));
+```
+
+This creates the URL pattern: `/media/{COMPOSE_PROJECT_NAME}/{filename}`
+
+#### Web Setup Process
+1. **File Copy**: Original file copied to `/data/media/web/{COMPOSE_PROJECT_NAME}/`
+2. **URL Generation**: Dynamic URL based on request headers and environment
+3. **Manifest Update**: `webUrl` added to file manifest
+4. **Static Serving**: File accessible via `/media/{project}/{filename}`
+
+#### Protocol Detection
+The system handles various deployment scenarios:
+
+```javascript
+// Protocol detection (handles reverse proxy)
+const ngrokDomain = process.env.NGROK_DOMAIN || req.get('x-forwarded-host') || req.get('host');
+const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
+const webUrl = `${protocol}://${ngrokDomain}/media/${composeProjectName}/${filename}`;
+```
+
+**Supported Scenarios**:
+- **Local Development**: `http://localhost:3005/media/project/file.jpg`
+- **Ngrok Tunnels**: `https://abc123.ngrok.io/media/project/file.jpg`
+- **Reverse Proxy**: `https://domain.com/media/project/file.jpg`
+- **Docker Containers**: Handles forwarded headers correctly
 
 ## Media Streaming and Access
 
@@ -582,10 +669,10 @@ class OIPMultiNetworkClient extends OIPMediaClient {
         date: Math.floor(Date.now() / 1000),
         nsfw: options.nsfw || false,
         tagItems: options.tags || [],
-        webUrl: webUrl || uploadResult.httpUrl
+        webUrl: webUrl || uploadResult.httpUrl  // Prefer web URL from /api/media/web-setup
       },
       [this.detectRecordType(file)]: {
-        webUrl: webUrl || uploadResult.httpUrl,
+        webUrl: webUrl || uploadResult.httpUrl,  // Prefer web URL from /api/media/web-setup
         bittorrentAddress: uploadResult.magnetURI,
         ipfsAddress: ipfsAddress,
         arweaveAddress: arweaveAddress,
@@ -784,6 +871,10 @@ curl -X POST http://localhost:3000/api/media/createRecord \
 ```bash
 # Media storage
 MEDIA_DIR=/usr/src/app/data/media
+
+# Web server distribution
+COMPOSE_PROJECT_NAME=my-project        # Project-specific folder for web media
+NGROK_DOMAIN=abc123.ngrok.io          # Optional: Custom domain for web URLs
 
 # BitTorrent configuration
 WEBTORRENT_TRACKERS=wss://tracker.openwebtorrent.com,wss://tracker.btorrent.xyz

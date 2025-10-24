@@ -3687,7 +3687,8 @@ async function searchRecordInDB(didTx) {
 // MEMORY LEAK FIX: Add caching to prevent loading 5000 records on every API call
 let recordsCache = null;
 let cacheTimestamp = 0;
-const CACHE_DURATION = 30000; // 30 seconds cache
+const CACHE_DURATION = 300000; // 5 minutes cache (was 30 seconds, too aggressive)
+let keepDBCycleCount = 0; // Track keepDBUpToDate cycles
 
 // move this into GetRecords() ?
 const getRecordsInDB = async (forceRefresh = false) => {
@@ -3774,6 +3775,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
 const clearRecordsCache = () => {
     recordsCache = null;
     cacheTimestamp = 0;
+    keepDBCycleCount = 0; // Reset cycle count when cache is cleared
     console.log(getFileInfo(), getLineNumber(), 'Records cache cleared');
 };
 
@@ -4379,7 +4381,13 @@ async function keepDBUpToDate(remapTemplates) {
         // to do standardize these names a bit better
         let { finalMaxArweaveBlock, qtyTemplatesInDB, templatesInDB } = await getTemplatesInDB();
         // console.log(getFileInfo(), getLineNumber(), 'Templates:', { finalMaxArweaveBlock, qtyTemplatesInDB });
-        let { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB(true); // Force refresh for keepDBUpToDate
+        // MEMORY LEAK FIX: Only refresh cache every 10 cycles to prevent constant memory allocation
+        keepDBCycleCount++;
+        const shouldRefresh = keepDBCycleCount % 10 === 0; // Refresh every 10 cycles (50 minutes)
+        if (shouldRefresh) {
+            console.log(`🔄 [keepDBUpToDate] Refreshing records cache (cycle ${keepDBCycleCount}/10)`);
+        }
+        let { finalMaxRecordArweaveBlock, qtyRecordsInDB, records } = await getRecordsInDB(shouldRefresh);
         // console.log(getFileInfo(), getLineNumber(), 'Records:', { finalMaxRecordArweaveBlock, qtyRecordsInDB });
         foundInDB.maxArweaveBlockInDB = Math.max(
             maxArweaveCreatorRegBlockInDB || 0,
