@@ -11,6 +11,37 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 
 **Returns:** JSON object containing filtered and paginated records with authentication status
 
+## Related Endpoints
+
+### Record Types Summary
+**Endpoint**: `GET /api/records/recordTypes`
+
+**Purpose**: Get a summary of all available record types and their counts in the database
+
+**Authentication**: Not required
+
+**Response**:
+```json
+{
+  "recordTypes": [
+    { "type": "post", "count": 1234 },
+    { "type": "recipe", "count": 567 },
+    { "type": "workout", "count": 890 },
+    { "type": "exercise", "count": 456 }
+  ],
+  "totalRecords": 3147
+}
+```
+
+### Delete Record
+**Endpoint**: `POST /api/records/deleteRecord`
+
+**Purpose**: Delete a record owned by the authenticated user
+
+**Authentication**: Required (JWT token)
+
+**See**: Full documentation in API_PUBLISH_DOCUMENTATION.md
+
 ## Authentication
 
 ### Optional Authentication Header
@@ -573,6 +604,54 @@ Due to GUN's limitations with arrays, certain fields are stored differently:
   - HTTP streaming with range request support
   - Seeding status and peer information
 
+### 📷 **Photo Analysis Endpoints**
+
+#### Photo Upload and Analysis
+- **Endpoint**: `POST /api/photo/upload`
+- **Purpose**: Upload photos for AI analysis using Grok-4 vision model
+- **Features**:
+  - Temporary caching (24-hour expiration)
+  - File type validation (JPEG, PNG, GIF, WebP, BMP, TIFF, SVG)
+  - Size limits (20MB maximum)
+  - Automatic cleanup
+
+#### Photo Analysis
+- **Endpoint**: `POST /api/photo/analyze`
+- **Purpose**: Analyze cached photos with Grok-4 vision capabilities
+- **Features**:
+  - Question-based analysis
+  - Image optimization for API efficiency
+  - Processing time tracking
+  - Error handling for various failure modes
+
+#### Photo Chat Integration
+- **Endpoint**: `POST /api/photo/chat`
+- **Purpose**: Integrated photo analysis with ALFRED's conversational system
+- **Features**:
+  - RAG integration with image context
+  - TTS support for audio responses
+  - Conversation history integration
+  - Enhanced context for AI responses
+
+### 🍽️ **Recipe Image Generation**
+
+#### Recipe Image Generation
+- **Endpoint**: `POST /api/recipes/generate-image`
+- **Purpose**: Generate professional food photography using DALL-E 3
+- **Features**:
+  - AI-powered image generation
+  - Server-side caching
+  - Force regeneration option
+  - Professional food blog styling
+
+#### Recipe Image Serving
+- **Endpoint**: `GET /api/recipes/images/:filename`
+- **Purpose**: Serve cached recipe images
+- **Features**:
+  - Long-term caching (1 year)
+  - Proper content type headers
+  - Error handling for missing images
+
 #### Media File Properties
 When retrieving media records, additional fields are available:
 - **`media.id`**: SHA256 hash of file content (mediaId)
@@ -806,6 +885,47 @@ GET /api/records?recordType=workoutSchedule&scheduledOn=2024-01-15&limit=10
 GET /api/records?fieldSearch=Mediterranean&fieldName=recipe.cuisine&fieldMatchMode=exact&limit=10
 ```
 
+### Photo Analysis Workflow
+```
+# 1. Upload photo
+POST /api/photo/upload
+Content-Type: multipart/form-data
+Body: photo file
+
+# 2. Analyze photo
+POST /api/photo/analyze
+Body: {
+  "photoId": "abc123...",
+  "question": "What ingredients do you see?",
+  "model": "grok-4"
+}
+
+# 3. Integrated photo chat
+POST /api/photo/chat
+Body: {
+  "photoId": "abc123...",
+  "question": "Help me create a recipe from this image",
+  "processing_mode": "rag",
+  "return_audio": true,
+  "voiceConfig": "{\"engine\":\"elevenlabs\",\"voice_id\":\"daniel\"}"
+}
+```
+
+### Recipe Image Generation
+```
+# Generate recipe image
+POST /api/recipes/generate-image
+Body: {
+  "recipeTitle": "Grilled Chicken Salad",
+  "description": "A healthy and delicious salad",
+  "ingredients": ["chicken breast", "lettuce", "tomatoes"],
+  "forceRegenerate": false
+}
+
+# Serve cached image
+GET /api/recipes/images/recipe-id.png
+```
+
 ### Ingredient Search in Recipes
 ```
 GET /api/records?recordType=recipe&ingredientNames=chicken,garlic,olive%20oil&resolveDepth=2&resolveNamesOnly=true&limit=10
@@ -959,6 +1079,36 @@ Authorization: Bearer user_a_token
 # Returns empty results due to ownership filtering
 ```
 
+## DID (Decentralized Identifier) Format
+
+### DID Structure
+Published records receive a unique DID in the following format:
+
+- **Arweave**: `did:arweave:{transaction_id}`
+- **GUN**: `did:gun:{user_hash}:{local_id}`
+- **Irys**: `did:irys:{transaction_id}`
+
+### Example DIDs
+```
+did:arweave:abc123def456ghi789jkl012mno345pqr678stu901vwx234yz
+did:gun:647f79c2a338:session_1757789557773
+did:irys:xyz789abc123def456ghi789jkl012mno345pqr678
+```
+
+### Using DIDs in Queries
+
+#### Filter by Specific DID
+```
+GET /api/records?did=did:arweave:abc123def456
+GET /api/records?didTx=did:arweave:abc123def456  # Alias for 'did'
+```
+
+#### Filter by DID Reference
+```
+GET /api/records?didTxRef=did:arweave:abc123def456
+```
+Finds all records that reference the specified DID in any field.
+
 ## Response Format
 
 ### Standard Response Structure
@@ -983,6 +1133,43 @@ Authorization: Bearer user_a_token
     }
   },
   "records": [ /* array of record objects */ ]
+}
+```
+
+### Record Object Structure
+
+Each record in the `records` array contains:
+
+```json
+{
+  "data": {
+    "basic": {
+      "name": "Record Title",
+      "description": "Record description",
+      "language": "en",
+      "date": 1703721600,
+      "nsfw": false,
+      "tagItems": ["tag1", "tag2"]
+    },
+    /* record-type-specific data */
+  },
+  "oip": {
+    "did": "did:arweave:abc123...",
+    "didTx": "did:arweave:abc123...",  // Legacy field
+    "inArweaveBlock": 1234567,
+    "recordType": "post",
+    "indexedAt": "2025-09-13T18:52:38.413Z",
+    "recordStatus": "confirmed",
+    "ver": "0.8.0",
+    "storage": "arweave",
+    "creator": {
+      "creatorHandle": "username",
+      "didAddress": "did:arweave:creator_address",
+      "didTx": "did:arweave:creator_tx",
+      "publicKey": "hex_public_key"
+    }
+  },
+  "dateReadable": "December 27, 2023"  // Optional, when hideDateReadable=false
 }
 ```
 

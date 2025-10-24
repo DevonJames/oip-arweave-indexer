@@ -4,6 +4,34 @@
 
 The OIP (Open Index Protocol) publishing system supports multiple storage backends and privacy levels. This comprehensive guide covers publishing records to both **Arweave** (permanent, public) and **GUN** (private, encrypted) storage systems with user authentication and cryptographic ownership.
 
+## Endpoint Authentication Summary
+
+| Endpoint | Authentication | Required |
+|----------|----------------|----------|
+| `POST /api/publish/newPost` | ✅ Required | JWT token |
+| `POST /api/publish/newRecipe` | ⚠️ Not Required | None |
+| `POST /api/publish/newWorkout` | ⚠️ Not Required | None |
+| `POST /api/publish/newVideo` | ✅ Required | JWT token |
+| `POST /api/publish/newImage` | ✅ Required | JWT token |
+| `POST /api/publish/newTemplate` | ✅ Required | JWT token |
+| `POST /api/publish/newNutritionalInfo` | ✅ Required | JWT token |
+| `POST /api/records/newRecord` | ✅ Required | JWT token |
+| `GET /api/records` | ⭕ Optional | JWT token (for private records) |
+| `POST /api/records/deleteRecord` | ✅ Required | JWT token |
+| `POST /api/media/upload` | ✅ Required | JWT token |
+| `GET /api/media/:mediaId` | ⭕ Optional | JWT token (for private media) |
+| `POST /api/photo/upload` | ❌ Not Required | None |
+| `POST /api/photo/analyze` | ❌ Not Required | None |
+| `POST /api/photo/chat` | ❌ Not Required | None |
+| `POST /api/recipes/generate-image` | ❌ Not Required | None |
+| `POST /api/generate/podcast` | ❌ Not Required | None |
+
+**Legend**:
+- ✅ **Required** - Endpoint requires valid JWT token
+- ⚠️ **Not Required** - No authentication (legacy endpoints, may change)
+- ⭕ **Optional** - Works without auth, enhanced with auth
+- ❌ **Not Required** - Designed to work without authentication
+
 ## Storage Systems
 
 ### Arweave Storage (Public/Permanent)
@@ -11,7 +39,7 @@ The OIP (Open Index Protocol) publishing system supports multiple storage backen
 - **Privacy**: Public by default
 - **Permanence**: Immutable, permanent storage
 - **Cost**: Requires Arweave tokens for storage
-- **Authentication**: Optional (currently not required)
+- **Authentication**: Varies by endpoint (see table above)
 
 ### GUN Storage (Private/Encrypted)
 - **Endpoint**: `/api/records/newRecord?storage=gun`
@@ -21,6 +49,81 @@ The OIP (Open Index Protocol) publishing system supports multiple storage backen
 - **Authentication**: Required for private records
 - **Ownership**: Individual user HD wallets
 - **Array Limitation**: Cannot handle complex nested arrays - use JSON strings instead
+
+## Schema Discovery Endpoints
+
+### List All Available Schemas
+**Endpoint**: `GET /api/publish/schemas`
+
+**Purpose**: Get a list of all available record type schemas and publishing endpoints
+
+**Authentication**: Not required
+
+**Response**:
+```json
+{
+  "description": "Available JSON schemas for OIP publishing endpoints",
+  "dynamic_schema_endpoint": {
+    "url": "GET /api/publish/schema?recordType={recordType}",
+    "description": "Dynamic schema generator that works with any record type",
+    "usage": "GET /api/publish/schema?recordType=mealPlan",
+    "supported_record_types": ["post", "recipe", "workout", "exercise", "nutritionalInfo", "mealPlan", "workoutSchedule", ...]
+  },
+  "specific_schemas": {
+    "recipe": {
+      "endpoint": "POST /api/publish/newRecipe",
+      "schema_url": "GET /api/publish/newRecipe/schema",
+      "description": "Publish recipe records with automatic ingredient processing"
+    },
+    "workout": {
+      "endpoint": "POST /api/publish/newWorkout",
+      "schema_url": "GET /api/publish/newWorkout/schema",
+      "description": "Publish workout records with automatic exercise lookup"
+    }
+  }
+}
+```
+
+### Get Dynamic Schema for Any Record Type
+**Endpoint**: `GET /api/publish/schema?recordType={recordType}`
+
+**Purpose**: Generate a complete schema for any record type dynamically from templates
+
+**Authentication**: Not required
+
+**Example**: `GET /api/publish/schema?recordType=mealPlan`
+
+**Response**:
+```json
+{
+  "description": "Complete JSON schema for publishing...",
+  "template_info": {
+    "template_name": "mealPlan",
+    "template_txid": "did:arweave:template_tx_id",
+    "fields_count": 15
+  },
+  "example": {
+    "basic": { "name": "...", ... },
+    "mealPlan": { ... }
+  },
+  "field_descriptions": { ... },
+  "endpoint_info": {
+    "publishing_endpoint": "/api/records/newRecord?recordType=mealPlan&storage=arweave",
+    "publishing_endpoint_gun": "/api/records/newRecord?recordType=mealPlan&storage=gun",
+    "method": "POST",
+    "authentication": "Optional for Arweave, Required for GUN storage"
+  }
+}
+```
+
+### Get Specific Endpoint Schemas
+- `GET /api/publish/newRecipe/schema` - Recipe schema with ingredient processing notes
+- `GET /api/publish/newWorkout/schema` - Workout schema with exercise lookup notes
+- `GET /api/publish/newPost/schema` - Post schema (dynamically generated)
+- `GET /api/publish/newText/schema` - Text schema (dynamically generated)
+- `GET /api/publish/newVideo/schema` - Video schema (dynamically generated)
+- `GET /api/publish/newImage/schema` - Image schema (dynamically generated)
+- `GET /api/publish/newNutritionalInfo/schema` - Nutritional info schema
 
 ## User Authentication System
 
@@ -89,8 +192,10 @@ The OIP (Open Index Protocol) publishing system supports multiple storage backen
 **Headers**:
 ```http
 Content-Type: application/json
-Authorization: Bearer <jwt-token>  # Optional but recommended
+Authorization: Bearer <jwt-token>  # Required
 ```
+
+**Authentication Status**: ✅ **REQUIRED** - This endpoint requires a valid JWT token.
 
 **Request Body**:
 ```json
@@ -109,9 +214,51 @@ Authorization: Bearer <jwt-token>  # Optional but recommended
     "bylineWritersTitle": "Blockchain Developer",
     "bylineWritersLocation": "San Francisco, CA",
     "webUrl": "https://example.com/my-post",
-    "featuredImage": "https://example.com/images/featured.jpg"
+    "featuredImage": "https://example.com/images/featured.jpg",
+    "imageItems": [],
+    "imageCaptionItems": [],
+    "videoItems": [],
+    "audioItems": [],
+    "audioCaptionItems": [],
+    "replyTo": ""
   },
   "blockchain": "arweave"
+}
+```
+
+**Field Specifications**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `basic.name` | string | **Yes** | Title/name of the post |
+| `basic.description` | string | No | Brief description or summary |
+| `basic.language` | string | No | Language code (default: "en") |
+| `basic.date` | number | No | Unix timestamp (default: current time) |
+| `basic.nsfw` | boolean | No | Not Safe For Work flag (default: false) |
+| `basic.tagItems` | array | No | Array of tag strings for categorization |
+| `post.articleText` | string | **Yes** | Main content of the post |
+| `post.webUrl` | string | No | Original URL if cross-posting |
+| `post.bylineWriter` | string | No | Author name |
+| `post.bylineWritersTitle` | string | No | Author's title/position |
+| `post.bylineWritersLocation` | string | No | Author's location |
+| `post.featuredImage` | string | No | URL to featured image |
+| `post.imageItems` | array | No | Array of additional images |
+| `post.imageCaptionItems` | array | No | Captions for images |
+| `post.videoItems` | array | No | Array of embedded videos |
+| `post.audioItems` | array | No | Array of audio files |
+| `post.audioCaptionItems` | array | No | Captions for audio items |
+| `post.replyTo` | string | No | Reference to another post if this is a reply |
+| `blockchain` | string | No | Target blockchain (default: "arweave") |
+
+**Minimal Example**:
+```json
+{
+  "basic": {
+    "name": "My First Blog Post"
+  },
+  "post": {
+    "articleText": "This is the main content of my blog post."
+  }
 }
 ```
 
@@ -123,10 +270,14 @@ Authorization: Bearer <jwt-token>  # Optional but recommended
     "data": { /* original record data */ },
     "oip": {
       "didTx": "did:arweave:abc123def456...",
+      "inArweaveBlock": 1234567,
       "recordType": "post",
       "indexedAt": "2025-09-13T18:52:38.413Z",
+      "recordStatus": "pending confirmation in Arweave",
       "creator": {
+        "creatorHandle": "string",
         "didAddress": "did:arweave:creator_address",
+        "didTx": "did:arweave:creator_tx",
         "publicKey": "creator_public_key"
       }
     }
@@ -134,6 +285,19 @@ Authorization: Bearer <jwt-token>  # Optional but recommended
   "blockchain": "arweave",
   "message": "Post published successfully"
 }
+```
+
+**Query Parameters for Media Processing** (Optional):
+- `publishFiles`: Boolean to enable media file processing
+- `addMediaToArweave`: Boolean to store media on Arweave (default: true for media endpoints)
+- `addMediaToIPFS`: Boolean to store media on IPFS
+- `addMediaToArFleet`: Boolean to store media on ArFleet
+
+**Example with Media Processing**:
+```bash
+curl -X POST "https://api.oip.onl/api/publish/newPost?publishFiles=true&addMediaToArweave=true" \
+  -H "Content-Type: application/json" \
+  -d '{ /* post data */ }'
 ```
 
 ## Publishing to GUN (Private Records)
@@ -489,7 +653,7 @@ curl -X POST https://api.oip.onl/api/user/login \
   }'
 ```
 
-#### Publish Public Post (Arweave)
+#### Publish Public Post (Arweave) - Authentication Required
 ```bash
 curl -X POST https://api.oip.onl/api/publish/newPost \
   -H "Content-Type: application/json" \
@@ -503,6 +667,41 @@ curl -X POST https://api.oip.onl/api/publish/newPost \
     "post": {
       "articleText": "This is my public blog post content that everyone can see.",
       "bylineWriter": "John Developer"
+    }
+  }'
+```
+
+#### Publish Recipe (No Authentication Required - Legacy)
+```bash
+curl -X POST https://api.oip.onl/api/publish/newRecipe \
+  -H "Content-Type: application/json" \
+  -d '{
+    "basic": {
+      "name": "Mediterranean Grilled Chicken",
+      "description": "A delicious grilled chicken recipe"
+    },
+    "recipe": {
+      "ingredient": ["chicken thighs", "olive oil", "garlic"],
+      "ingredient_amount": [4, 2, 2],
+      "ingredient_unit": ["pieces", "tbsp", "cloves"],
+      "instructions": "1. Marinate chicken..."
+    }
+  }'
+```
+
+#### Publish Workout (No Authentication Required - Legacy)
+```bash
+curl -X POST https://api.oip.onl/api/publish/newWorkout \
+  -H "Content-Type: application/json" \
+  -d '{
+    "basic": {
+      "name": "Upper Body Strength",
+      "description": "Comprehensive upper body workout"
+    },
+    "workout": {
+      "exercise": ["Push-ups", "Bench Press", "Pull-ups"],
+      "exercise_amount": [3, 3, 3],
+      "exercise_unit": ["sets", "sets", "sets"]
     }
   }'
 ```
@@ -912,8 +1111,8 @@ Each user has a unique HD wallet with:
 | **Privacy** | Public | Private/Encrypted |
 | **Cost** | Paid (AR tokens) | Free |
 | **Speed** | Slower | Faster |
-| **Authentication** | Optional | Required for private |
-| **Ownership** | Server-signed | User HD wallets |
+| **Authentication** | Required (most endpoints) | Required for private |
+| **Ownership** | User HD wallets | User HD wallets |
 | **Arrays** | ✅ Supported | ❌ JSON strings only |
 | **Search** | Full Elasticsearch | Basic filtering |
 | **Data Complexity** | ✅ Full support | ⚠️ Limited by GUN |
@@ -922,22 +1121,39 @@ Each user has a unique HD wallet with:
 | **P2P Distribution** | ❌ No | ✅ WebTorrent |
 | **File Seeding** | ❌ No | ✅ Persistent |
 
+**Note**: The `/api/publish/newRecipe` and `/api/publish/newWorkout` endpoints are legacy endpoints that don't require authentication. All other publishing endpoints require authentication.
+
 ## Error Handling
 
 ### Common Error Responses
 
 #### Authentication Errors
+
+**No Token Provided** (401):
 ```json
 {
-  "error": "No token provided",
-  "status": 401
+  "error": "No token provided"
 }
 ```
 
+**Invalid Token** (403):
 ```json
 {
-  "error": "Invalid token",
-  "status": 403
+  "error": "Invalid token"
+}
+```
+
+**Token Expired** (403):
+```json
+{
+  "error": "Token expired"
+}
+```
+
+**Authentication Required** (401):
+```json
+{
+  "error": "Authentication required for this endpoint"
 }
 ```
 
@@ -1034,6 +1250,141 @@ Each user has a unique HD wallet with:
 
 ## Additional Publish Endpoints
 
+### Photo Analysis and Upload
+
+#### Photo Upload
+**Endpoint**: `POST /api/photo/upload`
+
+**Headers**:
+```http
+Content-Type: multipart/form-data
+```
+
+**Request Body**:
+```
+photo: <image_file>  # Required: Image file (JPEG, PNG, GIF, WebP, BMP, TIFF, SVG)
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "photoId": "abc123...",
+  "filename": "image.jpg",
+  "size": 1234567,
+  "mimetype": "image/jpeg",
+  "message": "Photo uploaded and cached successfully",
+  "expiresIn": "24 hours"
+}
+```
+
+#### Photo Analysis
+**Endpoint**: `POST /api/photo/analyze`
+
+**Headers**:
+```http
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "photoId": "abc123...",
+  "question": "What do you see in this image?",
+  "model": "grok-4"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "photoId": "abc123...",
+  "question": "What do you see in this image?",
+  "analysis": "I can see a beautiful landscape with mountains...",
+  "model": "grok-4",
+  "processingTimeMs": 1234,
+  "photoInfo": {
+    "filename": "image.jpg",
+    "size": 1234567,
+    "uploadedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+#### Photo Chat Integration
+**Endpoint**: `POST /api/photo/chat`
+
+**Headers**:
+```http
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "photoId": "abc123...",
+  "question": "Explain what's happening in this photo",
+  "model": "grok-4",
+  "processing_mode": "rag",
+  "return_audio": true,
+  "voiceConfig": "{\"engine\":\"elevenlabs\",\"voice_id\":\"daniel\"}",
+  "conversationHistory": []
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "response": "Based on the image analysis, I can see...",
+  "image_analysis": "Raw Grok-4 analysis...",
+  "audio_data": "base64_encoded_audio_data",
+  "processing_mode": "rag",
+  "model": "grok-4",
+  "photoInfo": {
+    "filename": "image.jpg",
+    "uploadedAt": "2024-01-15T10:30:00.000Z"
+  },
+  "processingTimeMs": 2345
+}
+```
+
+### Recipe Image Generation
+
+#### Generate Recipe Image
+**Endpoint**: `POST /api/recipes/generate-image`
+
+**Headers**:
+```http
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "recipeId": "recipe-123",
+  "recipeTitle": "Grilled Chicken Salad",
+  "description": "A healthy and delicious salad with grilled chicken breast",
+  "ingredients": ["chicken breast", "lettuce", "tomatoes", "cucumber"],
+  "forceRegenerate": false
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "imageUrl": "/api/recipe-images/recipe-123.png",
+  "cached": false
+}
+```
+
+#### Serve Recipe Images
+**Endpoint**: `GET /api/recipes/images/:filename`
+
+**Response**: Binary image data with proper content type headers
+
 ### Text Document Publishing
 
 **Endpoint**: `POST /api/publish/newText`
@@ -1041,8 +1392,10 @@ Each user has a unique HD wallet with:
 **Headers**:
 ```http
 Content-Type: application/json
-Authorization: Bearer <jwt-token>  # Optional but recommended
+Authorization: Bearer <jwt-token>  # Required
 ```
+
+**Authentication Status**: ✅ **REQUIRED** - This endpoint requires a valid JWT token.
 
 **Request Body**:
 ```json
@@ -1100,6 +1453,8 @@ Content-Type: application/json
 Authorization: Bearer <jwt-token>  # Required
 ```
 
+**Authentication Status**: ✅ **REQUIRED** - This endpoint requires a valid JWT token.
+
 **Request Body**:
 ```json
 {
@@ -1114,16 +1469,181 @@ Authorization: Bearer <jwt-token>  # Required
       "calories": 165,
       "proteinG": 31,
       "fatG": 3.6,
+      "saturatedFatG": 1.0,
+      "transFatG": 0,
       "cholesterolMg": 85,
       "sodiumMg": 74,
       "carbohydratesG": 0,
-      "servingSize": "100g",
-      "servingUnit": "grams"
+      "dietaryFiberG": 0,
+      "sugarsG": 0,
+      "addedSugarsG": 0,
+      "vitaminDMcg": 0,
+      "calciumMg": 15,
+      "ironMg": 0.9,
+      "potassiumMg": 256,
+      "vitaminAMcg": 9,
+      "vitaminCMg": 0,
+      "allergens": [],
+      "glutenFree": true,
+      "organic": false,
+      "standardAmount": 1,
+      "standardUnit": "100g"
+    },
+    "image": {
+      "webUrl": "https://example.com/chicken-breast.jpg",
+      "contentType": "image/jpeg"
     }
   },
   "blockchain": "arweave"
 }
 ```
+
+### Nutritional Information Lookup (Preview)
+
+**Endpoint**: `POST /api/publish/lookupNutritionalInfo`
+
+**Headers**:
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt-token>  # Required
+```
+
+**Purpose**: Look up nutritional information from Nutritionix API without publishing (preview/validation)
+
+**Request Body**:
+```json
+{
+  "ingredientName": "chicken breast"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "ingredientName": "chicken breast",
+  "data": {
+    "basic": {
+      "name": "chicken breast",
+      "webUrl": "https://www.nutritionix.com/food/chicken-breast",
+      "date": 1757789547,
+      "language": "en"
+    },
+    "nutritionalInfo": {
+      "standardAmount": 1,
+      "standardUnit": "100g",
+      "calories": 165,
+      "proteinG": 31,
+      "fatG": 3.6,
+      ...
+    }
+  }
+}
+```
+
+## Recipe Publishing: Two Approaches
+
+### Specialized Recipe Endpoint (`/api/publish/newRecipe`)
+
+**Endpoint**: `POST /api/publish/newRecipe`
+
+**Headers**:
+```http
+Content-Type: application/json
+```
+
+**Authentication Status**: ⚠️ **NOT REQUIRED** - This endpoint currently does not require authentication for backward compatibility.
+
+**Features**:
+- **Intelligent Ingredient Processing**: Automatically looks up existing nutritional records
+- **Fuzzy Matching**: Advanced scoring algorithms for ingredient matching
+- **Auto-Creation**: Creates new nutritional records for missing ingredients
+- **Nutritionix Integration**: Fetches nutritional data from external API
+- **Parallel Array Construction**: Server builds ingredient arrays automatically
+
+**Use Case**: Server-side automation with intelligent ingredient handling
+
+**Request Format**:
+```json
+{
+  "basic": { "name": "My Recipe", ... },
+  "recipe": {
+    "ingredient": ["garlic", "olive oil"],           // Raw ingredient names
+    "ingredient_comment": ["minced", "extra virgin"],
+    "ingredient_amount": [2, 3],
+    "ingredient_unit": ["cloves", "tbsp"],
+    "instructions": "Cook the garlic in oil...",
+    ...
+  }
+}
+```
+
+### Specialized Workout Endpoint (`/api/publish/newWorkout`)
+
+**Endpoint**: `POST /api/publish/newWorkout`
+
+**Headers**:
+```http
+Content-Type: application/json
+```
+
+**Authentication Status**: ⚠️ **NOT REQUIRED** - This endpoint currently does not require authentication for backward compatibility.
+
+**Features**:
+- **Intelligent Exercise Processing**: Automatically looks up existing exercise records
+- **Auto-Creation**: Creates new exercise records from Kaggle dataset if missing
+- **Duration Calculation**: Automatically calculates total workout duration
+- **Exercise Validation**: Validates exercise references and resolves them
+- **Parallel Array Construction**: Server builds exercise arrays automatically
+
+**Use Case**: Server-side automation with intelligent exercise handling
+
+### General Record Endpoint (`/api/records/newRecord`)
+
+**Endpoint**: `POST /api/records/newRecord`
+
+**Headers**:
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt-token>  # Required
+```
+
+**Authentication Status**: ✅ **REQUIRED** - This endpoint requires a valid JWT token.
+
+**Features**:
+- **Pre-processed Ingredients**: Requires DIDs for all ingredients
+- **Standard DID Handling**: Uses `oip.did` field (modern standard)
+- **Storage Flexibility**: Supports both Arweave and GUN storage
+- **Authentication Required**: Secure publishing with user ownership
+
+**Use Case**: Client-side control with proper DID standardization
+
+**Request Format**:
+```json
+{
+  "basic": { "name": "My Recipe", ... },
+  "recipe": {
+    "ingredient": ["did:arweave:xyz", "did:arweave:abc"],  // Pre-resolved DIDs
+    "ingredient_comment": ["chopped", "diced"],
+    "ingredient_amount": [2, 1],
+    "ingredient_unit": ["cups", "whole"],
+    "instructions": ["Step 1", "Step 2"],
+    ...
+  },
+  "accessControl": { ... }
+}
+```
+
+### Recommendation for Recipe Bundle Feature
+
+For implementing a Recipe Bundle feature in `reference-client.html`:
+
+1. **Use `/api/records/newRecord`** for final recipe publishing (ensures proper DID handling)
+2. **Implement intelligent ingredient handling client-side**:
+   - Search for existing ingredients using `/api/records?recordType=nutritionalInfo`
+   - Create new nutritional records as needed
+   - Build parallel arrays with DIDs before publishing
+3. **Follow the Exercise Bundle pattern** for UI/UX consistency
 
 ## Advanced Features
 
@@ -1164,6 +1684,263 @@ await clientA.publishPrivateSession('shared_session', messages);
 const records = await clientB.getPrivateRecords();
 // Will include session created on Device A
 ```
+
+## Record Deletion
+
+### Delete Record
+
+**Endpoint**: `POST /api/records/deleteRecord`
+
+**Headers**:
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt-token>  # Required
+```
+
+**Authentication Status**: ✅ **REQUIRED** - This endpoint requires a valid JWT token.
+
+**Request Body**:
+```json
+{
+  "delete": {
+    "did": "did:arweave:abc123def456..."
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Record deleted successfully",
+  "did": "did:arweave:abc123def456...",
+  "deletedCount": 1,
+  "deleteMessageTxId": "xyz789...",
+  "blockchainDeletion": true,
+  "propagationNote": "Delete message published to blockchain. Deletion will propagate to all nodes during sync."
+}
+```
+
+**Features**:
+- **Ownership Verification**: Only record owners can delete their records
+- **Blockchain Propagation**: For Arweave records, publishes a deleteMessage to propagate deletion across all nodes
+- **Admin Override**: Server admins can delete server-created records
+- **Immediate Deletion**: Records are deleted from local Elasticsearch index immediately
+- **Network Sync**: Delete messages ensure deletion propagates during blockchain sync
+
+**Error Responses**:
+
+```json
+{
+  "error": "Record not found",
+  "did": "did:arweave:abc123..."
+}
+```
+
+```json
+{
+  "error": "Access denied. You can only delete records that you own.",
+  "did": "did:arweave:abc123..."
+}
+```
+
+```json
+{
+  "error": "Invalid request format. Expected: {\"delete\": {\"did\": \"did:gun:...\"}}"
+}
+```
+
+## Podcast Generation from Records
+
+### Generate Podcast from OIP Records
+
+**Endpoint**: `POST /api/generate/podcast`
+
+**Headers**:
+```http
+Content-Type: application/json
+```
+
+**Authentication Status**: ❌ **NOT REQUIRED** - This endpoint works without authentication.
+
+**Request Body**:
+```json
+{
+  "didTx": "did:arweave:record-id",
+  "selectedHosts": ["socrates", "hypatia"],
+  "targetLengthSeconds": 3500
+}
+```
+
+### Parameters
+
+#### `didTx` (string)
+- **Description**: Single didTx identifier for a record to include in the podcast
+- **Format**: `"did:arweave:transactionId"`
+- **Example**: `"did:arweave:abc123def456ghi789"`
+
+#### `didTxs` (array of strings)
+- **Description**: Array of didTx identifiers for multiple records to include in the podcast
+- **Format**: `["did:arweave:txId1", "did:arweave:txId2", ...]`
+- **Example**: `["did:arweave:abc123", "did:arweave:def456", "did:arweave:ghi789"]`
+
+#### `articles` (array of objects)
+- **Description**: Manually provided articles for podcast content
+- **Can be combined with**: `didTx` or `didTxs` for mixed content
+
+#### `selectedHosts` (array of strings)
+- **Description**: Podcast host personas
+- **Required**: Yes
+- **Available**: "socrates", "hypatia", "thomasJefferson", "machiavelli", etc.
+
+#### `targetLengthSeconds` (number)
+- **Description**: Target podcast length in seconds
+- **Default**: Varies based on content
+- **Example**: 3500 (approximately 58 minutes)
+
+### Supported Record Types
+
+#### `post` Records
+- **Primary source**: `data.post.webUrl` - External article URL
+- **Secondary source**: `data.post.articleText.data.text.webUrl` - Resolved text dref URL
+- **Fallback**: `data.post.articleText` - Direct text content
+
+#### `text` Records
+- **Primary source**: `data.text.webUrl` - Text content URL
+- **Fallback**: `data.text.text` - Direct text content
+
+#### Other Record Types
+- **Automatic extraction**: Uses RAG service to find full text URLs
+- **Fallback**: `data.basic.description` - Record description
+
+### Usage Examples
+
+#### Single Record Podcast
+```javascript
+const response = await fetch('/api/generate/podcast', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        didTx: "did:arweave:your-record-id-here",
+        selectedHosts: ["socrates", "hypatia"],
+        targetLengthSeconds: 3500
+    })
+});
+```
+
+#### Multiple Records Podcast
+```javascript
+const response = await fetch('/api/generate/podcast', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        didTxs: [
+            "did:arweave:record1-id",
+            "did:arweave:record2-id",
+            "did:arweave:record3-id"
+        ],
+        selectedHosts: ["thomasJefferson", "machiavelli"],
+        targetLengthSeconds: 2500
+    })
+});
+```
+
+#### Mixed Content (Articles + Records)
+```javascript
+const response = await fetch('/api/generate/podcast', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        articles: [
+            {
+                title: "Manual Article",
+                content: "Article content...",
+                url: "https://example.com/article"
+            }
+        ],
+        didTxs: [
+            "did:arweave:record1-id",
+            "did:arweave:record2-id"
+        ],
+        selectedHosts: ["socrates", "hypatia"],
+        targetLengthSeconds: 4000
+    })
+});
+```
+
+### Response Format
+
+Server-Sent Events (SSE) stream:
+
+```
+event: generatingPodcast
+data: "Podcast generation starting for ID: abc123..."
+
+event: podcastProductionUpdate  
+data: "Socrates & Hypatia are hosting"
+
+event: podcastProductionUpdate
+data: "Socrates is writing intro"
+
+event: podcastComplete
+data: {"message": "Podcast generation complete!", "podcastFile": "podcast-id.mp3"}
+```
+
+### Content Processing
+
+The system automatically:
+
+1. **Fetches records** with `resolveDepth: 3` to ensure all dref references are resolved
+2. **Extracts URLs** based on record type and structure
+3. **Fetches content** from web URLs using the built-in content fetching service
+4. **Converts to articles format** with the following structure:
+   ```javascript
+   {
+       didTx: "did:arweave:...",
+       title: "Record title",
+       description: "Record description", 
+       tags: "tag1,tag2,tag3",
+       relatedScore: 1.0,
+       url: "https://source-url.com", // if available
+       content: "Full text content..."
+   }
+   ```
+
+### Error Handling
+
+**Common Errors**:
+- **No valid articles**: No content could be extracted from provided didTx records
+- **Record not found**: One or more didTx records don't exist in the database
+- **Content extraction failed**: Unable to fetch content from URLs in the records
+- **Missing hosts**: `selectedHosts` parameter is required
+
+**Error Response Format**:
+```json
+{
+    "error": "Error message describing the issue"
+}
+```
+
+### Best Practices
+
+1. **Use specific records**: Records with clear content URLs work best
+2. **Mix content types**: Combine different record types for varied discussion
+3. **Check record availability**: Ensure records exist and are accessible
+4. **Content quality**: Records with substantial text content produce better podcasts
+5. **Host selection**: Choose hosts that match the content topic for better discussions
+
+### Limitations
+
+1. **Content accessibility**: URLs must be publicly accessible for content fetching
+2. **Content size**: Very large articles may be truncated
+3. **Processing time**: Multiple records with external URLs take longer to process
+4. **Network dependencies**: Requires internet access to fetch external content
 
 ### Media Distribution and Streaming
 Handle large media files with BitTorrent distribution:

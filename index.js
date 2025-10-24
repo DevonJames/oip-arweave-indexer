@@ -463,7 +463,10 @@ initializeIndices()
         const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
         const rssMB = Math.round(memUsage.rss / 1024 / 1024);
         const externalMB = Math.round(memUsage.external / 1024 / 1024);
-        const heapUtilization = ((memUsage.heapUsed / memUsage.heapTotal) * 100).toFixed(2);
+        // Use V8 heap statistics for accurate utilization calculation
+        const v8 = require('v8');
+        const heapStats = v8.getHeapStatistics();
+        const heapUtilization = ((heapStats.used_heap_size / heapStats.heap_size_limit) * 100).toFixed(2);
         
         console.log(`[Memory Monitor] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${heapUtilization}%), RSS: ${rssMB}MB, External: ${externalMB}MB`);
         
@@ -494,7 +497,7 @@ initializeIndices()
           }
         }
         
-        // Warning if heap utilization is high
+        // Warning if heap utilization is high (using V8 heap statistics)
         if (parseFloat(heapUtilization) > memoryWarningThreshold) {
           console.warn(`⚠️  [Memory Monitor] HIGH MEMORY USAGE: ${heapUtilization}% heap utilization`);
           

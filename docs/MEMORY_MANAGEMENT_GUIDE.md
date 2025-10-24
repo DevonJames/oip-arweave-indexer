@@ -90,7 +90,23 @@ GUN_CACHE_MAX_AGE=3600000  # Clear cache every hour (in milliseconds)
 **Files Modified:**
 - `helpers/elasticsearch.js` - Fixed keepDBUpToDate cache bypass
 
-### 5. Emergency Memory Cleanup Script
+### 5. Memory Monitor Calculation Fix
+**FIX**: Fixed misleading heap utilization calculation in memory monitor.
+
+**The Problem:**
+- Memory monitor was calculating utilization against current heap size (95%)
+- Health endpoint was calculating against maximum heap size (0.52%)
+- This caused confusion about actual memory usage
+
+**The Solution:**
+- Updated memory monitor to use V8 heap statistics like the health endpoint
+- Now both endpoints show the same accurate utilization percentage
+- True utilization is ~0.5% (very healthy) instead of misleading 95%
+
+**Files Modified:**
+- `index.js` - Fixed memory monitor calculation
+
+### 6. Emergency Memory Cleanup Script
 Added a new emergency cleanup script for immediate memory relief:
 
 ```bash
@@ -104,7 +120,7 @@ node scripts/emergency-memory-cleanup.js monitor 120
 node scripts/emergency-memory-cleanup.js stats
 ```
 
-### 6. Memory Monitoring Endpoints
+### 7. Memory Monitoring Endpoints
 
 #### Check Memory Status
 ```bash
