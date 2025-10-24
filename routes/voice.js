@@ -1267,8 +1267,15 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 console.log(`[Voice Chat] Using search params:`, ragOptions.searchParams);
             }
             
+            // If pinned JSON data is supplied by the client, bypass search and answer about that JSON data
+            if (req.body.pinnedJsonData && typeof req.body.pinnedJsonData === 'object') {
+                console.log(`[Voice Chat] Pinned JSON data provided by client`);
+                ragOptions.pinnedJsonData = req.body.pinnedJsonData;
+                // Disable filter analysis to skip interpretation/search in json-data mode
+                ragOptions.include_filter_analysis = false;
+            }
             // If a pinned DID is supplied by the client, bypass search and answer about that record
-            if (req.body.pinnedDidTx && typeof req.body.pinnedDidTx === 'string') {
+            else if (req.body.pinnedDidTx && typeof req.body.pinnedDidTx === 'string') {
                 console.log(`[Voice Chat] Pinned DID provided by client: ${req.body.pinnedDidTx}`);
                 ragOptions.pinnedDidTx = req.body.pinnedDidTx;
                 // Disable filter analysis to skip interpretation/search in single-record mode
@@ -2215,8 +2222,14 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         console.log(`[Voice Converse] Using existing context with ${ragOptions.existingContext.length} records`);
                     }
                     
+                    // If pinned JSON data is supplied by the client, bypass search and answer about that JSON data
+                    if (req.body.pinnedJsonData && typeof req.body.pinnedJsonData === 'object') {
+                        console.log(`[Voice Converse] Pinned JSON data provided by client`);
+                        ragOptions.pinnedJsonData = req.body.pinnedJsonData;
+                        ragOptions.include_filter_analysis = false;
+                    }
                     // If a pinned DID is supplied by the client, bypass search and answer about that record
-                    if (req.body.pinnedDidTx && typeof req.body.pinnedDidTx === 'string') {
+                    else if (req.body.pinnedDidTx && typeof req.body.pinnedDidTx === 'string') {
                         console.log(`[Voice Converse] Pinned DID provided by client: ${req.body.pinnedDidTx}`);
                         ragOptions.pinnedDidTx = req.body.pinnedDidTx;
                         ragOptions.include_filter_analysis = false;

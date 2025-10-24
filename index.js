@@ -39,6 +39,7 @@ const cleanupRoutes = require('./routes/cleanup');
 const photoRoutes = require('./routes/photo');
 const recipesRoutes = require('./routes/recipes');
 const narrationRoutes = require('./routes/narration');
+const documentationRoutes = require('./routes/documentation');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 const axios = require('axios');
 
@@ -297,6 +298,8 @@ app.use('/api/recipes', recipesRoutes);
 app.use('/api/cleanup', cleanupRoutes);
 // Document narration routes
 app.use('/api', narrationRoutes);
+// Documentation routes
+app.use('/api/documentation', documentationRoutes);
 
 // Make io available to routes
 app.set('io', io);
