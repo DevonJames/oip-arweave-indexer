@@ -212,30 +212,26 @@ async function fetchNutritionalData(ingredientName) {
   try {
     console.log(`🔍 Fetching nutritional data for: ${ingredientName}`);
     
-    // Use OpenAI's web search with domain filtering for reliable nutrition sources
+    // Use OpenAI's Responses API with web search and structured outputs
     const response = await axios.post('https://api.openai.com/v1/responses', {
       model: 'gpt-5-mini',
-      tools: [{
-        type: 'web_search',
-        filters: {
-          allowed_domains: [
-            'nutritionix.com',
-            'usda.gov',
-            'fdc.nal.usda.gov',
-            'nutritiondata.self.com',
-            'cronometer.com',
-            'myfitnesspal.com',
-            'webmd.com',
-            'healthline.com',
-            'mayoclinic.org'
-          ]
+      input: [
+        {
+          role: 'system',
+          content: 'You are a nutritional data expert. Find comprehensive nutritional information from reliable sources and provide accurate data in the requested format.'
+        },
+        {
+          role: 'user',
+          content: `Find comprehensive nutritional information for "${ingredientName}". I need detailed nutritional facts including calories, protein, fat, carbohydrates, fiber, sugars, sodium, cholesterol, vitamins, and minerals. Please provide data for the most common serving size used in recipes - typically 1 cup for liquids and bulk ingredients, 1 tablespoon for spices and condiments, or 1 piece for whole items like fruits.`
         }
+      ],
+      tools: [{
+        type: 'web_search'
       }],
-      tool_choice: 'auto',
-      input: `Find comprehensive nutritional information for "${ingredientName}". I need detailed nutritional facts including calories, protein, fat, carbohydrates, fiber, sugars, sodium, cholesterol, vitamins, and minerals. Please provide data for the most common serving size used in recipes - typically 1 cup for liquids and bulk ingredients, 1 tablespoon for spices and condiments, or 1 piece for whole items like fruits.`,
       text: {
         format: {
           type: 'json_schema',
+          name: 'nutritional_data',
           strict: true,
           schema: {
             type: 'object',
@@ -282,12 +278,20 @@ async function fetchNutritionalData(ingredientName) {
       }
     });
 
-    if (!response.data || !response.data.output_parsed) {
-      throw new Error('No structured response from OpenAI');
+    if (!response.data || !response.data.output_text) {
+      throw new Error('No response from OpenAI');
     }
 
     // Extract nutritional data from the structured response
-    const openaiData = response.data.output_parsed;
+    let openaiData;
+    
+    try {
+      // Parse the JSON content from the output_text
+      openaiData = JSON.parse(response.data.output_text);
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error('Invalid JSON response from OpenAI');
+    }
     
     // Construct the full OIP record structure
     const nutritionalData = {
