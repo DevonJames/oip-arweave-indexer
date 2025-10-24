@@ -3489,6 +3489,219 @@
                 align-self: flex-end;
             }
         }
+
+        /* Documentation Interface Styles */
+        .documentation-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+        }
+
+        .documentation-header h2 {
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+
+        .documentation-header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .documentation-content {
+            display: flex;
+            gap: 20px;
+            min-height: 600px;
+        }
+
+        .documentation-sidebar {
+            width: 300px;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+        }
+
+        .documentation-search {
+            margin-bottom: 20px;
+        }
+
+        .documentation-search input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+        }
+
+        .documentation-search input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .doc-file-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .doc-file-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .doc-file-item:hover {
+            background: #667eea;
+            color: white;
+            transform: translateX(4px);
+        }
+
+        .doc-file-item.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .documentation-main {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+        }
+
+        .doc-content {
+            min-height: 500px;
+        }
+
+        .doc-placeholder {
+            text-align: center;
+            padding: 60px 20px;
+            color: #64748b;
+        }
+
+        .doc-placeholder h3 {
+            margin-bottom: 10px;
+            color: #334155;
+        }
+
+        .doc-content h1, .doc-content h2, .doc-content h3, .doc-content h4, .doc-content h5, .doc-content h6 {
+            color: #1e293b;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .doc-content h1 {
+            font-size: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+        }
+
+        .doc-content h2 {
+            font-size: 1.5rem;
+        }
+
+        .doc-content h3 {
+            font-size: 1.25rem;
+        }
+
+        .doc-content p {
+            margin-bottom: 16px;
+            line-height: 1.6;
+            color: #475569;
+        }
+
+        .doc-content code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            color: #e11d48;
+        }
+
+        .doc-content pre {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+
+        .doc-content pre code {
+            background: none;
+            padding: 0;
+            color: #334155;
+        }
+
+        .doc-content ul, .doc-content ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        .doc-content li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .doc-content blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 16px;
+            margin: 16px 0;
+            color: #64748b;
+            font-style: italic;
+        }
+
+        .doc-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+
+        .doc-content th, .doc-content td {
+            border: 1px solid #e2e8f0;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .doc-content th {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+
+        .doc-content a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .doc-content a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .documentation-content {
+                flex-direction: column;
+            }
+            
+            .documentation-sidebar {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -3503,6 +3716,7 @@
             <div class="nav-tabs">
                 <div class="nav-tab active" onclick="showSearchInterface()">Browse</div>
                 <div class="nav-tab" onclick="showPublishTab()">Publish</div>
+                <div class="nav-tab" onclick="showDocumentationInterface()">Documentation</div>
             </div>
             
             <div id="header-search" class="header-search hidden">
@@ -3605,6 +3819,36 @@
     <div id="filters-drawer" class="filters-drawer">
         <div class="filters-drawer-content">
             <!-- This will contain the moved filters content -->
+        </div>
+    </div>
+
+    <!-- Documentation Interface -->
+    <div id="documentation-interface" class="container hidden">
+        <div class="documentation-header">
+            <h2>📚 Documentation</h2>
+            <p>Browse and search through the project documentation</p>
+        </div>
+        
+        <div class="documentation-content">
+            <div class="documentation-sidebar">
+                <div class="documentation-search">
+                    <input type="text" id="doc-search-input" placeholder="Search documentation..." onkeyup="searchDocumentation(this.value)">
+                </div>
+                <div class="documentation-nav">
+                    <div id="doc-file-list" class="doc-file-list">
+                        <!-- Documentation files will be loaded here -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="documentation-main">
+                <div id="doc-content" class="doc-content">
+                    <div class="doc-placeholder">
+                        <h3>Select a documentation file to view</h3>
+                        <p>Choose a file from the sidebar to view its content</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -4676,6 +4920,10 @@
             document.getElementById('search-interface').classList.remove('hidden');
             document.getElementById('record-view-interface').classList.add('hidden');
             document.getElementById('publish-tab').classList.add('hidden');
+            document.getElementById('documentation-interface').classList.add('hidden');
+            
+            // Clear documentation data when switching away from documentation
+            clearDocumentationData();
             
             // Show header search when on browse tab
             showHeaderSearch();
@@ -4793,9 +5041,33 @@
             document.getElementById('search-interface').classList.add('hidden');
             document.getElementById('record-view-interface').classList.add('hidden');
             document.getElementById('publish-tab').classList.remove('hidden');
+            document.getElementById('documentation-interface').classList.add('hidden');
+            
+            // Clear documentation data when switching away from documentation
+            clearDocumentationData();
             
             // Hide header search when not on browse tab
             hideHeaderSearch();
+        }
+
+        function showDocumentationInterface() {
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab')[2].classList.add('active');
+            
+            document.getElementById('welcome-interface').classList.add('hidden');
+            document.getElementById('search-interface').classList.add('hidden');
+            document.getElementById('record-view-interface').classList.add('hidden');
+            document.getElementById('publish-tab').classList.add('hidden');
+            document.getElementById('documentation-interface').classList.remove('hidden');
+            
+            // Hide header search when not on browse tab
+            hideHeaderSearch();
+            
+            // Load documentation files if not already loaded
+            if (!window.documentationLoaded) {
+                loadDocumentationFiles();
+                window.documentationLoaded = true;
+            }
         }
 
         // Record View Navigation Functions
@@ -5125,6 +5397,142 @@
                     button.textContent = 'Keep Reading';
                 }
             }
+        }
+
+        // Documentation Functions
+        async function loadDocumentationFiles() {
+            try {
+                const response = await fetch('/api/documentation/files');
+                if (response.ok) {
+                    const files = await response.json();
+                    displayDocumentationFiles(files);
+                } else {
+                    console.error('Failed to load documentation files');
+                    document.getElementById('doc-file-list').innerHTML = '<div class="doc-file-item">No documentation files found</div>';
+                }
+            } catch (error) {
+                console.error('Error loading documentation files:', error);
+                document.getElementById('doc-file-list').innerHTML = '<div class="doc-file-item">Error loading documentation files</div>';
+            }
+        }
+
+        function displayDocumentationFiles(files) {
+            const fileList = document.getElementById('doc-file-list');
+            fileList.innerHTML = '';
+            
+            files.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'doc-file-item';
+                fileItem.textContent = file.name;
+                fileItem.onclick = () => loadDocumentationFile(file.path, file.name);
+                fileList.appendChild(fileItem);
+            });
+        }
+
+        async function loadDocumentationFile(filePath, fileName) {
+            try {
+                // Update active file in sidebar
+                document.querySelectorAll('.doc-file-item').forEach(item => item.classList.remove('active'));
+                // Find the clicked item and mark it as active
+                const fileItems = document.querySelectorAll('.doc-file-item');
+                fileItems.forEach(item => {
+                    if (item.textContent === fileName) {
+                        item.classList.add('active');
+                    }
+                });
+                
+                const response = await fetch(`/api/documentation/content?file=${encodeURIComponent(filePath)}`);
+                if (response.ok) {
+                    const content = await response.text();
+                    displayDocumentationContent(content, fileName);
+                } else {
+                    document.getElementById('doc-content').innerHTML = '<div class="doc-placeholder"><h3>Error loading file</h3><p>Could not load the documentation file.</p></div>';
+                }
+            } catch (error) {
+                console.error('Error loading documentation file:', error);
+                document.getElementById('doc-content').innerHTML = '<div class="doc-placeholder"><h3>Error loading file</h3><p>An error occurred while loading the documentation file.</p></div>';
+            }
+        }
+
+        function displayDocumentationContent(content, fileName) {
+            const docContent = document.getElementById('doc-content');
+            
+            // Store the loaded documentation content globally for ALFRED access
+            window.__alfredDocumentationData = {
+                content: content,
+                fileName: fileName,
+                recordType: 'documentation',
+                title: fileName,
+                description: content.substring(0, 500) + (content.length > 500 ? '...' : ''),
+                timestamp: Date.now()
+            };
+            
+            // Simple markdown to HTML conversion
+            let html = content
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
+                .replace(/^##### (.*$)/gim, '<h5>$1</h5>')
+                .replace(/^###### (.*$)/gim, '<h6>$1</h6>')
+                .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                .replace(/`([^`]+)`/gim, '<code>$1</code>')
+                .replace(/```([^`]+)```/gim, '<pre><code>$1</code></pre>')
+                .replace(/^\* (.*$)/gim, '<li>$1</li>')
+                .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2">$1</a>')
+                .replace(/\n\n/gim, '</p><p>')
+                .replace(/\n/gim, '<br>');
+            
+            // Wrap in paragraphs
+            html = '<p>' + html + '</p>';
+            
+            // Fix list items
+            html = html.replace(/<li>(.*?)<\/li>/gim, '<ul><li>$1</li></ul>');
+            html = html.replace(/<\/ul><ul>/gim, '');
+            
+            docContent.innerHTML = `<h1>${fileName}</h1>${html}`;
+            
+            // Log that documentation is available for ALFRED
+            console.log(`[Documentation] Loaded "${fileName}" for ALFRED access`);
+            
+            // Show visual indicator that documentation is available for ALFRED
+            const alfredToggle = document.getElementById('ai-drawer-toggle');
+            if (alfredToggle) {
+                alfredToggle.style.borderColor = '#4CAF50';
+                alfredToggle.style.backgroundColor = '#E8F5E8';
+                alfredToggle.title = `ALFRED can answer questions about "${fileName}"`;
+            }
+        }
+
+        function searchDocumentation(query) {
+            const fileItems = document.querySelectorAll('.doc-file-item');
+            const searchTerm = query.toLowerCase();
+            
+            fileItems.forEach(item => {
+                const fileName = item.textContent.toLowerCase();
+                if (fileName.includes(searchTerm)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function clearDocumentationData() {
+            // Clear documentation data when switching away from documentation
+            window.__alfredDocumentationData = null;
+            
+            // Reset ALFRED button styling
+            const alfredToggle = document.getElementById('ai-drawer-toggle');
+            if (alfredToggle) {
+                alfredToggle.style.borderColor = '';
+                alfredToggle.style.backgroundColor = '';
+                alfredToggle.title = 'ALFRED AI Assistant';
+            }
+            
+            console.log('[Documentation] Cleared documentation data for ALFRED');
         }
 
         // AI Drawer Functions
@@ -13459,6 +13867,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         is_follow_up: true,
                         conversation_context: chatState.conversation.slice(-4), // Last 4 messages for context
                         existing_search_results: currentRecords && currentRecords.length === 1 ? currentRecords : chatState.lastSearchResults,
+                        pinnedJsonData: window.__alfredDocumentationData && window.__alfredDocumentationData.content ? window.__alfredDocumentationData : undefined,
                         pinnedDidTx: (window.__alfredPinnedDid || '').trim() || undefined
                     }),
                     signal: controller.signal
@@ -13547,8 +13956,14 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     is_follow_up: false
                 };
                 
+                // If documentation data is available, use it for ALFRED
+                if (window.__alfredDocumentationData && window.__alfredDocumentationData.content) {
+                    requestBody.pinnedJsonData = window.__alfredDocumentationData;
+                    requestBody.include_filter_analysis = false;
+                    console.log(`[Chat] Using documentation data: "${window.__alfredDocumentationData.fileName}"`);
+                }
                 // If a pinned DID is set, force single-record mode server-side
-                if ((window.__alfredPinnedDid || '').trim()) {
+                else if ((window.__alfredPinnedDid || '').trim()) {
                     requestBody.pinnedDidTx = window.__alfredPinnedDid.trim();
                     // In single-record mode, there is no need to pass existingContext/searchParams
                     requestBody.include_filter_analysis = false;
