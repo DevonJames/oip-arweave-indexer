@@ -2001,6 +2001,17 @@ async function getRecords(queryParams) {
                 return record.oip.recordType && record.oip.recordType.toLowerCase() === recordType.toLowerCase();
             });
             // console.log('after filtering by recordType, there are', records.length, 'records');
+            
+            // Special filtering for nutritionalInfo records - only include records with actual nutritional data
+            if (recordType.toLowerCase() === 'nutritionalinfo') {
+                const beforeFilterCount = records.length;
+                records = records.filter(record => {
+                    const hasNutritionalInfo = record.data?.nutritionalInfo && 
+                                              Object.keys(record.data.nutritionalInfo).length > 0;
+                    return hasNutritionalInfo;
+                });
+                console.log(`Filtered nutritionalInfo records: ${beforeFilterCount} -> ${records.length} (removed ${beforeFilterCount - records.length} records without nutritional data)`);
+            }
         }
 
         if (didTxRef != undefined) {
