@@ -5402,17 +5402,22 @@
         // Documentation Functions
         async function loadDocumentationFiles() {
             try {
+                console.log('[Documentation] Fetching documentation files from /api/documentation/files');
                 const response = await fetch('/api/documentation/files');
+                console.log('[Documentation] Response status:', response.status);
+                
                 if (response.ok) {
                     const files = await response.json();
+                    console.log('[Documentation] Files received:', files);
                     displayDocumentationFiles(files);
                 } else {
-                    console.error('Failed to load documentation files');
-                    document.getElementById('doc-file-list').innerHTML = '<div class="doc-file-item">No documentation files found</div>';
+                    const errorText = await response.text();
+                    console.error('Failed to load documentation files:', response.status, errorText);
+                    document.getElementById('doc-file-list').innerHTML = `<div class="doc-file-item">Error: ${response.status} - ${errorText}</div>`;
                 }
             } catch (error) {
                 console.error('Error loading documentation files:', error);
-                document.getElementById('doc-file-list').innerHTML = '<div class="doc-file-item">Error loading documentation files</div>';
+                document.getElementById('doc-file-list').innerHTML = `<div class="doc-file-item">Network error: ${error.message}</div>`;
             }
         }
 
