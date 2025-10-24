@@ -261,4 +261,3 @@ If you're an AI agent working on OIP and need clarification:
 
 *This index is maintained as part of the OIP Arweave Indexer project.*
 *Last updated: 2025-10-09*
-

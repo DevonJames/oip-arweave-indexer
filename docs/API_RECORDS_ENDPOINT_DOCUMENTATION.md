@@ -11,6 +11,43 @@ The `/api/records` endpoint provides powerful search and filtering capabilities 
 
 **Returns:** JSON object containing filtered and paginated records with authentication status
 
+## Cache Management
+
+### Force Refresh Parameter
+To bypass the cache and get fresh data from the database, add the `forceRefresh` parameter:
+
+```http
+GET /api/records?forceRefresh=true
+```
+
+**Use Cases:**
+- After deleting records to see immediate changes
+- When data has been modified and you need fresh results
+- For critical operations where cache staleness is unacceptable
+
+**Example:**
+```javascript
+// After deleting 40 records, get fresh data
+const response = await fetch('/api/records?forceRefresh=true&recordType=workout');
+const freshData = await response.json();
+```
+
+### Manual Cache Clearing
+Clear the records cache manually:
+
+```http
+POST /api/records/clear-cache
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Records cache cleared successfully",
+  "timestamp": "2025-10-24T14:30:00.000Z"
+}
+```
+
 ## Related Endpoints
 
 ### Record Types Summary
@@ -50,14 +87,251 @@ Authorization: Bearer <jwt-token>
 ```
 
 ### Authentication Behavior
+The `/api/records` endpoint uses **optional authentication** (`optionalAuthenticateToken` middleware):
+
 - **Without Token**: Only public records are returned
-- **With Valid Token**: Public records + user's private records are returned
+- **With Valid Token**: Public records + user's private records are returned  
 - **With Invalid Token**: Treated as unauthenticated (public records only)
+
+This allows the same endpoint to serve both public discovery and private user data.
+
+**Benefits of Optional Authentication**:
+- ✅ **Backward Compatibility**: Existing API consumers continue to work
+- ✅ **Progressive Enhancement**: Authenticated users get enhanced access
+- ✅ **Security**: Private data is properly protected
+- ✅ **Performance**: No unnecessary decryption for public records
+- ✅ **Ownership Verification**: Proper ownership checks for private records
+- ✅ **Clear Response Format**: Clients know authentication status
+
+### Authentication Status in Response
+
+All responses include authentication status:
+
+```json
+{
+  "records": [...],
+  "auth": {
+    "authenticated": true,
+    "user": {
+      "email": "user@example.com",
+      "userId": "elasticsearch_user_id",
+      "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+    }
+  }
+}
+```
+
+**When Unauthenticated**:
+```json
+{
+  "records": [...],
+  "auth": {
+    "authenticated": false,
+    "user": null
+  }
+}
+```
 
 ### Private Record Access
 - **Private GUN Records**: Accessible only by authenticated record owners
 - **Conversation Sessions**: Private by default, require user authentication
 - **Access Control**: Uses `accessControl.access_level` and `owner_public_key` for filtering
+
+### Access Control Levels
+
+Records can have different access levels defined in the `accessControl` template:
+
+| Level | Description | Access Rules |
+|-------|-------------|--------------|
+| `public` | Public access | Everyone can view |
+| `private` | Private access | Only owner can view |
+| `shared` | Shared access | Owner + specified users in `shared_with` array |
+| `organization` | Organization access | Organization members (future) |
+
+### Ownership Verification
+
+The system uses multiple methods to verify record ownership with HD wallet integration:
+
+1. **Primary**: `accessControl.owner_public_key` - User's HD wallet public key
+2. **Session-specific**: `conversationSession.owner_public_key` - Session owner
+3. **Shared access**: `accessControl.shared_with` - Array of authorized public keys
+4. **GUN soul**: DID format `did:gun:{user_hash}:{local_id}` - Hash of user's public key
+5. **Creator**: `oip.creator.publicKey` - Fallback for server-signed records
+
+#### HD Wallet Ownership Verification Process
+
+**JWT Token Extraction**:
+```javascript
+// Extract user's public key from JWT token
+const userPublicKey = req.user.publicKey; // From JWT payload
+```
+
+**Ownership Check Priority**:
+```javascript
+const userOwnsRecord = (record, user) => {
+  const userPubKey = user.publicKey; // User's HD wallet key
+  
+  // 1. Check accessControl.owner_public_key (primary)
+  if (record.data?.accessControl?.owner_public_key === userPubKey) {
+    return true;
+  }
+  
+  // 2. Check conversationSession.owner_public_key
+  if (record.data?.conversationSession?.owner_public_key === userPubKey) {
+    return true;
+  }
+  
+  // 3. Check shared_with array
+  if (record.data?.accessControl?.shared_with?.includes(userPubKey)) {
+    return true;
+  }
+  
+  // 4. Check GUN soul hash
+  const userHash = crypto.createHash('sha256')
+    .update(userPubKey)
+    .digest('hex')
+    .substring(0, 12);
+  if (record.oip?.did?.includes(userHash)) {
+    return true;
+  }
+  
+  // 5. Fallback to creator public key
+  if (record.oip?.creator?.publicKey === userPubKey) {
+    return true;
+  }
+  
+  return false;
+};
+```
+
+#### Cross-User Privacy Enforcement
+
+**Private Record Filtering**:
+```javascript
+// Unauthenticated requests - only public records
+if (!req.isAuthenticated) {
+  return records.filter(record => 
+    record.data?.accessControl?.access_level === 'public'
+  );
+}
+
+// Authenticated requests - public + owned private records
+return records.filter(record => {
+  // Always include public records
+  if (record.data?.accessControl?.access_level === 'public') {
+    return true;
+  }
+  
+  // Include private records owned by user
+  if (record.data?.accessControl?.access_level === 'private') {
+    return userOwnsRecord(record, req.user);
+  }
+  
+  // Include shared records where user is authorized
+  if (record.data?.accessControl?.access_level === 'shared') {
+    return record.data?.accessControl?.shared_with?.includes(req.user.publicKey);
+  }
+  
+  return false;
+});
+```
+
+### Privacy Filtering Logic
+
+**Unauthenticated Requests**:
+```javascript
+// Only public records are returned
+// Filters out:
+// - accessControl.access_level !== 'public'
+// - accessControl.private === true (legacy)
+// - conversationSession.is_private === true (legacy)
+```
+
+**Authenticated Requests**:
+```javascript
+// Public records + owned/shared private records
+// Includes:
+// - All public records
+// - Private records where owner_public_key === user.publicKey
+// - Shared records where user.publicKey in shared_with array
+// Excludes:
+// - Private records owned by other users
+```
+
+### Legacy Support
+
+The system supports both old and new access control formats:
+
+**Legacy Format** (still supported):
+```json
+{
+  "accessControl": {
+    "private": true  // Boolean
+  },
+  "conversationSession": {
+    "is_private": true  // Boolean
+  }
+}
+```
+
+**Modern Format** (recommended):
+```json
+{
+  "accessControl": {
+    "access_level": "private",  // Enum: public/private/shared/organization
+    "owner_public_key": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+    "shared_with": [],
+    "created_by": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+  }
+}
+```
+
+### Optional Authentication Middleware
+
+The `/api/records` endpoint uses the `optionalAuthenticateToken` middleware which:
+
+**When Token Provided**:
+1. Verifies JWT token signature
+2. Checks token expiration
+3. Extracts user information (userId, email, publicKey)
+4. Sets `req.isAuthenticated = true`
+5. Sets `req.user` with user data
+6. Continues to route handler
+
+**When No Token**:
+1. Detects missing Authorization header
+2. Sets `req.isAuthenticated = false`
+3. Sets `req.user = null`
+4. Continues to route handler (doesn't block)
+
+**When Invalid Token**:
+1. Catches JWT verification error
+2. Sets `req.isAuthenticated = false`
+3. Sets `req.user = null`
+4. Continues to route handler (doesn't block)
+
+This middleware pattern allows the same endpoint to serve both authenticated and unauthenticated requests with appropriate data filtering.
+
+### GUN Soul Verification
+
+For GUN records, additional security verification:
+
+**Soul Format**: `{user_public_key_hash}:{local_id}`
+
+**Verification Process**:
+1. Extract user's public key from JWT token
+2. Hash public key using SHA-256
+3. Take first 12 characters of hash
+4. Verify GUN soul starts with this hash
+5. Reject access if soul doesn't match user
+
+**Example**:
+```javascript
+// User public key: 0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1
+// Hash: 647f79c2a338... (first 12 chars)
+// GUN soul: 647f79c2a338:session_1757789557773
+// DID: did:gun:647f79c2a338:session_1757789557773
+```
 
 ## Storage Sources
 

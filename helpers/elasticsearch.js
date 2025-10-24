@@ -1766,7 +1766,9 @@ async function getRecords(queryParams) {
     
     // console.log('get records using:', {queryParams});
     try {
-        const result = await getRecordsInDB();
+        // CACHE BYPASS: Pass forceRefresh parameter to getRecordsInDB
+        const forceRefresh = queryParams.forceRefresh === true || queryParams.forceRefresh === 'true';
+        const result = await getRecordsInDB(forceRefresh);
         let records = result.records;
         let recordsInDB = result.records;
         let qtyRecordsInDB = result.qtyRecordsInDB;

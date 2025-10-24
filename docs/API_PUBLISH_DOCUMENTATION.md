@@ -145,9 +145,12 @@ The OIP (Open Index Protocol) publishing system supports multiple storage backen
   "success": true,
   "message": "User registered successfully",
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+  "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+  "mnemonic": "abandon ability able about above absent absorb abstract absurd abuse access accident"
 }
 ```
+
+**Note**: The `mnemonic` field is only returned during registration to allow users to back up their recovery phrase. It is not returned during login for security reasons.
 
 ### HD Wallet Login
 
@@ -171,6 +174,61 @@ The OIP (Open Index Protocol) publishing system supports multiple storage backen
 }
 ```
 
+### Mnemonic Retrieval
+
+**Endpoint**: `GET /api/user/mnemonic`
+
+**Headers**:
+```http
+Authorization: Bearer <jwt-token>
+```
+
+**Query Parameters**:
+```
+password=<user_password>
+```
+
+**Example Request**:
+```javascript
+const response = await fetch('/api/user/mnemonic?password=user_password', {
+  headers: {
+    'Authorization': `Bearer ${jwtToken}`
+  }
+});
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "mnemonic": "abandon ability able about above absent absorb abstract absurd abuse access accident",
+  "message": "Save this mnemonic securely. You can use it to import your wallet on other OIP nodes."
+}
+```
+
+### Wallet Import
+
+**Endpoint**: `POST /api/user/import-wallet`
+
+**Request**:
+```json
+{
+  "email": "user@example.com",
+  "password": "secure_password",
+  "mnemonic": "abandon ability able about above absent absorb abstract absurd abuse access accident"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Wallet imported successfully",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
+}
+```
+
 ### JWT Token Structure
 ```json
 {
@@ -181,6 +239,39 @@ The OIP (Open Index Protocol) publishing system supports multiple storage backen
   "iat": 1757789547,
   "exp": 1761677547
 }
+```
+
+### HD Wallet System Details
+
+#### Key Generation Process
+1. **Mnemonic Generation**: 12-word BIP-39 mnemonic seed phrase
+2. **Key Derivation**: BIP-32 hierarchical deterministic key derivation at path `m/44'/0'/0'/0/0`
+3. **Key Extraction**: Public and private keys in compressed secp256k1 format
+4. **Encryption**: Private key and mnemonic encrypted with user's password using AES-256-GCM
+5. **Salt Generation**: Unique 32-byte GUN encryption salt for per-user encryption
+
+#### Security Features
+- **AES-256-GCM Encryption**: Reversible encryption for private keys and mnemonics
+- **PBKDF2 Key Derivation**: 100,000 iterations with SHA-256 for encryption keys
+- **Unique Salts**: Different salts for mnemonic vs private key encryption
+- **Cross-Node Compatibility**: Same mnemonic generates same keys across nodes
+
+#### Database Storage
+```javascript
+const userDoc = {
+  email: email,
+  passwordHash: passwordHash,
+  // Cryptographic identity
+  publicKey: publicKey,                    // Hex-encoded public key (66 chars)
+  encryptedPrivateKey: encryptedPrivateKey, // AES-256-GCM encrypted private key (JSON string)
+  encryptedMnemonic: encryptedMnemonic,     // AES-256-GCM encrypted mnemonic (JSON string)
+  encryptedGunSalt: encryptedGunSalt,       // AES-256-GCM encrypted GUN salt
+  keyDerivationPath: "m/44'/0'/0'/0/0",     // BIP-32 derivation path
+  createdAt: new Date(),
+  waitlistStatus: 'registered',
+  subscriptionStatus: 'inactive',
+  paymentMethod: null
+};
 ```
 
 ## Publishing to Arweave (Public Records)
@@ -549,6 +640,69 @@ Authorization: Bearer <jwt-token>  # Required for private media
 - **`text`**: Text document records
 - **`template`**: Schema template records
 - **`nutritionalInfo`**: Nutritional information records
+- **`accessControl`**: Access control and privacy configuration (template-based)
+
+### Access Control Template
+
+**Template Name**: `accessControl`
+
+**Purpose**: Define privacy, ownership, and access permissions for records
+
+**Template Structure**:
+```json
+{
+  "accessControl": {
+    "access_level": "enum",
+    "access_levelValues": [
+      {"code": "public", "name": "Public Access"},
+      {"code": "private", "name": "Private Access"}, 
+      {"code": "shared", "name": "Shared Access"},
+      {"code": "organization", "name": "Organization Access"}
+    ],
+    "index_access_level": 0,
+    "owner_public_key": "string", 
+    "index_owner_public_key": 1,
+    "owner_signature": "string",
+    "index_owner_signature": 2,
+    "encryption_method": "enum",
+    "encryption_methodValues": [
+      {"code": "none", "name": "No Encryption"},
+      {"code": "aes-256-gcm", "name": "AES-256-GCM"},
+      {"code": "custom", "name": "Custom Encryption"}
+    ],
+    "index_encryption_method": 3,
+    "shared_with": "repeated string",
+    "index_shared_with": 4,
+    "permissions": "repeated string", 
+    "index_permissions": 5,
+    "expiry_timestamp": "uint64",
+    "index_expiry_timestamp": 6,
+    "access_conditions": "string",
+    "index_access_conditions": 7,
+    "created_by": "string",
+    "index_created_by": 8,
+    "created_timestamp": "uint64",
+    "index_created_timestamp": 9,
+    "last_modified_timestamp": "uint64", 
+    "index_last_modified_timestamp": 10,
+    "version": "string",
+    "index_version": 11,
+    "metadata": "string",
+    "index_metadata": 12
+  }
+}
+```
+
+**Template Publishing**:
+```bash
+# Publish the accessControl template
+node config/createTemplate.js accessControl accessControl.json
+```
+
+**Template Registration** (add to `config/templates.config.js`):
+```javascript
+accessControl: "TEMPLATE_TXID_HERE"
+```
 
 ### Access Control Levels
 
@@ -561,11 +715,69 @@ Authorization: Bearer <jwt-token>  # Required for private media
 ## User Ownership and Privacy
 
 ### HD Wallet System
-- **BIP-39**: 12-word mnemonic phrases for account recovery
-- **BIP-32**: Hierarchical deterministic key derivation
-- **Key Path**: `m/44'/0'/0'/0/0`
-- **Public Key Format**: 66-character hex string (compressed secp256k1)
-- **Private Key Storage**: Encrypted with user password using PBKDF2
+
+The OIP system uses hierarchical deterministic (HD) wallets to provide users with true cryptographic ownership of their data.
+
+#### Key Generation Process
+
+**During Registration**:
+1. Generate 12-word BIP-39 mnemonic seed phrase
+2. Derive master key from mnemonic using BIP-32
+3. Derive user signing key at path `m/44'/0'/0'/0/0`
+4. Extract public and private keys (compressed secp256k1 format)
+5. Encrypt private key with user's password using PBKDF2 (100,000 iterations)
+6. Encrypt mnemonic with user's password for backup
+7. Store encrypted keys in Elasticsearch
+
+**Key Format**:
+- **Public Key**: 66-character hex string (compressed secp256k1)
+- **Private Key**: Encrypted with user password
+- **Mnemonic**: Encrypted 12-word recovery phrase
+- **Derivation Path**: `m/44'/0'/0'/0/0` (standard Bitcoin path)
+
+#### HD Wallet Benefits
+
+✅ **True User Ownership**: Users cryptographically own their records
+✅ **Cross-Device Identity**: Same keys across devices using mnemonic recovery
+✅ **Message Signing**: Users can sign their own messages and records
+✅ **Selective Sharing**: Users can share records with specific recipients
+✅ **Account Recovery**: 12-word mnemonic enables complete account recovery
+✅ **No Custody**: Server never has access to unencrypted private keys
+
+#### Required Dependencies
+```bash
+npm install bip39 bip32 secp256k1
+```
+
+#### Implementation in Registration
+
+**Enhanced User Document Structure**:
+```javascript
+{
+  email: "user@example.com",
+  passwordHash: "pbkdf2_hash...",
+  publicKey: "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+  encryptedPrivateKey: "encrypted_hex_string...",
+  encryptedMnemonic: "encrypted_mnemonic...",
+  keyDerivationPath: "m/44'/0'/0'/0/0",
+  createdAt: "2025-01-15T10:30:00.000Z",
+  waitlistStatus: "registered"
+}
+```
+
+#### JWT Token Enhancement
+
+JWT tokens include the user's public key:
+```json
+{
+  "userId": "elasticsearch_user_id",
+  "email": "user@example.com",
+  "publicKey": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+  "isAdmin": false,
+  "iat": 1757789547,
+  "exp": 1761677547
+}
+```
 
 ### Ownership Verification
 Records include multiple ownership indicators:
@@ -575,12 +787,89 @@ Records include multiple ownership indicators:
 4. **GUN Soul Hash**: User's public key hash in DID
 
 ### Privacy Filtering
-- **Unauthenticated**: Only public records (`access_level: 'public'`)
-- **Authenticated**: Public records + owned private records
-- **Cross-User**: Users cannot access other users' private records
+
+The system uses a sophisticated multi-layer filtering approach:
+
+**Unauthenticated Requests**:
+- Only returns records with `access_level: 'public'`
+- Filters out all private, shared, and organization records
+- Legacy support: Filters out `private: true` and `is_private: true` records
+
+**Authenticated Requests**:
+- Returns all public records
+- Returns private records where `owner_public_key` matches user's public key
+- Returns shared records where user's public key is in `shared_with` array
+- Filters out other users' private records
+
+**Cross-User Privacy**:
+- Users cannot access other users' private records
+- Ownership verification using HD wallet public keys
+- GUN soul verification (DID contains user's public key hash)
+- Multi-point ownership checks for maximum security
+
+**Ownership Verification Methods**:
+1. `accessControl.owner_public_key` === user's public key
+2. `conversationSession.owner_public_key` === user's public key
+3. `shared_with` array includes user's public key
+4. GUN soul starts with user's public key hash
+5. `oip.creator.publicKey` === user's public key (fallback)
 
 ## GUN Network Integration
 
+### Architecture: Dual-Storage System
+
+The OIP uses a **parallel storage architecture** for optimal performance and privacy:
+
+**1. GUN Network (Distributed)**:
+- Encrypted data for privacy during P2P distribution
+- Decentralized storage across network peers
+- Real-time synchronization capabilities
+- Protects network transmission
+
+**2. Elasticsearch (Centralized)**:
+- Same encryption state as GUN network
+- Fast local access and powerful search
+- Filtered by ownership before returning
+- Indexed for quick retrieval
+
+**3. API Access Layer**:
+- Optional authentication middleware
+- Ownership verification before data access
+- Privacy filtering based on access control
+- Transparent decryption for authorized users
+
+### Complete Data Flow
+
+**Publishing Flow** (GUN Storage):
+```
+1. Frontend creates record with accessControl: { access_level: "private" }
+2. POST /api/records/newRecord?storage=gun (authenticated)
+3. publishNewRecord() detects storage: 'gun'
+4. publishToGun() called with encrypt: true flag
+5. gunHelper.putRecord() encrypts data (AES-256-GCM)
+6. Encrypted record stored in GUN network
+7. Same encrypted record indexed in Elasticsearch
+8. Response includes DID: did:gun:{user_hash}:{local_id}
+```
+
+**Retrieval Flow** (Authenticated):
+```
+1. GET /api/records?source=gun (with JWT token)
+2. optionalAuthenticateToken middleware verifies token
+3. getRecords() filters by ownership (owner_public_key)
+4. Returns only user's records + public records
+5. Automatic decryption if meta.encrypted: true
+6. Response includes decrypted data + auth status
+```
+
+**Retrieval Flow** (Unauthenticated):
+```
+1. GET /api/records?source=gun (no token)
+2. optionalAuthenticateToken sets isAuthenticated: false
+3. getRecords() filters out all non-public records
+4. Returns only public records
+5. Response indicates authenticated: false
+```
 
 ### Array Data Handling (Automatic)
 **GUN cannot handle complex nested arrays**, but the OIP backend automatically handles this conversion for you.
@@ -616,10 +905,52 @@ Records include multiple ownership indicators:
 - **API Response Consistency**: Retrieved records show natural array format
 
 ### Encryption
-- **Algorithm**: AES-256-GCM
-- **Key Derivation**: PBKDF2 with 100,000 iterations
-- **Automatic**: Private records encrypted before GUN storage
-- **Decryption**: Automatic on retrieval for authorized users
+
+#### GUN Record Encryption
+GUN records with `accessControl.private: true` or `accessControl.access_level: "private"` are automatically encrypted:
+
+**Encryption Process**:
+1. **Algorithm**: AES-256-GCM with authentication tags
+2. **Key Derivation**: PBKDF2 with 100,000 iterations
+3. **IV Generation**: Secure random initialization vectors
+4. **Automatic**: Triggered when `encrypt: true` flag is set
+5. **Data Protection**: Encrypts entire record before GUN storage
+
+**Decryption Process**:
+1. **Automatic**: When retrieving via authenticated endpoints
+2. **Conditional**: Only decrypts if `meta.encrypted: true`
+3. **User-Specific**: Uses user's encryption context
+4. **Transparent**: API responses contain decrypted data
+
+#### Dual-Layer Privacy Protection
+
+**GUN Network Layer** (Distributed):
+- Encrypted data during P2P distribution
+- Protects network transmission
+- Prevents casual observation
+
+**Elasticsearch Layer** (Centralized):
+- Same encryption state as GUN
+- Fast local access for authenticated users
+- Filtered by ownership before returning
+
+**API Access Layer**:
+- Optional authentication middleware
+- Ownership verification
+- Privacy filtering based on access control
+
+#### Encryption Key Management
+
+⚠️ **Current Implementation**:
+- Uses hardcoded password (`'gun-encryption-key'`) for key derivation
+- Server-side decryption without storing decryption keys
+- Protects against casual observation but not determined attacks with code access
+
+🔒 **Security Level**:
+- **Network Transmission**: Encrypted
+- **Database Storage**: Encrypted
+- **API Access**: Protected by ownership verification
+- **Code Access**: Anyone with codebase access can theoretically decrypt
 
 ### Soul Generation
 GUN souls are deterministic based on user's public key:
@@ -1087,12 +1418,55 @@ Each user has a unique HD wallet with:
 - **Mnemonic**: 12-word backup phrase (encrypted)
 
 ### Access Control Template
+
+The `accessControl` template defines record privacy and ownership:
+
+**Complete Template Structure**:
 ```json
 {
   "accessControl": {
-    "access_level": "private|public|shared|organization",
-    "owner_public_key": "user_hex_public_key",
-    "created_by": "creator_hex_public_key"
+    "access_level": "public|private|shared|organization",
+    "owner_public_key": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+    "owner_signature": "hex_signature_string",
+    "encryption_method": "none|aes-256-gcm|custom",
+    "shared_with": ["pubkey1", "pubkey2"],
+    "permissions": ["read", "write"],
+    "expiry_timestamp": 1767789547,
+    "access_conditions": "custom_logic_string",
+    "created_by": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+    "created_timestamp": 1757789558199,
+    "last_modified_timestamp": 1757789558199,
+    "version": "1.0.0",
+    "metadata": "additional_metadata_json"
+  }
+}
+```
+
+**Field Descriptions**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `access_level` | enum | Access level: public/private/shared/organization |
+| `owner_public_key` | string | Owner's HD wallet public key (primary ownership) |
+| `owner_signature` | string | Owner's signature for authenticity verification |
+| `encryption_method` | enum | Encryption method used: none/aes-256-gcm/custom |
+| `shared_with` | array | Array of public keys for shared access |
+| `permissions` | array | Permissions array (e.g., ["read", "write"]) |
+| `expiry_timestamp` | number | Unix timestamp for access expiry (optional) |
+| `access_conditions` | string | Custom access logic (future feature) |
+| `created_by` | string | Creator's public key |
+| `created_timestamp` | number | Creation timestamp |
+| `last_modified_timestamp` | number | Last modification timestamp |
+| `version` | string | Access control schema version |
+| `metadata` | string | Additional metadata (JSON string) |
+
+**Minimal Example**:
+```json
+{
+  "accessControl": {
+    "access_level": "private",
+    "owner_public_key": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1",
+    "created_by": "0349b2160ea3117a90a1fcbbf198ef53bf325b604157cbcf81693f0f476006c9e1"
   }
 }
 ```
@@ -1978,6 +2352,57 @@ console.log('Seeders active:', info.seeding);
 - **Server Keys → User Keys**: For true ownership
 - **Boolean → Enum**: `private: true` → `access_level: 'private'`
 
+### Migration Strategy
+
+**Phase 1: Existing Sessions**
+- Remain accessible but without user ownership
+- Server-owned records (signed with server's Arweave key)
+- Treated as legacy records
+
+**Phase 2: New Sessions**
+- Include user public key ownership
+- User-signed records for authenticity
+- Modern `accessControl` template
+
+**Phase 3: Gradual Transition**
+- Both ownership models supported simultaneously
+- Legacy support maintained for backward compatibility
+- Eventual deprecation of server-signed records
+
+### Backward Compatibility Support
+
+The system handles multiple ownership and privacy models:
+
+**Legacy Boolean Privacy**:
+```json
+{
+  "accessControl": {
+    "private": true  // Old format
+  }
+}
+```
+
+**Legacy Session Privacy**:
+```json
+{
+  "conversationSession": {
+    "is_private": true  // Old format
+  }
+}
+```
+
+**Modern Access Control**:
+```json
+{
+  "accessControl": {
+    "access_level": "private",  // New format
+    "owner_public_key": "user_public_key"
+  }
+}
+```
+
+All three formats are supported in privacy filtering logic.
+
 ## Security Best Practices
 
 ### For Developers
@@ -1987,6 +2412,10 @@ console.log('Seeders active:', info.seeding);
 4. **Use HTTPS** for all API calls
 5. **Implement proper error handling**
 6. **Log security events** for monitoring
+7. **Use modern accessControl template** instead of legacy `private: true`
+8. **Include owner_public_key** in all private records
+9. **Verify ownership** before allowing record modifications
+10. **Handle both authenticated and unauthenticated states** in client applications
 
 ### For Users
 1. **Backup mnemonic phrases** securely
