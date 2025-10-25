@@ -222,7 +222,7 @@ async function fetchNutritionalData(ingredientName) {
         },
         {
           role: 'user',
-          content: `What is the nutritional information for "${ingredientName}"? I need calories, protein, fat, saturated fat, sodium, carbohydrates, dietary fiber, sugars, cholesterol, potassium, calcium, vitamin A and iron.`
+          content: `What is the nutritional information for "${ingredientName}"? I need calories, protein, fat, saturated fat, trans fat, cholesterol, sodium, carbohydrates, dietary fiber, sugars, added sugars, potassium, calcium, iron, vitamin A, vitamin C, vitamin D, allergens, gluten free, and organic, as well as the standard amount and unit of the ingredient.`
         }
       ],
       response_format: {
@@ -233,21 +233,30 @@ async function fetchNutritionalData(ingredientName) {
           schema: {
             type: 'object',
             properties: {
+              standardAmount: { type: 'number' },
+              standardUnit: { type: 'string' },
               calories: { type: 'number' },
               proteinG: { type: 'number' },
               fatG: { type: 'number' },
               saturatedFatG: { type: 'number' },
+              transFatG: { type: 'number' },
+              cholesterolMg: { type: 'number' },
               sodiumMg: { type: 'number' },
               carbohydratesG: { type: 'number' },
               dietaryFiberG: { type: 'number' },
               sugarsG: { type: 'number' },
-              cholesterolMg: { type: 'number' },
+              addedSugarsG: { type: 'number' },
               potassiumMg: { type: 'number' },
               calciumMg: { type: 'number' },
               ironMg: { type: 'number' },
               vitaminAMcg: { type: 'number' },
+              vitaminCMg: { type: 'number' },
+              vitaminDMcg: { type: 'number' },
+              allergens: { type: 'array', items: { type: 'string' } },
+              glutenFree: { type: 'boolean' },
+              organic: { type: 'boolean' }
             },
-            required: ['calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'cholesterolMg', 'potassiumMg', 'calciumMg', 'ironMg', 'vitaminAMcg'],
+            required: ['standardAmount', 'standardUnit', 'calories', 'proteinG', 'fatG', 'saturatedFatG', 'transFatG', 'cholesterolMg', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'addedSugarsG', 'potassiumMg', 'calciumMg', 'ironMg', 'vitaminAMcg', 'vitaminCMg', 'vitaminDMcg', 'allergens', 'glutenFree', 'organic'],
             additionalProperties: false
           }
         }
