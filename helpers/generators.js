@@ -2635,9 +2635,6 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
 
     // MEMORY CLEANUP: Immediately release the arraybuffer and force GC
     if (imageBuffer.length > 1024 * 1024) { // If > 1MB
-      // Clear the response data immediately
-      imageResponse.data = null;
-      
       // Force garbage collection to free the external memory
       if (global.gc) {
         global.gc();
