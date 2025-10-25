@@ -222,7 +222,7 @@ async function fetchNutritionalData(ingredientName) {
         },
         {
           role: 'user',
-          content: `What is the nutritional information for "${ingredientName}"? I need calories, protein, fat, saturated fat, sodium, carbohydrates, dietary fiber, sugars, cholesterol, potassium, calcium, and iron.`
+          content: `What is the nutritional information for "${ingredientName}"? I need calories, protein, fat, saturated fat, sodium, carbohydrates, dietary fiber, sugars, cholesterol, potassium, calcium, vitamin A and iron.`
         }
       ],
       response_format: {
@@ -246,12 +246,8 @@ async function fetchNutritionalData(ingredientName) {
               calciumMg: { type: 'number' },
               ironMg: { type: 'number' },
               vitaminAMcg: { type: 'number' },
-              vitaminCMg: { type: 'number' },
-              vitaminDMcg: { type: 'number' },
-              glutenFree: { type: 'boolean' },
-              organic: { type: 'boolean' }
             },
-            required: ['calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'cholesterolMg', 'potassiumMg', 'calciumMg', 'ironMg'],
+            required: ['calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'cholesterolMg', 'potassiumMg', 'calciumMg', 'ironMg', 'vitaminAMcg'],
             additionalProperties: false
           }
         }
