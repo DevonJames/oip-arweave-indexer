@@ -2633,9 +2633,15 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
     console.log('Buffer size:', imageBuffer.length);
     console.log('Buffer type check:', Buffer.isBuffer(imageBuffer));
     
+    // Create a fresh Buffer copy to avoid any proxy/subclass issues with axios
+    const freshBuffer = Buffer.allocUnsafe(imageBuffer.length);
+    imageBuffer.copy(freshBuffer);
+    
+    console.log('Created fresh buffer copy, size:', freshBuffer.length);
+    
     // Write the file
-    fs.writeFileSync(cachedImagePath, imageBuffer);
-    console.log(`✅ Successfully wrote ${imageBuffer.length} bytes to file`);
+    fs.writeFileSync(cachedImagePath, freshBuffer);
+    console.log(`✅ Successfully wrote ${freshBuffer.length} bytes to file`);
 
     console.log(`✅ Generated and cached image for recipe: ${recipeTitle}`);
 
