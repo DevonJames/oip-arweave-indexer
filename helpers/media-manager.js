@@ -126,8 +126,8 @@ class MediaManager {
     async downloadFromUrl(url) {
         console.log('Downloading media from URL:', url);
         const response = await axios.get(url, { responseType: 'arraybuffer' });
-        // Handle Proxy-wrapped arraybuffer from axios interceptor
-        const buffer = Buffer.from(new Uint8Array(response.data));
+        // Handle Proxy-wrapped arraybuffer from axios interceptor - use slice() to copy
+        const buffer = response.data.slice ? response.data.slice() : Buffer.from(response.data);
         
         // MEMORY CLEANUP: Immediately release the arraybuffer
         response.data = null;

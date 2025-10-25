@@ -307,7 +307,9 @@ class StreamingCoordinator {
         if (response.status === 200 && response.data) {
             console.log(`[StreamingCoordinator] ElevenLabs generated ${response.data.byteLength} bytes for chunk ${chunk.chunkIndex}`);
             // Handle Proxy-wrapped arraybuffer from axios interceptor
-            return Buffer.from(new Uint8Array(response.data));
+            // Use slice() to create a copy, which works through the Proxy's get trap
+            const buffer = response.data.slice ? response.data.slice() : Buffer.from(response.data);
+            return buffer;
         } else {
             throw new Error(`ElevenLabs API returned status: ${response.status}`);
         }
@@ -355,7 +357,9 @@ class StreamingCoordinator {
         if (response.status === 200 && response.data) {
             console.log(`[StreamingCoordinator] Local TTS generated ${response.data.byteLength} bytes for chunk ${chunk.chunkIndex}`);
             // Handle Proxy-wrapped arraybuffer from axios interceptor
-            return Buffer.from(new Uint8Array(response.data));
+            // Use slice() to create a copy, which works through the Proxy's get trap
+            const buffer = response.data.slice ? response.data.slice() : Buffer.from(response.data);
+            return buffer;
         } else {
             throw new Error(`Local TTS service returned status: ${response.status}`);
         }
