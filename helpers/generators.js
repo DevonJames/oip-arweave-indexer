@@ -2591,7 +2591,31 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
       throw new Error(`Failed to download image: ${imageResponse.statusText}`);
     }
 
-    const imageBuffer = Buffer.from(imageResponse.data);
+    // Validate that we received proper data
+    if (!imageResponse.data) {
+      throw new Error('No image data received from OpenAI');
+    }
+
+    // Handle different data types that axios might return
+    let imageBuffer;
+    if (Buffer.isBuffer(imageResponse.data)) {
+      imageBuffer = imageResponse.data;
+    } else if (imageResponse.data instanceof ArrayBuffer) {
+      imageBuffer = Buffer.from(imageResponse.data);
+    } else if (typeof imageResponse.data === 'string') {
+      // If it's a base64 string, decode it
+      imageBuffer = Buffer.from(imageResponse.data, 'base64');
+    } else {
+      // Last resort: try to convert whatever we got
+      try {
+        imageBuffer = Buffer.from(imageResponse.data);
+      } catch (bufferError) {
+        console.error('Image data type:', typeof imageResponse.data);
+        console.error('Image data constructor:', imageResponse.data?.constructor?.name);
+        throw new Error(`Unexpected image data type: ${typeof imageResponse.data}. Cannot convert to Buffer.`);
+      }
+    }
+
     fs.writeFileSync(cachedImagePath, imageBuffer);
 
     console.log(`✅ Generated and cached image for recipe: ${recipeTitle}`);
