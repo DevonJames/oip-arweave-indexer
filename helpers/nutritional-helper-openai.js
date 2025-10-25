@@ -233,18 +233,28 @@ async function fetchNutritionalData(ingredientName) {
           schema: {
             type: 'object',
             properties: {
+              standardAmount: { type: 'number' },
+              standardUnit: { type: 'string' },
               calories: { type: 'number' },
               proteinG: { type: 'number' },
               fatG: { type: 'number' },
               saturatedFatG: { type: 'number' },
+              transFatG: { type: 'number' },
+              cholesterolMg: { type: 'number' },
               sodiumMg: { type: 'number' },
               carbohydratesG: { type: 'number' },
               dietaryFiberG: { type: 'number' },
               sugarsG: { type: 'number' },
-              cholesterolMg: { type: 'number' },
-              potassiumMg: { type: 'number' },
+              addedSugarsG: { type: 'number' },
+              vitaminDMcg: { type: 'number' },
               calciumMg: { type: 'number' },
-              ironMg: { type: 'number' }
+              ironMg: { type: 'number' },
+              potassiumMg: { type: 'number' },
+              vitaminAMcg: { type: 'number' },
+              vitaminCMg: { type: 'number' },
+              allergens: { type: 'array', items: { type: 'string' } },
+              glutenFree: { type: 'boolean' },
+              organic: { type: 'boolean' }
             },
             required: ['calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'cholesterolMg', 'potassiumMg', 'calciumMg', 'ironMg'],
             additionalProperties: false
