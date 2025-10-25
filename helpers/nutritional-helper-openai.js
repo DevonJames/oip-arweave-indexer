@@ -218,63 +218,35 @@ async function fetchNutritionalData(ingredientName) {
       messages: [
         {
           role: 'system',
-          content: 'You are a nutritional database expert with access to USDA and nutritional databases. Provide accurate, complete nutritional information for all requested fields. Never leave fields as zero unless the food genuinely contains zero of that nutrient.'
+          content: 'You are a nutritional data expert. Find comprehensive nutritional information from reliable sources and provide accurate data.'
         },
         {
           role: 'user',
-          content: `Provide complete nutritional information for "${ingredientName}". Include ALL of the following fields with accurate values:
-
-- Standard serving size (amount and unit - use recipe-friendly units like "piece" for eggs, "cup" for liquids, "tbsp" for spices)
-- Calories (kcal)
-- Protein (grams)
-- Total Fat (grams)
-- Saturated Fat (grams)
-- Trans Fat (grams)
-- Cholesterol (milligrams)
-- Sodium (milligrams)
-- Carbohydrates (grams)
-- Dietary Fiber (grams)
-- Sugars (grams)
-- Added Sugars (grams)
-- Vitamin D (micrograms)
-- Calcium (milligrams)
-- Iron (milligrams)
-- Potassium (milligrams)
-- Vitamin A (micrograms RAE)
-- Vitamin C (milligrams)
-
-Provide realistic values based on USDA nutritional database or reliable nutrition sources. Do not use zeros unless the nutrient is genuinely absent.`
+          content: `What is the nutritional information for "${ingredientName}"? I need calories, protein, fat, saturated fat, sodium, carbohydrates, dietary fiber, sugars, cholesterol, potassium, calcium, and iron.`
         }
       ],
       response_format: {
         type: 'json_schema',
         json_schema: {
-          name: 'simple_nutritional_data',
+          name: 'nutritional_data',
           strict: true,
           schema: {
             type: 'object',
             properties: {
-              standardAmount: { type: 'number' },
-              standardUnit: { type: 'string' },
               calories: { type: 'number' },
               proteinG: { type: 'number' },
               fatG: { type: 'number' },
               saturatedFatG: { type: 'number' },
-              transFatG: { type: 'number' },
-              cholesterolMg: { type: 'number' },
               sodiumMg: { type: 'number' },
               carbohydratesG: { type: 'number' },
               dietaryFiberG: { type: 'number' },
               sugarsG: { type: 'number' },
-              addedSugarsG: { type: 'number' },
-              vitaminDMcg: { type: 'number' },
-              calciumMg: { type: 'number' },
-              ironMg: { type: 'number' },
+              cholesterolMg: { type: 'number' },
               potassiumMg: { type: 'number' },
-              vitaminAMcg: { type: 'number' },
-              vitaminCMg: { type: 'number' }
+              calciumMg: { type: 'number' },
+              ironMg: { type: 'number' }
             },
-            required: ['standardAmount', 'standardUnit', 'calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG'],
+            required: ['calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'cholesterolMg', 'potassiumMg', 'calciumMg', 'ironMg'],
             additionalProperties: false
           }
         }
