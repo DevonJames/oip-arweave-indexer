@@ -2633,11 +2633,12 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
     console.log('Buffer size:', imageBuffer.length);
     console.log('Buffer type check:', Buffer.isBuffer(imageBuffer));
     
-    // Create a fresh Buffer copy to avoid any proxy/subclass issues with axios
-    const freshBuffer = Buffer.allocUnsafe(imageBuffer.length);
-    imageBuffer.copy(freshBuffer);
+    // Convert to Uint8Array first, then to a fresh Buffer
+    // This handles axios Buffer proxies/subclasses
+    const uint8Array = new Uint8Array(imageBuffer);
+    const freshBuffer = Buffer.from(uint8Array);
     
-    console.log('Created fresh buffer copy, size:', freshBuffer.length);
+    console.log('Created fresh buffer from Uint8Array, size:', freshBuffer.length);
     
     // Write the file
     fs.writeFileSync(cachedImagePath, freshBuffer);
