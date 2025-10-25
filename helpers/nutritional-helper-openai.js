@@ -252,9 +252,9 @@ async function fetchNutritionalData(ingredientName) {
               potassiumMg: { type: 'number' },
               vitaminAMcg: { type: 'number' },
               vitaminCMg: { type: 'number' },
-              allergens: { type: 'array', items: { type: 'string' } },
-              glutenFree: { type: 'boolean' },
-              organic: { type: 'boolean' }
+              // allergens: { type: 'array', items: { type: 'string' } },
+              // glutenFree: { type: 'boolean' },
+              // organic: { type: 'boolean' }
             },
             required: ['calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'cholesterolMg', 'potassiumMg', 'calciumMg', 'ironMg'],
             additionalProperties: false
