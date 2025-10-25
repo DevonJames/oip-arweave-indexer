@@ -1110,7 +1110,8 @@ router.post('/elevenlabs/:voiceId/synthesize', async (req, res) => {
         console.log(`[ElevenLabs] Generated ${response.data.byteLength} bytes successfully`);
         
         res.set('Content-Type', 'audio/mp3');
-        res.send(Buffer.from(response.data));
+        // Handle Proxy-wrapped arraybuffer from axios interceptor
+        res.send(Buffer.from(new Uint8Array(response.data)));
         
     } catch (error) {
         console.error('[ElevenLabs] Synthesis failed:', error.message);
