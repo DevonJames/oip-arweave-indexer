@@ -2598,22 +2598,35 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
 
     // Handle different data types that axios might return
     let imageBuffer;
+    
+    console.log('Image data type:', typeof imageResponse.data);
+    console.log('Is Buffer?', Buffer.isBuffer(imageResponse.data));
+    console.log('Constructor:', imageResponse.data?.constructor?.name);
+    
     if (Buffer.isBuffer(imageResponse.data)) {
+      // Already a Buffer, use directly
       imageBuffer = imageResponse.data;
+      console.log('✅ Data is already a Buffer');
     } else if (imageResponse.data instanceof ArrayBuffer) {
-      imageBuffer = Buffer.from(imageResponse.data);
+      // Convert ArrayBuffer to Buffer
+      imageBuffer = Buffer.from(new Uint8Array(imageResponse.data));
+      console.log('✅ Converted ArrayBuffer to Buffer');
     } else if (typeof imageResponse.data === 'string') {
-      // If it's a base64 string, decode it
+      // Base64 string, decode it
       imageBuffer = Buffer.from(imageResponse.data, 'base64');
-    } else {
-      // Last resort: try to convert whatever we got
+      console.log('✅ Decoded base64 string to Buffer');
+    } else if (imageResponse.data && typeof imageResponse.data === 'object') {
+      // Might be a Uint8Array or similar typed array
       try {
         imageBuffer = Buffer.from(imageResponse.data);
+        console.log('✅ Converted typed array to Buffer');
       } catch (bufferError) {
-        console.error('Image data type:', typeof imageResponse.data);
-        console.error('Image data constructor:', imageResponse.data?.constructor?.name);
-        throw new Error(`Unexpected image data type: ${typeof imageResponse.data}. Cannot convert to Buffer.`);
+        console.error('❌ Failed to convert object to Buffer:', bufferError.message);
+        throw new Error(`Cannot convert data to Buffer: ${bufferError.message}`);
       }
+    } else {
+      console.error('❌ Unexpected data type:', typeof imageResponse.data);
+      throw new Error(`Unexpected image data type: ${typeof imageResponse.data}`);
     }
 
     fs.writeFileSync(cachedImagePath, imageBuffer);
