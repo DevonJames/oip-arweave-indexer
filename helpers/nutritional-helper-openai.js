@@ -218,11 +218,32 @@ async function fetchNutritionalData(ingredientName) {
       messages: [
         {
           role: 'system',
-          content: 'You are a nutritional data expert. Find comprehensive nutritional information from reliable sources and provide accurate data.'
+          content: 'You are a nutritional database expert with access to USDA and nutritional databases. Provide accurate, complete nutritional information for all requested fields. Never leave fields as zero unless the food genuinely contains zero of that nutrient.'
         },
         {
           role: 'user',
-          content: `What is the nutritional information for "${ingredientName}"? I'll need calories, protein, and fat.`
+          content: `Provide complete nutritional information for "${ingredientName}". Include ALL of the following fields with accurate values:
+
+- Standard serving size (amount and unit - use recipe-friendly units like "piece" for eggs, "cup" for liquids, "tbsp" for spices)
+- Calories (kcal)
+- Protein (grams)
+- Total Fat (grams)
+- Saturated Fat (grams)
+- Trans Fat (grams)
+- Cholesterol (milligrams)
+- Sodium (milligrams)
+- Carbohydrates (grams)
+- Dietary Fiber (grams)
+- Sugars (grams)
+- Added Sugars (grams)
+- Vitamin D (micrograms)
+- Calcium (milligrams)
+- Iron (milligrams)
+- Potassium (milligrams)
+- Vitamin A (micrograms RAE)
+- Vitamin C (milligrams)
+
+Provide realistic values based on USDA nutritional database or reliable nutrition sources. Do not use zeros unless the nutrient is genuinely absent.`
         }
       ],
       response_format: {
@@ -233,16 +254,27 @@ async function fetchNutritionalData(ingredientName) {
           schema: {
             type: 'object',
             properties: {
+              standardAmount: { type: 'number' },
+              standardUnit: { type: 'string' },
               calories: { type: 'number' },
               proteinG: { type: 'number' },
               fatG: { type: 'number' },
               saturatedFatG: { type: 'number' },
+              transFatG: { type: 'number' },
+              cholesterolMg: { type: 'number' },
               sodiumMg: { type: 'number' },
               carbohydratesG: { type: 'number' },
               dietaryFiberG: { type: 'number' },
-              sugarsG: { type: 'number' }
+              sugarsG: { type: 'number' },
+              addedSugarsG: { type: 'number' },
+              vitaminDMcg: { type: 'number' },
+              calciumMg: { type: 'number' },
+              ironMg: { type: 'number' },
+              potassiumMg: { type: 'number' },
+              vitaminAMcg: { type: 'number' },
+              vitaminCMg: { type: 'number' }
             },
-            required: ['calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG'],
+            required: ['standardAmount', 'standardUnit', 'calories', 'proteinG', 'fatG', 'saturatedFatG', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG'],
             additionalProperties: false
           }
         }
@@ -260,7 +292,59 @@ async function fetchNutritionalData(ingredientName) {
 
     const result = response.data.choices[0].message.content;
     console.log('Nutritional Info Response:', result);
-    return result;
+    
+    // Parse the JSON response
+    let openaiData;
+    try {
+      openaiData = JSON.parse(result);
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      return createFallbackNutritionalData(ingredientName);
+    }
+    
+    console.log('Parsed OpenAI data:', openaiData);
+    
+    // Construct the full OIP record structure
+    const nutritionalData = {
+      basic: {
+        name: ingredientName,
+        date: Math.floor(Date.now() / 1000),
+        language: 'en',
+        nsfw: false,
+        webUrl: `https://www.nutritionix.com/food/${ingredientName.replace(/\s+/g, '-').toLowerCase()}`
+      },
+      nutritionalInfo: {
+        standardAmount: openaiData.standardAmount || 1,
+        standardUnit: openaiData.standardUnit || 'piece',
+        calories: openaiData.calories || 0,
+        proteinG: openaiData.proteinG || 0,
+        fatG: openaiData.fatG || 0,
+        saturatedFatG: openaiData.saturatedFatG || 0,
+        transFatG: openaiData.transFatG || 0,
+        cholesterolMg: openaiData.cholesterolMg || 0,
+        sodiumMg: openaiData.sodiumMg || 0,
+        carbohydratesG: openaiData.carbohydratesG || 0,
+        dietaryFiberG: openaiData.dietaryFiberG || 0,
+        sugarsG: openaiData.sugarsG || 0,
+        addedSugarsG: openaiData.addedSugarsG || 0,
+        vitaminDMcg: openaiData.vitaminDMcg || 0,
+        calciumMg: openaiData.calciumMg || 0,
+        ironMg: openaiData.ironMg || 0,
+        potassiumMg: openaiData.potassiumMg || 0,
+        vitaminAMcg: openaiData.vitaminAMcg || 0,
+        vitaminCMg: openaiData.vitaminCMg || 0,
+        allergens: openaiData.allergens || [],
+        glutenFree: openaiData.glutenFree || false,
+        organic: openaiData.organic || false
+      },
+      image: {
+        webUrl: '',
+        contentType: 'image/jpeg'
+      }
+    };
+    
+    console.log('Returning full nutritional data structure:', nutritionalData);
+    return nutritionalData;
 
   } catch (error) {
     console.error(`❌ Error fetching nutritional data for ${ingredientName}:`, error);
