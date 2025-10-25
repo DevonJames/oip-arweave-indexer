@@ -2629,7 +2629,13 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
       throw new Error(`Unexpected image data type: ${typeof imageResponse.data}`);
     }
 
+    console.log('About to write image to:', cachedImagePath);
+    console.log('Buffer size:', imageBuffer.length);
+    console.log('Buffer type check:', Buffer.isBuffer(imageBuffer));
+    
+    // Write the file
     fs.writeFileSync(cachedImagePath, imageBuffer);
+    console.log(`✅ Successfully wrote ${imageBuffer.length} bytes to file`);
 
     console.log(`✅ Generated and cached image for recipe: ${recipeTitle}`);
 
