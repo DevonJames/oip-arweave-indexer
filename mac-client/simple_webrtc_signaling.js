@@ -310,8 +310,8 @@ class SimpleWebRTCSignaling extends EventEmitter {
             // Send audio to client
             this.sendToClient(clientId, {
                 type: 'tts_audio',
-                // Handle Proxy-wrapped arraybuffer from axios interceptor
-                audio: Buffer.from(new Uint8Array(response.data)).toString('base64'),
+                // Handle Proxy-wrapped arraybuffer from axios interceptor - use slice() to copy
+                audio: (response.data.slice ? response.data.slice() : Buffer.from(response.data)).toString('base64'),
                 timestamp: Date.now()
             });
             

@@ -2151,8 +2151,9 @@ async function streamAudioToClient(dialogueId, text, voiceConfig) {
         );
         
         // Convert to base64 and send to client
-        // Handle Proxy-wrapped arraybuffer from axios interceptor
-        const audioBase64 = Buffer.from(new Uint8Array(response.data)).toString('base64');
+        // Handle Proxy-wrapped arraybuffer from axios interceptor - use slice() to copy
+        const buffer = response.data.slice ? response.data.slice() : Buffer.from(response.data);
+        const audioBase64 = buffer.toString('base64');
         
         socketManager.sendToClients(dialogueId, {
             type: 'audio',
@@ -2797,8 +2798,8 @@ async function generateTTS(text, voiceId, apiKey) {
         throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
     }
     
-    // Handle Proxy-wrapped arraybuffer from axios interceptor
-    return Buffer.from(new Uint8Array(response.data));
+    // Handle Proxy-wrapped arraybuffer from axios interceptor - use slice() to copy
+    return response.data.slice ? response.data.slice() : Buffer.from(response.data);
 }
 
 /**

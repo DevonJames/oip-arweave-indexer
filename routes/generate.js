@@ -1721,8 +1721,9 @@ router.post('/tts-fallback', express.json(), express.urlencoded({ extended: true
         
         // Send the audio file to the client
         res.set('Content-Type', 'audio/mp3');
-        // Handle Proxy-wrapped arraybuffer from axios interceptor
-        res.send(Buffer.from(new Uint8Array(response.data)));
+        // Handle Proxy-wrapped arraybuffer from axios interceptor - use slice() to copy
+        const buffer = response.data.slice ? response.data.slice() : Buffer.from(response.data);
+        res.send(buffer);
         
     } catch (error) {
         console.error('Error in fallback TTS:', error.message);
