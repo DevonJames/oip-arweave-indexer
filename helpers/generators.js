@@ -1059,7 +1059,11 @@ async function synthesizeSpeech(text, voiceConfig, outputFileName, api = 'eleven
           console.error(`Eleven Labs error: ${error.message}`);
           if (error.response) {
               console.error(`Response status: ${error.response.status}`);
-              console.error(`Response data: ${Buffer.from(error.response.data).toString('utf-8')}`);
+              // Handle both string and arraybuffer error responses
+              const errorData = typeof error.response.data === 'string' 
+                  ? error.response.data 
+                  : Buffer.from(new Uint8Array(error.response.data)).toString('utf-8');
+              console.error(`Response data: ${errorData}`);
           }
           throw error;
       }
@@ -2147,7 +2151,8 @@ async function streamAudioToClient(dialogueId, text, voiceConfig) {
         );
         
         // Convert to base64 and send to client
-        const audioBase64 = Buffer.from(response.data).toString('base64');
+        // Handle Proxy-wrapped arraybuffer from axios interceptor
+        const audioBase64 = Buffer.from(new Uint8Array(response.data)).toString('base64');
         
         socketManager.sendToClients(dialogueId, {
             type: 'audio',
@@ -2792,7 +2797,8 @@ async function generateTTS(text, voiceId, apiKey) {
         throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText}`);
     }
     
-    return Buffer.from(response.data);
+    // Handle Proxy-wrapped arraybuffer from axios interceptor
+    return Buffer.from(new Uint8Array(response.data));
 }
 
 /**
