@@ -2633,16 +2633,20 @@ async function generateRecipeImage(recipeTitle, description = '', ingredients = 
     console.log('Buffer size:', imageBuffer.length);
     console.log('Buffer type check:', Buffer.isBuffer(imageBuffer));
     
-    // Convert to Uint8Array first, then to a fresh Buffer
-    // This handles axios Buffer proxies/subclasses
-    const uint8Array = new Uint8Array(imageBuffer);
-    const freshBuffer = Buffer.from(uint8Array);
-    
-    console.log('Created fresh buffer from Uint8Array, size:', freshBuffer.length);
-    
-    // Write the file
-    fs.writeFileSync(cachedImagePath, freshBuffer);
-    console.log(`✅ Successfully wrote ${freshBuffer.length} bytes to file`);
+    // Write directly without conversion - fs should handle it
+    try {
+      fs.writeFileSync(cachedImagePath, imageBuffer);
+      console.log(`✅ Successfully wrote ${imageBuffer.length} bytes to file`);
+    } catch (fsError) {
+      // If direct write fails, try converting to a plain buffer
+      console.log('Direct write failed, trying buffer conversion...');
+      const plainBuffer = Buffer.alloc(imageBuffer.length);
+      for (let i = 0; i < imageBuffer.length; i++) {
+        plainBuffer[i] = imageBuffer[i];
+      }
+      fs.writeFileSync(cachedImagePath, plainBuffer);
+      console.log(`✅ Successfully wrote ${plainBuffer.length} bytes to file (via conversion)`);
+    }
 
     console.log(`✅ Generated and cached image for recipe: ${recipeTitle}`);
 
