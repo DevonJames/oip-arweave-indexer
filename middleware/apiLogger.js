@@ -1,6 +1,7 @@
 /**
  * Clean API Call Logger
  * Logs only API calls with timestamp and parameters
+ * Timezone: configured via LOG_TIMEZONE or TZ env variables
  */
 
 function apiLogger(req, res, next) {
@@ -9,7 +10,21 @@ function apiLogger(req, res, next) {
         return next();
     }
 
-    const timestamp = new Date().toISOString();
+    const timezone = process.env.LOG_TIMEZONE || process.env.TZ || 'UTC';
+    
+    // Simple localized timestamp
+    const date = new Date();
+    const timestamp = date.toLocaleString('en-US', { 
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        fractionalSecondDigits: 3
+    });
+    
     const method = req.method;
     const path = req.path;
     const query = Object.keys(req.query).length > 0 ? req.query : null;
