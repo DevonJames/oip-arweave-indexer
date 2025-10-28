@@ -32,7 +32,12 @@ fi
 HEAP_SIZE=${HEAP_SIZE:-4096}
 echo "Setting heap size to: ${HEAP_SIZE}MB"
 
-node --inspect=0.0.0.0:9229 --max-old-space-size=${HEAP_SIZE} index.js --keepDBUpToDate 10 10 &
+# Configure keepDBUpToDate arguments from environment variables (default: 10 10)
+KEEP_DB_DELAY=${KEEP_DB_DELAY:-10}  # Delay in seconds before first check
+KEEP_DB_REFRESH=${KEEP_DB_REFRESH:-10}  # How often to refresh cache (every N keepDB cycles)
+echo "Configuring keepDBUpToDate: delay=${KEEP_DB_DELAY}s, refresh every ${KEEP_DB_REFRESH} cycles"
+
+node --inspect=0.0.0.0:9229 --max-old-space-size=${HEAP_SIZE} index.js --keepDBUpToDate $KEEP_DB_DELAY $KEEP_DB_REFRESH &
 API_PID=$!
 
 # Wait for both processes
