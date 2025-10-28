@@ -977,15 +977,18 @@ async function publishToGun(record, recordType, options = {}) {
         
         // Register in GUN registry for other nodes to discover
         try {
-            const { GunSyncService } = require('./gunSyncService');
-            const gunSyncService = new GunSyncService();
-            await gunSyncService.registerLocalRecord(
-                publishResult.did,
-                publishResult.soul,
-                recordType,
-                myPublicKey
-            );
-            console.log('📝 Record registered in GUN registry for sync:', publishResult.did);
+            // MEMORY LEAK FIX: Use global gunSyncService instead of creating new instance
+            if (global.gunSyncService) {
+                await global.gunSyncService.registerLocalRecord(
+                    publishResult.did,
+                    publishResult.soul,
+                    recordType,
+                    myPublicKey
+                );
+                console.log('📝 Record registered in GUN registry for sync:', publishResult.did);
+            } else {
+                console.warn('⚠️ Global gunSyncService not available, skipping GUN registry sync');
+            }
         } catch (registryError) {
             console.error('⚠️ Failed to register record in GUN registry (sync may be affected):', registryError);
             // Don't fail the entire publish operation for registry issues
