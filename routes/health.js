@@ -4,7 +4,20 @@ const router = express.Router();
 router.get('/', async (req, res) => {
     // console.log('GET /api/health');
     try {
-        console.log(`Health check passed at: ${new Date().toISOString()}`);
+        const timezone = process.env.LOG_TIMEZONE || process.env.TZ || 'UTC';
+        const date = new Date();
+        const localTimestamp = date.toLocaleString('en-US', { 
+            timeZone: timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            fractionalSecondDigits: 3
+        });
+        
+        console.log(`Health check passed at: ${localTimestamp}`);
         // add more checks here (e.g., database connection status)
         res.status(200).json({ status: 'OK' });
     } catch (error) {
