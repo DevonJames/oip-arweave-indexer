@@ -1405,7 +1405,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                             'edge_expressive': { gender: 'female', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
                             'female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
                             'male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
-                            'default': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }
+                            'default': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                            'male_british': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }
                         };
                         
                         return voiceMatrix[voice_id] || voiceMatrix['default'];
@@ -1923,7 +1924,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
             status: 'processing',
             clients: new Set(),
             data: [],
-            startTime: Date.now()
+            startTime: Date.now(),
+            lastActivity: Date.now() // Track for timeout cleanup
         });
         
         const ongoingStream = ongoingDialogues.get(dialogueId);
