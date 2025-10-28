@@ -1,5 +1,32 @@
 const ongoingDialogues = new Map();
 
+// MEMORY LEAK FIX: Add timeout-based cleanup for stale dialogues
+const DIALOGUE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const CLEANUP_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
+
+// Periodically clean up stale dialogues
+setInterval(() => {
+    const now = Date.now();
+    let cleanedCount = 0;
+    
+    for (const [dialogueId, dialogue] of ongoingDialogues.entries()) {
+        const lastActivity = dialogue.lastActivity || dialogue.startTime || now;
+        const timeSinceActivity = now - lastActivity;
+        
+        // Remove dialogues that haven't been accessed in 30 minutes
+        if (timeSinceActivity > DIALOGUE_TIMEOUT) {
+            console.log(`🧹 [Memory Cleanup] Removing stale dialogue ${dialogueId} (inactive for ${Math.round(timeSinceActivity / 60000)} minutes)`);
+            ongoingDialogues.delete(dialogueId);
+            cleanedCount++;
+        }
+    }
+    
+    if (cleanedCount > 0) {
+        const remaining = ongoingDialogues.size;
+        console.log(`🧹 [Memory Cleanup] Cleaned up ${cleanedCount} stale dialogues (${remaining} remaining)`);
+    }
+}, CLEANUP_INTERVAL);
+
 // Shared state to store ongoing scrapes
 const ongoingScrapes = new Map();
 

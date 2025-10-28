@@ -106,7 +106,42 @@ GUN_CACHE_MAX_AGE=3600000  # Clear cache every hour (in milliseconds)
 **Files Modified:**
 - `index.js` - Fixed memory monitor calculation
 
-### 6. Emergency Memory Cleanup Script
+### 6. Dialogue Timeout Cleanup Fix
+**FIX**: Added automatic cleanup for stale voice conversation dialogues that don't properly disconnect.
+
+**The Problem:**
+- Voice conversations can accumulate in `ongoingDialogues` Map if clients don't properly disconnect
+- Network issues or browser crashes can leave orphaned dialogues in memory
+- These stale dialogues were never cleaned up, causing steady memory growth during voice chat sessions
+
+**The Solution:**
+- Added 30-minute timeout for inactive dialogues
+- Automatic cleanup checks every 5 minutes
+- Tracks `lastActivity` timestamp on each dialogue
+- Removes any dialogue not accessed in 30+ minutes
+- Logs cleanup actions for monitoring
+
+**Files Modified:**
+- `helpers/sharedState.js` - Added timeout cleanup mechanism
+- `routes/voice.js` - Added lastActivity tracking
+
+### 7. Cache Bypass Parameters
+**FIX**: Added ability to bypass caching for fresh data when needed.
+
+**Parameters Available:**
+- `forceRefresh=true` - Bypass cache for immediate fresh data from Elasticsearch
+- `POST /api/records/clear-cache` - Manually clear the entire records cache
+
+**Use Cases:**
+- After bulk deletes to see changes immediately
+- When data has been modified and staleness is unacceptable
+- Before critical operations requiring fresh data
+
+**Files Modified:**
+- `routes/records.js` - Added cache bypass parameter and clear-cache endpoint
+- `helpers/elasticsearch.js` - Added forceRefresh parameter support
+
+### 8. Emergency Memory Cleanup Script
 Added a new emergency cleanup script for immediate memory relief:
 
 ```bash
