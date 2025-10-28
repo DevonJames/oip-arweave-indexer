@@ -2847,7 +2847,7 @@ async function getRecords(queryParams) {
         // console.log('after adding dateReadable field, there are', records.length, 'records');
 
         // Helper function to sort records based on sortBy parameter
-        const applySorting = (recordsToSort, sortByParam) => {
+        const applySorting = (recordsToSort, sortByParam, silent = false) => {
             if (sortByParam != undefined) {
                 // console.log('sorting by:', sortByParam);
                 const fieldToSortBy = sortByParam.split(':')[0];
@@ -2935,9 +2935,9 @@ async function getRecords(queryParams) {
                                 return (b.score || 0) - (a.score || 0);
                             }
                         });
-                        console.log('sorted by tags match score (' + order + ')');
+                        if (!silent) console.log('sorted by tags match score (' + order + ')');
                     } else {
-                        console.log('Warning: sortBy=tags specified but no tags parameter provided - skipping tags sort');
+                        if (!silent) console.log('Warning: sortBy=tags specified but no tags parameter provided - skipping tags sort');
                     }
                 }
 
@@ -2951,9 +2951,9 @@ async function getRecords(queryParams) {
                                 return (b.exerciseScore || 0) - (a.exerciseScore || 0);
                             }
                         });
-                        console.log('sorted by exercise score (' + order + ')');
+                        if (!silent) console.log('sorted by exercise score (' + order + ')');
                     } else {
-                        console.log('Warning: sortBy=exerciseScore specified but no exerciseNames parameter provided - skipping exerciseScore sort');
+                        if (!silent) console.log('Warning: sortBy=exerciseScore specified but no exerciseNames parameter provided - skipping exerciseScore sort');
                     }
                 }
 
@@ -2967,9 +2967,9 @@ async function getRecords(queryParams) {
                                 return (b.ingredientScore || 0) - (a.ingredientScore || 0);
                             }
                         });
-                        console.log('sorted by ingredient score (' + order + ')');
+                        if (!silent) console.log('sorted by ingredient score (' + order + ')');
                     } else {
-                        console.log('Warning: sortBy=ingredientScore specified but no ingredientNames parameter provided - skipping ingredientScore sort');
+                        if (!silent) console.log('Warning: sortBy=ingredientScore specified but no ingredientNames parameter provided - skipping ingredientScore sort');
                     }
                 }
 
@@ -2983,9 +2983,9 @@ async function getRecords(queryParams) {
                                 return (b.equipmentScore || 0) - (a.equipmentScore || 0);
                             }
                         });
-                        console.log('sorted by equipment score (' + order + ')');
+                        if (!silent) console.log('sorted by equipment score (' + order + ')');
                     } else {
-                        console.log('Warning: sortBy=equipmentScore specified but no equipmentRequired parameter provided - skipping equipmentScore sort');
+                        if (!silent) console.log('Warning: sortBy=equipmentScore specified but no equipmentRequired parameter provided - skipping equipmentScore sort');
                     }
                 }
 
@@ -2999,9 +2999,9 @@ async function getRecords(queryParams) {
                                 return (b.exerciseTypeScore || 0) - (a.exerciseTypeScore || 0);
                             }
                         });
-                        console.log('sorted by exercise type score (' + order + ')');
+                        if (!silent) console.log('sorted by exercise type score (' + order + ')');
                     } else {
-                        console.log('Warning: sortBy=exerciseTypeScore specified but no exerciseType parameter provided - skipping exerciseTypeScore sort');
+                        if (!silent) console.log('Warning: sortBy=exerciseTypeScore specified but no exerciseType parameter provided - skipping exerciseTypeScore sort');
                     }
                 }
 
@@ -3015,9 +3015,9 @@ async function getRecords(queryParams) {
                                 return (b.cuisineScore || 0) - (a.cuisineScore || 0);
                             }
                         });
-                        console.log('sorted by cuisine score (' + order + ')');
+                        if (!silent) console.log('sorted by cuisine score (' + order + ')');
                     } else {
-                        console.log('Warning: sortBy=cuisineScore specified but no cuisine parameter provided - skipping cuisineScore sort');
+                        if (!silent) console.log('Warning: sortBy=cuisineScore specified but no cuisine parameter provided - skipping cuisineScore sort');
                     }
                 }
 
@@ -3031,9 +3031,9 @@ async function getRecords(queryParams) {
                                 return (b.modelScore || 0) - (a.modelScore || 0);
                             }
                         });
-                        console.log('sorted by model score (' + order + ')');
+                        if (!silent) console.log('sorted by model score (' + order + ')');
                     } else {
-                        console.log('Warning: sortBy=modelScore specified but no model parameter provided - skipping modelScore sort');
+                        if (!silent) console.log('Warning: sortBy=modelScore specified but no model parameter provided - skipping modelScore sort');
                     }
                 }
 
@@ -3047,9 +3047,9 @@ async function getRecords(queryParams) {
                                 return (b.matchCount || 0) - (a.matchCount || 0);
                             }
                         });
-                        console.log('sorted by match count (' + order + ')');
+                        if (!silent) console.log('sorted by match count (' + order + ')');
                     } else {
-                        console.log('Warning: sortBy=matchCount specified but no search parameter provided - skipping matchCount sort');
+                        if (!silent) console.log('Warning: sortBy=matchCount specified but no search parameter provided - skipping matchCount sort');
                     }
                 }
 
@@ -3080,9 +3080,9 @@ async function getRecords(queryParams) {
                                 return bDate - aDate;
                             }
                         });
-                        console.log(`sorted by scheduled date (${order}) for recordType=${recordType}`);
+                        if (!silent) console.log(`sorted by scheduled date (${order}) for recordType=${recordType}`);
                     } else {
-                        console.log(`Warning: sortBy=scheduledDate specified but recordType is '${recordType}' (must be 'mealPlan' or 'workoutSchedule') - skipping scheduledDate sort`);
+                        if (!silent) console.log(`Warning: sortBy=scheduledDate specified but recordType is '${recordType}' (must be 'mealPlan' or 'workoutSchedule') - skipping scheduledDate sort`);
                     }
                 }
             }
@@ -3119,7 +3119,7 @@ async function getRecords(queryParams) {
                 } else {
                     // Multiple records with same name, sort and keep the best one
                     const sortedDuplicates = [...duplicateRecords];
-                    applySorting(sortedDuplicates, duplicateSortBy);
+                    applySorting(sortedDuplicates, duplicateSortBy, true); // silent = true to avoid spamming logs
                     uniqueRecords.push(sortedDuplicates[0]);
                     // console.log(`Filtered ${duplicateRecords.length - 1} duplicate(s) for name "${name}", kept record with DID: ${sortedDuplicates[0].oip?.did || sortedDuplicates[0].oip?.didTx}`);
                 }
