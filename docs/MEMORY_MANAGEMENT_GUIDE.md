@@ -141,6 +141,41 @@ GUN_CACHE_MAX_AGE=3600000  # Clear cache every hour (in milliseconds)
 - `routes/records.js` - Added cache bypass parameter and clear-cache endpoint
 - `helpers/elasticsearch.js` - Added forceRefresh parameter support
 
+### 7. GUN Sync Service Memory Leak Fix (Critical)
+**CRITICAL FIX**: Fixed severe memory leak from creating duplicate GUN Sync Service instances on every record publish.
+
+**The Problem:**
+- Every time a GUN record was published, `templateHelper.js` was creating a **new GunSyncService instance**
+- Each instance had its own `OIPGunRegistry`, `PrivateRecordHandler`, and internal state
+- Publishing multiple records rapidly resulted in 10+ service instances in memory
+- Each instance accumulated state that was never cleaned up
+- External memory grew rapidly from 17GB+ during voice chat sessions
+
+**The Solution:**
+- Removed instance creation in `templateHelper.js` line 981
+- Now reuses the **global singleton instance** initialized in `index.js` at startup
+- Only one service instance exists for the entire application lifetime
+- Dramatically reduces memory footprint
+
+**Files Modified:**
+- `helpers/templateHelper.js` - Use global gunSyncService instead of creating new instance
+
+**Before (Memory Leak):**
+```
+Multiple service initializations logged:
+🚀 GUN Sync Service initialized: (nodeId: 4967dc4e65399225)
+🚀 GUN Sync Service initialized: (nodeId: ecbf70629f73b183)
+🚀 GUN Sync Service initialized: (nodeId: b0969c8fa6e11878)
+🚀 GUN Sync Service initialized: (nodeId: 74d93bb7831d0e29)
+```
+
+**After (Fixed):**
+```
+Single service initialization at startup:
+🚀 GUN Sync Service initialized: (nodeId: 4967dc4e65399225)
+[reused for all record operations]
+```
+
 ### 8. Emergency Memory Cleanup Script
 Added a new emergency cleanup script for immediate memory relief:
 
