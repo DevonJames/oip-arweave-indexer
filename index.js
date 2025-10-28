@@ -539,8 +539,8 @@ initializeIndices()
       if (args.keepDBUpToDate) {
           console.log('🔍 [DEBUG] ✅ INSIDE keepDBUpToDate block! Setting up parameters...');
           const wait = args._[0] ? parseInt(args._[0], 10) : 0; // Delay in seconds
-          // const interval = args._[1] ? parseInt(args._[1], 10) : 600; // Interval in seconds
-          const interval = 300;
+          const interval = args._[1] ? parseInt(args._[1], 10) : 600; // Interval in seconds
+          // const interval = 300;
 
           if (isNaN(wait) || isNaN(interval)) {
               console.error('Invalid arguments for --keepDBUpToDate. Provide delay and interval as numbers.');

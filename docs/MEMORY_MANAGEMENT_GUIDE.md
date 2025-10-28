@@ -417,3 +417,44 @@ NODE_OPTIONS=--max-old-space-size=8192
 **Last Updated:** 2025-10-11  
 **Version:** 1.0.0
 
+## Configuration
+
+### keepDBUpToDate Cache Refresh Parameters
+
+You can now configure how often the Elasticsearch cache is refreshed during the `keepDBUpToDate` cycle by setting environment variables in your `.env` file:
+
+```bash
+# Delay before first cache check (in seconds) - default: 10
+KEEP_DB_DELAY=10
+
+# How often to refresh cache - every N keepDB cycles - default: 10
+# With keepDB running every 5 minutes, refresh happens every 50 minutes
+# (10 cycles × 5 minutes = 50 minutes between full refreshes)
+KEEP_DB_REFRESH=10
+```
+
+**Examples:**
+
+```bash
+# Very aggressive refresh (refresh every cycle):
+KEEP_DB_DELAY=10
+KEEP_DB_REFRESH=1
+
+# Conservative refresh (refresh every 20 cycles = ~100 minutes with 5min keepDB interval):
+KEEP_DB_DELAY=10
+KEEP_DB_REFRESH=20
+
+# Default (refresh every 10 cycles = ~50 minutes):
+KEEP_DB_DELAY=10
+KEEP_DB_REFRESH=10
+```
+
+### How the Cache Refresh Works
+
+1. **keepDBUpToDate runs every 5 minutes** in the background
+2. **By default, it uses the 30-second cache** to avoid reloading data
+3. **Every 10 cycles (~50 minutes)**, it does a **full refresh** of the cache
+4. This ensures data freshness while maintaining excellent performance
+
+The cache bypass also applies to API requests - you can add `?forceRefresh=true` to any `/api/records` request to bypass the cache immediately.
+
