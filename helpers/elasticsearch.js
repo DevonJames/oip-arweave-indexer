@@ -54,7 +54,9 @@ const elasticClient = new Client({
     auth: {
         username: process.env.ELASTICCLIENTUSERNAME,
         password: process.env.ELASTICCLIENTPASSWORD
-    }
+    },
+    maxRetries: 3,
+    requestTimeout: 30000
 });
 
 // Helper function for backward-compatible DID queries
