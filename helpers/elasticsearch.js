@@ -1423,6 +1423,18 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     
     // console.log(`❌ Gram conversion failed or returned null`);
 
+    // FALLBACK: Treat unrecognized standardUnits as count-based "whole"
+    // This enables recipes to use custom standardUnits like "0.5 whole"
+    const knownUnits = ['g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms', 'lb', 'lbs', 'pound', 'pounds', 'oz', 'ounce', 'ounces', 'ml', 'milliliter', 'milliliters', 'l', 'liter', 'liters', 'cup', 'cups', 'tbsp', 'tablespoon', 'tablespoons', 'tsp', 'teaspoon', 'teaspoons', 'pinch', 'pinches', 'dash', 'dashes', 'smidgen', 'smidgens', 'smidge', 'fl oz', 'fluid ounce', 'fluid ounces', 'pint', 'pints', 'quart', 'quarts', 'gallon', 'gallons', 'unit', 'units', 'piece', 'pieces', 'item', 'items', 'whole', 'pat', 'pats', 'clove', 'cloves', 'slice', 'slices', 'pickle', 'pickles', 'spear', 'spears', 'head', 'heads', 'bun', 'buns', 'roll', 'rolls', 'leaf', 'leaves', 'stalk', 'stalks', 'bunch', 'bunches', 'can', 'cans', 'bottle', 'bottles', 'jar', 'jars', 'packet', 'packets', 'bag', 'bags', 'box', 'boxes', 'fillet', 'fillets', 'breast', 'breasts', 'thigh', 'thighs', 'large', 'medium', 'small', 'serving', 'servings', 'portion', 'portions', 'wedge', 'wedges', 'sprig', 'sprigs'];
+    
+    const normalizedToUnitForCheck = normalizeUnit(toUnit);
+    if (!knownUnits.includes(normalizedToUnitForCheck)) {
+        // toUnit is unrecognized - treat it as a count unit like "whole"
+        if (fromIsCount || !knownUnits.includes(normalizeUnit(fromUnit))) {
+            console.log(`🔄 FALLBACK: Unrecognized standardUnit '${toUnit}' treated as count; ${fromAmount} ${fromUnit} → ${fromAmount} ${toUnit}`);
+            return fromAmount;
+        }
+    }
     
     // Return null if conversion is not possible
     return null;
