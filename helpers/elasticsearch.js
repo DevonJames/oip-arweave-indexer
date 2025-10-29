@@ -3113,8 +3113,8 @@ async function getRecords(queryParams) {
         if (noDuplicates === true || noDuplicates === 'true') {
             // console.log('Applying noDuplicates filtering...');
             
-            // If no sortBy is specified, use default for duplicate resolution
-            const duplicateSortBy = sortBy || 'inArweaveBlock:desc';
+            // use default for duplicate resolution
+            const duplicateSortBy = 'inArweaveBlock:desc';
             
             // Group records by their basic.name field
             const recordsByName = {};
