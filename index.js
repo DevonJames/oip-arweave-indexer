@@ -45,6 +45,29 @@ const axios = require('axios');
 
 dotenv.config();
 
+// MEMORY LEAK FIX: Configure HTTP agents to prevent socket leak
+// The application was accumulating 1000+ open sockets leading to 200GB+ external memory
+const http = require('http');
+const https = require('https');
+
+const httpAgent = new http.Agent({
+    keepAlive: false,  // Disable keep-alive to close sockets after each request
+    maxSockets: 50,    // Limit concurrent connections
+    maxFreeSockets: 10, // Limit cached sockets
+    timeout: 30000     // Socket timeout
+});
+
+const httpsAgent = new https.Agent({
+    keepAlive: false,  // Disable keep-alive to close sockets after each request
+    maxSockets: 50,    // Limit concurrent connections
+    maxFreeSockets: 10, // Limit cached sockets
+    timeout: 30000     // Socket timeout
+});
+
+// Set default agents for all axios requests
+axios.defaults.httpAgent = httpAgent;
+axios.defaults.httpsAgent = httpsAgent;
+
 // MEMORY LEAK FIX: Add axios response interceptor to clean up arraybuffers
 // This prevents 47GB+ external memory leaks from TTS audio and image downloads
 axios.interceptors.response.use(
@@ -56,7 +79,7 @@ axios.interceptors.response.use(
       
       // Log large buffers being created
       if (bufferSize > 1024 * 1024) { // > 1MB
-        console.log(`📦 [Axios] Created ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer`);
+        console.log(`📦 [Axios] Created ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer from ${response.config.url}`);
       }
       
       // Create a proxy to track when the data is accessed
@@ -109,6 +132,10 @@ axios.interceptors.response.use(
     return response;
   },
   (error) => {
+    // MEMORY LEAK FIX: Log errors for diagnostics
+    if (error.response?.config?.url) {
+      console.error(`[Axios Error] ${error.message} from ${error.response.config.url}`);
+    }
     return Promise.reject(error);
   }
 );
@@ -472,6 +499,14 @@ initializeIndices()
         const heapUtilization = ((heapStats.used_heap_size / heapStats.heap_size_limit) * 100).toFixed(2);
         
         console.log(`[Memory Monitor] Heap: ${heapUsedMB}MB / ${heapTotalMB}MB (${heapUtilization}%), RSS: ${rssMB}MB, External: ${externalMB}MB`);
+        
+        // MEMORY LEAK FIX: Detailed diagnostic for external memory
+        if (externalMB > 1024) {
+          const rssExternalRatio = ((externalMB / rssMB) * 100).toFixed(1);
+          console.warn(`⚠️  [Memory Monitor] CRITICAL: External memory ${externalMB}MB is ${rssExternalRatio}% of RSS - possible buffer leak`);
+          console.warn(`    External/Heap Ratio: ${((externalMB / heapUsedMB) * 100).toFixed(1)}% (should be <50%)`);
+          console.warn(`    Possible sources: Elasticsearch connections, Axios proxies, GUN relay, or long-running streams`);
+        }
         
         // Warning if external memory is excessive (> 10GB suggests buffer leak)
         if (externalMB > 10240) {
