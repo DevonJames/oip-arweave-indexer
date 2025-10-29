@@ -2188,8 +2188,12 @@ async function getRecords(queryParams) {
                 
                 // Perform matching based on mode
                 if (fieldMatchMode.toLowerCase() === 'exact') {
-                    // Exact match (case-sensitive)
-                    const matches = fieldValueStr === searchValueStr;
+                    // Exact match - normalize dashes and spaces to treat them as equivalent
+                    const normalizeDashesSpaces = (str) => str.toLowerCase().replace(/[-\s]+/g, ' ').trim();
+                    const normalizedField = normalizeDashesSpaces(fieldValueStr);
+                    const normalizedSearch = normalizeDashesSpaces(searchValueStr);
+                    
+                    const matches = normalizedField === normalizedSearch;
                     if (matches) {
                         record.fieldSearchScore = 1000; // Max score for exact match
                     }
