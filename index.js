@@ -47,7 +47,6 @@ dotenv.config();
 
 // MEMORY LEAK FIX: Configure HTTP agents to prevent socket leak
 // The application was accumulating 1000+ open sockets leading to 200GB+ external memory
-const http = require('http');
 const https = require('https');
 
 const httpAgent = new http.Agent({
