@@ -493,3 +493,47 @@ KEEP_DB_REFRESH=10
 
 The cache bypass also applies to API requests - you can add `?forceRefresh=true` to any `/api/records` request to bypass the cache immediately.
 
+### 8. Organization Records Memory Leak Fix (CRITICAL)
+**CRITICAL FIX**: Fixed severe memory leak from loading 10,000 organization records every 5 minutes.
+
+**The Problem:**
+- `getOrganizationsInDB()` was fetching **ALL 10,000 organization records** from Elasticsearch on every `keepDBUpToDate` cycle
+- This happened every 5 minutes, loading massive nested objects into memory
+- Memory was growing ~3GB every 3 minutes (accumulating 10,000 records = 2-3GB each cycle)
+- The records were being returned but not properly freed
+- This was the cause of the continuous 80GB+ memory accumulation
+
+**The Solution:**
+- Changed to use **Elasticsearch aggregations** instead of fetching full records
+- Now only fetches: count of organizations + maximum block height (minimal data)
+- Dramatically reduces memory per cycle from ~3GB to <1MB
+- Maintains all functionality since only the count and block height are needed
+
+**Files Modified:**
+- `helpers/elasticsearch.js` - Rewrote `getOrganizationsInDB()` to use aggregations
+
+**Before (Memory Leak):**
+```
+// Fetching 10,000 full organization objects:
+const response = await elasticClient.search({
+    index: 'organizations',
+    size: 10000,  // ← Loading 10,000 records!
+    sort: [...]
+});
+const organizations = response.hits.hits.map(hit => hit._source);  // ← All records in memory
+```
+
+**After (Fixed):**
+```
+// Fetching only aggregated counts:
+const response = await elasticClient.search({
+    index: 'organizations',
+    size: 0,  // ← Don't fetch any records
+    aggs: {
+        count: { value_count: { field: "_id" } },
+        max_block: { max: { field: "oip.inArweaveBlock" } }
+    }
+});
+// Only extract: count and max_block values (~1MB)
+```
+
