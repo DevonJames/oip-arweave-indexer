@@ -3602,33 +3602,39 @@ async function getRecords(queryParams) {
 
 const getOrganizationsInDB = async () => {
     try {
+        // MEMORY LEAK FIX: Only fetch aggregated data (count and max block), not all records
+        // Previously was loading 10,000 full organization records every 5 minutes!
         const response = await elasticClient.search({
-            index: 'organizations', // Use dedicated organizations index like creators use creatorregistrations
+            index: 'organizations',
             body: {
                 query: {
                     match_all: {}
                 },
-                size: 10000, // Adjust as needed
-                sort: [
-                    {
-                        "oip.inArweaveBlock": {
-                            order: "desc"
+                size: 0, // Don't fetch any records, just aggregations
+                aggs: {
+                    count: {
+                        value_count: {
+                            field: "_id"
+                        }
+                    },
+                    max_block: {
+                        max: {
+                            field: "oip.inArweaveBlock"
                         }
                     }
-                ]
+                }
             }
         });
 
-        const organizations = response.hits.hits.map(hit => hit._source);
-        const qtyOrganizationsInDB = organizations.length;
-        const maxArweaveOrgBlockInDB = organizations.length > 0 ? organizations[0].oip.inArweaveBlock : 0;
+        const qtyOrganizationsInDB = response.aggregations?.count?.value || 0;
+        const maxArweaveOrgBlockInDB = response.aggregations?.max_block?.value || 0;
 
-        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in organizations index`);
+        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in organizations index (max block: ${maxArweaveOrgBlockInDB})`);
 
         return {
             qtyOrganizationsInDB,
             maxArweaveOrgBlockInDB,
-            organizationsInDB: organizations
+            organizationsInDB: [] // Don't return full records - just the counts
         };
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error getting organizations from DB:', error);
