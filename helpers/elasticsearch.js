@@ -3784,7 +3784,13 @@ const getRecordsInDB = async (forceRefresh = false) => {
             );
             const pendingRecordsCount = records.length - confirmedRecords.length;
             if (pendingRecordsCount > 0) {
-                console.log(getFileInfo(), getLineNumber(), `Found ${pendingRecordsCount} pending records (will re-process when confirmed on chain)`);
+                const pendingRecords = records.filter(record => 
+                    record.oip.recordStatus === "pending confirmation in Arweave"
+                );
+                const minBlockInPending = Math.min(...pendingRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)));
+                const maxBlockInPending = Math.max(...pendingRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)));
+                const blockRangeStr = !isNaN(minBlockInPending) && !isNaN(maxBlockInPending) ? ` (block range: ${minBlockInPending}-${maxBlockInPending})` : '';
+                console.log(getFileInfo(), getLineNumber(), `Found ${pendingRecordsCount} pending records (will re-process when confirmed on chain)${blockRangeStr}`);
             }
             const maxArweaveBlockInDB = confirmedRecords.length > 0 
                 ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
