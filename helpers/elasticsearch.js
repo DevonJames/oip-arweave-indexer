@@ -3647,7 +3647,7 @@ const getOrganizationsInDB = async () => {
         const qtyOrganizationsInDB = response.aggregations?.count?.value || 0;
         const maxArweaveOrgBlockInDB = response.aggregations?.max_block?.value || 0;
 
-        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in organizations index (max block: ${maxArweaveOrgBlockInDB})`);
+        // console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in organizations index (max block: ${maxArweaveOrgBlockInDB})`);
 
         return {
             qtyOrganizationsInDB,
@@ -4613,11 +4613,16 @@ async function searchArweaveForNewTransactions(foundInDB) {
             hasNextPage = false;
         }
 
+        // Trigger GC occasionally to prevent external memory buildup
+        if (allTransactions.length % 500 === 0 && global.gc) {
+            global.gc();
+        }
+
         // console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
     }
 
     console.log(`🔎 [searchArweaveForNewTransactions] GraphQL query completed. Found ${allTransactions.length} transactions with OIP tags (Index-Method:OIP, Ver:0.8.0) from block ${min} onwards`);
-    return allTransactions.reverse(); // Returning reversed transactions as per your original code
+    return allTransactions.reverse(); // CRITICAL: Return in reverse order (newest first) as required
 }
 
 async function processTransaction(tx, remapTemplates) {

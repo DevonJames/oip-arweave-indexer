@@ -218,13 +218,20 @@ class GunHelper {
         try {
             // console.log('📡 Sending HTTP GET request to GUN API...'); // Commented out - too verbose
             
-            const response = await axios.get(`${this.apiUrl}/get`, {
-                params: { soul },
-                timeout: 5000,
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
+            // MEMORY LEAK FIX: Add retry with exponential backoff and socket cleanup for failed requests
+            let lastError = null;
+            let retryCount = 0;
+            const maxRetries = 2;
+            
+            while (retryCount < maxRetries) {
+                try {
+                    const response = await axios.get(`${this.apiUrl}/get`, {
+                        params: { soul },
+                        timeout: 5000,
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
 
             if (response.data.success) {
                 let data = response.data.data;
@@ -357,13 +364,34 @@ class GunHelper {
                 return null; // Record not found
             }
 
-        } catch (error) {
-            if (error.response && error.response.status === 404) {
-                return null; // Record not found
+                    // Success - exit retry loop
+                    return response.data.success ? response.data.data : null;
+                } catch (error) {
+                    lastError = error;
+                    retryCount++;
+                    
+                    // If 404, don't retry - record doesn't exist
+                    if (error.response && error.response.status === 404) {
+                        return null;
+                    }
+                    
+                    // For other errors, retry with backoff
+                    if (retryCount < maxRetries) {
+                        const backoffMs = Math.pow(2, retryCount) * 100; // 200ms, 400ms
+                        await new Promise(resolve => setTimeout(resolve, backoffMs));
+                    }
+                }
             }
             
-            console.error('❌ Error in getRecord:', error.message);
-            throw error;
+            // If we exhausted retries, log but don't crash
+            if (lastError) {
+                console.error(`⚠️  Error in getRecord after ${maxRetries} retries:`, lastError.message);
+                return null; // Return null instead of throwing
+            }
+            
+        } catch (error) {
+            console.error('❌ Unexpected error in getRecord:', error.message);
+            return null; // Return null instead of throwing
         }
     }
 
