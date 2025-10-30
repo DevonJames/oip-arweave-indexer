@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+# Source .env file if it exists so bash can read environment variables
+if [ -f ".env" ]; then
+    set -a  # Export all variables
+    source .env
+    set +a  # Stop exporting
+    echo "✓ Loaded .env file"
+fi
+
+
 # Wait for Elasticsearch to be ready
 ./wait-for-it.sh elasticsearch:9200 --timeout=90 --strict
 
