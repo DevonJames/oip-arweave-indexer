@@ -4559,6 +4559,14 @@ async function searchArweaveForNewTransactions(foundInDB) {
                 break; // Break the retry loop if the request is successful
             } catch (error) {
                 retryCount++;
+                
+                // RATE LIMIT FIX: Stop retrying immediately on 429 errors
+                if (error.status === 429 || error.message?.includes('429')) {
+                    console.warn(`⚠️  [Arweave] Rate limited (429). Stopping retries for this cycle.`);
+                    response = null;
+                    break; // Exit retry loop immediately
+                }
+                
                 console.error(
                     `Attempt ${retryCount} failed for fetching transactions:`, 
                     error.message
