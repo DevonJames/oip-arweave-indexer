@@ -4514,6 +4514,8 @@ async function searchArweaveForNewTransactions(foundInDB) {
     // const min = (qtyRecordsInDB === 0) ? 1579580 : (maxArweaveBlockInDB + 1); // before todays templates
     const min = Math.max(startBlockHeight, (maxArweaveBlockInDB + 1));
 
+    console.log(`🔍 [searchArweaveForNewTransactions] Searching Arweave for OIP records from block ${min}`);
+
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
     // MEMORY LEAK FIX: Limit maximum transactions to prevent unbounded growth
@@ -4521,9 +4523,11 @@ async function searchArweaveForNewTransactions(foundInDB) {
     let allTransactions = [];
     let hasNextPage = true;
     let afterCursor = null;  // Cursor for pagination
+    let rateLimited = false;  // Track if we hit rate limit
     const endpoint = 'https://arweave.net/graphql';
 
-    while (hasNextPage && allTransactions.length < MAX_TRANSACTIONS_PER_CYCLE) {
+    while (hasNextPage && allTransactions.length < MAX_TRANSACTIONS_PER_CYCLE && !rateLimited) {
+        console.log(`  📄 Pagination: ${allTransactions.length} records fetched so far (searching from block ${min})`);
         const query = gql`
             query {
                 transactions(
@@ -4564,6 +4568,7 @@ async function searchArweaveForNewTransactions(foundInDB) {
                     console.warn(`⚠️  [Arweave] Rate limited (429). Setting 30-minute backoff.`);
                     global.rateLimitBackoffUntil = Date.now() + (30 * 60 * 1000);
                     console.warn(`    Will resume at: ${new Date(global.rateLimitBackoffUntil).toLocaleTimeString()}`);;
+                    rateLimited = true;  // Signal to break out of pagination loop
                     response = null;
                     break; // Exit retry loop immediately
                 }
