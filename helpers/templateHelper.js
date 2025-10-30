@@ -367,8 +367,6 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                 // Continue with blockchain publishing even if local deletion fails
             }
             
-            let stringValue = JSON.stringify(record);
-            recordData += stringValue;
         } else if (record.deleteTemplate !== undefined && typeof record.deleteTemplate === 'object' && (record.deleteTemplate.didTx || record.deleteTemplate.did)) {
             recordType = 'deleteTemplate';
             const didTx = record.deleteTemplate.didTx || record.deleteTemplate.did;
@@ -413,9 +411,6 @@ async function publishNewRecord(record, recordType, publishFiles = false, addMed
                     throw error;
                 }
             }
-            
-            let stringValue = JSON.stringify(record);
-            recordData += stringValue;
 
         } else if (recordType === 'deleteTemplate') {
             // deleteTemplate messages don't need template processing, recordData is already set
