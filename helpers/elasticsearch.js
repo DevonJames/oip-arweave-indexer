@@ -4363,7 +4363,6 @@ const reIndexUnconfirmedRecords = async () => {
 };
 
 async function keepDBUpToDate(remapTemplates) {
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('🔄 [keepDBUpToDate] CYCLE STARTED');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     try {
@@ -4562,7 +4561,9 @@ async function searchArweaveForNewTransactions(foundInDB) {
                 
                 // RATE LIMIT FIX: Stop retrying immediately on 429 errors
                 if (error.status === 429 || error.message?.includes('429')) {
-                    console.warn(`⚠️  [Arweave] Rate limited (429). Stopping retries for this cycle.`);
+                    console.warn(`⚠️  [Arweave] Rate limited (429). Setting 30-minute backoff.`);
+                    global.rateLimitBackoffUntil = Date.now() + (30 * 60 * 1000);
+                    console.warn(`    Will resume at: ${new Date(global.rateLimitBackoffUntil).toLocaleTimeString()}`);;
                     response = null;
                     break; // Exit retry loop immediately
                 }
