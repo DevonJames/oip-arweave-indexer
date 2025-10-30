@@ -572,8 +572,11 @@ initializeIndices()
       // Periodically keep DB up to date
       if (args.keepDBUpToDate) {
           console.log('🔍 [DEBUG] ✅ INSIDE keepDBUpToDate block! Setting up parameters...');
-          const wait = args._[0] ? parseInt(args._[0], 10) : 0; // Delay in seconds
-          const interval = args._[1] ? parseInt(args._[1], 10) : 600; // Interval in seconds
+          // When called as: node index.js --keepDBUpToDate 15 600
+          // minimist parses as: { keepDBUpToDate: 15, _: [600] }
+          // So the delay is args.keepDBUpToDate, and interval is args._[0]
+          const wait = parseInt(args.keepDBUpToDate, 10); // Delay in seconds (from flag value)
+          const interval = args._[0] ? parseInt(args._[0], 10) : 600; // Interval in seconds (from positional arg)
           // const interval = 300;
 
           if (isNaN(wait) || isNaN(interval)) {
