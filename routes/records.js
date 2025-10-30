@@ -447,7 +447,7 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
                 // This also triggers deleteRecordFromDB which deletes the target record immediately
                 const deleteMessage = {
                     delete: {
-                        didTx: didToDelete,
+                        // didTx: didToDelete,
                         did: didToDelete
                     }
                 };
