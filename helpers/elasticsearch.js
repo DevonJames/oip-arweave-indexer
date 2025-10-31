@@ -4473,19 +4473,9 @@ async function keepDBUpToDate(remapTemplates) {
         
         // console.log(getFileInfo(), getLineNumber(), 'Found in DB:', foundInDB);
 
-        const newTransactions = await searchArweaveForNewTransactions(foundInDB);
-        if (newTransactions && newTransactions.length > 0) {
-            console.log(`\n🔍 [keepDBUpToDate] Found ${newTransactions.length} new OIP transactions to process`);
-            for (let i = 0; i < newTransactions.length; i++) {
-                const tx = newTransactions[i];
-                console.log(`\n📦 [Transaction ${i+1}/${newTransactions.length}] Processing: ${tx.id}`);
-                await processTransaction(tx, remapTemplates);
-            }
-            console.log(`\n✅ [keepDBUpToDate] Completed processing ${newTransactions.length} transactions`);
-            // MEMORY LEAK FIX: Clear transaction array after processing
-            newTransactions.length = 0;
-        }
-        else {
+        // searchArweaveForNewTransactions now processes transactions immediately instead of buffering
+        const processedCount = await searchArweaveForNewTransactions(foundInDB, remapTemplates);
+        if (processedCount === 0) {
             console.log(`⏳ [keepDBUpToDate] No new OIP transactions found (checking from block ${foundInDB.maxArweaveBlockInDB + 1})`);
         }
     } catch (error) {
@@ -4512,7 +4502,7 @@ async function keepDBUpToDate(remapTemplates) {
     }
 }
 
-async function searchArweaveForNewTransactions(foundInDB) {
+async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     // console.log('foundinDB:', foundInDB);
     await ensureIndexExists();
     const { qtyRecordsInDB, maxArweaveBlockInDB } = foundInDB;
@@ -4524,16 +4514,20 @@ async function searchArweaveForNewTransactions(foundInDB) {
 
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
-    // MEMORY LEAK FIX: Limit maximum transactions to prevent unbounded growth
+    // MEMORY LEAK FIX: Process transactions immediately instead of buffering
     const MAX_TRANSACTIONS_PER_CYCLE = parseInt(process.env.MAX_TRANSACTIONS_PER_CYCLE) || 1000;
-    let allTransactions = [];
+    let transactionCount = 0;
+    let processedCount = 0;
     let hasNextPage = true;
     let afterCursor = null;  // Cursor for pagination
     let rateLimited = false;  // Track if we hit rate limit
     const endpoint = 'https://arweave.net/graphql';
+    
+    // Store transactions in reverse order as we process them (newest last, oldest first in processing)
+    let transactionsToProcess = [];
 
-    while (hasNextPage && allTransactions.length < MAX_TRANSACTIONS_PER_CYCLE && !rateLimited) {
-        console.log(`  📄 Pagination: ${allTransactions.length} records fetched so far (searching from block ${min})`);
+    while (hasNextPage && transactionCount < MAX_TRANSACTIONS_PER_CYCLE && !rateLimited) {
+        console.log(`  📄 Pagination: ${transactionCount} records fetched so far (searching from block ${min})`);
         const query = gql`
             query {
                 transactions(
@@ -4599,7 +4593,10 @@ async function searchArweaveForNewTransactions(foundInDB) {
         }
 
         const transactions = response.transactions.edges.map(edge => edge.node);
-        allTransactions = allTransactions.concat(transactions);
+        
+        // Store for processing in reverse order (newest first)
+        transactionsToProcess = transactions.concat(transactionsToProcess);
+        transactionCount += transactions.length;
 
         // Pagination logic
         hasNextPage = response.transactions.pageInfo.hasNextPage;
@@ -4608,21 +4605,38 @@ async function searchArweaveForNewTransactions(foundInDB) {
             : null;
 
         // MEMORY LEAK FIX: Check if we've reached the limit
-        if (allTransactions.length >= MAX_TRANSACTIONS_PER_CYCLE) {
+        if (transactionCount >= MAX_TRANSACTIONS_PER_CYCLE) {
             console.log(`[searchArweaveForNewTransactions] Reached transaction limit (${MAX_TRANSACTIONS_PER_CYCLE}), will fetch more in next cycle`);
             hasNextPage = false;
         }
 
         // Trigger GC occasionally to prevent external memory buildup
-        if (allTransactions.length % 500 === 0 && global.gc) {
+        if (transactionCount % 500 === 0 && global.gc) {
             global.gc();
         }
 
-        // console.log('Fetched', transactions.length, 'transactions, total so far:', allTransactions.length, getFileInfo(), getLineNumber());
+        // console.log('Fetched', transactions.length, 'transactions, total so far:', transactionCount, getFileInfo(), getLineNumber());
     }
 
-    console.log(`🔎 [searchArweaveForNewTransactions] GraphQL query completed. Found ${allTransactions.length} transactions with OIP tags (Index-Method:OIP, Ver:0.8.0) from block ${min} onwards`);
-    return allTransactions.reverse(); // CRITICAL: Return in reverse order (newest first) as required
+    // MEMORY LEAK FIX: Process transactions immediately as we find them
+    // This prevents buffering entire transaction objects in memory
+    console.log(`🔎 [searchArweaveForNewTransactions] GraphQL query completed. Found ${transactionCount} transactions with OIP tags (Index-Method:OIP, Ver:0.8.0) from block ${min} onwards`);
+    console.log(`🔍 [keepDBUpToDate] Processing ${transactionsToProcess.length} transactions...`);
+    
+    for (let i = 0; i < transactionsToProcess.length; i++) {
+        const tx = transactionsToProcess[i];
+        console.log(`📦 [Transaction ${i+1}/${transactionsToProcess.length}] Processing: ${tx.id}`);
+        await processTransaction(tx, remapTemplates);
+        processedCount++;
+    }
+    
+    console.log(`✅ [searchArweaveForNewTransactions] Completed processing ${processedCount} transactions`);
+    
+    // Clear array to free memory
+    transactionsToProcess.length = 0;
+    transactionsToProcess = null;
+    
+    return processedCount;
 }
 
 async function processTransaction(tx, remapTemplates) {
@@ -4956,7 +4970,14 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 isDeleteMessageFound = true;
             }
         } catch (error) {
-            console.error(getFileInfo(), getLineNumber(), `Invalid JSON data, skipping: ${transaction.transactionId}`, transaction.data, typeof transaction.data, error);
+            // Check if this looks like a malformed delete message (contains both array and object JSON)
+            if (transaction.data && typeof transaction.data === 'string' && 
+                transaction.data.includes('{"delete"') && 
+                (transaction.data.match(/{"delete"/g) || []).length > 1) {
+                console.warn(getFileInfo(), getLineNumber(), `Malformed delete message, skipping ${transaction.transactionId}`, transaction.data);
+            } else {
+                console.error(getFileInfo(), getLineNumber(), `Invalid JSON data, skipping: ${transaction.transactionId}`, transaction.data, typeof transaction.data, error);
+            }
             return { records: newRecords, recordsToDelete };
         }
     } else if (typeof transaction.data === 'object') {
