@@ -754,7 +754,7 @@ const indexRecord = async (record) => {
                 body: processedRecord,
                 refresh: 'wait_for' // Wait for indexing to be complete before returning
             });
-            console.log(`      ✅ [indexRecord] Record CREATED successfully: ${recordId} (storage: ${record.oip?.storage || 'unknown'}) (${response.result})`);
+            console.log(`      ✅ [indexRecord] Record CREATED successfully: ${recordId} (${response.result})`);
         }
 
     } catch (error) {
@@ -4652,12 +4652,12 @@ async function processTransaction(tx, remapTemplates) {
         return acc;
     }, {});
 
-    console.log(`   🏷️  Transaction tags:`, {
-        'Type': tags['Type'],
-        'RecordType': tags['RecordType'],
-        'Index-Method': tags['Index-Method'],
-        'Ver': tags['Ver']
-    });
+    // console.log(`   🏷️  Transaction tags:`, {
+    //     'Type': tags['Type'],
+    //     'RecordType': tags['RecordType'],
+    //     'Index-Method': tags['Index-Method'],
+    //     'Ver': tags['Ver']
+    // });
 
     // { name: "Ver", values: ["0.8.0"] }
     if (tags['Type'] === 'Record' && tags['Index-Method'] === 'OIP' && semver.gte(tags['Ver'], '0.8.0')) {
@@ -4877,7 +4877,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
     const transactionId = transaction.transactionId;
     const tags = transaction.tags.slice(0, -1);
     const recordType = tags.find(tag => tag.name === 'RecordType')?.value;
-    console.log(`   📋 [processNewRecord] Record type: ${recordType}`);
+    // console.log(`   📋 [processNewRecord] Record type: ${recordType}`);
     // handle creator registration
     let creatorInfo;
     if (recordType && recordType === 'creatorRegistration') {
@@ -4944,11 +4944,11 @@ async function processNewRecord(transaction, remapTemplates = []) {
         console.log(`   ✅ [processNewRecord] Special record type processed: ${recordType}`);
         return { records: newRecords, recordsToDelete };
     } else {
-        console.log(`   🔨 [processNewRecord] Processing as standard record...`);
+        // console.log(`   🔨 [processNewRecord] Processing as standard record...`);
     // handle records
     dataForSignature = JSON.stringify(tags) + transaction.data;
     let creatorDid = txidToDid(transaction.creator);
-    console.log(getFileInfo(), getLineNumber());
+    // console.log(getFileInfo(), getLineNumber());
     
     creatorInfo = (!creatorInfo) ? await searchCreatorByAddress(creatorDid) : creatorInfo;
     // console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
