@@ -331,6 +331,12 @@ const expandData = async (compressedData, templates) => {
 
     const expandedRecords = await Promise.all(records.map(async record => {
         // console.log('es 72 record:', record.t);
+        
+        // Skip translation for delete and deleteTemplate messages
+        if (record.delete || record.deleteTemplate) {
+            console.log('Skipping template translation for delete/deleteTemplate message');
+            return null;
+        }
 
         let template = findTemplateByTxId(record.t, templates);
         // console.log('es 70 template:', record.t, template);
@@ -4965,7 +4971,9 @@ async function processNewRecord(transaction, remapTemplates = []) {
     if (typeof transaction.data === 'string') {
         try {
             transactionData = JSON.parse(transaction.data);
-            if (transactionData.hasOwnProperty('deleteTemplate') || transactionData.hasOwnProperty('delete')) {
+            // Check if transactionData is an array and look at the first element
+            const dataToCheck = Array.isArray(transactionData) ? transactionData[0] : transactionData;
+            if (dataToCheck && (dataToCheck.hasOwnProperty('deleteTemplate') || dataToCheck.hasOwnProperty('delete'))) {
                 console.log(getFileInfo(), getLineNumber(), 'DELETE TEMPLATE MESSAGE FOUND, processing', transaction.transactionId);
                 isDeleteMessageFound = true;
             }
