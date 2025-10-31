@@ -4974,8 +4974,10 @@ async function processNewRecord(transaction, remapTemplates = []) {
             // Check if transactionData is an array and look at the first element
             const dataToCheck = Array.isArray(transactionData) ? transactionData[0] : transactionData;
             if (dataToCheck && (dataToCheck.hasOwnProperty('deleteTemplate') || dataToCheck.hasOwnProperty('delete'))) {
-                console.log(getFileInfo(), getLineNumber(), 'DELETE TEMPLATE MESSAGE FOUND, processing', transaction.transactionId);
+                const msgType = dataToCheck.deleteTemplate ? 'DELETE TEMPLATE' : 'DELETE RECORD';
+                console.log(getFileInfo(), getLineNumber(), msgType + ' MESSAGE FOUND, processing', transaction.transactionId);
                 isDeleteMessageFound = true;
+                transactionData = dataToCheck;  // Use the first element for the rest of the function
             }
         } catch (error) {
             // Check if this is a malformed delete message - look for ]{ which indicates array/object concatenation
@@ -5036,10 +5038,14 @@ async function processNewRecord(transaction, remapTemplates = []) {
             }
         }
         
+        // Determine if this is a delete record or deleteTemplate
+        const isDeleteTemplate = transactionData.hasOwnProperty('deleteTemplate');
+        const recordTypeStr = isDeleteTemplate ? 'deleteTemplate' : 'delete';
+        
         record = {
             data: {...transactionData},
             oip: {
-                recordType: 'deleteTemplate',
+                recordType: recordTypeStr,
                 did: 'did:arweave:' + transaction.transactionId,
                 didTx: 'did:arweave:' + transaction.transactionId, // Backward compatibility
                 inArweaveBlock: inArweaveBlock,
@@ -5069,8 +5075,11 @@ async function processNewRecord(transaction, remapTemplates = []) {
             }
         }
         // console.log(getFileInfo(), getLineNumber(), creatorDid, transaction);
-        await deleteRecordFromDB(creatorDid, transaction);
-        console.log(getFileInfo(), getLineNumber(), 'Delete template message indexed:', transaction.transactionId, 'and referenced template deleted', record.data.deleteTemplate?.didTx || record.data.delete?.didTx);
+        if (isDeleteMessageFound) {
+            // Pass the extracted transactionData to deleteRecordFromDB
+            await deleteRecordFromDB(creatorDid, { ...transaction, data: transactionData });
+        }
+        console.log(getFileInfo(), getLineNumber(), 'Delete message indexed:', transaction.transactionId, 'and target deleted', record.data.deleteTemplate?.didTx || record.data.deleteTemplate?.did || record.data.delete?.didTx || record.data.delete?.did);
 
     } else {
         // handle new records
