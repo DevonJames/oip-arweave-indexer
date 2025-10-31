@@ -131,9 +131,13 @@ axios.interceptors.response.use(
     return response;
   },
   (error) => {
-    // MEMORY LEAK FIX: Log errors for diagnostics
+    // MEMORY LEAK FIX: Log errors for diagnostics (suppress expected 404s from GUN relay)
     if (error.response?.config?.url) {
-      console.error(`[Axios Error] ${error.message} from ${error.response.config.url}`);
+      // Suppress 404 errors from GUN relay - they're expected when index parent nodes don't have data
+      const isGunRelay404 = error.response.status === 404 && error.response.config.url?.includes('gun-relay');
+      if (!isGunRelay404) {
+        console.error(`[Axios Error] ${error.message} from ${error.response.config.url}`);
+      }
     }
     return Promise.reject(error);
   }
