@@ -4978,6 +4978,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 console.log(getFileInfo(), getLineNumber(), msgType + ' MESSAGE FOUND, processing', transaction.transactionId);
                 isDeleteMessageFound = true;
                 transactionData = dataToCheck;  // Use the first element for the rest of the function
+                console.log(getFileInfo(), getLineNumber(), 'DEBUG: After extraction, transactionData type:', typeof transactionData, 'isArray:', Array.isArray(transactionData), 'content:', transactionData);
             }
         } catch (error) {
             // Check if this is a malformed delete message - look for ]{ which indicates array/object concatenation
@@ -5009,7 +5010,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         
         // Safety check: Skip old-format template deletions
         if (transactionData.hasOwnProperty('delete') && !transactionData.hasOwnProperty('deleteTemplate')) {
-            const targetDid = transactionData.delete.didTx;
+            const targetDid = transactionData.delete.didTx || transactionData.delete.did;
             console.log(getFileInfo(), getLineNumber(), 'Checking if delete target is a template:', targetDid);
             
             // Check if the target is a template by searching the templates index
@@ -5042,6 +5043,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         const isDeleteTemplate = transactionData.hasOwnProperty('deleteTemplate');
         const recordTypeStr = isDeleteTemplate ? 'deleteTemplate' : 'delete';
         
+        console.log(getFileInfo(), getLineNumber(), 'DEBUG: Before indexing, transactionData type:', typeof transactionData, 'isArray:', Array.isArray(transactionData));
         record = {
             data: {...transactionData},
             oip: {
