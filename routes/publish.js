@@ -1411,12 +1411,9 @@ router.post('/newWorkout', async (req, res) => {
         const nonStandardWorkout = req.body.workout?.nonStandardWorkout || false;
         let recordType = 'workout';
 
-        let resolvedWorkout;
-        if (!nonStandardWorkout) {
-          resolvedWorkout = await resolveDrefsInRecord(req.body, 'workout', {exercise: 'exercise'}, blockchain);
-        } else {
-          resolvedWorkout = req.body;
-        }
+        // Always resolve drefs to handle nested exercise structures
+        // This ensures new exercise records are created even for nonStandardWorkouts
+        let resolvedWorkout = await resolveDrefsInRecord(req.body, 'workout', {exercise: 'exercise'}, blockchain);
 
         if (!resolvedWorkout.workout.total_duration_minutes) {
           let total = 0;
