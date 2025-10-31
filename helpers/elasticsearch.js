@@ -4970,10 +4970,8 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 isDeleteMessageFound = true;
             }
         } catch (error) {
-            // Check if this looks like a malformed delete message (contains both array and object JSON)
-            if (transaction.data && typeof transaction.data === 'string' && 
-                transaction.data.includes('{"delete"') && 
-                (transaction.data.match(/{"delete"/g) || []).length > 1) {
+            // Check if this is a malformed delete message - look for ]{ which indicates array/object concatenation
+            if (transaction.data && typeof transaction.data === 'string' && /\]\{/.test(transaction.data)) {
                 console.warn(getFileInfo(), getLineNumber(), `Malformed delete message, skipping ${transaction.transactionId}`, transaction.data);
             } else {
                 console.error(getFileInfo(), getLineNumber(), `Invalid JSON data, skipping: ${transaction.transactionId}`, transaction.data, typeof transaction.data, error);
