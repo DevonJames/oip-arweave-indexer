@@ -847,7 +847,10 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             ? JSON.parse(transaction.data) 
             : transaction.data;
         
-        didTxToDelete = parsedData.deleteTemplate?.didTx || parsedData.deleteTemplate?.did || parsedData.delete?.didTx || parsedData.delete?.did;
+        // If parsedData is an array, extract the first element
+        const dataToProcess = Array.isArray(parsedData) ? parsedData[0] : parsedData;
+        
+        didTxToDelete = dataToProcess.deleteTemplate?.didTx || dataToProcess.deleteTemplate?.did || dataToProcess.delete?.didTx || dataToProcess.delete?.did;
         console.log(getFileInfo(), getLineNumber(), 'didTxToDelete:', creatorDid, transaction.creator, transaction.data, { didTxToDelete })
         
         if (!didTxToDelete) {
