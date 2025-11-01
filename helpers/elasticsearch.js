@@ -3378,9 +3378,9 @@ async function getRecords(queryParams) {
             .map(tag => ({ tag, count: tagCounts[tag] }))
             .sort((a, b) => b.count - a.count);
             
-            // Apply Paging to tag summary
-            const pageSize = parseInt(limit) || 20; // Default to 20 if not specified
-            const pageNumber = parseInt(page) || 1;  // Default to the first page
+            // Apply Paging to tag summary (pageSize and pageNumber already declared at top)
+            // const pageSize = parseInt(limit) || 20; // Already declared
+            // const pageNumber = parseInt(page) || 1;  // Already declared
             const tagPageNumber = parseInt(tagPage) || 1;  // Default to the first page
             const tagStartIndex = (tagPageNumber - 1) * tagCount;
             const tagEndIndex = tagStartIndex + tagCount;
@@ -3450,9 +3450,9 @@ async function getRecords(queryParams) {
         
         }
 
-        // Apply Paging
-        const pageSize = parseInt(limit) || 20; // Default to 20 if not specified
-        const pageNumber = parseInt(page) || 1;  // Default to the first page
+        // Apply Paging (pageSize and pageNumber already declared at top of function)
+        // const pageSize = parseInt(limit) || 20; // Already declared
+        // const pageNumber = parseInt(page) || 1;  // Already declared
         
         const startIndex = (pageNumber - 1) * pageSize;
         const endIndex = startIndex + pageSize;
