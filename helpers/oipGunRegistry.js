@@ -71,8 +71,9 @@ class OIPGunRegistry {
             // console.log('✅ Registered OIP record in GUN registry:', recordDid);
             
         } catch (error) {
-            console.error('❌ Failed to register OIP record in registry:', error);
-            throw error;
+            // Log concise error with DID for identification
+            console.error(`❌ Failed to register OIP record ${recordDid}: ${error.message || error.code || 'Unknown error'}`);
+            // Don't re-throw to avoid blocking other records from being registered
         }
     }
     

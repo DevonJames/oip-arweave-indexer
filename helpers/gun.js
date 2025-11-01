@@ -201,7 +201,7 @@ class GunHelper {
             } else if (error.code === 'ETIMEDOUT') {
                 throw new Error('GUN relay timeout - service may be overloaded');
             } else {
-                console.error('❌ Error in putRecord:', error.message);
+                // Only log concise error message, full stack trace not needed
                 throw error;
             }
         }
