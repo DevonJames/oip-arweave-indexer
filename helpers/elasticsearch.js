@@ -1801,217 +1801,82 @@ async function getRecords(queryParams) {
     
     // console.log('get records using:', {queryParams});
     try {
-        // CACHE BYPASS: Pass forceRefresh parameter to getRecordsInDB
-        const forceRefresh = queryParams.forceRefresh === true || queryParams.forceRefresh === 'true';
-        const result = await getRecordsInDB(forceRefresh);
-        let records = result.records;
-        let recordsInDB = result.records;
+        // ============================================================
+        // OPTIMIZED ELASTICSEARCH QUERY IMPLEMENTATION
+        // Phases 1-3: Use ES for filtering instead of fetching all + in-memory filter
+        // ============================================================
+        
+        // Build Elasticsearch query from parameters
+        const esQuery = buildElasticsearchQuery(queryParams);
+        
+        // Determine if we need post-processing (affects pagination)
+        const requiresPostProcessing = needsPostProcessing(queryParams);
+        const overFetchMultiplier = getOverFetchMultiplier(queryParams);
+        
+        // Calculate pagination for ES query
+        const pageSize = parseInt(limit) || 20;
+        const pageNumber = parseInt(page) || 1;
+        
+        // If post-processing needed, fetch more records to account for filtering
+        const esFrom = requiresPostProcessing ? 0 : (pageNumber - 1) * pageSize;
+        const esSize = requiresPostProcessing 
+            ? pageSize * overFetchMultiplier 
+            : pageSize;
+        
+        // Build sort configuration
+        const esSort = buildElasticsearchSort(sortBy);
+        
+        // Execute optimized Elasticsearch query
+        console.log(`🚀 [ES Query] Executing optimized query: from=${esFrom}, size=${esSize}, requiresPostProcessing=${requiresPostProcessing}`);
+        
+        const searchResponse = await elasticClient.search({
+            index: 'records',
+            body: {
+                query: esQuery,
+                sort: esSort || [{ "oip.inArweaveBlock": { order: 'desc' } }],
+                from: esFrom,
+                size: esSize
+            }
+        });
+        
+        // Extract records from search response
+        let records = searchResponse.hits.hits.map(hit => hit._source);
+        const totalHits = searchResponse.hits.total.value;
+        
+        console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
+        
+        // Get metadata (for backward compatibility with old code)
+        // Note: We still need these for response metadata
+        const result = await getRecordsInDB(false); // Use cache for metadata only
+        let recordsInDB = result.records; // Used only for resolution
         let qtyRecordsInDB = result.qtyRecordsInDB;
         let maxArweaveBlockInDB = result.finalMaxRecordArweaveBlock;
 
-        // Perform filtering based on query parameters
-
-        // NEW: Filter by storage type (detect from DID prefix)
-        if (source && source !== 'all') {
-            records = records.filter(record => {
-                const did = record.oip?.did || record.oip?.didTx;
-                if (!did) return false;
-                
-                if (source === 'gun') return did.startsWith('did:gun:');
-                if (source === 'arweave') return did.startsWith('did:arweave:');
-                if (source === 'irys') return did.startsWith('did:irys:');
-                return true;
-            });
-            // console.log(`after filtering by source=${source}, there are`, records.length, 'records');
-        }
-        if (storage && storage !== 'all') {
-            records = records.filter(record => {
-                const did = record.oip?.did || record.oip?.didTx;
-                if (!did) return false;
-                
-                if (storage === 'gun') return did.startsWith('did:gun:');
-                if (storage === 'arweave') return did.startsWith('did:arweave:');
-                if (storage === 'irys') return did.startsWith('did:irys:');
-                return true;
-            });
-            // console.log(`after filtering by storage=${storage}, there are`, records.length, 'records');
-        }
-
-        // console.log('before filtering, there are', qtyRecordsInDB, 'records');
-
-
-        if (includeDeleteMessages === false) {
-            records = records.filter(record => record.oip.recordType !== 'deleteMessage');
-            // console.log('after filtering out deleteMessages, there are', records.length, 'records');
-        }
-            
-
-        if (dateStart != undefined) {
-            records = records.filter(record => {
-                let timestampToCheck;
-                
-                // Handle special record types with their own date fields
-                if (record.oip.recordType === 'workoutSchedule' && record.data?.workoutSchedule?.scheduled_date) {
-                    // scheduled_date is stored as Unix timestamp
-                    timestampToCheck = record.data.workoutSchedule.scheduled_date;
-                } else if (record.oip.recordType === 'mealPlan' && record.data?.mealPlan?.meal_date) {
-                    // meal_date is stored as Unix timestamp
-                    timestampToCheck = record.data.mealPlan.meal_date;
-                } else {
-                    // Default behavior for other record types
-                    const basicData = record.data.basic;
-                    if (basicData && basicData.date) {
-                        timestampToCheck = basicData.date; // Unix timestamp
-                    }
-                }
-                
-                if (timestampToCheck !== undefined) {
-                    // Convert dateStart to Unix timestamp if it's a Date object
-                    const dateStartTimestamp = dateStart instanceof Date ? Math.floor(dateStart.getTime() / 1000) : dateStart;
-                    return timestampToCheck >= dateStartTimestamp;
-                }
-                return false;
-            });
-            // console.log('after filtering by dateStart, there are', records.length, 'records');
-        }
-
-        if (dateEnd != undefined) {
-            records = records.filter(record => {
-                let timestampToCheck;
-                
-                // Handle special record types with their own date fields
-                if (record.oip.recordType === 'workoutSchedule' && record.data?.workoutSchedule?.scheduled_date) {
-                    // scheduled_date is stored as Unix timestamp
-                    timestampToCheck = record.data.workoutSchedule.scheduled_date;
-                } else if (record.oip.recordType === 'mealPlan' && record.data?.mealPlan?.meal_date) {
-                    // meal_date is stored as Unix timestamp
-                    timestampToCheck = record.data.mealPlan.meal_date;
-                } else {
-                    // Default behavior for other record types
-                    const basicData = record.data.basic;
-                    if (basicData && basicData.date) {
-                        timestampToCheck = basicData.date; // Unix timestamp
-                    }
-                }
-                
-                if (timestampToCheck !== undefined) {
-                    // Convert dateEnd to Unix timestamp if it's a Date object
-                    const dateEndTimestamp = dateEnd instanceof Date ? Math.floor(dateEnd.getTime() / 1000) : dateEnd;
-                    return timestampToCheck <= dateEndTimestamp;
-                }
-                return false;
-            });
-            // console.log('after filtering by dateEnd, there are', records.length, 'records');
-        }
-
-        // Filter by scheduledOn date for workoutSchedule and mealPlan records
-        if (scheduledOn != undefined) {
-            console.log('Filtering by scheduledOn:', scheduledOn);
-            
-            // Parse the YYYY-MM-DD format and create start/end of day timestamps
-            const dateMatch = scheduledOn.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-            if (!dateMatch) {
-                console.warn('Invalid scheduledOn date format. Expected YYYY-MM-DD, got:', scheduledOn);
-            } else {
-                const [, year, month, day] = dateMatch;
-                
-                // Create start of day (midnight) and end of day timestamps
-                // Using local time to match how workout schedules are typically stored
-                const startOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
-                const endOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999);
-                
-                const startTimestamp = Math.floor(startOfDay.getTime() / 1000);
-                const endTimestamp = Math.floor(endOfDay.getTime() / 1000);
-                
-                console.log(`Filtering workoutSchedule and mealPlan records for date ${scheduledOn}`);
-                console.log(`Start timestamp: ${startTimestamp} (${startOfDay.toISOString()})`);
-                console.log(`End timestamp: ${endTimestamp} (${endOfDay.toISOString()})`);
-                
-                records = records.filter(record => {
-                    // Only apply this filter to workoutSchedule and mealPlan records
-                    if (record.oip.recordType !== 'workoutSchedule' && record.oip.recordType !== 'mealPlan') {
-                        return true; // Keep other record types
-                    }
-                    
-                    // Get the date field based on record type
-                    let scheduledDate;
-                    if (record.oip.recordType === 'workoutSchedule') {
-                        scheduledDate = record.data?.workoutSchedule?.scheduled_date;
-                    } else if (record.oip.recordType === 'mealPlan') {
-                        scheduledDate = record.data?.mealPlan?.meal_date;
-                    }
-                    
-                    if (!scheduledDate) {
-                        console.warn(`${record.oip.recordType} record ${record.oip?.did || record.oip?.didTx} missing date field`);
-                        return false;
-                    }
-                    
-                    // Check if the scheduled_date/meal_date falls within the specified day
-                    const isMatch = scheduledDate >= startTimestamp && scheduledDate <= endTimestamp;
-                    
-                    if (isMatch) {
-                        console.log(`✅ Match found: ${record.oip?.did || record.oip?.didTx} (${record.oip.recordType}) scheduled for ${new Date(scheduledDate * 1000).toISOString()}`);
-                    }
-                    
-                    return isMatch;
-                });
-                
-                console.log(`After filtering by scheduledOn=${scheduledOn}, there are ${records.length} records`);
-            }
-        }
-
-        if (inArweaveBlock != undefined) {
-            if (inArweaveBlock === 'bad') {
-            records = records.filter(record => {
-                const inArweaveBlock = record.oip.inArweaveBlock;
-                return isNaN(inArweaveBlock) || inArweaveBlock === null || inArweaveBlock === undefined || typeof inArweaveBlock !== 'number';
-            });
-            // console.log('after filtering by invalid inArweaveBlock, there are', records.length, 'records');
-            }
-            else {
-            // otherwise inArweaveBlock is a number
-            records = records.filter(record => {
-                return record.oip.inArweaveBlock === inArweaveBlock;
-            });
-            // console.log('after filtering by valid inArweaveBlock, there are', records.length, 'records');
-            }
-        }
-
-        // if (creator_name != undefined) {
-        //     records = records.filter(record => {
-        //     return record.oip.creator.name.toLowerCase() === creator_name.toLowerCase();
-        //     });
-        //     console.log('after filtering by creator_name, there are', records.length, 'records');
-        // }
-
-        if (creatorHandle != undefined) {
-            records = records.filter(record => {
-            return record.oip.creator.creatorHandle === creatorHandle;
-            });
-            // console.log('after filtering by creatorHandle, there are', records.length, 'records');
-        }
-
-        if (creator_did_address != undefined) {
-            const decodedCreatorDidAddress = decodeURIComponent(creator_did_address);
-            records = records.filter(record => {
-            return record.oip.creator.didAddress === decodedCreatorDidAddress;
-            });
-            // console.log('after filtering by creator_did_address, there are', records.length, 'records');
-        }
-
-        // if (txid) {
-        //     didTx = 'did:arweave:'+txid;
-        //     records = records.filter(record => record.oip.didTx === didTx);
-        // }
-
-        // Update DID filtering to use normalized field and support both did and didTx
-        if (normalizedDid != undefined) {
-            records = records.filter(record => {
-                const recordDid = record.oip?.did || record.oip?.didTx;
-                return recordDid === normalizedDid;
-            });
-            // console.log(`after filtering by DID=${normalizedDid}, there are`, records.length, 'records');
-        }
+        // ============================================================
+        // PHASE 4: POST-PROCESSING FILTERS
+        // These filters require complex logic that ES cannot handle efficiently
+        // ============================================================
+        
+        // Note: The following filters are now handled in Elasticsearch:
+        // - source, storage (DID prefix filtering)
+        // - includeDeleteMessages (record type filtering)
+        // - dateStart, dateEnd (range queries)
+        // - scheduledOn (date range for workoutSchedule/mealPlan)
+        // - inArweaveBlock (term query or exists)
+        // - creatorHandle, creator_did_address (term queries)
+        // - recordType (term query)
+        // - tags (terms query with AND/OR modes)
+        // - search (multi_match query with AND/OR modes)
+        // - equipmentRequired, exerciseType, cuisine, model (wildcard/terms queries)
+        // - fieldSearch (wildcard or term query)
+        // - exactMatch (term queries)
+        // - hasAudio (exists queries)
+        // - url (multi-field term query)
+        //
+        // Only complex filters remain below (those that need post-processing):
+        
+        // Template filtering - requires object key inspection
+        // (kept as post-processing because it searches through object keys dynamically)
 
         if (template != undefined) {
             records = records.filter(record => {
@@ -2030,25 +1895,9 @@ async function getRecords(queryParams) {
             // console.log('after filtering by template, there are', records.length, 'records');
         }
 
-        if (recordType != undefined) {
-            records = records.filter(record => {
-                // console.log('record', record);
-                return record.oip.recordType && record.oip.recordType.toLowerCase() === recordType.toLowerCase();
-            });
-            // console.log('after filtering by recordType, there are', records.length, 'records');
-            
-            // Special filtering for nutritionalInfo records - only include records with actual nutritional data
-            if (recordType.toLowerCase() === 'nutritionalinfo') {
-                const beforeFilterCount = records.length;
-                records = records.filter(record => {
-                    const hasNutritionalInfo = record.data?.nutritionalInfo && 
-                                              Object.keys(record.data.nutritionalInfo).length > 0;
-                    return hasNutritionalInfo;
-                });
-                console.log(`Filtered nutritionalInfo records: ${beforeFilterCount} -> ${records.length} (removed ${beforeFilterCount - records.length} records without nutritional data)`);
-            }
-        }
+        // recordType filter now handled in Elasticsearch (no longer needed here)
 
+        // didTxRef - requires recursive object search (kept as post-processing)
         if (didTxRef != undefined) {
             // console.log('didTxRef:', didTxRef);
 
@@ -2075,219 +1924,16 @@ async function getRecords(queryParams) {
             // console.log('after filtering by didTxRef, there are', records.length, 'records');
         }
         
-        // Add exactMatch filtering
-        if (exactMatch != undefined) {
-            // console.log('exactMatch:', exactMatch);
-            try {
-                const exactMatchObj = JSON.parse(exactMatch);
-                // console.log('parsed exactMatch:', exactMatchObj);
-                
-                records = records.filter(record => {
-                    return Object.entries(exactMatchObj).every(([fieldPath, expectedValue]) => {
-                        // Navigate through the nested object structure
-                        const pathParts = fieldPath.split('.');
-                        let currentValue = record;
-                        
-                        for (const part of pathParts) {
-                            if (currentValue && typeof currentValue === 'object' && part in currentValue) {
-                                currentValue = currentValue[part];
-                            } else {
-                                return false; // Path doesn't exist
-                            }
-                        }
-                        
-                        // Check if the final value matches exactly
-                        return currentValue === expectedValue;
-                    });
-                });
-                // console.log('after filtering by exactMatch, there are', records.length, 'records');
-            } catch (error) {
-                console.error('Error parsing exactMatch JSON:', error);
-            }
-        }
+        // exactMatch, url, tags filters now handled in Elasticsearch (no longer needed here)
         
-        // Helper function to calculate string similarity score
-        const calculateSimilarityScore = (fieldValue, searchValue) => {
-            const fieldLower = String(fieldValue).toLowerCase().trim();
-            const searchLower = String(searchValue).toLowerCase().trim();
-            
-            // Exact match (case-insensitive) gets highest score
-            if (fieldLower === searchLower) {
-                return 1000;
-            }
-            
-            // Starts with search term gets very high score
-            if (fieldLower.startsWith(searchLower)) {
-                return 900;
-            }
-            
-            // Ends with search term gets high score
-            if (fieldLower.endsWith(searchLower)) {
-                return 800;
-            }
-            
-            // Contains search term as whole word gets high score
-            const wordBoundaryRegex = new RegExp(`\\b${searchLower}\\b`, 'i');
-            if (wordBoundaryRegex.test(fieldLower)) {
-                return 700;
-            }
-            
-            // Contains search term anywhere gets medium score
-            if (fieldLower.includes(searchLower)) {
-                return 600;
-            }
-            
-            // Calculate Levenshtein distance for remaining cases
-            const levenshteinDistance = (str1, str2) => {
-                const matrix = [];
-                
-                for (let i = 0; i <= str2.length; i++) {
-                    matrix[i] = [i];
-                }
-                
-                for (let j = 0; j <= str1.length; j++) {
-                    matrix[0][j] = j;
-                }
-                
-                for (let i = 1; i <= str2.length; i++) {
-                    for (let j = 1; j <= str1.length; j++) {
-                        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-                            matrix[i][j] = matrix[i - 1][j - 1];
-                        } else {
-                            matrix[i][j] = Math.min(
-                                matrix[i - 1][j - 1] + 1, // substitution
-                                matrix[i][j - 1] + 1,     // insertion
-                                matrix[i - 1][j] + 1      // deletion
-                            );
-                        }
-                    }
-                }
-                
-                return matrix[str2.length][str1.length];
-            };
-            
-            const distance = levenshteinDistance(fieldLower, searchLower);
-            const maxLength = Math.max(fieldLower.length, searchLower.length);
-            const similarity = 1 - (distance / maxLength);
-            
-            // Scale similarity to 0-500 range for low matches
-            return Math.floor(similarity * 500);
-        };
+        // ============================================================
+        // POST-PROCESSING: Add Scores for Ranking
+        // ES filtered the data, now we add scores for custom sorting
+        // ============================================================
         
-        // Add flexible field search filtering
-        if (fieldSearch !== undefined && fieldName !== undefined) {
-            console.log(`Filtering by fieldName="${fieldName}" with value="${fieldSearch}" (mode: ${fieldMatchMode})`);
-            
-            // Helper function to safely navigate nested object paths
-            const getNestedValue = (obj, path) => {
-                const pathParts = path.split('.');
-                let currentValue = obj;
-                
-                for (const part of pathParts) {
-                    if (currentValue && typeof currentValue === 'object' && part in currentValue) {
-                        currentValue = currentValue[part];
-                    } else {
-                        return undefined; // Path doesn't exist
-                    }
-                }
-                
-                return currentValue;
-            };
-            
-            // Filter and add similarity scores
-            records = records.filter(record => {
-                const fieldValue = getNestedValue(record.data, fieldName);
-                
-                // If field doesn't exist in this record, exclude it
-                if (fieldValue === undefined || fieldValue === null) {
-                    return false;
-                }
-                
-                // Convert both values to strings for comparison
-                const fieldValueStr = String(fieldValue);
-                const searchValueStr = String(fieldSearch);
-                
-                // Perform matching based on mode
-                if (fieldMatchMode.toLowerCase() === 'exact') {
-                    // Exact match - normalize dashes and spaces to treat them as equivalent
-                    const normalizeDashesSpaces = (str) => str.toLowerCase().replace(/[-\s]+/g, ' ').trim();
-                    const normalizedField = normalizeDashesSpaces(fieldValueStr);
-                    const normalizedSearch = normalizeDashesSpaces(searchValueStr);
-                    
-                    const matches = normalizedField === normalizedSearch;
-                    if (matches) {
-                        record.fieldSearchScore = 1000; // Max score for exact match
-                    }
-                    return matches;
-                } else {
-                    // Partial match (case-insensitive) - default
-                    const matches = fieldValueStr.toLowerCase().includes(searchValueStr.toLowerCase());
-                    if (matches) {
-                        // Calculate similarity score for sorting
-                        record.fieldSearchScore = calculateSimilarityScore(fieldValueStr, searchValueStr);
-                    }
-                    return matches;
-                }
-            });
-            
-            console.log(`After filtering by fieldName="${fieldName}", there are ${records.length} records`);
-            
-            // If no explicit sortBy is provided, sort by similarity score
-            if (!sortBy || sortBy === 'inArweaveBlock:desc') {
-                records.sort((a, b) => {
-                    const scoreA = a.fieldSearchScore || 0;
-                    const scoreB = b.fieldSearchScore || 0;
-                    
-                    if (scoreB !== scoreA) {
-                        return scoreB - scoreA; // Higher score first
-                    }
-                    
-                    // Secondary sort by block height if scores are equal
-                    return (b.oip?.inArweaveBlock || 0) - (a.oip?.inArweaveBlock || 0);
-                });
-                console.log(`Sorted ${records.length} records by fieldSearch similarity score`);
-                
-                // Log top 5 matches for debugging
-                if (records.length > 0) {
-                    console.log('Top matches:');
-                    records.slice(0, 5).forEach((record, idx) => {
-                        const fieldValue = getNestedValue(record.data, fieldName);
-                        console.log(`  ${idx + 1}. "${fieldValue}" (score: ${record.fieldSearchScore})`);
-                    });
-                }
-            }
-        }
-        
-        if (url !== undefined) {
-            // console.log('url to match:', url);
-            records = records.filter(record => {
-                return record.data && record.data.basic && 
-                       (record.data.basic.url === url || record.data.basic.webUrl === url);
-            });
-            // console.log('after filtering by url:', url, 'there are', records.length, 'records');
-        }
-        if (tags != undefined) {
-            // console.log('tags to match:', tags, 'match mode:', tagsMatchMode);
+        // Add tag match scores (for sortBy=tags)
+        if (tags !== undefined) {
             const tagArray = tags.split(',').map(tag => tag.trim());
-            // console.log('type of tags:', typeof tagArray);
-            
-            // Filter records based on match mode (AND vs OR)
-            if (tagsMatchMode.toUpperCase() === 'AND') {
-                // AND behavior: record must have ALL specified tags
-                records = records.filter(record => {
-                    if (!record.data.basic || !record.data.basic.tagItems) return false;
-                    return tagArray.every(tag => record.data.basic.tagItems.includes(tag));
-                });
-                // console.log('after filtering by tags (AND mode), there are', records.length, 'records');
-            } else {
-                // OR behavior: record must have at least ONE of the specified tags (default)
-                records = records.filter(record => {
-                    return record.data.basic && record.data.basic.tagItems && record.data.basic.tagItems.some(tag => tagArray.includes(tag));
-                });
-                // console.log('after filtering by tags (OR mode), there are', records.length, 'records');
-            }
-
-            // Add tag match scores to all filtered records
             records = records.map(record => {
                 const countMatches = (record) => {
                     if (record.data && record.data.basic && record.data.basic.tagItems) {
@@ -2295,20 +1941,216 @@ async function getRecords(queryParams) {
                     }
                     return 0;
                 };
-
                 const matches = countMatches(record);
-                const score = (matches / tagArray.length).toFixed(3); // Calculate the score as a ratio of matches to total tags and trim to three decimal places
-                return { ...record, score }; // Attach the score to the record
+                const score = (matches / tagArray.length).toFixed(3);
+                return { ...record, score };
             });
-
-            // Only sort automatically by score if sortBy is not specified or is not 'tags'
-            if (!sortBy || sortBy.split(':')[0] !== 'tags') {
-                records.sort((a, b) => b.score - a.score); // Sort in descending order by score
-            }
         }
-
-        // Filter exercises by equipment required if equipmentRequired parameter is provided
+        
+        // Add search match counts (for sortBy=matchCount)
+        if (search !== undefined) {
+            const searchTerms = search.toLowerCase().split(' ').map(term => term.trim()).filter(Boolean);
+            records = records.map(record => {
+                const basicData = record.data.basic;
+                let matchCount = 0;
+                searchTerms.forEach(term => {
+                    if (
+                        (basicData?.name?.toLowerCase().includes(term)) ||
+                        (basicData?.description?.toLowerCase().includes(term)) ||
+                        (basicData?.tagItems?.some(tag => tag.toLowerCase().includes(term)))
+                    ) {
+                        matchCount++;
+                    }
+                });
+                return { ...record, matchCount };
+            });
+        }
+        
+        // Add equipment match scores (ES filtered, now add scores)
         if (equipmentRequired && recordType === 'exercise') {
+            const equipmentArray = equipmentRequired.split(',').map(eq => eq.trim());
+            const isDID = (str) => str && typeof str === 'string' && (str.startsWith('did:arweave:') || str.startsWith('did:gun:'));
+            const getEquipmentName = (equipment) => {
+                if (equipment && typeof equipment === 'object' && equipment.data && equipment.data.basic && equipment.data.basic.name) {
+                    return equipment.data.basic.name.toLowerCase();
+                }
+                if (equipment && typeof equipment === 'object' && equipment.name) {
+                    return equipment.name.toLowerCase();
+                }
+                if (typeof equipment === 'string') {
+                    return equipment.toLowerCase();
+                }
+                return '';
+            };
+            const equipmentMatches = (exerciseEq, requiredEq) => {
+                if (isDID(exerciseEq) && isDID(requiredEq)) {
+                    return exerciseEq === requiredEq;
+                }
+                const exerciseName = getEquipmentName(exerciseEq);
+                const requiredName = requiredEq.toLowerCase();
+                return exerciseName.includes(requiredName) || requiredName.includes(exerciseName);
+            };
+            
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.exercise) return 0;
+                    let exerciseEquipment = [];
+                    if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
+                        exerciseEquipment = record.data.exercise.equipmentRequired;
+                    } else if (record.data.exercise.equipment) {
+                        if (typeof record.data.exercise.equipment === 'string') {
+                            exerciseEquipment = [record.data.exercise.equipment];
+                        } else if (Array.isArray(record.data.exercise.equipment)) {
+                            exerciseEquipment = record.data.exercise.equipment;
+                        }
+                    }
+                    if (exerciseEquipment.length === 0 && equipmentMatchMode.toUpperCase() === 'OR') {
+                        return equipmentArray.length;
+                    }
+                    return equipmentArray.filter(requiredEquipment => 
+                        exerciseEquipment.some(exerciseEq => 
+                            equipmentMatches(exerciseEq, requiredEquipment)
+                        )
+                    ).length;
+                };
+                const matches = countMatches(record);
+                const score = (matches / equipmentArray.length).toFixed(3);
+                return { ...record, equipmentScore: score, equipmentMatchedCount: matches };
+            });
+        }
+        
+        // Add exercise type scores
+        if (exerciseType && recordType === 'exercise') {
+            const exerciseTypeArray = exerciseType.split(',').map(type => type.trim().toLowerCase());
+            const exerciseTypeEnumMap = {
+                'warmup': 'Warm-Up', 'warm-up': 'Warm-Up',
+                'main': 'Main', 'cooldown': 'Cool-Down', 'cool-down': 'Cool-Down'
+            };
+            const normalizedTypes = exerciseTypeArray.map(type => exerciseTypeEnumMap[type] || type);
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.exercise || !record.data.exercise.exercise_type) return 0;
+                    const exerciseTypeValue = record.data.exercise.exercise_type;
+                    return normalizedTypes.filter(requestedType => exerciseTypeValue === requestedType).length;
+                };
+                const matches = countMatches(record);
+                const score = (matches / normalizedTypes.length).toFixed(3);
+                return { ...record, exerciseTypeScore: score, exerciseTypeMatchedCount: matches };
+            });
+        }
+        
+        // Add cuisine scores
+        if (cuisine && recordType === 'recipe') {
+            const cuisineArray = cuisine.split(',').map(c => c.trim().toLowerCase());
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.recipe || !record.data.recipe.cuisine) return 0;
+                    const recipeCuisine = record.data.recipe.cuisine.toLowerCase();
+                    return cuisineArray.filter(requestedCuisine => recipeCuisine.includes(requestedCuisine)).length;
+                };
+                const matches = countMatches(record);
+                const score = (matches / cuisineArray.length).toFixed(3);
+                return { ...record, cuisineScore: score, cuisineMatchedCount: matches };
+            });
+        }
+        
+        // Add model scores
+        if (model && recordType === 'modelProvider') {
+            const modelArray = model.split(',').map(m => m.trim().toLowerCase());
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.modelProvider || !record.data.modelProvider.supported_models) return 0;
+                    let supportedModels = [];
+                    if (Array.isArray(record.data.modelProvider.supported_models)) {
+                        supportedModels = record.data.modelProvider.supported_models.map(model => model.toLowerCase());
+                    } else if (typeof record.data.modelProvider.supported_models === 'string') {
+                        supportedModels = record.data.modelProvider.supported_models.split(',').map(model => model.trim().toLowerCase());
+                    }
+                    return modelArray.filter(requestedModel =>
+                        supportedModels.some(supportedModel =>
+                            supportedModel.includes(requestedModel) || requestedModel.includes(supportedModel)
+                        )
+                    ).length;
+                };
+                const matches = countMatches(record);
+                const score = (matches / modelArray.length).toFixed(3);
+                return { ...record, modelScore: score, modelMatchedCount: matches };
+            });
+        }
+        
+        // Helper function to calculate string similarity score (for fieldSearch scoring)
+        const calculateSimilarityScore = (fieldValue, searchValue) => {
+            const fieldLower = String(fieldValue).toLowerCase().trim();
+            const searchLower = String(searchValue).toLowerCase().trim();
+            
+            if (fieldLower === searchLower) return 1000;
+            if (fieldLower.startsWith(searchLower)) return 900;
+            if (fieldLower.endsWith(searchLower)) return 800;
+            
+            const wordBoundaryRegex = new RegExp(`\\b${searchLower}\\b`, 'i');
+            if (wordBoundaryRegex.test(fieldLower)) return 700;
+            if (fieldLower.includes(searchLower)) return 600;
+            
+            // Levenshtein distance for remaining cases
+            const levenshteinDistance = (str1, str2) => {
+                const matrix = [];
+                for (let i = 0; i <= str2.length; i++) matrix[i] = [i];
+                for (let j = 0; j <= str1.length; j++) matrix[0][j] = j;
+                for (let i = 1; i <= str2.length; i++) {
+                    for (let j = 1; j <= str1.length; j++) {
+                        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                            matrix[i][j] = matrix[i - 1][j - 1];
+                        } else {
+                            matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+                        }
+                    }
+                }
+                return matrix[str2.length][str1.length];
+            };
+            
+            const distance = levenshteinDistance(fieldLower, searchLower);
+            const maxLength = Math.max(fieldLower.length, searchLower.length);
+            const similarity = 1 - (distance / maxLength);
+            return Math.floor(similarity * 500);
+        };
+        
+        // Add field search scoring (fieldSearch filter already handled in ES, just add scores)
+        if (fieldSearch !== undefined && fieldName !== undefined) {
+            // Helper function to safely navigate nested object paths
+            const getNestedValue = (obj, path) => {
+                const pathParts = path.split('.');
+                let currentValue = obj;
+                for (const part of pathParts) {
+                    if (currentValue && typeof currentValue === 'object' && part in currentValue) {
+                        currentValue = currentValue[part];
+                    } else {
+                        return undefined;
+                    }
+                }
+                return currentValue;
+            };
+            
+            // Add similarity scores to already-filtered records for sorting
+            records = records.map(record => {
+                const fieldValue = getNestedValue(record.data, fieldName);
+                if (fieldValue !== undefined && fieldValue !== null) {
+                    const fieldValueStr = String(fieldValue);
+                    record.fieldSearchScore = calculateSimilarityScore(fieldValueStr, fieldSearch);
+                }
+                return record;
+            });
+        }
+        
+        // url, tags, equipmentRequired, exerciseType, cuisine, model, search filtering now handled in Elasticsearch (scoring added above)
+        
+        // ============================================================
+        // AUTHENTICATION-BASED PRIVACY FILTERING (POST-PROCESSING)
+        // Complex ownership checks that require user context
+        // ============================================================
+        
+        // Authentication filtering - already handled in ES for unauthenticated users
+        // For authenticated users, we need post-processing for ownership checks
+        if (!isAuthenticated) {
             console.log('Filtering exercises by equipment required:', equipmentRequired, 'match mode:', equipmentMatchMode);
             const equipmentArray = equipmentRequired.split(',').map(equipment => equipment.trim());
             
@@ -3747,6 +3589,461 @@ let recordsCache = null;
 let cacheTimestamp = 0;
 const CACHE_DURATION = 300000; // 5 minutes cache (was 30 seconds, too aggressive)
 let keepDBCycleCount = 0; // Track keepDBUpToDate cycles
+
+/**
+ * Helper function to build Elasticsearch query from getRecords parameters
+ * Implements Phase 1-3 of the optimization plan
+ */
+const buildElasticsearchQuery = (params) => {
+    const must = [];
+    const should = [];
+    const mustNot = [];
+    
+    // Phase 1: Native ES filters
+    
+    // Filter by record type
+    if (params.recordType) {
+        must.push({
+            term: { "oip.recordType.keyword": params.recordType.toLowerCase() }
+        });
+    }
+    
+    // Filter by storage source (arweave/gun/irys)
+    if (params.source && params.source !== 'all') {
+        const didPrefix = `did:${params.source}:`;
+        must.push({
+            prefix: { "oip.did.keyword": didPrefix }
+        });
+    }
+    
+    // Filter by storage field (alias for source)
+    if (params.storage && params.storage !== 'all') {
+        const didPrefix = `did:${params.storage}:`;
+        must.push({
+            prefix: { "oip.did.keyword": didPrefix }
+        });
+    }
+    
+    // Filter by specific DID
+    const normalizedDid = params.did || params.didTx;
+    if (normalizedDid) {
+        must.push({
+            term: { "oip.did.keyword": normalizedDid }
+        });
+    }
+    
+    // Filter by creator handle
+    if (params.creatorHandle) {
+        must.push({
+            term: { "oip.creator.creatorHandle.keyword": params.creatorHandle }
+        });
+    }
+    
+    // Filter by creator DID address
+    if (params.creator_did_address) {
+        const decodedCreatorDidAddress = decodeURIComponent(params.creator_did_address);
+        must.push({
+            term: { "oip.creator.didAddress.keyword": decodedCreatorDidAddress }
+        });
+    }
+    
+    // Filter by Arweave block
+    if (params.inArweaveBlock !== undefined) {
+        if (params.inArweaveBlock === 'bad') {
+            // Filter for invalid block numbers
+            should.push({ bool: { must_not: { exists: { field: "oip.inArweaveBlock" } } } });
+            should.push({ term: { "oip.inArweaveBlock": null } });
+        } else {
+            must.push({
+                term: { "oip.inArweaveBlock": params.inArweaveBlock }
+            });
+        }
+    }
+    
+    // Filter by URL
+    if (params.url) {
+        should.push({ term: { "data.basic.url.keyword": params.url } });
+        should.push({ term: { "data.basic.webUrl.keyword": params.url } });
+    }
+    
+    // Date range filters
+    if (params.dateStart || params.dateEnd) {
+        const range = {};
+        if (params.dateStart) {
+            const dateStartTimestamp = params.dateStart instanceof Date 
+                ? Math.floor(params.dateStart.getTime() / 1000) 
+                : params.dateStart;
+            range.gte = dateStartTimestamp;
+        }
+        if (params.dateEnd) {
+            const dateEndTimestamp = params.dateEnd instanceof Date 
+                ? Math.floor(params.dateEnd.getTime() / 1000) 
+                : params.dateEnd;
+            range.lte = dateEndTimestamp;
+        }
+        
+        // Check multiple date fields depending on record type
+        const dateQueries = [
+            { range: { "data.basic.date": range } },
+            { range: { "data.workoutSchedule.scheduled_date": range } },
+            { range: { "data.mealPlan.meal_date": range } }
+        ];
+        
+        should.push({
+            bool: {
+                should: dateQueries,
+                minimum_should_match: 1
+            }
+        });
+    }
+    
+    // Filter by scheduled date for workoutSchedule and mealPlan
+    if (params.scheduledOn) {
+        const dateMatch = params.scheduledOn.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateMatch) {
+            const [, year, month, day] = dateMatch;
+            const startOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+            const endOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999);
+            const startTimestamp = Math.floor(startOfDay.getTime() / 1000);
+            const endTimestamp = Math.floor(endOfDay.getTime() / 1000);
+            
+            const scheduledRange = { gte: startTimestamp, lte: endTimestamp };
+            
+            should.push({ range: { "data.workoutSchedule.scheduled_date": scheduledRange } });
+            should.push({ range: { "data.mealPlan.meal_date": scheduledRange } });
+        }
+    }
+    
+    // Exclude delete messages by default
+    if (params.includeDeleteMessages === false || params.includeDeleteMessages === 'false') {
+        mustNot.push({
+            term: { "oip.recordType.keyword": "deleteMessage" }
+        });
+    }
+    
+    // Phase 2: Authentication/Privacy Filters
+    if (!params.isAuthenticated) {
+        // Unauthenticated users only see public records
+        must.push({
+            bool: {
+                should: [
+                    { term: { "data.accessControl.access_level.keyword": "public" } },
+                    { bool: { must_not: { exists: { field: "data.accessControl.access_level" } } } }
+                ],
+                minimum_should_match: 1
+            }
+        });
+        
+        // Also exclude legacy private conversation sessions
+        mustNot.push({
+            term: { "data.conversationSession.is_private": true }
+        });
+    }
+    // Note: Authenticated ownership filtering is complex and requires user context,
+    // so it will be handled in post-processing for now
+    
+    // Phase 3: Hybrid Filters (ES + post-processing)
+    
+    // Tag filtering with AND/OR modes
+    if (params.tags) {
+        const tagArray = params.tags.split(',').map(tag => tag.trim());
+        if (params.tagsMatchMode === 'AND' || params.tagsMatchMode === 'and') {
+            // AND mode: must have ALL tags
+            tagArray.forEach(tag => {
+                must.push({
+                    term: { "data.basic.tagItems.keyword": tag }
+                });
+            });
+        } else {
+            // OR mode: must have at least ONE tag (default)
+            must.push({
+                terms: { "data.basic.tagItems.keyword": tagArray }
+            });
+        }
+    }
+    
+    // Full-text search with AND/OR modes
+    if (params.search) {
+        const searchTerms = params.search.toLowerCase().split(' ').map(term => term.trim()).filter(Boolean);
+        const searchFields = [
+            "data.basic.name^3",           // Boost name matches
+            "data.basic.description^2",    // Boost description matches
+            "data.basic.tagItems^1"        // Normal tag matches
+        ];
+        
+        if (params.searchMatchMode === 'AND' || params.searchMatchMode === 'and') {
+            // AND mode: must match ALL terms
+            searchTerms.forEach(term => {
+                must.push({
+                    multi_match: {
+                        query: term,
+                        fields: searchFields,
+                        fuzziness: "AUTO"
+                    }
+                });
+            });
+        } else {
+            // OR mode: must match at least ONE term
+            must.push({
+                multi_match: {
+                    query: params.search,
+                    fields: searchFields,
+                    fuzziness: "AUTO"
+                }
+            });
+        }
+    }
+    
+    // Equipment filtering for exercises
+    if (params.equipmentRequired && params.recordType === 'exercise') {
+        const equipmentArray = params.equipmentRequired.split(',').map(eq => eq.trim());
+        
+        if (params.equipmentMatchMode === 'AND' || params.equipmentMatchMode === 'and') {
+            // AND mode: must have ALL equipment
+            equipmentArray.forEach(equipment => {
+                should.push({
+                    bool: {
+                        should: [
+                            { wildcard: { "data.exercise.equipmentRequired.keyword": `*${equipment.toLowerCase()}*` } },
+                            { wildcard: { "data.exercise.equipment.keyword": `*${equipment.toLowerCase()}*` } }
+                        ],
+                        minimum_should_match: 1
+                    }
+                });
+            });
+        } else {
+            // OR mode: must have at least ONE equipment (default)
+            const equipmentQueries = [];
+            equipmentArray.forEach(equipment => {
+                equipmentQueries.push({ wildcard: { "data.exercise.equipmentRequired.keyword": `*${equipment.toLowerCase()}*` } });
+                equipmentQueries.push({ wildcard: { "data.exercise.equipment.keyword": `*${equipment.toLowerCase()}*` } });
+            });
+            
+            should.push({
+                bool: {
+                    should: equipmentQueries,
+                    minimum_should_match: 1
+                }
+            });
+        }
+    }
+    
+    // Exercise type filtering
+    if (params.exerciseType && params.recordType === 'exercise') {
+        const exerciseTypeArray = params.exerciseType.split(',').map(type => type.trim().toLowerCase());
+        const exerciseTypeEnumMap = {
+            'warmup': 'Warm-Up',
+            'warm-up': 'Warm-Up',
+            'main': 'Main',
+            'cooldown': 'Cool-Down',
+            'cool-down': 'Cool-Down'
+        };
+        const normalizedTypes = exerciseTypeArray.map(type => exerciseTypeEnumMap[type] || type);
+        
+        if (params.exerciseTypeMatchMode === 'AND' || params.exerciseTypeMatchMode === 'and') {
+            // AND mode: must match ALL types (unusual for enum)
+            normalizedTypes.forEach(type => {
+                must.push({
+                    term: { "data.exercise.exercise_type.keyword": type }
+                });
+            });
+        } else {
+            // OR mode: must match at least ONE type (default)
+            must.push({
+                terms: { "data.exercise.exercise_type.keyword": normalizedTypes }
+            });
+        }
+    }
+    
+    // Cuisine filtering for recipes
+    if (params.cuisine && params.recordType === 'recipe') {
+        const cuisineArray = params.cuisine.split(',').map(c => c.trim().toLowerCase());
+        
+        if (params.cuisineMatchMode === 'AND' || params.cuisineMatchMode === 'and') {
+            // AND mode: must contain ALL cuisine terms
+            cuisineArray.forEach(cuisine => {
+                must.push({
+                    wildcard: { "data.recipe.cuisine.keyword": `*${cuisine}*` }
+                });
+            });
+        } else {
+            // OR mode: must contain at least ONE cuisine term (default)
+            const cuisineQueries = cuisineArray.map(cuisine => ({
+                wildcard: { "data.recipe.cuisine.keyword": `*${cuisine}*` }
+            }));
+            
+            should.push({
+                bool: {
+                    should: cuisineQueries,
+                    minimum_should_match: 1
+                }
+            });
+        }
+    }
+    
+    // Model filtering
+    if (params.model && params.recordType === 'modelProvider') {
+        const modelArray = params.model.split(',').map(m => m.trim().toLowerCase());
+        
+        // Search in supported_models field (can be array or comma-separated string)
+        const modelQueries = modelArray.map(model => ({
+            wildcard: { "data.modelProvider.supported_models.keyword": `*${model}*` }
+        }));
+        
+        if (params.modelMatchMode === 'AND' || params.modelMatchMode === 'and') {
+            // AND mode: must support ALL models
+            modelArray.forEach(model => {
+                must.push({
+                    wildcard: { "data.modelProvider.supported_models.keyword": `*${model}*` }
+                });
+            });
+        } else {
+            // OR mode: must support at least ONE model (default)
+            should.push({
+                bool: {
+                    should: modelQueries,
+                    minimum_should_match: 1
+                }
+            });
+        }
+    }
+    
+    // Field-specific search
+    if (params.fieldSearch && params.fieldName) {
+        const fieldPath = `data.${params.fieldName}`;
+        
+        if (params.fieldMatchMode === 'exact') {
+            must.push({
+                term: { [`${fieldPath}.keyword`]: params.fieldSearch }
+            });
+        } else {
+            // Partial match (default)
+            must.push({
+                wildcard: { [`${fieldPath}.keyword`]: `*${params.fieldSearch.toLowerCase()}*` }
+            });
+        }
+    }
+    
+    // Exact match filtering (JSON object with field paths)
+    if (params.exactMatch) {
+        try {
+            const exactMatchObj = JSON.parse(params.exactMatch);
+            Object.entries(exactMatchObj).forEach(([fieldPath, expectedValue]) => {
+                must.push({
+                    term: { [`${fieldPath}.keyword`]: expectedValue }
+                });
+            });
+        } catch (error) {
+            console.error('Error parsing exactMatch JSON:', error);
+        }
+    }
+    
+    // Audio filtering
+    if (params.hasAudio) {
+        if (params.hasAudio === true || params.hasAudio === 'true') {
+            should.push({ exists: { field: "data.post.audioItems" } });
+            should.push({ exists: { field: "data.basic.audioItems" } });
+        } else {
+            mustNot.push({ exists: { field: "data.post.audioItems" } });
+            mustNot.push({ exists: { field: "data.basic.audioItems" } });
+        }
+    }
+    
+    // Special handling for nutritionalInfo records
+    if (params.recordType && params.recordType.toLowerCase() === 'nutritionalinfo') {
+        must.push({
+            exists: { field: "data.nutritionalInfo" }
+        });
+    }
+    
+    // Build final query
+    const query = {
+        bool: {}
+    };
+    
+    if (must.length > 0) query.bool.must = must;
+    if (should.length > 0) {
+        query.bool.should = should;
+        query.bool.minimum_should_match = query.bool.minimum_should_match || 1;
+    }
+    if (mustNot.length > 0) query.bool.must_not = mustNot;
+    
+    // If no filters at all, use match_all
+    if (must.length === 0 && should.length === 0 && mustNot.length === 0) {
+        return { match_all: {} };
+    }
+    
+    return query;
+};
+
+/**
+ * Helper function to build Elasticsearch sort configuration
+ */
+const buildElasticsearchSort = (sortBy = 'inArweaveBlock:desc') => {
+    const [field, order] = sortBy.split(':');
+    const sortOrder = order || 'desc';
+    
+    const sortMap = {
+        'inArweaveBlock': 'oip.inArweaveBlock',
+        'indexedAt': 'oip.indexedAt',
+        'date': 'data.basic.date',
+        'recordType': 'oip.recordType.keyword',
+        'creatorHandle': 'oip.creator.creatorHandle.keyword',
+        'ver': 'oip.ver',
+        'scheduleDate': null  // Handled in post-processing
+    };
+    
+    const esField = sortMap[field];
+    
+    // Some sorts require post-processing (scores, complex fields)
+    const postProcessSorts = ['score', 'tags', 'exerciseScore', 'ingredientScore', 
+                              'equipmentScore', 'exerciseTypeScore', 'cuisineScore', 
+                              'modelScore', 'matchCount', 'scheduleDate'];
+    
+    if (postProcessSorts.includes(field)) {
+        // Return null to indicate post-processing needed
+        return null;
+    }
+    
+    if (!esField) {
+        // Default to inArweaveBlock if unknown field
+        return [{ "oip.inArweaveBlock": { order: 'desc' } }];
+    }
+    
+    return [{ [esField]: { order: sortOrder } }];
+};
+
+/**
+ * Helper function to determine if query needs post-processing filters
+ */
+const needsPostProcessing = (params) => {
+    return !!(
+        params.exerciseNames ||
+        params.exerciseDIDs ||
+        params.ingredientNames ||
+        params.didTxRef ||
+        params.template ||
+        params.noDuplicates ||
+        params.isAuthenticated  // Authenticated ownership checks need post-processing
+    );
+};
+
+/**
+ * Helper function to determine over-fetch multiplier
+ * When we need post-processing, fetch more records to account for filtering
+ */
+const getOverFetchMultiplier = (params) => {
+    if (params.exerciseNames || params.ingredientNames || params.didTxRef) {
+        return 5;  // Need to over-fetch significantly for complex filters
+    }
+    if (params.template || params.isAuthenticated) {
+        return 3;  // Moderate over-fetch for medium complexity
+    }
+    if (params.noDuplicates) {
+        return 2;  // Slight over-fetch for duplicate removal
+    }
+    return 1;  // No over-fetch needed
+};
 
 // move this into GetRecords() ?
 const getRecordsInDB = async (forceRefresh = false) => {
