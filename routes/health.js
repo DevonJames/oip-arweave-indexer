@@ -198,6 +198,27 @@ router.get('/memory', async (req, res) => {
     }
 });
 
+// Get memory leak tracker report
+router.get('/memory/tracker', async (req, res) => {
+    try {
+        const { getTracker } = require('../helpers/memoryTracker');
+        const tracker = getTracker();
+        const report = tracker.getReport();
+        
+        res.json({
+            status: 'ok',
+            tracker: report,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error getting memory tracker report:', error);
+        res.status(500).json({
+            status: 'error',
+            error: error.message
+        });
+    }
+});
+
 // Clear GUN sync cache manually
 router.post('/memory/clear-cache', async (req, res) => {
     try {

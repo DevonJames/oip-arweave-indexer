@@ -42,6 +42,7 @@ const narrationRoutes = require('./routes/narration');
 const documentationRoutes = require('./routes/documentation');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 const axios = require('axios');
+const { getTracker } = require('./helpers/memoryTracker');
 
 dotenv.config();
 
@@ -601,6 +602,15 @@ initializeIndices()
               console.log(`Will check Arweave for new OIP data every ${interval} seconds`);
             }
           }
+
+          // Start memory leak tracker
+          const memTracker = getTracker({
+              trackingInterval: 60000, // Sample every 1 minute
+              maxSamples: 60, // Keep last 60 samples (1 hour)
+              alertThreshold: 5000 // Alert if > 5GB growth
+          });
+          memTracker.start();
+          console.log('🔍 [STARTUP] Memory leak tracker started (sampling every 1 minute)');
 
           setTimeout(async () => {
               console.log("🚀 [STARTUP] Starting first keepDBUpToDate cycle...");
