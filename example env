@@ -92,7 +92,10 @@ GUN_DEFAULT_PRIVACY=false
 
 # GUN Sync Configuration (for multi-node synchronization)
 GUN_SYNC_ENABLED=true
-GUN_SYNC_INTERVAL=30000
+# GUN_SYNC_INTERVAL: How often to check for new records from other nodes (milliseconds)
+# Default: 300000 (5 minutes) - reduced from 30s to prevent socket/memory leaks
+# Lower values = more frequent sync but higher resource usage
+GUN_SYNC_INTERVAL=300000
 GUN_REGISTRY_ROOT=oip:registry
 GUN_NODE_ID_OVERRIDE=
 GUN_SYNC_PRIVATE_RECORDS=true
