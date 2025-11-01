@@ -2143,6 +2143,425 @@ async function getRecords(queryParams) {
         // These are now handled in Elasticsearch queries above
         
         // Jump directly to authentication filtering below...
+            
+            // Helper function to check if a string is a DID
+            const isDID = (str) => {
+                return str && typeof str === 'string' && (str.startsWith('did:arweave:') || str.startsWith('did:gun:'));
+            };
+            
+            // Helper function to extract equipment name from resolved equipment record
+            const getEquipmentName = (equipment) => {
+                // If it's a resolved object with data.basic.name
+                if (equipment && typeof equipment === 'object' && equipment.data && equipment.data.basic && equipment.data.basic.name) {
+                    return equipment.data.basic.name.toLowerCase();
+                }
+                // If it's a simple object with name property
+                if (equipment && typeof equipment === 'object' && equipment.name) {
+                    return equipment.name.toLowerCase();
+                }
+                // If it's a string (DID or simple name)
+                if (typeof equipment === 'string') {
+                    return equipment.toLowerCase();
+                }
+                return '';
+            };
+            
+            // Helper function to check if equipment matches
+            const equipmentMatches = (exerciseEq, requiredEq) => {
+                // For DIDs, use exact match (case-sensitive)
+                if (isDID(exerciseEq) && isDID(requiredEq)) {
+                    return exerciseEq === requiredEq;
+                }
+                
+                // For simple names, match against resolved equipment names
+                const exerciseName = getEquipmentName(exerciseEq);
+                const requiredName = requiredEq.toLowerCase();
+                
+                // Use fuzzy matching for simple names
+                return exerciseName.includes(requiredName) || requiredName.includes(exerciseName);
+            };
+            
+            // Filter records based on match mode (AND vs OR)
+            if (equipmentMatchMode.toUpperCase() === 'OR') {
+                // OR behavior: exercise must have at least ONE of the specified equipment OR no equipment required
+                records = records.filter(record => {
+                    if (!record.data.exercise) return false;
+                    
+                    let exerciseEquipment = [];
+                    
+                    // Handle different equipment data structures
+                    if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
+                        exerciseEquipment = record.data.exercise.equipmentRequired;
+                    } else if (record.data.exercise.equipment) {
+                        // Handle single equipment string
+                        if (typeof record.data.exercise.equipment === 'string') {
+                            exerciseEquipment = [record.data.exercise.equipment];
+                        } else if (Array.isArray(record.data.exercise.equipment)) {
+                            exerciseEquipment = record.data.exercise.equipment;
+                        }
+                    }
+                    
+                    // If no equipment is required (empty array or missing), include the exercise
+                    if (exerciseEquipment.length === 0) {
+                        return true;
+                    }
+                    
+                    // Check if ANY required equipment is present
+                    return equipmentArray.some(requiredEquipment => 
+                        exerciseEquipment.some(exerciseEq => 
+                            equipmentMatches(exerciseEq, requiredEquipment)
+                        )
+                    );
+                });
+                // console.log('after filtering by equipment (OR mode), there are', records.length, 'records');
+            } else {
+                // AND behavior: exercise must have ALL specified equipment (default)
+                records = records.filter(record => {
+                    if (!record.data.exercise) return false;
+                    
+                    let exerciseEquipment = [];
+                    
+                    // Handle different equipment data structures
+                    if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
+                        exerciseEquipment = record.data.exercise.equipmentRequired;
+                    } else if (record.data.exercise.equipment) {
+                        // Handle single equipment string
+                        if (typeof record.data.exercise.equipment === 'string') {
+                            exerciseEquipment = [record.data.exercise.equipment];
+                        } else if (Array.isArray(record.data.exercise.equipment)) {
+                            exerciseEquipment = record.data.exercise.equipment;
+                        }
+                    }
+                    
+                    // Check if ALL required equipment is present
+                    return equipmentArray.every(requiredEquipment => 
+                        exerciseEquipment.some(exerciseEq => 
+                            equipmentMatches(exerciseEq, requiredEquipment)
+                        )
+                    );
+                });
+                // console.log('after filtering by equipment (AND mode), there are', records.length, 'records');
+            }
+            
+            // Add equipment match scores to all filtered records
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.exercise) return 0;
+                    
+                    let exerciseEquipment = [];
+                    if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
+                        exerciseEquipment = record.data.exercise.equipmentRequired;
+                    } else if (record.data.exercise.equipment) {
+                        if (typeof record.data.exercise.equipment === 'string') {
+                            exerciseEquipment = [record.data.exercise.equipment];
+                        } else if (Array.isArray(record.data.exercise.equipment)) {
+                            exerciseEquipment = record.data.exercise.equipment;
+                        }
+                    }
+                    
+                    // For exercises with no equipment required, give them a perfect score in OR mode
+                    if (exerciseEquipment.length === 0 && equipmentMatchMode.toUpperCase() === 'OR') {
+                        return equipmentArray.length; // Perfect match - can be done with any equipment
+                    }
+                    
+                    return equipmentArray.filter(requiredEquipment => 
+                        exerciseEquipment.some(exerciseEq => 
+                            equipmentMatches(exerciseEq, requiredEquipment)
+                        )
+                    ).length;
+                };
+
+                const matches = countMatches(record);
+                const score = (matches / equipmentArray.length).toFixed(3);
+                return { ...record, equipmentScore: score, equipmentMatchedCount: matches };
+            });
+            
+            // Sort by equipment score if no other sorting is specified
+            if (!sortBy || sortBy.split(':')[0] !== 'equipmentScore') {
+                records.sort((a, b) => (b.equipmentScore || 0) - (a.equipmentScore || 0));
+            }
+            
+            console.log('After filtering by equipment required, there are', records.length, 'exercise records');
+        }
+
+        // Filter exercises by exercise type if exerciseType parameter is provided
+        if (exerciseType && recordType === 'exercise') {
+            console.log('Filtering exercises by exercise type:', exerciseType, 'match mode:', exerciseTypeMatchMode);
+            const exerciseTypeArray = exerciseType.split(',').map(type => type.trim().toLowerCase());
+            
+            // Define enum mapping for exercise types (user input -> database values)
+            const exerciseTypeEnumMap = {
+                'warmup': 'Warm-Up',
+                'warm-up': 'Warm-Up',
+                'main': 'Main',
+                'cooldown': 'Cool-Down',
+                'cool-down': 'Cool-Down'
+            };
+            
+            // Normalize requested types to match database format
+            const normalizedTypes = exerciseTypeArray.map(type => exerciseTypeEnumMap[type] || type);
+            
+            // Filter records based on match mode (AND vs OR)
+            if (exerciseTypeMatchMode.toUpperCase() === 'AND') {
+                // AND behavior: exercise must have ALL specified types
+                records = records.filter(record => {
+                    if (!record.data.exercise || !record.data.exercise.exercise_type) return false;
+                    
+                    const exerciseTypeValue = record.data.exercise.exercise_type;
+                    
+                    // For AND mode with single enum value, just check if it matches
+                    // For multiple types, this would be unusual for enum fields but we'll support it
+                    return normalizedTypes.every(requestedType => 
+                        exerciseTypeValue === requestedType
+                    );
+                });
+                // console.log('after filtering by exercise type (AND mode), there are', records.length, 'records');
+            } else {
+                // OR behavior: exercise must have ANY of the specified types (default)
+                records = records.filter(record => {
+                    if (!record.data.exercise || !record.data.exercise.exercise_type) return false;
+                    
+                    const exerciseTypeValue = record.data.exercise.exercise_type;
+                    
+                    // Check if ANY requested type matches
+                    return normalizedTypes.some(requestedType => 
+                        exerciseTypeValue === requestedType
+                    );
+                });
+                // console.log('after filtering by exercise type (OR mode), there are', records.length, 'records');
+            }
+            
+            // Add exercise type match scores to all filtered records
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.exercise || !record.data.exercise.exercise_type) return 0;
+                    
+                    const exerciseTypeValue = record.data.exercise.exercise_type;
+                    
+                    return normalizedTypes.filter(requestedType => 
+                        exerciseTypeValue === requestedType
+                    ).length;
+                };
+
+                const matches = countMatches(record);
+                const score = (matches / normalizedTypes.length).toFixed(3);
+                return { ...record, exerciseTypeScore: score, exerciseTypeMatchedCount: matches };
+            });
+            
+            // Sort by exercise type score if no other sorting is specified
+            if (!sortBy || sortBy.split(':')[0] !== 'exerciseTypeScore') {
+                records.sort((a, b) => (b.exerciseTypeScore || 0) - (a.exerciseTypeScore || 0));
+            }
+            
+            console.log('After filtering by exercise type, there are', records.length, 'exercise records');
+        }
+
+        // Filter recipes by cuisine if cuisine parameter is provided
+        if (cuisine && recordType === 'recipe') {
+            console.log('Filtering recipes by cuisine:', cuisine, 'match mode:', cuisineMatchMode);
+            const cuisineArray = cuisine.split(',').map(cuisineType => cuisineType.trim().toLowerCase());
+            
+            // Filter records based on match mode (AND vs OR)
+            if (cuisineMatchMode.toUpperCase() === 'AND') {
+                // AND behavior: recipe must have ALL specified cuisines (unusual but supported)
+                records = records.filter(record => {
+                    if (!record.data.recipe || !record.data.recipe.cuisine) return false;
+                    
+                    const recipeCuisine = record.data.recipe.cuisine.toLowerCase();
+                    
+                    // For AND mode, check if the recipe cuisine contains all requested terms
+                    return cuisineArray.every(requestedCuisine => 
+                        recipeCuisine.includes(requestedCuisine)
+                    );
+                });
+                // console.log('after filtering by cuisine (AND mode), there are', records.length, 'records');
+            } else {
+                // OR behavior: recipe must have ANY of the specified cuisines (default)
+                records = records.filter(record => {
+                    if (!record.data.recipe || !record.data.recipe.cuisine) return false;
+                    
+                    const recipeCuisine = record.data.recipe.cuisine.toLowerCase();
+                    
+                    // Check if ANY requested cuisine matches
+                    return cuisineArray.some(requestedCuisine => 
+                        recipeCuisine.includes(requestedCuisine)
+                    );
+                });
+                // console.log('after filtering by cuisine (OR mode), there are', records.length, 'records');
+            }
+            
+            // Add cuisine match scores to all filtered records
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.recipe || !record.data.recipe.cuisine) return 0;
+                    
+                    const recipeCuisine = record.data.recipe.cuisine.toLowerCase();
+                    
+                    return cuisineArray.filter(requestedCuisine => 
+                        recipeCuisine.includes(requestedCuisine)
+                    ).length;
+                };
+
+                const matches = countMatches(record);
+                const score = (matches / cuisineArray.length).toFixed(3);
+                return { ...record, cuisineScore: score, cuisineMatchedCount: matches };
+            });
+            
+            // Sort by cuisine score if no other sorting is specified
+            if (!sortBy || sortBy.split(':')[0] !== 'cuisineScore') {
+                records.sort((a, b) => (b.cuisineScore || 0) - (a.cuisineScore || 0));
+            }
+            
+            console.log('After filtering by cuisine, there are', records.length, 'recipe records');
+        }
+
+        // Filter model providers by supported models if model parameter is provided
+        if (model && recordType === 'modelProvider') {
+            console.log('Filtering model providers by supported models:', model, 'match mode:', modelMatchMode);
+            const modelArray = model.split(',').map(modelName => modelName.trim().toLowerCase());
+
+            // Filter records based on match mode (AND vs OR)
+            if (modelMatchMode.toUpperCase() === 'AND') {
+                // AND behavior: model provider must support ALL specified models
+                records = records.filter(record => {
+                    if (!record.data.modelProvider || !record.data.modelProvider.supported_models) return false;
+
+                    let supportedModels = [];
+
+                    // Handle different supported_models data structures
+                    if (Array.isArray(record.data.modelProvider.supported_models)) {
+                        supportedModels = record.data.modelProvider.supported_models.map(model => model.toLowerCase());
+                    } else if (typeof record.data.modelProvider.supported_models === 'string') {
+                        // If it's a string, split by comma and trim
+                        supportedModels = record.data.modelProvider.supported_models.split(',').map(model => model.trim().toLowerCase());
+                    }
+
+                    // Check if ALL requested models are supported
+                    return modelArray.every(requestedModel =>
+                        supportedModels.some(supportedModel =>
+                            supportedModel.includes(requestedModel) || requestedModel.includes(supportedModel)
+                        )
+                    );
+                });
+                // console.log('after filtering by models (AND mode), there are', records.length, 'records');
+            } else {
+                // OR behavior: model provider must support ANY of the specified models (default)
+                records = records.filter(record => {
+                    if (!record.data.modelProvider || !record.data.modelProvider.supported_models) return false;
+
+                    let supportedModels = [];
+
+                    // Handle different supported_models data structures
+                    if (Array.isArray(record.data.modelProvider.supported_models)) {
+                        supportedModels = record.data.modelProvider.supported_models.map(model => model.toLowerCase());
+                    } else if (typeof record.data.modelProvider.supported_models === 'string') {
+                        // If it's a string, split by comma and trim
+                        supportedModels = record.data.modelProvider.supported_models.split(',').map(model => model.trim().toLowerCase());
+                    }
+
+                    // Check if ANY requested model is supported
+                    return modelArray.some(requestedModel =>
+                        supportedModels.some(supportedModel =>
+                            supportedModel.includes(requestedModel) || requestedModel.includes(supportedModel)
+                        )
+                    );
+                });
+                // console.log('after filtering by models (OR mode), there are', records.length, 'records');
+            }
+
+            // Add model match scores to all filtered records
+            records = records.map(record => {
+                const countMatches = (record) => {
+                    if (!record.data.modelProvider || !record.data.modelProvider.supported_models) return 0;
+
+                    let supportedModels = [];
+
+                    // Handle different supported_models data structures
+                    if (Array.isArray(record.data.modelProvider.supported_models)) {
+                        supportedModels = record.data.modelProvider.supported_models.map(model => model.toLowerCase());
+                    } else if (typeof record.data.modelProvider.supported_models === 'string') {
+                        // If it's a string, split by comma and trim
+                        supportedModels = record.data.modelProvider.supported_models.split(',').map(model => model.trim().toLowerCase());
+                    }
+
+                    return modelArray.filter(requestedModel =>
+                        supportedModels.some(supportedModel =>
+                            supportedModel.includes(requestedModel) || requestedModel.includes(supportedModel)
+                        )
+                    ).length;
+                };
+
+                const matches = countMatches(record);
+                const score = (matches / modelArray.length).toFixed(3);
+                return { ...record, modelScore: score, modelMatchedCount: matches };
+            });
+
+            // Sort by model score if no other sorting is specified
+            if (!sortBy || sortBy.split(':')[0] !== 'modelScore') {
+                records.sort((a, b) => (b.modelScore || 0) - (a.modelScore || 0));
+            }
+
+            console.log('After filtering by supported models, there are', records.length, 'model provider records');
+        }
+
+        // search records by search parameter
+        if (search !== undefined) {
+            const searchTerms = search.toLowerCase().split(' ').map(term => term.trim()).filter(Boolean); // Split on spaces to separate search terms
+            // console.log('searching for:', searchTerms, 'in records');
+            records = records.filter(record => {
+                const basicData = record.data.basic;
+                const matchFunction = searchMatchMode === 'OR' ? searchTerms.some : searchTerms.every;
+                return matchFunction.call(searchTerms, term => {
+                    const titleMatches = basicData?.name?.toLowerCase().includes(term) || false;
+                    const descriptionMatches = basicData?.description?.toLowerCase().includes(term) || false;
+                    const tagsMatches = basicData?.tagItems?.some(tag => tag.toLowerCase().includes(term)) || false;
+                    return titleMatches || descriptionMatches || tagsMatches;
+                });
+            });
+
+            // Add matchCount to each record
+            records = records.map(record => {
+                const basicData = record.data.basic;
+                let matchCount = 0;
+                searchTerms.forEach(term => {
+                    if (
+                        (basicData?.name?.toLowerCase().includes(term)) ||
+                        (basicData?.description?.toLowerCase().includes(term)) ||
+                        (basicData?.tagItems?.some(tag => tag.toLowerCase().includes(term)))
+                    ) {
+                        matchCount++;
+                    }
+                });
+                return { ...record, matchCount };
+            });
+
+            // Sort records
+            records.sort((a, b) => {
+                // Sort by matchCount descending
+                if (b.matchCount !== a.matchCount) {
+                    return b.matchCount - a.matchCount;
+                }
+                // Then by recordStatus: 'original' before 'pending confirmation in Arweave'
+                const statusOrder = {
+                    'original': 1,
+                    'pending confirmation in Arweave': 2
+                };
+                const statusA = a.oip.recordStatus || '';
+                const statusB = b.oip.recordStatus || '';
+                if (statusOrder[statusA] && statusOrder[statusB]) {
+                    if (statusOrder[statusA] !== statusOrder[statusB]) {
+                        return statusOrder[statusA] - statusOrder[statusB];
+                    }
+                }
+                // Finally by inArweaveBlock descending
+                return b.oip.inArweaveBlock - a.oip.inArweaveBlock;
+            });
+
+            // console.log('after search filtering and sorting, there are', records.length, 'records');
+        }
+
+        
+        
         // NEW: Filter by access level based on authentication status
         if (!isAuthenticated) {
             // Unauthenticated users only see public records
