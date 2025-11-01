@@ -181,7 +181,10 @@ class GunHelper {
                 timeout: 10000, // 10 second HTTP timeout
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                // Explicitly use global agents (don't create new ones per request)
+                httpAgent: axios.defaults.httpAgent,
+                httpsAgent: axios.defaults.httpsAgent
             });
 
             if (response.data.success) {
@@ -230,7 +233,10 @@ class GunHelper {
                         timeout: 5000,
                         headers: {
                             'Content-Type': 'application/json'
-                        }
+                        },
+                        // Explicitly use global agents (don't create new ones per request)
+                        httpAgent: axios.defaults.httpAgent,
+                        httpsAgent: axios.defaults.httpsAgent
                     });
 
             if (response.data.success) {
@@ -439,7 +445,10 @@ class GunHelper {
                 timeout: 10000,
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                // Explicitly use global agents (don't create new ones per request)
+                httpAgent: axios.defaults.httpAgent,
+                httpsAgent: axios.defaults.httpsAgent
             });
 
             if (response.data.success) {

@@ -48,6 +48,15 @@ const e = require('express');
 
 let startBlockHeight = 1579580;
 
+// Configure HTTP agent for Elasticsearch to prevent socket leaks
+const http = require('http');
+const elasticHttpAgent = new http.Agent({
+    keepAlive: false,       // Force socket closure after each request
+    maxSockets: 25,         // Limit concurrent ES connections (half of global limit)
+    maxFreeSockets: 5,      // Limit cached sockets
+    timeout: 30000          // Socket timeout
+});
+
 const elasticClient = new Client({
     node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
 
@@ -56,7 +65,10 @@ const elasticClient = new Client({
         password: process.env.ELASTICCLIENTPASSWORD
     },
     maxRetries: 3,
-    requestTimeout: 30000
+    requestTimeout: 30000,
+    
+    // MEMORY LEAK FIX: Configure HTTP agent to prevent socket accumulation
+    agent: () => elasticHttpAgent
 });
 
 // Helper function for backward-compatible DID queries

@@ -13,7 +13,7 @@ class GunSyncService {
         this.registry = new OIPGunRegistry();
         this.privateHandler = new PrivateRecordHandler();
         this.isRunning = false;
-        this.syncInterval = parseInt(process.env.GUN_SYNC_INTERVAL) || 30000; // 30 seconds default
+        this.syncInterval = parseInt(process.env.GUN_SYNC_INTERVAL) || 300000; // 5 minutes default (was 30s - too aggressive)
         this.processedRecords = new Set(); // Track processed records to avoid duplicates
         this.healthMonitor = new SyncHealthMonitor();
         
