@@ -152,6 +152,7 @@ let gunSyncService = null;
 if (process.env.GUN_SYNC_ENABLED !== 'false') {
     const { GunSyncService } = require('./helpers/gunSyncService');
     gunSyncService = new GunSyncService();
+    global.gunSyncService = gunSyncService; // Make globally accessible immediately
 }
 
 const app = express();
@@ -476,8 +477,7 @@ initializeIndices()
       if (gunSyncService) {
         gunSyncService.start()
           .then(() => {
-            global.gunSyncService = gunSyncService; // Make globally accessible for health endpoint
-            console.log('🔄 GUN Record Sync Service started successfully');
+            console.log('🚀 Starting GUN Record Sync Service...'); // This will start the background sync loop
           })
           .catch((error) => {
             console.error('❌ Failed to start GUN Sync Service:', error);
