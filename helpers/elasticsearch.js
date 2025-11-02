@@ -1872,6 +1872,24 @@ async function getRecords(queryParams) {
         // Debug: Log the ES query for equipment filtering
         if (equipmentRequired) {
             console.log(`🔍 [ES Query DEBUG] equipmentRequired query:`, JSON.stringify(esQuery, null, 2));
+            
+            // Debug: Fetch a sample exercise to see actual field structure
+            try {
+                const sampleExercise = await elasticClient.search({
+                    index: 'records',
+                    body: {
+                        query: { term: { "oip.recordType.keyword": "exercise" } },
+                        size: 1
+                    }
+                });
+                if (sampleExercise.hits.hits.length > 0) {
+                    const sample = sampleExercise.hits.hits[0]._source;
+                    console.log(`🔍 [ES Query DEBUG] Sample exercise.equipmentRequired field:`, sample.data?.exercise?.equipmentRequired);
+                    console.log(`🔍 [ES Query DEBUG] Sample exercise name:`, sample.data?.basic?.name);
+                }
+            } catch (debugError) {
+                console.error(`⚠️  [ES Query DEBUG] Error fetching sample:`, debugError.message);
+            }
         }
         
         const searchResponse = await elasticClient.search({
