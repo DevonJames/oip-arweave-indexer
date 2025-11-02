@@ -3175,7 +3175,7 @@ const buildElasticsearchQuery = (params) => {
     // Filter by record type
     if (params.recordType) {
         must.push({
-            term: { "oip.recordType.keyword": params.recordType.toLowerCase() }
+            term: { "oip.recordType.keyword": params.recordType } // Don't lowercase - ES stores exact case
         });
     }
     
