@@ -1869,6 +1869,11 @@ async function getRecords(queryParams) {
         // Execute optimized Elasticsearch query
         console.log(`🚀 [ES Query] Executing optimized query: from=${esFrom}, size=${esSize}, requiresPostProcessing=${requiresPostProcessing}`);
         
+        // Debug: Log the ES query for equipment filtering
+        if (equipmentRequired) {
+            console.log(`🔍 [ES Query DEBUG] equipmentRequired query:`, JSON.stringify(esQuery, null, 2));
+        }
+        
         const searchResponse = await elasticClient.search({
             index: 'records',
             body: {
@@ -3425,13 +3430,13 @@ const buildElasticsearchQuery = (params) => {
             // AND mode: must have ALL equipment DIDs
             equipmentArray.forEach(equipment => {
                 must.push({
-                    term: { "data.exercise.equipmentRequired": equipment }
+                    term: { "data.exercise.equipmentRequired.keyword": equipment }
                 });
             });
         } else {
             // OR mode: must have at least ONE equipment DID (default)
             must.push({
-                terms: { "data.exercise.equipmentRequired": equipmentArray }
+                terms: { "data.exercise.equipmentRequired.keyword": equipmentArray }
             });
         }
     }
