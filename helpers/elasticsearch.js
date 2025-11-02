@@ -2050,7 +2050,10 @@ async function getRecords(queryParams) {
                 return eq.toLowerCase();
             }));
             
-            const getEquipmentName = (equipment) => {
+            // Cache for resolved equipment DIDs to avoid duplicate lookups
+            const equipmentNameCache = {};
+            
+            const getEquipmentName = async (equipment) => {
                 if (equipment && typeof equipment === 'object' && equipment.data && equipment.data.basic && equipment.data.basic.name) {
                     return equipment.data.basic.name.toLowerCase();
                 }
@@ -2058,18 +2061,39 @@ async function getRecords(queryParams) {
                     return equipment.name.toLowerCase();
                 }
                 if (typeof equipment === 'string') {
+                    // Check if it's a DID
+                    if (isDID(equipment)) {
+                        // Check cache first
+                        if (equipmentNameCache[equipment]) {
+                            return equipmentNameCache[equipment];
+                        }
+                        // Resolve DID to name
+                        try {
+                            const equipRecord = await searchRecordInDB(equipment);
+                            if (equipRecord && equipRecord.data && equipRecord.data.basic && equipRecord.data.basic.name) {
+                                const name = equipRecord.data.basic.name.toLowerCase();
+                                equipmentNameCache[equipment] = name;
+                                return name;
+                            }
+                        } catch (error) {
+                            console.error(`⚠️  Failed to resolve equipment DID ${equipment}:`, error.message);
+                        }
+                        return ''; // Failed to resolve
+                    }
+                    // It's already a name
                     return equipment.toLowerCase();
                 }
                 return '';
             };
-            const equipmentMatches = (exerciseEq, requiredEq) => {
-                const exerciseName = getEquipmentName(exerciseEq);
+            
+            const equipmentMatches = async (exerciseEq, requiredEq) => {
+                const exerciseName = await getEquipmentName(exerciseEq);
                 const requiredName = requiredEq.toLowerCase();
                 return exerciseName.includes(requiredName) || requiredName.includes(exerciseName);
             };
             
-            records = records.map(record => {
-                const countMatches = (record) => {
+            records = await Promise.all(records.map(async (record) => {
+                const countMatches = async (record) => {
                     if (!record.data.exercise) return 0;
                     let exerciseEquipment = [];
                     if (record.data.exercise.equipmentRequired && Array.isArray(record.data.exercise.equipmentRequired)) {
@@ -2084,16 +2108,23 @@ async function getRecords(queryParams) {
                     if (exerciseEquipment.length === 0 && equipmentMatchMode.toUpperCase() === 'OR') {
                         return resolvedEquipment.length;
                     }
-                    return resolvedEquipment.filter(requiredEquipment => 
-                        exerciseEquipment.some(exerciseEq => 
-                            equipmentMatches(exerciseEq, requiredEquipment)
-                        )
-                    ).length;
+                    
+                    // Check how many required equipment items match
+                    let matchCount = 0;
+                    for (const requiredEquipment of resolvedEquipment) {
+                        for (const exerciseEq of exerciseEquipment) {
+                            if (await equipmentMatches(exerciseEq, requiredEquipment)) {
+                                matchCount++;
+                                break; // Found a match for this required equipment
+                            }
+                        }
+                    }
+                    return matchCount;
                 };
-                const matches = countMatches(record);
+                const matches = await countMatches(record);
                 const score = (matches / resolvedEquipment.length).toFixed(3);
                 return { ...record, equipmentScore: score, equipmentMatchedCount: matches };
-            });
+            }));
             
             // Filter out records that don't match equipment requirements
             if (equipmentMatchMode.toUpperCase() === 'AND') {
