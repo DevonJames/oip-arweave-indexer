@@ -3059,7 +3059,7 @@ async function getRecords(queryParams) {
         let progress = Math.round((maxArweaveBlockInDB - startBlockHeight) / (currentBlockHeight - startBlockHeight)  * 100);
         const searchResults = resolvedRecords.length;
         if (summarizeTags === 'true') {
-            console.log('Summarizing tags...');
+            console.log(`📊 [Tag Summary] Starting tag summarization with ${resolvedRecords.length} records`);
             const tagCounts = {};
             
             resolvedRecords.forEach(record => {
@@ -3071,6 +3071,8 @@ async function getRecords(queryParams) {
             }
             });
             
+            console.log(`📊 [Tag Summary] Found ${Object.keys(tagCounts).length} unique tags from ${resolvedRecords.length} records`);
+            
             const summary = Object.keys(tagCounts)
             .map(tag => ({ tag, count: tagCounts[tag] }))
             .sort((a, b) => b.count - a.count);
@@ -3079,8 +3081,9 @@ async function getRecords(queryParams) {
             // const pageSize = parseInt(limit) || 20; // Already declared
             // const pageNumber = parseInt(page) || 1;  // Already declared
             const tagPageNumber = parseInt(tagPage) || 1;  // Default to the first page
-            const tagStartIndex = (tagPageNumber - 1) * tagCount;
-            const tagEndIndex = tagStartIndex + tagCount;
+            const tagCountParsed = parseInt(tagCount) || 20;  // Default to 20 tags per page
+            const tagStartIndex = (tagPageNumber - 1) * tagCountParsed;
+            const tagEndIndex = tagStartIndex + tagCountParsed;
 
             const startIndex = (pageNumber - 1) * pageSize;
             const endIndex = startIndex + pageSize;
