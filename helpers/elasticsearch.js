@@ -2033,6 +2033,23 @@ async function getRecords(queryParams) {
         if (equipmentRequired && recordType === 'exercise') {
             const equipmentArray = equipmentRequired.split(',').map(eq => eq.trim());
             const isDID = (str) => str && typeof str === 'string' && (str.startsWith('did:arweave:') || str.startsWith('did:gun:'));
+            
+            // Resolve DIDs to equipment names
+            const resolvedEquipment = await Promise.all(equipmentArray.map(async (eq) => {
+                if (isDID(eq)) {
+                    // Resolve DID to get equipment name
+                    try {
+                        const equipRecord = await searchRecordInDB(eq);
+                        if (equipRecord && equipRecord.data && equipRecord.data.basic && equipRecord.data.basic.name) {
+                            return equipRecord.data.basic.name.toLowerCase();
+                        }
+                    } catch (error) {
+                        console.error(`⚠️  Failed to resolve equipment DID ${eq}:`, error.message);
+                    }
+                }
+                return eq.toLowerCase();
+            }));
+            
             const getEquipmentName = (equipment) => {
                 if (equipment && typeof equipment === 'object' && equipment.data && equipment.data.basic && equipment.data.basic.name) {
                     return equipment.data.basic.name.toLowerCase();
@@ -2046,9 +2063,6 @@ async function getRecords(queryParams) {
                 return '';
             };
             const equipmentMatches = (exerciseEq, requiredEq) => {
-                if (isDID(exerciseEq) && isDID(requiredEq)) {
-                    return exerciseEq === requiredEq;
-                }
                 const exerciseName = getEquipmentName(exerciseEq);
                 const requiredName = requiredEq.toLowerCase();
                 return exerciseName.includes(requiredName) || requiredName.includes(exerciseName);
@@ -2068,18 +2082,27 @@ async function getRecords(queryParams) {
                         }
                     }
                     if (exerciseEquipment.length === 0 && equipmentMatchMode.toUpperCase() === 'OR') {
-                        return equipmentArray.length;
+                        return resolvedEquipment.length;
                     }
-                    return equipmentArray.filter(requiredEquipment => 
+                    return resolvedEquipment.filter(requiredEquipment => 
                         exerciseEquipment.some(exerciseEq => 
                             equipmentMatches(exerciseEq, requiredEquipment)
                         )
                     ).length;
                 };
                 const matches = countMatches(record);
-                const score = (matches / equipmentArray.length).toFixed(3);
+                const score = (matches / resolvedEquipment.length).toFixed(3);
                 return { ...record, equipmentScore: score, equipmentMatchedCount: matches };
             });
+            
+            // Filter out records that don't match equipment requirements
+            if (equipmentMatchMode.toUpperCase() === 'AND') {
+                // AND mode: must match ALL equipment
+                records = records.filter(r => r.equipmentMatchedCount === resolvedEquipment.length);
+            } else {
+                // OR mode: must match at least ONE equipment
+                records = records.filter(r => r.equipmentMatchedCount > 0);
+            }
         }
         
         // Add exercise type scores
@@ -3440,23 +3463,33 @@ const buildElasticsearchQuery = (params) => {
     }
     
     // Equipment filtering for exercises
-    // NOTE: equipmentRequired is stored as an array of DID strings in the database
+    // NOTE: equipmentRequired is stored as array of equipment NAMES (strings), not DIDs
+    // User can query by DID or name, so we need to handle both cases
+    // If DID is provided, we need to resolve it to name (done in post-processing)
+    // If name is provided, we can query directly
+    // For now, mark this for post-processing to handle DID resolution properly
     if (params.equipmentRequired && params.recordType === 'exercise') {
+        // Check if ANY of the equipment params are DIDs
         const equipmentArray = params.equipmentRequired.split(',').map(eq => eq.trim());
+        const hasDID = equipmentArray.some(eq => eq.startsWith('did:arweave:') || eq.startsWith('did:gun:') || eq.startsWith('did:irys:'));
         
-        if (params.equipmentMatchMode === 'AND' || params.equipmentMatchMode === 'and') {
-            // AND mode: must have ALL equipment DIDs
-            equipmentArray.forEach(equipment => {
-                must.push({
-                    term: { "data.exercise.equipmentRequired.keyword": equipment }
+        if (!hasDID) {
+            // All are names - can query directly in ES
+            if (params.equipmentMatchMode === 'AND' || params.equipmentMatchMode === 'and') {
+                // AND mode: must have ALL equipment names
+                equipmentArray.forEach(equipment => {
+                    must.push({
+                        term: { "data.exercise.equipmentRequired.keyword": equipment.toLowerCase() }
+                    });
                 });
-            });
-        } else {
-            // OR mode: must have at least ONE equipment DID (default)
-            must.push({
-                terms: { "data.exercise.equipmentRequired.keyword": equipmentArray }
-            });
+            } else {
+                // OR mode: must have at least ONE equipment name (default)
+                must.push({
+                    terms: { "data.exercise.equipmentRequired.keyword": equipmentArray.map(e => e.toLowerCase()) }
+                });
+            }
         }
+        // If DIDs are provided, post-processing will handle resolution
     }
     
     // Exercise type filtering
@@ -3648,6 +3681,14 @@ const buildElasticsearchSort = (sortBy = 'inArweaveBlock:desc') => {
  * Helper function to determine if query needs post-processing filters
  */
 const needsPostProcessing = (params) => {
+    // Check if equipmentRequired contains DIDs (requires resolution)
+    const hasEquipmentDID = params.equipmentRequired && 
+        params.equipmentRequired.split(',').some(eq => 
+            eq.trim().startsWith('did:arweave:') || 
+            eq.trim().startsWith('did:gun:') || 
+            eq.trim().startsWith('did:irys:')
+        );
+    
     return !!(
         params.exerciseNames ||
         params.exerciseDIDs ||
@@ -3655,6 +3696,7 @@ const needsPostProcessing = (params) => {
         params.didTxRef ||
         params.template ||
         params.noDuplicates ||
+        hasEquipmentDID ||  // Equipment DIDs need resolution to names
         params.isAuthenticated  // Authenticated ownership checks need post-processing
     );
 };
