@@ -263,4 +263,49 @@ router.post('/memory/clear-cache', async (req, res) => {
     }
 });
 
+// Recreate Elasticsearch client (manual memory leak mitigation)
+router.post('/elasticsearch/recreate-client', async (req, res) => {
+    try {
+        const { recreateElasticsearchClient } = require('../helpers/elasticsearch');
+        
+        const beforeMem = process.memoryUsage();
+        
+        // Recreate the client
+        recreateElasticsearchClient();
+        
+        // Force garbage collection if available
+        if (global.gc) {
+            global.gc();
+        }
+        
+        const afterMem = process.memoryUsage();
+        
+        res.json({
+            message: 'Elasticsearch client recreated successfully',
+            memory: {
+                before: {
+                    heapUsedMB: Math.round(beforeMem.heapUsed / 1024 / 1024),
+                    externalMB: Math.round(beforeMem.external / 1024 / 1024)
+                },
+                after: {
+                    heapUsedMB: Math.round(afterMem.heapUsed / 1024 / 1024),
+                    externalMB: Math.round(afterMem.external / 1024 / 1024)
+                },
+                freed: {
+                    heapMB: Math.round((beforeMem.heapUsed - afterMem.heapUsed) / 1024 / 1024),
+                    externalMB: Math.round((beforeMem.external - afterMem.external) / 1024 / 1024)
+                }
+            },
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('Error recreating Elasticsearch client:', error);
+        res.status(500).json({
+            error: 'Failed to recreate Elasticsearch client',
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;

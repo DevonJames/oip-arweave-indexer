@@ -51,16 +51,65 @@ let startBlockHeight = 1579580;
 // Note: Elasticsearch client (v8+) uses Undici and manages connection pooling internally
 // The custom HTTP agent configuration is not compatible with newer ES clients
 // Connection pooling is handled automatically by the client
+//
+// MEMORY LEAK FIX: Periodically recreate ES client to force connection pool cleanup
+// This prevents ArrayBuffer accumulation from Undici's internal connection management
 
-const elasticClient = new Client({
-    node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
-    auth: {
-        username: process.env.ELASTICCLIENTUSERNAME,
-        password: process.env.ELASTICCLIENTPASSWORD
-    },
-    maxRetries: 3,
-    requestTimeout: 30000
-});
+let elasticClient = null;
+let elasticClientCreatedAt = null;
+const ES_CLIENT_RECREATION_INTERVAL = parseInt(process.env.ES_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 minutes default
+
+function createElasticsearchClient() {
+    // Close existing client if it exists
+    if (elasticClient) {
+        try {
+            elasticClient.close();
+            console.log('🔄 [ES Client] Closed old Elasticsearch client');
+        } catch (error) {
+            console.error('⚠️  [ES Client] Error closing old client:', error.message);
+        }
+    }
+    
+    // Create new client
+    elasticClient = new Client({
+        node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
+        auth: {
+            username: process.env.ELASTICCLIENTUSERNAME,
+            password: process.env.ELASTICCLIENTPASSWORD
+        },
+        maxRetries: 3,
+        requestTimeout: 30000
+    });
+    
+    elasticClientCreatedAt = Date.now();
+    console.log(`✅ [ES Client] Created new Elasticsearch client (will recreate every ${ES_CLIENT_RECREATION_INTERVAL / 60000} minutes)`);
+    
+    return elasticClient;
+}
+
+// Check if client needs recreation (based on age)
+function checkAndRecreateElasticsearchClient() {
+    if (!elasticClient || !elasticClientCreatedAt) {
+        return createElasticsearchClient();
+    }
+    
+    const clientAge = Date.now() - elasticClientCreatedAt;
+    if (clientAge > ES_CLIENT_RECREATION_INTERVAL) {
+        const ageMinutes = Math.round(clientAge / 60000);
+        console.log(`🔄 [ES Client] Recreating client (age: ${ageMinutes} minutes, threshold: ${ES_CLIENT_RECREATION_INTERVAL / 60000} minutes)`);
+        return createElasticsearchClient();
+    }
+    
+    return elasticClient;
+}
+
+// Initialize the first client
+createElasticsearchClient();
+
+// Set up periodic client recreation (every 5 minutes, check if recreation is needed)
+setInterval(() => {
+    checkAndRecreateElasticsearchClient();
+}, 300000); // Check every 5 minutes
 
 // Helper function for backward-compatible DID queries
 function createDIDQuery(targetDid) {
@@ -5349,6 +5398,7 @@ module.exports = {
     processRecordForElasticsearch,
     addRecipeNutritionalSummary,
     clearRecordsCache,
+    recreateElasticsearchClient: createElasticsearchClient, // Exposed for manual client recreation
     calculateRecipeNutrition,
     elasticClient
 };

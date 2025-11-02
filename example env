@@ -30,6 +30,12 @@ ELASTICCLIENTPASSWORD=yourpassword
 # For more space, use absolute path like: /data/elasticsearch
 ELASTICSEARCH_DATA_PATH=./elasticsearch_data
 
+# Elasticsearch Client Recreation Interval (milliseconds)
+# Periodically recreates the ES client to prevent memory leaks from Undici connection pooling
+# Default: 1800000 (30 minutes)
+# Lower values = more frequent recreation but higher connection overhead
+ES_CLIENT_RECREATION_INTERVAL=1800000
+
 # API Keys
 OPENAI_API_KEY=
 XAI_API_KEY=
