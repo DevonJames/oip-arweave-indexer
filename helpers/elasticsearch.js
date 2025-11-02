@@ -3021,17 +3021,19 @@ async function getRecords(queryParams) {
         
         }
 
-        // Apply Paging (pageSize and pageNumber already declared at top of function)
-        // const pageSize = parseInt(limit) || 20; // Already declared
-        // const pageNumber = parseInt(page) || 1;  // Already declared
-        
-        const startIndex = (pageNumber - 1) * pageSize;
-        const endIndex = startIndex + pageSize;
-        
-        const paginatedRecords = resolvedRecords.slice(startIndex, endIndex);
-        resolvedRecords = paginatedRecords;
-        
-        // console.log(`🔍 DEBUG: Second pagination - resolvedRecords.length=${resolvedRecords.length}, startIndex=${startIndex}, endIndex=${endIndex}, paginatedRecords.length=${paginatedRecords.length}`);
+        // Apply in-memory paging ONLY if post-processing was required
+        // (If post-processing wasn't needed, ES already paginated correctly)
+        if (requiresPostProcessing) {
+            const startIndex = (pageNumber - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            
+            const paginatedRecords = resolvedRecords.slice(startIndex, endIndex);
+            resolvedRecords = paginatedRecords;
+            
+            console.log(`📄 [Pagination] Applied in-memory pagination: ${startIndex}-${endIndex} from ${records.length} records (post-processing mode)`);
+        } else {
+            console.log(`📄 [Pagination] Using ES native pagination: page ${pageNumber}, size ${pageSize} (no post-processing)`);
+        }
 
         return {
             message: "Records retrieved successfully",
