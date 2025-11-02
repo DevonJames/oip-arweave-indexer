@@ -3371,15 +3371,30 @@ const buildElasticsearchQuery = (params) => {
     if (params.equipmentRequired && params.recordType === 'exercise') {
         const equipmentArray = params.equipmentRequired.split(',').map(eq => eq.trim());
         
+        // Helper to determine if a string is a DID
+        const isDID = (str) => str.startsWith('did:arweave:') || str.startsWith('did:gun:') || str.startsWith('did:irys:');
+        
         if (params.equipmentMatchMode === 'AND' || params.equipmentMatchMode === 'and') {
             // AND mode: must have ALL equipment
             equipmentArray.forEach(equipment => {
-                should.push({
+                const equipmentOrQueries = [];
+                
+                if (isDID(equipment)) {
+                    // Query by DID in nested equipment records
+                    equipmentOrQueries.push({ term: { "data.exercise.equipmentRequired.oip.did.keyword": equipment } });
+                    equipmentOrQueries.push({ term: { "data.exercise.equipment.oip.did.keyword": equipment } });
+                } else {
+                    // Query by name in nested equipment records (case-insensitive wildcard)
+                    equipmentOrQueries.push({ wildcard: { "data.exercise.equipmentRequired.data.basic.name.keyword": `*${equipment}*` } });
+                    equipmentOrQueries.push({ wildcard: { "data.exercise.equipment.data.basic.name.keyword": `*${equipment}*` } });
+                    // Also try direct string match for legacy data
+                    equipmentOrQueries.push({ wildcard: { "data.exercise.equipmentRequired.keyword": `*${equipment}*` } });
+                    equipmentOrQueries.push({ wildcard: { "data.exercise.equipment.keyword": `*${equipment}*` } });
+                }
+                
+                must.push({
                     bool: {
-                        should: [
-                            { wildcard: { "data.exercise.equipmentRequired.keyword": `*${equipment.toLowerCase()}*` } },
-                            { wildcard: { "data.exercise.equipment.keyword": `*${equipment.toLowerCase()}*` } }
-                        ],
+                        should: equipmentOrQueries,
                         minimum_should_match: 1
                     }
                 });
@@ -3388,8 +3403,18 @@ const buildElasticsearchQuery = (params) => {
             // OR mode: must have at least ONE equipment (default)
             const equipmentQueries = [];
             equipmentArray.forEach(equipment => {
-                equipmentQueries.push({ wildcard: { "data.exercise.equipmentRequired.keyword": `*${equipment.toLowerCase()}*` } });
-                equipmentQueries.push({ wildcard: { "data.exercise.equipment.keyword": `*${equipment.toLowerCase()}*` } });
+                if (isDID(equipment)) {
+                    // Query by DID in nested equipment records
+                    equipmentQueries.push({ term: { "data.exercise.equipmentRequired.oip.did.keyword": equipment } });
+                    equipmentQueries.push({ term: { "data.exercise.equipment.oip.did.keyword": equipment } });
+                } else {
+                    // Query by name in nested equipment records (case-insensitive wildcard)
+                    equipmentQueries.push({ wildcard: { "data.exercise.equipmentRequired.data.basic.name.keyword": `*${equipment}*` } });
+                    equipmentQueries.push({ wildcard: { "data.exercise.equipment.data.basic.name.keyword": `*${equipment}*` } });
+                    // Also try direct string match for legacy data
+                    equipmentQueries.push({ wildcard: { "data.exercise.equipmentRequired.keyword": `*${equipment}*` } });
+                    equipmentQueries.push({ wildcard: { "data.exercise.equipment.keyword": `*${equipment}*` } });
+                }
             });
             
             should.push({
