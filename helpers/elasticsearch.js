@@ -1858,10 +1858,21 @@ async function getRecords(queryParams) {
         const pageNumber = parseInt(page) || 1;
         
         // If post-processing needed, fetch more records to account for filtering
-        const esFrom = requiresPostProcessing ? 0 : (pageNumber - 1) * pageSize;
-        const esSize = requiresPostProcessing 
-            ? pageSize * overFetchMultiplier 
-            : pageSize;
+        // Special case: for noDuplicates, fetch ALL records to ensure we get all unique ones
+        let esFrom, esSize;
+        if (noDuplicates) {
+            // Fetch all records for this query, we'll filter and paginate after deduplication
+            esFrom = 0;
+            esSize = 10000; // ES default max
+        } else if (requiresPostProcessing) {
+            // Over-fetch based on complexity
+            esFrom = 0;
+            esSize = pageSize * overFetchMultiplier;
+        } else {
+            // ES can handle pagination directly
+            esFrom = (pageNumber - 1) * pageSize;
+            esSize = pageSize;
+        }
         
         // Build sort configuration
         const esSort = buildElasticsearchSort(sortBy);
