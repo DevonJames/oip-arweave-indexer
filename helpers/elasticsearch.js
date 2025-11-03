@@ -1908,6 +1908,11 @@ async function getRecords(queryParams) {
         // Execute optimized Elasticsearch query
         console.log(`🚀 [ES Query] Executing optimized query: from=${esFrom}, size=${esSize}, requiresPostProcessing=${requiresPostProcessing}, pageSize=${pageSize}, pageNumber=${pageNumber}`);
         
+        // DEBUG: Log the full ES query for date filters
+        if (dateStart || dateEnd) {
+            console.log(`🔍 [ES Query DEBUG] Full query:`, JSON.stringify(esQuery, null, 2));
+        }
+        
         // Debug: Log the ES query for equipment filtering
         if (equipmentRequired) {
             console.log(`🔍 [ES Query DEBUG] equipmentRequired query:`, JSON.stringify(esQuery, null, 2));
