@@ -1911,6 +1911,27 @@ async function getRecords(queryParams) {
         // DEBUG: Log the full ES query for date filters
         if (dateStart || dateEnd) {
             console.log(`🔍 [ES Query DEBUG] Full query:`, JSON.stringify(esQuery, null, 2));
+            
+            // DEBUG: Test if ANY workoutSchedule records exist at all
+            try {
+                const testQuery = await elasticClient.search({
+                    index: 'records',
+                    body: {
+                        query: { term: { "oip.recordType.keyword": "workoutSchedule" } },
+                        size: 1
+                    }
+                });
+                console.log(`🔍 [ES Query DEBUG] Total workoutSchedule records in ES: ${testQuery.hits.total.value}`);
+                if (testQuery.hits.hits.length > 0) {
+                    const sample = testQuery.hits.hits[0]._source;
+                    console.log(`🔍 [ES Query DEBUG] Sample workoutSchedule record:`);
+                    console.log(`   - DID: ${sample.oip?.did}`);
+                    console.log(`   - scheduled_date: ${sample.data?.workoutSchedule?.scheduled_date} (type: ${typeof sample.data?.workoutSchedule?.scheduled_date})`);
+                    console.log(`   - access_level: ${sample.data?.accessControl?.access_level}`);
+                }
+            } catch (debugErr) {
+                console.error(`⚠️  [ES Query DEBUG] Error checking workoutSchedule records:`, debugErr.message);
+            }
         }
         
         // Debug: Log the ES query for equipment filtering
