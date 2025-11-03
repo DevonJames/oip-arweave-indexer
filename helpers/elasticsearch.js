@@ -3411,17 +3411,49 @@ const buildElasticsearchQuery = (params) => {
     if (params.dateStart || params.dateEnd) {
         const range = {};
         if (params.dateStart) {
-            const dateStartTimestamp = params.dateStart instanceof Date 
-                ? Math.floor(params.dateStart.getTime() / 1000) 
-                : params.dateStart;
+            let dateStartTimestamp;
+            if (params.dateStart instanceof Date) {
+                // Already a Date object
+                dateStartTimestamp = Math.floor(params.dateStart.getTime() / 1000);
+            } else if (typeof params.dateStart === 'string') {
+                // Check if it's a numeric string (Unix timestamp) or date string
+                if (/^\d+$/.test(params.dateStart)) {
+                    // Numeric string timestamp: "1762156800" → 1762156800
+                    dateStartTimestamp = parseInt(params.dateStart, 10);
+                } else {
+                    // Date string: "2024-11-03" → convert to timestamp
+                    dateStartTimestamp = Math.floor(new Date(params.dateStart).getTime() / 1000);
+                }
+            } else {
+                // Already a number
+                dateStartTimestamp = params.dateStart;
+            }
             range.gte = dateStartTimestamp;
         }
         if (params.dateEnd) {
-            const dateEndTimestamp = params.dateEnd instanceof Date 
-                ? Math.floor(params.dateEnd.getTime() / 1000) 
-                : params.dateEnd;
+            let dateEndTimestamp;
+            if (params.dateEnd instanceof Date) {
+                // Already a Date object
+                dateEndTimestamp = Math.floor(params.dateEnd.getTime() / 1000);
+            } else if (typeof params.dateEnd === 'string') {
+                // Check if it's a numeric string (Unix timestamp) or date string
+                if (/^\d+$/.test(params.dateEnd)) {
+                    // Numeric string timestamp: "1762761600" → 1762761600
+                    dateEndTimestamp = parseInt(params.dateEnd, 10);
+                } else {
+                    // Date string: "2024-11-03" → convert to timestamp (end of day)
+                    const endDate = new Date(params.dateEnd);
+                    endDate.setHours(23, 59, 59, 999);
+                    dateEndTimestamp = Math.floor(endDate.getTime() / 1000);
+                }
+            } else {
+                // Already a number
+                dateEndTimestamp = params.dateEnd;
+            }
             range.lte = dateEndTimestamp;
         }
+        
+        console.log(`📅 [Date Filter] dateStart=${params.dateStart} (${range.gte}), dateEnd=${params.dateEnd} (${range.lte})`);
         
         // Check multiple date fields depending on record type
         const dateQueries = [
@@ -3440,15 +3472,37 @@ const buildElasticsearchQuery = (params) => {
     
     // Filter by scheduled date for workoutSchedule and mealPlan
     if (params.scheduledOn) {
-        const dateMatch = params.scheduledOn.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (dateMatch) {
-            const [, year, month, day] = dateMatch;
-            const startOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
-            const endOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999);
-            const startTimestamp = Math.floor(startOfDay.getTime() / 1000);
-            const endTimestamp = Math.floor(endOfDay.getTime() / 1000);
+        let startTimestamp, endTimestamp;
+        
+        // Check if it's a Unix timestamp string or number
+        if (typeof params.scheduledOn === 'number' || /^\d+$/.test(params.scheduledOn)) {
+            // Unix timestamp: treat as exact timestamp or start of day
+            const timestamp = typeof params.scheduledOn === 'number' 
+                ? params.scheduledOn 
+                : parseInt(params.scheduledOn, 10);
             
+            // Assume timestamp represents start of day, calculate end of day
+            const date = new Date(timestamp * 1000);
+            const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+            const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+            startTimestamp = Math.floor(startOfDay.getTime() / 1000);
+            endTimestamp = Math.floor(endOfDay.getTime() / 1000);
+        } else {
+            // Date string in YYYY-MM-DD format
+            const dateMatch = params.scheduledOn.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (dateMatch) {
+                const [, year, month, day] = dateMatch;
+                const startOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+                const endOfDay = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 23, 59, 59, 999);
+                startTimestamp = Math.floor(startOfDay.getTime() / 1000);
+                endTimestamp = Math.floor(endOfDay.getTime() / 1000);
+            }
+        }
+        
+        if (startTimestamp && endTimestamp) {
             const scheduledRange = { gte: startTimestamp, lte: endTimestamp };
+            
+            console.log(`📅 [ScheduledOn Filter] scheduledOn=${params.scheduledOn} (${startTimestamp} - ${endTimestamp})`);
             
             should.push({ range: { "data.workoutSchedule.scheduled_date": scheduledRange } });
             should.push({ range: { "data.mealPlan.meal_date": scheduledRange } });
