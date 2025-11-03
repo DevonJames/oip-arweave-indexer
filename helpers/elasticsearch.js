@@ -3579,9 +3579,29 @@ const buildElasticsearchQuery = (params) => {
         mustNot.push({
             term: { "data.conversationSession.is_private": true }
         });
+    } else if (params.user) {
+        // Authenticated users: show public records + their own private records
+        const userPubKey = params.user.publicKey || params.user.publisherPubKey;
+        
+        if (userPubKey) {
+            must.push({
+                bool: {
+                    should: [
+                        // Public records
+                        { term: { "data.accessControl.access_level.keyword": "public" } },
+                        // Records without access control (legacy public)
+                        { bool: { must_not: { exists: { field: "data.accessControl.access_level" } } } },
+                        // Private records owned by this user (via accessControl)
+                        { term: { "data.accessControl.owner_public_key.keyword": userPubKey } },
+                        { term: { "data.accessControl.created_by.keyword": userPubKey } },
+                        // Private records owned by this user (via conversationSession)
+                        { term: { "data.conversationSession.owner_public_key.keyword": userPubKey } }
+                    ],
+                    minimum_should_match: 1
+                }
+            });
+        }
     }
-    // Note: Authenticated ownership filtering is complex and requires user context,
-    // so it will be handled in post-processing for now
     
     // Phase 3: Hybrid Filters (ES + post-processing)
     
