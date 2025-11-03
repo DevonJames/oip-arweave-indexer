@@ -24,13 +24,11 @@ async function fetchTemplate(templateName) {
   throw new Error(`Template ${templateName} not found`);
 }
 
-async function resolveDrefsInRecord(recordJson, templateName, fieldToSubTemplate = {}, blockchain = 'arweave') {
+async function resolveDrefsInRecord(recordJson, templateName, fieldToSubTemplate = {}, blockchain = 'arweave', options = {}) {
   const fields = await fetchTemplate(templateName);
+  const { nonStandardWorkout = true } = options; // Default to true (create new records)
 
   async function processSubObject(subObj, subTemplateName) {
-    // Build exactMatch from subObj, focusing on basic.name
-    const exactMatch = {};
-    
     // Handle nested dref structure like {exercise: {basic: {name: "..."}}}
     let basicName = null;
     let recordData = null;
@@ -47,20 +45,38 @@ async function resolveDrefsInRecord(recordJson, templateName, fieldToSubTemplate
       basicName = subObj.basic.name;
     }
     
-    if (basicName) {
-      exactMatch['data.basic.name'] = basicName;
+    if (!basicName) {
+      console.log(`No basic.name found in subObject for ${subTemplateName}, skipping`);
+      return null;
     }
     
     console.log(`Processing subObject for ${subTemplateName}:`, JSON.stringify(subObj, null, 2));
     console.log(`Extracted recordData:`, JSON.stringify(recordData, null, 2));
-    console.log(`Built exactMatch:`, exactMatch);
+    console.log(`Searching for existing record with basic.name = "${basicName}"`);
     
-    const results = await getRecords({ exactMatch: JSON.stringify(exactMatch), recordType: subTemplateName, limit: 1, sortBy: 'inArweaveBlock:desc' });
+    // Use fieldName, fieldSearch, fieldMatchMode for exact matching
+    const results = await getRecords({ 
+      recordType: subTemplateName,
+      fieldName: 'basic.name',
+      fieldSearch: basicName,
+      fieldMatchMode: 'exact',
+      limit: 1,
+      sortBy: 'inArweaveBlock:desc'
+    });
+    
     if (results.records.length > 0) {
       console.log(`Found existing record for ${basicName}:`, results.records[0].oip.didTx);
       return results.records[0].oip.didTx;
     } else {
-      console.log(`No existing record found for ${basicName}, creating new one`);
+      console.log(`No existing record found for ${basicName}`);
+      
+      // If nonStandardWorkout is false/omitted, skip creating new records
+      if (!nonStandardWorkout) {
+        console.log(`nonStandardWorkout is false - skipping creation of new ${subTemplateName} record`);
+        return null; // Return null to indicate this exercise should be excluded
+      }
+      
+      console.log(`nonStandardWorkout is true - creating new ${subTemplateName} record`);
       
       // Use the extracted recordData for publishing
       let enhancedObj = { ...recordData };
@@ -100,12 +116,17 @@ async function resolveDrefsInRecord(recordJson, templateName, fieldToSubTemplate
         }
       } else if (fieldType === 'repeated dref') {
         if (Array.isArray(props[key])) {
-          props[key] = await Promise.all(props[key].map(async (item) => {
+          const resolvedItems = await Promise.all(props[key].map(async (item) => {
             if (typeof item === 'object' && item !== null && !(typeof item === 'string' && item.startsWith('did:'))) {
               return await processSubObject(item, subTemplate);
             }
             return item;
           }));
+          
+          // Filter out null values (exercises that were skipped because they weren't found and nonStandardWorkout is false)
+          props[key] = resolvedItems.filter(item => item !== null);
+          
+          console.log(`Filtered ${key} array: ${resolvedItems.length} items processed, ${props[key].length} items kept`);
         }
       }
     }
