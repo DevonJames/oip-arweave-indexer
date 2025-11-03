@@ -2378,16 +2378,19 @@ async function getRecords(queryParams) {
         // url, tags, equipmentRequired, exerciseType, cuisine, model, search filtering now handled in Elasticsearch (scoring added above)
         
         // ============================================================
-        // AUTHENTICATION-BASED PRIVACY FILTERING (POST-PROCESSING)
-        // Complex ownership checks that require user context
+        // AUTHENTICATION-BASED PRIVACY FILTERING
+        // NOW HANDLED IN ELASTICSEARCH (buildElasticsearchQuery)
+        // This section is NO LONGER NEEDED - authentication filtering moved to ES query
         // ============================================================
         
-        // Skip the old redundant filter blocks (equipment, exerciseType, cuisine, model, search)
-        // These are now handled in Elasticsearch queries above
+        // Authentication filtering is now done in the ES query itself (Phase 2)
+        // No need to re-filter in post-processing
         
-        // Jump directly to authentication filtering below...
-        // NEW: Filter by access level based on authentication status
-        if (!isAuthenticated) {
+        // OLD CODE REMOVED (was causing double-filtering):
+        // if (!isAuthenticated) { ... filter to public only ... }
+        // else { ... filter to public + owned ... }
+        
+        if (false && !isAuthenticated) {  // DISABLED - handled in ES
             // Unauthenticated users only see public records
             records = records.filter(record => {
                 // Check if record has access control settings
