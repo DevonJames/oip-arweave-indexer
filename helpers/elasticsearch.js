@@ -3462,7 +3462,8 @@ const buildElasticsearchQuery = (params) => {
             { range: { "data.mealPlan.meal_date": range } }
         ];
         
-        should.push({
+        // Date filters are REQUIRED (must match), not optional (should match)
+        must.push({
             bool: {
                 should: dateQueries,
                 minimum_should_match: 1
@@ -3504,8 +3505,16 @@ const buildElasticsearchQuery = (params) => {
             
             console.log(`📅 [ScheduledOn Filter] scheduledOn=${params.scheduledOn} (${startTimestamp} - ${endTimestamp})`);
             
-            should.push({ range: { "data.workoutSchedule.scheduled_date": scheduledRange } });
-            should.push({ range: { "data.mealPlan.meal_date": scheduledRange } });
+            // ScheduledOn filter is REQUIRED (must match), not optional
+            must.push({
+                bool: {
+                    should: [
+                        { range: { "data.workoutSchedule.scheduled_date": scheduledRange } },
+                        { range: { "data.mealPlan.meal_date": scheduledRange } }
+                    ],
+                    minimum_should_match: 1
+                }
+            });
         }
     }
     
