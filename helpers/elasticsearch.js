@@ -1928,6 +1928,26 @@ async function getRecords(queryParams) {
                     console.log(`   - DID: ${sample.oip?.did}`);
                     console.log(`   - scheduled_date: ${sample.data?.workoutSchedule?.scheduled_date} (type: ${typeof sample.data?.workoutSchedule?.scheduled_date})`);
                     console.log(`   - access_level: ${sample.data?.accessControl?.access_level}`);
+                    console.log(`   - owner_public_key: ${sample.data?.accessControl?.owner_public_key?.substring(0, 20)}...`);
+                }
+                
+                // DEBUG: Test the EXACT record we know exists
+                const exactRecordQuery = await elasticClient.search({
+                    index: 'records',
+                    body: {
+                        query: { term: { "oip.did.keyword": "did:gun:647f79c2a338:workout_1762473600_kqo31tblt" } },
+                        size: 1
+                    }
+                });
+                if (exactRecordQuery.hits.hits.length > 0) {
+                    const exactRecord = exactRecordQuery.hits.hits[0]._source;
+                    console.log(`🔍 [ES Query DEBUG] The exact record you're looking for:`);
+                    console.log(`   - DID: ${exactRecord.oip?.did}`);
+                    console.log(`   - scheduled_date: ${exactRecord.data?.workoutSchedule?.scheduled_date} (${typeof exactRecord.data?.workoutSchedule?.scheduled_date})`);
+                    console.log(`   - In range? ${exactRecord.data?.workoutSchedule?.scheduled_date >= 1762156800 && exactRecord.data?.workoutSchedule?.scheduled_date <= 1762761600}`);
+                    console.log(`   - owner_public_key: ${exactRecord.data?.accessControl?.owner_public_key}`);
+                    console.log(`   - Your public key: ${params.user?.publicKey || params.user?.publisherPubKey}`);
+                    console.log(`   - Keys match? ${exactRecord.data?.accessControl?.owner_public_key === (params.user?.publicKey || params.user?.publisherPubKey)}`);
                 }
             } catch (debugErr) {
                 console.error(`⚠️  [ES Query DEBUG] Error checking workoutSchedule records:`, debugErr.message);
@@ -3483,16 +3503,25 @@ const buildElasticsearchQuery = (params) => {
         
         // Check multiple date fields depending on record type
         // NOTE: Date fields may be stored as numbers OR strings in ES, so we check both
-        const dateQueries = [
-            // Number fields (preferred)
-            { range: { "data.basic.date": range } },
-            { range: { "data.workoutSchedule.scheduled_date": range } },
-            { range: { "data.mealPlan.meal_date": range } },
-            // String fields (for legacy data that stored timestamps as strings)
-            { range: { "data.basic.date.keyword": { gte: range.gte.toString(), lte: range.lte.toString() } } },
-            { range: { "data.workoutSchedule.scheduled_date.keyword": { gte: range.gte.toString(), lte: range.lte.toString() } } },
-            { range: { "data.mealPlan.meal_date.keyword": { gte: range.gte.toString(), lte: range.lte.toString() } } }
-        ];
+        // IMPORTANT: Only include fields that are actually indexed as numbers/dates in ES
+        const dateQueries = [];
+        
+        // Only check relevant date fields based on record type
+        if (params.recordType === 'workoutSchedule') {
+            dateQueries.push({ range: { "data.workoutSchedule.scheduled_date": range } });
+        } else if (params.recordType === 'mealPlan') {
+            dateQueries.push({ range: { "data.mealPlan.meal_date": range } });
+        } else {
+            // For other record types, check basic.date
+            dateQueries.push({ range: { "data.basic.date": range } });
+        }
+        
+        // If no specific recordType, check all possible date fields
+        if (!params.recordType) {
+            dateQueries.push({ range: { "data.basic.date": range } });
+            dateQueries.push({ range: { "data.workoutSchedule.scheduled_date": range } });
+            dateQueries.push({ range: { "data.mealPlan.meal_date": range } });
+        }
         
         // Date filters are REQUIRED (must match), not optional (should match)
         must.push({
