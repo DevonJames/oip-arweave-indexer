@@ -2043,6 +2043,38 @@ async function getRecords(queryParams) {
             // console.log('after filtering by template, there are', records.length, 'records');
         }
 
+        // Date range filtering (POST-PROCESSING)
+        // ES range queries don't work reliably, so filter in memory
+        if (dateStart || dateEnd) {
+            const dateStartNum = dateStart ? (typeof dateStart === 'string' && /^\d+$/.test(dateStart) ? parseInt(dateStart, 10) : dateStart) : null;
+            const dateEndNum = dateEnd ? (typeof dateEnd === 'string' && /^\d+$/.test(dateEnd) ? parseInt(dateEnd, 10) : dateEnd) : null;
+            
+            records = records.filter(record => {
+                let recordDate = null;
+                
+                // Determine which date field to check based on record type
+                if (recordType === 'workoutSchedule') {
+                    recordDate = record.data?.workoutSchedule?.scheduled_date;
+                } else if (recordType === 'mealPlan') {
+                    recordDate = record.data?.mealPlan?.meal_date;
+                } else {
+                    recordDate = record.data?.basic?.date;
+                }
+                
+                if (!recordDate) return false;
+                
+                // Handle date as string or number
+                const dateNum = typeof recordDate === 'string' ? parseInt(recordDate, 10) : recordDate;
+                
+                if (dateStartNum && dateNum < dateStartNum) return false;
+                if (dateEndNum && dateNum > dateEndNum) return false;
+                
+                return true;
+            });
+            
+            console.log(`📅 [Date Filter POST] Filtered to ${records.length} records in range ${dateStartNum} - ${dateEndNum}`);
+        }
+
         // recordType filter now handled in Elasticsearch (no longer needed here)
 
         // didTxRef - requires recursive object search (kept as post-processing)
@@ -3453,84 +3485,9 @@ const buildElasticsearchQuery = (params) => {
         should.push({ term: { "data.basic.webUrl.keyword": params.url } });
     }
     
-    // Date range filters
-    if (params.dateStart || params.dateEnd) {
-        const range = {};
-        if (params.dateStart) {
-            let dateStartTimestamp;
-            if (params.dateStart instanceof Date) {
-                // Already a Date object
-                dateStartTimestamp = Math.floor(params.dateStart.getTime() / 1000);
-            } else if (typeof params.dateStart === 'string') {
-                // Check if it's a numeric string (Unix timestamp) or date string
-                if (/^\d+$/.test(params.dateStart)) {
-                    // Numeric string timestamp: "1762156800" → 1762156800
-                    dateStartTimestamp = parseInt(params.dateStart, 10);
-                } else {
-                    // Date string: "2024-11-03" → convert to timestamp
-                    dateStartTimestamp = Math.floor(new Date(params.dateStart).getTime() / 1000);
-                }
-            } else {
-                // Already a number
-                dateStartTimestamp = params.dateStart;
-            }
-            range.gte = dateStartTimestamp;
-        }
-        if (params.dateEnd) {
-            let dateEndTimestamp;
-            if (params.dateEnd instanceof Date) {
-                // Already a Date object
-                dateEndTimestamp = Math.floor(params.dateEnd.getTime() / 1000);
-            } else if (typeof params.dateEnd === 'string') {
-                // Check if it's a numeric string (Unix timestamp) or date string
-                if (/^\d+$/.test(params.dateEnd)) {
-                    // Numeric string timestamp: "1762761600" → 1762761600
-                    dateEndTimestamp = parseInt(params.dateEnd, 10);
-                } else {
-                    // Date string: "2024-11-03" → convert to timestamp (end of day)
-                    const endDate = new Date(params.dateEnd);
-                    endDate.setHours(23, 59, 59, 999);
-                    dateEndTimestamp = Math.floor(endDate.getTime() / 1000);
-                }
-            } else {
-                // Already a number
-                dateEndTimestamp = params.dateEnd;
-            }
-            range.lte = dateEndTimestamp;
-        }
-        
-        console.log(`📅 [Date Filter] dateStart=${params.dateStart} (${range.gte}), dateEnd=${params.dateEnd} (${range.lte})`);
-        
-        // Check multiple date fields depending on record type
-        // NOTE: Date fields may be stored as numbers OR strings in ES, so we check both
-        // IMPORTANT: Only include fields that are actually indexed as numbers/dates in ES
-        const dateQueries = [];
-        
-        // Only check relevant date fields based on record type
-        if (params.recordType === 'workoutSchedule') {
-            dateQueries.push({ range: { "data.workoutSchedule.scheduled_date": range } });
-        } else if (params.recordType === 'mealPlan') {
-            dateQueries.push({ range: { "data.mealPlan.meal_date": range } });
-        } else {
-            // For other record types, check basic.date
-            dateQueries.push({ range: { "data.basic.date": range } });
-        }
-        
-        // If no specific recordType, check all possible date fields
-        if (!params.recordType) {
-            dateQueries.push({ range: { "data.basic.date": range } });
-            dateQueries.push({ range: { "data.workoutSchedule.scheduled_date": range } });
-            dateQueries.push({ range: { "data.mealPlan.meal_date": range } });
-        }
-        
-        // Date filters are REQUIRED (must match), not optional (should match)
-        must.push({
-            bool: {
-                should: dateQueries,
-                minimum_should_match: 1
-            }
-        });
-    }
+    // Date range filters - MOVED TO POST-PROCESSING
+    // ES range queries are unreliable for nested date fields, so we filter in memory
+    // (Date filtering is handled after ES query in post-processing section)
     
     // Filter by scheduled date for workoutSchedule and mealPlan
     if (params.scheduledOn) {
@@ -3919,7 +3876,9 @@ const needsPostProcessing = (params) => {
         params.template ||
         params.noDuplicates ||
         hasEquipmentDID ||  // Equipment DIDs need resolution to names
-        params.isAuthenticated  // Authenticated ownership checks need post-processing
+        params.isAuthenticated ||  // Authenticated ownership checks need post-processing
+        params.dateStart ||  // Date filtering moved to post-processing
+        params.dateEnd  // Date filtering moved to post-processing
     );
 };
 
