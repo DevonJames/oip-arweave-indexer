@@ -36,6 +36,12 @@ ELASTICSEARCH_DATA_PATH=./elasticsearch_data
 # Lower values = more frequent recreation but higher connection overhead
 ES_CLIENT_RECREATION_INTERVAL=1800000
 
+# GraphQL Client Recreation Interval (milliseconds)
+# Periodically recreates the GraphQL client used for Arweave queries to prevent socket/buffer leaks
+# Default: 1800000 (30 minutes)
+# Lower values = more frequent recreation, reducing connection accumulation
+GRAPHQL_CLIENT_RECREATION_INTERVAL=1800000
+
 # API Keys
 OPENAI_API_KEY=
 XAI_API_KEY=
