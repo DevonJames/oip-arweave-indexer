@@ -263,15 +263,20 @@ router.post('/memory/clear-cache', async (req, res) => {
     }
 });
 
-// Recreate Elasticsearch client (manual memory leak mitigation)
-router.post('/elasticsearch/recreate-client', async (req, res) => {
+// DISABLED: Elasticsearch client recreation endpoint
+// This endpoint was removed because periodic ES client recreation caused connection failures
+// and was not the source of the memory leak (GraphQL client was the real culprit)
+// router.post('/elasticsearch/recreate-client', async (req, res) => { ... });
+
+// Recreate GraphQL client (manual memory leak mitigation for Arweave queries)
+router.post('/graphql/recreate-client', async (req, res) => {
     try {
-        const { recreateElasticsearchClient } = require('../helpers/elasticsearch');
+        const { recreateGraphQLClient } = require('../helpers/elasticsearch');
         
         const beforeMem = process.memoryUsage();
         
         // Recreate the client
-        recreateElasticsearchClient();
+        recreateGraphQLClient();
         
         // Force garbage collection if available
         if (global.gc) {
@@ -281,7 +286,7 @@ router.post('/elasticsearch/recreate-client', async (req, res) => {
         const afterMem = process.memoryUsage();
         
         res.json({
-            message: 'Elasticsearch client recreated successfully',
+            message: 'GraphQL client recreated successfully',
             memory: {
                 before: {
                     heapUsedMB: Math.round(beforeMem.heapUsed / 1024 / 1024),
@@ -300,9 +305,9 @@ router.post('/elasticsearch/recreate-client', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error recreating Elasticsearch client:', error);
+        console.error('Error recreating GraphQL client:', error);
         res.status(500).json({
-            error: 'Failed to recreate Elasticsearch client',
+            error: 'Failed to recreate GraphQL client',
             details: error.message
         });
     }

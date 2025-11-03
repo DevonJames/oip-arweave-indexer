@@ -1,235 +1,74 @@
-# Elasticsearch Client Recreation (Memory Leak Mitigation)
+# Elasticsearch Client Recreation (DISABLED)
 
-## Overview
+**⚠️ THIS FIX HAS BEEN DISABLED**
 
-The Elasticsearch client (v8+) uses Undici for internal HTTP connection management. Over time, Undici accumulates ArrayBuffers from connection pooling, leading to external memory leaks (~400MB/minute in idle systems).
+This fix was initially implemented to address external memory leaks, but testing revealed:
+1. **Caused connection failures**: The ES client occasionally failed to reconnect, breaking queries
+2. **Not the real source**: The GraphQL client (Arweave queries) was the actual memory leak culprit
+3. **Unnecessary complexity**: ES client recreation added complexity without solving the problem
 
-**Solution**: Periodically recreate the Elasticsearch client to force connection pool cleanup and buffer release.
+**Current Status**: The ES client is now created once at startup and persists for the application lifetime. The GraphQL client periodic recreation is the active memory leak fix.
 
-## Implementation
+---
 
-### Automatic Recreation
+## Original Problem (For Reference)
 
-The ES client is automatically recreated on a schedule:
+The Elasticsearch client (v8+) uses Undici for internal HTTP connection management. Over time, Undici was suspected to accumulate ArrayBuffers from connection pooling, potentially leading to external memory leaks.
 
-- **Default interval**: 30 minutes (1800000ms)
-- **Check frequency**: Every 5 minutes
-- **Configurable via**: `ES_CLIENT_RECREATION_INTERVAL` environment variable
+## Why It Was Disabled
 
-```bash
-# In .env file
-ES_CLIENT_RECREATION_INTERVAL=1800000  # 30 minutes (default)
-```
+### Testing Results
+- External memory leak persisted at ~365 MB/min even with ES client recreation
+- Memory dropped only when GraphQL client was recreated
+- ES client recreation caused occasional query failures
 
-### Manual Recreation
+### Root Cause Identification
+- Socket count analysis showed connections to `arweave.net` accumulating
+- `graphql-request` library was creating persistent connections
+- GraphQL client recreation successfully stopped the leak
 
-You can manually trigger client recreation via API:
+## Active Fix
 
-```bash
-curl -X POST http://localhost:3015/api/health/elasticsearch/recreate-client
-```
+The GraphQL client periodic recreation (every 30 minutes) is the active memory leak mitigation:
+- See: `docs/GRAPHQL_CLIENT_MEMORY_FIX.md`
+- Endpoint: `POST /api/health/graphql/recreate-client`
+- Config: `GRAPHQL_CLIENT_RECREATION_INTERVAL`
 
-**Response:**
-```json
-{
-  "message": "Elasticsearch client recreated successfully",
-  "memory": {
-    "before": {
-      "heapUsedMB": 2534,
-      "externalMB": 47731
-    },
-    "after": {
-      "heapUsedMB": 2512,
-      "externalMB": 1245
-    },
-    "freed": {
-      "heapMB": 22,
-      "externalMB": 46486
-    }
-  },
-  "timestamp": "2025-11-01T21:45:00.000Z"
-}
-```
+## Code Changes
 
-## How It Works
-
-### 1. Client Lifecycle Management
-
+### `helpers/elasticsearch.js`
 ```javascript
+// BEFORE (with recreation):
 let elasticClient = null;
-let elasticClientCreatedAt = null;
+function createElasticsearchClient() { ... }
+setInterval(() => { checkAndRecreateElasticsearchClient(); }, 300000);
 
-function createElasticsearchClient() {
-    // Close old client if exists
-    if (elasticClient) {
-        elasticClient.close();
-    }
-    
-    // Create new client
-    elasticClient = new Client({ ... });
-    elasticClientCreatedAt = Date.now();
-    
-    return elasticClient;
-}
+// AFTER (disabled):
+const elasticClient = new Client({ ... });
+// Single instance, no recreation
 ```
 
-### 2. Automatic Age-Based Recreation
-
+### `routes/health.js`
 ```javascript
-// Check every 5 minutes if client needs recreation
-setInterval(() => {
-    const clientAge = Date.now() - elasticClientCreatedAt;
-    if (clientAge > ES_CLIENT_RECREATION_INTERVAL) {
-        createElasticsearchClient(); // Recreate if too old
-    }
-}, 300000);
+// Endpoint removed/disabled
+// router.post('/elasticsearch/recreate-client', ...);
 ```
 
-### 3. Connection Pool Cleanup
+## Environment Variables
 
-When the client is recreated:
-1. Old client connections are closed
-2. Undici connection pool is destroyed
-3. ArrayBuffers are marked for garbage collection
-4. New client starts with fresh connection pool
+The `ES_CLIENT_RECREATION_INTERVAL` environment variable is now ignored and can be removed from `.env` files.
 
-## Expected Results
+## Migration Notes
 
-### Before Recreation
-```
-External Memory: 47731MB
-ArrayBuffer Growth: +400MB/min
-Memory Leak: Active
-```
+If you had scripts or monitoring that used the ES client recreation endpoint:
+- Remove: `POST /api/health/elasticsearch/recreate-client`
+- Use instead: `POST /api/health/graphql/recreate-client` (if needed)
 
-### After Recreation
-```
-External Memory: ~1200MB (freed 46000MB)
-ArrayBuffer Growth: Stopped temporarily
-Memory Leak: Mitigated
-```
+## Rollback
 
-### Long-term Behavior
-- **Memory growth**: Gradual increase between recreations
-- **Peak memory**: ~10-15GB at 30-minute mark (vs 200GB+ without recreation)
-- **Memory pattern**: Sawtooth (grows → drops → grows → drops)
-
-## Configuration Tuning
-
-### Aggressive Recreation (High Traffic)
+If ES client issues occur (unlikely), the old recreation code is preserved in git history:
 ```bash
-ES_CLIENT_RECREATION_INTERVAL=900000  # 15 minutes
-```
-- More frequent cleanup
-- Lower peak memory
-- Higher connection overhead
-
-### Conservative Recreation (Low Traffic)
-```bash
-ES_CLIENT_RECREATION_INTERVAL=3600000  # 60 minutes
-```
-- Less frequent cleanup
-- Higher peak memory
-- Lower connection overhead
-
-### Recommended Settings
-
-| Traffic Level | Interval | Peak Memory | Connection Overhead |
-|---------------|----------|-------------|---------------------|
-| High (>100 req/min) | 15 min | ~5GB | Moderate |
-| Medium (20-100 req/min) | 30 min (default) | ~10GB | Low |
-| Low (<20 req/min) | 60 min | ~20GB | Minimal |
-
-## Monitoring
-
-### Logs to Watch
-
-**Client creation:**
-```
-✅ [ES Client] Created new Elasticsearch client (will recreate every 30 minutes)
+git log --all --grep="ES client" -- helpers/elasticsearch.js
 ```
 
-**Periodic recreation:**
-```
-🔄 [ES Client] Recreating client (age: 31 minutes, threshold: 30 minutes)
-🔄 [ES Client] Closed old Elasticsearch client
-✅ [ES Client] Created new Elasticsearch client (will recreate every 30 minutes)
-```
-
-### Memory Monitoring
-
-Watch external memory via health endpoint:
-```bash
-curl http://localhost:3015/api/health | jq '.memory.external'
-```
-
-Expected pattern:
-- **Minutes 0-30**: Gradual increase (1GB → 10GB)
-- **Minute 30**: Sharp drop (10GB → 1GB)
-- **Minutes 30-60**: Gradual increase again
-- **Repeat...**
-
-## Troubleshooting
-
-### Issue: Client recreation not happening
-
-**Check:**
-1. Verify `ES_CLIENT_RECREATION_INTERVAL` is set
-2. Check logs for creation messages
-3. Ensure interval check is running (should log every 5 minutes)
-
-**Fix:**
-```bash
-# Manually trigger recreation
-curl -X POST http://localhost:3015/api/health/elasticsearch/recreate-client
-```
-
-### Issue: Memory still growing after recreation
-
-**Possible causes:**
-1. Other services also leaking (Axios, GUN, etc.)
-2. Recreation interval too long
-3. Query volume overwhelming recreation
-
-**Fix:**
-1. Check other services' memory usage
-2. Reduce `ES_CLIENT_RECREATION_INTERVAL`
-3. Scale horizontally (multiple instances)
-
-### Issue: Too many recreations causing connection errors
-
-**Symptom:**
-```
-Error: Connection refused (ECONNREFUSED)
-Error: Socket hang up
-```
-
-**Fix:**
-Increase `ES_CLIENT_RECREATION_INTERVAL`:
-```bash
-ES_CLIENT_RECREATION_INTERVAL=3600000  # 60 minutes
-```
-
-## Related Fixes
-
-This is part of a comprehensive memory leak mitigation strategy:
-
-1. ✅ **Axios ArrayBuffer cleanup** (index.js)
-2. ✅ **HTTP Agent keepAlive: false** (index.js, gun.js)
-3. ✅ **ES client recreation** (elasticsearch.js) ← **This fix**
-4. ✅ **LRU caching** (elasticsearch.js, alfred.js)
-5. ✅ **GUN sync interval reduction** (gunSyncService.js)
-6. ✅ **Dialogue timeout cleanup** (sharedState.js)
-
-## References
-
-- **Implementation**: `helpers/elasticsearch.js` lines 51-112
-- **Manual endpoint**: `routes/health.js` lines 266-309
-- **Configuration**: `example env` lines 33-37
-- **Elasticsearch v8 docs**: https://www.elastic.co/guide/en/elasticsearch/client/javascript-api/current/
-- **Undici docs**: https://undici.nodejs.org/
-
-## Version History
-
-- **v1.0** (2025-11-01): Initial implementation with 30-minute default interval
-
+The GraphQL client fix has proven to be sufficient for memory leak mitigation.

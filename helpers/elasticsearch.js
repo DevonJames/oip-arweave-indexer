@@ -8,9 +8,11 @@ const arweave = Arweave.init(arweaveConfig);
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 const semver = require('semver');
-const { gql, request } = require('graphql-request');
+const { gql, GraphQLClient } = require('graphql-request');
 const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber, resolveRecords } = require('./utils');
 const recordTypeIndexConfig = require('../config/recordTypesToIndex');
+const http = require('http');
+const https = require('https');
 
 // Helper function for async filtering
 async function asyncFilter(array, predicate) {
@@ -52,63 +54,80 @@ let startBlockHeight = 1579580;
 // The custom HTTP agent configuration is not compatible with newer ES clients
 // Connection pooling is handled automatically by the client
 //
-// MEMORY LEAK FIX: Periodically recreate ES client to force connection pool cleanup
-// This prevents ArrayBuffer accumulation from Undici's internal connection management
+// NOTE: Periodic ES client recreation was DISABLED as it caused connection failures
+// and was not the source of the memory leak. The GraphQL client is the real culprit.
 
-let elasticClient = null;
-let elasticClientCreatedAt = null;
-const ES_CLIENT_RECREATION_INTERVAL = parseInt(process.env.ES_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 minutes default
+const elasticClient = new Client({
+    node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
+    auth: {
+        username: process.env.ELASTICCLIENTUSERNAME,
+        password: process.env.ELASTICCLIENTPASSWORD
+    },
+    maxRetries: 3,
+    requestTimeout: 30000
+});
 
-function createElasticsearchClient() {
-    // Close existing client if it exists
-    if (elasticClient) {
-        try {
-            elasticClient.close();
-            console.log('🔄 [ES Client] Closed old Elasticsearch client');
-        } catch (error) {
-            console.error('⚠️  [ES Client] Error closing old client:', error.message);
-        }
+console.log('✅ [ES Client] Created Elasticsearch client');
+
+// MEMORY LEAK FIX: Configure GraphQL client for Arweave with non-persistent connections
+// This prevents socket accumulation from graphql-request library
+let graphQLClient = null;
+let graphQLClientCreatedAt = null;
+const GRAPHQL_CLIENT_RECREATION_INTERVAL = parseInt(process.env.GRAPHQL_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 minutes
+
+function createGraphQLClient() {
+    if (graphQLClient) {
+        console.log('🔄 [GraphQL Client] Disposing old GraphQL client');
+        graphQLClient = null; // graphql-request doesn't have explicit close method
     }
     
-    // Create new client
-    elasticClient = new Client({
-        node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
-        auth: {
-            username: process.env.ELASTICCLIENTUSERNAME,
-            password: process.env.ELASTICCLIENTPASSWORD
-        },
-        maxRetries: 3,
-        requestTimeout: 30000
+    // Create HTTP agent with keepAlive: false to prevent socket leaks
+    const httpAgent = new http.Agent({
+        keepAlive: false,
+        maxSockets: 50,
+        maxFreeSockets: 0,
+        timeout: 30000
     });
     
-    elasticClientCreatedAt = Date.now();
-    console.log(`✅ [ES Client] Created new Elasticsearch client (will recreate every ${ES_CLIENT_RECREATION_INTERVAL / 60000} minutes)`);
+    const httpsAgent = new https.Agent({
+        keepAlive: false,
+        maxSockets: 50,
+        maxFreeSockets: 0,
+        timeout: 30000
+    });
     
-    return elasticClient;
+    graphQLClient = new GraphQLClient('https://arweave.net/graphql', {
+        agent: (url) => url.protocol === 'https:' ? httpsAgent : httpAgent,
+        timeout: 30000
+    });
+    
+    graphQLClientCreatedAt = Date.now();
+    console.log(`✅ [GraphQL Client] Created new GraphQL client (will recreate every ${GRAPHQL_CLIENT_RECREATION_INTERVAL / 60000} minutes)`);
+    
+    return graphQLClient;
 }
 
-// Check if client needs recreation (based on age)
-function checkAndRecreateElasticsearchClient() {
-    if (!elasticClient || !elasticClientCreatedAt) {
-        return createElasticsearchClient();
+function checkAndRecreateGraphQLClient() {
+    if (!graphQLClient || !graphQLClientCreatedAt) {
+        return createGraphQLClient();
     }
     
-    const clientAge = Date.now() - elasticClientCreatedAt;
-    if (clientAge > ES_CLIENT_RECREATION_INTERVAL) {
+    const clientAge = Date.now() - graphQLClientCreatedAt;
+    if (clientAge > GRAPHQL_CLIENT_RECREATION_INTERVAL) {
         const ageMinutes = Math.round(clientAge / 60000);
-        console.log(`🔄 [ES Client] Recreating client (age: ${ageMinutes} minutes, threshold: ${ES_CLIENT_RECREATION_INTERVAL / 60000} minutes)`);
-        return createElasticsearchClient();
+        console.log(`🔄 [GraphQL Client] Recreating client (age: ${ageMinutes} minutes, threshold: ${GRAPHQL_CLIENT_RECREATION_INTERVAL / 60000} minutes)`);
+        return createGraphQLClient();
     }
     
-    return elasticClient;
+    return graphQLClient;
 }
 
-// Initialize the first client
-createElasticsearchClient();
+// Initialize GraphQL client
+createGraphQLClient();
 
-// Set up periodic client recreation (every 5 minutes, check if recreation is needed)
+// Check GraphQL client age periodically
 setInterval(() => {
-    checkAndRecreateElasticsearchClient();
+    checkAndRecreateGraphQLClient();
 }, 300000); // Check every 5 minutes
 
 // Helper function for backward-compatible DID queries
@@ -4594,7 +4613,9 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
 
         while (retryCount < maxRetries) {
             try {
-                response = await request(endpoint, query);
+                // MEMORY LEAK FIX: Use managed GraphQL client with connection pooling
+                checkAndRecreateGraphQLClient();
+                response = await graphQLClient.request(query);
                 break; // Break the retry loop if the request is successful
             } catch (error) {
                 retryCount++;
@@ -5469,7 +5490,7 @@ module.exports = {
     processRecordForElasticsearch,
     addRecipeNutritionalSummary,
     clearRecordsCache,
-    recreateElasticsearchClient: createElasticsearchClient, // Exposed for manual client recreation
+    recreateGraphQLClient: createGraphQLClient, // Exposed for manual GraphQL client recreation
     calculateRecipeNutrition,
     elasticClient
 };
