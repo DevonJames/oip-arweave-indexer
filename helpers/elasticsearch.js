@@ -1870,11 +1870,20 @@ async function getRecords(queryParams) {
         
         // Determine if we need post-processing (affects pagination)
         const requiresPostProcessing = needsPostProcessing(queryParams);
-        const overFetchMultiplier = getOverFetchMultiplier(queryParams);
+        let overFetchMultiplier = getOverFetchMultiplier(queryParams);
+        
+        // CRITICAL FIX: When limit is small and post-processing is required,
+        // increase the multiplier to ensure we fetch enough records
+        // Example: limit=1 with multiplier=3 only fetches 3 records, which might all be filtered out
+        if (requiresPostProcessing && limit && parseInt(limit) <= 5) {
+            overFetchMultiplier = Math.max(overFetchMultiplier, 10); // Fetch at least 10x for small limits
+            console.log(`⚠️  [Over-fetch] Small limit (${limit}) with post-processing - using multiplier ${overFetchMultiplier}`);
+        }
         
         // Calculate pagination for ES query
-        const pageSize = parseInt(limit) || 20;
-        const pageNumber = parseInt(page) || 1;
+        // Ensure both pageSize and pageNumber have valid defaults
+        const pageSize = Math.max(1, parseInt(limit) || 20); // Minimum 1, default 20
+        const pageNumber = Math.max(1, parseInt(page) || 1);  // Minimum 1, default 1 (ALWAYS defaults to page 1 if not provided)
         
         // If post-processing needed, fetch more records to account for filtering
         // Special case: for noDuplicates, fetch ALL records to ensure we get all unique ones
@@ -1897,7 +1906,7 @@ async function getRecords(queryParams) {
         const esSort = buildElasticsearchSort(sortBy);
         
         // Execute optimized Elasticsearch query
-        console.log(`🚀 [ES Query] Executing optimized query: from=${esFrom}, size=${esSize}, requiresPostProcessing=${requiresPostProcessing}`);
+        console.log(`🚀 [ES Query] Executing optimized query: from=${esFrom}, size=${esSize}, requiresPostProcessing=${requiresPostProcessing}, pageSize=${pageSize}, pageNumber=${pageNumber}`);
         
         // Debug: Log the ES query for equipment filtering
         if (equipmentRequired) {
