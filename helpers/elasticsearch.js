@@ -2049,16 +2049,28 @@ async function getRecords(queryParams) {
             const dateStartNum = dateStart ? (typeof dateStart === 'string' && /^\d+$/.test(dateStart) ? parseInt(dateStart, 10) : dateStart) : null;
             const dateEndNum = dateEnd ? (typeof dateEnd === 'string' && /^\d+$/.test(dateEnd) ? parseInt(dateEnd, 10) : dateEnd) : null;
             
+            const beforeCount = records.length;
+            let sampleDates = [];
+            
             records = records.filter(record => {
                 let recordDate = null;
+                let dateFieldName = null;
                 
                 // Determine which date field to check based on record type
                 if (recordType === 'workoutSchedule') {
                     recordDate = record.data?.workoutSchedule?.scheduled_date;
+                    dateFieldName = 'data.workoutSchedule.scheduled_date';
                 } else if (recordType === 'mealPlan') {
                     recordDate = record.data?.mealPlan?.meal_date;
+                    dateFieldName = 'data.mealPlan.meal_date';
                 } else {
                     recordDate = record.data?.basic?.date;
+                    dateFieldName = 'data.basic.date';
+                }
+                
+                // Debug: Collect sample dates from first 3 records
+                if (sampleDates.length < 3) {
+                    sampleDates.push({ did: record.oip?.did, field: dateFieldName, value: recordDate, type: typeof recordDate });
                 }
                 
                 if (!recordDate) return false;
@@ -2072,7 +2084,11 @@ async function getRecords(queryParams) {
                 return true;
             });
             
-            console.log(`📅 [Date Filter POST] Filtered to ${records.length} records in range ${dateStartNum} - ${dateEndNum}`);
+            console.log(`📅 [Date Filter POST] Filtered from ${beforeCount} to ${records.length} records in range ${dateStartNum} - ${dateEndNum}`);
+            if (records.length === 0 && sampleDates.length > 0) {
+                console.log(`📅 [Date Filter DEBUG] Sample dates from records that were filtered out:`);
+                sampleDates.forEach(s => console.log(`   - ${s.did}: ${s.field} = ${s.value} (${s.type})`));
+            }
         }
 
         // recordType filter now handled in Elasticsearch (no longer needed here)
@@ -2390,35 +2406,8 @@ async function getRecords(queryParams) {
         // if (!isAuthenticated) { ... filter to public only ... }
         // else { ... filter to public + owned ... }
         
-        if (false && !isAuthenticated) {  // DISABLED - handled in ES
-            // Unauthenticated users only see public records
-            records = records.filter(record => {
-                // Check if record has access control settings
-                const accessControl = record.data?.accessControl;
-                const accessLevel = accessControl?.access_level;
-                
-                // Check conversation session privacy (legacy support for is_private)
-                const conversationSession = record.data?.conversationSession;
-                const legacySessionPrivate = conversationSession?.is_private === true;
-                
-                // Exclude non-public records for unauthenticated users
-                if (accessLevel && accessLevel !== 'public') {
-                    // console.log('Filtering out non-public record for unauthenticated user:', record.oip?.did, 'access_level:', accessLevel);
-                    return false;
-                }
-                
-                // Legacy fallback: treat old private fields as access_level: 'private'
-                if (legacySessionPrivate) {
-                    // console.log('Filtering out legacy private conversation session for unauthenticated user (treating as access_level: private):', record.oip?.did);
-                    return false;
-                }
-                
-                return true;
-            });
-            // console.log(`after filtering non-public records for unauthenticated user, there are ${records.length} records`);
-        } else {
-            // Authenticated users see public records + their own private/shared records
-            // Use async filter for organization membership checking
+        if (false) {  // ENTIRE AUTH FILTER DISABLED - handled in ES query
+            // This entire block is disabled because authentication is now in ES
             records = await asyncFilter(records, async (record) => {
                 const accessControl = record.data?.accessControl;
                 const conversationSession = record.data?.conversationSession;
