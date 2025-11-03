@@ -3461,10 +3461,16 @@ const buildElasticsearchQuery = (params) => {
         console.log(`📅 [Date Filter] dateStart=${params.dateStart} (${range.gte}), dateEnd=${params.dateEnd} (${range.lte})`);
         
         // Check multiple date fields depending on record type
+        // NOTE: Date fields may be stored as numbers OR strings in ES, so we check both
         const dateQueries = [
+            // Number fields (preferred)
             { range: { "data.basic.date": range } },
             { range: { "data.workoutSchedule.scheduled_date": range } },
-            { range: { "data.mealPlan.meal_date": range } }
+            { range: { "data.mealPlan.meal_date": range } },
+            // String fields (for legacy data that stored timestamps as strings)
+            { range: { "data.basic.date.keyword": { gte: range.gte.toString(), lte: range.lte.toString() } } },
+            { range: { "data.workoutSchedule.scheduled_date.keyword": { gte: range.gte.toString(), lte: range.lte.toString() } } },
+            { range: { "data.mealPlan.meal_date.keyword": { gte: range.gte.toString(), lte: range.lte.toString() } } }
         ];
         
         // Date filters are REQUIRED (must match), not optional (should match)
@@ -3511,11 +3517,16 @@ const buildElasticsearchQuery = (params) => {
             console.log(`📅 [ScheduledOn Filter] scheduledOn=${params.scheduledOn} (${startTimestamp} - ${endTimestamp})`);
             
             // ScheduledOn filter is REQUIRED (must match), not optional
+            // NOTE: Date fields may be stored as numbers OR strings in ES, so we check both
             must.push({
                 bool: {
                     should: [
+                        // Number fields (preferred)
                         { range: { "data.workoutSchedule.scheduled_date": scheduledRange } },
-                        { range: { "data.mealPlan.meal_date": scheduledRange } }
+                        { range: { "data.mealPlan.meal_date": scheduledRange } },
+                        // String fields (for legacy data)
+                        { range: { "data.workoutSchedule.scheduled_date.keyword": { gte: scheduledRange.gte.toString(), lte: scheduledRange.lte.toString() } } },
+                        { range: { "data.mealPlan.meal_date.keyword": { gte: scheduledRange.gte.toString(), lte: scheduledRange.lte.toString() } } }
                     ],
                     minimum_should_match: 1
                 }
