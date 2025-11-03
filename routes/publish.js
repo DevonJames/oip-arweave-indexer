@@ -394,9 +394,10 @@ router.get('/newWorkout/schema', (req, res) => {
                 "blockchain": "Target blockchain ('arweave' or 'turbo')"
             },
             "exercise_lookup_notes": {
-                "automatic_processing": "Exercise names in workout.exercise array are automatically looked up in the exercise database",
-                "fallback": "Missing exercises are created from Kaggle fitness dataset",
-                "bypass": "Set 'workout.nonStandardWorkout: true' to skip exercise lookup and use custom exercises",
+                "automatic_processing": "Exercise names in workout.exercise array are automatically looked up in the exercise database using exact name matching",
+                "nonStandardWorkout_true": "If set to true: Missing exercises will be created as new exercise records (from Kaggle dataset if available)",
+                "nonStandardWorkout_false": "If set to false or omitted: Missing exercises will be skipped and excluded from the workout (only existing exercises are included)",
+                "did_strings": "DID strings (e.g., 'did:arweave:abc123') are always preserved as-is regardless of nonStandardWorkout setting",
                 "array_alignment": "exercise_amount, exercise_unit, and exercise arrays must have the same length"
             }
         };
@@ -1408,12 +1409,21 @@ router.post('/newWorkout', async (req, res) => {
         console.log('POST /api/publish/newWorkout', req.body);
         const record = req.body;
         const blockchain = req.body.blockchain || 'arweave';
-        const nonStandardWorkout = req.body.workout?.nonStandardWorkout || false;
+        const nonStandardWorkout = req.body.workout?.nonStandardWorkout !== undefined 
+            ? req.body.workout.nonStandardWorkout 
+            : false; // Default to false (don't create new exercises)
         let recordType = 'workout';
 
-        // Always resolve drefs to handle nested exercise structures
-        // This ensures new exercise records are created even for nonStandardWorkouts
-        let resolvedWorkout = await resolveDrefsInRecord(req.body, 'workout', {exercise: 'exercise'}, blockchain);
+        // Resolve drefs to handle nested exercise structures
+        // If nonStandardWorkout is true, new exercise records will be created for missing exercises
+        // If nonStandardWorkout is false (or omitted), missing exercises will be skipped
+        let resolvedWorkout = await resolveDrefsInRecord(
+            req.body, 
+            'workout', 
+            {exercise: 'exercise'}, 
+            blockchain,
+            { nonStandardWorkout }
+        );
 
         if (!resolvedWorkout.workout.total_duration_minutes) {
           let total = 0;
