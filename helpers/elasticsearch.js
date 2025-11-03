@@ -2402,12 +2402,27 @@ async function getRecords(queryParams) {
         // Authentication filtering is now done in the ES query itself (Phase 2)
         // No need to re-filter in post-processing
         
-        // OLD CODE REMOVED (was causing double-filtering):
-        // if (!isAuthenticated) { ... filter to public only ... }
-        // else { ... filter to public + owned ... }
+        // AUTHENTICATION POST-PROCESSING
+        // ES pre-filters for performance, but we still need post-processing for correctness
+        // ES brings in: public + no-access-level + your-owned records
+        // Post-processing: verify ownership claims
         
-        if (false) {  // ENTIRE AUTH FILTER DISABLED - handled in ES query
-            // This entire block is disabled because authentication is now in ES
+        if (!isAuthenticated) {
+            // Unauthenticated users only see public records
+            records = records.filter(record => {
+                const accessControl = record.data?.accessControl;
+                const accessLevel = accessControl?.access_level;
+                const conversationSession = record.data?.conversationSession;
+                const legacySessionPrivate = conversationSession?.is_private === true;
+                
+                // Exclude private records
+                if (accessLevel && accessLevel !== 'public') return false;
+                if (legacySessionPrivate) return false;
+                
+                return true;
+            });
+        } else {
+            // Authenticated users: verify ownership for private records
             records = await asyncFilter(records, async (record) => {
                 const accessControl = record.data?.accessControl;
                 const conversationSession = record.data?.conversationSession;
