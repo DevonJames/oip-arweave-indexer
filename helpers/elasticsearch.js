@@ -57,17 +57,48 @@ let startBlockHeight = 1579580;
 // NOTE: Periodic ES client recreation was DISABLED as it caused connection failures
 // and was not the source of the memory leak. The GraphQL client is the real culprit.
 
-const elasticClient = new Client({
-    node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
-    auth: {
-        username: process.env.ELASTICCLIENTUSERNAME,
-        password: process.env.ELASTICCLIENTPASSWORD
-    },
-    maxRetries: 3,
-    requestTimeout: 30000
-});
+// Re-enable ES client recreation to address remaining 71 MB/min leak
+let elasticClient = null;
+let elasticClientCreatedAt = null;
+const ES_CLIENT_RECREATION_INTERVAL = parseInt(process.env.ES_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 min
 
-console.log('✅ [ES Client] Created Elasticsearch client');
+function createElasticsearchClient() {
+    if (elasticClient) {
+        try {
+            elasticClient.close();
+            console.log('🔄 [ES Client] Closed old client');
+        } catch (error) {
+            console.error('⚠️  [ES Client] Error closing:', error.message);
+        }
+    }
+    
+    elasticClient = new Client({
+        node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
+        auth: {
+            username: process.env.ELASTICCLIENTUSERNAME,
+            password: process.env.ELASTICCLIENTPASSWORD
+        },
+        maxRetries: 3,
+        requestTimeout: 30000
+    });
+    
+    elasticClientCreatedAt = Date.now();
+    console.log(`✅ [ES Client] Created (recreate every ${ES_CLIENT_RECREATION_INTERVAL / 60000} min)`);
+    return elasticClient;
+}
+
+function checkAndRecreateElasticsearchClient() {
+    if (!elasticClient || !elasticClientCreatedAt) return createElasticsearchClient();
+    const clientAge = Date.now() - elasticClientCreatedAt;
+    if (clientAge > ES_CLIENT_RECREATION_INTERVAL) {
+        console.log(`🔄 [ES Client] Recreating (age: ${Math.round(clientAge / 60000)} min)`);
+        return createElasticsearchClient();
+    }
+    return elasticClient;
+}
+
+createElasticsearchClient();
+setInterval(() => checkAndRecreateElasticsearchClient(), 300000);
 
 // MEMORY LEAK FIX: Configure GraphQL client for Arweave with non-persistent connections
 // This prevents socket accumulation from graphql-request library
