@@ -12784,6 +12784,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         <textarea id="gif-collection-description" placeholder="Multi-resolution GIF demonstration set for..." rows="2"></textarea>
                     </div>
 
+                    <!-- Citations -->
+                    <div class="form-group">
+                        <label for="gif-citations">Citations:</label>
+                        <textarea id="gif-citations" placeholder="References, sources, or citations related to this GIF collection..." rows="2"></textarea>
+                        <small>Optional citations or references for this collection</small>
+                    </div>
+
                     <!-- Input Method Selection -->
                     <div class="form-group">
                         <label for="gif-input-method">Input Method:</label>
@@ -23785,6 +23792,7 @@ CRITICAL:
                         description: document.getElementById('gif-collection-description').value,
                         language: 'en',
                         date: Math.floor(Date.now() / 1000),
+                        citations: document.getElementById('gif-citations').value.trim(),
                         tagItems: document.getElementById('gif-tags').value.split(',').map(t => t.trim()).filter(t => t)
                     },
                     multiResolutionGif: {
