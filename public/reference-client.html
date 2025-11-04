@@ -12787,8 +12787,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     <!-- Citations -->
                     <div class="form-group">
                         <label for="gif-citations">Citations:</label>
-                        <textarea id="gif-citations" placeholder="References, sources, or citations related to this GIF collection..." rows="2"></textarea>
-                        <small>Optional citations or references for this collection</small>
+                        <textarea id="gif-citations" placeholder="Add citations (one per line)" rows="3"></textarea>
+                        <small>Optional citations or references for this collection. Enter one citation per line.</small>
                     </div>
 
                     <!-- Input Method Selection -->
@@ -23799,7 +23799,10 @@ CRITICAL:
                         description: document.getElementById('gif-collection-description').value,
                         language: 'en',
                         date: Math.floor(Date.now() / 1000),
-                        citations: document.getElementById('gif-citations').value.trim(),
+                        citations: document.getElementById('gif-citations').value
+                            .split('\n')
+                            .map(c => c.trim())
+                            .filter(c => c),
                         tagItems: document.getElementById('gif-tags').value.split(',').map(t => t.trim()).filter(t => t)
                     },
                     multiResolutionGif: {
