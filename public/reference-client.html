@@ -23738,10 +23738,17 @@ CRITICAL:
                                 throw new Error(`Record creation failed: ${recordResult.error}`);
                             }
 
-                            console.log(`✅ Step 4 complete for ${task.label} - OIP Record: ${recordResult.did}`);
+                            // Get the DID from response (format depends on storage type)
+                            const recordDid = recordResult.did || (recordResult.transactionId ? `did:arweave:${recordResult.transactionId}` : null);
+                            
+                            if (!recordDid) {
+                                throw new Error(`No DID or transactionId in response for ${task.label}`);
+                            }
+
+                            console.log(`✅ Step 4 complete for ${task.label} - OIP Record: ${recordDid}`);
 
                             // Store the results
-                            gifRefs.push(recordResult.did);
+                            gifRefs.push(recordDid);
                             resolutionLabels.push(task.label);
                             fileSizes.push(task.file.size);
                             widths.push(task.width);
