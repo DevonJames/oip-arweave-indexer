@@ -57,70 +57,55 @@ let startBlockHeight = 1579580;
 // NOTE: Periodic ES client recreation was DISABLED as it caused connection failures
 // and was not the source of the memory leak. The GraphQL client is the real culprit.
 
-// Re-enable ES client recreation to address remaining 71 MB/min leak
-let elasticClient = null;
-let elasticClientCreatedAt = null;
-const ES_CLIENT_RECREATION_INTERVAL = parseInt(process.env.ES_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 min
+// ES client - single persistent instance
+// Recreation disabled: causes "NoLivingConnectionsError" and breaks all queries
+// The 60 MB/min leak is from GraphQL/other sources, not ES client
 
-function createElasticsearchClient() {
-    if (elasticClient) {
-        try {
-            elasticClient.close();
-            console.log('🔄 [ES Client] Closed old client');
-        } catch (error) {
-            console.error('⚠️  [ES Client] Error closing:', error.message);
-        }
-    }
-    
-    elasticClient = new Client({
-        node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
-        auth: {
-            username: process.env.ELASTICCLIENTUSERNAME,
-            password: process.env.ELASTICCLIENTPASSWORD
-        },
-        maxRetries: 3,
-        requestTimeout: 30000
-    });
-    
-    elasticClientCreatedAt = Date.now();
-    console.log(`✅ [ES Client] Created (recreate every ${ES_CLIENT_RECREATION_INTERVAL / 60000} min)`);
-    return elasticClient;
-}
+const elasticClient = new Client({
+    node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
+    auth: {
+        username: process.env.ELASTICCLIENTUSERNAME,
+        password: process.env.ELASTICCLIENTPASSWORD
+    },
+    maxRetries: 3,
+    requestTimeout: 30000
+});
 
-function checkAndRecreateElasticsearchClient() {
-    if (!elasticClient || !elasticClientCreatedAt) return createElasticsearchClient();
-    const clientAge = Date.now() - elasticClientCreatedAt;
-    if (clientAge > ES_CLIENT_RECREATION_INTERVAL) {
-        console.log(`🔄 [ES Client] Recreating (age: ${Math.round(clientAge / 60000)} min)`);
-        return createElasticsearchClient();
-    }
-    return elasticClient;
-}
-
-createElasticsearchClient();
-setInterval(() => checkAndRecreateElasticsearchClient(), 300000);
+console.log('✅ [ES Client] Created Elasticsearch client (persistent)');
 
 // MEMORY LEAK FIX: Configure GraphQL client for Arweave with non-persistent connections
 // This prevents socket accumulation from graphql-request library
 let graphQLClient = null;
 let graphQLClientCreatedAt = null;
+let graphQLHttpAgent = null;
+let graphQLHttpsAgent = null;
 const GRAPHQL_CLIENT_RECREATION_INTERVAL = parseInt(process.env.GRAPHQL_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 minutes
 
 function createGraphQLClient() {
     if (graphQLClient) {
         console.log('🔄 [GraphQL Client] Disposing old GraphQL client');
-        graphQLClient = null; // graphql-request doesn't have explicit close method
+        graphQLClient = null;
     }
     
-    // Create HTTP agent with keepAlive: false to prevent socket leaks
-    const httpAgent = new http.Agent({
+    // Destroy old agents if they exist
+    if (graphQLHttpAgent) {
+        graphQLHttpAgent.destroy();
+        console.log('🔄 [GraphQL Client] Destroyed old HTTP agent');
+    }
+    if (graphQLHttpsAgent) {
+        graphQLHttpsAgent.destroy();
+        console.log('🔄 [GraphQL Client] Destroyed old HTTPS agent');
+    }
+    
+    // Create NEW HTTP agents with keepAlive: false
+    graphQLHttpAgent = new http.Agent({
         keepAlive: false,
         maxSockets: 50,
         maxFreeSockets: 0,
         timeout: 30000
     });
     
-    const httpsAgent = new https.Agent({
+    graphQLHttpsAgent = new https.Agent({
         keepAlive: false,
         maxSockets: 50,
         maxFreeSockets: 0,
@@ -128,7 +113,7 @@ function createGraphQLClient() {
     });
     
     graphQLClient = new GraphQLClient('https://arweave.net/graphql', {
-        agent: (url) => url.protocol === 'https:' ? httpsAgent : httpAgent,
+        agent: (url) => url.protocol === 'https:' ? graphQLHttpsAgent : graphQLHttpAgent,
         timeout: 30000
     });
     
