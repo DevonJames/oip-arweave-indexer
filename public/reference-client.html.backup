@@ -23715,9 +23715,9 @@ CRITICAL:
 
                             console.log(`📋 Step 3: Built record structure for ${task.label}`);
 
-                            // Step 4: Publish complete OIP record to selected storage type
+                            // Step 4: Publish complete OIP record to GUN
                             publishBtn.textContent = `📋 Creating record for ${task.file.name}...`;
-                            const recordResponse = await fetch(`/api/records/newRecord?recordType=image${storageType === 'gun' ? '&storage=gun' : ''}`, {
+                            const recordResponse = await fetch('/api/records/newRecord?recordType=image&storage=gun', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -23808,14 +23808,12 @@ CRITICAL:
                     };
                 }
 
-                // Publish to selected storage type for multi-resolution GIF collections
+                // Always publish to GUN for multi-resolution GIF collections
                 const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
-                const queryParams = `?recordType=multiResolutionGif${storageType === 'gun' ? '&storage=gun' : ''}${localId ? `&localId=${localId}` : ''}`;
+                const queryParams = `?recordType=multiResolutionGif${localId ? `&localId=${localId}` : ''}`;
 
                 const requestBody = { ...gifData };
-                if (storageType === 'gun') {
-                    requestBody.storage = 'gun';
-                }
+                requestBody.storage = 'gun';
                 if (localId) requestBody.localId = localId;
 
                 const response = await fetch(`/api/records/newRecord${queryParams}`, {
