@@ -1924,6 +1924,16 @@ async function getRecords(queryParams) {
             }
         }
         
+        console.log('🔍 [ES Query Debug] Full query:', JSON.stringify({
+            index: 'records',
+            body: {
+                query: esQuery,
+                sort: esSort || [{ "oip.inArweaveBlock": { order: 'desc' } }],
+                from: esFrom,
+                size: esSize
+            }
+        }, null, 2));
+        
         const searchResponse = await elasticClient.search({
             index: 'records',
             body: {
