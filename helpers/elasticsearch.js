@@ -1936,6 +1936,12 @@ async function getRecords(queryParams) {
         
         // Extract records from search response
         let records = searchResponse.hits.hits.map(hit => hit._source);
+
+        console.log('🔍 [DEBUG] ES returned', records.length, 'records');
+        if (records.length > 0 && records.length <= 3) {
+            records.forEach(r => console.log('  -', r.oip?.recordType, r.oip?.did, r.data?.workoutSchedule?.scheduled_date));
+        }
+
         const totalHits = searchResponse.hits.total.value;
         
         // console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
