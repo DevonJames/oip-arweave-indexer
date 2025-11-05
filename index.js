@@ -610,7 +610,7 @@ initializeIndices()
               alertThreshold: 5000 // Alert if > 5GB growth
           });
           memTracker.start();
-          console.log('🔍 [STARTUP] Memory leak tracker started (sampling every 1 minute)');
+          console.log('🔍 [STARTUP] Memory leak tracker started (fixed to not store object references)');
 
           setTimeout(async () => {
               console.log("🚀 [STARTUP] Starting first keepDBUpToDate cycle...");
