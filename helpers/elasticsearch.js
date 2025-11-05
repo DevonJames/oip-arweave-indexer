@@ -1857,7 +1857,7 @@ async function getRecords(queryParams) {
         
         // DEBUG: Log the full ES query for date filters
         if (dateStart || dateEnd) {
-            console.log(`🔍 [ES Query DEBUG] Full query:`, JSON.stringify(esQuery, null, 2));
+            // console.log(`🔍 [ES Query DEBUG] Full query:`, JSON.stringify(esQuery, null, 2));
             
             // DEBUG: Test if ANY workoutSchedule records exist at all
             try {
@@ -1868,14 +1868,14 @@ async function getRecords(queryParams) {
                         size: 1
                     }
                 });
-                console.log(`🔍 [ES Query DEBUG] Total workoutSchedule records in ES: ${testQuery.hits.total.value}`);
+                // console.log(`🔍 [ES Query DEBUG] Total workoutSchedule records in ES: ${testQuery.hits.total.value}`);
                 if (testQuery.hits.hits.length > 0) {
                     const sample = testQuery.hits.hits[0]._source;
-                    console.log(`🔍 [ES Query DEBUG] Sample workoutSchedule record:`);
-                    console.log(`   - DID: ${sample.oip?.did}`);
-                    console.log(`   - scheduled_date: ${sample.data?.workoutSchedule?.scheduled_date} (type: ${typeof sample.data?.workoutSchedule?.scheduled_date})`);
-                    console.log(`   - access_level: ${sample.data?.accessControl?.access_level}`);
-                    console.log(`   - owner_public_key: ${sample.data?.accessControl?.owner_public_key?.substring(0, 20)}...`);
+                    // console.log(`🔍 [ES Query DEBUG] Sample workoutSchedule record:`);
+                    // console.log(`   - DID: ${sample.oip?.did}`);
+                    // console.log(`   - scheduled_date: ${sample.data?.workoutSchedule?.scheduled_date} (type: ${typeof sample.data?.workoutSchedule?.scheduled_date})`);
+                    // console.log(`   - access_level: ${sample.data?.accessControl?.access_level}`);
+                    // console.log(`   - owner_public_key: ${sample.data?.accessControl?.owner_public_key?.substring(0, 20)}...`);
                 }
                 
                 // DEBUG: Test the EXACT record we know exists
@@ -1888,22 +1888,22 @@ async function getRecords(queryParams) {
                 });
                 if (exactRecordQuery.hits.hits.length > 0) {
                     const exactRecord = exactRecordQuery.hits.hits[0]._source;
-                    console.log(`🔍 [ES Query DEBUG] The exact record you're looking for:`);
-                    console.log(`   - DID: ${exactRecord.oip?.did}`);
-                    console.log(`   - scheduled_date: ${exactRecord.data?.workoutSchedule?.scheduled_date} (${typeof exactRecord.data?.workoutSchedule?.scheduled_date})`);
-                    console.log(`   - In range? ${exactRecord.data?.workoutSchedule?.scheduled_date >= 1762156800 && exactRecord.data?.workoutSchedule?.scheduled_date <= 1762761600}`);
-                    console.log(`   - owner_public_key: ${exactRecord.data?.accessControl?.owner_public_key}`);
-                    console.log(`   - Your public key: ${params.user?.publicKey || params.user?.publisherPubKey}`);
-                    console.log(`   - Keys match? ${exactRecord.data?.accessControl?.owner_public_key === (params.user?.publicKey || params.user?.publisherPubKey)}`);
+                    // console.log(`🔍 [ES Query DEBUG] The exact record you're looking for:`);
+                    // console.log(`   - DID: ${exactRecord.oip?.did}`);
+                    // console.log(`   - scheduled_date: ${exactRecord.data?.workoutSchedule?.scheduled_date} (${typeof exactRecord.data?.workoutSchedule?.scheduled_date})`);
+                    // console.log(`   - In range? ${exactRecord.data?.workoutSchedule?.scheduled_date >= 1762156800 && exactRecord.data?.workoutSchedule?.scheduled_date <= 1762761600}`);
+                    // console.log(`   - owner_public_key: ${exactRecord.data?.accessControl?.owner_public_key}`);
+                    // console.log(`   - Your public key: ${params.user?.publicKey || params.user?.publisherPubKey}`);
+                    // console.log(`   - Keys match? ${exactRecord.data?.accessControl?.owner_public_key === (params.user?.publicKey || params.user?.publisherPubKey)}`);
                 }
             } catch (debugErr) {
-                console.error(`⚠️  [ES Query DEBUG] Error checking workoutSchedule records:`, debugErr.message);
+                // console.error(`⚠️  [ES Query DEBUG] Error checking workoutSchedule records:`, debugErr.message);
             }
         }
         
         // Debug: Log the ES query for equipment filtering
         if (equipmentRequired) {
-            console.log(`🔍 [ES Query DEBUG] equipmentRequired query:`, JSON.stringify(esQuery, null, 2));
+            // console.log(`🔍 [ES Query DEBUG] equipmentRequired query:`, JSON.stringify(esQuery, null, 2));
             
             // Debug: Fetch a sample exercise to see actual field structure
             try {
@@ -1916,8 +1916,8 @@ async function getRecords(queryParams) {
                 });
                 if (sampleExercise.hits.hits.length > 0) {
                     const sample = sampleExercise.hits.hits[0]._source;
-                    console.log(`🔍 [ES Query DEBUG] Sample exercise.equipmentRequired field:`, sample.data?.exercise?.equipmentRequired);
-                    console.log(`🔍 [ES Query DEBUG] Sample exercise name:`, sample.data?.basic?.name);
+                    // console.log(`🔍 [ES Query DEBUG] Sample exercise.equipmentRequired field:`, sample.data?.exercise?.equipmentRequired);
+                    // console.log(`🔍 [ES Query DEBUG] Sample exercise name:`, sample.data?.basic?.name);
                 }
             } catch (debugError) {
                 console.error(`⚠️  [ES Query DEBUG] Error fetching sample:`, debugError.message);
@@ -1938,7 +1938,7 @@ async function getRecords(queryParams) {
         let records = searchResponse.hits.hits.map(hit => hit._source);
         const totalHits = searchResponse.hits.total.value;
         
-        console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
+        // console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
         
         // Get metadata (for backward compatibility with old code)
         // Note: We still need these for response metadata
@@ -3832,7 +3832,8 @@ const needsPostProcessing = (params) => {
         hasEquipmentDID ||  // Equipment DIDs need resolution to names
         params.isAuthenticated ||  // Authenticated ownership checks need post-processing
         params.dateStart ||  // Date filtering moved to post-processing
-        params.dateEnd  // Date filtering moved to post-processing
+        params.dateEnd ||  // Date filtering moved to post-processing
+        params.scheduledOn  // ScheduledOn uses date filtering which may be affected by privacy filters - over-fetch to ensure results
     );
 };
 
@@ -3844,8 +3845,8 @@ const getOverFetchMultiplier = (params) => {
     if (params.exerciseNames || params.ingredientNames || params.didTxRef) {
         return 5;  // Need to over-fetch significantly for complex filters
     }
-    if (params.template || params.isAuthenticated) {
-        return 3;  // Moderate over-fetch for medium complexity
+    if (params.template || params.isAuthenticated || params.scheduledOn) {
+        return 3;  // Moderate over-fetch for medium complexity (includes scheduledOn which may be affected by privacy filtering)
     }
     if (params.noDuplicates) {
         return 2;  // Slight over-fetch for duplicate removal
