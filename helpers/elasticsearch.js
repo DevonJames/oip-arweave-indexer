@@ -3450,9 +3450,20 @@ const buildElasticsearchQuery = (params) => {
     }
     
     // Filter by URL
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.url) {
-        should.push({ term: { "data.basic.url.keyword": params.url } });
-        should.push({ term: { "data.basic.webUrl.keyword": params.url } });
+        should.push({
+            nested: {
+                path: "data",
+                query: { term: { "data.basic.url.keyword": params.url } }
+            }
+        });
+        should.push({
+            nested: {
+                path: "data",
+                query: { term: { "data.basic.webUrl.keyword": params.url } }
+            }
+        });
     }
     
     // Date range filters - MOVED TO POST-PROCESSING
@@ -3524,21 +3535,32 @@ const buildElasticsearchQuery = (params) => {
     }
     
     // Phase 2: Authentication/Privacy Filters
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (!params.isAuthenticated) {
         // Unauthenticated users only see public records
         must.push({
-            bool: {
-                should: [
-                    { term: { "data.accessControl.access_level.keyword": "public" } },
-                    { bool: { must_not: { exists: { field: "data.accessControl.access_level" } } } }
-                ],
-                minimum_should_match: 1
+            nested: {
+                path: "data",
+                query: {
+                    bool: {
+                        should: [
+                            { term: { "data.accessControl.access_level.keyword": "public" } },
+                            { bool: { must_not: { exists: { field: "data.accessControl.access_level" } } } }
+                        ],
+                        minimum_should_match: 1
+                    }
+                }
             }
         });
         
         // Also exclude legacy private conversation sessions
         mustNot.push({
-            term: { "data.conversationSession.is_private": true }
+            nested: {
+                path: "data",
+                query: {
+                    term: { "data.conversationSession.is_private": true }
+                }
+            }
         });
     } else if (params.user) {
         // Authenticated users: show public records + their own private records
@@ -3546,19 +3568,24 @@ const buildElasticsearchQuery = (params) => {
         
         if (userPubKey) {
             must.push({
-                bool: {
-                    should: [
-                        // Public records
-                        { term: { "data.accessControl.access_level.keyword": "public" } },
-                        // Records without access control (legacy public)
-                        { bool: { must_not: { exists: { field: "data.accessControl.access_level" } } } },
-                        // Private records owned by this user (via accessControl)
-                        { term: { "data.accessControl.owner_public_key.keyword": userPubKey } },
-                        { term: { "data.accessControl.created_by.keyword": userPubKey } },
-                        // Private records owned by this user (via conversationSession)
-                        { term: { "data.conversationSession.owner_public_key.keyword": userPubKey } }
-                    ],
-                    minimum_should_match: 1
+                nested: {
+                    path: "data",
+                    query: {
+                        bool: {
+                            should: [
+                                // Public records
+                                { term: { "data.accessControl.access_level.keyword": "public" } },
+                                // Records without access control (legacy public)
+                                { bool: { must_not: { exists: { field: "data.accessControl.access_level" } } } },
+                                // Private records owned by this user (via accessControl)
+                                { term: { "data.accessControl.owner_public_key.keyword": userPubKey } },
+                                { term: { "data.accessControl.created_by.keyword": userPubKey } },
+                                // Private records owned by this user (via conversationSession)
+                                { term: { "data.conversationSession.owner_public_key.keyword": userPubKey } }
+                            ],
+                            minimum_should_match: 1
+                        }
+                    }
                 }
             });
         }
@@ -3567,24 +3594,36 @@ const buildElasticsearchQuery = (params) => {
     // Phase 3: Hybrid Filters (ES + post-processing)
     
     // Tag filtering with AND/OR modes
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.tags) {
         const tagArray = params.tags.split(',').map(tag => tag.trim());
         if (params.tagsMatchMode === 'AND' || params.tagsMatchMode === 'and') {
             // AND mode: must have ALL tags
             tagArray.forEach(tag => {
                 must.push({
-                    term: { "data.basic.tagItems.keyword": tag }
+                    nested: {
+                        path: "data",
+                        query: {
+                            term: { "data.basic.tagItems.keyword": tag }
+                        }
+                    }
                 });
             });
         } else {
             // OR mode: must have at least ONE tag (default)
             must.push({
-                terms: { "data.basic.tagItems.keyword": tagArray }
+                nested: {
+                    path: "data",
+                    query: {
+                        terms: { "data.basic.tagItems.keyword": tagArray }
+                    }
+                }
             });
         }
     }
     
     // Full-text search with AND/OR modes
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.search) {
         const searchTerms = params.search.toLowerCase().split(' ').map(term => term.trim()).filter(Boolean);
         const searchFields = [
@@ -3597,20 +3636,30 @@ const buildElasticsearchQuery = (params) => {
             // AND mode: must match ALL terms
             searchTerms.forEach(term => {
                 must.push({
-                    multi_match: {
-                        query: term,
-                        fields: searchFields,
-                        fuzziness: "AUTO"
+                    nested: {
+                        path: "data",
+                        query: {
+                            multi_match: {
+                                query: term,
+                                fields: searchFields,
+                                fuzziness: "AUTO"
+                            }
+                        }
                     }
                 });
             });
         } else {
             // OR mode: must match at least ONE term
             must.push({
-                multi_match: {
-                    query: params.search,
-                    fields: searchFields,
-                    fuzziness: "AUTO"
+                nested: {
+                    path: "data",
+                    query: {
+                        multi_match: {
+                            query: params.search,
+                            fields: searchFields,
+                            fuzziness: "AUTO"
+                        }
+                    }
                 }
             });
         }
@@ -3622,6 +3671,7 @@ const buildElasticsearchQuery = (params) => {
     // If DID is provided, we need to resolve it to name (done in post-processing)
     // If name is provided, we can query directly
     // For now, mark this for post-processing to handle DID resolution properly
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.equipmentRequired && params.recordType === 'exercise') {
         // Check if ANY of the equipment params are DIDs
         const equipmentArray = params.equipmentRequired.split(',').map(eq => eq.trim());
@@ -3633,13 +3683,23 @@ const buildElasticsearchQuery = (params) => {
                 // AND mode: must have ALL equipment names
                 equipmentArray.forEach(equipment => {
                     must.push({
-                        term: { "data.exercise.equipmentRequired.keyword": equipment.toLowerCase() }
+                        nested: {
+                            path: "data",
+                            query: {
+                                term: { "data.exercise.equipmentRequired.keyword": equipment.toLowerCase() }
+                            }
+                        }
                     });
                 });
             } else {
                 // OR mode: must have at least ONE equipment name (default)
                 must.push({
-                    terms: { "data.exercise.equipmentRequired.keyword": equipmentArray.map(e => e.toLowerCase()) }
+                    nested: {
+                        path: "data",
+                        query: {
+                            terms: { "data.exercise.equipmentRequired.keyword": equipmentArray.map(e => e.toLowerCase()) }
+                        }
+                    }
                 });
             }
         }
@@ -3647,6 +3707,7 @@ const buildElasticsearchQuery = (params) => {
     }
     
     // Exercise type filtering
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.exerciseType && params.recordType === 'exercise') {
         const exerciseTypeArray = params.exerciseType.split(',').map(type => type.trim().toLowerCase());
         const exerciseTypeEnumMap = {
@@ -3662,18 +3723,29 @@ const buildElasticsearchQuery = (params) => {
             // AND mode: must match ALL types (unusual for enum)
             normalizedTypes.forEach(type => {
                 must.push({
-                    term: { "data.exercise.exercise_type.keyword": type }
+                    nested: {
+                        path: "data",
+                        query: {
+                            term: { "data.exercise.exercise_type.keyword": type }
+                        }
+                    }
                 });
             });
         } else {
             // OR mode: must match at least ONE type (default)
             must.push({
-                terms: { "data.exercise.exercise_type.keyword": normalizedTypes }
+                nested: {
+                    path: "data",
+                    query: {
+                        terms: { "data.exercise.exercise_type.keyword": normalizedTypes }
+                    }
+                }
             });
         }
     }
     
     // Cuisine filtering for recipes
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.cuisine && params.recordType === 'recipe') {
         const cuisineArray = params.cuisine.split(',').map(c => c.trim().toLowerCase());
         
@@ -3681,7 +3753,12 @@ const buildElasticsearchQuery = (params) => {
             // AND mode: must contain ALL cuisine terms
             cuisineArray.forEach(cuisine => {
                 must.push({
-                    wildcard: { "data.recipe.cuisine.keyword": `*${cuisine}*` }
+                    nested: {
+                        path: "data",
+                        query: {
+                            wildcard: { "data.recipe.cuisine.keyword": `*${cuisine}*` }
+                        }
+                    }
                 });
             });
         } else {
@@ -3691,15 +3768,21 @@ const buildElasticsearchQuery = (params) => {
             }));
             
             should.push({
-                bool: {
-                    should: cuisineQueries,
-                    minimum_should_match: 1
+                nested: {
+                    path: "data",
+                    query: {
+                        bool: {
+                            should: cuisineQueries,
+                            minimum_should_match: 1
+                        }
+                    }
                 }
             });
         }
     }
     
     // Model filtering
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.model && params.recordType === 'modelProvider') {
         const modelArray = params.model.split(',').map(m => m.trim().toLowerCase());
         
@@ -3712,44 +3795,79 @@ const buildElasticsearchQuery = (params) => {
             // AND mode: must support ALL models
             modelArray.forEach(model => {
                 must.push({
-                    wildcard: { "data.modelProvider.supported_models.keyword": `*${model}*` }
+                    nested: {
+                        path: "data",
+                        query: {
+                            wildcard: { "data.modelProvider.supported_models.keyword": `*${model}*` }
+                        }
+                    }
                 });
             });
         } else {
             // OR mode: must support at least ONE model (default)
             should.push({
-                bool: {
-                    should: modelQueries,
-                    minimum_should_match: 1
+                nested: {
+                    path: "data",
+                    query: {
+                        bool: {
+                            should: modelQueries,
+                            minimum_should_match: 1
+                        }
+                    }
                 }
             });
         }
     }
     
     // Field-specific search
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.fieldSearch && params.fieldName) {
         const fieldPath = `data.${params.fieldName}`;
         
         if (params.fieldMatchMode === 'exact') {
             must.push({
-                term: { [`${fieldPath}.keyword`]: params.fieldSearch }
+                nested: {
+                    path: "data",
+                    query: {
+                        term: { [`${fieldPath}.keyword`]: params.fieldSearch }
+                    }
+                }
             });
         } else {
             // Partial match (default)
             must.push({
-                wildcard: { [`${fieldPath}.keyword`]: `*${params.fieldSearch.toLowerCase()}*` }
+                nested: {
+                    path: "data",
+                    query: {
+                        wildcard: { [`${fieldPath}.keyword`]: `*${params.fieldSearch.toLowerCase()}*` }
+                    }
+                }
             });
         }
     }
     
     // Exact match filtering (JSON object with field paths)
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries for data.* fields
     if (params.exactMatch) {
         try {
             const exactMatchObj = JSON.parse(params.exactMatch);
             Object.entries(exactMatchObj).forEach(([fieldPath, expectedValue]) => {
-                must.push({
-                    term: { [`${fieldPath}.keyword`]: expectedValue }
-                });
+                // Check if this is a data.* field
+                if (fieldPath.startsWith('data.')) {
+                    must.push({
+                        nested: {
+                            path: "data",
+                            query: {
+                                term: { [`${fieldPath}.keyword`]: expectedValue }
+                            }
+                        }
+                    });
+                } else {
+                    // Non-nested fields (like oip.*)
+                    must.push({
+                        term: { [`${fieldPath}.keyword`]: expectedValue }
+                    });
+                }
             });
         } catch (error) {
             console.error('Error parsing exactMatch JSON:', error);
@@ -3757,20 +3875,47 @@ const buildElasticsearchQuery = (params) => {
     }
     
     // Audio filtering
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.hasAudio) {
         if (params.hasAudio === true || params.hasAudio === 'true') {
-            should.push({ exists: { field: "data.post.audioItems" } });
-            should.push({ exists: { field: "data.basic.audioItems" } });
+            should.push({
+                nested: {
+                    path: "data",
+                    query: { exists: { field: "data.post.audioItems" } }
+                }
+            });
+            should.push({
+                nested: {
+                    path: "data",
+                    query: { exists: { field: "data.basic.audioItems" } }
+                }
+            });
         } else {
-            mustNot.push({ exists: { field: "data.post.audioItems" } });
-            mustNot.push({ exists: { field: "data.basic.audioItems" } });
+            mustNot.push({
+                nested: {
+                    path: "data",
+                    query: { exists: { field: "data.post.audioItems" } }
+                }
+            });
+            mustNot.push({
+                nested: {
+                    path: "data",
+                    query: { exists: { field: "data.basic.audioItems" } }
+                }
+            });
         }
     }
     
     // Special handling for nutritionalInfo records
+    // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.recordType && params.recordType.toLowerCase() === 'nutritionalinfo') {
         must.push({
-            exists: { field: "data.nutritionalInfo" }
+            nested: {
+                path: "data",
+                query: {
+                    exists: { field: "data.nutritionalInfo" }
+                }
+            }
         });
     }
     
