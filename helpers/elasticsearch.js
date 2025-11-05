@@ -3493,19 +3493,24 @@ const buildElasticsearchQuery = (params) => {
             
             console.log(`📅 [ScheduledOn Filter] scheduledOn=${params.scheduledOn} (${startTimestamp} - ${endTimestamp})`);
             
+            // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
             // ScheduledOn filter is REQUIRED (must match), not optional
-            // NOTE: Date fields may be stored as numbers OR strings in ES, so we check both
             must.push({
-                bool: {
-                    should: [
-                        // Number fields (preferred)
-                        { range: { "data.workoutSchedule.scheduled_date": scheduledRange } },
-                        { range: { "data.mealPlan.meal_date": scheduledRange } },
-                        // String fields (for legacy data)
-                        { range: { "data.workoutSchedule.scheduled_date.keyword": { gte: scheduledRange.gte.toString(), lte: scheduledRange.lte.toString() } } },
-                        { range: { "data.mealPlan.meal_date.keyword": { gte: scheduledRange.gte.toString(), lte: scheduledRange.lte.toString() } } }
-                    ],
-                    minimum_should_match: 1
+                nested: {
+                    path: "data",
+                    query: {
+                        bool: {
+                            should: [
+                                // Number fields (preferred)
+                                { range: { "data.workoutSchedule.scheduled_date": scheduledRange } },
+                                { range: { "data.mealPlan.meal_date": scheduledRange } },
+                                // String fields (for legacy data)
+                                { range: { "data.workoutSchedule.scheduled_date.keyword": { gte: scheduledRange.gte.toString(), lte: scheduledRange.lte.toString() } } },
+                                { range: { "data.mealPlan.meal_date.keyword": { gte: scheduledRange.gte.toString(), lte: scheduledRange.lte.toString() } } }
+                            ],
+                            minimum_should_match: 1
+                        }
+                    }
                 }
             });
         }
