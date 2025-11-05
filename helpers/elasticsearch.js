@@ -8,7 +8,7 @@ const arweave = Arweave.init(arweaveConfig);
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 const semver = require('semver');
-const { gql, GraphQLClient } = require('graphql-request');
+const { gql, request } = require('graphql-request');
 const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber, resolveRecords } = require('./utils');
 const recordTypeIndexConfig = require('../config/recordTypesToIndex');
 const http = require('http');
@@ -73,78 +73,9 @@ const elasticClient = new Client({
 
 console.log('✅ [ES Client] Created Elasticsearch client (persistent)');
 
-// MEMORY LEAK FIX: Configure GraphQL client for Arweave with non-persistent connections
-// This prevents socket accumulation from graphql-request library
-let graphQLClient = null;
-let graphQLClientCreatedAt = null;
-let graphQLHttpAgent = null;
-let graphQLHttpsAgent = null;
-const GRAPHQL_CLIENT_RECREATION_INTERVAL = parseInt(process.env.GRAPHQL_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 minutes
-
-function createGraphQLClient() {
-    if (graphQLClient) {
-        console.log('🔄 [GraphQL Client] Disposing old GraphQL client');
-        graphQLClient = null;
-    }
-    
-    // Destroy old agents if they exist
-    if (graphQLHttpAgent) {
-        graphQLHttpAgent.destroy();
-        console.log('🔄 [GraphQL Client] Destroyed old HTTP agent');
-    }
-    if (graphQLHttpsAgent) {
-        graphQLHttpsAgent.destroy();
-        console.log('🔄 [GraphQL Client] Destroyed old HTTPS agent');
-    }
-    
-    // Create NEW HTTP agents with keepAlive: false
-    graphQLHttpAgent = new http.Agent({
-        keepAlive: false,
-        maxSockets: 50,
-        maxFreeSockets: 0,
-        timeout: 30000
-    });
-    
-    graphQLHttpsAgent = new https.Agent({
-        keepAlive: false,
-        maxSockets: 50,
-        maxFreeSockets: 0,
-        timeout: 30000
-    });
-    
-    graphQLClient = new GraphQLClient('https://arweave.net/graphql', {
-        agent: (url) => url.protocol === 'https:' ? graphQLHttpsAgent : graphQLHttpAgent,
-        timeout: 30000
-    });
-    
-    graphQLClientCreatedAt = Date.now();
-    console.log(`✅ [GraphQL Client] Created new GraphQL client (will recreate every ${GRAPHQL_CLIENT_RECREATION_INTERVAL / 60000} minutes)`);
-    
-    return graphQLClient;
-}
-
-function checkAndRecreateGraphQLClient() {
-    if (!graphQLClient || !graphQLClientCreatedAt) {
-        return createGraphQLClient();
-    }
-    
-    const clientAge = Date.now() - graphQLClientCreatedAt;
-    if (clientAge > GRAPHQL_CLIENT_RECREATION_INTERVAL) {
-        const ageMinutes = Math.round(clientAge / 60000);
-        console.log(`🔄 [GraphQL Client] Recreating client (age: ${ageMinutes} minutes, threshold: ${GRAPHQL_CLIENT_RECREATION_INTERVAL / 60000} minutes)`);
-        return createGraphQLClient();
-    }
-    
-    return graphQLClient;
-}
-
-// Initialize GraphQL client
-createGraphQLClient();
-
-// Check GraphQL client age periodically
-setInterval(() => {
-    checkAndRecreateGraphQLClient();
-}, 300000); // Check every 5 minutes
+// GraphQL client management REMOVED - was making leak worse
+// The 'request()' function from graphql-request works better than managed client
+// Failed DNS lookups were creating leaked sockets with the managed approach
 
 // Helper function for backward-compatible DID queries
 function createDIDQuery(targetDid) {
@@ -4753,9 +4684,8 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
 
         while (retryCount < maxRetries) {
             try {
-                // MEMORY LEAK FIX: Use managed GraphQL client with connection pooling
-                checkAndRecreateGraphQLClient();
-                response = await graphQLClient.request(query);
+                // Use simple request (no managed client - the agent recreation was causing worse leaks)
+                response = await request(endpoint, query);
                 break; // Break the retry loop if the request is successful
             } catch (error) {
                 retryCount++;
@@ -5630,7 +5560,6 @@ module.exports = {
     processRecordForElasticsearch,
     addRecipeNutritionalSummary,
     clearRecordsCache,
-    recreateGraphQLClient: createGraphQLClient, // Exposed for manual GraphQL client recreation
     calculateRecipeNutrition,
     elasticClient
 };
