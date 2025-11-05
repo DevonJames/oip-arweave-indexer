@@ -40,8 +40,21 @@ class MemoryLeakTracker {
     takeSample() {
         const memUsage = process.memoryUsage();
         const heapStats = v8.getHeapStatistics();
+        
+        // MEMORY LEAK FIX: Get counts without keeping references to objects
+        // Storing handle/request objects prevents garbage collection
         const handles = process._getActiveHandles();
         const requests = process._getActiveRequests();
+        
+        // Count types immediately then discard the object references
+        const handleTypes = this._countTypes(handles);
+        const requestTypes = this._countTypes(requests);
+        const handleCount = handles.length;
+        const requestCount = requests.length;
+        
+        // Explicitly null out to help GC
+        handles.length = 0;
+        requests.length = 0;
 
         const sample = {
             timestamp: Date.now(),
@@ -51,12 +64,12 @@ class MemoryLeakTracker {
             external: memUsage.external,
             arrayBuffers: memUsage.arrayBuffers,
             heapLimit: heapStats.heap_size_limit,
-            activeHandles: handles.length,
-            activeRequests: requests.length,
+            activeHandles: handleCount,
+            activeRequests: requestCount,
             
-            // Track handle types
-            handleTypes: this._countTypes(handles),
-            requestTypes: this._countTypes(requests),
+            // Store only counts, not object references
+            handleTypes: handleTypes,
+            requestTypes: requestTypes,
         };
 
         this.samples.push(sample);
