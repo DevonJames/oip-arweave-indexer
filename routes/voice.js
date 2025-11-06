@@ -2018,7 +2018,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 // Step 3: Generate streaming response using ALFRED RAG system
                 const {
                     // model = 'grok-2',
-                    model = parallel,
+                    model = 'parallel',
                     voice_id = 'onwK4e9ZLuTAKqWW03F9', // Daniel - Male British voice
                     speed = 1.0,
                     creator_filter = null,
