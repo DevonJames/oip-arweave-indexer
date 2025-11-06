@@ -1,0 +1,324 @@
+I truly appreciate your enthusiasm and I am not forgetting about you, it’s just that I arrived at GLAM Wiki conference in Lisbon and there honestly aren’t enough hours in the day right now. Let me share with you what I have thus far. I wish it was in better shape.
+
+Our one sheet before the conference:
+[https://docs.google.com/document/d/1oRdoFLaZacQV4necyGax9yFMU5dm3tSFVqVegu6RACA/edit?usp=sharing](https://docs.google.com/document/d/1oRdoFLaZacQV4necyGax9yFMU5dm3tSFVqVegu6RACA/edit?usp=sharing)
+
+Rough rough notes from cypherpunk workshop.
+[https://yopad.eu/p/cp2025-20-365days](https://yopad.eu/p/cp2025-20-365days)
+
+Notes from the hackathon:
+about 5 projects reasonably matched our category
+one was vibecode copypasta, one was pretty close to that, neither worked
+pretty interesting project using a VNC session to host a "reporting desk" so you don't have to run anything locally, but a bit sparse otherwise and did not work
+one project matched brewster's brief exactly (slick native installable app that has ghost + tor) but it also hightlighted the big problems with the brief (no persistance, machine must be on all the time, no discovery mechanism)
+one project didn't quite match the brief (it's a docker-compose) but put a lot of thought into the other questions and had quite good code quality and attention to details
+
+The project that matched Brewster’s brief exactly is below and the developer was very good and communicative and expressed his willingness to continue working on this.
+[https://github.com/nionis/freedom-kit](https://github.com/nionis/freedom-kit)
+
+There is a signal group of people interested in developing this after the cypherpunk retreat in Berlin in late September.
+[https://signal.group/#CjQKIAOHMfdMPhe5b5ei7vArRD0Nsk6hFKEyJtrJNCJGAIbKEhB4dD9PqDY2C_REhFLf86DR](https://signal.group/#CjQKIAOHMfdMPhe5b5ei7vArRD0Nsk6hFKEyJtrJNCJGAIbKEhB4dD9PqDY2C_REhFLf86DR)
+
+Let me know what you think and how best we could develop this further. Thank you for your persistence and enthusiasm!
+
+Session: DWEB Server
+Session Lead(s) / Point of Contact:
+Scribe:
+Participants:
+
+===================
+
+Notes:
+
+* dweb server - censorship resistant
+
+* super easy to use, one click download, allows you to buidl your own web server e.g. wordpress instance, that is writer private
+
+* could work on home ... making a website is too hard. can we make it easy?
+
+* this can be doable, the components exist. what we don't have is something that works well
+
+* signal -- took 50 million dollars, it just works. right people, right 50 mill. not janky, actually works
+
+* 4 components -- s.t. freedom of press foundation can use for journalists anywhere
+
+* tor onion server - internet archive has onion service - it was hard. took a talented person a long time to make it work, it as a nightmare. can't expect other people to be doing this
+
+* decentralzied alternative to DNS. long addresses ... can't write it. can we use web3 community to get a dns that works?
+
+* automatic backups to archive.org - if your thing goes down in your house, it can run from someplace else. as long as internet archive isn't doing it, wayback machine
+
+* can we build decentralized server that leverages the tech we know?
+
+* hat's the bundle of services needed to make this compelling? to use to share annotated information? blog, library
+
+* proposals?
+
+* [ if you know people interested in working on this - also marketing, use, etc. ]
+
+* DNS alternative may be hardest - relying on cloudflare, etc. need a p2p dns
+
+* expected behavior: like a bittorrent client?
+
+* hoping normal browsers could come in. rn tor and brave only ones that can talk tor. integration w/ brave not that smooth
+
+* tor has writer privacy
+
+* working on normal browsers for most people ... thinking adversarial system.
+
+* tor - 20 years of ... whack a mole ... ride things that exist
+
+* worry - wedf - human rights, massive archive of human rights related information
+
+* do we only allow trusted parties to publish to the archive? data quality high is important. status of data changes. do we want to open floodgates that anyone can publish anything?
+
+* flooding or poisoning - esp when digital generation is super easy. could be inverse of censorship, pollution. flooded w/ information that makes it impractical to find information. governance problem will appear, design decisions early
+
+* if person who wants writer privacy, it's their own wordpress website - a layer of governance. censorship resistance
+
+* you have your own instance, can manage any way you want. it's not one archive for all. a set of web servers, this time around, writer-private. we have a lot of reader privacy, tor. can we do next step which is writer privacy?
+
+* ?: if my server is connected to tor, no one knows server is running on my laptop? (yes)
+
+* currently, re-writing tor in c and rust
+
+* internal connection was nightmare. re-write ... easily integrate onion service into your rust implementation. all traffic goes through tor, rust ecosystem of types, will only get better. one binary, no ipc on machine, just one process that does everything which is amazing for deployment
+
+* want to make the stack easy to use. we have tor
+
+* discoverability - not going to be crawled by google, b/c tor
+
+* even internet archive doesn't archive tor / onion services - b/c we got in so much trouble for it
+
+* discoverability layer - an alternative web. can we use brave? will enough people brave? can brave search index?
+
+* maybe brave can help next generation of dweb?
+
+* bittorrent -- so simple for writer privacy. seed a file, it's up there. file could be a contained web server, bucket, can be replicated bucket, marrying tor. bittorrent is reliable. running bittorrent client - can see ip addresses that has what i'm looking for. i don't want my home on that list. can we make bittorent work w/ onion servers on the backend?
+
+* ?: what kind of web server? think of it as wordpress. the internet archive of italy to be this.
+
+* keyleaks(?) - distributed
+
+* pirate bay ... being taken down and popped back up. piracy people running usenet servers, infrastructure. knowledge transfer question. how to talk to those solving this problem
+
+* p2p backend for the web
+
+* we have the pieces ...
+
+* targetting wordpress could be good b/c ... serve stuff / static websites, and also interact w/ them
+
+* not just a broadcast, need to be able to interact, connect back. right to privacy also for someone contributing to website
+
+* censorship resistance - so many angles - for data? for users?
+
+* ?: w/ censorship resistance, moderation..? e.g. ncii abuse, revenge porn
+
+* internet archive can take things down we don't want up ... but hit by commercial players
+
+* i don't know ...
+
+* if p2p way, i host my server, it's more on meta level, who is indexing these servers - they can be responsible for taking things don that shouldn't be indexed - can make abusive content hard to find, dark web/discoverability
+
+* general issue ... two groups of authority and control
+
+* p2p group: no authority, must be completely decentralized
+
+* there's google, and they decide nat's indexed
+
+* directory index in tor: balance
+
+* relays list index, generated by directory authority. servers by 10 individuals, agree on consensus automatically. which relays to ban. done in a democratic fashion 2/3s majority. this as a layer in-between - some authority, decentralized authrotiy. hands of diverse people, 10-20 people w/ authority w/ 2/3 majority. can sovle many problems including dns problem.
+
+* dns - e.g. authority, trademark. not absolutes, some democratic
+
+* ENS - registry of dns names on eth, governed by a dao
+
+* maybe don't have the right to take domains for copyright claims ... still wild west
+
+* governed on chain by a community, protocol decisions decide on .. rather than direct censorship of domains
+
+* GNS - GNU Name SystemSystem
+
+  * DNS compatible
+
+* zeronet - bittorrent browser
+
+* maybe shut down 4 years ago? but case study - beaker browser, another example
+
+* dweb community - but don't get enough momentum ... so not sure this will. geopolitics is causing some opportunities ...
+
+* threat of information at scale ... journalists
+
+* user community of journalists - if can build it smooth enough to use
+
+* adversaries you expect? what likely to be taken down and why? e.g. unwelcome information of nation states? predatory companies for ip?
+
+* natural disasters ... if central authority goes down. earthquakes, floods, fires ...
+
+* replicated out of the servers
+
+* launching archive-aware services bundled into wordpress. e.g. wikipedia back up outbound links right away
+
+* try to make things more reliable
+
+* possibility to redact information, take it down ... dweb, can take it off. how to deal w/ archives? revenge porn aware archives ...
+
+* IA - not absolutism, we do take things down, but it makes us less reliable
+
+* dns alternative - handshake
+
+* not sure how well it works, decentralized dns provider. still need tls certification. need to make it easy
+
+* onion service and tls - let's encrypt - spec is out and going forward
+
+* scope ... e.g. journalists, one to many transmission
+
+* different from platforms
+
+* much simpler ways to dissemate information... if you don't need sessions as much vs. if you do and need a real server
+
+* wordpress-like comments ...
+
+* VPN providers
+
+* in the same way tor is the only way to access tor ... normies, age verification, browse netflix ... if you use our vpn you can also access these parts of the internet
+
+* able to step into dark web w/ 'easy mode' / 'strict mode'
+
+* interface
+
+* tor hidden services - drugs association, bittorrent - movies
+
+* how to maintain the network? store data redundantly... some redundancy, if you start missing server, how to mandate?
+
+* wayback machine is one possibility ...
+
+* residential internet has gotten good, extremely cheap (in berlin) - 1gb for 15 euros a month
+
+* ?: hardware gadget? rasp. pi? plug and play - rpi now has a screen
+
+* something mass appealing
+
+* scope - you can do it, have rpi and host.
+
+* eth - long term, want everyone participate somehow. construct fabric for people's right to participate in a global network. not just right to transact, also right to host and serve content and information. a bundling of things that condense, is there a single unit/gadget people can plug in
+
+* research around local p2p protocols - decentralized collaborative, like git for data. mechanism is ... CRDTs, see LoFi.Re
+
+* async collab on data repo, add pages, comments, permissioned. still p2p
+
+* can make a snapshot of data repo - archival
+
+* colalboration re-write, can join p2p
+
+* dweb going in direction of p2p rewrite, snapshots. satisfies archivability, replication, decentral. can still collaborate, cdrt replicated (not centralized like wordpress)
+
+* version 2.0 -- weaves people together in ways they approve, weave new ideas. something that catches w/ critical mass of a community that cares. i'll help reproduce your thing
+
+* people have opinions on, e.g. content moderation
+
+* scope of building another "parallel" internet / decentralized web
+
+* 1-2 years ... IA stakeholder
+
+* ?: what do you want to see first?
+
+* goal: censorship resistant, fun, monthly, no monthly fee, reliable
+
+* can fund a person to do this
+
+* funding the commons hackathon - vaclav
+
+* sponsoring w/ tor - can propose as a topic
+
+* already some funding, maybe IA can join
+
+* residency after hackathon, devconnect in argentina
+
+* realfi
+
+* "really retro"
+
+* censorship resistance - can also avoid being found to avoid being taken down
+
+* pollution is also a way of censoring
+
+* tor has been fighting this
+
+* solve problem of how people spin up these servers first
+
+* Sandi, Clara (help w Tor part)
+
+* Peter - i think we're making something like this already
+
+* John, Vaclav
+
+* local first p2p - TG - dns
+
+* alan?
+
+* Vasel - reliability
+
+* if you know anyone who wants to spend a year being core coder on this
+
+* publix in berlin - org for free journalism, corrective ... could be a collaboration. coorking space, hosting orgs, preservation of journalist rights, infra side.
+
+Outcomes / Next steps:
+
+* PRD from conversations, user stories
+* user testimonials of what we want this to do, finishing the spec
+*
+
+Action Items:
+
+*
+
+Continuing Conversation: [Signal] / [Matrix] / [Telegram]
+
+* [https://signal.group/#CjQKIAOHMfdMPhe5b5ei7vArRD0Nsk6hFKEyJtrJNCJGAIbKEhB4dD9PqDY2C_REhFLf86DR](https://signal.group/#CjQKIAOHMfdMPhe5b5ei7vArRD0Nsk6hFKEyJtrJNCJGAIbKEhB4dD9PqDY2C_REhFLf86DR)
+
+APRS - walkie talkie to ISS broadcasting
+https;//free2z.cash
+
+CYPHERPUNK CAMP READ ME - public
+
+Focus Area
+
+Narrative and policy defense
+What's the current state of your focus area? What's the state of the tech, what's the state of coordination, coalition-building, and adoption?
+Are there mistakes or missed opportunities or interesting events from recent history?
+Do you think we can meaningfully improve this in 1-2 years? Where should we be collectively?
+
+Bad behavior is on the rise.
+
+Bad behavior by the media companies (I am focused on the traditional publishers: book, academic journals, etc)--  they are suing everyone.  40+ major lawsuits in the US around AI alone.   Repeatedly suing the Internet Archive.    Wikipedia, I am told has 40 lawsuits pending at any one time.
+
+Bad behavior by governments.
+UK age verification, Russian takedown demands and lawsuits, Great Wall of China, DNS blocking.    EU copyright is up for being reexamined in June 2026 (soon), so we need to show the value of open world, as the publishers are working very hard to close everything down.
+
+Cyberattacks on the rise, some are malicious; some are overzealous AI companies.
+Internet Archive DDos’ed repeatedly, intrusion in October (2 weeks before the election)
+Cloudflare getting into the gatekeeper business: charge people to access websites.
+
+To build stable systems of information preservation and access
+We need more legs for the stool.
+Decentralized Web tech including IPFS and Filecoin
+Building communities in different locations: IA, IAcanada, IAe, IAs
+Infrastructure for open:
+the IAe’s house in Amsterdam, venues/housing in Vancouver and SF
+
+DWeb Server: censorship an onion server on to
+
+Dweb Server
+Censorship resistant WebServer. Easy and fun, no monthly fee, open source, private, reliable.
+“We need this!” – Freedom of the Press Foundation
+What is it?
+One-click downloadable software package to build your own webserver that protects writer privacy. This webserver bundle will work on home networks with no fees or corporate dependencies.
+Why is this doable?
+Building on existing components and packaging them for ease of use. This is a no-magic project.
+Components:
+Tor Onion Server to protect writer privacy and enable portable webservers
+WordPress - self-hosted instance for easy authoring without cloud-based intermediaries
+Decentralized alternative to DNS using blockchain registries
+Automatic backups to archive.org to ensure reliability
