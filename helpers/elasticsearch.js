@@ -1431,7 +1431,7 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     if (!knownUnits.includes(normalizedToUnitForCheck)) {
         // toUnit is unrecognized - treat it as a count unit like "whole"
         if (fromIsCount || !knownUnits.includes(normalizeUnit(fromUnit))) {
-            console.log(`🔄 FALLBACK: Unrecognized standardUnit '${toUnit}' treated as count; ${fromAmount} ${fromUnit} → ${fromAmount} ${toUnit}`);
+            // console.log(`🔄 FALLBACK: Unrecognized standardUnit '${toUnit}' treated as count; ${fromAmount} ${fromUnit} → ${fromAmount} ${toUnit}`);
             return fromAmount;
         }
     }
@@ -1444,7 +1444,7 @@ const convertUnits = (fromAmount, fromUnit, toUnit) => {
     
     // If both are count units, use simple ratio
     if (fromIsCount && toIsCount) {
-        console.log(`📦 Both are count units, using simple ratio`);
+        // console.log(`📦 Both are count units, using simple ratio`);
         return fromAmount;
     }
     
@@ -1705,17 +1705,17 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
             return record;
         }
         
-        console.log(`\n✅ Successfully processed ${result.processedIngredients}/${result.totalIngredients} ingredients for recipe ${record.oip?.didTx || 'unknown'}`);
-        console.log(`📊 Total recipe nutritional values (for ${servings} servings):`);
-        console.log(`   Calories: ${result.total.calories}`);
-        console.log(`   Protein: ${result.total.proteinG}g`);
-        console.log(`   Fat: ${result.total.fatG}g`);
-        console.log(`   Carbs: ${result.total.carbohydratesG}g`);
-        console.log(`\n📊 Per-serving nutritional values (1 of ${servings} servings):`);
-        console.log(`   Calories: ${result.perServing.calories}`);
-        console.log(`   Protein: ${result.perServing.proteinG}g`);
-        console.log(`   Fat: ${result.perServing.fatG}g`);
-        console.log(`   Carbs: ${result.perServing.carbohydratesG}g`);
+        // // console.log(`\n✅ Successfully processed ${result.processedIngredients}/${result.totalIngredients} ingredients for recipe ${record.oip?.didTx || 'unknown'}`);
+        // console.log(`📊 Total recipe nutritional values (for ${servings} servings):`);
+        // console.log(`   Calories: ${result.total.calories}`);
+        // console.log(`   Protein: ${result.total.proteinG}g`);
+        // console.log(`   Fat: ${result.total.fatG}g`);
+        // console.log(`   Carbs: ${result.total.carbohydratesG}g`);
+        // console.log(`\n📊 Per-serving nutritional values (1 of ${servings} servings):`);
+        // console.log(`   Calories: ${result.perServing.calories}`);
+        // console.log(`   Protein: ${result.perServing.proteinG}g`);
+        // console.log(`   Fat: ${result.perServing.fatG}g`);
+        // console.log(`   Carbs: ${result.perServing.carbohydratesG}g`);
         
         if (result.skippedIngredients.length > 0) {
             console.log(`\n⚠️ Skipped ${result.skippedIngredients.length} ingredients:`);
@@ -3246,9 +3246,9 @@ async function getRecords(queryParams) {
             const paginatedRecords = resolvedRecords.slice(startIndex, endIndex);
             resolvedRecords = paginatedRecords;
             
-            console.log(`📄 [Pagination] Applied in-memory pagination: ${startIndex}-${endIndex} from ${records.length} records (post-processing mode)`);
+            // console.log(`📄 [Pagination] Applied in-memory pagination: ${startIndex}-${endIndex} from ${records.length} records (post-processing mode)`);
         } else {
-            console.log(`📄 [Pagination] Using ES native pagination: page ${pageNumber}, size ${pageSize} (no post-processing)`);
+            // console.log(`📄 [Pagination] Using ES native pagination: page ${pageNumber}, size ${pageSize} (no post-processing)`);
         }
 
         return {
@@ -4031,7 +4031,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
             return recordsCache;
         }
 
-        console.log(getFileInfo(), getLineNumber(), 'Fetching fresh records from Elasticsearch...');
+        // console.log(getFileInfo(), getLineNumber(), 'Fetching fresh records from Elasticsearch...');
         
         const searchResponse = await elasticClient.search({
             index: 'records',
