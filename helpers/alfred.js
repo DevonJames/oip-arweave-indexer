@@ -322,7 +322,7 @@ class ALFRED {
         };
 
         console.log(`[ALFRED] 🌐 Calling ${modelConfig.provider} API for ${modelName} at ${modelConfig.apiUrl}`);
-        console.log(`[ALFRED] Request body:`, JSON.stringify(requestBody, null, 2));
+        // console.log(`[ALFRED] Request body:`, JSON.stringify(requestBody, null, 2));
 
         try {
             const response = await axios.post(modelConfig.apiUrl, requestBody, {

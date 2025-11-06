@@ -1853,7 +1853,7 @@ async function getRecords(queryParams) {
         const esSort = buildElasticsearchSort(sortBy);
         
         // Execute optimized Elasticsearch query
-        console.log(`🚀 [ES Query] Executing optimized query: from=${esFrom}, size=${esSize}, requiresPostProcessing=${requiresPostProcessing}, pageSize=${pageSize}, pageNumber=${pageNumber}`);
+        // console.log(`🚀 [ES Query] Executing optimized query: from=${esFrom}, size=${esSize}, requiresPostProcessing=${requiresPostProcessing}, pageSize=${pageSize}, pageNumber=${pageNumber}`);
         
         // DEBUG: Log the full ES query for date filters
         if (dateStart || dateEnd) {
@@ -1924,15 +1924,15 @@ async function getRecords(queryParams) {
             }
         }
         
-        console.log('🔍 [ES Query Debug] Full query:', JSON.stringify({
-            index: 'records',
-            body: {
-                query: esQuery,
-                sort: esSort || [{ "oip.inArweaveBlock": { order: 'desc' } }],
-                from: esFrom,
-                size: esSize
-            }
-        }, null, 2));
+        // console.log('🔍 [ES Query Debug] Full query:', JSON.stringify({
+        //     index: 'records',
+        //     body: {
+        //         query: esQuery,
+        //         sort: esSort || [{ "oip.inArweaveBlock": { order: 'desc' } }],
+        //         from: esFrom,
+        //         size: esSize
+        //     }
+        // }, null, 2));
         
         const searchResponse = await elasticClient.search({
             index: 'records',
