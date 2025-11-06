@@ -1784,17 +1784,17 @@ router.get('/models', async (req, res) => {
  * Similar to /generate/converse but uses ALFRED's RAG system
  */
 router.post('/converse', upload.single('audio'), async (req, res) => {
-    console.log('🎯 [ROUTE: /api/voice/converse] Processing streaming voice conversation with SSE');
-    console.log('📥 [ROUTE: /api/voice/converse] Request body:', {
-        text: req.body.text || req.body.userInput,
-        processing_mode: req.body.processing_mode,
-        model: req.body.model,
-        pinnedDidTx: req.body.pinnedDidTx,
-        conversationHistory: req.body.conversationHistory ? `${(typeof req.body.conversationHistory === 'string' ? JSON.parse(req.body.conversationHistory || '[]') : req.body.conversationHistory).length} messages` : 'none',
-        dialogueId: req.body.dialogueId,
-        voiceConfig: req.body.voiceConfig ? 'provided' : 'default',
-        hasAudioFile: !!req.file
-    });
+    // console.log('🎯 [ROUTE: /api/voice/converse] Processing streaming voice conversation with SSE');
+    // console.log('📥 [ROUTE: /api/voice/converse] Request body:', {
+    //     text: req.body.text || req.body.userInput,
+    //     processing_mode: req.body.processing_mode,
+    //     model: req.body.model,
+    //     pinnedDidTx: req.body.pinnedDidTx,
+    //     conversationHistory: req.body.conversationHistory ? `${(typeof req.body.conversationHistory === 'string' ? JSON.parse(req.body.conversationHistory || '[]') : req.body.conversationHistory).length} messages` : 'none',
+    //     dialogueId: req.body.dialogueId,
+    //     voiceConfig: req.body.voiceConfig ? 'provided' : 'default',
+    //     hasAudioFile: !!req.file
+    // });
     
     const startTime = Date.now();
     console.log('Voice converse request received');
@@ -1880,8 +1880,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 }
                 
                 // Debug the actual structure
-                console.log('Raw conversation history structure:', 
-                    JSON.stringify(parsedHistory, null, 2).substring(0, 300));
+                // console.log('Raw conversation history structure:', 
+                //     JSON.stringify(parsedHistory, null, 2).substring(0, 300));
                 
                 // Ensure it's an array with the right format
                 if (Array.isArray(parsedHistory)) {
@@ -1897,8 +1897,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     }];
                 }
                 
-                console.log('Formatted conversation history:', 
-                    JSON.stringify(conversationHistory, null, 2).substring(0, 300));
+                // console.log('Formatted conversation history:', 
+                //     JSON.stringify(conversationHistory, null, 2).substring(0, 300));
             } catch (error) {
                 console.error('Error parsing conversation history:', error);
                 // Continue with empty history rather than failing
@@ -1955,7 +1955,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
             try {
                 const parsedVoiceConfig = JSON.parse(req.body.voiceConfig);
                 voiceSettings = { ...voiceSettings, ...parsedVoiceConfig };
-                console.log('🎵 Parsed voice configuration:', voiceSettings.engine, 'engine selected');
+                // console.log('🎵 Parsed voice configuration:', voiceSettings.engine, 'engine selected');
             } catch (error) {
                 console.error('Error parsing voice configuration:', error);
                 // Continue with defaults
@@ -2017,7 +2017,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
 
                 // Step 3: Generate streaming response using ALFRED RAG system
                 const {
-                    model = 'grok-2',
+                    // model = 'grok-2',
+                    model = parallel,
                     voice_id = 'onwK4e9ZLuTAKqWW03F9', // Daniel - Male British voice
                     speed = 1.0,
                     creator_filter = null,

@@ -1180,8 +1180,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 const parsedHistory = JSON.parse(req.body.conversationHistory);
                 
                 // Debug the actual structure
-                console.log('Raw conversation history structure:', 
-                    JSON.stringify(parsedHistory, null, 2).substring(0, 300));
+                // console.log('Raw conversation history structure:', 
+                //     JSON.stringify(parsedHistory, null, 2).substring(0, 300));
                 
                 // Ensure it's an array with the right format
                 if (Array.isArray(parsedHistory)) {
@@ -1197,8 +1197,8 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     }];
                 }
                 
-                console.log('Formatted conversation history:', 
-                    JSON.stringify(conversationHistory, null, 2).substring(0, 300));
+                // console.log('Formatted conversation history:', 
+                //     JSON.stringify(conversationHistory, null, 2).substring(0, 300));
             } catch (error) {
                 console.error('Error parsing conversation history:', error);
                 // Continue with empty history rather than failing
@@ -1227,7 +1227,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             try {
                 const parsedVoiceConfig = JSON.parse(req.body.voiceConfig);
                 voiceSettings = { ...voiceSettings, ...parsedVoiceConfig };
-                console.log('🎵 Parsed voice configuration:', voiceSettings.engine, 'engine selected');
+                // console.log('🎵 Parsed voice configuration:', voiceSettings.engine, 'engine selected');
             } catch (error) {
                 console.error('Error parsing voice configuration:', error);
                 // Continue with defaults

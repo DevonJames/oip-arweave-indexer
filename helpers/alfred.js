@@ -1253,7 +1253,7 @@ JSON Response:`;
                 const recordType = record.recordType || record.oip?.recordType || 'unknown';
                 const specificData = record.data?.[recordType] || {};
                 
-                console.log(`[ALFRED] Processing record: ${basicData.name || 'Untitled'} (type: ${recordType}) - recordType source: ${record.recordType ? 'record.recordType' : record.oip?.recordType ? 'record.oip.recordType' : 'unknown'}`);
+                // console.log(`[ALFRED] Processing record: ${basicData.name || 'Untitled'} (type: ${recordType}) - recordType source: ${record.recordType ? 'record.recordType' : record.oip?.recordType ? 'record.oip.recordType' : 'unknown'}`);
                 
                 let content = {
                     title: basicData.name || 'Untitled',
@@ -1329,7 +1329,7 @@ JSON Response:`;
                             sodiumMg: Math.round((content.nutritionPerServing.sodiumMg || 0) * servings * 100) / 100,
                             carbohydratesG: Math.round((content.nutritionPerServing.carbohydratesG || 0) * servings * 100) / 100
                         };
-                        console.log(`[ALFRED] Included nutritional info for recipe: ${content.title}`);
+                        // console.log(`[ALFRED] Included nutritional info for recipe: ${content.title}`);
                     } else if (record.data.summaryNutritionalInfo) {
                         // Legacy support: if old records have summaryNutritionalInfo
                         content.nutrition = record.data.summaryNutritionalInfo;
@@ -1380,7 +1380,7 @@ JSON Response:`;
                         console.warn('[ALFRED] Failed to build measured ingredient list:', e.message);
                     }
                     
-                    console.log(`[ALFRED] Enhanced recipe data for: ${content.title} (prep: ${content.prepTimeMinutes}min, cook: ${content.cookTimeMinutes}min)`);
+                    // console.log(`[ALFRED] Enhanced recipe data for: ${content.title} (prep: ${content.prepTimeMinutes}min, cook: ${content.cookTimeMinutes}min)`);
                 } else if (recordType === 'exercise') {
                     // Include comprehensive exercise data for exercise records
                     const exerciseData = record.data.exercise || {};
@@ -3229,7 +3229,7 @@ Answer the question directly and conversationally:`;
                 limit: 1
             };
 
-            console.log(`[ALFRED] 📥 Loading single record for DID: ${didTx} with`, fetchParams);
+            // console.log(`[ALFRED] 📥 Loading single record for DID: ${didTx} with`, fetchParams);
             const single = await getRecords(fetchParams);
             const records = (single && Array.isArray(single.records)) ? single.records.slice(0, 1) : [];
 
