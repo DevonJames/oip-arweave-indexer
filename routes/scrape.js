@@ -2141,30 +2141,6 @@ if (records.searchResults > 0) {
   // Note: We no longer do ingredient matching in scrape.js
   // The /api/publish/newRecipe endpoint handles all ingredient lookup, matching, and creation
 
-    // console.log('Ingredient DID References:', ingredientDidRefs);
-    // now we want to look up the record.oip.didTx value from the top ranked record for each ingredient and assign it to ingredientDidRef, we may need to add pagination (there are 20 records limit per page by default) to check all returned records
-    
-    
-    
-
-
-    // now filter each one by the ingredientName matching against this json structure: data: { basic: { name: ,and get the nutritional info
-    // for each ingredient, if it exists
-    // const nutritionalInfo = records.map(record => {
-    //   const ingredientName = record.data.basic.name;
-    //   const nutritionalInfo = record.data.nutritionalInfo || {}; // Ensure it's an object, not undefined
-    //   const ingredientSource = record.data.basic.webUrl;
-    //   const ingredientDidRef = ingredientDidRefs[ingredientName.toLowerCase()] || null; // Ensure case-insensitive lookup
-    //   return {
-    //     ingredientName,
-    //     nutritionalInfo,
-    //     ingredientSource,
-    //     ingredientDidRef
-    //   };
-    // });
-
-    // console.log('Nutritional info:', nutritionalInfo);
-
 
     // Helper function to convert ISO 8601 duration to minutes
     function parseDurationToMinutes(duration) {
@@ -2232,64 +2208,6 @@ if (records.searchResults > 0) {
 
     // Extract notes
     const notes = $('.wprm-recipe-notes').text().trim() || null;
-
-    console.log('Missing Ingredients:', missingIngredientNames);
-    // console.log('Nutritional Info Array:', nutritionalInfoArray);
- 
-    console.log('Original Ingredient Names:', ingredientNames);
-console.log('Units Before Assignment:', ingredientUnits);
-console.log('Amounts Before Assignment:', ingredientAmounts);
-console.log('Ingredient Did Refs:', ingredientRecords);
-
-  // Normalize all ingredient names in `ingredientNames` upfront
-  const normalizedIngredientNames = ingredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase());
-
-
-  console.log('Normalized Ingredient Names:', normalizedIngredientNames);
-  console.log('Missing Ingredient Names:', missingIngredientNames.map(name => name.trim().replace(/,$/, '').toLowerCase()));
-
-  // Normalize missing ingredients and process them
-  missingIngredientNames.forEach((name, index) => {
-    const normalizedName = name.trim().replace(/,$/, '').toLowerCase();
-    console.log(`Normalized Missing Ingredient Name: ${normalizedName}`);
-    
-    // Find the matching ingredient in the normalized array
-    const unitIndex = normalizedIngredientNames.findIndex(
-      ingredientName => ingredientName === normalizedName
-    );
-
-    console.log(`Processing ingredient: ${normalizedName}, Index in ingredientNames: ${unitIndex}`);
-    
-    if (unitIndex !== -1 && !ingredientUnits[unitIndex]) {
-      const nutritionalInfo = nutritionalInfoArray[index];
-      console.log(`Found nutritional info for: ${normalizedName}`, nutritionalInfo);
-      
-      if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
-        ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standard_unit || 'unit';
-        ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standard_amount || 1;
-      } else {
-        console.log(`No nutritional info found for: ${normalizedName}`);
-        ingredientUnits[unitIndex] = 'unit'; // Fallback unit
-      }
-    } else {
-      console.log(`Ingredient not found or already has unit: ${normalizedName}`);
-    }
-  });
-
-let ingredientDRefs = [];
-ingredientNames.forEach((name, index) => {
-  // get the ingredientDidRef for each ingredient and put it in an array so that we can use it in the recipeData object
-  const ingredientDidRef = ingredientRecords.ingredientDidRefs[name] || null;
-  ingredientDRefs.push(ingredientDidRef);
-  console.log(`Ingredient DID Ref for ${name}:`, ingredientDidRef);
-});
-
-console.log('Final Units:', ingredientUnits);
-console.log('Final Amounts:', ingredientAmounts);
-
-
-console.log('Units After Assignment:', ingredientUnits);
-console.log('Amounts After Assignment:', ingredientAmounts);
 
 const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000) || Math.floor(Date.now() / 1000);
      
