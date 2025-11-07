@@ -107,14 +107,14 @@ async function parseRecipeWithLLM(htmlContent, url, metadata) {
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: 'gpt-4o-mini',
       messages: [
-        {
-          role: 'system',
-          content: 'You are a recipe extraction expert. Extract complete recipe information from the provided text. Parse ingredient strings to separate amounts, units, and names. For timing, convert to minutes.'
-        },
-        {
-          role: 'user',
-          content: `Extract the recipe from this webpage text. Return complete recipe data including title, description, ingredients (with amount, unit, and name separated), instructions, timing, servings, etc.\n\nWebpage URL: ${url}\n\nText:\n${limitedText}`
-        }
+              {
+                role: 'system',
+                content: 'You are a recipe extraction expert. Extract complete recipe information from the provided text. Parse ingredient strings to separate amounts, units, names, and comments. Comments include preparation notes like "minced", "chopped", "sliced", "diced", "optional", "to taste", etc. - these typically appear after commas or in parentheses. For timing, convert to minutes.'
+              },
+              {
+                role: 'user',
+                content: `Extract the recipe from this webpage text. Return complete recipe data including title, description, ingredients (with amount, unit, name, and comment separated), instructions, timing, servings, etc.\n\nFor ingredients, separate any preparation notes or modifiers into the "comment" field. Examples:\n- "2 cloves garlic, minced" → amount: 2, unit: "cloves", name: "garlic", comment: "minced"\n- "1 cup onion (diced)" → amount: 1, unit: "cup", name: "onion", comment: "diced"\n- "Salt to taste" → amount: null, unit: "", name: "salt", comment: "to taste"\n- "1 cup olive oil" → amount: 1, unit: "cup", name: "olive oil", comment: ""\n\nWebpage URL: ${url}\n\nText:\n${limitedText}`
+              }
       ],
       response_format: {
         type: 'json_schema',
@@ -133,19 +133,20 @@ async function parseRecipeWithLLM(htmlContent, url, metadata) {
               servings: { type: ['number', 'null'] },
               cuisine: { type: ['string', 'null'] },
               course: { type: ['string', 'null'] },
-              ingredients: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    amount: { type: ['number', 'null'] },
-                    unit: { type: 'string' },
-                    name: { type: 'string' }
-                  },
-                  required: ['amount', 'unit', 'name'],
-                  additionalProperties: false
-                }
-              },
+                    ingredients: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          amount: { type: ['number', 'null'] },
+                          unit: { type: 'string' },
+                          name: { type: 'string' },
+                          comment: { type: 'string' }
+                        },
+                        required: ['amount', 'unit', 'name', 'comment'],
+                        additionalProperties: false
+                      }
+                    },
               instructions: {
                 type: 'array',
                 items: { type: 'string' }
@@ -1841,25 +1842,58 @@ if (records.searchResults > 0) {
       
       return parseFloat(str) || null;
     }
+
+    // Helper function to extract comments from ingredient strings
+    function extractIngredientComment(nameString) {
+      if (!nameString) return { name: '', comment: '' };
+      
+      // Check for comma-separated comment (e.g., "garlic, minced")
+      const commaMatch = nameString.match(/^([^,]+),\s*(.+)$/);
+      if (commaMatch) {
+        return {
+          name: commaMatch[1].trim(),
+          comment: commaMatch[2].trim()
+        };
+      }
+      
+      // Check for parentheses comment (e.g., "onion (diced)")
+      const parenMatch = nameString.match(/^([^(]+)\(([^)]+)\)(.*)$/);
+      if (parenMatch) {
+        return {
+          name: (parenMatch[1].trim() + ' ' + parenMatch[3].trim()).trim(),
+          comment: parenMatch[2].trim()
+        };
+      }
+      
+      // No comment found
+      return {
+        name: nameString.trim(),
+        comment: ''
+      };
+    }
     
     // Try JSON-LD first if available
     if (jsonLdRecipe && jsonLdRecipe.recipeIngredient && jsonLdRecipe.recipeIngredient.length > 0) {
       console.log(`Parsing ${jsonLdRecipe.recipeIngredient.length} ingredients from JSON-LD schema`);
       const ingredients = jsonLdRecipe.recipeIngredient.map(ingredientString => {
-        // Parse ingredient string like "2 cups flour" or "1 1/2 tablespoons olive oil"
+        // Parse ingredient string like "2 cups flour" or "1 1/2 tablespoons olive oil, minced"
         const match = ingredientString.match(/^([\d\s\/\.]+)?\s*([a-zA-Z]+)?\s*(.+)$/);
         if (match) {
+          const { name, comment } = extractIngredientComment(match[3] || ingredientString);
           return {
             amount: match[1] ? parseFraction(match[1].trim()) : null,
             unit: match[2] || '',
-            name: match[3] || ingredientString
+            name: name,
+            comment: comment
           };
         }
         // Fallback if regex doesn't match
+        const { name, comment } = extractIngredientComment(ingredientString);
         return {
           amount: null,
           unit: '',
-          name: ingredientString
+          name: name,
+          comment: comment
         };
       });
       
@@ -1882,14 +1916,16 @@ if (records.searchResults > 0) {
         .each((j, elem) => {
           const amount = $(elem).find('[class*="amount"]').text().trim() || null;
           const unit = $(elem).find('[class*="unit"]').text().trim() || null;
-          const name = $(elem).find('[class*="name"]').text().trim() || null;
+          const nameRaw = $(elem).find('[class*="name"]').text().trim() || null;
 
           // Ensure that at least `name` is present and valid to include the ingredient
-          if (name && (amount || unit || name)) {
+          if (nameRaw && (amount || unit || nameRaw)) {
+            const { name, comment } = extractIngredientComment(nameRaw);
             ingredients.push({
               amount: parseFloat(amount) || null,
               unit: unit || '',
               name: name || '',
+              comment: comment
             });
           }
         });
@@ -2091,216 +2127,19 @@ if (records.searchResults > 0) {
 
   console.log('Instructions:', instructions);
 
-  const ingredientNames = primaryIngredientSection.ingredients.map(ing => {
-    const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
-    return normalizedIngredientName;
-  });
-  const ingredientAmounts = primaryIngredientSection.ingredients.map(ing => ing.amount ?? 1);
-const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
+  // Build ingredient arrays directly from parsed data (no matching needed - endpoint will handle that)
+  const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name.trim());
+  const ingredientAmounts = primaryIngredientSection.ingredients.map(ing => ing.amount ?? null);
+  const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.unit && ing.unit.trim()) || '');
+  const ingredientComments = primaryIngredientSection.ingredients.map(ing => (ing.comment && ing.comment.trim()) || '');
 
+  console.log('Ingredient names:', ingredientNames);
+  console.log('Ingredient amounts:', ingredientAmounts);
   console.log('Ingredient units:', ingredientUnits);
-    
-  // Define ingredient synonyms for better matching
-  const synonymMap = {
-      "garlic cloves": "minced garlic",
-      "ground green cardamom": "ground cardamom",
-      "chicken breast": "boneless skinless chicken breast",
-      "chicken thighs": "boneless skinless chicken thighs",
-      "olive oil": "extra virgin olive oil",
-      "vegetable oil": "seed oil",
-      "all-purpose flour": "flour",
-      "green onions": "scallions",
-      "cilantro": "fresh cilantro",
-      "parsley": "fresh parsley",
-      "basil": "fresh basil",
-      "oregano": "fresh oregano",
-      "thyme": "fresh thyme",
-      "rosemary": "fresh rosemary",
-      "sage": "fresh sage",
-      "dill": "fresh dill",
-      "mint": "fresh mint",
-      "chives": "fresh chives",
-      "tarragon": "fresh tarragon",
-      "bay leaves": "dried bay leaves",
-      "red pepper flakes": "crushed red pepper",
-      "red pepper": "red bell pepper",
-      // Add more as needed
-  };
+  console.log('Ingredient comments:', ingredientComments);
 
-  let recordMap = {};
-    
-  async function fetchIngredientRecordData(primaryIngredientSection) {
-    const ingredientNames = primaryIngredientSection.ingredients.map(ing => ing.name.trim().toLowerCase().replace(/,$/, ''));
-
-    // Query for all ingredients in one API call
-    const queryParams = {
-        recordType: 'nutritionalInfo',
-        search: ingredientNames.join(','),
-        limit: 50
-    };
-
-    const recordsInDB = await getRecords(queryParams);
-    console.log('quantity of results:', recordsInDB.searchResults);
-    // Populate the global recordMap
-    recordMap = {};  // Reset before populating
-    recordsInDB.records.forEach(record => {
-        const recordName = record.data.basic.name.toLowerCase();
-        recordMap[recordName] = record;
-    });
-
-    const ingredientDidRefs = {};
-    const nutritionalInfo = [];
-
-    for (const name of ingredientNames) {
-        const bestMatch = findBestMatch(name);
-        if (bestMatch) {
-            ingredientDidRefs[name] = bestMatch.oip.did || bestMatch.oip.didTx;
-            nutritionalInfo.push({
-                ingredientName: bestMatch.data.basic.name,
-                nutritionalInfo: bestMatch.data.nutritionalInfo || {},
-                ingredientSource: bestMatch.data.basic.webUrl,
-                ingredientDidRef: bestMatch.oip.did || bestMatch.oip.didTx
-            });
-            console.log(`Match found for ${name}:`, nutritionalInfo[nutritionalInfo.length - 1]);
-        } else {
-            ingredientDidRefs[name] = null;
-        }
-    }
-
-    return { ingredientDidRefs, nutritionalInfo };
-
-    
-  }
-
-// } catch (error) {
-// console.error('Error fetching parsed recipe data:', error);
-// sendUpdate('error', { message: 'Failed to fetch recipe data.' });
-// res.end();
-// cleanupScrape(scrapeId);
-// }
-
-
-
-    
-  // Function to find the best match
-  function findBestMatch(ingredientName) {
-    if (!recordMap || Object.keys(recordMap).length === 0) {
-        console.error("Error: recordMap is not populated before calling findBestMatch().");
-        return null;
-    }
-    // const ingredientNames = primaryIngredientSection.ingredients.map(ing => {
-    //   const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
-    //   return normalizedIngredientName;
-    // });
-  
-    // const normalizedIngredientName = ing.name.trim().toLowerCase().replace(/,$/, '');
-    const searchTerms = ingredientName.split(/\s+/).filter(Boolean);
-
-    console.log(`Searching for ingredient: ${ingredientName}, Search terms:`, searchTerms);
-
-    // Check if the ingredient has a predefined synonym
-    const synonym = synonymMap[ingredientName];
-    if (synonym && recordMap[synonym]) {
-        console.log(`Found synonym match for ${ingredientName}: ${synonym}`);
-        return recordMap[synonym];
-    }
-
-    // Direct match
-    if (recordMap[ingredientName]) {
-        console.log(`Direct match found for ${ingredientName}, nutritionalInfo:`, recordMap[ingredientName].data.nutritionalInfo);
-        return recordMap[ingredientName];
-    }
-
-    // Looser match using search terms
-    const matches = Object.keys(recordMap)
-        .filter(recordName => {
-            const normalizedRecordName = recordName.toLowerCase();
-            return searchTerms.some(term => normalizedRecordName.includes(term));
-        })
-        .map(recordName => recordMap[recordName]);
-
-    if (matches.length > 0) {
-        matches.sort((a, b) => {
-            const aMatchCount = searchTerms.filter(term => a.data.basic.name.toLowerCase().includes(term)).length;
-            const bMatchCount = searchTerms.filter(term => b.data.basic.name.toLowerCase().includes(term)).length;
-            return bMatchCount - aMatchCount;
-        });
-
-        console.log(`Loose matches found for ${ingredientName}:`, matches);
-        return matches[0];
-    }
-
-    console.log(`No match found for ${ingredientName}`);
-    return null;
-  }
-
-  const ingredientRecords = await fetchIngredientRecordData(primaryIngredientSection);
-  console.log('Ingredient records:', ingredientRecords);
-  
-  let missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
-    name => ingredientRecords.ingredientDidRefs[name] === null
-  );
-  if (missingIngredientNames.length > 0) {
-    // Send the names of the missing ingredients through findBestMatch(ingredientName) to get the best match for each
-    const bestMatches = await Promise.all(
-      missingIngredientNames.map(name => findBestMatch(name))
-    );
-    console.log('Best matches for missing ingredients:', bestMatches);
-
-    // Assign matches and update ingredientDidRefs
-    bestMatches.forEach((match, index) => {
-      if (match) {
-        const name = missingIngredientNames[index];
-        ingredientDidRefs[name] = match.oip.didTx;
-        nutritionalInfo.push({
-          ingredientName: match.data.basic.name,
-          nutritionalInfo: match.data.nutritionalInfo || {},
-          ingredientSource: match.data.basic.webUrl,
-          ingredientDidRef: match.oip.did || match.oip.didTx
-        });
-      }
-    });
-
-    // Remove matched names from missingIngredientNames
-    let matchedNames = bestMatches
-      .map((match, index) => (match ? missingIngredientNames[index] : null))
-      .filter(name => name !== null);
-    missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
-
-    const nutritionalInfoArray = await Promise.all(
-      missingIngredientNames.map(name => createNewNutritionalInfoRecord(name, blockchain))
-    );
-
-    // Restart the function now that all ingredients have nutritional info
-    return await fetchParsedRecipeData(url, scrapeId, options);
-  }
-  // Check for empty values in ingredientUnits and assign standard_unit from nutritionalInfoArray
-  missingIngredientNames.forEach((name, index) => {
-    const trimmedName = name.trim().replace(/,$/, '');
-    const unitIndex = ingredientNames.findIndex(ingredientName => ingredientName === trimmedName);
-
-    console.log(`Processing missing ingredient: ${trimmedName}, Found at index: ${unitIndex}`);
-
-    if (unitIndex !== -1 && !ingredientUnits[unitIndex]) {
-        const nutritionalInfo = nutritionalInfoArray[index];
-        console.log(`Found nutritional info for: ${trimmedName}`, nutritionalInfo);
-
-        if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
-            ingredientUnits[unitIndex] = nutritionalInfo.nutritionalInfo.standard_unit || 'unit';
-            ingredientAmounts[unitIndex] *= nutritionalInfo.nutritionalInfo.standard_amount || 1;
-
-            console.log(`Updated Units: ${ingredientUnits[unitIndex]}, Updated Amounts: ${ingredientAmounts[unitIndex]}`);
-        } else {
-            console.log(`No nutritional info found for: ${trimmedName}`);
-            ingredientUnits[unitIndex] = 'unit'; // Fallback unit
-        }
-    } else {
-        console.log(`Ingredient not found in ingredientNames or already has a unit: ${trimmedName}`);
-    }
-});
-  // You can now use nutritionalInfoArray as needed
-
-  // console.log('Ingredient DidRefs:', ingredientDidRefs);
+  // Note: We no longer do ingredient matching in scrape.js
+  // The /api/publish/newRecipe endpoint handles all ingredient lookup, matching, and creation
 
     // console.log('Ingredient DID References:', ingredientDidRefs);
     // now we want to look up the record.oip.didTx value from the top ranked record for each ingredient and assign it to ingredientDidRef, we may need to add pagination (there are 20 records limit per page by default) to check all returned records
@@ -2526,26 +2365,11 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000)
       }
     }
 
-    // Build ingredient_comment array (extract comments from ingredient names if present)
-    const ingredientComments = ingredientNames.map(name => {
-      // Check if ingredient name has a comment (e.g., "garlic, minced")
-      const parts = name.split(',');
-      if (parts.length > 1) {
-        return parts.slice(1).join(',').trim();
-      }
-      return '';
-    });
-
-    // Clean ingredient names (remove comments)
-    const cleanIngredientNames = ingredientNames.map(name => {
-      const parts = name.split(',');
-      return parts[0].trim();
-    });
-    
     // Assign to recipeData - format for /api/publish/newRecipe endpoint
+    // Ingredient comments are already separated during parsing
     const recipeData = {
       basic: {
-        name: metadata.ogTitle || metadata.title || null,
+        name: title || metadata.ogTitle || metadata.title || null,
         language: "En",
         date: recipeDate,
         description: description || null,
@@ -2560,7 +2384,7 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000)
         servings: servings || null,
         ingredient_amount: ingredientAmounts.length ? ingredientAmounts : [],
         ingredient_unit: ingredientUnits.length ? ingredientUnits : [],
-        ingredient: cleanIngredientNames.length ? cleanIngredientNames : [], // Send names, not DIDs - endpoint will resolve
+        ingredient: ingredientNames.length ? ingredientNames : [], // Send raw names - endpoint will handle lookup/matching
         ingredient_comment: ingredientComments.length ? ingredientComments : [],
         instructions: instructions.length ? instructions.join('\n') : '', // Join array to string
         notes: notes || '',
