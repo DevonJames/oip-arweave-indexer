@@ -24,17 +24,16 @@
 
 ## Status & Timeline
 
-**✅ Built (OIP 0.8):** Docker, BitTorrent/IPFS, Alfred AI, Elasticsearch, GUN, moderation, HD wallets. *Production:* WeAreChange.org, TimCast.com.
+**Built (OIP 0.8):** Docker, BitTorrent/IPFS, Alfred AI, Elasticsearch, GUN, moderation, HD wallets.
 
-**🔄 18 Weeks to 1.0:** DID system (3w) → WordPress+Tor (5w) → ENS/GNS (5w) → Pi image+Archive.org (5w)
+**18 Weeks to 1.0:** DID system (3w) → WordPress+Tor (5w) → ENS/GNS (5w) → Pi image+Archive.org (5w)
 
 **Track Record:** 2016 DWeb Summit, Tim Berners-Lee endorsement • Caltech, Wyoming, Imogen Heap pilots • DIDs = W3C standard (2022) • Brewster Kahle vision: *"Censorship resistant WebServer. Easy and fun, no monthly fee."*
 
 **Tech:** DIDs = Dewey Decimal for dweb (universal identifiers across all gateways) • Index storage blockchain-agnostic (Arweave, Bitcoin, Ethereum, any chain) • W3C standards, not blockchain hype
 
----
 
-## Comparison: What Exists vs. What We Built
+## Comparison: What Exists vs. What We're Building
 
 | Feature | DWeb Server | Medium/Substack | SecureDrop | ZeroNet |
 |---------|-------------|-----------------|------------|---------|
@@ -65,5 +64,4 @@ Whistleblowers, journalists, researchers, activists publish without fear. Inform
 
 **Join:** Stakeholders (partnerships: Internet Archive, FPF, EFF) • Developers (github.com/DevonJames/oip-arweave-indexer) • Operators ($35 Pi, control moderation, support free speech)
 
-**Contact:** amy@alexandria.io • v2.4 • Nov 2025 • 18 weeks to 1.0
-
+**Contact:** amy@alexandria.io • based on v2.5 of PRD • Nov 2025 • 18 weeks to 1.0
