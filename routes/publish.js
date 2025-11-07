@@ -524,14 +524,51 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
 }
 
 router.post('/newRecipe', async (req, res) => {
-
+    // Import job tracker
+    const { createJob, updateProgress, completeJob, failJob } = require('../helpers/jobTracker');
+    
     try {
-        console.log('POST /api/publish/newRecipe', req.body)
+        console.log('POST /api/publish/newRecipe', req.body);
+        
+        // Create job and return immediately
+        const jobId = createJob('recipe_publish');
+        
+        // Send immediate response
+        res.status(202).json({
+          jobId,
+          status: 'pending',
+          message: 'Recipe publishing initiated. This may take a few minutes...'
+        });
+        
+        // Process recipe asynchronously
+        processRecipeAsync(jobId, req.body, req.user).catch(error => {
+          console.error('Async recipe processing error:', error);
+          failJob(jobId, error);
+        });
+        
+    } catch (error) {
+        console.error('Error initiating recipe publish:', error);
+        res.status(500).json({ error: 'Failed to initiate recipe publish' });
+    }
+});
+
+/**
+ * Process recipe publishing asynchronously
+ * @param {string} jobId - Job tracker ID
+ * @param {Object} reqBody - Request body with recipe data
+ * @param {Object} user - Authenticated user info
+ */
+async function processRecipeAsync(jobId, reqBody, user) {
+    const { updateProgress, completeJob, failJob } = require('../helpers/jobTracker');
+    
+    try {
         console.log('ENV CHECK - NUTRITIONIX_APP_ID:', process.env.NUTRITIONIX_APP_ID ? 'EXISTS' : 'MISSING');
         console.log('ENV CHECK - NUTRITIONIX_API_KEY:', process.env.NUTRITIONIX_API_KEY ? 'EXISTS' : 'MISSING');
-        const record = req.body;
-        const blockchain = req.body.blockchain || 'arweave'; // Get blockchain parameter, default to arweave
+        const record = reqBody;
+        const blockchain = reqBody.blockchain || 'arweave'; // Get blockchain parameter, default to arweave
         let recordType = 'recipe';
+        
+        updateProgress(jobId, 5, 'Starting recipe processing...');
 
     // Process ingredients directly from the single recipe object
     const ingredients = record.recipe.ingredient.map((name, i) => ({
@@ -960,9 +997,11 @@ router.post('/newRecipe', async (req, res) => {
   let ingredientRecords = { ingredientDidRefs: {}, nutritionalInfo: [] };
   
   if (cleanedNamesNeedingLookup.length > 0) {
+    updateProgress(jobId, 15, `Searching for ${cleanedNamesNeedingLookup.length} ingredients in database...`);
     ingredientRecords = await fetchIngredientRecordData(cleanedNamesNeedingLookup, originalNamesNeedingLookup);
   } else {
     console.log('No ingredients need lookup - all are already didTx values');
+    updateProgress(jobId, 20, 'All ingredients already have DIDs, skipping lookup...');
   }
   console.log('Ingredient records:', ingredientRecords);
   
@@ -1004,13 +1043,20 @@ router.post('/newRecipe', async (req, res) => {
     missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
 
     // Create nutritional info records using CLEANED names, not original names
-    const nutritionalInfoArray = await Promise.all(
-      missingIngredientNames.map(originalName => {
-        const cleanedName = nameMapping[originalName];
-        console.log(`Creating nutritional info record for cleaned name: "${cleanedName}" (original: "${originalName}")`);
-        return createNewNutritionalInfoRecord(cleanedName, blockchain);
-      })
-    );
+    updateProgress(jobId, 30, `Creating ${missingIngredientNames.length} new ingredient records via OpenAI...`);
+    
+    const nutritionalInfoArray = [];
+    for (let i = 0; i < missingIngredientNames.length; i++) {
+      const originalName = missingIngredientNames[i];
+      const cleanedName = nameMapping[originalName];
+      const progressPercent = 30 + Math.floor((i / missingIngredientNames.length) * 50); // 30-80%
+      
+      updateProgress(jobId, progressPercent, `Creating ingredient ${i + 1} of ${missingIngredientNames.length}: ${cleanedName}...`);
+      console.log(`Creating nutritional info record for cleaned name: "${cleanedName}" (original: "${originalName}")`);
+      
+      const result = await createNewNutritionalInfoRecord(cleanedName, blockchain);
+      nutritionalInfoArray.push(result);
+    }
 
     // Update ingredientDidRefs with the newly created nutritional info records
     nutritionalInfoArray.forEach((newRecord, index) => {
@@ -1316,6 +1362,8 @@ if (hasIngredientNames && hasNoNutrition) {
 }
 // ====== END INTELLIGENT INGREDIENT RESOLUTION ======
 
+        updateProgress(jobId, 82, 'Calculating nutritional summary...');
+        
 // Calculate nutritional summaries before publishing (unless already provided or calculated above)
 // Check if summaryNutritionalInfoPerServing was already included in the request OR calculated via intelligent resolution
 if (recipeData.summaryNutritionalInfoPerServing && Object.keys(recipeData.summaryNutritionalInfoPerServing).length > 0) {
@@ -1380,27 +1428,70 @@ if (recipeData.summaryNutritionalInfoPerServing && Object.keys(recipeData.summar
   }
 }
 
-try {
-  console.log('Attempting to publish recipe...');
-  recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
-  console.log('Recipe published successfully:', recipeRecord.transactionId);
-} catch (publishError) {
-  console.error('Error publishing recipe:', publishError);
-  console.error('Recipe data that failed to publish:', JSON.stringify(recipeData, null, 2));
-  throw publishError;
+        updateProgress(jobId, 90, 'Publishing recipe to blockchain...');
+        
+        try {
+          console.log('Attempting to publish recipe...');
+          recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain);
+          console.log('Recipe published successfully:', recipeRecord.transactionId);
+        } catch (publishError) {
+          console.error('Error publishing recipe:', publishError);
+          console.error('Recipe data that failed to publish:', JSON.stringify(recipeData, null, 2));
+          throw publishError;
+        }
+
+        const transactionId = recipeRecord.transactionId;
+        const recordToIndex = recipeRecord.recordToIndex;
+        
+        // Mark job as completed
+        completeJob(jobId, {
+          transactionId,
+          recordToIndex,
+          blockchain
+        });
+        
+        console.log(`✅ Recipe publish job ${jobId} completed successfully`);
+        
+    } catch (error) {
+        console.error('Error in async recipe processing:', error);
+        failJob(jobId, error);
+    }
 }
 
-
-    // const newRecord = await publishNewRecord(record, recordType, publishFiles, addMediaToArweave, addMediaToIPFS, youtubeUrl);
-    const transactionId = recipeRecord.transactionId;
-    const recordToIndex = recipeRecord.recordToIndex;
-    // const dataForSignature = newRecord.dataForSignature;
-    // const creatorSig = newRecord.creatorSig;
-    res.status(200).json({ transactionId, recordToIndex, blockchain });
-} catch (error) {
-    console.error('Error publishing record:', error);
-    res.status(500).json({ error: 'Failed to publish record' });
-}
+// Add job status polling endpoint
+router.get('/publish-status/:jobId', (req, res) => {
+    const { getJob } = require('../helpers/jobTracker');
+    const { jobId } = req.params;
+    
+    const job = getJob(jobId);
+    
+    if (!job) {
+        return res.status(404).json({
+            error: 'Job not found',
+            message: 'Job may have expired or never existed'
+        });
+    }
+    
+    const response = {
+        jobId: job.jobId,
+        status: job.status,
+        progress: job.progress,
+        message: job.message
+    };
+    
+    // Include result data when completed
+    if (job.status === 'completed' && job.result) {
+        response.transactionId = job.result.transactionId;
+        response.recordToIndex = job.result.recordToIndex;
+        response.blockchain = job.result.blockchain;
+    }
+    
+    // Include error details when failed
+    if (job.status === 'failed' && job.error) {
+        response.error = job.error.message;
+    }
+    
+    res.status(200).json(response);
 });
 
 // Add workout publishing endpoint

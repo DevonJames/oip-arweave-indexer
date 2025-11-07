@@ -1569,189 +1569,13 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
 // }
 
 // try at generalized for all sites BUT HAS NO PUBLISHING CAPABILITY
+// DEPRECATED: This first version of fetchParsedRecipeData is not used (overridden by the version below)
+// Keeping for reference only - can be removed in future refactoring
+// The active implementation is below at line ~1761
+
+// works well for mediteranean site, trying another version that might generalize to all sites
 async function fetchParsedRecipeData(url, html, scrapeId, screenshots, totalHeight, options) {
-  console.log('Scrape ID:', scrapeId, 'Fetching parsed recipe data from', url);
-  const { sendUpdate, res, blockchain = 'arweave' } = options; // Destructure blockchain from options
-
-  if (!ongoingScrapes.has(scrapeId)) {
-    ongoingScrapes.set(scrapeId, { clients: [res], data: [] });
-  }
-
-  const streamData = ongoingScrapes.get(scrapeId);
-  sendUpdate('scrapeId', { scrapeId });
-
-
-  console.log('converting screenshot to file');
-  console.log('stitching images together using totalHeight:', totalHeight); 
-  const screenshotMediaId = await stitchImages(screenshots, totalHeight, scrapeId);
-  const screenshotURL = `${getBaseUrl(req)}/api/media?id=${screenshotMediaId}`;
-  console.log('Full Screenshot saved at:', screenshotURL);
-
-
-  // Site-specific selectors configuration
-  const selectors = {
-    default: {
-      title: ['h1.entry-title', 'h1.recipe-title'],
-      description: ['meta[name="description"]', 'p:first-of-type'],
-      imageUrl: ['meta[property="og:image"]', 'img.wp-image:first-of-type'],
-      ingredientSection: ['[class*="ingredient-group"]', '[class*="ingredients-group"]'],
-      ingredientName: ['[class*="name"]'],
-      ingredientAmount: ['[class*="amount"]'],
-      ingredientUnit: ['[class*="unit"]'],
-      instruction: ['.wprm-recipe-instruction'],
-      servings: ['[data-servings]', '[class*="wprm-recipe-servings"]'],
-      cuisine: ['.wprm-recipe-cuisine'],
-      course: ['.wprm-recipe-course'],
-      prepTime: ['.wprm-recipe-prep_time'],
-      cookTime: ['.wprm-recipe-cook_time'],
-      totalTime: ['.wprm-recipe-total_time'],
-    },
-    'themediterraneandish.com': {
-      title: ['h1.entry-title'],
-      servings: ['[data-servings]'],
-    },
-    'wholelifestylenutrition.com': {
-      title: ['.tasty-recipes-title'],
-      servings: ['.tasty-recipes-yield span'],
-      prepTime: ['.tasty-recipes-prep-time span'],
-      cookTime: ['.tasty-recipes-cook-time span'],
-      totalTime: ['.tasty-recipes-total-time span'],
-      ingredientSection: ['.tasty-recipes-ingredients ul'],
-      ingredientName: ['li span:last-child'],
-      ingredientAmount: ['li span[data-amount]'],
-      ingredientUnit: ['li span[data-unit]'], // Adjust if units are encoded differently
-      instruction: ['.tasty-recipes-instructions ol li'],
-      imageUrl: ['meta[property="og:image"]'],
-    },
-  };
-
-  // Identify the site and get the specific selectors
-  const domain = new URL(url).hostname;
-
-  const siteSelectors = selectors[domain] || selectors.default;
-
-  try {
-    console.log('Fetching recipe data from URL:', url);
-    let htmlContent = html;
-
-    if (!htmlContent) {
-      // Fetch HTML using FireCrawl
-      const response = await axios.post(
-      'https://api.firecrawl.dev/v1/scrape',
-      { url, formats: ['html'] },
-      { headers: { Authorization: `Bearer ${process.env.FIRECRAWL}` } }
-      );
-
-      if (!response.data.success) throw new Error(`Scrape failed: ${response.data.error}`);
-
-      htmlContent = response.data.data.html;
-      const metadata = response.data.data.metadata;
-    }
-    const $ = cheerio.load(html);
-
-    // Helper function for extracting text using selectors
-    function extractText($, selectorList) {
-      if (!Array.isArray(selectorList)) {
-        throw new TypeError('selectorList must be an array');
-      }
-      for (const selector of selectorList) {
-        const text = $(selector).text().trim();
-        if (text) return text; // Return the first non-empty text found
-      }
-      return null; // Fallback if no text found
-    }
-
-    // Parse title, description, and image URL
-    const title = extractText($, siteSelectors.title);
-const description = extractText($, siteSelectors.description);
-const imageUrl = extractText($, siteSelectors.imageUrl);
-
-const cuisine = extractText($, siteSelectors.cuisine) || null;
-const course = extractText($, siteSelectors.course) || null;
-const prepTime = parseInt(extractText($, siteSelectors.prepTime)?.match(/\d+/)?.[0], 10) || null;
-const cookTime = parseInt(extractText($, siteSelectors.cookTime)?.match(/\d+/)?.[0], 10) || null;
-const totalTime = parseInt(extractText($, siteSelectors.totalTime)?.match(/\d+/)?.[0], 10) || null;
-
-    // Parse servings
-    let servingsStr = $(siteSelectors.servings[0]).attr('data-servings') || extractText($, siteSelectors.servings);
-    const servings = servingsStr ? parseInt(servingsStr.match(/\d+/)?.[0], 10) : null;
-
-    // Parse ingredient sections
-    const ingredientSections = [];
-    $(siteSelectors.ingredientSection.join(',')).each((i, section) => {
-      const ingredients = [];
-      $(section)
-        .find(siteSelectors.ingredientName.join(','))
-        .each((j, elem) => {
-          const amount = $(elem).find(siteSelectors.ingredientAmount.join(',')).text().trim() || null;
-          const unit = $(elem).find(siteSelectors.ingredientUnit.join(',')).text().trim() || null;
-          const name = $(elem).text().trim() || null;
-          if (name) {
-            ingredients.push({
-              amount: parseFloat(amount) || null,
-              unit: unit || '',
-              name: name || '',
-            });
-          }
-        });
-      if (ingredients.length) {
-        ingredientSections.push({ section: `Section ${i + 1}`, ingredients });
-      }
-    });
-
-    const primaryIngredientSection = ingredientSections.length > 1
-      ? ingredientSections.reduce((prev, current) => (prev.ingredients.length > current.ingredients.length ? prev : current))
-      : ingredientSections[0];
-
-    // Parse instructions
-    const instructions = [];
-    $(siteSelectors.instruction.join(',')).each((i, elem) => {
-      const instruction = $(elem).text().trim();
-      if (instruction) instructions.push(instruction);
-    });
-
-
-    // Build the recipe data object
-    const recipeData = {
-      basic: {
-        name: title,
-        language: 'en',
-        description,
-        webUrl: url,
-      },
-      recipe: {
-        servings,
-        prep_time_mins: prepTime,
-        cook_time_mins: cookTime,
-        total_time_mins: totalTime,
-        instructions,
-        cuisine,
-        course,
-        ingredients: primaryIngredientSection?.ingredients || [],
-      },
-      image: {
-        webUrl: imageUrl,
-      },
-    };
-
-    console.log('Parsed Recipe Data:', recipeData);
-
-    // if basic.name is null or empty or ingredients is empty, run analyzeImageForRecipe()
-    const extractedRecipeData = await analyzeImageForRecipe(screenshotURL);
-    console.log('extractedRecipeData:', extractedRecipeData);
-
-    cleanupScrape(scrapeId);
-    return recipeData;
-  } catch (error) {
-    console.error('Error parsing recipe data:', error);
-    cleanupScrape(scrapeId);
-  }
-}
-
-
-// works well for mediteranean site, trying another version that might generalize to all sites DO NOT DELETE TILL MOST OF ITS FUNCTIONALITY IS MIGRATED OVER
-async function fetchParsedRecipeData(url, scrapeId, options) {
-  const { sendUpdate, res } = options; // Destructure res from options
+  const { sendUpdate, res, blockchain = 'arweave' } = options; // Destructure res and blockchain from options
     // Ensure scrapeId is initialized
     if (!ongoingScrapes.has(scrapeId)) {
       ongoingScrapes.set(scrapeId, { clients: [res], data: [] });
@@ -1760,7 +1584,7 @@ async function fetchParsedRecipeData(url, scrapeId, options) {
     sendUpdate('scrapeId', { scrapeId });
 
   try {
-    console.log('Scrape ID:', scrapeId, 'Fetching parsed article data from', url);
+    console.log('Scrape ID:', scrapeId, 'Fetching parsed recipe data from', url);
 
 
     const sortBy = 'inArweaveBlock:desc';
@@ -1779,28 +1603,50 @@ if (records.searchResults > 0) {
     // Parse the recipe data from the HTML
     console.log('Parsing recipe data from URL:', url);
 
-    // Scrape the website using FireCrawl
-    const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
-      url: url,
-      formats: ['html'], // You can request 'markdown' too
-    }, {
-        headers: {
-            Authorization: `Bearer ${process.env.FIRECRAWL}`,
-        },
-    });
+    let htmlContent = html;
+    let metadata = {};
 
-    if (response.data.success) {
-        console.log('Scraped Data type:', typeof response.data.data.html);
-        // return response.data.html; // Process the HTML as needed
+    if (!htmlContent) {
+      // Fetch HTML using FireCrawl if not provided
+      console.log('HTML not provided, fetching from URL using FireCrawl...');
+      sendUpdate('processing', { message: 'Fetching recipe page...' });
+      
+      const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
+        url: url,
+        formats: ['html'], // You can request 'markdown' too
+      }, {
+          headers: {
+              Authorization: `Bearer ${process.env.FIRECRAWL}`,
+          },
+      });
+
+      if (response.data.success) {
+          console.log('Scraped Data type:', typeof response.data.data.html);
+          // return response.data.html; // Process the HTML as needed
+      } else {
+          throw new Error(`Scrape failed: ${response.data.error}`);
+      }
+
+      console.log('Scrape result:', response.data.data);
+      metadata = response.data.data.metadata || {};
+      // console.log('Metadata:', metadata);
+      htmlContent = response.data.data.html;
+      console.log('HTML fetched successfully from FireCrawl');
     } else {
-        throw new Error(`Scrape failed: ${response.data.error}`);
+      console.log('Using HTML provided in request');
+      // When HTML is provided, extract metadata from the HTML itself
+      const tempDom = cheerio.load(htmlContent);
+      metadata = {
+        title: tempDom('title').text() || tempDom('meta[property="og:title"]').attr('content') || '',
+        ogTitle: tempDom('meta[property="og:title"]').attr('content') || '',
+        ogDescription: tempDom('meta[property="og:description"]').attr('content') || tempDom('meta[name="description"]').attr('content') || '',
+        ogImage: tempDom('meta[property="og:image"]').attr('content') || '',
+        author: tempDom('meta[name="author"]').attr('content') || '',
+        publishedTime: tempDom('meta[property="article:published_time"]').attr('content') || new Date().toISOString()
+      };
     }
-
-    console.log('Scrape result:', response.data.data);
-    const metadata = response.data.data.metadata;
-    // console.log('Metadata:', metadata);
-    const html = response.data.data.html;
-    const $ = cheerio.load(html);  
+    
+    const $ = cheerio.load(htmlContent);  
 
     console.log('Scraping recipe data from URL:', url);
 
@@ -2269,39 +2115,129 @@ console.log('Final Amounts:', ingredientAmounts);
 console.log('Units After Assignment:', ingredientUnits);
 console.log('Amounts After Assignment:', ingredientAmounts);
 
-const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1) || Date.now() / 1;
+const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000) || Math.floor(Date.now() / 1000);
      
+    // Process and upload recipe image to get BitTorrent and IPFS addresses
+    let imageData = null;
+    if (imageUrl) {
+      try {
+        console.log('Downloading recipe image from:', imageUrl);
+        const imageFileName = await downloadImageFile(imageUrl, url);
+        const mediaDownloadsDir = path.resolve(__dirname, '../media');
+        const imagePath = path.join(mediaDownloadsDir, imageFileName);
+
+        // Upload to media system to get BitTorrent magnet URI
+        const FormData = require('form-data');
+        const fs = require('fs');
+        const form = new FormData();
+        form.append('file', fs.createReadStream(imagePath));
+        form.append('name', `${metadata.ogTitle || metadata.title} - Recipe Image`);
+        form.append('access_level', 'public');
+
+        // Upload to get mediaId and BitTorrent addresses
+        const uploadResponse = await axios.post(`${getBaseUrl(req)}/api/media/upload`, form, {
+          headers: {
+            ...form.getHeaders(),
+            'Authorization': req.headers.authorization || ''
+          }
+        });
+
+        if (uploadResponse.data.success) {
+          console.log('Image uploaded successfully, mediaId:', uploadResponse.data.mediaId);
+          
+          // Upload to IPFS
+          const ipfsResponse = await axios.post(`${getBaseUrl(req)}/api/media/ipfs-upload`, {
+            mediaId: uploadResponse.data.mediaId
+          });
+
+          // Setup web access
+          const webResponse = await axios.post(`${getBaseUrl(req)}/api/media/web-setup`, {
+            mediaId: uploadResponse.data.mediaId,
+            filename: imageFileName
+          });
+
+          // Get image dimensions and size
+          const sharp = require('sharp');
+          const imageMetadata = await sharp(imagePath).metadata();
+
+          imageData = {
+            webUrl: webResponse.data.webUrl || uploadResponse.data.httpUrl,
+            bittorrentAddress: uploadResponse.data.magnetURI || '',
+            ipfsAddress: ipfsResponse.data.ipfsHash || '',
+            arweaveAddress: '',
+            filename: imageFileName,
+            size: uploadResponse.data.size || 0,
+            contentType: uploadResponse.data.mime || 'image/jpeg',
+            width: imageMetadata.width || 0,
+            height: imageMetadata.height || 0
+          };
+        }
+      } catch (error) {
+        console.error('Error processing recipe image:', error);
+        // Fallback to just web URL if upload fails
+        imageData = {
+          webUrl: imageUrl,
+          bittorrentAddress: '',
+          ipfsAddress: '',
+          arweaveAddress: '',
+          filename: '',
+          size: 0,
+          contentType: 'image/jpeg',
+          width: 0,
+          height: 0
+        };
+      }
+    }
+
+    // Build ingredient_comment array (extract comments from ingredient names if present)
+    const ingredientComments = ingredientNames.map(name => {
+      // Check if ingredient name has a comment (e.g., "garlic, minced")
+      const parts = name.split(',');
+      if (parts.length > 1) {
+        return parts.slice(1).join(',').trim();
+      }
+      return '';
+    });
+
+    // Clean ingredient names (remove comments)
+    const cleanIngredientNames = ingredientNames.map(name => {
+      const parts = name.split(',');
+      return parts[0].trim();
+    });
     
-    // Assign to recipeData
+    // Assign to recipeData - format for /api/publish/newRecipe endpoint
     const recipeData = {
       basic: {
         name: metadata.ogTitle || metadata.title || null,
         language: "En",
         date: recipeDate,
-        description,
+        description: description || null,
         webUrl: url || null,
         nsfw: false,
-        // tagItems: [],
+        tagItems: []
       },
       recipe: {
-        prep_time_mins,
-        cook_time_mins,
-        total_time_mins,
-        servings,
-        ingredient_amount: ingredientAmounts.length ? ingredientAmounts : null,
-        ingredient_unit: ingredientUnits.length ? ingredientUnits : null,
-        ingredient: ingredientDRefs,
-        instructions: instructions.length ? instructions : null,
-        notes,
-        cuisine,
-        course,
+        prep_time_mins: prep_time_mins || null,
+        cook_time_mins: cook_time_mins || null,
+        total_time_mins: total_time_mins || null,
+        servings: servings || null,
+        ingredient_amount: ingredientAmounts.length ? ingredientAmounts : [],
+        ingredient_unit: ingredientUnits.length ? ingredientUnits : [],
+        ingredient: cleanIngredientNames.length ? cleanIngredientNames : [], // Send names, not DIDs - endpoint will resolve
+        ingredient_comment: ingredientComments.length ? ingredientComments : [],
+        instructions: instructions.length ? instructions.join('\n') : '', // Join array to string
+        notes: notes || '',
+        cuisine: cuisine || null,
+        course: course || null,
         author: metadata.author || null
       },
-      image: {
-        webUrl: imageUrl,
-        // contentType: imageFileType
-      },
+      blockchain: blockchain
     };
+
+    // Add image object if we have image data
+    if (imageData) {
+      recipeData.image = imageData;
+    }
 
     // TO DO, use this so that it doesnt break if there is no image included
     // if (articleData.embeddedImage) {
@@ -2336,10 +2272,48 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1) ||
 
 
 
-// console.log('nutritionalInfo:', nutritionalInfo);
-    console.log('Recipe data:', recipeData);
-    recipeRecord = await publishNewRecord(recipeData, "recipe", false, false, false, null, blockchain)
-    console.log('Recipe record:', recipeRecord);
+    // Log the recipe data being sent
+    console.log('Recipe data to be published:', JSON.stringify(recipeData, null, 2));
+
+    // Send to /api/publish/newRecipe endpoint
+    try {
+      const publishResponse = await axios.post(`${getBaseUrl(req)}/api/publish/newRecipe`, recipeData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers.authorization || ''
+        }
+      });
+
+      console.log('Recipe publishing initiated via /api/publish/newRecipe');
+      console.log('Response:', publishResponse.data);
+      
+      // Send job info through stream if available
+      // The /api/publish/newRecipe endpoint now returns immediately with jobId
+      if (sendUpdate) {
+        sendUpdate('recipePublished', {
+          jobId: publishResponse.data.jobId,
+          status: publishResponse.data.status,
+          message: publishResponse.data.message,
+          recipeData: recipeData, // Include the full recipe JSON that was sent
+          // Legacy fields for backward compatibility
+          did: publishResponse.data.transactionId || publishResponse.data.did || null
+        });
+      }
+      
+      recipeRecord = publishResponse.data;
+    } catch (error) {
+      console.error('Error publishing recipe to /api/publish/newRecipe:', error.response?.data || error.message);
+      
+      // Send error update through stream if available
+      if (sendUpdate) {
+        sendUpdate('error', {
+          message: 'Failed to publish recipe',
+          details: error.response?.data || error.message
+        });
+      }
+      
+      throw error;
+    }
 
     cleanupScrape(scrapeId); // Clear completed scrape
 
