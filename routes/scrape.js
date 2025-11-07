@@ -1611,25 +1611,25 @@ if (records.searchResults > 0) {
       console.log('HTML not provided, fetching from URL using FireCrawl...');
       sendUpdate('processing', { message: 'Fetching recipe page...' });
       
-      const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
-        url: url,
-        formats: ['html'], // You can request 'markdown' too
-      }, {
-          headers: {
-              Authorization: `Bearer ${process.env.FIRECRAWL}`,
-          },
-      });
+    const response = await axios.post('https://api.firecrawl.dev/v1/scrape', {
+      url: url,
+      formats: ['html'], // You can request 'markdown' too
+    }, {
+        headers: {
+            Authorization: `Bearer ${process.env.FIRECRAWL}`,
+        },
+    });
 
-      if (response.data.success) {
-          console.log('Scraped Data type:', typeof response.data.data.html);
-          // return response.data.html; // Process the HTML as needed
-      } else {
-          throw new Error(`Scrape failed: ${response.data.error}`);
-      }
+    if (response.data.success) {
+        console.log('Scraped Data type:', typeof response.data.data.html);
+        // return response.data.html; // Process the HTML as needed
+    } else {
+        throw new Error(`Scrape failed: ${response.data.error}`);
+    }
 
-      console.log('Scrape result:', response.data.data);
+    console.log('Scrape result:', response.data.data);
       metadata = response.data.data.metadata || {};
-      // console.log('Metadata:', metadata);
+    // console.log('Metadata:', metadata);
       htmlContent = response.data.data.html;
       console.log('HTML fetched successfully from FireCrawl');
     } else {
@@ -1652,18 +1652,39 @@ if (records.searchResults > 0) {
 
     // Check for JSON-LD schema data (common on many recipe sites including Allrecipes)
     let jsonLdRecipe = null;
+    console.log('Searching for JSON-LD schema...');
     $('script[type="application/ld+json"]').each((i, elem) => {
       try {
-        const jsonData = JSON.parse($(elem).html());
-        // Check if it's a Recipe schema
-        if (jsonData['@type'] === 'Recipe' || (Array.isArray(jsonData['@graph']) && jsonData['@graph'].find(item => item['@type'] === 'Recipe'))) {
-          jsonLdRecipe = jsonData['@type'] === 'Recipe' ? jsonData : jsonData['@graph'].find(item => item['@type'] === 'Recipe');
-          console.log('Found JSON-LD Recipe schema');
+        const jsonText = $(elem).html();
+        const jsonData = JSON.parse(jsonText);
+        console.log(`Found JSON-LD script ${i}:`, jsonData['@type'] || 'No @type');
+        
+        // Check if it's a Recipe schema - handle both direct Recipe and @graph array
+        if (jsonData['@type'] === 'Recipe') {
+          jsonLdRecipe = jsonData;
+          console.log('✓ Found JSON-LD Recipe schema (direct)');
+        } else if (Array.isArray(jsonData['@graph'])) {
+          const recipe = jsonData['@graph'].find(item => item['@type'] === 'Recipe');
+          if (recipe) {
+            jsonLdRecipe = recipe;
+            console.log('✓ Found JSON-LD Recipe schema (in @graph)');
+          }
+        } else if (Array.isArray(jsonData)) {
+          // Sometimes it's just an array at the top level
+          const recipe = jsonData.find(item => item['@type'] === 'Recipe');
+          if (recipe) {
+            jsonLdRecipe = recipe;
+            console.log('✓ Found JSON-LD Recipe schema (in array)');
+          }
         }
       } catch (e) {
-        // Skip invalid JSON
+        console.error('Error parsing JSON-LD:', e.message);
       }
     });
+    
+    if (!jsonLdRecipe) {
+      console.log('No JSON-LD Recipe schema found, will try HTML parsing');
+    }
 
     // Parse title, description, and metadata
     const title = jsonLdRecipe?.name || $('h1.entry-title').text().trim() || $('h1.recipe-title').text().trim() || metadata.ogTitle || null;
@@ -1696,7 +1717,7 @@ if (records.searchResults > 0) {
     
     // Try JSON-LD first if available
     if (jsonLdRecipe && jsonLdRecipe.recipeIngredient && jsonLdRecipe.recipeIngredient.length > 0) {
-      console.log('Parsing ingredients from JSON-LD schema');
+      console.log(`Parsing ${jsonLdRecipe.recipeIngredient.length} ingredients from JSON-LD schema`);
       const ingredients = jsonLdRecipe.recipeIngredient.map(ingredientString => {
         // Parse ingredient string like "2 cups flour" or "1 1/2 tablespoons olive oil"
         const match = ingredientString.match(/^([\d\s\/\.]+)?\s*([a-zA-Z]+)?\s*(.+)$/);
@@ -1719,10 +1740,13 @@ if (records.searchResults > 0) {
         section: 'Main',
         ingredients: ingredients
       });
+      console.log(`Added ${ingredients.length} ingredients from JSON-LD`);
     }
     
     // If JSON-LD didn't work, try HTML parsing
-    $('[class*="ingredient-group"], [class*="ingredients-group"]').each((i, section) => {
+    if (ingredientSections.length === 0) {
+      console.log('Trying HTML parsing for ingredients...');
+      $('[class*="ingredient-group"], [class*="ingredients-group"]').each((i, section) => {
       const sectionName = $(section).find('[class*="group-name"], [class*="section-title"]').text().trim() || `Section ${i + 1}`;
       const ingredients = [];
 
@@ -1750,6 +1774,8 @@ if (records.searchResults > 0) {
         });
       }
     });
+      console.log(`HTML parsing found ${ingredientSections.length} ingredient sections`);
+    } // End of HTML parsing fallback
 
     // Primary ingredient section logic
     let primaryIngredientSection = ingredientSections[0];
@@ -1889,10 +1915,10 @@ if (records.searchResults > 0) {
 
   // Fallback to HTML parsing if no instructions found
   if (instructions.length === 0) {
-    $('.wprm-recipe-instruction').each((i, elem) => {
-      const instruction = $(elem).text().replace(/\s+/g, ' ').trim();
-      if (instruction) instructions.push(instruction);
-    });
+  $('.wprm-recipe-instruction').each((i, elem) => {
+    const instruction = $(elem).text().replace(/\s+/g, ' ').trim();
+    if (instruction) instructions.push(instruction);
+  });
   }
 
   console.log('Instructions:', instructions);
@@ -2160,17 +2186,17 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
 
     // Fallback to HTML parsing if not found in JSON-LD
     if (!prep_time_mins) {
-      const prepTimeMatch = $('.wprm-recipe-prep_time').text().trim().match(/(\d+)\s*mins?/i);
+    const prepTimeMatch = $('.wprm-recipe-prep_time').text().trim().match(/(\d+)\s*mins?/i);
       prep_time_mins = prepTimeMatch ? parseInt(prepTimeMatch[1], 10) : null;
     }
 
     if (!cook_time_mins) {
-      const cookTimeMatch = $('.wprm-recipe-cook_time').text().trim().match(/(\d+)\s*mins?/i);
+    const cookTimeMatch = $('.wprm-recipe-cook_time').text().trim().match(/(\d+)\s*mins?/i);
       cook_time_mins = cookTimeMatch ? parseInt(cookTimeMatch[1], 10) : null;
     }
 
     if (!total_time_mins) {
-      const totalTimeMatch = $('.wprm-recipe-total_time').text().trim().match(/(\d+)\s*mins?/i);
+    const totalTimeMatch = $('.wprm-recipe-total_time').text().trim().match(/(\d+)\s*mins?/i);
       total_time_mins = totalTimeMatch ? parseInt(totalTimeMatch[1], 10) : null;
     }
 
@@ -2189,12 +2215,12 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     
     // Fallback to HTML parsing
     if (!servings) {
-      let servingsStr = $('#wprm-recipe-container-10480').attr('data-servings');
-      // Fallback if data-servings is not found
-      if (!servingsStr) {
-        servingsStr = $('[class*="wprm-recipe-servings"]').text().trim() || null;
-      }
-      // Extract numerical value from servingsStr if possible
+    let servingsStr = $('#wprm-recipe-container-10480').attr('data-servings');
+    // Fallback if data-servings is not found
+    if (!servingsStr) {
+      servingsStr = $('[class*="wprm-recipe-servings"]').text().trim() || null;
+    }
+    // Extract numerical value from servingsStr if possible
       servings = servingsStr ? parseInt(servingsStr.match(/\d+/)?.[0], 10) : null;
     }
 
