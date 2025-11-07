@@ -1502,11 +1502,21 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
         for (let i = 0; i < ingredients.length; i++) {
             try {
                 const ingredient = ingredients[i];
-                const recipeAmount = ingredient.amount;
-                const recipeUnit = ingredient.unit;
+                let recipeAmount = ingredient.amount;
+                let recipeUnit = ingredient.unit;
                 
-                if (!recipeAmount || !recipeUnit || recipeAmount <= 0) {
-                    skippedIngredients.push({ index: i, reason: 'Invalid amount or unit', name: ingredient.name });
+                // FIX #3: Skip ingredients marked as optional
+                const comment = ingredient.comment || '';
+                if (comment.toLowerCase().includes('optional') || 
+                    comment.toLowerCase().includes('as desired') ||
+                    comment.toLowerCase().includes('to taste')) {
+                    skippedIngredients.push({ index: i, reason: 'Optional ingredient (excluded from nutrition)', name: ingredient.name });
+                    console.log(`⏭️ Skipping optional ingredient: ${ingredient.name} (comment: "${comment}")`);
+                    continue;
+                }
+                
+                if (!recipeAmount || recipeAmount <= 0) {
+                    skippedIngredients.push({ index: i, reason: 'Invalid amount', name: ingredient.name });
                     continue;
                 }
                 
@@ -1536,6 +1546,25 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                     continue;
                 }
                 
+                // FIX #1 & #2: Use standardUnit when recipe unit is empty or generic 'unit'
+                if (!recipeUnit || recipeUnit.trim() === '' || recipeUnit === 'unit') {
+                    console.log(`🔧 Recipe unit empty or generic for ${ingredientName}, using standardUnit: ${rawStandardUnit}`);
+                    recipeUnit = rawStandardUnit;
+                    
+                    // FIX #4: Extract numeric multiplier from standardUnit if present
+                    // Example: "g (1 medium russet potato)" → recipe wants 4 units = 4 potatoes
+                    // If standardAmount is 173g per potato, and recipe wants 4 potatoes, we need 4 × standardAmount
+                    const unitMatch = rawStandardUnit.match(/\((\d+(?:\.\d+)?)\s+/);
+                    if (unitMatch && recipeAmount) {
+                        // Recipe amount represents number of items described in standardUnit
+                        // Example: recipe wants 4 potatoes, standard is 173g per 1 potato
+                        // So we want: recipeAmount (4) × standardAmount (173g)
+                        console.log(`📐 Detected standard unit multiplier: ${unitMatch[1]} in "${rawStandardUnit}"`);
+                        console.log(`   Recipe wants ${recipeAmount} units, standard is ${standardAmount} per unit`);
+                        // The conversion will handle this by treating recipeAmount as multiplier
+                    }
+                }
+                
                 // Parse and clean units
                 const cleanRecipeUnit = parseUnit(recipeUnit);
                 const standardUnit = parseUnit(rawStandardUnit);
@@ -1544,12 +1573,37 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                 let multiplier;
                 let conversionMethod = '';
                 
+                // FIX #4: Extract multiplier from standardUnit descriptors
+                // Example: "g (1 medium russet potato)" → 1 potato = 173g
+                // If recipe uses generic 'unit' or matches the descriptor, use direct multiplier
+                const extractStandardUnitMultiplier = (standardUnitStr) => {
+                    // Match patterns like "(1 medium potato)", "(2 slices)", etc.
+                    const match = standardUnitStr.match(/\((\d+(?:\.\d+)?)\s+([^)]+)\)/);
+                    if (match) {
+                        return {
+                            count: parseFloat(match[1]),
+                            description: match[2].trim()
+                        };
+                    }
+                    return null;
+                };
+                
+                const standardUnitInfo = extractStandardUnitMultiplier(rawStandardUnit);
+                
                 // Try direct unit conversion first
                 const convertedAmount = convertUnits(recipeAmount, cleanRecipeUnit, standardUnit);
                 
                 if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
                     multiplier = convertedAmount / standardAmount;
                     conversionMethod = 'direct unit conversion';
+                } else if (standardUnitInfo && isCountUnit(cleanRecipeUnit)) {
+                    // FIX #4 continued: Recipe uses count unit, standard describes count
+                    // Example: recipe wants 4 "unit", standard is "173g (1 medium russet potato)"
+                    // Multiplier = recipeAmount / standardUnitInfo.count
+                    // So 4 units / 1 unit = 4x the standard amount
+                    multiplier = recipeAmount / standardUnitInfo.count;
+                    conversionMethod = `count-based with standard descriptor (${standardUnitInfo.description})`;
+                    console.log(`✅ Count-based conversion: ${recipeAmount} ${cleanRecipeUnit} = ${multiplier}x standard (${standardUnitInfo.count} ${standardUnitInfo.description} per standard)`);
                 } else {
                     // Fallback logic
                     const normalizedRecipeUnit = cleanRecipeUnit.toLowerCase().trim();
@@ -1562,8 +1616,15 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                         multiplier = recipeAmount / standardAmount;
                         conversionMethod = 'count units';
                     } else if (isCountUnit(cleanRecipeUnit) && !isCountUnit(standardUnit)) {
-                        skippedIngredients.push({ index: i, reason: `Cannot convert count '${cleanRecipeUnit}' to '${standardUnit}'`, name: ingredientName });
-                        continue;
+                        // Last attempt: check if we can use standardUnit info
+                        if (standardUnitInfo) {
+                            multiplier = recipeAmount / standardUnitInfo.count;
+                            conversionMethod = `fallback count conversion (${standardUnitInfo.description})`;
+                            console.log(`✅ Fallback count conversion: ${recipeAmount} ${cleanRecipeUnit} → ${multiplier}x standard`);
+                        } else {
+                            skippedIngredients.push({ index: i, reason: `Cannot convert count '${cleanRecipeUnit}' to '${standardUnit}'`, name: ingredientName });
+                            continue;
+                        }
                     } else if (!isCountUnit(cleanRecipeUnit) && isCountUnit(standardUnit)) {
                         skippedIngredients.push({ index: i, reason: `Cannot convert '${cleanRecipeUnit}' to count '${standardUnit}'`, name: ingredientName });
                         continue;
@@ -1689,6 +1750,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
             did: typeof ingredientRef === 'string' && ingredientRef.startsWith('did:') ? ingredientRef : null,
             amount: recipe.ingredient_amount[i],
             unit: recipe.ingredient_unit[i],
+            comment: recipe.ingredient_comment ? recipe.ingredient_comment[i] : '', // Include comment for optional ingredient filtering
             name: typeof ingredientRef === 'object' && ingredientRef?.data?.basic?.name ? ingredientRef.data.basic.name : `ingredient ${i}`,
             nutritionalInfo: typeof ingredientRef === 'object' && ingredientRef?.data?.nutritionalInfo ? ingredientRef.data.nutritionalInfo : null
         }));
