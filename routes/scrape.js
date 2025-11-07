@@ -2287,20 +2287,114 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000)
       console.log('Recipe publishing initiated via /api/publish/newRecipe');
       console.log('Response:', publishResponse.data);
       
-      // Send job info through stream if available
-      // The /api/publish/newRecipe endpoint now returns immediately with jobId
+      const jobId = publishResponse.data.jobId;
+      
+      // Send initial job info through stream
       if (sendUpdate) {
         sendUpdate('recipePublished', {
-          jobId: publishResponse.data.jobId,
+          jobId: jobId,
           status: publishResponse.data.status,
           message: publishResponse.data.message,
           recipeData: recipeData, // Include the full recipe JSON that was sent
-          // Legacy fields for backward compatibility
-          did: publishResponse.data.transactionId || publishResponse.data.did || null
+          progress: 0
         });
       }
       
-      recipeRecord = publishResponse.data;
+      // Poll job status until completion
+      let jobCompleted = false;
+      let pollAttempts = 0;
+      const maxPollAttempts = 120; // 10 minutes max (5 seconds * 120 = 600 seconds)
+      
+      while (!jobCompleted && pollAttempts < maxPollAttempts) {
+        // Wait 5 seconds before polling
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        pollAttempts++;
+        
+        try {
+          console.log(`Polling job status (attempt ${pollAttempts})...`);
+          const statusResponse = await axios.get(
+            `${getBaseUrl(req)}/api/publish-status/${jobId}`,
+            {
+              headers: {
+                'Authorization': req.headers.authorization || ''
+              }
+            }
+          );
+          
+          const jobStatus = statusResponse.data;
+          console.log('Job status:', jobStatus);
+          
+          // Send status update through stream
+          if (sendUpdate) {
+            sendUpdate('publishProgress', {
+              jobId: jobStatus.jobId,
+              status: jobStatus.status,
+              progress: jobStatus.progress || 0,
+              message: jobStatus.message,
+              transactionId: jobStatus.transactionId || null
+            });
+          }
+          
+          // Check if job is completed
+          if (jobStatus.status === 'completed') {
+            jobCompleted = true;
+            recipeRecord = {
+              transactionId: jobStatus.transactionId,
+              recordToIndex: jobStatus.recordToIndex,
+              blockchain: jobStatus.blockchain || blockchain
+            };
+            
+            // Send final completion event
+            if (sendUpdate) {
+              sendUpdate('recipeCompleted', {
+                jobId: jobStatus.jobId,
+                status: 'completed',
+                progress: 100,
+                message: 'Recipe published successfully',
+                transactionId: jobStatus.transactionId,
+                did: jobStatus.transactionId,
+                blockchain: jobStatus.blockchain || blockchain,
+                recordToIndex: jobStatus.recordToIndex
+              });
+            }
+            
+            console.log('Recipe publishing completed:', jobStatus.transactionId);
+          } else if (jobStatus.status === 'failed') {
+            // Job failed
+            if (sendUpdate) {
+              sendUpdate('error', {
+                message: 'Recipe publishing failed',
+                details: jobStatus.message,
+                jobId: jobId
+              });
+            }
+            throw new Error(`Job failed: ${jobStatus.message}`);
+          }
+          
+        } catch (pollError) {
+          console.error('Error polling job status:', pollError.response?.data || pollError.message);
+          
+          // If this is the last attempt, send error
+          if (pollAttempts >= maxPollAttempts) {
+            if (sendUpdate) {
+              sendUpdate('error', {
+                message: 'Job status polling timed out',
+                details: 'Maximum polling attempts reached',
+                jobId: jobId
+              });
+            }
+            throw new Error('Job status polling timed out');
+          }
+          
+          // For other errors, continue polling (might be temporary network issue)
+          console.log('Continuing to poll despite error...');
+        }
+      }
+      
+      if (!jobCompleted) {
+        throw new Error('Recipe publishing did not complete within the expected time');
+      }
+      
     } catch (error) {
       console.error('Error publishing recipe to /api/publish/newRecipe:', error.response?.data || error.message);
       

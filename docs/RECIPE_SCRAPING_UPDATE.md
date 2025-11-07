@@ -307,54 +307,74 @@ cleanupScrape(scrapeId)            // Cleanup after scraping
 
 ### Understanding the Workflow
 
-The recipe publishing process is now **asynchronous** to prevent long-running operations from blocking the scraping workflow:
+The recipe publishing process is now **asynchronous** with **automatic polling** - the server handles all status updates via SSE:
 
 1. **Scraper parses recipe** (fast - ~5-10 seconds)
 2. **Scraper uploads image** (fast - ~2-5 seconds)
 3. **Submit to `/api/publish/newRecipe`** (returns immediately with jobId)
-4. **Return recipe data + jobId to client** (immediate)
-5. **Background job processes recipe** (slow - may take minutes):
-   - Looks up/creates ingredients
-   - Fetches nutritional data from OpenAI
-   - Calculates nutritional summary
-   - Publishes to Arweave/GUN
+4. **Send initial `recipePublished` event** with recipe data to client
+5. **Server polls job status** every 5 seconds and streams updates
+6. **Background job processes recipe** (slow - may take minutes):
+   - Looks up/creates ingredients → `publishProgress` events
+   - Fetches nutritional data from OpenAI → `publishProgress` events
+   - Calculates nutritional summary → `publishProgress` events
+   - Publishes to Arweave/GUN → `publishProgress` events
+7. **Send final `recipeCompleted` event** with transaction ID
 
-### Benefits of Including Recipe Data
+### Benefits of Server-Side Polling
 
-The `recipeData` field in the SSE response provides **immediate value** to the client:
-
-- ✅ **Instant Preview**: Display the recipe to the user immediately (no waiting for blockchain)
-- ✅ **Better UX**: Users can review and edit before final publishing
-- ✅ **Transparency**: See exactly what data was sent to the publishing endpoint
-- ✅ **Debugging**: Easy to verify the parsed recipe structure
-- ✅ **Caching**: Store locally while waiting for DID
-- ✅ **Fallback**: If publishing fails, still have the recipe data
+- ✅ **No Client Polling Required**: Server handles all status checks
+- ✅ **Real-Time Updates**: Progress streamed via SSE every 5 seconds
+- ✅ **Simplified Frontend**: Just listen to SSE events
+- ✅ **Consistent UX**: All clients get same update frequency
+- ✅ **Automatic Cleanup**: Connection closes when complete
+- ✅ **Error Resilience**: Server handles temporary network issues
 
 ### Client Implementation
 
-**Listen to SSE Stream:**
+**Simple SSE Listener (No Polling Needed!):**
 ```javascript
 const eventSource = new EventSource(`/api/scrape/open-stream?streamId=${scrapeId}`);
 
+// 1. Recipe data available immediately
 eventSource.addEventListener('recipePublished', (event) => {
   const data = JSON.parse(event.data);
-  console.log('Job ID:', data.jobId);
-  console.log('Status:', data.status);
-  console.log('Message:', data.message);
-  console.log('Recipe Data:', data.recipeData);
-  
-  // Display the recipe data immediately (before publishing completes)
+  console.log('Publishing started:', data.jobId);
   displayRecipePreview(data.recipeData);
-  
-  // Store jobId for status polling
-  localStorage.setItem('recipeJobId', data.jobId);
-  
-  // Start polling job status to get final DID
-  pollJobStatus(data.jobId);
+  showProgress(data.progress); // 0%
 });
 
+// 2. Progress updates (every 5 seconds)
+eventSource.addEventListener('publishProgress', (event) => {
+  const data = JSON.parse(event.data);
+  console.log(`Progress: ${data.progress}% - ${data.message}`);
+  showProgress(data.progress);
+  updateStatusMessage(data.message);
+});
+
+// 3. Publishing complete!
+eventSource.addEventListener('recipeCompleted', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Published!', data.transactionId);
+  showSuccess(data.recordToIndex);
+  eventSource.close(); // Done!
+});
+
+// 4. Handle errors
+eventSource.addEventListener('error', (event) => {
+  const data = JSON.parse(event.data);
+  showError(data.message);
+  eventSource.close();
+});
+```
+
+**That's it!** No need to implement polling logic - the server handles everything.
+
+### Complete Example with UI Updates
+
+```javascript
 function displayRecipePreview(recipeData) {
-  // Show the recipe details to the user immediately
+  // Show the recipe details immediately
   document.getElementById('recipeName').textContent = recipeData.basic.name;
   document.getElementById('recipeDescription').textContent = recipeData.basic.description;
   document.getElementById('recipeImage').src = recipeData.image.webUrl;
@@ -371,53 +391,39 @@ function displayRecipePreview(recipeData) {
     .map(ing => `<li>${ing}</li>`)
     .join('');
   
-  // Show instructions
   document.getElementById('instructions').textContent = recipeData.recipe.instructions;
+}
+
+function showProgress(progress) {
+  document.getElementById('progressBar').style.width = progress + '%';
+  document.getElementById('progressText').textContent = progress + '%';
+}
+
+function updateStatusMessage(message) {
+  document.getElementById('statusMessage').textContent = message;
+}
+
+function showSuccess(recordToIndex) {
+  document.getElementById('statusMessage').textContent = 'Recipe published successfully!';
+  document.getElementById('progressBar').style.width = '100%';
   
-  // Show publishing status
-  document.getElementById('status').textContent = 'Publishing to blockchain...';
+  // Show transaction ID
+  document.getElementById('transactionId').textContent = recordToIndex.oip.did;
+  
+  // Enable "View Recipe" button
+  document.getElementById('viewButton').disabled = false;
+  document.getElementById('viewButton').onclick = () => {
+    window.location.href = `/recipes/${recordToIndex.oip.did}`;
+  };
+}
+
+function showError(message) {
+  document.getElementById('errorMessage').textContent = message;
+  document.getElementById('errorMessage').style.display = 'block';
 }
 ```
 
-**Poll Job Status:**
-```javascript
-async function pollJobStatus(jobId) {
-  const interval = setInterval(async () => {
-    const response = await fetch(`/api/jobs/${jobId}/status`);
-    const status = await response.json();
-    
-    if (status.status === 'completed') {
-      clearInterval(interval);
-      console.log('Recipe published:', status.result);
-      displayRecipe(status.result);
-    } else if (status.status === 'failed') {
-      clearInterval(interval);
-      console.error('Publishing failed:', status.error);
-    } else {
-      console.log('Status:', status.message);
-    }
-  }, 5000); // Poll every 5 seconds
-}
-```
-
-### Job Status API (Reference)
-
-**Note:** The job status API endpoint should be implemented in your application.
-
-```javascript
-// Example job status response
-{
-  "jobId": "recipe_publish_abc123def456",
-  "status": "processing", // pending | processing | completed | failed
-  "message": "Creating nutritional info for missing ingredients...",
-  "progress": 60, // percentage (optional)
-  "result": {
-    // Complete published recipe (when completed)
-    "transactionId": "did:arweave:xyz...",
-    "recordToIndex": { ... }
-  }
-}
-```
+**For complete React, Vue, and Vanilla JS examples, see [RECIPE_SCRAPING_SSE_GUIDE.md](./RECIPE_SCRAPING_SSE_GUIDE.md)**
 
 ## HTML Parameter - Optional
 
@@ -499,10 +505,13 @@ curl -X POST http://localhost:3005/api/scrape/recipe \
    }
    ```
 
-2. **Stream Events:**
+2. **SSE Stream Events:**
    - `scrapeId` - Scrape initiated
    - `processing` - Parsing recipe
-   - `recipePublished` - Recipe publishing job initiated
+   - `recipePublished` - Recipe publishing job initiated (includes full recipe data)
+   - `publishProgress` - Real-time progress updates (every 5 seconds)
+   - `recipeCompleted` - Publishing complete with transaction ID
+   - `error` - Error occurred at any stage
 
 3. **Recipe Published Event (SSE):**
    ```json
@@ -510,7 +519,7 @@ curl -X POST http://localhost:3005/api/scrape/recipe \
      "jobId": "recipe_publish_abc123def456",
      "status": "pending",
      "message": "Recipe publishing initiated. This may take a few minutes...",
-     "did": null,
+     "progress": 0,
      "recipeData": {
        "basic": {
          "name": "Spicy Sesame Noodle Bowl",
@@ -552,12 +561,43 @@ curl -X POST http://localhost:3005/api/scrape/recipe \
    }
    ```
 
-4. **Async Processing:**
+4. **Publishing Progress Events (SSE):**
+   Sent every 5 seconds while job is processing:
+   ```json
+   {
+     "jobId": "recipe_publish_abc123def456",
+     "status": "processing",
+     "progress": 45,
+     "message": "Creating ingredient 3 of 12: chicken breast...",
+     "transactionId": null
+   }
+   ```
+
+5. **Recipe Completed Event (SSE):**
+   Final event when publishing is complete:
+   ```json
+   {
+     "jobId": "recipe_publish_abc123def456",
+     "status": "completed",
+     "progress": 100,
+     "message": "Recipe published successfully",
+     "transactionId": "h5FTJ2oFoA7xp4H7t7YI...",
+     "did": "h5FTJ2oFoA7xp4H7t7YI...",
+     "blockchain": "arweave",
+     "recordToIndex": {
+       "oip": { "did": "h5FTJ2oFoA7xp4H7t7YI...", "templateName": "recipe" },
+       "data": { /* complete recipe with nutritional info */ }
+     }
+   }
+   ```
+
+6. **Backend Processing:**
    - Recipe published to Arweave/GUN (asynchronous)
    - All ingredients resolved or created
    - Image uploaded with all addresses
    - Nutritional summary calculated
-   - Client can poll job status using jobId
+   - **Backend polls job status and streams updates to client**
+   - Client receives real-time progress updates via SSE
 
 ## Configuration
 
