@@ -268,6 +268,63 @@ router.post('/memory/clear-cache', async (req, res) => {
 // and was not the source of the memory leak (GraphQL client was the real culprit)
 // router.post('/elasticsearch/recreate-client', async (req, res) => { ... });
 
+// Analyze what's currently in memory (detailed breakdown)
+router.get('/memory/analyze', async (req, res) => {
+    try {
+        const v8 = require('v8');
+        const memUsage = process.memoryUsage();
+        const heapStats = v8.getHeapStatistics();
+        const handles = process._getActiveHandles();
+        const requests = process._getActiveRequests();
+        
+        // Count handle types
+        const handleTypes = {};
+        handles.forEach(h => {
+            const type = h.constructor.name;
+            handleTypes[type] = (handleTypes[type] || 0) + 1;
+        });
+        
+        // Count request types
+        const requestTypes = {};
+        requests.forEach(r => {
+            const type = r.constructor.name;
+            requestTypes[type] = (requestTypes[type] || 0) + 1;
+        });
+        
+        res.json({
+            memory: {
+                heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
+                heapTotalMB: Math.round(memUsage.heapTotal / 1024 / 1024),
+                rssMB: Math.round(memUsage.rss / 1024 / 1024),
+                externalMB: Math.round(memUsage.external / 1024 / 1024),
+                arrayBuffersMB: Math.round(memUsage.arrayBuffers / 1024 / 1024)
+            },
+            ratios: {
+                externalToHeapPercent: Math.round((memUsage.external / memUsage.heapUsed) * 100),
+                arrayBuffersToExternalPercent: Math.round((memUsage.arrayBuffers / memUsage.external) * 100)
+            },
+            connections: {
+                activeHandles: handles.length,
+                activeRequests: requests.length,
+                handleTypes: handleTypes,
+                requestTypes: requestTypes
+            },
+            heap: {
+                heapSizeLimitMB: Math.round(heapStats.heap_size_limit / 1024 / 1024),
+                totalAvailableMB: Math.round(heapStats.total_available_size / 1024 / 1024),
+                mallocedMB: Math.round(heapStats.malloced_memory / 1024 / 1024)
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error analyzing memory:', error);
+        res.status(500).json({
+            error: 'Failed to analyze memory',
+            details: error.message
+        });
+    }
+});
+
 // Recreate GraphQL client (manual memory leak mitigation for Arweave queries)
 router.post('/graphql/recreate-client', async (req, res) => {
     try {
