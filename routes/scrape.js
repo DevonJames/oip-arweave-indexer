@@ -1810,6 +1810,15 @@ if (records.searchResults > 0) {
     let imageUrl = jsonLdRecipe?.image?.url || jsonLdRecipe?.image || metadata.ogImage || $('img.wp-image').first().attr('src') || null;
     // const date = Date.now() / 1000;
 
+    // Declare arrays and variables that LLM might need to update
+    let instructions = [];
+    let prep_time_mins = null;
+    let cook_time_mins = null;
+    let total_time_mins = null;
+    let servings = null;
+    let cuisine = null;
+    let course = null;
+
     // Parse ingredient sections
     const ingredientSections = [];
     
@@ -2049,9 +2058,7 @@ if (records.searchResults > 0) {
     const remainingIngredientSections = ingredientSections.filter(section => section !== primaryIngredientSection);
     remainingIngredientSections.sort((a, b) => b.ingredients.length - a.ingredients.length);    
 
-  // Extract instructions
-  const instructions = [];
-
+  // Extract instructions (already declared above, just populate)
   // Try JSON-LD first
   if (jsonLdRecipe && jsonLdRecipe.recipeInstructions) {
     if (Array.isArray(jsonLdRecipe.recipeInstructions)) {
@@ -2333,11 +2340,7 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
       return null;
     }
 
-    // Extract prep time, cook time, total time, cuisine, and course
-    let prep_time_mins = null;
-    let cook_time_mins = null;
-    let total_time_mins = null;
-
+    // Extract prep time, cook time, total time, cuisine, and course (already declared above)
     // Try JSON-LD first
     if (jsonLdRecipe) {
       prep_time_mins = parseDurationToMinutes(jsonLdRecipe.prepTime);
@@ -2361,9 +2364,7 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
       total_time_mins = totalTimeMatch ? parseInt(totalTimeMatch[1], 10) : null;
     }
 
-    // Parse servings
-    let servings = null;
-    
+    // Parse servings (already declared above)
     // Try JSON-LD first
     if (jsonLdRecipe && jsonLdRecipe.recipeYield) {
       if (typeof jsonLdRecipe.recipeYield === 'number') {
@@ -2385,9 +2386,9 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
       servings = servingsStr ? parseInt(servingsStr.match(/\d+/)?.[0], 10) : null;
     }
 
-    // Parse cuisine and course (declare with let so LLM can update them later)
-    let cuisine = jsonLdRecipe?.recipeCuisine || $('.wprm-recipe-cuisine').text().trim() || null;
-    let course = jsonLdRecipe?.recipeCategory || $('.wprm-recipe-course').text().trim() || null;
+    // Parse cuisine and course (already declared above)
+    cuisine = jsonLdRecipe?.recipeCuisine || $('.wprm-recipe-cuisine').text().trim() || null;
+    course = jsonLdRecipe?.recipeCategory || $('.wprm-recipe-course').text().trim() || null;
 
 
     // Extract notes
