@@ -930,7 +930,7 @@ async function processRecipeAsync(jobId, reqBody, user) {
     console.log('No ingredients need lookup - all are already didTx values');
     updateProgress(jobId, 20, 'All ingredients already have DIDs, skipping lookup...');
   }
-  const missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
+  let missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
     name => ingredientRecords.ingredientDidRefs[name] === null
   );
   
