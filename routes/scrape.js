@@ -81,6 +81,124 @@ if (!fs.existsSync(downloadsDirectory)) {
     fs.mkdirSync(downloadsDirectory);
 }
 
+// LLM-based recipe parser for when traditional parsing fails
+async function parseRecipeWithLLM(htmlContent, url, metadata) {
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  
+  if (!openaiApiKey) {
+    console.error('OpenAI API key not configured - cannot use LLM fallback');
+    throw new Error('OpenAI API key not configured');
+  }
+
+  try {
+    console.log('🤖 Using OpenAI to extract recipe from HTML...');
+    
+    // Extract text content from HTML (remove scripts, styles, etc.)
+    const $ = cheerio.load(htmlContent);
+    $('script, style, nav, header, footer, .ad, .advertisement').remove();
+    const textContent = $('body').text().replace(/\s+/g, ' ').trim();
+    
+    // Limit text size to avoid token limits (keep first 8000 chars)
+    const limitedText = textContent.substring(0, 8000);
+    
+    console.log(`Sending ${limitedText.length} characters to OpenAI for recipe extraction`);
+    
+    // Use OpenAI's Chat Completions API with structured outputs
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a recipe extraction expert. Extract complete recipe information from the provided text. Parse ingredient strings to separate amounts, units, and names. For timing, convert to minutes.'
+        },
+        {
+          role: 'user',
+          content: `Extract the recipe from this webpage text. Return complete recipe data including title, description, ingredients (with amount, unit, and name separated), instructions, timing, servings, etc.\n\nWebpage URL: ${url}\n\nText:\n${limitedText}`
+        }
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'recipe_data',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              description: { type: 'string' },
+              imageUrl: { type: 'string' },
+              prepTime: { type: ['number', 'null'] },
+              cookTime: { type: ['number', 'null'] },
+              totalTime: { type: ['number', 'null'] },
+              servings: { type: ['number', 'null'] },
+              cuisine: { type: ['string', 'null'] },
+              course: { type: ['string', 'null'] },
+              ingredients: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    amount: { type: ['number', 'null'] },
+                    unit: { type: 'string' },
+                    name: { type: 'string' }
+                  },
+                  required: ['amount', 'unit', 'name'],
+                  additionalProperties: false
+                }
+              },
+              instructions: {
+                type: 'array',
+                items: { type: 'string' }
+              }
+            },
+            required: ['title', 'description', 'imageUrl', 'prepTime', 'cookTime', 'totalTime', 'servings', 'cuisine', 'course', 'ingredients', 'instructions'],
+            additionalProperties: false
+          }
+        }
+      },
+      temperature: 0.3 // Lower temperature for more consistent extraction
+    }, {
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000 // 30 second timeout
+    });
+
+    if (!response.data || !response.data.choices || !response.data.choices[0]) {
+      throw new Error('No response from OpenAI');
+    }
+
+    const result = response.data.choices[0].message.content;
+    console.log('✓ OpenAI response received');
+    
+    // Parse the JSON response
+    let recipeData;
+    try {
+      recipeData = JSON.parse(result);
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error('Failed to parse OpenAI response');
+    }
+    
+    console.log(`✓ Extracted recipe: "${recipeData.title}" with ${recipeData.ingredients.length} ingredients`);
+    
+    // Use metadata imageUrl as fallback if LLM didn't find one
+    if (!recipeData.imageUrl && metadata.ogImage) {
+      recipeData.imageUrl = metadata.ogImage;
+    }
+    
+    return recipeData;
+
+  } catch (error) {
+    console.error('❌ Error in LLM recipe extraction:', error.message);
+    if (error.response) {
+      console.error('OpenAI API error:', error.response.data);
+    }
+    throw error;
+  }
+}
+
 // Generic retry function
 async function retryAsync(asyncFunction, args = [], options = { maxRetries: 5, delay: 3000, fallbackValue: null }) {
   console.log('retrying async function');
@@ -1686,10 +1804,10 @@ if (records.searchResults > 0) {
       console.log('No JSON-LD Recipe schema found, will try HTML parsing');
     }
 
-    // Parse title, description, and metadata
-    const title = jsonLdRecipe?.name || $('h1.entry-title').text().trim() || $('h1.recipe-title').text().trim() || metadata.ogTitle || null;
-    const description = jsonLdRecipe?.description || metadata.ogDescription || $('p').first().text().trim() || null;
-    const imageUrl = jsonLdRecipe?.image?.url || jsonLdRecipe?.image || metadata.ogImage || $('img.wp-image').first().attr('src') || null;
+    // Parse title, description, and metadata (declare with let so LLM can update them later)
+    let title = jsonLdRecipe?.name || $('h1.entry-title').text().trim() || $('h1.recipe-title').text().trim() || metadata.ogTitle || null;
+    let description = jsonLdRecipe?.description || metadata.ogDescription || $('p').first().text().trim() || null;
+    let imageUrl = jsonLdRecipe?.image?.url || jsonLdRecipe?.image || metadata.ogImage || $('img.wp-image').first().attr('src') || null;
     // const date = Date.now() / 1000;
 
     // Parse ingredient sections
@@ -1788,19 +1906,62 @@ if (records.searchResults > 0) {
     console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
     console.log('Primary ingredient section:', primaryIngredientSection);
 
-    // Check if we found any ingredients - if not, send error and skip processing
+    // Check if we found any ingredients - if not, try LLM fallback before giving up
     if (!primaryIngredientSection || !primaryIngredientSection.ingredients || primaryIngredientSection.ingredients.length === 0) {
-      console.error('No ingredients found on page - selectors may not match this site');
+      console.error('No ingredients found on page - trying LLM fallback...');
       
       if (sendUpdate) {
-        sendUpdate('error', {
-          message: 'Could not parse recipe ingredients',
-          details: `The recipe structure on ${new URL(url).hostname} is not recognized. Please try a different recipe site or provide the HTML directly.`
+        sendUpdate('processing', {
+          message: 'Traditional parsing failed, using AI to extract recipe...'
         });
       }
       
-      cleanupScrape(scrapeId);
-      return;
+      try {
+        // Try LLM-based recipe extraction as fallback
+        const llmRecipe = await parseRecipeWithLLM(htmlContent, url, metadata);
+        
+        if (llmRecipe && llmRecipe.ingredients && llmRecipe.ingredients.length > 0) {
+          console.log('✓ LLM successfully extracted recipe data');
+          
+          // Convert LLM response to our ingredient section format
+          ingredientSections.push({
+            section: 'Main',
+            ingredients: llmRecipe.ingredients
+          });
+          
+          primaryIngredientSection = ingredientSections[0];
+          
+          // Also update other fields from LLM if they're not already set
+          if (!title && llmRecipe.title) title = llmRecipe.title;
+          if (!description && llmRecipe.description) description = llmRecipe.description;
+          if (!imageUrl && llmRecipe.imageUrl) imageUrl = llmRecipe.imageUrl;
+          if (instructions.length === 0 && llmRecipe.instructions) {
+            instructions.push(...llmRecipe.instructions);
+          }
+          if (!prep_time_mins && llmRecipe.prepTime) prep_time_mins = llmRecipe.prepTime;
+          if (!cook_time_mins && llmRecipe.cookTime) cook_time_mins = llmRecipe.cookTime;
+          if (!total_time_mins && llmRecipe.totalTime) total_time_mins = llmRecipe.totalTime;
+          if (!servings && llmRecipe.servings) servings = llmRecipe.servings;
+          if (!cuisine && llmRecipe.cuisine) cuisine = llmRecipe.cuisine;
+          if (!course && llmRecipe.course) course = llmRecipe.course;
+          
+          console.log('Continuing with LLM-extracted data');
+        } else {
+          throw new Error('LLM extraction failed to find ingredients');
+        }
+      } catch (llmError) {
+        console.error('LLM fallback failed:', llmError.message);
+        
+        if (sendUpdate) {
+          sendUpdate('error', {
+            message: 'Could not parse recipe',
+            details: `Failed to extract recipe from ${new URL(url).hostname} using both traditional parsing and AI extraction. Please try a different recipe site or provide the HTML directly.`
+          });
+        }
+        
+        cleanupScrape(scrapeId);
+        return;
+      }
     }
 
     // works well for two sections but breaks with one section - trying test above for both cases
@@ -2224,9 +2385,9 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
       servings = servingsStr ? parseInt(servingsStr.match(/\d+/)?.[0], 10) : null;
     }
 
-    // Parse cuisine and course
-    const cuisine = jsonLdRecipe?.recipeCuisine || $('.wprm-recipe-cuisine').text().trim() || null;
-    const course = jsonLdRecipe?.recipeCategory || $('.wprm-recipe-course').text().trim() || null;
+    // Parse cuisine and course (declare with let so LLM can update them later)
+    let cuisine = jsonLdRecipe?.recipeCuisine || $('.wprm-recipe-cuisine').text().trim() || null;
+    let course = jsonLdRecipe?.recipeCategory || $('.wprm-recipe-course').text().trim() || null;
 
 
     // Extract notes
