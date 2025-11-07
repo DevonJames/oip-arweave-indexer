@@ -579,11 +579,6 @@ async function processRecipeAsync(jobId, reqBody, user) {
 
     console.log('Processing single recipe section with', ingredients.length, 'ingredients');
 
-  // Extract instructions directly from recipe object
-  const instructions = record.recipe.instructions || '';
-
-  console.log('Instructions:', instructions);
-
   // Since ingredient_comment is now provided explicitly, use ingredients as-is
   const parsedIngredients = ingredients.map(ing => ({
     originalString: ing.name,
@@ -606,45 +601,27 @@ async function processRecipeAsync(jobId, reqBody, user) {
       // Handle didTx with potential comment: "did:arweave:abc123, comment text"
       const commaIndex = originalString.indexOf(',');
       if (commaIndex !== -1) {
-        // Extract didTx and comment separately
         const didTx = originalString.substring(0, commaIndex).trim();
-        const comment = originalString.substring(commaIndex + 1).trim();
-        
-        // Store the clean didTx value
         ingredientDidTxMap[originalString] = didTx;
-        ingredientNamesForDisplay.push(didTx); // For display purposes
-        
-        // Comments are already provided in ingredient_comment array
-        
-        console.log(`Found didTx with comment at index ${index}: ${didTx} (comment: "${comment}")`);
+        ingredientNamesForDisplay.push(didTx);
       } else {
-        // didTx without comment
         ingredientDidTxMap[originalString] = originalString;
-        ingredientNamesForDisplay.push(originalString); // For display purposes
-        console.log(`Found didTx without comment at index ${index}: ${originalString}`);
+        ingredientNamesForDisplay.push(originalString);
       }
     } else if (ingredient.startsWith('did:')) {
-      // This handles the case where ingredient is already a didTx
       ingredientDidTxMap[originalString] = ingredient;
-      ingredientNamesForDisplay.push(ingredient); // For display purposes
-      console.log(`Found existing didTx at index ${index}: ${ingredient}`);
+      ingredientNamesForDisplay.push(ingredient);
     } else {
-      // This is a name that needs to be looked up
       const normalizedName = ingredient.trim().toLowerCase().replace(/,/g, '').replace(/\s+/g, ' ');
       ingredientNames.push(normalizedName);
       ingredientNamesForDisplay.push(normalizedName);
-      console.log(`Need to lookup ingredient at index ${index}: ${normalizedName}`);
     }
   });
   
   const ingredientAmounts = ingredients.map(ing => ing.amount ?? 1);
   const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
 
-  console.log('Ingredient names for lookup only:', ingredientNames);
-  console.log('All ingredient names for display:', ingredientNamesForDisplay);
-  console.log('Ingredient comments:', ingredientComments);
-  console.log('Ingredient units:', ingredientUnits);
-  console.log('Existing didTx values:', ingredientDidTxMap);
+  console.log(`📊 Ingredients: ${ingredientNames.length} need lookup, ${Object.keys(ingredientDidTxMap).length} already have DIDs`);
     
   // Define ingredient synonyms for better matching
   const synonymMap = {
@@ -707,9 +684,7 @@ async function processRecipeAsync(jobId, reqBody, user) {
                 limit: 20
             };
             
-            console.log(`Searching for: "${searchTerm}" (exact match, no duplicates)`);
-            const recordsInDB = await getRecords(queryParams);
-            console.log(`Found ${recordsInDB.searchResults} results for "${searchTerm}"`);
+                    const recordsInDB = await getRecords(queryParams);
             
             // Add results to recordMap (results are now sorted by similarity)
             // Preserve the fieldSearchScore from elasticsearch for quality checking
@@ -719,13 +694,9 @@ async function processRecipeAsync(jobId, reqBody, user) {
                 const hasNutritionalInfo = record.data?.nutritionalInfo && 
                                           Object.keys(record.data.nutritionalInfo).length > 0;
                 
-                if (!recordMap[recordName] && hasNutritionalInfo) {  // Avoid duplicates and records without nutritional info
-                    // Preserve the fieldSearchScore for quality threshold checking
+                if (!recordMap[recordName] && hasNutritionalInfo) {
                     recordMap[recordName] = record;
-                    console.log(`  Added "${record.data.basic.name}" with fieldSearchScore: ${record.fieldSearchScore || 'N/A'}`);
                     totalRecordsFound++;
-                } else if (!hasNutritionalInfo) {
-                    console.log(`  Skipped "${record.data.basic.name}" (no nutritional info)`);
                 }
             });
         } catch (error) {
@@ -733,7 +704,7 @@ async function processRecipeAsync(jobId, reqBody, user) {
         }
     }
     
-    console.log(`recordMap populated with ${Object.keys(recordMap).length} unique records from ${totalRecordsFound} total results`);
+    console.log(`📋 Found ${Object.keys(recordMap).length} existing ingredient records in database`);
 
     const ingredientDidRefs = {};
     const nutritionalInfo = [];
@@ -743,11 +714,6 @@ async function processRecipeAsync(jobId, reqBody, user) {
         const cleanedName = cleanedIngredientNames[i];
         const originalName = originalIngredientNames[i];
         const coreSearchTerm = coreIngredientTerms[i];
-        
-        console.log(`Processing ingredient ${i + 1}:`);
-        console.log(`  Original: "${originalName}"`);
-        console.log(`  Cleaned: "${cleanedName}"`);
-        console.log(`  Search term: "${coreSearchTerm}"`);
         
         const bestMatch = findBestMatch(cleanedName);
         if (bestMatch) {
@@ -761,7 +727,6 @@ async function processRecipeAsync(jobId, reqBody, user) {
             console.log(`  ✅ Match found: "${bestMatch.data.basic.name}" (${bestMatch.oip.did || bestMatch.oip.didTx})`);
         } else {
             ingredientDidRefs[originalName] = null;
-            console.log(`  ❌ No match found`);
         }
     }
 
@@ -868,50 +833,43 @@ async function processRecipeAsync(jobId, reqBody, user) {
             const normalizedRecordName = recordName.toLowerCase();
             const recordTerms = normalizedRecordName.split(/\s+/).filter(Boolean);
             
-            // Calculate match score
             let score = 0;
             let matchedTerms = 0;
             let coreMatchedTerms = 0;
             let exactSequenceBonus = 0;
             
-            // Count exact term matches, with higher weight for core terms
             searchTerms.forEach(term => {
                 if (recordTerms.includes(term)) {
                     matchedTerms++;
                     const isCoreIngredient = coreTerms.includes(term);
                     if (isCoreIngredient) {
                         coreMatchedTerms++;
-                        score += 15; // Higher points for core ingredient matches
+                        score += 15;
                     } else {
-                        score += 5; // Lower points for descriptor matches
+                        score += 5;
                     }
                 }
             });
             
-            // Bonus for exact sequence matches (e.g., "beef liver" in that order)
             if (searchTerms.length >= 2) {
                 const searchSequence = searchTerms.join(' ');
                 if (normalizedRecordName.includes(searchSequence)) {
-                    exactSequenceBonus = 50; // Big bonus for exact sequence
+                    exactSequenceBonus = 50;
                     score += exactSequenceBonus;
                 }
             }
             
-            // Bonus for completeness (all search terms found)
             if (matchedTerms === searchTerms.length) {
                 score += 20;
             }
             
-            // Big bonus for matching all core terms
             if (coreMatchedTerms === coreTerms.length && coreTerms.length > 0) {
                 score += 30;
             }
             
-            // Penalty for extra terms in record name (prefer simpler matches)
             const extraTerms = recordTerms.length - matchedTerms;
             score -= extraTerms * 2;
             
-            // Only consider matches that have at least one matching term
             if (matchedTerms === 0) {
                 score = 0;
             }
@@ -927,48 +885,19 @@ async function processRecipeAsync(jobId, reqBody, user) {
                 exactSequence: exactSequenceBonus > 0
             };
         })
-        .filter(match => match.score > 0) // Only keep matches with positive scores
-        .sort((a, b) => b.score - a.score); // Sort by score descending
+        .filter(match => match.score > 0)
+        .sort((a, b) => b.score - a.score);
 
     if (scoredMatches.length > 0) {
         const bestMatch = scoredMatches[0];
-        
-        // Check fieldSearchScore from elasticsearch similarity scoring
         const fieldSearchScore = bestMatch.record.fieldSearchScore || 0;
-        
-        // Calculate minimum score threshold based on ingredient complexity
         const minScoreThreshold = calculateMinimumScoreThreshold(searchTerms.length, bestMatch.matchedTerms);
         
-        console.log(`Best candidate for "${ingredientName}": "${bestMatch.recordName}"`);
-        console.log(`   - Internal score: ${bestMatch.score} (threshold: ${minScoreThreshold})`);
-        console.log(`   - fieldSearchScore: ${fieldSearchScore} (threshold: 900)`);
-        console.log(`   - Matched ${bestMatch.matchedTerms}/${bestMatch.totalTerms} terms (${bestMatch.coreMatchedTerms}/${bestMatch.totalCoreTerms} core)`);
-        console.log(`   - Exact sequence match: ${bestMatch.exactSequence}`);
-        
-        // Log other close matches for debugging
-        if (scoredMatches.length > 1) {
-            console.log(`   Other candidates:`, 
-                scoredMatches.slice(1, 3).map(m => `"${m.recordName}" (internal: ${m.score}, fieldSearch: ${m.record.fieldSearchScore || 'N/A'})`)
-            );
-        }
-        
-        // First check fieldSearchScore - must be >= 900 for high-quality match
-        if (fieldSearchScore < 900) {
-            console.log(`❌ Match rejected: fieldSearchScore ${fieldSearchScore} < 900 (not similar enough to "${ingredientName}"). Will create new record.`);
-            return null;
-        }
-        
-        // Then check internal score threshold
-        if (bestMatch.score >= minScoreThreshold) {
-            console.log(`✅ Match accepted: "${bestMatch.recordName}" (fieldSearchScore: ${fieldSearchScore} >= 900, internal score: ${bestMatch.score} >= ${minScoreThreshold})`);
+        if (fieldSearchScore >= 900 && bestMatch.score >= minScoreThreshold) {
             return bestMatch.record;
-        } else {
-            console.log(`❌ Match rejected: internal score ${bestMatch.score} below threshold ${minScoreThreshold}. Will create new record.`);
-            return null;
         }
+        return null;
     }
-
-    console.log(`No match found for ${ingredientName}`);
     return null;
   }
 
@@ -990,8 +919,6 @@ async function processRecipeAsync(jobId, reqBody, user) {
     }
   });
   
-  console.log('Names needing lookup:', cleanedNamesNeedingLookup);
-  console.log('Original names needing lookup:', originalNamesNeedingLookup);
   
   // Only call lookup function if there are names that need lookup
   let ingredientRecords = { ingredientDidRefs: {}, nutritionalInfo: [] };
@@ -1003,24 +930,19 @@ async function processRecipeAsync(jobId, reqBody, user) {
     console.log('No ingredients need lookup - all are already didTx values');
     updateProgress(jobId, 20, 'All ingredients already have DIDs, skipping lookup...');
   }
-  console.log('Ingredient records:', ingredientRecords);
-  
-  // Only check for missing ingredients among those that needed lookup (not didTx values)
-  let missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
+  const missingIngredientNames = Object.keys(ingredientRecords.ingredientDidRefs).filter(
     name => ingredientRecords.ingredientDidRefs[name] === null
   );
   
+  console.log(`🔍 ${missingIngredientNames.length} ingredients need to be created via OpenAI`);
+  
   if (missingIngredientNames.length > 0) {
-    
-    // Send the CLEANED names through findBestMatch to get the best match for each
     const bestMatches = await Promise.all(
       missingIngredientNames.map(originalName => {
         const cleanedName = nameMapping[originalName];
-        console.log(`Looking for best match for cleaned name: "${cleanedName}" (original: "${originalName}")`);
         return findBestMatch(cleanedName);
       })
     );
-    console.log('Best matches for missing ingredients:', bestMatches);
 
     // Assign matches and update ingredientDidRefs
     bestMatches.forEach((match, index) => {
@@ -1052,11 +974,11 @@ async function processRecipeAsync(jobId, reqBody, user) {
       const progressPercent = 30 + Math.floor((i / missingIngredientNames.length) * 50); // 30-80%
       
       updateProgress(jobId, progressPercent, `Creating ingredient ${i + 1} of ${missingIngredientNames.length}: ${cleanedName}...`);
-      console.log(`Creating nutritional info record for cleaned name: "${cleanedName}" (original: "${originalName}")`);
-      
       const result = await createNewNutritionalInfoRecord(cleanedName, blockchain);
       nutritionalInfoArray.push(result);
     }
+    
+    console.log(`✅ Created ${nutritionalInfoArray.filter(r => r).length} new ingredient records`);
 
     // Update ingredientDidRefs with the newly created nutritional info records
     nutritionalInfoArray.forEach((newRecord, index) => {
@@ -1073,39 +995,8 @@ async function processRecipeAsync(jobId, reqBody, user) {
       }
     });
 
-    // Update missingIngredientNames to remove those that were successfully created
     missingIngredientNames = missingIngredientNames.filter((name, index) => !nutritionalInfoArray[index]);
-    
-    // Check for empty values in ingredientUnits and assign standard_unit from nutritionalInfoArray
-    missingIngredientNames.forEach((originalName, index) => {
-      const cleanedName = nameMapping[originalName];
-      const originalIndex = originalIngredientNames.findIndex(name => name === originalName);
-
-      console.log(`Processing missing ingredient: ${cleanedName} (original: ${originalName}), Found at original index: ${originalIndex}`);
-
-      if (originalIndex !== -1 && !ingredientUnits[originalIndex]) {
-          const nutritionalInfo = nutritionalInfoArray[index];
-          console.log(`Found nutritional info for: ${cleanedName}`, nutritionalInfo);
-
-          if (nutritionalInfo && nutritionalInfo.nutritionalInfo) {
-              ingredientUnits[originalIndex] = nutritionalInfo.nutritionalInfo.standardUnit || 'unit';
-              ingredientAmounts[originalIndex] *= nutritionalInfo.nutritionalInfo.standardAmount || 1;
-
-              console.log(`Updated Units: ${ingredientUnits[originalIndex]}, Updated Amounts: ${ingredientAmounts[originalIndex]}`);
-          } else {
-              console.log(`No nutritional info found for: ${cleanedName}`);
-              ingredientUnits[originalIndex] = 'unit'; // Fallback unit
-          }
-      } else {
-          console.log(`Ingredient not found in original array or already has a unit: ${cleanedName}`);
-      }
-    });
-  } else {
-    console.log('No missing ingredients to process');
   }
-  // You can now use nutritionalInfoArray as needed
-
-  console.log('Ingredient Did Refs:', ingredientRecords);
 
     // console.log('Ingredient DID References:', ingredientRecords.ingredientDidRefs);
     // now we want to look up the record.oip.didTx value from the top ranked record for each ingredient and assign it to ingredientDidRef, we may need to add pagination (there are 20 records limit per page by default) to check all returned records
@@ -1151,29 +1042,12 @@ async function processRecipeAsync(jobId, reqBody, user) {
   // This section is now redundant since we handled the unit processing above
   // The logic has been moved to the previous section to use proper name mapping
 
-// Build final ingredientDRefs array by combining looked-up values with existing didTx values
-let ingredientDRefs = [];
-originalIngredientNames.forEach((originalName, index) => {
-  // Check if this ingredient is already a didTx value
-  if (ingredientDidTxMap[originalName]) {
-    // Use the existing didTx value directly
-    const didTx = ingredientDidTxMap[originalName];
-    ingredientDRefs.push(didTx);
-    console.log(`Using existing didTx for ${originalName}: ${didTx}`);
-  } else {
-    // Get the looked-up didTx value
-    const ingredientDidRef = ingredientRecords.ingredientDidRefs[originalName] || null;
-    ingredientDRefs.push(ingredientDidRef);
-    console.log(`Looked-up DID Ref for ${originalName}: ${ingredientDidRef}`);
-  }
+// Build final ingredientDRefs array
+let ingredientDRefs = originalIngredientNames.map(originalName => {
+  return ingredientDidTxMap[originalName] || ingredientRecords.ingredientDidRefs[originalName] || null;
 });
 
-console.log('Final Units:', ingredientUnits);
-console.log('Final Amounts:', ingredientAmounts);
-
-
-console.log('Units After Assignment:', ingredientUnits);
-console.log('Amounts After Assignment:', ingredientAmounts);
+console.log(`📊 Final ingredient DIDs: ${ingredientDRefs.filter(d => d).length}/${ingredientDRefs.length} resolved`);
 
 // Extract values from the first recipe section for the main recipe data
 const recipeDate = record.basic.date || Math.floor(Date.now() / 1000);
@@ -1207,63 +1081,18 @@ const recipeData = {
   }
 };
 
-// Debug: Check array lengths before filtering
-console.log('Array lengths before filtering:');
-console.log('- ingredientDRefs:', ingredientDRefs.length);
-console.log('- ingredientComments:', ingredientComments.length);
-console.log('- ingredientAmounts:', ingredientAmounts.length);
-console.log('- ingredientUnits:', ingredientUnits.length);
-
-// Only filter if there are actually null values
+// Filter out null ingredients if any
 const hasNulls = ingredientDRefs.some(ref => ref === null);
-console.log('Has null ingredient references:', hasNulls);
-
 if (hasNulls) {
-  console.log('Filtering out null ingredients...');
   const validIndices = ingredientDRefs.map((ref, index) => ref !== null ? index : null).filter(index => index !== null);
-  console.log('Valid indices:', validIndices);
-  
   ingredientDRefs = validIndices.map(index => ingredientDRefs[index]);
   ingredientComments = validIndices.map(index => ingredientComments[index]);
   ingredientAmounts = validIndices.map(index => ingredientAmounts[index]);
   ingredientUnits = validIndices.map(index => ingredientUnits[index]);
-  
-  console.log('Array lengths after filtering:');
-  console.log('- ingredientDRefs:', ingredientDRefs.length);
-  console.log('- ingredientComments:', ingredientComments.length);
-  console.log('- ingredientAmounts:', ingredientAmounts.length);
-  console.log('- ingredientUnits:', ingredientUnits.length);
+  console.log(`⚠️ Filtered out ${originalIngredientNames.length - ingredientDRefs.length} null ingredients`);
 }
 
-// Validate final recipe data structure
-console.log('Final recipe data validation:');
-console.log('- Recipe has basic data:', !!recipeData.basic);
-console.log('- Recipe has recipe data:', !!recipeData.recipe);
-console.log('- All ingredient arrays same length:', 
-  recipeData.recipe.ingredient_amount.length === recipeData.recipe.ingredient_unit.length &&
-  recipeData.recipe.ingredient_unit.length === recipeData.recipe.ingredient.length &&
-  recipeData.recipe.ingredient.length === recipeData.recipe.ingredient_comment.length);
-
-console.log('Final array lengths:');
-console.log('- ingredient_amount:', recipeData.recipe.ingredient_amount?.length || 0);
-console.log('- ingredient_unit:', recipeData.recipe.ingredient_unit?.length || 0);
-console.log('- ingredient:', recipeData.recipe.ingredient?.length || 0);
-console.log('- ingredient_comment:', recipeData.recipe.ingredient_comment?.length || 0);
-
-console.log('Sample ingredient data:');
-if (recipeData.recipe.ingredient && recipeData.recipe.ingredient.length > 0) {
-  console.log('- First ingredient DID:', recipeData.recipe.ingredient[0]);
-  console.log('- First ingredient amount:', recipeData.recipe.ingredient_amount[0]);
-  console.log('- First ingredient unit:', recipeData.recipe.ingredient_unit[0]);
-  console.log('- First ingredient comment:', recipeData.recipe.ingredient_comment[0]);
-}
-
-console.log('Recipe data:', recipeData);
-console.log('Final ingredient processing summary:');
-console.log('- Original ingredients:', originalIngredientNames);
-console.log('- Ingredients for nutrition lookup:', ingredientNames);
-console.log('- Ingredient comments:', ingredientComments);
-console.log('- Ingredient DID references:', ingredientDRefs);
+console.log(`✅ Recipe ready: ${ingredientDRefs.length} ingredients with DIDs`);
 
 // ====== INTELLIGENT INGREDIENT RESOLUTION ======
 // If recipe has ingredient names (not all DIDs) and no pre-calculated nutrition, resolve them intelligently

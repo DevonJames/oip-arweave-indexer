@@ -1546,23 +1546,11 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                     continue;
                 }
                 
-                // FIX #1 & #2: Use standardUnit when recipe unit is empty or generic 'unit'
+                // FIX #1 & #2: Use 'whole' when recipe unit is empty or generic 'unit'
+                // This allows count-based conversion using standardUnit descriptors
                 if (!recipeUnit || recipeUnit.trim() === '' || recipeUnit === 'unit') {
-                    console.log(`🔧 Recipe unit empty or generic for ${ingredientName}, using standardUnit: ${rawStandardUnit}`);
-                    recipeUnit = rawStandardUnit;
-                    
-                    // FIX #4: Extract numeric multiplier from standardUnit if present
-                    // Example: "g (1 medium russet potato)" → recipe wants 4 units = 4 potatoes
-                    // If standardAmount is 173g per potato, and recipe wants 4 potatoes, we need 4 × standardAmount
-                    const unitMatch = rawStandardUnit.match(/\((\d+(?:\.\d+)?)\s+/);
-                    if (unitMatch && recipeAmount) {
-                        // Recipe amount represents number of items described in standardUnit
-                        // Example: recipe wants 4 potatoes, standard is 173g per 1 potato
-                        // So we want: recipeAmount (4) × standardAmount (173g)
-                        console.log(`📐 Detected standard unit multiplier: ${unitMatch[1]} in "${rawStandardUnit}"`);
-                        console.log(`   Recipe wants ${recipeAmount} units, standard is ${standardAmount} per unit`);
-                        // The conversion will handle this by treating recipeAmount as multiplier
-                    }
+                    console.log(`🔧 Recipe unit empty/generic for ${ingredientName}, using 'whole' (count-based)`);
+                    recipeUnit = 'whole'; // Use 'whole' instead of standardUnit for better conversion
                 }
                 
                 // Parse and clean units
@@ -1780,10 +1768,7 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
         // console.log(`   Carbs: ${result.perServing.carbohydratesG}g`);
         
         if (result.skippedIngredients.length > 0) {
-            console.log(`\n⚠️ Skipped ${result.skippedIngredients.length} ingredients:`);
-            result.skippedIngredients.forEach(skip => {
-                console.log(`   - ${skip.name}: ${skip.reason}`);
-            });
+            console.log(`⏭️ Skipped ${result.skippedIngredients.length}: ${result.skippedIngredients.map(s => `${s.name} (${s.reason})`).join(', ')}`);
         }
         
         // Add the summaries to the record using the specified field prefix
