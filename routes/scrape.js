@@ -2228,26 +2228,45 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000)
     let imageData = null;
     if (imageUrl) {
       try {
-        console.log('Downloading recipe image from:', imageUrl);
-        const imageFileName = await downloadImageFile(imageUrl, url);
-        const mediaDownloadsDir = path.resolve(__dirname, '../media');
-        const imagePath = path.join(mediaDownloadsDir, imageFileName);
+        // Check if user is authenticated (required for media upload)
+        const hasAuth = req.headers.authorization && req.headers.authorization.trim() !== '';
+        
+        if (!hasAuth) {
+          console.log('No authentication provided - skipping media upload, using web URL only');
+          // Just use the original web URL without uploading
+          imageData = {
+            webUrl: imageUrl,
+            bittorrentAddress: '',
+            ipfsAddress: '',
+            arweaveAddress: '',
+            filename: '',
+            size: 0,
+            contentType: 'image/jpeg',
+            width: 0,
+            height: 0
+          };
+        } else {
+          // User is authenticated - proceed with media upload
+          console.log('Downloading recipe image from:', imageUrl);
+          const imageFileName = await downloadImageFile(imageUrl, url);
+          const mediaDownloadsDir = path.resolve(__dirname, '../media');
+          const imagePath = path.join(mediaDownloadsDir, imageFileName);
 
-        // Upload to media system to get BitTorrent magnet URI
-        const FormData = require('form-data');
-        const fs = require('fs');
-        const form = new FormData();
-        form.append('file', fs.createReadStream(imagePath));
-        form.append('name', `${metadata.ogTitle || metadata.title} - Recipe Image`);
-        form.append('access_level', 'public');
+          // Upload to media system to get BitTorrent magnet URI
+          const FormData = require('form-data');
+          const fs = require('fs');
+          const form = new FormData();
+          form.append('file', fs.createReadStream(imagePath));
+          form.append('name', `${metadata.ogTitle || metadata.title} - Recipe Image`);
+          form.append('access_level', 'public');
 
-        // Upload to get mediaId and BitTorrent addresses
-        const uploadResponse = await axios.post(`${getBaseUrl(req)}/api/media/upload`, form, {
-          headers: {
-            ...form.getHeaders(),
-            'Authorization': req.headers.authorization || ''
-          }
-        });
+          // Upload to get mediaId and BitTorrent addresses
+          const uploadResponse = await axios.post(`${getBaseUrl(req)}/api/media/upload`, form, {
+            headers: {
+              ...form.getHeaders(),
+              'Authorization': req.headers.authorization
+            }
+          });
 
         if (uploadResponse.data.success) {
           console.log('Image uploaded successfully, mediaId:', uploadResponse.data.mediaId);
@@ -2279,6 +2298,7 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000)
             height: imageMetadata.height || 0
           };
         }
+        } // End of hasAuth else block
       } catch (error) {
         console.error('Error processing recipe image:', error);
         // Fallback to just web URL if upload fails

@@ -1458,42 +1458,6 @@ if (recipeData.summaryNutritionalInfoPerServing && Object.keys(recipeData.summar
     }
 }
 
-// Add job status polling endpoint
-router.get('/publish-status/:jobId', (req, res) => {
-    const { getJob } = require('../helpers/jobTracker');
-    const { jobId } = req.params;
-    
-    const job = getJob(jobId);
-    
-    if (!job) {
-        return res.status(404).json({
-            error: 'Job not found',
-            message: 'Job may have expired or never existed'
-        });
-    }
-    
-    const response = {
-        jobId: job.jobId,
-        status: job.status,
-        progress: job.progress,
-        message: job.message
-    };
-    
-    // Include result data when completed
-    if (job.status === 'completed' && job.result) {
-        response.transactionId = job.result.transactionId;
-        response.recordToIndex = job.result.recordToIndex;
-        response.blockchain = job.result.blockchain;
-    }
-    
-    // Include error details when failed
-    if (job.status === 'failed' && job.error) {
-        response.error = job.error.message;
-    }
-    
-    res.status(200).json(response);
-});
-
 // Add workout publishing endpoint
 router.post('/newWorkout', async (req, res) => {
     try {
