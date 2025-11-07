@@ -109,11 +109,11 @@ async function parseRecipeWithLLM(htmlContent, url, metadata) {
       messages: [
               {
                 role: 'system',
-                content: 'You are a recipe extraction expert. Extract complete recipe information from the provided text. Parse ingredient strings to separate amounts, units, names, and comments. Comments include preparation notes like "minced", "chopped", "sliced", "diced", "optional", "to taste", etc. - these typically appear after commas or in parentheses. For timing, convert to minutes.'
+                content: 'You are a recipe extraction expert. Extract complete recipe information from the provided text. Parse ingredient strings to separate amounts, units, names, and comments. Comments include preparation notes like "minced", "chopped", "sliced", "diced", "optional", "to taste", etc. - these typically appear after commas or in parentheses. For timing, convert to minutes. Identify the recipe author if mentioned. Intelligently determine the cuisine type and course/meal type based on the recipe content.'
               },
               {
                 role: 'user',
-                content: `Extract the recipe from this webpage text. Return complete recipe data including title, description, ingredients (with amount, unit, name, and comment separated), instructions, timing, servings, etc.\n\nFor ingredients, separate any preparation notes or modifiers into the "comment" field. Examples:\n- "2 cloves garlic, minced" → amount: 2, unit: "cloves", name: "garlic", comment: "minced"\n- "1 cup onion (diced)" → amount: 1, unit: "cup", name: "onion", comment: "diced"\n- "Salt to taste" → amount: null, unit: "", name: "salt", comment: "to taste"\n- "1 cup olive oil" → amount: 1, unit: "cup", name: "olive oil", comment: ""\n\nWebpage URL: ${url}\n\nText:\n${limitedText}`
+                content: `Extract the recipe from this webpage text. Return complete recipe data including title, description, author, ingredients (with amount, unit, name, and comment separated), instructions, timing, servings, cuisine, and course.\n\nFor ingredients, separate any preparation notes or modifiers into the "comment" field. Examples:\n- "2 cloves garlic, minced" → amount: 2, unit: "cloves", name: "garlic", comment: "minced"\n- "1 cup onion (diced)" → amount: 1, unit: "cup", name: "onion", comment: "diced"\n- "Salt to taste" → amount: null, unit: "", name: "salt", comment: "to taste"\n- "1 cup olive oil" → amount: 1, unit: "cup", name: "olive oil", comment: ""\n\nFor course, choose from: Breakfast, Lunch, Dinner, Snack, Workout Meal, Brunch, Afternoon Snack, Nighttime Snack, Pre-Workout Meal, Post-Workout Meal\n\nFor cuisine, use descriptive terms like: Italian, Mexican, Chinese, Japanese, Indian, Thai, French, Mediterranean, American, Greek, etc.\n\nFor author, look for "By [Name]", "Recipe by [Name]", or author attribution in the text. If not found, return null.\n\nWebpage URL: ${url}\n\nText:\n${limitedText}`
               }
       ],
       response_format: {
@@ -122,17 +122,18 @@ async function parseRecipeWithLLM(htmlContent, url, metadata) {
           name: 'recipe_data',
           strict: true,
           schema: {
-            type: 'object',
-            properties: {
-              title: { type: 'string' },
-              description: { type: 'string' },
-              imageUrl: { type: 'string' },
-              prepTime: { type: ['number', 'null'] },
-              cookTime: { type: ['number', 'null'] },
-              totalTime: { type: ['number', 'null'] },
-              servings: { type: ['number', 'null'] },
-              cuisine: { type: ['string', 'null'] },
-              course: { type: ['string', 'null'] },
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string' },
+                    description: { type: 'string' },
+                    author: { type: ['string', 'null'] },
+                    imageUrl: { type: 'string' },
+                    prepTime: { type: ['number', 'null'] },
+                    cookTime: { type: ['number', 'null'] },
+                    totalTime: { type: ['number', 'null'] },
+                    servings: { type: ['number', 'null'] },
+                    cuisine: { type: ['string', 'null'] },
+                    course: { type: ['string', 'null'] },
                     ingredients: {
                       type: 'array',
                       items: {
@@ -147,12 +148,12 @@ async function parseRecipeWithLLM(htmlContent, url, metadata) {
                         additionalProperties: false
                       }
                     },
-              instructions: {
-                type: 'array',
-                items: { type: 'string' }
-              }
-            },
-            required: ['title', 'description', 'imageUrl', 'prepTime', 'cookTime', 'totalTime', 'servings', 'cuisine', 'course', 'ingredients', 'instructions'],
+                    instructions: {
+                      type: 'array',
+                      items: { type: 'string' }
+                    }
+                  },
+                  required: ['title', 'description', 'author', 'imageUrl', 'prepTime', 'cookTime', 'totalTime', 'servings', 'cuisine', 'course', 'ingredients', 'instructions'],
             additionalProperties: false
           }
         }
@@ -1694,7 +1695,7 @@ async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arwe
 
 // works well for mediteranean site, trying another version that might generalize to all sites
 async function fetchParsedRecipeData(url, html, scrapeId, screenshots, totalHeight, options) {
-  const { sendUpdate, res, blockchain = 'arweave' } = options; // Destructure res and blockchain from options
+  const { sendUpdate, res, req, blockchain = 'arweave' } = options; // Destructure res, req, and blockchain from options
     // Ensure scrapeId is initialized
     if (!ongoingScrapes.has(scrapeId)) {
       ongoingScrapes.set(scrapeId, { clients: [res], data: [] });
@@ -1819,6 +1820,7 @@ if (records.searchResults > 0) {
     let servings = null;
     let cuisine = null;
     let course = null;
+    let author = null;
 
     // Parse ingredient sections
     const ingredientSections = [];
@@ -1989,6 +1991,7 @@ if (records.searchResults > 0) {
           if (!servings && llmRecipe.servings) servings = llmRecipe.servings;
           if (!cuisine && llmRecipe.cuisine) cuisine = llmRecipe.cuisine;
           if (!course && llmRecipe.course) course = llmRecipe.course;
+          if (!author && llmRecipe.author) author = llmRecipe.author;
           
           console.log('Continuing with LLM-extracted data');
         } else {
@@ -2202,9 +2205,19 @@ if (records.searchResults > 0) {
     }
 
     // Parse cuisine and course (already declared above)
-    cuisine = jsonLdRecipe?.recipeCuisine || $('.wprm-recipe-cuisine').text().trim() || null;
-    course = jsonLdRecipe?.recipeCategory || $('.wprm-recipe-course').text().trim() || null;
+    // If LLM hasn't already set them, try to extract from HTML
+    if (!cuisine) {
+      cuisine = jsonLdRecipe?.recipeCuisine || $('.wprm-recipe-cuisine').text().trim() || null;
+    }
+    if (!course) {
+      course = jsonLdRecipe?.recipeCategory || $('.wprm-recipe-course').text().trim() || null;
+    }
 
+    // Parse author (already declared above)
+    // If LLM hasn't already set it, try to extract from JSON-LD or metadata
+    if (!author) {
+      author = jsonLdRecipe?.author?.name || jsonLdRecipe?.author || metadata.author || null;
+    }
 
     // Extract notes
     const notes = $('.wprm-recipe-notes').text().trim() || null;
@@ -2308,7 +2321,7 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000)
         notes: notes || '',
         cuisine: cuisine || null,
         course: course || null,
-        author: metadata.author || null
+        author: author || null
       },
       blockchain: blockchain
     };
@@ -2994,7 +3007,7 @@ router.post('/recipe', async (req, res) => {
       scrapeId, 
       screenshots, 
       totalHeight,
-      { sendUpdate, res, blockchain }
+      { sendUpdate, res, req, blockchain }
     );
 
   } catch (error) {
