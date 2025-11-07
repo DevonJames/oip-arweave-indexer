@@ -1650,14 +1650,78 @@ if (records.searchResults > 0) {
 
     console.log('Scraping recipe data from URL:', url);
 
+    // Check for JSON-LD schema data (common on many recipe sites including Allrecipes)
+    let jsonLdRecipe = null;
+    $('script[type="application/ld+json"]').each((i, elem) => {
+      try {
+        const jsonData = JSON.parse($(elem).html());
+        // Check if it's a Recipe schema
+        if (jsonData['@type'] === 'Recipe' || (Array.isArray(jsonData['@graph']) && jsonData['@graph'].find(item => item['@type'] === 'Recipe'))) {
+          jsonLdRecipe = jsonData['@type'] === 'Recipe' ? jsonData : jsonData['@graph'].find(item => item['@type'] === 'Recipe');
+          console.log('Found JSON-LD Recipe schema');
+        }
+      } catch (e) {
+        // Skip invalid JSON
+      }
+    });
+
     // Parse title, description, and metadata
-    const title = $('h1.entry-title').text().trim() || $('h1.recipe-title').text().trim() || null;
-    const description = metadata.ogDescription || $('p').first().text().trim() || null;
-    const imageUrl = metadata.ogImage || $('img.wp-image').first().attr('src') || null;
+    const title = jsonLdRecipe?.name || $('h1.entry-title').text().trim() || $('h1.recipe-title').text().trim() || metadata.ogTitle || null;
+    const description = jsonLdRecipe?.description || metadata.ogDescription || $('p').first().text().trim() || null;
+    const imageUrl = jsonLdRecipe?.image?.url || jsonLdRecipe?.image || metadata.ogImage || $('img.wp-image').first().attr('src') || null;
     // const date = Date.now() / 1000;
 
     // Parse ingredient sections
     const ingredientSections = [];
+    
+    // Helper function to parse fractions safely
+    function parseFraction(str) {
+      if (!str) return null;
+      // Handle mixed numbers like "1 1/2" or fractions like "1/2" or decimals like "1.5"
+      const mixedMatch = str.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+      if (mixedMatch) {
+        const whole = parseInt(mixedMatch[1], 10);
+        const numerator = parseInt(mixedMatch[2], 10);
+        const denominator = parseInt(mixedMatch[3], 10);
+        return whole + (numerator / denominator);
+      }
+      
+      const fractionMatch = str.match(/^(\d+)\/(\d+)$/);
+      if (fractionMatch) {
+        return parseInt(fractionMatch[1], 10) / parseInt(fractionMatch[2], 10);
+      }
+      
+      return parseFloat(str) || null;
+    }
+    
+    // Try JSON-LD first if available
+    if (jsonLdRecipe && jsonLdRecipe.recipeIngredient && jsonLdRecipe.recipeIngredient.length > 0) {
+      console.log('Parsing ingredients from JSON-LD schema');
+      const ingredients = jsonLdRecipe.recipeIngredient.map(ingredientString => {
+        // Parse ingredient string like "2 cups flour" or "1 1/2 tablespoons olive oil"
+        const match = ingredientString.match(/^([\d\s\/\.]+)?\s*([a-zA-Z]+)?\s*(.+)$/);
+        if (match) {
+          return {
+            amount: match[1] ? parseFraction(match[1].trim()) : null,
+            unit: match[2] || '',
+            name: match[3] || ingredientString
+          };
+        }
+        // Fallback if regex doesn't match
+        return {
+          amount: null,
+          unit: '',
+          name: ingredientString
+        };
+      });
+      
+      ingredientSections.push({
+        section: 'Main',
+        ingredients: ingredients
+      });
+    }
+    
+    // If JSON-LD didn't work, try HTML parsing
     $('[class*="ingredient-group"], [class*="ingredients-group"]').each((i, section) => {
       const sectionName = $(section).find('[class*="group-name"], [class*="section-title"]').text().trim() || `Section ${i + 1}`;
       const ingredients = [];
@@ -1698,6 +1762,20 @@ if (records.searchResults > 0) {
     console.log('Ingredient sections count:', ingredientSections.length, ingredientSections);
     console.log('Primary ingredient section:', primaryIngredientSection);
 
+    // Check if we found any ingredients - if not, send error and skip processing
+    if (!primaryIngredientSection || !primaryIngredientSection.ingredients || primaryIngredientSection.ingredients.length === 0) {
+      console.error('No ingredients found on page - selectors may not match this site');
+      
+      if (sendUpdate) {
+        sendUpdate('error', {
+          message: 'Could not parse recipe ingredients',
+          details: `The recipe structure on ${new URL(url).hostname} is not recognized. Please try a different recipe site or provide the HTML directly.`
+        });
+      }
+      
+      cleanupScrape(scrapeId);
+      return;
+    }
 
     // works well for two sections but breaks with one section - trying test above for both cases
     // // Parse ingredient sections
@@ -1787,11 +1865,35 @@ if (records.searchResults > 0) {
   // Extract instructions
   const instructions = [];
 
+  // Try JSON-LD first
+  if (jsonLdRecipe && jsonLdRecipe.recipeInstructions) {
+    if (Array.isArray(jsonLdRecipe.recipeInstructions)) {
+      jsonLdRecipe.recipeInstructions.forEach(step => {
+        if (typeof step === 'string') {
+          instructions.push(step);
+        } else if (step.text) {
+          instructions.push(step.text);
+        } else if (step['@type'] === 'HowToStep' && step.text) {
+          instructions.push(step.text);
+        }
+      });
+    } else if (typeof jsonLdRecipe.recipeInstructions === 'string') {
+      // Split by newlines or numbered steps
+      const steps = jsonLdRecipe.recipeInstructions.split(/\n+|(?=\d+\.)/);
+      steps.forEach(step => {
+        const cleanStep = step.trim().replace(/^\d+\.\s*/, '');
+        if (cleanStep) instructions.push(cleanStep);
+      });
+    }
+  }
 
-  $('.wprm-recipe-instruction').each((i, elem) => {
-    const instruction = $(elem).text().replace(/\s+/g, ' ').trim();
-    if (instruction) instructions.push(instruction);
-  });
+  // Fallback to HTML parsing if no instructions found
+  if (instructions.length === 0) {
+    $('.wprm-recipe-instruction').each((i, elem) => {
+      const instruction = $(elem).text().replace(/\s+/g, ' ').trim();
+      if (instruction) instructions.push(instruction);
+    });
+  }
 
   console.log('Instructions:', instructions);
 
@@ -2031,27 +2133,74 @@ const ingredientUnits = primaryIngredientSection.ingredients.map(ing => (ing.uni
     // console.log('Nutritional info:', nutritionalInfo);
 
 
-    // Extract prep time, cook time, total time, cuisine, and course
-
-    const prepTimeMatch = $('.wprm-recipe-prep_time').text().trim().match(/(\d+)\s*mins?/i);
-    const prep_time_mins = prepTimeMatch ? parseInt(prepTimeMatch[1], 10) : null;
-
-    const cookTimeMatch = $('.wprm-recipe-cook_time').text().trim().match(/(\d+)\s*mins?/i);
-    const cook_time_mins = cookTimeMatch ? parseInt(cookTimeMatch[1], 10) : null;
-
-    const totalTimeMatch = $('.wprm-recipe-total_time').text().trim().match(/(\d+)\s*mins?/i);
-    const total_time_mins = totalTimeMatch ? parseInt(totalTimeMatch[1], 10) : null;
-
-    let servingsStr = $('#wprm-recipe-container-10480').attr('data-servings');
-    // Fallback if data-servings is not found
-    if (!servingsStr) {
-      servingsStr = $('[class*="wprm-recipe-servings"]').text().trim() || null;
+    // Helper function to convert ISO 8601 duration to minutes
+    function parseDurationToMinutes(duration) {
+      if (!duration) return null;
+      // Handle ISO 8601 format like "PT15M", "PT1H30M", "P1DT2H"
+      const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+      if (match) {
+        const hours = parseInt(match[1] || 0, 10);
+        const minutes = parseInt(match[2] || 0, 10);
+        return hours * 60 + minutes;
+      }
+      return null;
     }
-    // Extract numerical value from servingsStr if possible
-    const servings = servingsStr ? parseInt(servingsStr.match(/\d+/)?.[0], 10) : null;
 
-    const cuisine = $('.wprm-recipe-cuisine').text().trim() || null;
-    const course = $('.wprm-recipe-course').text().trim() || null;
+    // Extract prep time, cook time, total time, cuisine, and course
+    let prep_time_mins = null;
+    let cook_time_mins = null;
+    let total_time_mins = null;
+
+    // Try JSON-LD first
+    if (jsonLdRecipe) {
+      prep_time_mins = parseDurationToMinutes(jsonLdRecipe.prepTime);
+      cook_time_mins = parseDurationToMinutes(jsonLdRecipe.cookTime);
+      total_time_mins = parseDurationToMinutes(jsonLdRecipe.totalTime);
+    }
+
+    // Fallback to HTML parsing if not found in JSON-LD
+    if (!prep_time_mins) {
+      const prepTimeMatch = $('.wprm-recipe-prep_time').text().trim().match(/(\d+)\s*mins?/i);
+      prep_time_mins = prepTimeMatch ? parseInt(prepTimeMatch[1], 10) : null;
+    }
+
+    if (!cook_time_mins) {
+      const cookTimeMatch = $('.wprm-recipe-cook_time').text().trim().match(/(\d+)\s*mins?/i);
+      cook_time_mins = cookTimeMatch ? parseInt(cookTimeMatch[1], 10) : null;
+    }
+
+    if (!total_time_mins) {
+      const totalTimeMatch = $('.wprm-recipe-total_time').text().trim().match(/(\d+)\s*mins?/i);
+      total_time_mins = totalTimeMatch ? parseInt(totalTimeMatch[1], 10) : null;
+    }
+
+    // Parse servings
+    let servings = null;
+    
+    // Try JSON-LD first
+    if (jsonLdRecipe && jsonLdRecipe.recipeYield) {
+      if (typeof jsonLdRecipe.recipeYield === 'number') {
+        servings = jsonLdRecipe.recipeYield;
+      } else if (typeof jsonLdRecipe.recipeYield === 'string') {
+        const match = jsonLdRecipe.recipeYield.match(/\d+/);
+        servings = match ? parseInt(match[0], 10) : null;
+      }
+    }
+    
+    // Fallback to HTML parsing
+    if (!servings) {
+      let servingsStr = $('#wprm-recipe-container-10480').attr('data-servings');
+      // Fallback if data-servings is not found
+      if (!servingsStr) {
+        servingsStr = $('[class*="wprm-recipe-servings"]').text().trim() || null;
+      }
+      // Extract numerical value from servingsStr if possible
+      servings = servingsStr ? parseInt(servingsStr.match(/\d+/)?.[0], 10) : null;
+    }
+
+    // Parse cuisine and course
+    const cuisine = jsonLdRecipe?.recipeCuisine || $('.wprm-recipe-cuisine').text().trim() || null;
+    const course = jsonLdRecipe?.recipeCategory || $('.wprm-recipe-course').text().trim() || null;
 
 
     // Extract notes
@@ -3230,22 +3379,31 @@ router.get('/open-stream', (req, res) => {
   
   // Store the client connection
   if (!ongoingScrapes.has(streamId)) {
-    ongoingScrapes.set(streamId, []);
+    ongoingScrapes.set(streamId, { clients: [], data: [] });
   }
-  ongoingScrapes.get(streamId).push(res);
+  const streamData = ongoingScrapes.get(streamId);
+  streamData.clients.push(res);
+  
+  // Send any cached events to this new client
+  if (streamData.data && streamData.data.length > 0) {
+    streamData.data.forEach(({ event, data }) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    });
+  }
   
   // Clean up on client disconnect
   req.on('close', () => {
     clearInterval(pingInterval);
-    const clients = ongoingScrapes.get(streamId);
-    if (clients) {
-      const index = clients.indexOf(res);
+    const streamData = ongoingScrapes.get(streamId);
+    if (streamData && streamData.clients) {
+      const index = streamData.clients.indexOf(res);
       if (index !== -1) {
-        clients.splice(index, 1);
+        streamData.clients.splice(index, 1);
       }
       
       // If no more clients, clean up resources
-      if (clients.length === 0) {
+      if (streamData.clients.length === 0) {
         cleanupScrape(streamId);
         console.log(`No more clients for streamId: ${streamId}. Cleaning up.`);
       }
