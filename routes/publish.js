@@ -652,6 +652,18 @@ async function processRecipeAsync(jobId, reqBody, user) {
 
   let recordMap = {};
     
+  // Helper function to check if a unit is count-based
+  const isCountUnit = (unit) => {
+    const countUnits = ['unit', 'units', 'piece', 'pieces', 'item', 'items', 'whole', 'clove', 'cloves', 'large', 'medium', 'small'];
+    return countUnits.includes(unit?.toLowerCase()?.trim());
+  };
+  
+  // Helper function to parse units (remove parenthetical descriptions)
+  const parseUnit = (unit) => {
+    if (!unit) return unit;
+    return unit.replace(/\(.*?\)/g, '').trim();
+  };
+  
   async function fetchIngredientRecordData(cleanedIngredientNames, originalIngredientNames) {
     // CRITICAL FIX: Use the full cleaned ingredient names for search
     // This ensures "grass-fed butter" searches for "grass-fed butter" and creates "grass-fed butter"
@@ -717,14 +729,29 @@ async function processRecipeAsync(jobId, reqBody, user) {
         
         const bestMatch = findBestMatch(cleanedName);
         if (bestMatch) {
-            ingredientDidRefs[originalName] = bestMatch.oip.did || bestMatch.oip.didTx;
-            nutritionalInfo.push({
-                ingredientName: bestMatch.data.basic.name,
-                nutritionalInfo: bestMatch.data.nutritionalInfo || {},
-                ingredientSource: bestMatch.data.basic.webUrl,
-                ingredientDidRef: bestMatch.oip.did || bestMatch.oip.didTx
-            });
-            console.log(`  ✅ Match found: "${bestMatch.data.basic.name}" (${bestMatch.oip.did || bestMatch.oip.didTx})`);
+            // Check if the match has compatible units with the recipe
+            const recipeUnit = ingredientUnits[i] || 'whole';
+            const standardUnit = bestMatch.data.nutritionalInfo?.standardUnit || '';
+            const isRecipeCountBased = isCountUnit(recipeUnit);
+            const isStandardCountBased = isCountUnit(parseUnit(standardUnit));
+            const hasQtyField = bestMatch.data.nutritionalInfo?.qtyInStandardAmount !== undefined;
+            
+            // Determine if units are incompatible
+            const unitsIncompatible = (isRecipeCountBased !== isStandardCountBased) && !hasQtyField;
+            
+            if (unitsIncompatible) {
+                console.log(`⚠️ Unit mismatch: "${bestMatch.data.basic.name}" has ${standardUnit}, recipe needs ${recipeUnit} (missing qtyInStandardAmount). Will regenerate.`);
+                ingredientDidRefs[originalName] = null; // Force regeneration
+            } else {
+                ingredientDidRefs[originalName] = bestMatch.oip.did || bestMatch.oip.didTx;
+                nutritionalInfo.push({
+                    ingredientName: bestMatch.data.basic.name,
+                    nutritionalInfo: bestMatch.data.nutritionalInfo || {},
+                    ingredientSource: bestMatch.data.basic.webUrl,
+                    ingredientDidRef: bestMatch.oip.did || bestMatch.oip.didTx
+                });
+                console.log(`  ✅ Matched: ${originalName}`);
+            }
         } else {
             ingredientDidRefs[originalName] = null;
         }

@@ -222,7 +222,15 @@ async function fetchNutritionalData(ingredientName) {
         },
         {
           role: 'user',
-          content: `What is the nutritional information for "${ingredientName}"? I need calories, protein, fat, saturated fat, trans fat, cholesterol, sodium, carbohydrates, dietary fiber, sugars, added sugars, potassium, calcium, iron, vitamin A, vitamin C, vitamin D, allergens, gluten free, and organic, as well as the standard amount and unit of the ingredient.`
+          content: `What is the nutritional information for "${ingredientName}"? I need:
+- Standard amount and unit (use practical serving sizes)
+- qtyInStandardAmount: How many WHOLE items are in the standard amount? For example, if standard is "113g (1 cup shredded)", qtyInStandardAmount is the number of whole items (like "2 whole avocados") that would fill 1 cup when shredded/prepared. If it's a liquid or bulk ingredient, use 1. If it's already count-based like "1 medium apple", use 1.
+- Calories, protein, fat, saturated fat, trans fat, cholesterol, sodium, carbohydrates, dietary fiber, sugars, added sugars
+- Minerals: potassium, calcium, iron
+- Vitamins: vitamin A (mcg RAE), vitamin C (mg), vitamin D (mcg)
+- Allergens (array), gluten free (boolean), organic (boolean)
+
+Important: qtyInStandardAmount helps convert between volume measurements and whole item counts.`
         }
       ],
       response_format: {
@@ -235,6 +243,7 @@ async function fetchNutritionalData(ingredientName) {
             properties: {
               standardAmount: { type: 'number' },
               standardUnit: { type: 'string' },
+              qtyInStandardAmount: { type: 'number' },
               calories: { type: 'number' },
               proteinG: { type: 'number' },
               fatG: { type: 'number' },
@@ -256,7 +265,7 @@ async function fetchNutritionalData(ingredientName) {
               glutenFree: { type: 'boolean' },
               organic: { type: 'boolean' }
             },
-            required: ['standardAmount', 'standardUnit', 'calories', 'proteinG', 'fatG', 'saturatedFatG', 'transFatG', 'cholesterolMg', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'addedSugarsG', 'potassiumMg', 'calciumMg', 'ironMg', 'vitaminAMcg', 'vitaminCMg', 'vitaminDMcg', 'allergens', 'glutenFree', 'organic'],
+            required: ['standardAmount', 'standardUnit', 'qtyInStandardAmount', 'calories', 'proteinG', 'fatG', 'saturatedFatG', 'transFatG', 'cholesterolMg', 'sodiumMg', 'carbohydratesG', 'dietaryFiberG', 'sugarsG', 'addedSugarsG', 'potassiumMg', 'calciumMg', 'ironMg', 'vitaminAMcg', 'vitaminCMg', 'vitaminDMcg', 'allergens', 'glutenFree', 'organic'],
             additionalProperties: false
           }
         }
@@ -298,6 +307,7 @@ async function fetchNutritionalData(ingredientName) {
       nutritionalInfo: {
         standardAmount: openaiData.standardAmount || 1,
         standardUnit: openaiData.standardUnit || 'piece',
+        qtyInStandardAmount: openaiData.qtyInStandardAmount || 1,
         calories: openaiData.calories || 0,
         proteinG: openaiData.proteinG || 0,
         fatG: openaiData.fatG || 0,
@@ -370,6 +380,7 @@ function parseNutritionalDataManually(text, ingredientName) {
     nutritionalInfo: {
       standardAmount: 100,
       standardUnit: 'g',
+      qtyInStandardAmount: 1,
       calories: extracted.calories || 0,
       proteinG: extracted.protein || 0,
       fatG: extracted.fat || 0,
@@ -414,7 +425,8 @@ function createFallbackNutritionalData(ingredientName) {
     },
     nutritionalInfo: {
       standardAmount: 1,
-      standardUnit: 'unit',
+      standardUnit: 'piece',
+      qtyInStandardAmount: 1,
       calories: 0,
       proteinG: 0,
       fatG: 0,

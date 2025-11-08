@@ -1098,7 +1098,7 @@ async function searchCreatorByAddress(didAddress) {
     }
 };
 
-// Helper function to normalize and extract base unit from compound descriptions
+  // Helper function to normalize and extract base unit from compound descriptions
 const normalizeUnit = (unit) => {
     if (!unit) return '';
     
@@ -1111,6 +1111,7 @@ const normalizeUnit = (unit) => {
     
     // Handle descriptive units like "cups shredded" -> "cups"
     // or "roll 1 serving" -> "roll"
+    // or "cup diced" -> "cup"
     const firstWord = normalized.split(' ')[0];
     
     return firstWord;
@@ -1540,11 +1541,14 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                 
                 const standardAmount = nutritionalInfo.standardAmount;
                 const rawStandardUnit = nutritionalInfo.standardUnit;
+                const qtyInStandardAmount = nutritionalInfo.qtyInStandardAmount || 1; // New field
                 
                 if (!standardAmount || !rawStandardUnit || standardAmount <= 0) {
                     skippedIngredients.push({ index: i, reason: 'Missing standard amount/unit', name: ingredientName });
                     continue;
                 }
+                
+                console.log(`🔍 ${ingredientName}: standard=${standardAmount} ${rawStandardUnit}, qty=${qtyInStandardAmount} whole items`);
                 
                 // FIX #1 & #2: Use 'whole' when recipe unit is empty or generic 'unit'
                 // This allows count-based conversion using standardUnit descriptors
@@ -1579,11 +1583,28 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                 const standardUnitInfo = extractStandardUnitMultiplier(rawStandardUnit);
                 
                 // Try direct unit conversion first
-                const convertedAmount = convertUnits(recipeAmount, cleanRecipeUnit, standardUnit);
+                let convertedAmount = convertUnits(recipeAmount, cleanRecipeUnit, standardUnit);
+                
+                // NEW: If conversion failed and standardUnit has descriptors, try just the base unit
+                if ((convertedAmount === null || convertedAmount === undefined || isNaN(convertedAmount)) && standardUnit !== rawStandardUnit) {
+                    const baseStandardUnit = normalizeUnit(rawStandardUnit); // Gets first word: "cup diced" -> "cup"
+                    console.log(`⚙️ First conversion failed, trying base unit: "${rawStandardUnit}" -> "${baseStandardUnit}"`);
+                    convertedAmount = convertUnits(recipeAmount, cleanRecipeUnit, baseStandardUnit);
+                    if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
+                        console.log(`✅ Base unit conversion succeeded: ${cleanRecipeUnit} -> ${baseStandardUnit}`);
+                    }
+                }
                 
                 if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
                     multiplier = convertedAmount / standardAmount;
                     conversionMethod = 'direct unit conversion';
+                } else if (isCountUnit(cleanRecipeUnit) && qtyInStandardAmount > 0) {
+                    // NEW: Use qtyInStandardAmount for count-based conversions
+                    // Example: recipe wants 2 whole avocados, standard is "1 cup (2 whole avocados)"
+                    // qtyInStandardAmount = 2, so multiplier = 2 / 2 = 1x the standard amount
+                    multiplier = recipeAmount / qtyInStandardAmount;
+                    conversionMethod = `count-to-volume conversion using qtyInStandardAmount (${qtyInStandardAmount} whole per ${standardAmount} ${rawStandardUnit})`;
+                    console.log(`✅ Count conversion: ${recipeAmount} ${cleanRecipeUnit} = ${multiplier}x standard (${qtyInStandardAmount} whole items per standard)`);
                 } else if (standardUnitInfo && isCountUnit(cleanRecipeUnit)) {
                     // FIX #4 continued: Recipe uses count unit, standard describes count
                     // Example: recipe wants 4 "unit", standard is "173g (1 medium russet potato)"
