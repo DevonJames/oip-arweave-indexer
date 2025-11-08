@@ -1511,8 +1511,8 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                 if (comment.toLowerCase().includes('optional') || 
                     comment.toLowerCase().includes('as desired') ||
                     comment.toLowerCase().includes('to taste')) {
-                    skippedIngredients.push({ index: i, reason: 'Optional ingredient (excluded from nutrition)', name: ingredient.name });
-                    console.log(`⏭️ Skipping optional ingredient: ${ingredient.name} (comment: "${comment}")`);
+                    skippedIngredients.push({ index: i, reason: 'Optional ingredient (excluded from nutrition)', name: ingredientName });
+                    console.log(`⏭️ Skipping optional ingredient: [${i}] ${ingredientName} (comment: "${comment}")`);
                     continue;
                 }
                 
@@ -1759,10 +1759,12 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
             did: typeof ingredientRef === 'string' && ingredientRef.startsWith('did:') ? ingredientRef : null,
             amount: recipe.ingredient_amount[i],
             unit: recipe.ingredient_unit[i],
-            comment: recipe.ingredient_comment ? recipe.ingredient_comment[i] : '', // Include comment for optional ingredient filtering
+            comment: recipe.ingredient_comment && recipe.ingredient_comment[i] ? recipe.ingredient_comment[i] : '', // Include comment for optional ingredient filtering
             name: typeof ingredientRef === 'object' && ingredientRef?.data?.basic?.name ? ingredientRef.data.basic.name : `ingredient ${i}`,
             nutritionalInfo: typeof ingredientRef === 'object' && ingredientRef?.data?.nutritionalInfo ? ingredientRef.data.nutritionalInfo : null
         }));
+        
+        console.log(`📋 Processing ${ingredients.length} ingredients, comments: ${ingredients.map((ing, i) => `[${i}]="${ing.comment}"`).join(', ')}`);
         
         const servings = recipe.servings || 1;
         
