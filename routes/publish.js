@@ -1233,51 +1233,64 @@ if (recipeData.summaryNutritionalInfoPerServing && Object.keys(recipeData.summar
   try {
     console.log('Calculating nutritional summary for recipe...');
     
-    // Fetch all records from database to resolve ingredient nutritional data
+    // Build ingredients array with nutritional data for calculation
+    // This includes both existing records from DB and newly created ones
+    const ingredientsWithNutrition = [];
+    
+    for (let i = 0; i < ingredientDRefs.length; i++) {
+      const did = ingredientDRefs[i];
+      const amount = ingredientAmounts[i];
+      const unit = ingredientUnits[i];
+      const comment = ingredientComments[i] || '';
+      
+      // Try to find nutritionalInfo from the ingredientRecords (newly created)
+      let nutritionalInfo = null;
+      let name = `ingredient ${i}`;
+      
+      const matchingInfo = ingredientRecords.nutritionalInfo.find(info => info.ingredientDidRef === did);
+      if (matchingInfo) {
+        nutritionalInfo = matchingInfo.nutritionalInfo;
+        name = matchingInfo.ingredientName;
+      }
+      
+      ingredientsWithNutrition.push({
+        did,
+        amount,
+        unit,
+        comment,
+        name,
+        nutritionalInfo // Will be null if not found in newly created list
+      });
+    }
+    
+    console.log(`🧮 Calculating nutrition for ${ingredientsWithNutrition.length} ingredients (${ingredientsWithNutrition.filter(i => i.nutritionalInfo).length} have nutritionalInfo in memory)`);
+    
+    // Fetch records from database for any ingredients we don't have in memory
     const recordsResult = await getRecords({ 
       recordType: 'nutritionalInfo',
-      limit: 5000  // Get all nutritional info records
+      limit: 5000
     });
-    const allRecordsInDB = recordsResult.records || [];
-    
-    // Filter to only include records with actual nutritional information
-    const recordsInDB = allRecordsInDB.filter(record => {
-      return record.data?.nutritionalInfo && 
-             Object.keys(record.data.nutritionalInfo).length > 0;
+    const recordsInDB = (recordsResult.records || []).filter(record => {
+      return record.data?.nutritionalInfo && Object.keys(record.data.nutritionalInfo).length > 0;
     });
     
-    console.log(`Found ${recordsInDB.length} nutritional info records with data (filtered from ${allRecordsInDB.length} total) in database for calculation`);
+    console.log(`📚 Database has ${recordsInDB.length} nutritional info records for lookup`);
     
-    // Create a temporary record structure for calculation
-    const tempRecordForCalculation = {
-      data: recipeData,
-      oip: {
-        didTx: 'temp-recipe-for-calculation',
-        recordType: 'recipe'
-      }
-    };
+    // Calculate using the shared function
+    const servings = recipeData.recipe.servings || 1;
+    const nutritionResult = await calculateRecipeNutrition(ingredientsWithNutrition, servings, recordsInDB);
     
-    // Calculate nutritional summaries using the same function as read-time calculation
-    // Use default 'summary' prefix for publish-time calculation
-    const recordWithNutrition = await addRecipeNutritionalSummary(
-      tempRecordForCalculation, 
-      recordsInDB,
-      'summary'  // Use 'summary' prefix for publish-time data
-    );
-    
-    // Extract the calculated nutritional data and add it to recipeData
-    // NOTE: Only summaryNutritionalInfoPerServing is added because it's the only template defined in templates.config.js
-    // The total nutritional info is calculated but not published as a separate template
-    if (recordWithNutrition.data.summaryNutritionalInfo) {
-      // Only add the per-serving template (which is defined in templates.config.js)
-      recipeData.summaryNutritionalInfoPerServing = recordWithNutrition.data.summaryNutritionalInfoPerServing;
+    if (nutritionResult && nutritionResult.perServing && nutritionResult.processedIngredients > 0) {
+      recipeData.summaryNutritionalInfoPerServing = nutritionResult.perServing;
+      console.log(`✅ Nutritional summary calculated: ${nutritionResult.processedIngredients}/${nutritionResult.totalIngredients} ingredients → ${nutritionResult.perServing.calories} cal/serving`);
       
-      console.log('✅ Nutritional summary calculated and added to recipe:');
-      console.log(`   Total: ${recordWithNutrition.data.summaryNutritionalInfo.calories} cal, ${recordWithNutrition.data.summaryNutritionalInfo.proteinG}g protein`);
-      console.log(`   Per serving: ${recipeData.summaryNutritionalInfoPerServing.calories} cal, ${recipeData.summaryNutritionalInfoPerServing.proteinG}g protein`);
+      if (nutritionResult.skippedIngredients && nutritionResult.skippedIngredients.length > 0) {
+        console.log(`⏭️ Skipped ${nutritionResult.skippedIngredients.length}: ${nutritionResult.skippedIngredients.map(s => s.name).join(', ')}`);
+      }
     } else {
       console.log('⚠️ Unable to calculate nutritional summary (insufficient ingredient data)');
     }
+    
   } catch (nutritionError) {
     console.error('Error calculating nutritional summary (continuing with publish):', nutritionError);
     // Don't fail the publish if nutrition calculation fails
