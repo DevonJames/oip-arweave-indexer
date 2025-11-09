@@ -1747,7 +1747,7 @@ if (records.searchResults > 0) {
         throw new Error(`Scrape failed: ${response.data.error}`);
     }
 
-    console.log('Scrape result:', response.data.data);
+    // console.log('Scrape result:', response.data.data);
       metadata = response.data.data.metadata || {};
     // console.log('Metadata:', metadata);
       htmlContent = response.data.data.html;
