@@ -511,9 +511,19 @@ router.get('/newBasic/schema', async (req, res) => {
 });
 
 // Function to create new nutritional info records for missing ingredients
-async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave') {
+async function createNewNutritionalInfoRecord(ingredientName, blockchain = 'arweave', recipeUnit = '') {
   try {
-    const formattedNutritionalInfo = await fetchNutritionalData(ingredientName);
+    // Determine preferred unit type based on recipe unit
+    const isVolumeUnit = recipeUnit && (
+      recipeUnit.includes('cup') || recipeUnit.includes('tbsp') || recipeUnit.includes('tsp') ||
+      recipeUnit.includes('tablespoon') || recipeUnit.includes('teaspoon') ||
+      recipeUnit.includes('oz') || recipeUnit.includes('ml') || recipeUnit.includes('liter')
+    );
+    const preferredUnitType = isVolumeUnit ? 'volume' : 'count';
+    
+    console.log(`Creating nutritionalInfo for "${ingredientName}" with preferred unit type: ${preferredUnitType} (recipe unit: ${recipeUnit})`);
+    
+    const formattedNutritionalInfo = await fetchNutritionalData(ingredientName, preferredUnitType);
     const ingredientTx = await publishNewRecord(formattedNutritionalInfo, "nutritionalInfo", false, false, false, null, blockchain);
     console.log(`Successfully published nutritional info for ${ingredientName}:`, ingredientTx);
     return ingredientTx.recordToIndex;
@@ -1000,8 +1010,12 @@ async function processRecipeAsync(jobId, reqBody, user) {
       const cleanedName = nameMapping[originalName];
       const progressPercent = 30 + Math.floor((i / missingIngredientNames.length) * 50); // 30-80%
       
+      // Find the recipe unit for this ingredient
+      const ingredientIndex = originalIngredientNames.findIndex(name => name === originalName);
+      const recipeUnit = ingredientIndex >= 0 ? ingredientUnits[ingredientIndex] : '';
+      
       updateProgress(jobId, progressPercent, `Creating ingredient ${i + 1} of ${missingIngredientNames.length}: ${cleanedName}...`);
-      const result = await createNewNutritionalInfoRecord(cleanedName, blockchain);
+      const result = await createNewNutritionalInfoRecord(cleanedName, blockchain, recipeUnit);
       nutritionalInfoArray.push(result);
     }
     

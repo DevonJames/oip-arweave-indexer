@@ -201,8 +201,10 @@ function convertNutritionalValues(nutritionalData, fromAmount, fromUnit, toAmoun
 
 /**
  * Fetch nutritional data using OpenAI web search and structured outputs
+ * @param {string} ingredientName - Name of the ingredient
+ * @param {string} preferredUnitType - 'volume' or 'count' based on recipe usage
  */
-async function fetchNutritionalData(ingredientName) {
+async function fetchNutritionalData(ingredientName, preferredUnitType = 'volume') {
   const openaiApiKey = process.env.OPENAI_API_KEY;
   
   if (!openaiApiKey) {
@@ -210,7 +212,7 @@ async function fetchNutritionalData(ingredientName) {
   }
 
   try {
-    console.log(`🔍 Fetching nutritional data for: ${ingredientName}`);
+    console.log(`🔍 Fetching nutritional data for: ${ingredientName} (preferred unit type: ${preferredUnitType})`);
     
     // Use OpenAI's Chat Completions API with structured outputs
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -222,15 +224,26 @@ async function fetchNutritionalData(ingredientName) {
         },
         {
           role: 'user',
-          content: `What is the nutritional information for "${ingredientName}"? I need:
-- Standard amount and unit (use practical serving sizes)
-- qtyInStandardAmount: How many WHOLE items are in the standard amount? For example, if standard is "113g (1 cup shredded)", qtyInStandardAmount is the number of whole items (like "2 whole avocados") that would fill 1 cup when shredded/prepared. If it's a liquid or bulk ingredient, use 1. If it's already count-based like "1 medium apple", use 1.
-- Calories, protein, fat, saturated fat, trans fat, cholesterol, sodium, carbohydrates, dietary fiber, sugars, added sugars
-- Minerals: potassium, calcium, iron
-- Vitamins: vitamin A (mcg RAE), vitamin C (mg), vitamin D (mcg)
-- Allergens (array), gluten free (boolean), organic (boolean)
+          content: `What is the nutritional information for "${ingredientName}"? The recipe uses this ingredient in ${preferredUnitType} form.
 
-Important: qtyInStandardAmount helps convert between volume measurements and whole item counts.`
+Please provide nutritional data that can work with BOTH volume and count measurements:
+
+- standardAmount and standardUnit: Use the most practical measurement for this ingredient
+  * For items typically measured by volume: use volume (cup, tbsp, tsp, oz)
+  * For items typically counted: describe the count with weight (e.g., "1 medium breast (174g)", "1 whole avocado (150g)")
+  * Include weight in grams in parentheses when possible
+
+- qtyInStandardAmount: Number of whole discrete items in the standard amount
+  * If standardUnit is "1 cup chopped chicken" and it takes 1.2 breasts to make that cup, use 1.2
+  * If standardUnit is "1 medium apple (182g)", use 1
+  * If it's a liquid/powder with no discrete items, use 1
+
+Examples:
+- Chicken breast (volume recipe): standardAmount=1, standardUnit="cup diced (≈140g)", qtyInStandardAmount=0.8 (0.8 breasts per cup)
+- Chicken breast (count recipe): standardAmount=174, standardUnit="g (1 medium breast)", qtyInStandardAmount=1
+- Avocado: standardAmount=1, standardUnit="cup diced (≈150g)", qtyInStandardAmount=2 (2 avocados per cup)
+
+Provide complete nutritional data: calories, protein, fat, saturated fat, trans fat, cholesterol, sodium, carbohydrates, fiber, sugars, added sugars, potassium, calcium, iron, vitamins A/C/D, allergens, gluten-free, organic status.`
         }
       ],
       response_format: {
