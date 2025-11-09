@@ -2631,6 +2631,607 @@ router.get('/open-stream', (req, res) => {
 });
 
 /**
+ * POST /api/voice/converse-custom
+ * Custom streaming conversation with user-defined system/user prompts
+ * Supports custom LLM selection, text/voice modes, OIP record context, and target response length
+ */
+router.post('/converse-custom', upload.single('audio'), async (req, res) => {
+    console.log('🎯 [ROUTE: /api/voice/converse-custom] Processing custom streaming conversation with custom prompts');
+    console.log('📥 [ROUTE: /api/voice/converse-custom] Request body:', {
+        systemPrompt: req.body.systemPrompt ? `${req.body.systemPrompt.substring(0, 100)}...` : 'none',
+        userPrompt: req.body.userPrompt ? `${req.body.userPrompt.substring(0, 100)}...` : 'none',
+        model: req.body.model,
+        outputMode: req.body.outputMode,
+        targetResponseLength: req.body.targetResponseLength,
+        oipRecordDid: req.body.oipRecordDid,
+        elevenlabsVoiceId: req.body.elevenlabsVoiceId,
+        hasAudioFile: !!req.file
+    });
+    
+    const startTime = Date.now();
+    const processingMetrics = {
+        stt_time_ms: 0,
+        llm_time_ms: 0,
+        tts_time_ms: 0,
+        total_time_ms: 0
+    };
+    
+    try {
+        let inputText = '';
+        
+        // Step 1: Handle audio transcription if provided
+        if (req.file) {
+            const formData = new FormData();
+            
+            const bufferStream = new Readable();
+            bufferStream.push(req.file.buffer);
+            bufferStream.push(null);
+            
+            formData.append('file', bufferStream, {
+                filename: req.file.originalname || 'recording.webm',
+                contentType: req.file.mimetype || 'audio/webm'
+            });
+
+            const sttStartTime = Date.now();
+            const sttResponse = await safeAxiosCall(
+                `${STT_SERVICE_URL}/transcribe_file`,
+                {
+                    method: 'POST',
+                    data: formData,
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                }
+            );
+            processingMetrics.stt_time_ms = Date.now() - sttStartTime;
+
+            inputText = sttResponse.data.text;
+            console.log(`[Converse Custom] STT transcription (${processingMetrics.stt_time_ms}ms): "${inputText}"`);
+            
+        } else if (req.body.userPrompt) {
+            inputText = req.body.userPrompt;
+        } else {
+            return res.status(400).json({ error: 'Either audio file or userPrompt is required' });
+        }
+
+        if (!inputText.trim()) {
+            return res.status(400).json({ error: 'No text to process' });
+        }
+
+        // Parse parameters
+        const {
+            systemPrompt = "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. Answer questions directly and conversationally. Do not use emojis, asterisks, or markdown formatting.",
+            model = 'parallel', // Default to parallel mode for best performance
+            outputMode = 'voice', // 'voice' or 'text'
+            targetResponseLength = 'medium', // 'short' (1-2 sentences), 'medium' (2-4 sentences), 'long' (detailed), 'custom' (use customMaxTokens)
+            customMaxTokens = null, // Custom token limit if targetResponseLength='custom'
+            oipRecordDid = null, // Optional OIP record DID for context
+            elevenlabsVoiceId = 'onwK4e9ZLuTAKqWW03F9' // Default: Daniel - Male British voice
+        } = req.body;
+        
+        // Validate outputMode
+        if (!['voice', 'text'].includes(outputMode)) {
+            return res.status(400).json({ error: 'outputMode must be "voice" or "text"' });
+        }
+        
+        // Calculate max_tokens based on target response length
+        let maxTokens = 512; // Default medium
+        const lengthMapping = {
+            'short': 150,
+            'medium': 512,
+            'long': 1500,
+            'detailed': 2000,
+            'custom': customMaxTokens || 512
+        };
+        maxTokens = lengthMapping[targetResponseLength] || 512;
+        
+        console.log(`[Converse Custom] Configuration: model=${model}, outputMode=${outputMode}, targetLength=${targetResponseLength} (${maxTokens} tokens)`);
+
+        // Generate dialogue ID
+        const dialogueId = req.body.dialogueId || `custom-dialogue-${Date.now()}-${Math.random().toString(36).substring(2, 12)}`;
+        console.log(`[Converse Custom] Using dialogueId: ${dialogueId}`);
+        
+        // Import required modules
+        const { 
+            streamAdaptiveTextToSpeech,
+            finishAdaptiveTextToSpeech
+        } = require('../helpers/generators');
+        const { ongoingDialogues } = require('../helpers/sharedState');
+        const socketManager = require('../socket/socketManager');
+
+        // Initialize stream
+        ongoingDialogues.set(dialogueId, {
+            id: dialogueId,
+            status: 'processing',
+            clients: new Set(),
+            data: [],
+            startTime: Date.now(),
+            lastActivity: Date.now()
+        });
+        
+        const ongoingStream = ongoingDialogues.get(dialogueId);
+        console.log(`🔄 Initialized custom stream for dialogueId: ${dialogueId}`);
+        
+        // Parse voice configuration
+        let voiceSettings = {
+            engine: 'edge_tts',
+            enabled: outputMode === 'voice',
+            edge: {
+                selectedVoice: 'en-GB-RyanNeural',
+                speed: 1.0,
+                pitch: 0,
+                volume: 0
+            }
+        };
+        
+        if (req.body.voiceConfig) {
+            try {
+                const parsedVoiceConfig = JSON.parse(req.body.voiceConfig);
+                voiceSettings = { ...voiceSettings, ...parsedVoiceConfig };
+            } catch (error) {
+                console.error('Error parsing voice configuration:', error);
+            }
+        }
+        
+        // Return success immediately, client will connect to SSE stream
+        const response = {
+            success: true,
+            dialogueId: dialogueId,
+            configuration: {
+                model: model,
+                outputMode: outputMode,
+                targetResponseLength: targetResponseLength,
+                maxTokens: maxTokens
+            }
+        };
+        
+        res.json(response);
+        
+        // Start background processing
+        (async () => {
+            try {
+                // Add user message to stream
+                ongoingStream.data.push({
+                    event: 'textChunk',
+                    data: {
+                        role: 'user',
+                        text: inputText
+                    }
+                });
+                
+                socketManager.sendToClients(dialogueId, {
+                    type: 'textChunk',
+                    role: 'user',
+                    text: inputText
+                });
+                
+                let responseText = '';
+                
+                // Configure voice settings for adaptive TTS
+                const hasElevenLabsKey = !!process.env.ELEVENLABS_API_KEY;
+                const voiceConfig = {
+                    engine: hasElevenLabsKey ? 'elevenlabs' : 'local',
+                    voiceId: hasElevenLabsKey ? elevenlabsVoiceId : null,
+                    voiceSettings: {
+                        stability: 0.5,
+                        similarity_boost: 0.75,
+                        style: 0.0,
+                        use_speaker_boost: true
+                    },
+                    elevenlabs: hasElevenLabsKey ? {
+                        selectedVoice: elevenlabsVoiceId,
+                        speed: voiceSettings.elevenlabs?.speed || 1.0,
+                        stability: voiceSettings.elevenlabs?.stability || 0.5,
+                        similarity_boost: voiceSettings.elevenlabs?.similarity_boost || 0.75,
+                        model_id: 'eleven_turbo_v2',
+                        style: 0.0,
+                        use_speaker_boost: true
+                    } : null,
+                    chatterbox: {
+                        selectedVoice: 'female_expressive',
+                        gender: 'female',
+                        emotion: 'expressive',
+                        exaggeration: 0.6,
+                        cfg_weight: 0.7,
+                        voiceCloning: { enabled: false }
+                    }
+                };
+                
+                console.log(`[Converse Custom] Using TTS engine: ${voiceConfig.engine} with voice: ${elevenlabsVoiceId} (ElevenLabs available: ${hasElevenLabsKey})`);
+
+                const handleTextChunk = async (textChunk) => {
+                    responseText += textChunk;
+                    
+                    // Send text chunk to client
+                    socketManager.sendToClients(dialogueId, {
+                        type: 'textChunk',
+                        role: 'assistant',
+                        text: textChunk
+                    });
+                    
+                    ongoingStream.data.push({
+                        event: 'textChunk',
+                        data: {
+                            role: 'assistant',
+                            text: textChunk
+                        }
+                    });
+                    
+                    // Generate audio if voice mode enabled
+                    if (outputMode === 'voice') {
+                        try {
+                            await streamAdaptiveTextToSpeech(
+                                textChunk,
+                                String(dialogueId),
+                                voiceConfig,
+                                (audioChunk, chunkIndex, chunkText, isFinal = false) => {
+                                    console.log(`🎵 Custom adaptive audio chunk ${chunkIndex} (${audioChunk.length} bytes)`);
+                                    
+                                    socketManager.sendToClients(dialogueId, {
+                                        type: 'audioChunk',
+                                        audio: audioChunk,
+                                        chunkIndex: chunkIndex,
+                                        text: chunkText,
+                                        isFinal: isFinal,
+                                        adaptive: true
+                                    });
+                                },
+                                (textChunk) => {
+                                    // Text chunk callback already handled above
+                                }
+                            );
+                        } catch (ttsError) {
+                            console.error('Error in adaptive TTS:', ttsError.message);
+                        }
+                    }
+                };
+
+                // Build conversation with custom system prompt and optional OIP record context
+                const conversationWithSystem = [
+                    {
+                        role: "system",
+                        content: systemPrompt
+                    }
+                ];
+                
+                // Add OIP record context if provided
+                if (oipRecordDid) {
+                    try {
+                        console.log(`[Converse Custom] Fetching OIP record: ${oipRecordDid}`);
+                        
+                        // Fetch record from API
+                        const axios = require('axios');
+                        const recordResponse = await axios.get(`http://localhost:3000/api/records/${oipRecordDid}`);
+                        
+                        if (recordResponse.data && recordResponse.data.data) {
+                            const record = recordResponse.data;
+                            const recordData = record.data;
+                            
+                            // Build context string from record data
+                            let contextParts = [];
+                            
+                            // Add basic info
+                            if (recordData.basic) {
+                                if (recordData.basic.name) contextParts.push(`Title: ${recordData.basic.name}`);
+                                if (recordData.basic.description) contextParts.push(`Description: ${recordData.basic.description}`);
+                            }
+                            
+                            // Add type-specific data
+                            const recordType = record.oip?.recordType || 'unknown';
+                            contextParts.push(`Type: ${recordType}`);
+                            
+                            // Add full record data as JSON for maximum context
+                            contextParts.push(`\nFull Record Data:\n${JSON.stringify(recordData, null, 2)}`);
+                            
+                            const recordContext = contextParts.join('\n');
+                            
+                            conversationWithSystem.push({
+                                role: "system",
+                                content: `Context from OIP record (${oipRecordDid}):\n${recordContext}`
+                            });
+                            console.log(`[Converse Custom] Added OIP record context (${recordContext.length} chars)`);
+                        }
+                    } catch (error) {
+                        console.warn(`[Converse Custom] Failed to fetch OIP record context: ${error.message}`);
+                    }
+                }
+                
+                // Add user message
+                conversationWithSystem.push({
+                    role: "user",
+                    content: inputText
+                });
+
+                // Process with LLM (parallel or specific model)
+                console.log(`[Converse Custom] Processing with model: ${model}`);
+                const llmStartTime = Date.now();
+                
+                if (model === 'parallel') {
+                    // Parallel mode - race multiple models
+                    console.log(`[Converse Custom] 🏁 Racing parallel requests with max_tokens=${maxTokens}`);
+                    
+                    const requests = [];
+                    
+                    // OpenAI request
+                    if (process.env.OPENAI_API_KEY) {
+                        requests.push(callOpenAIStreaming(conversationWithSystem, 'gpt-4o-mini', maxTokens, handleTextChunk));
+                    }
+                    
+                    // Grok request
+                    if (process.env.XAI_API_KEY) {
+                        requests.push(callGrokStreaming(conversationWithSystem, 'grok-beta', maxTokens, handleTextChunk));
+                    }
+                    
+                    // Ollama requests
+                    requests.push(callOllamaStreaming(conversationWithSystem, 'mistral:latest', maxTokens, handleTextChunk));
+                    const defaultModel = process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b';
+                    requests.push(callOllamaStreaming(conversationWithSystem, defaultModel, maxTokens, handleTextChunk));
+                    
+                    // Race: first to finish wins
+                    let winnerFound = false;
+                    await new Promise((resolve) => {
+                        requests.forEach((req) => {
+                            req.then(result => {
+                                if (!winnerFound && result && result.success) {
+                                    winnerFound = true;
+                                    const raceTime = Date.now() - llmStartTime;
+                                    console.log(`[Converse Custom] 🏆 FIRST TO FINISH: ${result.source} in ${raceTime}ms`);
+                                    resolve(result);
+                                }
+                            }).catch((error) => {
+                                console.warn(`[Converse Custom] Model failed: ${error.message}`);
+                            });
+                        });
+                        
+                        // Fallback timeout
+                        setTimeout(() => {
+                            if (!winnerFound) {
+                                console.error('[Converse Custom] All parallel requests timed out');
+                                resolve(null);
+                            }
+                        }, 30000);
+                    });
+                    
+                } else {
+                    // Specific model mode
+                    console.log(`[Converse Custom] Using specific model: ${model} with max_tokens=${maxTokens}`);
+                    
+                    let result;
+                    if (model.startsWith('gpt-') || model.includes('openai')) {
+                        const actualModel = model.replace('openai-', '').replace('openai', 'gpt-4o-mini');
+                        result = await callOpenAIStreaming(conversationWithSystem, actualModel, maxTokens, handleTextChunk);
+                    } else if (model.startsWith('grok-')) {
+                        result = await callGrokStreaming(conversationWithSystem, model, maxTokens, handleTextChunk);
+                    } else {
+                        // Assume Ollama model
+                        result = await callOllamaStreaming(conversationWithSystem, model, maxTokens, handleTextChunk);
+                    }
+                    
+                    if (!result || !result.success) {
+                        throw new Error(`Failed to get response from ${model}`);
+                    }
+                }
+                
+                processingMetrics.llm_time_ms = Date.now() - llmStartTime;
+                console.log(`[Converse Custom] LLM processing complete (${processingMetrics.llm_time_ms}ms): ${responseText.length} chars`);
+                
+                // Finish adaptive streaming session if voice mode
+                if (outputMode === 'voice') {
+                    try {
+                        console.log(`🎯 Finishing adaptive streaming session: ${dialogueId}`);
+                        const finalMetrics = await finishAdaptiveTextToSpeech(String(dialogueId));
+                        
+                        if (finalMetrics.success) {
+                            console.log(`🎉 Adaptive streaming completed:`, {
+                                firstAudioLatency: finalMetrics.firstAudioLatency,
+                                chunksGenerated: finalMetrics.chunksGenerated,
+                                sessionDuration: finalMetrics.sessionDuration
+                            });
+                            
+                            ongoingStream.adaptiveMetrics = finalMetrics;
+                            processingMetrics.tts_time_ms = finalMetrics.sessionDuration || 0;
+                        }
+                    } catch (finishError) {
+                        console.error('Error finishing adaptive streaming:', finishError.message);
+                    }
+                }
+                
+                // Calculate total time
+                processingMetrics.total_time_ms = Date.now() - startTime;
+                
+                // Wait briefly for TTS completion
+                if (outputMode === 'voice') {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+                
+                // Send completion event
+                if (socketManager.hasClients(dialogueId)) {
+                    console.log('✅ Sending custom conversation completion event');
+                    
+                    ongoingStream.status = 'completed';
+                    const completionData = {
+                        type: 'done',
+                        data: "Custom conversation complete",
+                        processing_metrics: processingMetrics,
+                        configuration: {
+                            model: model,
+                            outputMode: outputMode,
+                            targetResponseLength: targetResponseLength,
+                            maxTokens: maxTokens
+                        },
+                        response_length: responseText.length,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    socketManager.sendToClients(dialogueId, completionData);
+                    ongoingStream.data.push({
+                        event: 'done',
+                        data: completionData
+                    });
+                }
+                
+                ongoingStream.status = 'completed';
+                console.log(`✅ Custom streaming response completed for dialogueId: ${dialogueId}`);
+                
+            } catch (error) {
+                console.error('Error in custom streaming process:', error);
+                ongoingStream.status = 'error';
+                
+                socketManager.sendToClients(dialogueId, {
+                    type: 'error',
+                    data: {
+                        message: error.message
+                    }
+                });
+                
+                ongoingStream.data.push({
+                    event: 'error',
+                    data: {
+                        message: error.message
+                    }
+                });
+            }
+        })();
+        
+    } catch (error) {
+        console.error('Error in converse-custom endpoint:', error);
+        
+        if (!res.headersSent) {
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+});
+
+// Helper functions for streaming LLM calls
+async function callOpenAIStreaming(conversation, modelName, maxTokens, onChunk) {
+    try {
+        const response = await axiosInstance.post('https://api.openai.com/v1/chat/completions', {
+            model: modelName,
+            messages: conversation,
+            temperature: 0.7,
+            max_tokens: maxTokens,
+            stream: false // We'll chunk it ourselves for consistency
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 45000
+        });
+        
+        const fullText = response.data.choices[0].message.content.trim();
+        
+        // Stream in word chunks
+        const words = fullText.split(' ');
+        const chunkSize = 3;
+        for (let i = 0; i < words.length; i += chunkSize) {
+            const chunk = words.slice(i, i + chunkSize).join(' ');
+            if (i + chunkSize < words.length) {
+                await onChunk(chunk + ' ');
+            } else {
+                await onChunk(chunk);
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        return {
+            success: true,
+            source: `openai-${modelName}`
+        };
+    } catch (error) {
+        console.warn(`[Streaming] OpenAI ${modelName} failed:`, error.message);
+        return null;
+    }
+}
+
+async function callGrokStreaming(conversation, modelName, maxTokens, onChunk) {
+    try {
+        const response = await axiosInstance.post('https://api.x.ai/v1/chat/completions', {
+            model: modelName,
+            messages: conversation,
+            temperature: 0.7,
+            max_tokens: maxTokens,
+            stream: false
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 45000
+        });
+        
+        const fullText = response.data.choices[0].message.content.trim();
+        
+        // Stream in word chunks
+        const words = fullText.split(' ');
+        const chunkSize = 3;
+        for (let i = 0; i < words.length; i += chunkSize) {
+            const chunk = words.slice(i, i + chunkSize).join(' ');
+            if (i + chunkSize < words.length) {
+                await onChunk(chunk + ' ');
+            } else {
+                await onChunk(chunk);
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        return {
+            success: true,
+            source: `xai-${modelName}`
+        };
+    } catch (error) {
+        console.warn(`[Streaming] XAI ${modelName} failed:`, error.message);
+        return null;
+    }
+}
+
+async function callOllamaStreaming(conversation, modelName, maxTokens, onChunk) {
+    try {
+        const prompt = conversation.map(msg => `${msg.role}: ${msg.content}`).join('\n') + '\nassistant:';
+        
+        const ollamaBaseUrl = process.env.OLLAMA_HOST || 'http://ollama:11434';
+        const response = await axiosInstance.post(`${ollamaBaseUrl}/api/generate`, {
+            model: modelName,
+            prompt: prompt,
+            stream: false,
+            options: {
+                temperature: 0.7,
+                top_p: 0.9,
+                top_k: 40,
+                repeat_penalty: 1.1,
+                num_predict: maxTokens
+            }
+        }, {
+            timeout: 30000
+        });
+        
+        const fullText = response.data.response?.trim() || '';
+        
+        // Stream in word chunks
+        const words = fullText.split(' ');
+        const chunkSize = 3;
+        for (let i = 0; i < words.length; i += chunkSize) {
+            const chunk = words.slice(i, i + chunkSize).join(' ');
+            if (i + chunkSize < words.length) {
+                await onChunk(chunk + ' ');
+            } else {
+                await onChunk(chunk);
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        return {
+            success: true,
+            source: `ollama-${modelName}`
+        };
+    } catch (error) {
+        console.warn(`[Streaming] Ollama ${modelName} failed:`, error.message);
+        return null;
+    }
+}
+
+/**
  * POST /api/voice/rag
  * Direct RAG query without TTS (for testing and text-only use)
  */
