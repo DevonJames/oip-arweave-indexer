@@ -214,7 +214,8 @@ const corsOptions = {
       'https://oip.fitnessally.io',
       'https://app.fitnessally.io',
       'https://mini.fitnessally.io',
-      'https://mobile.fitnessally.io'
+      'https://mobile.fitnessally.io',
+      'https://rockhoppersgame.com'
     ];
     
     // Allow any localhost origin in development
