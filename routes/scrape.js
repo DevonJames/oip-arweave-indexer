@@ -1728,7 +1728,24 @@ if (records.searchResults > 0) {
  
     const recipeInDB = records
     console.log('Recipe found in DB:', recipeInDB.records[0]);
-    // { ingredientDidRefs, nutritionalInfo }
+    
+    // Send update to frontend that recipe already exists
+    if (sendUpdate) {
+      sendUpdate('recipeCompleted', {
+        status: 'exists',
+        progress: 100,
+        message: 'Recipe already exists in database',
+        transactionId: recipeInDB.records[0].oip.did,
+        did: recipeInDB.records[0].oip.did,
+        blockchain: blockchain || 'arweave',
+        recordToIndex: recipeInDB.records[0],
+        alreadyExists: true
+      });
+    }
+    
+    // Clean up and end the stream
+    cleanupScrape(scrapeId);
+    return;
 
    } else {
 
