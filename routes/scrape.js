@@ -1990,8 +1990,8 @@ if (records.searchResults > 0) {
           
           primaryIngredientSection = ingredientSections[0];
           
-          // Also update other fields from LLM if they're not already set
-          if (!title && llmRecipe.title) title = llmRecipe.title;
+          // Also update other fields from LLM - title should ALWAYS override scraped clickbait titles
+          if (llmRecipe.title) title = llmRecipe.title;  // Always use LLM title if available
           if (!description && llmRecipe.description) description = llmRecipe.description;
           if (!imageUrl && llmRecipe.imageUrl) imageUrl = llmRecipe.imageUrl;
           if (instructions.length === 0 && llmRecipe.instructions) {
