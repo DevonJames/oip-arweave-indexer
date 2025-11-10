@@ -974,33 +974,12 @@ async function processRecipeAsync(jobId, reqBody, user) {
   console.log(`🔍 ${missingIngredientNames.length} ingredients need to be created via OpenAI`);
   
   if (missingIngredientNames.length > 0) {
-    const bestMatches = await Promise.all(
-      missingIngredientNames.map(originalName => {
-        const cleanedName = nameMapping[originalName];
-        return findBestMatch(cleanedName);
-      })
-    );
-
-    // Assign matches and update ingredientDidRefs
-    bestMatches.forEach((match, index) => {
-      if (match) {
-        const originalName = missingIngredientNames[index];
-        ingredientRecords.ingredientDidRefs[originalName] = match.oip.did || match.oip.didTx;
-        ingredientRecords.nutritionalInfo.push({
-          ingredientName: match.data.basic.name,
-          nutritionalInfo: match.data.nutritionalInfo || {},
-          ingredientSource: match.data.basic.webUrl,
-          ingredientDidRef: match.oip.did || match.oip.didTx
-        });
-      }
-    });
-
-    // Remove matched names from missingIngredientNames
-    let matchedNames = bestMatches
-      .map((match, index) => (match ? missingIngredientNames[index] : null))
-      .filter(name => name !== null);
-    missingIngredientNames = missingIngredientNames.filter(name => !matchedNames.includes(name));
-
+    // ⚠️ BUG FIX: Removed second-pass fuzzy matching that was causing incorrect ingredient assignments
+    // Previously, this code tried to find matches for missing ingredients a SECOND time,
+    // which resulted in bad fuzzy matches like "mint leaves" → "flat-leaf parsley leaves" 
+    // (both contain the word "leaves", so the scoring system matched them incorrectly).
+    // If an ingredient is missing after the first search, it should go straight to OpenAI creation.
+    
     // Create nutritional info records using CLEANED names, not original names
     updateProgress(jobId, 30, `Creating ${missingIngredientNames.length} new ingredient records via OpenAI...`);
     
