@@ -2485,21 +2485,111 @@ const recipeDate = Math.floor(new Date(metadata.publishedTime).getTime() / 1000)
               blockchain: jobStatus.blockchain || blockchain
             };
             
-            // Send final completion event
+            console.log('Recipe publishing completed, waiting for ingredient resolution...');
+            
+            // Wait for ingredients to be fully resolved before sending completion
+            const did = jobStatus.transactionId;
+            let ingredientsResolved = false;
+            let resolutionAttempts = 0;
+            const maxResolutionAttempts = 30; // 2.5 minutes max (5 seconds * 30)
+            
             if (sendUpdate) {
-              sendUpdate('recipeCompleted', {
+              sendUpdate('publishProgress', {
                 jobId: jobStatus.jobId,
-                status: 'completed',
-                progress: 100,
-                message: 'Recipe published successfully',
-                transactionId: jobStatus.transactionId,
-                did: jobStatus.transactionId,
-                blockchain: jobStatus.blockchain || blockchain,
-                recordToIndex: jobStatus.recordToIndex
+                status: 'resolving',
+                progress: 90,
+                message: 'Waiting for ingredients to resolve...',
+                transactionId: did
               });
             }
             
-            console.log('Recipe publishing completed:', jobStatus.transactionId);
+            while (!ingredientsResolved && resolutionAttempts < maxResolutionAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds between checks
+              resolutionAttempts++;
+              
+              try {
+                console.log(`Checking ingredient resolution (attempt ${resolutionAttempts}/${maxResolutionAttempts})...`);
+                
+                // Fetch the record with ingredient resolution
+                const checkResponse = await axios.get(
+                  `${getBaseUrl(req)}/api/records?did=${encodeURIComponent(did)}&resolveDepth=1&resolveNamesOnly=true&limit=1`,
+                  {
+                    headers: {
+                      'Authorization': req.headers.authorization || ''
+                    }
+                  }
+                );
+                
+                if (checkResponse.data.records && checkResponse.data.records.length > 0) {
+                  const resolvedRecipe = checkResponse.data.records[0];
+                  const ingredients = resolvedRecipe.data?.recipe?.ingredient || [];
+                  
+                  // Check if all ingredients are resolved (strings, not DIDs)
+                  const allResolved = ingredients.every(ingredient => {
+                    // If it's a string that starts with "did:", it's not resolved yet
+                    if (typeof ingredient === 'string' && ingredient.startsWith('did:')) {
+                      return false;
+                    }
+                    // If it's an object with a name, it's resolved
+                    if (typeof ingredient === 'object' && ingredient.name) {
+                      return true;
+                    }
+                    // If it's a plain string (not a DID), it's resolved
+                    if (typeof ingredient === 'string' && !ingredient.startsWith('did:')) {
+                      return true;
+                    }
+                    return false;
+                  });
+                  
+                  if (allResolved && ingredients.length > 0) {
+                    ingredientsResolved = true;
+                    console.log(`✓ All ${ingredients.length} ingredients resolved successfully`);
+                    
+                    // Send final completion event with fully resolved record
+                    if (sendUpdate) {
+                      sendUpdate('recipeCompleted', {
+                        jobId: jobStatus.jobId,
+                        status: 'completed',
+                        progress: 100,
+                        message: 'Recipe published and fully resolved',
+                        transactionId: did,
+                        did: did,
+                        blockchain: jobStatus.blockchain || blockchain,
+                        recordToIndex: resolvedRecipe
+                      });
+                    }
+                  } else {
+                    console.log(`⏳ Ingredients not fully resolved yet (${ingredients.filter(i => typeof i === 'string' && !i.startsWith('did:')).length}/${ingredients.length} resolved)`);
+                  }
+                } else {
+                  console.log('⏳ Recipe not yet indexed in Elasticsearch');
+                }
+                
+              } catch (resolutionError) {
+                console.error('Error checking ingredient resolution:', resolutionError.message);
+                // Continue polling even if there's an error
+              }
+            }
+            
+            // If we hit max attempts without full resolution, send completion anyway with warning
+            if (!ingredientsResolved) {
+              console.warn('⚠️  Max resolution attempts reached, sending completion with partial resolution');
+              if (sendUpdate) {
+                sendUpdate('recipeCompleted', {
+                  jobId: jobStatus.jobId,
+                  status: 'completed',
+                  progress: 100,
+                  message: 'Recipe published (ingredients may still be resolving)',
+                  transactionId: did,
+                  did: did,
+                  blockchain: jobStatus.blockchain || blockchain,
+                  recordToIndex: jobStatus.recordToIndex,
+                  partialResolution: true
+                });
+              }
+            }
+            
+            console.log('Recipe publishing completed:', did);
           } else if (jobStatus.status === 'failed') {
             // Job failed
             if (sendUpdate) {
