@@ -428,48 +428,57 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
         // NOTE: Publishing the delete message also deletes the record locally via deleteRecordFromDB
         let deleteMessageTxId = null;
         let alreadyDeleted = false;
+        const recordStatus = recordToDelete.oip?.recordStatus;
+        const isPendingRecord = recordStatus === "pending confirmation in Arweave";
         
         if (didToDelete.startsWith('did:arweave:')) {
-            try {
-                console.log('📝 Publishing blockchain delete message for Arweave record...');
-                
-                // Check if this is a server admin deleting a server-created record
-                const isAdmin = isServerAdmin(user);
-                const serverPubKey = getServerPublicKey();
-                const creatorPubKey = recordToDelete.oip?.creator?.publicKey;
-                const isServerCreated = serverPubKey && creatorPubKey === serverPubKey;
-                
-                if (isAdmin && isServerCreated) {
-                    console.log('✅ Admin deleting server-created record - using server wallet for delete message');
-                }
-                
-                // Publish delete message (will be signed by server wallet automatically via publishNewRecord)
-                // This also triggers deleteRecordFromDB which deletes the target record immediately
-                const deleteMessage = {
-                    delete: {
-                        // didTx: didToDelete,
-                        did: didToDelete
+            // For pending records, skip blockchain delete message and just delete locally
+            // since the record hasn't been confirmed on the blockchain yet
+            if (isPendingRecord) {
+                console.log('⚠️ Record has pending status - skipping blockchain delete message');
+                console.log('ℹ️ Will delete locally only (record not yet confirmed on blockchain)');
+            } else {
+                try {
+                    console.log('📝 Publishing blockchain delete message for Arweave record...');
+                    
+                    // Check if this is a server admin deleting a server-created record
+                    const isAdmin = isServerAdmin(user);
+                    const serverPubKey = getServerPublicKey();
+                    const creatorPubKey = recordToDelete.oip?.creator?.publicKey;
+                    const isServerCreated = serverPubKey && creatorPubKey === serverPubKey;
+                    
+                    if (isAdmin && isServerCreated) {
+                        console.log('✅ Admin deleting server-created record - using server wallet for delete message');
                     }
-                };
-                
-                const publishResult = await publishNewRecord(
-                    deleteMessage,
-                    'deleteMessage', // recordType
-                    false, // publishFiles
-                    true,  // addMediaToArweave
-                    false, // addMediaToIPFS
-                    null,  // youtubeUrl
-                    'arweave', // blockchain
-                    false  // addMediaToArFleet
-                );
-                
-                deleteMessageTxId = publishResult.transactionId;
-                alreadyDeleted = true; // The record was deleted by deleteRecordFromDB during publishing
-                console.log('✅ Delete message published to blockchain:', deleteMessageTxId);
-                console.log('✅ Record deleted locally via deleteRecordFromDB during message publishing');
-            } catch (error) {
-                console.error('⚠️ Failed to publish blockchain delete message:', error);
-                // Continue with local deletion even if blockchain message fails
+                    
+                    // Publish delete message (will be signed by server wallet automatically via publishNewRecord)
+                    // This also triggers deleteRecordFromDB which deletes the target record immediately
+                    const deleteMessage = {
+                        delete: {
+                            // didTx: didToDelete,
+                            did: didToDelete
+                        }
+                    };
+                    
+                    const publishResult = await publishNewRecord(
+                        deleteMessage,
+                        'deleteMessage', // recordType
+                        false, // publishFiles
+                        true,  // addMediaToArweave
+                        false, // addMediaToIPFS
+                        null,  // youtubeUrl
+                        'arweave', // blockchain
+                        false  // addMediaToArFleet
+                    );
+                    
+                    deleteMessageTxId = publishResult.transactionId;
+                    alreadyDeleted = true; // The record was deleted by deleteRecordFromDB during publishing
+                    console.log('✅ Delete message published to blockchain:', deleteMessageTxId);
+                    console.log('✅ Record deleted locally via deleteRecordFromDB during message publishing');
+                } catch (error) {
+                    console.error('⚠️ Failed to publish blockchain delete message:', error);
+                    // Continue with local deletion even if blockchain message fails
+                }
             }
         }
         
@@ -489,13 +498,17 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
                 success: true,
                 message: 'Record deleted successfully',
                 did: didToDelete,
-                deletedCount: 1
+                deletedCount: 1,
+                recordStatus: recordStatus
             };
             
             if (deleteMessageTxId) {
                 response.deleteMessageTxId = deleteMessageTxId;
                 response.blockchainDeletion = true;
                 response.propagationNote = 'Delete message published to blockchain. Deletion will propagate to all nodes during sync.';
+            } else if (isPendingRecord) {
+                response.blockchainDeletion = false;
+                response.propagationNote = 'Record was pending confirmation - deleted locally without blockchain message (record not yet confirmed on chain).';
             } else {
                 response.blockchainDeletion = false;
                 response.propagationNote = 'Local deletion only. To delete from all nodes, ensure blockchain delete message is published.';

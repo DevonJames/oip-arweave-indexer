@@ -82,8 +82,8 @@ function createDIDQuery(targetDid) {
     return {
         bool: {
             should: [
-                { term: { "oip.did": targetDid } },
-                { term: { "oip.didTx": targetDid } }
+                { term: { "oip.did.keyword": targetDid } },
+                { term: { "oip.didTx.keyword": targetDid } }
             ]
         }
     };
