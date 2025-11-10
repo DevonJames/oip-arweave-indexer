@@ -224,24 +224,34 @@ async function fetchNutritionalData(ingredientName, preferredUnitType = 'volume'
         },
         {
           role: 'user',
-          content: `What is the nutritional information for "${ingredientName}"? The recipe uses this ingredient in ${preferredUnitType} form.
+          content: `What is the nutritional information for "${ingredientName}"?
 
-Please provide nutritional data that can work with BOTH volume and count measurements:
+CRITICAL RULES FOR STANDARD UNITS:
+1. standardAmount and standardUnit MUST ALWAYS be weight (oz, g, kg, lb) or volume (cup, tbsp, tsp, ml, l)
+2. NEVER use descriptive units like "fillet (≈170 g)", "1 medium breast (174g)", or "piece"
+3. Extract the actual weight/volume number from any descriptions
 
-- standardAmount and standardUnit: Use the most practical measurement for this ingredient
-  * For items typically measured by volume: use volume (cup, tbsp, tsp, oz)
-  * For items typically counted: describe the count with weight (e.g., "1 medium breast (174g)", "1 whole avocado (150g)")
-  * Include weight in grams in parentheses when possible
+Valid standardUnit values ONLY:
+- Weight units: oz, g, kg, lb, lbs
+- Volume units: cup, cups, tbsp, tsp, ml, l
 
-- qtyInStandardAmount: Number of whole discrete items in the standard amount
-  * If standardUnit is "1 cup chopped chicken" and it takes 1.2 breasts to make that cup, use 1.2
-  * If standardUnit is "1 medium apple (182g)", use 1
-  * If it's a liquid/powder with no discrete items, use 1
+Examples of CORRECT formatting:
+- Chicken breast: standardAmount=4, standardUnit="oz", qtyInStandardAmount=1 (1 breast = 4 oz)
+- Salmon fillet: standardAmount=6, standardUnit="oz", qtyInStandardAmount=1 (1 fillet = 6 oz)  
+- Apple: standardAmount=182, standardUnit="g", qtyInStandardAmount=1 (1 apple = 182g)
+- Avocado (diced): standardAmount=1, standardUnit="cup", qtyInStandardAmount=2 (2 avocados = 1 cup diced)
+- Canned beans: standardAmount=15, standardUnit="oz", qtyInStandardAmount=1 (1 can = 15 oz)
+- Olive oil: standardAmount=1, standardUnit="tbsp", qtyInStandardAmount=1 (liquid, no discrete count)
 
-Examples:
-- Chicken breast (volume recipe): standardAmount=1, standardUnit="cup diced (≈140g)", qtyInStandardAmount=0.8 (0.8 breasts per cup)
-- Chicken breast (count recipe): standardAmount=174, standardUnit="g (1 medium breast)", qtyInStandardAmount=1
-- Avocado: standardAmount=1, standardUnit="cup diced (≈150g)", qtyInStandardAmount=2 (2 avocados per cup)
+qtyInStandardAmount Field Rules:
+- How many whole discrete items equal the standardAmount
+- For chicken breast at 4 oz standard: qtyInStandardAmount=1 (1 breast = 4 oz)
+- For avocado at 1 cup diced: qtyInStandardAmount=2 (2 avocados = 1 cup diced)  
+- For liquids/powders with no discrete items: qtyInStandardAmount=1
+
+The recipe uses this ingredient in ${preferredUnitType} form, so choose weight or volume accordingly:
+- If preferredUnitType is "volume": prefer cup, tbsp, tsp, ml, l
+- If preferredUnitType is "count": use weight (oz, g) with qtyInStandardAmount showing the count
 
 Provide complete nutritional data: calories, protein, fat, saturated fat, trans fat, cholesterol, sodium, carbohydrates, fiber, sugars, added sugars, potassium, calcium, iron, vitamins A/C/D, allergens, gluten-free, organic status.`
         }

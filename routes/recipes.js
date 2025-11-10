@@ -130,10 +130,10 @@ router.post('/find-standard-unit', async (req, res) => {
     // Standard measurable units (excluding count-based units like piece, slice, etc.)
     const weightUnits = ['lb', 'lbs', 'oz', 'g', 'kg'];
     const volumeUnits = ['cup', 'cups', 'tbsp', 'tsp', 'ml', 'l'];
-    const allStandardUnits = [...weightUnits, ...volumeUnits, 'whole'];
+    const allStandardUnits = [...weightUnits, ...volumeUnits];
     
     // Construct the AI prompt with improved guidance
-    const prompt = `You are a nutrition expert. Analyze this nutritional information for "${ingredientName}".
+    const prompt = `You are a nutrition expert. Fix the non-standard unit for "${ingredientName}".
 
 Current Standard: ${nutritionalInfo.standardAmount} ${nutritionalInfo.standardUnit}
 
@@ -146,20 +146,31 @@ Nutritional Values:
 
 The current unit "${nutritionalInfo.standardUnit}" is non-standard and makes conversions difficult.
 
-IMPORTANT UNIT SELECTION RULES:
-1. For MEATS (beef, chicken, pork, fish, etc.): Use WEIGHT units (${weightUnits.join(', ')})
-2. For LIQUIDS: Use VOLUME units (${volumeUnits.join(', ')})
-3. For OTHER SOLIDS (vegetables, fruits, grains, chips, etc.): Use VOLUME units (${volumeUnits.join(', ')})
-4. For DISCRETE ITEMS used whole in recipes (bagels, eggs, tortillas, etc.): Use "whole" if recipes typically call for whole items
-5. NEVER use "whole" for items that recipes measure by volume (like chips, even though they're discrete pieces)
+CRITICAL RULES:
+1. standardAmount and standardUnit MUST ALWAYS be weight (oz, g, kg, lb) or volume (cup, tbsp, tsp, ml, l)
+2. NEVER use descriptive units like "fillet (≈170 g)", "1 medium breast", "whole", "piece", or "item"
+3. Convert descriptive units to actual weight/volume
+4. Extract numbers from parenthetical descriptions like "(≈170 g)" → 170, "g" or convert to oz
 
-Available units: ${allStandardUnits.join(', ')}
+Examples of CORRECT fixes:
+- "1 fillet (≈170 g)" → amount: 6, unit: "oz" (convert ~170g to 6 oz)
+- "1 medium breast (174g)" → amount: 174, unit: "g"  
+- "1 cup diced" → amount: 1, unit: "cup"
+- "piece" → amount: 4, unit: "oz" (estimate appropriate weight for this ingredient)
 
-Respond ONLY with a JSON object in this exact format (no other text):
+UNIT SELECTION RULES:
+- For MEATS (beef, chicken, pork, fish, etc.): Use WEIGHT units (${weightUnits.join(', ')})
+- For LIQUIDS: Use VOLUME units (${volumeUnits.join(', ')})
+- For OTHER SOLIDS (vegetables, fruits, grains, etc.): Use VOLUME units (${volumeUnits.join(', ')})
+
+Available units: ${weightUnits.join(', ')}, ${volumeUnits.join(', ')}
+DO NOT use: whole, piece, item, unit, fillet, breast, or any descriptive terms
+
+Respond ONLY with JSON (no other text):
 {
   "amount": <number>,
-  "unit": "<one of the available units>",
-  "reasoning": "<brief explanation of why this unit is appropriate>"
+  "unit": "<weight or volume unit only>",
+  "reasoning": "<brief explanation>"
 }`;
 
     console.log('🤖 Calling OpenAI GPT-4o to find standard unit for:', ingredientName);
@@ -339,20 +350,26 @@ function needsStandardUnitFix(nutritionalInfo, ingredientName) {
   
   const unit = nutritionalInfo.standardUnit.toLowerCase();
   
-  // List of problematic units that should be converted
-  const problematicUnits = [
-    'piece', 'pieces', 'slice', 'slices', 'clove', 'cloves',
-    'roast', 'roasts', 'serving', 'servings', 'portion', 'portions',
-    'stalk', 'stalks', 'sprig', 'sprigs', 'leaf', 'leaves',
-    'head', 'heads', 'bunch', 'bunches', 'strip', 'strips'
+  // Valid weight and volume units ONLY
+  const validUnits = [
+    'oz', 'g', 'kg', 'lb', 'lbs', 'gram', 'grams', 'ounce', 'ounces', 'pound', 'pounds',
+    'cup', 'cups', 'tbsp', 'tsp', 'ml', 'l', 'tablespoon', 'tablespoons', 'teaspoon', 'teaspoons'
   ];
   
-  // Check if it's a problematic count-based unit
-  for (const problematic of problematicUnits) {
-    if (unit.includes(problematic)) {
-      console.log(`   ⚠️ Problematic unit detected: "${nutritionalInfo.standardUnit}"`);
-      return true;
-    }
+  // Extract first word to check if unit is valid
+  const firstWord = unit.trim().split(' ')[0].split('(')[0]; // Handle "cup(diced)" or "cup diced"
+  
+  // If first word is not a valid unit, it needs fixing
+  if (!validUnits.includes(firstWord)) {
+    console.log(`   ⚠️ Non-standard unit detected: "${nutritionalInfo.standardUnit}" (normalized: "${firstWord}")`);
+    return true;
+  }
+  
+  // Check for parenthetical descriptions that indicate improper formatting
+  // e.g., "fillet (≈170 g)" or "oz (1 medium breast)" should be fixed to extract the weight
+  if (unit.includes('(') && unit.includes(')') && !validUnits.includes(firstWord)) {
+    console.log(`   ⚠️ Parenthetical description detected: "${nutritionalInfo.standardUnit}"`);
+    return true;
   }
   
   return false;
@@ -367,9 +384,9 @@ async function fixStandardUnitWithAI(ingredientName, nutritionalInfo) {
     
     const weightUnits = ['lb', 'lbs', 'oz', 'g', 'kg'];
     const volumeUnits = ['cup', 'cups', 'tbsp', 'tsp', 'ml', 'l'];
-    const allStandardUnits = [...weightUnits, ...volumeUnits, 'whole'];
+    const allStandardUnits = [...weightUnits, ...volumeUnits];
     
-    const prompt = `You are a nutrition expert. Analyze this nutritional information for "${ingredientName}".
+    const prompt = `You are a nutrition expert. Fix the non-standard unit for "${ingredientName}".
 
 Current Standard: ${nutritionalInfo.standardAmount} ${nutritionalInfo.standardUnit}
 
@@ -382,20 +399,31 @@ Nutritional Values:
 
 The current unit "${nutritionalInfo.standardUnit}" is non-standard and makes conversions difficult.
 
-IMPORTANT UNIT SELECTION RULES:
-1. For MEATS (beef, chicken, pork, fish, etc.): Use WEIGHT units (${weightUnits.join(', ')})
-2. For LIQUIDS: Use VOLUME units (${volumeUnits.join(', ')})
-3. For OTHER SOLIDS (vegetables, fruits, grains, chips, etc.): Use VOLUME units (${volumeUnits.join(', ')})
-4. For DISCRETE ITEMS used whole in recipes (bagels, eggs, tortillas, etc.): Use "whole" if recipes typically call for whole items
-5. NEVER use "whole" for items that recipes measure by volume (like chips, even though they're discrete pieces)
+CRITICAL RULES:
+1. standardAmount and standardUnit MUST ALWAYS be weight (oz, g, kg, lb) or volume (cup, tbsp, tsp, ml, l)
+2. NEVER use descriptive units like "fillet (≈170 g)", "1 medium breast", "whole", "piece", or "item"
+3. Convert descriptive units to actual weight/volume
+4. Extract numbers from parenthetical descriptions like "(≈170 g)" → 170, "g" or convert to oz
 
-Available units: ${allStandardUnits.join(', ')}
+Examples of CORRECT fixes:
+- "1 fillet (≈170 g)" → amount: 6, unit: "oz" (convert ~170g to 6 oz)
+- "1 medium breast (174g)" → amount: 174, unit: "g"  
+- "1 cup diced" → amount: 1, unit: "cup"
+- "piece" → amount: 4, unit: "oz" (estimate appropriate weight for this ingredient)
 
-Respond ONLY with a JSON object in this exact format (no other text):
+UNIT SELECTION RULES:
+- For MEATS (beef, chicken, pork, fish, etc.): Use WEIGHT units (${weightUnits.join(', ')})
+- For LIQUIDS: Use VOLUME units (${volumeUnits.join(', ')})
+- For OTHER SOLIDS (vegetables, fruits, grains, etc.): Use VOLUME units (${volumeUnits.join(', ')})
+
+Available units: ${weightUnits.join(', ')}, ${volumeUnits.join(', ')}
+DO NOT use: whole, piece, item, unit, fillet, breast, or any descriptive terms
+
+Respond ONLY with JSON (no other text):
 {
   "amount": <number>,
-  "unit": "<one of the available units>",
-  "reasoning": "<brief explanation of why this unit is appropriate>"
+  "unit": "<weight or volume unit only>",
+  "reasoning": "<brief explanation>"
 }`;
 
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {

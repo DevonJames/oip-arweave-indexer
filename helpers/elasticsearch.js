@@ -1595,17 +1595,56 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
                     }
                 }
                 
-                if (convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
+                // SAFETY NET: Extract weight from parenthetical descriptions like "(≈170 g)" or "(6 oz)"
+                // This handles legacy records with improper formatting like "fillet (≈170 g)"
+                const extractParentheticalWeight = (unitStr) => {
+                    // Match patterns like "(≈170 g)", "(~4 oz)", "(174g)", "(6 oz)"
+                    const match = unitStr.match(/\((?:≈|~)?(\d+(?:\.\d+)?)\s*([a-zA-Z]+)\)/i);
+                    if (match) {
+                        return {
+                            amount: parseFloat(match[1]),
+                            unit: match[2].toLowerCase().trim()
+                        };
+                    }
+                    return null;
+                };
+                
+                if ((convertedAmount === null || convertedAmount === undefined || isNaN(convertedAmount)) && rawStandardUnit.includes('(')) {
+                    const parentheticalWeight = extractParentheticalWeight(rawStandardUnit);
+                    
+                    if (parentheticalWeight) {
+                        console.log(`⚙️ Extracting weight from parentheses: "${rawStandardUnit}" → ${parentheticalWeight.amount} ${parentheticalWeight.unit}`);
+                        
+                        // Try conversion using the extracted weight
+                        const extractedAmount = convertUnits(recipeAmount, cleanRecipeUnit, parentheticalWeight.unit);
+                        if (extractedAmount !== null && extractedAmount !== undefined && !isNaN(extractedAmount)) {
+                            // Adjust for the fact that standardAmount might be 1 but parenthetical shows actual weight
+                            // e.g., standardAmount=1, standardUnit="fillet (≈170 g)" means 1 unit = 170g
+                            // So if recipe wants 24 oz and we converted to 680g, multiplier = 680 / 170 = 4
+                            if (standardAmount === 1) {
+                                // The parenthetical weight IS the standard amount
+                                multiplier = extractedAmount / parentheticalWeight.amount;
+                            } else {
+                                // Use standard calculation
+                                multiplier = extractedAmount / standardAmount;
+                            }
+                            conversionMethod = `parenthetical weight extraction (${parentheticalWeight.amount} ${parentheticalWeight.unit})`;
+                            console.log(`✅ Parenthetical weight conversion succeeded: ${recipeAmount} ${cleanRecipeUnit} = ${multiplier}x standard`);
+                        }
+                    }
+                }
+                
+                if (!multiplier && convertedAmount !== null && convertedAmount !== undefined && !isNaN(convertedAmount)) {
                     multiplier = convertedAmount / standardAmount;
                     conversionMethod = 'direct unit conversion';
-                } else if (isCountUnit(cleanRecipeUnit) && qtyInStandardAmount > 0) {
+                } else if (!multiplier && isCountUnit(cleanRecipeUnit) && qtyInStandardAmount > 0) {
                     // NEW: Use qtyInStandardAmount for count-based conversions
                     // Example: recipe wants 2 whole avocados, standard is "1 cup (2 whole avocados)"
                     // qtyInStandardAmount = 2, so multiplier = 2 / 2 = 1x the standard amount
                     multiplier = recipeAmount / qtyInStandardAmount;
                     conversionMethod = `count-to-volume conversion using qtyInStandardAmount (${qtyInStandardAmount} whole per ${standardAmount} ${rawStandardUnit})`;
                     console.log(`✅ Count conversion: ${recipeAmount} ${cleanRecipeUnit} = ${multiplier}x standard (${qtyInStandardAmount} whole items per standard)`);
-                } else if (standardUnitInfo && isCountUnit(cleanRecipeUnit)) {
+                } else if (!multiplier && standardUnitInfo && isCountUnit(cleanRecipeUnit)) {
                     // FIX #4 continued: Recipe uses count unit, standard describes count
                     // Example: recipe wants 4 "unit", standard is "173g (1 medium russet potato)"
                     // Multiplier = recipeAmount / standardUnitInfo.count
