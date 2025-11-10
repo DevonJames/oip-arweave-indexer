@@ -63,7 +63,7 @@ function generateMappingFromTemplate(templateName, fieldsInTemplate) {
  */
 async function updateRecordsMappingForTemplate(templateName, fieldsInTemplate) {
     try {
-        console.log(`📋 Generating Elasticsearch mapping for template: ${templateName}`);
+        // console.log(`📋 Generating Elasticsearch mapping for template: ${templateName}`);
         
         const properties = generateMappingFromTemplate(templateName, fieldsInTemplate);
         
