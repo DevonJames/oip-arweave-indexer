@@ -761,13 +761,21 @@ async function processRecipeAsync(jobId, reqBody, user) {
             const hasDescriptiveUnit = standardUnit.includes(',') || standardUnit.includes('yields') || 
                                        standardUnit.includes(' as ') || standardUnit.includes('(');
             
+            // Check for problematic volume↔weight mismatches that cause wrong conversions
+            // Example: Recipe uses "cup", ingredient has "g" → forces liquid conversion (1 cup = 240g)
+            // This is WRONG for dry goods like quinoa (1 cup = 170g), corn (1 cup = 145g)
+            const recipeIsVolume = recipeUnit && (recipeUnit.includes('cup') || recipeUnit.includes('tbsp') || recipeUnit.includes('tsp'));
+            const standardIsWeight = standardUnit && (standardUnit.includes('g') || standardUnit.includes('oz') || standardUnit.includes('lb'));
+            const volumeWeightMismatch = recipeIsVolume && standardIsWeight;
+            
             // Determine if record needs regeneration
             const unitsIncompatible = (isRecipeCountBased !== isStandardCountBased) && !hasQtyField;
-            const needsRegeneration = hasInvalidUnit || hasDescriptiveUnit || unitsIncompatible;
+            const needsRegeneration = hasInvalidUnit || hasDescriptiveUnit || unitsIncompatible || volumeWeightMismatch;
             
             if (needsRegeneration) {
                 const reason = hasInvalidUnit ? 'invalid standardUnit' : 
                                hasDescriptiveUnit ? 'descriptive standardUnit' : 
+                               volumeWeightMismatch ? `volume↔weight mismatch (recipe:${recipeUnit}, standard:${standardUnit})` :
                                'missing qtyInStandardAmount';
                 console.log(`⚠️ "${bestMatch.data.basic.name}" needs regeneration (${reason}): standardUnit="${standardUnit}". Will regenerate.`);
                 ingredientDidRefs[originalName] = null; // Force regeneration
