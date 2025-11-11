@@ -742,6 +742,47 @@ if (hasInvalidUnit || hasDescriptiveUnit || unitsIncompatible) {
 
 **Result:** Bad records like "red onion" (standardUnit="onion") now get **automatically regenerated** with proper units before they reach the calculation.
 
+**Part C - Detect Volume↔Weight Mismatches:**
+```javascript
+// File: routes/publish.js (Lines 764-769)
+
+// NEW: Catch problematic volume↔weight mismatches
+const recipeIsVolume = recipeUnit && (recipeUnit.includes('cup') || recipeUnit.includes('tbsp') || recipeUnit.includes('tsp'));
+const standardIsWeight = standardUnit && (standardUnit.includes('g') || standardUnit.includes('oz') || standardUnit.includes('lb'));
+const volumeWeightMismatch = recipeIsVolume && standardIsWeight;
+
+if (volumeWeightMismatch) {
+  console.log(`⚠️ Volume↔weight mismatch: recipe uses "${recipeUnit}", ingredient has "${standardUnit}"`);
+  ingredientDidRefs[originalName] = null;  // Force regeneration
+}
+```
+
+**Why This Matters:**
+```javascript
+// Quinoa with volume↔weight mismatch:
+standardUnit: "g"  // ← Weight unit
+recipeUnit: "cup"  // ← Volume unit
+
+// Backend's convertToGrams treats "cup" as liquid:
+1 cup → 240 grams (assumes water density!)
+
+// For dry quinoa: 1 cup = ~170g, NOT 240g
+// Multiplier: 240/100 = 2.4x ❌ (should be 1.7x)
+// Calories: 368 × 2.4 = 883 cal ❌ (should be 625 cal)
+```
+
+**After Regeneration:**
+```javascript
+// Quinoa regenerated with volume unit:
+standardUnit: "cup"  // ← Matches recipe!
+standardAmount: 1
+calories: 625  // Already calculated for 1 cup dry
+
+// Recipe: 1 cup
+// Multiplier: 1 / 1 = 1x ✅
+// Calories: 625 × 1 = 625 cal ✅
+```
+
 ### Bug #2: Empty Units Converted to 'unit' String
 
 **File:** `routes/publish.js` (Line 632)

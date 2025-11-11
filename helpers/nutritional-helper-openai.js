@@ -245,16 +245,29 @@ Examples of CORRECT formatting:
 
 qtyInStandardAmount Field Rules:
 - How many whole discrete items equal the standardAmount
+- This field is CRITICAL when recipes use counts but you choose volume/weight units
 - For chicken breast at 4 oz standard: qtyInStandardAmount=1 (1 breast = 4 oz)
-- For avocado at 1 cup diced: qtyInStandardAmount=2 (2 avocados = 1 cup diced)  
+- For avocado at 1 cup diced: qtyInStandardAmount=1.5 (1.5 avocados = 1 cup diced)  
+- For bell pepper at 1 cup diced: qtyInStandardAmount=1 (1 pepper = 1 cup diced)
+- For lime juice at 1 tbsp: qtyInStandardAmount=4 (4 tbsp = 1 lime, so 1/4 lime = 1 tbsp)
 - For liquids/powders with no discrete items: qtyInStandardAmount=1
-- CRITICAL: If you choose a VOLUME unit (cup) for a COUNT ingredient (avocado), you MUST calculate how many whole items fit in that volume
-  Example: 1 whole avocado ≈ 0.67 cups diced, so qtyInStandardAmount=1.5 (1.5 avocados per cup)
-  Example: 1 whole bell pepper ≈ 1 cup chopped, so qtyInStandardAmount=1
 
-The recipe uses this ingredient in ${preferredUnitType} form:
-- If preferredUnitType is "volume": choose cup, tbsp, tsp, ml, l AND set qtyInStandardAmount correctly for count conversions
-- If preferredUnitType is "count": choose weight (oz, g) AND set qtyInStandardAmount=1 (1 item = that weight)
+IMPORTANT qtyInStandardAmount Examples:
+- If you use standardUnit="tbsp" for lime juice: How many tbsp in 1 whole lime? ~4 tbsp, so qtyInStandardAmount=4
+- If you use standardUnit="cup" for bell pepper: How many cups in 1 whole pepper? ~1 cup, so qtyInStandardAmount=1
+- If you use standardUnit="cup" for corn: How many cups in 1 ear of corn? ~0.5 cup, so qtyInStandardAmount=0.5
+- If you use standardUnit="oz" for chicken breast: How many oz in 1 breast? ~4 oz, so qtyInStandardAmount=1
+
+CRITICAL UNIT TYPE SELECTION based on ${preferredUnitType}:
+- The recipe uses this ingredient in ${preferredUnitType} form
+- You MUST prefer ${preferredUnitType === 'volume' ? 'VOLUME units (cup, tbsp, tsp, ml, l)' : 'WEIGHT units (oz, g, kg, lb)'}
+- Matching the recipe's unit type prevents incorrect density conversions
+- Example: If recipe uses "cup" and you use "g", conversion assumes liquid density (WRONG for dry goods like quinoa)
+- Example: If recipe uses "whole" and you use "cup", you MUST set qtyInStandardAmount correctly
+
+Then calculate qtyInStandardAmount properly:
+- If you chose volume but ingredient is countable: calculate how many whole items per volume
+- If you chose weight: qtyInStandardAmount = 1 (one whole item = that weight)
 
 Provide complete nutritional data: calories, protein, fat, saturated fat, trans fat, cholesterol, sodium, carbohydrates, fiber, sugars, added sugars, potassium, calcium, iron, vitamins A/C/D, allergens, gluten-free, organic status.`
         }
