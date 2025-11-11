@@ -676,21 +676,143 @@ const calculateRecipeNutrition = async (ingredients, servings, recordsInDB = [])
 - Total: 280 cal × 4 = 1,120 cal
 - Per serving: 1,120 / 2 = 560 cal ✅
 
+## Critical Bugs Fixed (Nov 2025 - Quinoa Bowl 5697 cal Issue)
+
+### Bug #1: Unknown Units Assumed 1:1 Ratio (MAJOR - Caused 5697 cal Error)
+
+**The Core Issue:** Existing nutritional records in the database had invalid `standardUnit` values like "onion", "lime yields", "avocado, NS as to Florida" that weren't being caught and regenerated.
+
+**Real-World Example from Quinoa Bowl Recipe:**
+```javascript
+// Red onion record in database had:
+standardUnit: "onion"  // ❌ Invalid unit!
+standardAmount: 1
+calories: 40
+
+// Recipe called for: 1 cup red onion
+
+// convertToGrams tried to convert:
+convertToGrams(1, "cup") → 240 grams
+convertToGrams(1, "onion") → 1 (old code assumed 1:1 ratio!)
+
+// multiplier calculation:
+240 / 1 = 240x multiplier ❌❌❌
+
+// calories:
+40 × 240 = 9,600 calories from ONE CUP OF ONION!
+```
+
+**The Two-Part Fix:**
+
+**Part A - Prevent Bogus Multipliers:**
+```javascript
+// File: helpers/elasticsearch.js (Lines 1214-1218)
+
+// OLD (DANGEROUS):
+console.warn(`Unknown unit for conversion: ${unit}, assuming 1:1 ratio`);
+return amount;  // ❌ Caused 240x multipliers!
+
+// NEW (SAFE):
+console.warn(`❌ Unknown unit for conversion: ${unit}, cannot convert (returning null)`);
+return null;  // ✅ Fails gracefully, ingredient gets skipped
+```
+
+**Part B - Catch Bad Records Early:**
+```javascript
+// File: routes/publish.js (Lines 751-773)
+
+// NEW: Comprehensive validation that catches invalid units BEFORE calculation
+
+const validWeightVolumeUnits = ['oz', 'g', 'kg', 'lb', 'cup', 'tbsp', 'tsp', 'ml', 'l'];
+const firstWordOfUnit = standardUnit.toLowerCase().trim().split(' ')[0].split('(')[0];
+const hasInvalidUnit = !validWeightVolumeUnits.includes(firstWordOfUnit);
+
+// Check for descriptive units
+const hasDescriptiveUnit = standardUnit.includes(',') || 
+                          standardUnit.includes('yields') || 
+                          standardUnit.includes(' as ') || 
+                          standardUnit.includes('(');
+
+// Force regeneration if unit is invalid or descriptive
+if (hasInvalidUnit || hasDescriptiveUnit || unitsIncompatible) {
+  console.log(`⚠️ "${ingredient}" needs regeneration: standardUnit="${standardUnit}"`);
+  ingredientDidRefs[originalName] = null;  // ← Forces AI to create new record
+}
+```
+
+**Result:** Bad records like "red onion" (standardUnit="onion") now get **automatically regenerated** with proper units before they reach the calculation.
+
+### Bug #2: Empty Units Converted to 'unit' String
+
+**File:** `routes/publish.js` (Line 632)
+
+**The Problem:**
+Empty ingredient units were being converted to the string `'unit'`, which triggered count-based conversion logic but didn't work properly when nutritional records had volume-based units.
+
+**Example:**
+```javascript
+// Recipe ingredient:
+amount: 1, unit: '' (empty)
+
+// OLD CODE converted empty → 'unit':
+const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit');
+
+// Result: 'unit' treated as count-based, but nutritional record might have "cup"
+// Caused mismatched conversions
+```
+
+**The Fix:**
+```javascript
+// Keep empty units as empty strings
+const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || '');
+```
+
+Empty units are now handled by the existing logic in `calculateRecipeNutrition` that converts empty → 'whole'.
+
+### Bug #3: Invalid Units Not Caught by Validation
+
+**File:** `routes/recipes.js` (Lines 346-382)
+
+**Enhanced needsStandardUnitFix to catch:**
+- **Parenthetical descriptions:** "teaspoon (2 g)", "tsp (≈6 g)"
+- **Descriptive units:** "lime yields", "avocado, NS as to Florida", "onion"
+- **Units with commas:** Any unit containing commas
+
+**New Validation Checks:**
+```javascript
+// Check for parenthetical descriptions
+if (unit.includes('(') && unit.includes(')')) {
+  return true;  // Needs fixing
+}
+
+// Check for descriptive multi-word units
+if (unit.includes(',') || unit.includes('yields') || unit.includes(' as ')) {
+  return true;  // Needs fixing
+}
+```
+
+These units will now trigger `fixStandardUnitWithAI` during recipe resolution.
+
 ## Files Modified
 
 ### 1. helpers/nutritional-helper-openai.js
-- **Lines 227-256:** Updated fetchNutritionalData prompt
-- **Changes:** Enforced weight/volume units, added critical rules and examples
+- **Lines 227-257:** Updated fetchNutritionalData prompt
+- **Changes:** Enforced weight/volume units, added qtyInStandardAmount guidance for volume units
 
 ### 2. routes/recipes.js
 - **Lines 136-174:** Updated find-standard-unit endpoint prompt
-- **Lines 346-375:** Updated needsStandardUnitFix validation
+- **Lines 346-382:** Updated needsStandardUnitFix validation (catches parentheses, commas, "yields")
 - **Lines 383-421:** Updated fixStandardUnitWithAI prompt
-- **Changes:** Removed "whole" from valid units, added parenthetical check, enforced weight/volume only
+- **Changes:** Removed "whole" from valid units, enhanced validation to catch invalid descriptive units
 
-### 3. helpers/elasticsearch.js
+### 3. routes/publish.js
+- **Line 632:** Changed empty unit default from 'unit' to '' (empty string)
+- **Changes:** Prevents wrong count-based conversions for empty units
+
+### 4. helpers/elasticsearch.js
+- **Lines 1214-1218:** Changed unknown unit handling from 1:1 assumption to null return
 - **Lines 1598-1636:** Added parenthetical weight extraction safety net
-- **Changes:** Extract weight from legacy "(≈170 g)" patterns as fallback
+- **Changes:** Prevents massive multiplier errors from invalid units, adds safety net for legacy records
 
 ## Success Metrics
 

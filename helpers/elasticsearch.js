@@ -1211,9 +1211,11 @@ const convertToGrams = (amount, unit) => {
         return null; // Special handling required
     }
     
-    // If no conversion found, assume it's already in grams or return a reasonable default
-    console.warn(`Unknown unit for conversion: ${unit}, assuming 1:1 ratio`);
-    return amount;
+    // If no conversion found, return null to indicate incompatible unit
+    // NOTE: We DON'T assume 1:1 ratio here - that caused 240x multiplier bugs
+    // Records with invalid units should be caught by needsStandardUnitFix and regenerated
+    console.warn(`❌ Unknown unit for conversion: ${unit}, cannot convert (returning null)`);
+    return null;
 };
 
 // Enhanced unit conversion function that attempts direct unit matching first

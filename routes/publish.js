@@ -629,7 +629,9 @@ async function processRecipeAsync(jobId, reqBody, user) {
   });
   
   const ingredientAmounts = ingredients.map(ing => ing.amount ?? 1);
-  const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || 'unit'); // Default unit to 'unit'
+  // Don't default empty units to 'unit' - keep as empty string and handle in calculation
+  // CRITICAL: Defaulting to 'unit' causes wrong count-based conversions
+  const ingredientUnits = ingredients.map(ing => (ing.unit && ing.unit.trim()) || '');
 
   console.log(`📊 Ingredients: ${ingredientNames.length} need lookup, ${Object.keys(ingredientDidTxMap).length} already have DIDs`);
     
@@ -746,11 +748,28 @@ async function processRecipeAsync(jobId, reqBody, user) {
             const isStandardCountBased = isCountUnit(parseUnit(standardUnit));
             const hasQtyField = bestMatch.data.nutritionalInfo?.qtyInStandardAmount !== undefined;
             
-            // Determine if units are incompatible
-            const unitsIncompatible = (isRecipeCountBased !== isStandardCountBased) && !hasQtyField;
+            // CRITICAL: Check if standardUnit is invalid (not a proper weight/volume unit)
+            // This catches records like standardUnit="onion" or "lime yields" that cause massive multiplier errors
+            const validWeightVolumeUnits = [
+                'oz', 'g', 'kg', 'lb', 'lbs', 'gram', 'grams', 'ounce', 'ounces', 'pound', 'pounds',
+                'cup', 'cups', 'tbsp', 'tsp', 'ml', 'l', 'tablespoon', 'tablespoons', 'teaspoon', 'teaspoons'
+            ];
+            const firstWordOfUnit = standardUnit.toLowerCase().trim().split(' ')[0].split('(')[0];
+            const hasInvalidUnit = !validWeightVolumeUnits.includes(firstWordOfUnit) && standardUnit.length > 0;
             
-            if (unitsIncompatible) {
-                console.log(`⚠️ Unit mismatch: "${bestMatch.data.basic.name}" has ${standardUnit}, recipe needs ${recipeUnit} (missing qtyInStandardAmount). Will regenerate.`);
+            // Also check for descriptive units that need fixing
+            const hasDescriptiveUnit = standardUnit.includes(',') || standardUnit.includes('yields') || 
+                                       standardUnit.includes(' as ') || standardUnit.includes('(');
+            
+            // Determine if record needs regeneration
+            const unitsIncompatible = (isRecipeCountBased !== isStandardCountBased) && !hasQtyField;
+            const needsRegeneration = hasInvalidUnit || hasDescriptiveUnit || unitsIncompatible;
+            
+            if (needsRegeneration) {
+                const reason = hasInvalidUnit ? 'invalid standardUnit' : 
+                               hasDescriptiveUnit ? 'descriptive standardUnit' : 
+                               'missing qtyInStandardAmount';
+                console.log(`⚠️ "${bestMatch.data.basic.name}" needs regeneration (${reason}): standardUnit="${standardUnit}". Will regenerate.`);
                 ingredientDidRefs[originalName] = null; // Force regeneration
             } else {
                 ingredientDidRefs[originalName] = bestMatch.oip.did || bestMatch.oip.didTx;
