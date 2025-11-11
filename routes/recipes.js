@@ -366,9 +366,16 @@ function needsStandardUnitFix(nutritionalInfo, ingredientName) {
   }
   
   // Check for parenthetical descriptions that indicate improper formatting
-  // e.g., "fillet (≈170 g)" or "oz (1 medium breast)" should be fixed to extract the weight
-  if (unit.includes('(') && unit.includes(')') && !validUnits.includes(firstWord)) {
+  // e.g., "fillet (≈170 g)", "oz (1 medium breast)", "teaspoon (2 g)", "tsp (≈6 g)"
+  if (unit.includes('(') && unit.includes(')')) {
     console.log(`   ⚠️ Parenthetical description detected: "${nutritionalInfo.standardUnit}"`);
+    return true;
+  }
+  
+  // Check for descriptive multi-word units that aren't valid
+  // e.g., "lime yields", "avocado, NS as to Florida", "onion"
+  if (unit.includes(',') || unit.includes('yields') || unit.includes(' as ')) {
+    console.log(`   ⚠️ Descriptive unit detected: "${nutritionalInfo.standardUnit}"`);
     return true;
   }
   

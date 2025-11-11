@@ -248,10 +248,13 @@ qtyInStandardAmount Field Rules:
 - For chicken breast at 4 oz standard: qtyInStandardAmount=1 (1 breast = 4 oz)
 - For avocado at 1 cup diced: qtyInStandardAmount=2 (2 avocados = 1 cup diced)  
 - For liquids/powders with no discrete items: qtyInStandardAmount=1
+- CRITICAL: If you choose a VOLUME unit (cup) for a COUNT ingredient (avocado), you MUST calculate how many whole items fit in that volume
+  Example: 1 whole avocado ≈ 0.67 cups diced, so qtyInStandardAmount=1.5 (1.5 avocados per cup)
+  Example: 1 whole bell pepper ≈ 1 cup chopped, so qtyInStandardAmount=1
 
-The recipe uses this ingredient in ${preferredUnitType} form, so choose weight or volume accordingly:
-- If preferredUnitType is "volume": prefer cup, tbsp, tsp, ml, l
-- If preferredUnitType is "count": use weight (oz, g) with qtyInStandardAmount showing the count
+The recipe uses this ingredient in ${preferredUnitType} form:
+- If preferredUnitType is "volume": choose cup, tbsp, tsp, ml, l AND set qtyInStandardAmount correctly for count conversions
+- If preferredUnitType is "count": choose weight (oz, g) AND set qtyInStandardAmount=1 (1 item = that weight)
 
 Provide complete nutritional data: calories, protein, fat, saturated fat, trans fat, cholesterol, sodium, carbohydrates, fiber, sugars, added sugars, potassium, calcium, iron, vitamins A/C/D, allergens, gluten-free, organic status.`
         }
