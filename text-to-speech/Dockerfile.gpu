@@ -68,8 +68,11 @@ RUN pip3 install --no-cache-dir chatterbox-tts || echo "Chatterbox TTS installat
 # Install Maya1 TTS dependencies
 # Maya1: 3B parameter transformer for expressive voice synthesis with SNAC codec
 RUN pip3 install --no-cache-dir \
+    transformers>=4.35.0 \
     snac \
     accelerate \
+    sentencepiece \
+    protobuf \
     || echo "⚠️ Maya1 TTS dependencies installation failed - will fallback to other engines"
 
 # Copy service files
