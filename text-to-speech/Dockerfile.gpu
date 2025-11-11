@@ -65,6 +65,13 @@ RUN pip3 install --no-cache-dir \
 # This prevents pip dependency conflicts from post-deployment installation
 RUN pip3 install --no-cache-dir chatterbox-tts || echo "Chatterbox TTS installation failed - will fallback to other engines"
 
+# Install Maya1 TTS dependencies
+# Maya1: 3B parameter transformer for expressive voice synthesis with SNAC codec
+RUN pip3 install --no-cache-dir \
+    snac \
+    accelerate \
+    || echo "⚠️ Maya1 TTS dependencies installation failed - will fallback to other engines"
+
 # Copy service files
 COPY . .
 
@@ -77,6 +84,9 @@ RUN python3 download_models.py || echo "Failed to pre-load models, will download
 
 # Setup Kokoro TTS model structure
 RUN python3 download_kokoro_model.py || echo "Failed to setup Kokoro model structure"
+
+# Pre-download Maya1 TTS model and SNAC codec (3B params + codec ~1-2GB total)
+RUN python3 download_maya1_model.py || echo "Failed to pre-load Maya1 models, will download on first use"
 
 # Expose port
 EXPOSE 5002
