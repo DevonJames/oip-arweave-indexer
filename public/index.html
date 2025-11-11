@@ -684,6 +684,7 @@
             // Map engine names to user-friendly labels
             const engineLabels = {
                 'kokoro': 'Kokoro TTS (Neural Synthesis)',
+                'maya1': 'Maya1 TTS (3B Transformer + Expressive + GPU)',
                 'chatterbox': 'Chatterbox TTS (High Quality + Voice Cloning)',
                 'silero': 'Silero Neural TTS (GPU Accelerated)', 
                 'edge_tts': 'Edge TTS (Fast + Many Voices)',
@@ -693,7 +694,7 @@
             };
             
             // Separate engines into Local and Cloud categories
-            const localEngines = ['kokoro', 'chatterbox', 'silero', 'espeak'];
+            const localEngines = ['kokoro', 'maya1', 'chatterbox', 'silero', 'espeak'];
             const cloudEngines = ['edge_tts', 'gtts', 'elevenlabs'];
             
             const localAvailable = engineNames.filter(name => localEngines.includes(name));
