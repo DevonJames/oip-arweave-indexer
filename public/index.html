@@ -108,6 +108,7 @@
                         <label for="voice-engine">Voice Engine:</label>
                         <select id="voice-engine" onchange="switchEngine()">
                             <option value="chatterbox" selected>Chatterbox TTS (High Quality + Voice Cloning)</option>
+                            <option value="maya1">Maya1 TTS (3B Transformer + Expressive + GPU)</option>
                             <option value="edge_tts">Edge TTS (Fast + Many Voices)</option>
                             <option value="elevenlabs">ElevenLabs (Premium + Ultra Fast)</option>
                         </select>
@@ -432,6 +433,7 @@
             // Update UI based on selected engine
             const engineTitles = {
                 'chatterbox': 'Chatterbox TTS (High Quality)',
+                'maya1': 'Maya1 TTS (3B Transformer + GPU)',
                 'kokoro': 'Kokoro TTS (Neural Synthesis)',
                 'edge_tts': 'Edge TTS (Fast Response)', 
                 'gtts': 'Google TTS (Cloud)',
@@ -441,6 +443,7 @@
             
             const engineLabels = {
                 'chatterbox': 'Enable Chatterbox TTS',
+                'maya1': 'Enable Maya1 TTS',
                 'kokoro': 'Enable Kokoro TTS',
                 'edge_tts': 'Enable Edge TTS',
                 'gtts': 'Enable Google TTS', 
@@ -456,6 +459,10 @@
             if (selectedEngine === 'chatterbox') {
                 document.getElementById('chatterbox-controls').style.display = 'block';
                 document.getElementById('voice-cloning-section').style.display = 'block';
+            } else if (selectedEngine === 'maya1') {
+                // Maya1 uses chatterbox-style controls (supports emotion/expression)
+                document.getElementById('chatterbox-controls').style.display = 'block';
+                // Voice cloning not supported for Maya1
             } else if (selectedEngine === 'edge_tts') {
                 document.getElementById('edge-controls').style.display = 'block';
             } else if (selectedEngine === 'elevenlabs') {
@@ -1120,7 +1127,7 @@
                     await synthesizeWithEdge(text);
                 } else if (engine === 'elevenlabs') {
                     await synthesizeWithElevenLabs(text);
-                } else if (engine === 'kokoro' || engine === 'silero' || engine === 'gtts' || engine === 'espeak') {
+                } else if (engine === 'maya1' || engine === 'kokoro' || engine === 'silero' || engine === 'gtts' || engine === 'espeak') {
                     await synthesizeWithGenericEngine(text, engine);
 
                 } else {

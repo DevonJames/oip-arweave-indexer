@@ -567,7 +567,7 @@ Both methods now wait for **full ingredient resolution** before sending `recipeC
 
 ### Resolution Progress
 - Checks every **5 seconds**
-- Maximum **30 attempts** (2.5 minutes)
+- Maximum **60 attempts** (5 minutes)
 - Logs resolution count: `"7/10 ingredients resolved"`
 - Only sends `recipeCompleted` when **all ingredients are resolved**
 

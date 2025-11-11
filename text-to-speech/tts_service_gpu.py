@@ -38,6 +38,20 @@ except Exception as e:
     CHATTERBOX_AVAILABLE = False
     logger.error(f"Error importing Chatterbox TTS: {e}")
 
+# Try to import Maya1 TTS and SNAC codec
+try:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from snac import SNAC
+    import soundfile as sf
+    MAYA1_AVAILABLE = True
+    logger.info("Maya1 TTS dependencies imported successfully")
+except ImportError as e:
+    MAYA1_AVAILABLE = False
+    logger.warning(f"Maya1 TTS not available: {e}")
+except Exception as e:
+    MAYA1_AVAILABLE = False
+    logger.error(f"Error importing Maya1 TTS: {e}")
+
 # Import pyttsx3 as fallback only
 import pyttsx3
 
@@ -102,6 +116,10 @@ class GPUTTSService:
         self.silero_speakers = {}
         self.chatterbox_engine = None
         self.chatterbox_voices = {}
+        self.maya1_model = None
+        self.maya1_tokenizer = None
+        self.maya1_snac = None
+        self.maya1_voices = {}
         self.engine_lock = threading.Lock()  # Add thread safety
         
         logger.info(f"Initializing GPU TTS service on device: {self.device}")
@@ -111,6 +129,8 @@ class GPUTTSService:
         self._initialize_chatterbox()
         # Initialize Kokoro TTS
         self._initialize_kokoro()
+        # Initialize Maya1 TTS
+        self._initialize_maya1()
     def _initialize_chatterbox(self):
         """Initialize Chatterbox TTS (Resemble AI) - REAL Chatterbox TTS ENGINE"""
         if not CHATTERBOX_AVAILABLE:
@@ -320,6 +340,106 @@ class GPUTTSService:
         }
         logger.info("✅ Kokoro TTS mock implementation ready")
         logger.info(f"   Available mock voices: {list(self.kokoro_voices.keys())}")
+    
+    def _initialize_maya1(self):
+        """Initialize Maya1 TTS (3B parameter transformer with SNAC codec)"""
+        if not MAYA1_AVAILABLE:
+            logger.warning("Maya1 TTS dependencies not available - skipping Maya1 initialization")
+            self.maya1_model = None
+            self.maya1_tokenizer = None
+            self.maya1_snac = None
+            self.maya1_voices = {}
+            return
+            
+        try:
+            logger.info("🚀 Initializing Maya1 TTS (Maya Research - 3B params)...")
+            
+            # Load Maya1 transformer model
+            logger.info("📥 Loading Maya1 model (this may take a moment)...")
+            self.maya1_model = AutoModelForCausalLM.from_pretrained(
+                "maya-research/maya1",
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+                trust_remote_code=True
+            )
+            
+            # Load tokenizer
+            logger.info("📥 Loading Maya1 tokenizer...")
+            self.maya1_tokenizer = AutoTokenizer.from_pretrained(
+                "maya-research/maya1",
+                trust_remote_code=True
+            )
+            
+            # Load SNAC codec for audio decoding
+            logger.info("📥 Loading SNAC codec (24kHz neural audio codec)...")
+            self.maya1_snac = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval()
+            
+            # Move SNAC to GPU if available
+            if torch.cuda.is_available():
+                self.maya1_snac = self.maya1_snac.to("cuda")
+                logger.info("   SNAC codec moved to GPU")
+            
+            # Define Maya1 voice presets with natural language descriptions
+            # Maya1 uses voice descriptions instead of simple IDs
+            self.maya1_voices = {
+                'female_expressive': {
+                    'description': 'A warm, expressive female voice with clear articulation',
+                    'emotion_tags': [],
+                    'gender': 'female',
+                    'style': 'expressive'
+                },
+                'female_calm': {
+                    'description': 'A calm, soothing female voice with gentle tones',
+                    'emotion_tags': [],
+                    'gender': 'female',
+                    'style': 'calm'
+                },
+                'male_expressive': {
+                    'description': 'A clear, expressive male voice with good articulation',
+                    'emotion_tags': [],
+                    'gender': 'male',
+                    'style': 'expressive'
+                },
+                'male_calm': {
+                    'description': 'A deep, calm male voice with measured pacing',
+                    'emotion_tags': [],
+                    'gender': 'male',
+                    'style': 'calm'
+                },
+                'female_cheerful': {
+                    'description': 'An upbeat, cheerful female voice with positive energy',
+                    'emotion_tags': ['<laugh>'],
+                    'gender': 'female',
+                    'style': 'cheerful'
+                },
+                'male_professional': {
+                    'description': 'A professional, authoritative male voice',
+                    'emotion_tags': [],
+                    'gender': 'male',
+                    'style': 'professional'
+                },
+                'default': {
+                    'description': 'A clear, natural voice with balanced articulation',
+                    'emotion_tags': [],
+                    'gender': 'neutral',
+                    'style': 'neutral'
+                }
+            }
+            
+            logger.info("✅ Maya1 TTS initialized successfully")
+            logger.info(f"   Model: maya-research/maya1 (3B parameters)")
+            logger.info(f"   Codec: SNAC 24kHz")
+            logger.info(f"   Device: {next(self.maya1_model.parameters()).device}")
+            logger.info(f"   Available voice presets: {list(self.maya1_voices.keys())}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize Maya1 TTS: {str(e)}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
+            self.maya1_model = None
+            self.maya1_tokenizer = None
+            self.maya1_snac = None
+            self.maya1_voices = {}
 
     async def synthesize_with_chatterbox(self, text: str, voice: str, gender: str = "female", emotion: str = "neutral", exaggeration: float = 0.5, cfg_weight: float = 0.5) -> Optional[str]:
         """Synthesize speech using REAL Chatterbox TTS (Resemble AI) - PRIMARY TTS ENGINE"""
@@ -383,6 +503,113 @@ class GPUTTSService:
                         
         except Exception as e:
             logger.warning(f"⚠️ Chatterbox TTS error: {e} - falling back to Silero")
+            return None
+
+    async def synthesize_with_maya1(self, text: str, voice: str, gender: str = "female", emotion: str = "neutral") -> Optional[str]:
+        """Synthesize speech using Maya1 TTS with SNAC codec"""
+        if not self.maya1_model or not self.maya1_tokenizer or not self.maya1_snac:
+            logger.warning("Maya1 TTS not available - model, tokenizer, or codec missing")
+            return None
+            
+        try:
+            # Get voice configuration
+            voice_config = self.maya1_voices.get(voice, self.maya1_voices.get('default'))
+            voice_description = voice_config['description']
+            emotion_tags = voice_config.get('emotion_tags', [])
+            
+            logger.info(f"🎵 Maya1 TTS: voice={voice}, description='{voice_description}'")
+            logger.info(f"   Generating SNAC tokens with transformer model...")
+            
+            # Build prompt with voice description and optional emotion tags
+            emotion_tag_str = ' '.join(emotion_tags) if emotion_tags else ''
+            prompt = f'<description="{voice_description}"> {emotion_tag_str} {text}'
+            
+            # Tokenize input
+            inputs = self.maya1_tokenizer(prompt, return_tensors="pt")
+            
+            # Move to GPU if available
+            if torch.cuda.is_available():
+                inputs = {k: v.to("cuda") for k, v in inputs.items()}
+            
+            # Generate SNAC tokens with Maya1 transformer
+            with torch.inference_mode():
+                outputs = self.maya1_model.generate(
+                    **inputs,
+                    max_new_tokens=500,  # Adjust based on text length
+                    temperature=0.4,      # Lower for more consistent speech
+                    top_p=0.9,
+                    do_sample=True,
+                    pad_token_id=self.maya1_tokenizer.eos_token_id
+                )
+            
+            # Extract generated tokens (skip input tokens)
+            generated_ids = outputs[0, inputs['input_ids'].shape[1]:]
+            
+            # Filter SNAC tokens (range: 128266 to 156937 according to Maya1 spec)
+            snac_tokens = [t.item() for t in generated_ids if 128266 <= t <= 156937]
+            
+            logger.info(f"   Generated {len(snac_tokens)} SNAC tokens")
+            
+            if len(snac_tokens) < 7:
+                logger.warning("   Insufficient SNAC tokens generated, synthesis may fail")
+                return None
+            
+            # Decode SNAC tokens to audio codes
+            # SNAC uses 7 tokens per frame across 3 layers
+            frames = len(snac_tokens) // 7
+            codes = [[], [], []]  # 3 layers
+            
+            for i in range(frames):
+                frame_tokens = snac_tokens[i*7:(i+1)*7]
+                # Layer 0: 1 code per frame
+                codes[0].append((frame_tokens[0] - 128266) % 4096)
+                # Layer 1: 2 codes per frame
+                codes[1].extend([
+                    (frame_tokens[1] - 128266) % 4096,
+                    (frame_tokens[4] - 128266) % 4096
+                ])
+                # Layer 2: 4 codes per frame
+                codes[2].extend([
+                    (frame_tokens[2] - 128266) % 4096,
+                    (frame_tokens[3] - 128266) % 4096,
+                    (frame_tokens[5] - 128266) % 4096,
+                    (frame_tokens[6] - 128266) % 4096
+                ])
+            
+            logger.info(f"   Decoded {frames} audio frames across 3 codec layers")
+            
+            # Convert codes to tensors
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            codes_tensor = [
+                torch.tensor(c, dtype=torch.long, device=device).unsqueeze(0) 
+                for c in codes
+            ]
+            
+            # Decode to audio using SNAC codec
+            logger.info(f"   Decoding SNAC tokens to audio waveform...")
+            with torch.inference_mode():
+                audio_tensor = self.maya1_snac.decoder(
+                    self.maya1_snac.quantizer.from_codes(codes_tensor)
+                )
+                # Extract audio array from tensor
+                audio_np = audio_tensor[0, 0].cpu().numpy()
+            
+            logger.info(f"   Generated {len(audio_np)} audio samples at 24kHz")
+            
+            # Save to temporary WAV file
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                import soundfile as sf
+                sf.write(tmp_file.name, audio_np, 24000)  # Maya1 outputs 24kHz audio
+                
+                duration = len(audio_np) / 24000
+                file_size = os.path.getsize(tmp_file.name)
+                logger.info(f"✅ Maya1 synthesis successful: {duration:.1f}s audio, {file_size} bytes")
+                return tmp_file.name
+                
+        except Exception as e:
+            logger.error(f"❌ Maya1 TTS error: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
             return None
 
     async def synthesize_with_kokoro(self, text: str, voice: str) -> Optional[str]:
@@ -792,6 +1019,7 @@ class GPUTTSService:
             engines_to_try = [
                 ("chatterbox", self.synthesize_with_chatterbox),  # PRIMARY ENGINE - MUST WORK
                 ("silero", self.synthesize_with_silero),          # First fallback (GPU)
+                ("maya1", self.synthesize_with_maya1),            # Maya1 (GPU) - NEW!
                 ("edge_tts", self.synthesize_with_edge_tts),
                 ("gtts", self.synthesize_with_gtts),
                 ("espeak", self.synthesize_with_espeak)
@@ -810,6 +1038,17 @@ class GPUTTSService:
             engines_to_try = [
                 ("chatterbox", self.synthesize_with_chatterbox),
                 ("silero", self.synthesize_with_silero),          # First fallback
+                ("maya1", self.synthesize_with_maya1),            # Maya1 fallback
+                ("edge_tts", self.synthesize_with_edge_tts),
+                ("gtts", self.synthesize_with_gtts),
+                ("espeak", self.synthesize_with_espeak)
+            ]
+        elif engine == "maya1":
+            # When specifically requesting Maya1
+            engines_to_try = [
+                ("maya1", self.synthesize_with_maya1),            # PRIMARY: Maya1
+                ("silero", self.synthesize_with_silero),          # GPU fallback
+                ("chatterbox", self.synthesize_with_chatterbox),
                 ("edge_tts", self.synthesize_with_edge_tts),
                 ("gtts", self.synthesize_with_gtts),
                 ("espeak", self.synthesize_with_espeak)
@@ -818,6 +1057,7 @@ class GPUTTSService:
             # Try specific engine first, then GPU-optimized fallbacks
             engine_methods = {
                 "kokoro": self.synthesize_with_kokoro,
+                "maya1": self.synthesize_with_maya1,
                 "silero": self.synthesize_with_silero,
                 "chatterbox": self.synthesize_with_chatterbox,
                 "edge_tts": self.synthesize_with_edge_tts,
@@ -838,9 +1078,14 @@ class GPUTTSService:
             try:
                 logger.info(f"Trying {engine_name} for synthesis")
                 
-                if engine_name in ["kokoro", "chatterbox", "silero", "edge_tts", "espeak"]:
-
+                if engine_name in ["kokoro", "silero", "edge_tts", "espeak"]:
                     audio_file = await method(text, voice)
+                elif engine_name == "chatterbox":
+                    # Chatterbox needs gender and emotion params
+                    audio_file = await method(text, voice, gender="female", emotion="neutral")
+                elif engine_name == "maya1":
+                    # Maya1 needs gender and emotion params
+                    audio_file = await method(text, voice, gender="female", emotion="neutral")
                 else:
                     audio_file = await method(text)
                 
@@ -1035,7 +1280,7 @@ async def synthesize_speech_json(request: TTSRequest):
 
 @app.get("/voices")
 async def get_voices():
-    """Get available TTS voices - Chatterbox PRIMARY, Silero fallback"""
+    """Get available TTS voices - Chatterbox PRIMARY, Maya1/Silero fallback"""
     voices = []
     
     # Add Chatterbox voices (PRIMARY ENGINE)
@@ -1061,6 +1306,33 @@ async def get_voices():
                 "quality": "high",
                 "gpu_accelerated": False,
                 "primary": True
+            })
+    
+    # Add Maya1 voices (GPU-ACCELERATED)
+    if tts_service.maya1_model is not None:
+        maya1_voice_descriptions = {
+            "female_expressive": {"name": "Maya1 Female Expressive", "description": "Warm, expressive female voice (3B transformer)"},
+            "female_calm": {"name": "Maya1 Female Calm", "description": "Calm, soothing female voice (3B transformer)"},
+            "male_expressive": {"name": "Maya1 Male Expressive", "description": "Clear, expressive male voice (3B transformer)"},
+            "male_calm": {"name": "Maya1 Male Calm", "description": "Deep, calm male voice (3B transformer)"},
+            "female_cheerful": {"name": "Maya1 Female Cheerful", "description": "Upbeat, cheerful female voice (3B transformer)"},
+            "male_professional": {"name": "Maya1 Male Professional", "description": "Professional, authoritative male voice (3B transformer)"},
+            "default": {"name": "Maya1 Default", "description": "Natural voice with balanced articulation"}
+        }
+        
+        for voice_id, voice_config in tts_service.maya1_voices.items():
+            voice_info = maya1_voice_descriptions.get(voice_id, {"name": f"Maya1 {voice_id}", "description": "Maya1 neural voice"})
+            voices.append({
+                "id": voice_id,
+                "name": voice_info["name"],
+                "engine": "maya1",
+                "language": "en",
+                "gender": voice_config.get('gender', 'neutral'),
+                "description": voice_info["description"],
+                "quality": "very_high",
+                "gpu_accelerated": True,
+                "primary": False,
+                "features": ["emotion_tags", "voice_descriptions", "expressive"]
             })
     
     # Add Silero voices as fallback (if available)
@@ -1113,10 +1385,12 @@ async def health_check():
     else:
         gpu_info = {"gpu_available": False}
     
-    # Determine primary engine (Chatterbox is primary, Silero is first fallback)
+    # Determine primary engine (Chatterbox is primary, Maya1/Silero are fallbacks)
     primary_engine = "none"
     if tts_service.chatterbox_engine is not None:
         primary_engine = "chatterbox"
+    elif tts_service.maya1_model is not None:
+        primary_engine = "maya1"
     elif tts_service.silero_model is not None:
         primary_engine = "silero"
     
@@ -1124,7 +1398,7 @@ async def health_check():
     engines_array = [
         {"name": "kokoro", "available": getattr(tts_service, 'kokoro_available', False), "primary": True},
         {"name": "chatterbox", "available": tts_service.chatterbox_engine is not None, "primary": False},
-
+        {"name": "maya1", "available": tts_service.maya1_model is not None, "primary": False, "gpu_accelerated": True},
         {"name": "silero", "available": tts_service.silero_model is not None, "primary": False},
         {"name": "edge_tts", "available": True, "primary": False},
         {"name": "gtts", "available": True, "primary": False},
@@ -1138,14 +1412,21 @@ async def health_check():
         "engines": engines_array,  # Array format for voice.js compatibility
         "engines_dict": {  # Keep object format for backward compatibility
             "chatterbox": tts_service.chatterbox_engine is not None,
+            "maya1": tts_service.maya1_model is not None,
             "silero": tts_service.silero_model is not None,
             "edge_tts": True,
             "gtts": True,
             "espeak": True
         },
         "gpu_info": gpu_info,
-        "available_voices": len(tts_service.chatterbox_voices) if tts_service.chatterbox_engine else len(tts_service.silero_speakers),
-        "voice_options": list(tts_service.chatterbox_voices.keys()) if tts_service.chatterbox_engine else list(tts_service.silero_speakers.keys())
+        "available_voices": len(tts_service.chatterbox_voices) if tts_service.chatterbox_engine else (len(tts_service.maya1_voices) if tts_service.maya1_model else len(tts_service.silero_speakers)),
+        "voice_options": list(tts_service.chatterbox_voices.keys()) if tts_service.chatterbox_engine else (list(tts_service.maya1_voices.keys()) if tts_service.maya1_model else list(tts_service.silero_speakers.keys())),
+        "maya1_info": {
+            "available": tts_service.maya1_model is not None,
+            "model": "maya-research/maya1 (3B parameters)" if tts_service.maya1_model else None,
+            "codec": "SNAC 24kHz" if tts_service.maya1_snac else None,
+            "voices": list(tts_service.maya1_voices.keys()) if tts_service.maya1_voices else []
+        }
     }
 
 if __name__ == "__main__":
