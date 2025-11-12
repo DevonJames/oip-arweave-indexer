@@ -337,6 +337,12 @@
                     timer: null
                 }
             },
+            // Maya1-specific settings
+            maya1: {
+                selectedVoice: 'male_british',  // Default to British male voice
+                exaggeration: 0.7,
+                cfg_weight: 0.3
+            },
             // Edge TTS-specific settings
             edge: {
                 selectedVoice: 'en-US-AriaNeural',
@@ -498,6 +504,20 @@
                         v.engine && (v.engine.toLowerCase() === 'edge tts' || v.engine.toLowerCase() === 'edge_tts')
                     );
                     
+                    // Filter Maya1 voices
+                    availableVoices.maya1 = voices.filter(v => 
+                        v.engine && v.engine.toLowerCase() === 'maya1'
+                    );
+                    
+                    // Add Maya1 British male voice (custom description)
+                    availableVoices.maya1.push({
+                        id: 'male_british',
+                        name: 'Maya1 Male British',
+                        gender: 'male',
+                        engine: 'maya1',
+                        description: 'A sophisticated male voice with a refined British accent, clear articulation and measured pacing'
+                    });
+                    
                     // Add ElevenLabs voices (hardcoded popular ones)
                     availableVoices.elevenlabs = [
                         { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male, Deep)', gender: 'male', engine: 'elevenlabs' },
@@ -512,7 +532,7 @@
                         { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace (Female, Calm)', gender: 'female', engine: 'elevenlabs' }
                     ];
                     
-                    console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices, ${availableVoices.edge_tts.length} Edge TTS voices, and ${availableVoices.elevenlabs.length} ElevenLabs voices`);
+                    console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices, ${availableVoices.edge_tts.length} Edge TTS voices, ${availableVoices.maya1.length} Maya1 voices, and ${availableVoices.elevenlabs.length} ElevenLabs voices`);
                     
                     // Populate dropdown for default engine
                     await populateVoiceDropdown(voiceConfig.selectedEngine);
@@ -595,6 +615,13 @@
                     voiceSelect.value = defaultVoice.id;
                     voiceConfig.chatterbox.selectedVoice = defaultVoice.id;
                 }
+            } else if (engine === 'maya1') {
+                // Default to British male voice
+                const defaultVoice = voices.find(v => v.id === 'male_british') || voices.find(v => v.gender === 'male') || voices[0];
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.id;
+                    voiceConfig.maya1.selectedVoice = defaultVoice.id;
+                }
             } else if (engine === 'edge_tts') {
                 const defaultVoice = voices.find(v => v.id === 'en-US-AriaNeural') || voices[0];
                 if (defaultVoice) {
@@ -619,6 +646,8 @@
             
             if (engine === 'chatterbox') {
                 voiceConfig.chatterbox.selectedVoice = selectedVoice;
+            } else if (engine === 'maya1') {
+                voiceConfig.maya1.selectedVoice = selectedVoice;
             } else if (engine === 'edge_tts') {
                 voiceConfig.edge.selectedVoice = selectedVoice;
             } else if (engine === 'elevenlabs') {
@@ -1161,26 +1190,51 @@
                 formData.append('text', text);
                 formData.append('engine', engine);
                 
-                // Required parameters for all engines
-                formData.append('gender', 'female');
-                formData.append('emotion', 'neutral');
-                formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
-                formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
-                formData.append('voice_cloning', false);
-                
                 // Add engine-specific voice configuration
-                if (engine === 'kokoro') {
+                if (engine === 'maya1') {
+                    // Maya1 TTS configuration
+                    const selectedVoice = voiceConfig.maya1.selectedVoice || 'male_british';
+                    formData.append('voice_id', selectedVoice);
+                    formData.append('gender', 'male');  // British voice is male
+                    formData.append('emotion', 'neutral');
+                    formData.append('exaggeration', voiceConfig.maya1.exaggeration.toString());
+                    formData.append('cfg_weight', voiceConfig.maya1.cfg_weight.toString());
+                    formData.append('voice_cloning', false);
+                    formData.append('speed', '1.0');
+                } else if (engine === 'kokoro') {
                     // Kokoro might support voice selection
                     formData.append('voice_id', voiceConfig.chatterbox.selectedVoice || 'default');
+                    formData.append('gender', 'female');
+                    formData.append('emotion', 'neutral');
+                    formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                    formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                    formData.append('voice_cloning', false);
                     formData.append('speed', '1.0');
                 } else if (engine === 'gtts') {
                     // Google TTS supports language/voice
                     formData.append('voice_id', 'en');
+                    formData.append('gender', 'female');
+                    formData.append('emotion', 'neutral');
+                    formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                    formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                    formData.append('voice_cloning', false);
                     formData.append('speed', '1.0');
                 } else if (engine === 'espeak') {
                     // eSpeak basic parameters
                     formData.append('voice_id', 'en');
+                    formData.append('gender', 'female');
+                    formData.append('emotion', 'neutral');
+                    formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                    formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                    formData.append('voice_cloning', false);
                     formData.append('speed', '1.0'); // Let backend handle speed conversion
+                } else {
+                    // Default parameters for other engines
+                    formData.append('gender', 'female');
+                    formData.append('emotion', 'neutral');
+                    formData.append('exaggeration', voiceConfig.chatterbox.exaggeration.toString());
+                    formData.append('cfg_weight', voiceConfig.chatterbox.cfg_weight.toString());
+                    formData.append('voice_cloning', false);
                 }
                 
                 const response = await fetch('/api/alfred/synthesize', {

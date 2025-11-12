@@ -469,6 +469,12 @@ class GPUTTSService:
                     'gender': 'male',
                     'style': 'professional'
                 },
+                'male_british': {
+                    'description': 'A sophisticated male voice with a refined British accent, clear articulation and measured pacing',
+                    'emotion_tags': [],
+                    'gender': 'male',
+                    'style': 'professional'
+                },
                 'default': {
                     'description': 'A clear, natural voice with balanced articulation',
                     'emotion_tags': [],
@@ -1368,6 +1374,7 @@ async def get_voices():
             "male_calm": {"name": "Maya1 Male Calm", "description": "Deep, calm male voice (3B transformer)"},
             "female_cheerful": {"name": "Maya1 Female Cheerful", "description": "Upbeat, cheerful female voice (3B transformer)"},
             "male_professional": {"name": "Maya1 Male Professional", "description": "Professional, authoritative male voice (3B transformer)"},
+            "male_british": {"name": "Maya1 Male British", "description": "Sophisticated male voice with refined British accent (3B transformer)"},
             "default": {"name": "Maya1 Default", "description": "Natural voice with balanced articulation"}
         }
         
