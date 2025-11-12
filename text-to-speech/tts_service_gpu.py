@@ -470,7 +470,7 @@ class GPUTTSService:
                     'style': 'professional'
                 },
                 'male_british': {
-                    'description': 'A sophisticated male voice with a refined British accent, clear articulation and measured pacing',
+                    'description': 'Realistic male voice in the 30s age with British accent. Normal pitch, warm timbre, conversational pacing',
                     'emotion_tags': [],
                     'gender': 'male',
                     'style': 'professional'
@@ -581,6 +581,8 @@ class GPUTTSService:
             emotion_tag_str = ' '.join(emotion_tags) if emotion_tags else ''
             prompt = f'<description="{voice_description}"> {emotion_tag_str} {text}'
             
+            logger.info(f"   Prompt: {prompt[:100]}...")
+            
             # Tokenize input
             inputs = self.maya1_tokenizer(prompt, return_tensors="pt")
             
@@ -588,24 +590,75 @@ class GPUTTSService:
             if torch.cuda.is_available():
                 inputs = {k: v.to("cuda") for k, v in inputs.items()}
             
+            logger.info(f"   Input tokens: {inputs['input_ids'].shape[1]}")
+            
             # Generate SNAC tokens with Maya1 transformer
-            with torch.inference_mode():
-                outputs = self.maya1_model.generate(
-                    **inputs,
-                    max_new_tokens=500,  # Adjust based on text length
-                    temperature=0.4,      # Lower for more consistent speech
-                    top_p=0.9,
-                    do_sample=True,
-                    pad_token_id=self.maya1_tokenizer.eos_token_id
-                )
+            # Try multiple generation strategies if first attempt fails
+            snac_tokens = []
+            generation_attempts = [
+                {
+                    'max_new_tokens': 1500,
+                    'temperature': 0.8,
+                    'top_p': 0.95,
+                    'do_sample': True
+                },
+                {
+                    'max_new_tokens': 2000,
+                    'temperature': 1.0,
+                    'top_p': 0.98,
+                    'do_sample': True
+                },
+                {
+                    'max_new_tokens': 1000,
+                    'temperature': 0.6,
+                    'top_p': 0.9,
+                    'do_sample': True
+                }
+            ]
             
-            # Extract generated tokens (skip input tokens)
-            generated_ids = outputs[0, inputs['input_ids'].shape[1]:]
-            
-            # Filter SNAC tokens (range: 128266 to 156937 according to Maya1 spec)
-            snac_tokens = [t.item() for t in generated_ids if 128266 <= t <= 156937]
-            
-            logger.info(f"   Generated {len(snac_tokens)} SNAC tokens")
+            for attempt_num, gen_params in enumerate(generation_attempts):
+                logger.info(f"   Generation attempt {attempt_num + 1}/{len(generation_attempts)}")
+                
+                with torch.inference_mode():
+                    outputs = self.maya1_model.generate(
+                        **inputs,
+                        max_new_tokens=gen_params['max_new_tokens'],
+                        temperature=gen_params['temperature'],
+                        top_p=gen_params['top_p'],
+                        do_sample=gen_params['do_sample'],
+                        pad_token_id=self.maya1_tokenizer.eos_token_id,
+                        eos_token_id=self.maya1_tokenizer.eos_token_id,
+                        repetition_penalty=1.05
+                    )
+                
+                # Extract generated tokens (skip input tokens)
+                generated_ids = outputs[0, inputs['input_ids'].shape[1]:]
+                
+                logger.info(f"   Total generated tokens: {len(generated_ids)}")
+                
+                # Filter SNAC tokens (range: 128266 to 156937 according to Maya1 spec)
+                snac_tokens = [t.item() for t in generated_ids if 128266 <= t <= 156937]
+                
+                logger.info(f"   Generated {len(snac_tokens)} SNAC tokens")
+                
+                if len(snac_tokens) >= 7:
+                    break  # Success!
+                
+                # Debug: show token distribution if failed
+                if len(snac_tokens) == 0:
+                    unique_tokens = torch.unique(generated_ids).tolist()
+                    logger.warning(f"   Attempt {attempt_num + 1} failed - No SNAC tokens found!")
+                    logger.warning(f"   Generated token IDs (first 20): {unique_tokens[:20]}")
+                    logger.warning(f"   Token range: min={generated_ids.min().item()}, max={generated_ids.max().item()}")
+                    logger.warning(f"   Expected SNAC range: 128266-156937")
+                    
+                    # Try decoding some tokens to see what they are
+                    if len(generated_ids) > 0:
+                        try:
+                            decoded_sample = self.maya1_tokenizer.decode(generated_ids[:10])
+                            logger.warning(f"   Decoded sample: {decoded_sample[:100]}")
+                        except:
+                            pass
             
             if len(snac_tokens) < 7:
                 logger.warning("   Insufficient SNAC tokens generated, synthesis may fail")
