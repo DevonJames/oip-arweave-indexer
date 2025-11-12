@@ -27,19 +27,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install Python dependencies with GPU acceleration
-RUN pip3 install --upgrade pip
+RUN pip3 install --upgrade pip setuptools wheel
 
-# Install PyTorch 2.x with CUDA 11.7 support (required for SNAC codec)
-# PyTorch 2.0+ includes weight_norm in torch.nn.utils.parametrizations
-# SNAC requires PyTorch >= 2.0.0 for weight_norm support
-# Using official PyTorch 2.0.0 installation for CUDA 11.7
-RUN pip3 uninstall -y torch torchvision torchaudio || true && \
-    pip3 install --no-cache-dir \
-    torch==2.0.0+cu117 torchvision==0.15.0+cu117 torchaudio==2.0.0+cu117 \
-    --extra-index-url https://download.pytorch.org/whl/cu117 && \
-    python3 -c "import torch; assert torch.__version__.startswith('2.0'), f'PyTorch version {torch.__version__} is not 2.0.x'; print(f'✅ PyTorch {torch.__version__} installed successfully')"
-
-# Install core packages (matching working standard profile)
+# Install core packages FIRST (matching working standard profile)
+# These don't depend on PyTorch, so install them before PyTorch
 RUN pip3 install --no-cache-dir \
     fastapi==0.104.1 \
     uvicorn==0.24.0 \
@@ -59,17 +50,13 @@ RUN pip3 install --no-cache-dir \
     omegaconf \
     tqdm
 
-# Upgrade pip first
-RUN pip3 install --upgrade pip setuptools wheel
-
 # Install Kokoro TTS package with fallback to mock if it fails due to numpy conflicts
 RUN pip3 install --no-cache-dir \
-    soundfile \
     kokoro || echo "⚠️ Kokoro TTS installation failed due to numpy version conflict - will use mock implementation"
 
 # Install Chatterbox TTS during build (like working standard profile) 
-# This prevents pip dependency conflicts from post-deployment installation
-RUN pip3 install --no-cache-dir chatterbox-tts || echo "Chatterbox TTS installation failed - will fallback to other engines"
+RUN pip3 install --no-cache-dir \
+    chatterbox-tts || echo "Chatterbox TTS installation failed - will fallback to other engines"
 
 # Install Maya1 TTS dependencies
 # Maya1: 3B parameter transformer for expressive voice synthesis with SNAC codec
@@ -80,6 +67,17 @@ RUN pip3 install --no-cache-dir \
     sentencepiece \
     protobuf \
     || echo "⚠️ Maya1 TTS dependencies installation failed - will fallback to other engines"
+
+# Install PyTorch 2.x LAST with CUDA 11.7 support (required for SNAC codec)
+# PyTorch 2.0+ includes weight_norm in torch.nn.utils.parametrizations
+# SNAC requires PyTorch >= 2.0.0 for weight_norm support
+# Installing LAST ensures nothing can downgrade it
+# CRITICAL: Must use --force-reinstall to overwrite any PyTorch 1.x installed by dependencies
+RUN pip3 uninstall -y torch torchvision torchaudio || true && \
+    pip3 install --no-cache-dir --force-reinstall \
+    torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 \
+    --extra-index-url https://download.pytorch.org/whl/cu117 && \
+    python3 -c "import torch; version=torch.__version__; assert version.startswith('2.0'), f'PyTorch version {version} is not 2.0.x - SNAC will fail!'; print(f'✅ PyTorch {version} installed successfully')"
 
 # Copy service files
 COPY . .
