@@ -39,18 +39,44 @@ except Exception as e:
     logger.error(f"Error importing Chatterbox TTS: {e}")
 
 # Try to import Maya1 TTS and SNAC codec
+MAYA1_AVAILABLE = False
 try:
     from transformers import AutoModelForCausalLM, AutoTokenizer
+    logger.info("✅ transformers imported successfully")
+    
+    # Check PyTorch version for SNAC compatibility
+    import torch
+    torch_version = torch.__version__
+    logger.info(f"   PyTorch version: {torch_version}")
+    
+    # Verify weight_norm is available (required by SNAC)
+    try:
+        from torch.nn.utils.parametrizations import weight_norm
+        logger.info("✅ weight_norm available in torch.nn.utils.parametrizations")
+    except ImportError:
+        logger.error(f"❌ weight_norm not available in torch.nn.utils.parametrizations")
+        logger.error(f"   PyTorch {torch_version} may be too old - SNAC requires PyTorch >= 2.1.0")
+        logger.error(f"   Please upgrade PyTorch: pip install --upgrade torch>=2.1.0")
+        raise ImportError(f"PyTorch {torch_version} incompatible with SNAC - requires PyTorch >= 2.1.0")
+    
+    # Now try importing SNAC
     from snac import SNAC
+    logger.info("✅ SNAC codec imported successfully")
+    
     import soundfile as sf
     MAYA1_AVAILABLE = True
-    logger.info("Maya1 TTS dependencies imported successfully")
+    logger.info("✅ Maya1 TTS dependencies imported successfully")
 except ImportError as e:
     MAYA1_AVAILABLE = False
-    logger.warning(f"Maya1 TTS not available: {e}")
+    logger.warning(f"❌ Maya1 TTS not available: {e}")
+    logger.warning(f"   Error type: ImportError")
+    import traceback
+    logger.debug(f"   Traceback: {traceback.format_exc()}")
 except Exception as e:
     MAYA1_AVAILABLE = False
-    logger.error(f"Error importing Maya1 TTS: {e}")
+    logger.error(f"❌ Error importing Maya1 TTS: {e}")
+    import traceback
+    logger.error(f"   Traceback: {traceback.format_exc()}")
 
 # Import pyttsx3 as fallback only
 import pyttsx3

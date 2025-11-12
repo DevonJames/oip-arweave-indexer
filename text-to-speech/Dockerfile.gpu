@@ -68,16 +68,17 @@ RUN pip3 install --no-cache-dir \
     protobuf \
     || echo "⚠️ Maya1 TTS dependencies installation failed - will fallback to other engines"
 
-# Install PyTorch 2.x LAST with CUDA 11.7 support (required for SNAC codec)
-# PyTorch 2.0+ includes weight_norm in torch.nn.utils.parametrizations
-# SNAC requires PyTorch >= 2.0.0 for weight_norm support
+# Install PyTorch 2.1+ LAST with CUDA 11.8 support (required for SNAC codec)
+# PyTorch 2.1+ includes weight_norm in torch.nn.utils.parametrizations (fixed API)
+# SNAC requires PyTorch >= 2.1.0 for proper weight_norm support
+# CUDA 11.8 wheels are backward compatible with CUDA 11.7 runtime
 # Installing LAST ensures nothing can downgrade it
-# CRITICAL: Must use --force-reinstall to overwrite any PyTorch 1.x installed by dependencies
+# CRITICAL: Must use --force-reinstall to overwrite any PyTorch 1.x/2.0.x installed by dependencies
 RUN pip3 uninstall -y torch torchvision torchaudio || true && \
     pip3 install --no-cache-dir --force-reinstall \
-    torch==2.0.0 torchvision==0.15.0 torchaudio==2.0.0 \
-    --extra-index-url https://download.pytorch.org/whl/cu117 && \
-    python3 -c "import torch; version=torch.__version__; assert version.startswith('2.0'), f'PyTorch version {version} is not 2.0.x - SNAC will fail!'; print(f'✅ PyTorch {version} installed successfully')"
+    torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 \
+    --extra-index-url https://download.pytorch.org/whl/cu118 && \
+    python3 -c "import torch; version=torch.__version__; assert version.startswith('2.1'), f'PyTorch version {version} is not 2.1.x - SNAC will fail!'; print(f'✅ PyTorch {version} installed successfully'); from torch.nn.utils.parametrizations import weight_norm; print('✅ weight_norm import successful')"
 
 # Copy service files
 COPY . .
