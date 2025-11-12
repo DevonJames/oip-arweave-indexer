@@ -344,7 +344,8 @@ class GPUTTSService:
     def _initialize_maya1(self):
         """Initialize Maya1 TTS (3B parameter transformer with SNAC codec)"""
         if not MAYA1_AVAILABLE:
-            logger.warning("Maya1 TTS dependencies not available - skipping Maya1 initialization")
+            logger.error("❌ MAYA1_AVAILABLE flag is False - dependencies failed to import at startup")
+            logger.error("   Check container logs for import errors at startup")
             self.maya1_model = None
             self.maya1_tokenizer = None
             self.maya1_snac = None
@@ -353,31 +354,55 @@ class GPUTTSService:
             
         try:
             logger.info("🚀 Initializing Maya1 TTS (Maya Research - 3B params)...")
+            logger.info("   Checking if model files exist in cache...")
             
             # Load Maya1 transformer model
-            logger.info("📥 Loading Maya1 model (this may take a moment)...")
-            self.maya1_model = AutoModelForCausalLM.from_pretrained(
-                "maya-research/maya1",
-                torch_dtype=torch.bfloat16,
-                device_map="auto",
-                trust_remote_code=True
-            )
+            logger.info("📥 Loading Maya1 model from maya-research/maya1...")
+            try:
+                self.maya1_model = AutoModelForCausalLM.from_pretrained(
+                    "maya-research/maya1",
+                    torch_dtype=torch.bfloat16,
+                    device_map="auto",
+                    trust_remote_code=True,
+                    low_cpu_mem_usage=True
+                )
+                logger.info(f"✅ Maya1 model loaded - Device: {next(self.maya1_model.parameters()).device}")
+            except Exception as model_error:
+                logger.error(f"❌ Failed to load Maya1 model: {model_error}")
+                logger.error(f"   Error type: {type(model_error).__name__}")
+                import traceback
+                logger.error(f"   Traceback:\n{traceback.format_exc()}")
+                raise model_error
             
             # Load tokenizer
             logger.info("📥 Loading Maya1 tokenizer...")
-            self.maya1_tokenizer = AutoTokenizer.from_pretrained(
-                "maya-research/maya1",
-                trust_remote_code=True
-            )
+            try:
+                self.maya1_tokenizer = AutoTokenizer.from_pretrained(
+                    "maya-research/maya1",
+                    trust_remote_code=True
+                )
+                logger.info("✅ Maya1 tokenizer loaded")
+            except Exception as tok_error:
+                logger.error(f"❌ Failed to load Maya1 tokenizer: {tok_error}")
+                raise tok_error
             
             # Load SNAC codec for audio decoding
             logger.info("📥 Loading SNAC codec (24kHz neural audio codec)...")
-            self.maya1_snac = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval()
+            try:
+                self.maya1_snac = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval()
+                logger.info("✅ SNAC codec loaded")
+            except Exception as snac_error:
+                logger.error(f"❌ Failed to load SNAC codec: {snac_error}")
+                raise snac_error
             
             # Move SNAC to GPU if available
             if torch.cuda.is_available():
-                self.maya1_snac = self.maya1_snac.to("cuda")
-                logger.info("   SNAC codec moved to GPU")
+                try:
+                    self.maya1_snac = self.maya1_snac.to("cuda")
+                    logger.info("   SNAC codec moved to GPU")
+                except Exception as gpu_error:
+                    logger.warning(f"⚠️ Failed to move SNAC to GPU: {gpu_error}")
+                    logger.info("   SNAC will run on CPU")
             
             # Define Maya1 voice presets with natural language descriptions
             # Maya1 uses voice descriptions instead of simple IDs
@@ -1370,6 +1395,91 @@ async def get_voices():
         "primary_engine": "chatterbox",
         "fallback_available": tts_service.silero_model is not None
     }
+
+@app.get("/test-maya1")
+async def test_maya1_initialization():
+    """Diagnostic endpoint to test Maya1 initialization and return detailed error info"""
+    diagnostic_info = {
+        "imports": {},
+        "model_loading": {},
+        "snac_loading": {},
+        "initialization": {}
+    }
+    
+    # Test imports
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        import transformers
+        diagnostic_info["imports"]["transformers"] = {
+            "available": True,
+            "version": transformers.__version__
+        }
+    except Exception as e:
+        diagnostic_info["imports"]["transformers"] = {
+            "available": False,
+            "error": str(e)
+        }
+    
+    try:
+        from snac import SNAC
+        diagnostic_info["imports"]["snac"] = {"available": True}
+    except Exception as e:
+        diagnostic_info["imports"]["snac"] = {
+            "available": False,
+            "error": str(e)
+        }
+    
+    # Test Maya1 model loading
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        logger.info("Testing Maya1 model load...")
+        test_model = AutoModelForCausalLM.from_pretrained(
+            "maya-research/maya1",
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True
+        )
+        diagnostic_info["model_loading"] = {
+            "success": True,
+            "device": str(next(test_model.parameters()).device)
+        }
+        del test_model  # Free memory
+    except Exception as e:
+        diagnostic_info["model_loading"] = {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+    
+    # Test SNAC codec loading
+    try:
+        from snac import SNAC
+        logger.info("Testing SNAC codec load...")
+        test_snac = SNAC.from_pretrained("hubertsiuzdak/snac_24khz").eval()
+        if torch.cuda.is_available():
+            test_snac = test_snac.to("cuda")
+        diagnostic_info["snac_loading"] = {
+            "success": True,
+            "device": "cuda" if torch.cuda.is_available() else "cpu"
+        }
+        del test_snac  # Free memory
+    except Exception as e:
+        diagnostic_info["snac_loading"] = {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+    
+    # Check current initialization status
+    diagnostic_info["initialization"] = {
+        "MAYA1_AVAILABLE_flag": MAYA1_AVAILABLE,
+        "maya1_model_loaded": tts_service.maya1_model is not None,
+        "maya1_tokenizer_loaded": tts_service.maya1_tokenizer is not None,
+        "maya1_snac_loaded": tts_service.maya1_snac is not None,
+        "voice_presets_count": len(tts_service.maya1_voices)
+    }
+    
+    return diagnostic_info
 
 @app.get("/health")
 async def health_check():
