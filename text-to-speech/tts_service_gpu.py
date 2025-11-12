@@ -577,14 +577,17 @@ class GPUTTSService:
             logger.info(f"🎵 Maya1 TTS: voice={voice}, description='{voice_description}'")
             logger.info(f"   Generating SNAC tokens with transformer model...")
             
-            # Build prompt with voice description and optional emotion tags
-            # Format matches Maya1 documentation exactly: <description="..."> text
+            # Build prompt with voice description using Maya1's special token format
+            # Format: <|soh|><description="..."><|eoh|><|soa|>text<|eot_id|>
             emotion_tag_str = ' '.join(emotion_tags) if emotion_tags else ''
-            prompt = f'<description="{voice_description}"> {emotion_tag_str} {text}'
+            text_with_emotions = f'{emotion_tag_str} {text}'.strip()
             
-            logger.info(f"   Prompt: {prompt[:100]}...")
+            # Use Maya1's special token format
+            prompt = f'<|soh|><description="{voice_description}"><|eoh|><|soa|>{text_with_emotions}<|eot_id|>'
             
-            # Tokenize input - use standard tokenization as per Maya1 documentation
+            logger.info(f"   Prompt: {prompt[:150]}...")
+            
+            # Tokenize input - use standard tokenization
             inputs = self.maya1_tokenizer(prompt, return_tensors="pt")
             
             # Move to GPU if available
@@ -593,16 +596,36 @@ class GPUTTSService:
             
             logger.info(f"   Input tokens: {inputs['input_ids'].shape[1]}")
             
-            # Generate SNAC tokens - use EXACT parameters from Maya1 documentation
-            # Documentation specifies: max_new_tokens=500, temperature=0.4, top_p=0.9, do_sample=True, pad_token_id=eos_token_id
+            # Get CODE_END_TOKEN_ID (Maya1's actual EOS token for SNAC generation)
+            # This is typically the tokenizer's eot_id token
+            code_end_token_id = None
+            if hasattr(self.maya1_tokenizer, 'eot_id'):
+                code_end_token_id = self.maya1_tokenizer.eot_id
+            elif hasattr(self.maya1_tokenizer, 'convert_tokens_to_ids'):
+                # Try to find eot_id token
+                try:
+                    code_end_token_id = self.maya1_tokenizer.convert_tokens_to_ids('<|eot_id|>')
+                except:
+                    pass
+            
+            if code_end_token_id is None:
+                code_end_token_id = self.maya1_tokenizer.eos_token_id
+            
+            logger.info(f"   CODE_END_TOKEN_ID: {code_end_token_id}")
+            
+            # Generate SNAC tokens - use parameters from Maya1 implementation
+            # min_new_tokens ensures we generate enough tokens for SNAC
             with torch.inference_mode():
                 outputs = self.maya1_model.generate(
                     **inputs,
-                    max_new_tokens=500,
+                    max_new_tokens=2048,
+                    min_new_tokens=28,  # Minimum tokens needed for SNAC
                     temperature=0.4,
                     top_p=0.9,
+                    repetition_penalty=1.1,
                     do_sample=True,
-                    pad_token_id=self.maya1_tokenizer.eos_token_id
+                    eos_token_id=code_end_token_id,  # Use CODE_END_TOKEN_ID
+                    pad_token_id=self.maya1_tokenizer.pad_token_id if self.maya1_tokenizer.pad_token_id is not None else self.maya1_tokenizer.eos_token_id
                 )
             
             # Extract generated tokens (skip input tokens)
