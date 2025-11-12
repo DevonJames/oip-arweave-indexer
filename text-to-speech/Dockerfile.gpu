@@ -32,8 +32,12 @@ RUN pip3 install --upgrade pip
 # Install PyTorch 2.x with CUDA 11.7 support (required for SNAC codec)
 # PyTorch 2.0+ includes weight_norm in torch.nn.utils.parametrizations
 # SNAC requires PyTorch >= 2.0.0 for weight_norm support
-RUN pip3 install --no-cache-dir \
-    "torch>=2.0.0,<2.1.0" "torchvision>=0.15.0,<0.16.0" "torchaudio>=2.0.0,<2.1.0" --index-url https://download.pytorch.org/whl/cu117
+# Using official PyTorch 2.0.0 installation for CUDA 11.7
+RUN pip3 uninstall -y torch torchvision torchaudio || true && \
+    pip3 install --no-cache-dir \
+    torch==2.0.0+cu117 torchvision==0.15.0+cu117 torchaudio==2.0.0+cu117 \
+    --extra-index-url https://download.pytorch.org/whl/cu117 && \
+    python3 -c "import torch; assert torch.__version__.startswith('2.0'), f'PyTorch version {torch.__version__} is not 2.0.x'; print(f'✅ PyTorch {torch.__version__} installed successfully')"
 
 # Install core packages (matching working standard profile)
 RUN pip3 install --no-cache-dir \
