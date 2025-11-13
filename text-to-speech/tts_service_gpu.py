@@ -21,8 +21,12 @@ import uvicorn
 import time
 import threading
 
-# Configure logging FIRST
-logging.basicConfig(level=logging.INFO)
+# Configure logging FIRST with timestamps
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 # Try to import Chatterbox TTS (Resemble AI) - REAL Chatterbox
