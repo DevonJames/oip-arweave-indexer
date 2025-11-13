@@ -70,6 +70,10 @@ help: ## Show this help message
 	@echo "  make migrate-elasticsearch-data # Migrate from Docker volume to host bind mount"
 	@echo "  make clean-old-es-volume       # Remove old Docker volume after migration"
 	@echo ""
+	@echo "$(YELLOW)GUN Records Backup & Restore:$(NC)"
+	@echo "  make backup-gun-records        # Backup all GUN records from Elasticsearch to JSON file"
+	@echo "  make restore-gun-records FILE=backup.json  # Restore GUN records from backup file"
+	@echo ""
 	@echo "$(YELLOW)ngrok Integration (Simplified v3 Command):$(NC)"
 	@echo "  🌐 API available at: $(GREEN)https://api.oip.onl$(NC)"
 	@echo "  🔧 Setup: Add NGROK_AUTH_TOKEN=your_token to .env file"
@@ -1183,3 +1187,41 @@ check-memory-config: ## Check current memory configuration from .env
 			echo "$(BLUE)System Memory: $${TOTAL_MEM}MB$(NC)"; \
 		fi; \
 	fi
+
+# GUN Records Backup & Restore
+backup-gun-records: ## Backup all GUN records from Elasticsearch to JSON file
+	@echo "$(BLUE)📦 Backing up GUN records from Elasticsearch...$(NC)"
+	@CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep -E "oip|fitnessally" | grep -v elasticsearch | grep -v kibana | grep -v ngrok | head -1); \
+	if [ -z "$$CONTAINER_NAME" ]; then \
+		echo "$(RED)❌ No OIP container found. Is the service running?$(NC)"; \
+		echo "$(YELLOW)💡 Try: make status$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)✅ Found container: $$CONTAINER_NAME$(NC)"; \
+	echo "$(BLUE)🚀 Running backup script...$(NC)"; \
+	docker exec -it $$CONTAINER_NAME node scripts/backup-gun-records.js || \
+	(docker exec $$CONTAINER_NAME node scripts/backup-gun-records.js && echo "$(GREEN)✅ Backup completed (non-interactive mode)$(NC)")
+
+restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.json)
+	@if [ -z "$(FILE)" ]; then \
+		echo "$(RED)❌ FILE parameter required$(NC)"; \
+		echo "$(YELLOW)Usage: make restore-gun-records FILE=gun-backup-2025-11-13.json$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$(FILE)" ]; then \
+		echo "$(RED)❌ Backup file not found: $(FILE)$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(BLUE)📦 Restoring GUN records from $(FILE)...$(NC)"; \
+	CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep -E "oip|fitnessally" | grep -v elasticsearch | grep -v kibana | grep -v ngrok | head -1); \
+	if [ -z "$$CONTAINER_NAME" ]; then \
+		echo "$(RED)❌ No OIP container found. Is the service running?$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)✅ Found container: $$CONTAINER_NAME$(NC)"; \
+	echo "$(BLUE)📂 Copying backup file to container...$(NC)"; \
+	docker cp "$(FILE)" $$CONTAINER_NAME:/tmp/backup-restore.json; \
+	echo "$(BLUE)🚀 Running restore script...$(NC)"; \
+	docker exec $$CONTAINER_NAME node scripts/restore-gun-records.js /tmp/backup-restore.json; \
+	docker exec $$CONTAINER_NAME rm /tmp/backup-restore.json; \
+	echo "$(GREEN)✅ Restore completed$(NC)"
