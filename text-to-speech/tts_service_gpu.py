@@ -603,13 +603,13 @@ class GPUTTSService:
             logger.info(f"🎵 Maya1 TTS: voice={voice}, description='{voice_description}'")
             logger.info(f"   Generating SNAC tokens with transformer model...")
             
-            # Build prompt with voice description using Maya1's special token format
-            # ORIGINAL WORKING FORMAT: <|soh|><description="..."><|eoh|><|soa|>text<|eot_id|>
+            # Build prompt with voice description - use simple format from test file
+            # Format: <description="..."> text
             emotion_tag_str = ' '.join(emotion_tags) if emotion_tags else ''
             text_with_emotions = f'{emotion_tag_str} {text}'.strip()
             
-            # Use Maya1's special token format (ORIGINAL WORKING VERSION)
-            prompt = f'<|soh|><description="{voice_description}"><|eoh|><|soa|>{text_with_emotions}<|eot_id|>'
+            # Use simple format matching test file and HuggingFace examples
+            prompt = f'<description="{voice_description}"> {text_with_emotions}'
             
             logger.info(f"   Full prompt (first 200 chars): {prompt[:200]}...")
             logger.info(f"   Full prompt (last 100 chars): ...{prompt[-100:]}")
@@ -624,36 +624,16 @@ class GPUTTSService:
             
             logger.info(f"   Input tokens: {inputs['input_ids'].shape[1]}")
             
-            # Generate SNAC tokens - use parameters matching test file and documentation
-            # Model generates SNAC tokens directly after the prompt
-            # CRITICAL: Must NOT stop on EOS or eot_id - we need SNAC tokens which come after text
-            # Get eot_id token ID to exclude it from stopping
-            eot_id_token = None
-            try:
-                if hasattr(self.maya1_tokenizer, 'eot_id'):
-                    eot_id_token = self.maya1_tokenizer.eot_id
-                elif hasattr(self.maya1_tokenizer, 'convert_tokens_to_ids'):
-                    eot_id_token = self.maya1_tokenizer.convert_tokens_to_ids('<|eot_id|>')
-            except:
-                pass
-            
-            logger.info(f"   eot_id token ID: {eot_id_token}")
-            
-            # Generate SNAC tokens - use parameters from ORIGINAL WORKING VERSION
-            # CRITICAL: Model generates text tokens first, then SNAC tokens
-            # We need to continue generation until we get SNAC tokens (128266-156937)
-            # Don't stop on EOS - we need SNAC tokens which come after text
+            # Generate SNAC tokens - use parameters matching test file
+            # Model generates text tokens first, then SNAC tokens (128266-156937)
             with torch.inference_mode():
                 outputs = self.maya1_model.generate(
                     **inputs,
-                    max_new_tokens=2048,
-                    min_new_tokens=100,  # Ensure we generate enough to reach SNAC tokens
+                    max_new_tokens=500,  # Match test file
                     temperature=0.4,
                     top_p=0.9,
-                    repetition_penalty=1.1,
                     do_sample=True,
-                    eos_token_id=None,  # Don't stop on EOS - we need SNAC tokens after text
-                    pad_token_id=self.maya1_tokenizer.pad_token_id if self.maya1_tokenizer.pad_token_id is not None else self.maya1_tokenizer.eos_token_id
+                    pad_token_id=self.maya1_tokenizer.eos_token_id  # Match test file - allows natural stopping
                 )
             
             # Extract generated tokens (skip input tokens)
