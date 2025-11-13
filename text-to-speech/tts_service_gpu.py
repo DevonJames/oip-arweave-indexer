@@ -624,16 +624,33 @@ class GPUTTSService:
             
             logger.info(f"   Input tokens: {inputs['input_ids'].shape[1]}")
             
-            # Generate SNAC tokens - use parameters matching test file
-            # Model generates text tokens first, then SNAC tokens (128266-156937)
+            # Get eot_id token ID to exclude it from stopping
+            # The model generates <|eot_id|> after the text, then continues with SNAC tokens
+            eot_id_token = None
+            try:
+                if hasattr(self.maya1_tokenizer, 'convert_tokens_to_ids'):
+                    eot_id_token = self.maya1_tokenizer.convert_tokens_to_ids('<|eot_id|>')
+                elif hasattr(self.maya1_tokenizer, 'eot_id'):
+                    eot_id_token = self.maya1_tokenizer.eot_id
+            except:
+                pass
+            
+            logger.info(f"   eot_id token ID: {eot_id_token}")
+            
+            # Generate SNAC tokens - model generates text tokens first, then SNAC tokens (128266-156937)
+            # CRITICAL: Don't stop on <|eot_id|> - we need SNAC tokens after it
+            # The model generates <|eot_id|> after the text, then continues with SNAC tokens
             with torch.inference_mode():
+                # Prevent stopping on <|eot_id|> - we need to continue generating SNAC tokens
+                # Set eos_token_id to None to prevent early stopping, rely on max_new_tokens to limit
                 outputs = self.maya1_model.generate(
                     **inputs,
-                    max_new_tokens=500,  # Match test file
+                    max_new_tokens=500,  # Generate enough tokens to get SNAC tokens
                     temperature=0.4,
                     top_p=0.9,
                     do_sample=True,
-                    pad_token_id=self.maya1_tokenizer.eos_token_id  # Match test file - allows natural stopping
+                    eos_token_id=None,  # Don't stop on any token - we need SNAC tokens after <|eot_id|>
+                    pad_token_id=self.maya1_tokenizer.pad_token_id if self.maya1_tokenizer.pad_token_id is not None else self.maya1_tokenizer.eos_token_id
                 )
             
             # Extract generated tokens (skip input tokens)
@@ -1231,6 +1248,8 @@ class GPUTTSService:
                                 engine_used=engine_name,
                                 voice_used=voice
                             )
+                    # If Maya1 returns None, continue to next engine
+                    continue
                 else:
                     audio_file = await method(text)
                 
