@@ -14,10 +14,17 @@ const path = require('path');
 async function backupGunRecords(outputFile = null) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const defaultOutputFile = outputFile || `gun-backup-${timestamp}.json`;
-    const outputPath = path.resolve(process.cwd(), defaultOutputFile);
+    // Write to /usr/src/app/data (mounted volume) so file is accessible on host
+    const dataDir = path.resolve('/usr/src/app/data');
+    // Ensure data directory exists
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const outputPath = path.resolve(dataDir, defaultOutputFile);
     
     console.log('📦 Starting GUN records backup...');
     console.log(`📁 Output file: ${outputPath}`);
+    console.log(`📂 Host path: ./data/${defaultOutputFile} (relative to project root)`);
     
     try {
         // Query all GUN records from Elasticsearch
@@ -100,7 +107,8 @@ async function backupGunRecords(outputFile = null) {
         console.log(`   📊 Records: ${allRecords.length}`);
         console.log(`   💾 File size: ${fileSizeMB} MB`);
         console.log(`   📁 Location: ${outputPath}`);
-        console.log(`\n💡 To restore, use: node scripts/restore-gun-records.js ${outputPath}`);
+        console.log(`   📂 Host path: ./data/${defaultOutputFile} (relative to project root)`);
+        console.log(`\n💡 To restore, use: make restore-gun-records FILE=./data/${defaultOutputFile}`);
         
         return outputPath;
         
