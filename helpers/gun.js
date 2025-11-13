@@ -178,7 +178,7 @@ class GunHelper {
                 soul: soul,
                 data: gunRecord
             }, {
-                timeout: 10000, // 10 second HTTP timeout
+                timeout: 30000, // 30 second HTTP timeout (increased due to GUN radisk JSON parsing slowdowns)
                 headers: {
                     'Content-Type': 'application/json'
                 },
@@ -230,7 +230,7 @@ class GunHelper {
                 try {
                     const response = await axios.get(`${this.apiUrl}/get`, {
                         params: { soul },
-                        timeout: 5000,
+                        timeout: 20000, // 20 second timeout (increased due to GUN radisk JSON parsing slowdowns)
                         headers: {
                             'Content-Type': 'application/json'
                         },
