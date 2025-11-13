@@ -96,10 +96,8 @@ services:
       - ELASTICCLIENTPASSWORD=${ELASTICCLIENTPASSWORD}
       - STT_SERVICE_URL=http://stt-service:8003
       - TTS_SERVICE_URL=http://tts-service:8005
-      - TEXT_GENERATOR_URL=http://text-generator:8081
     depends_on:
       - elasticsearch
-      - text-generator
       - tts-service
       - stt-service
       - ollama
@@ -342,25 +340,6 @@ services:
       - standard
       - standard-macMseries
       - standard-monolithic
-
-  # Text generator for GPU deployments - uses GPU Ollama API
-  text-generator-gpu:
-    build: ./text-generator
-    env_file:
-      - .env
-    environment:
-      - OLLAMA_HOST=http://ollama-gpu:11434  # Internal Docker network port stays 11434
-      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
-    ports:
-      - "${TEXT_GENERATOR_PORT:-8081}:8081"
-    depends_on:
-      - ollama-gpu
-    networks:
-      - oip-network
-    restart: unless-stopped
-    profiles:
-      - standard-gpu
-      - gpu
 
   # Speech-to-Text Service (Whisper)
   stt-service:
