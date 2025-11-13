@@ -3887,6 +3887,7 @@
                     <label for="voice-engine">Voice Engine</label>
                     <select id="voice-engine" onchange="switchVoiceEngine()">
                         <option value="chatterbox">Chatterbox TTS (High Quality + Voice Cloning)</option>
+                        <option value="maya1">Maya1 TTS (3B Transformer + Expressive + GPU)</option>
                         <option value="edge_tts">Edge TTS (Fast + Many Voices)</option>
                         <option value="elevenlabs" selected>ElevenLabs (Premium + Ultra Fast)</option>
                     </select>
@@ -13244,12 +13245,19 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 similarity_boost: 0.75,                // Good similarity
                 style: 0.0,                           // Neutral style
                 use_speaker_boost: true               // Enhanced clarity
+            },
+            // Maya1-specific settings
+            maya1: {
+                selectedVoice: 'male_british',  // Default to British male voice
+                exaggeration: 0.7,
+                cfg_weight: 0.3
             }
         };
         
         // Available voices for each engine (loaded dynamically)
         let availableVoices = {
             chatterbox: [],
+            maya1: [],
             edge_tts: [],
             elevenlabs: []
         };
@@ -13267,6 +13275,11 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 document.getElementById('edge-controls').style.display = 'none';
                 document.getElementById('elevenlabs-controls').style.display = 'none';
                 document.getElementById('tts-enable-label').textContent = 'Enable Chatterbox TTS';
+            } else if (selectedEngine === 'maya1') {
+                document.getElementById('chatterbox-controls').style.display = 'block';
+                document.getElementById('edge-controls').style.display = 'none';
+                document.getElementById('elevenlabs-controls').style.display = 'none';
+                document.getElementById('tts-enable-label').textContent = 'Enable Maya1 TTS';
             } else if (selectedEngine === 'edge_tts') {
                 document.getElementById('chatterbox-controls').style.display = 'none';
                 document.getElementById('edge-controls').style.display = 'block';
@@ -13281,7 +13294,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             
             // Load voices for selected engine
             await populateVoiceDropdown(selectedEngine);
-            updateAIStatus(`🔄 Switched to ${selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : selectedEngine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs'}`);
+            const engineNames = {
+                'chatterbox': 'Chatterbox TTS',
+                'maya1': 'Maya1 TTS',
+                'edge_tts': 'Edge TTS',
+                'elevenlabs': 'ElevenLabs'
+            };
+            updateAIStatus(`🔄 Switched to ${engineNames[selectedEngine] || selectedEngine}`);
         }
 
         // Load available voices from API
@@ -13301,6 +13320,20 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         v.engine && (v.engine.toLowerCase() === 'edge tts' || v.engine.toLowerCase() === 'edge_tts')
                     );
                     
+                    // Filter Maya1 voices
+                    availableVoices.maya1 = voices.filter(v => 
+                        v.engine && v.engine.toLowerCase() === 'maya1'
+                    );
+                    
+                    // Add Maya1 British male voice (custom description)
+                    availableVoices.maya1.push({
+                        id: 'male_british',
+                        name: 'Maya1 Male British',
+                        gender: 'male',
+                        engine: 'maya1',
+                        description: 'A sophisticated male voice with a refined British accent, clear articulation and measured pacing'
+                    });
+                    
                     // Add ElevenLabs voices (hardcoded popular ones)
                     availableVoices.elevenlabs = [
                         { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam (Male, Deep)', gender: 'male', engine: 'elevenlabs' },
@@ -13315,7 +13348,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         { id: 'oWAxZDx7w5VEj9dCyTzz', name: 'Grace (Female, Calm)', gender: 'female', engine: 'elevenlabs' }
                     ];
                     
-                    console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices, ${availableVoices.edge_tts.length} Edge TTS voices, and ${availableVoices.elevenlabs.length} ElevenLabs voices`);
+                    console.log(`🎵 Loaded ${availableVoices.chatterbox.length} Chatterbox voices, ${availableVoices.maya1.length} Maya1 voices, ${availableVoices.edge_tts.length} Edge TTS voices, and ${availableVoices.elevenlabs.length} ElevenLabs voices`);
                     
                     // Populate dropdown for default engine
                     await populateVoiceDropdown(voiceConfig.selectedEngine);
@@ -13398,6 +13431,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     voiceSelect.value = defaultVoice.id;
                     voiceConfig.chatterbox.selectedVoice = defaultVoice.id;
                 }
+            } else if (engine === 'maya1') {
+                const defaultVoice = voices.find(v => v.id === 'male_british') || voices.find(v => v.gender === 'male') || voices[0];
+                if (defaultVoice) {
+                    voiceSelect.value = defaultVoice.id;
+                    voiceConfig.maya1.selectedVoice = defaultVoice.id;
+                }
             } else if (engine === 'edge_tts') {
                 const defaultVoice = voices.find(v => v.id === 'en-US-AriaNeural') || voices[0];
                 if (defaultVoice) {
@@ -13422,6 +13461,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             
             if (engine === 'chatterbox') {
                 voiceConfig.chatterbox.selectedVoice = selectedVoice;
+            } else if (engine === 'maya1') {
+                voiceConfig.maya1.selectedVoice = selectedVoice;
             } else if (engine === 'edge_tts') {
                 voiceConfig.edge.selectedVoice = selectedVoice;
             } else if (engine === 'elevenlabs') {
@@ -13482,8 +13523,13 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
         function toggleTTSEnabled() {
             const checkbox = document.getElementById('tts-enabled');
             voiceConfig.enabled = checkbox.checked;
-            const engineName = voiceConfig.selectedEngine === 'chatterbox' ? 'Chatterbox TTS' : 
-                             voiceConfig.selectedEngine === 'edge_tts' ? 'Edge TTS' : 'ElevenLabs';
+            const engineNames = {
+                'chatterbox': 'Chatterbox TTS',
+                'maya1': 'Maya1 TTS',
+                'edge_tts': 'Edge TTS',
+                'elevenlabs': 'ElevenLabs'
+            };
+            const engineName = engineNames[voiceConfig.selectedEngine] || voiceConfig.selectedEngine;
             updateAIStatus(voiceConfig.enabled ? `${engineName} Enabled` : 'TTS Disabled');
         }
 
@@ -13499,6 +13545,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             try {
                 if (engine === 'chatterbox') {
                     await synthesizeWithChatterbox(text);
+                } else if (engine === 'maya1') {
+                    await synthesizeWithMaya1(text);
                 } else if (engine === 'edge_tts') {
                     await synthesizeWithEdge(text);
                 } else if (engine === 'elevenlabs') {
@@ -13622,6 +13670,40 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 
             } catch (error) {
                 console.error('ElevenLabs synthesis failed:', error);
+                throw error;
+            }
+        }
+
+        // Synthesize with Maya1 TTS
+        async function synthesizeWithMaya1(text) {
+            try {
+                updateAIStatus('🎵 Synthesizing with Maya1 TTS...');
+                
+                const formData = new FormData();
+                formData.append('text', text);
+                formData.append('voice_id', voiceConfig.maya1.selectedVoice);
+                formData.append('gender', 'male');
+                formData.append('emotion', 'neutral');
+                formData.append('exaggeration', voiceConfig.maya1.exaggeration.toString());
+                formData.append('cfg_weight', voiceConfig.maya1.cfg_weight.toString());
+                formData.append('voice_cloning', false);
+                formData.append('speed', '1.0');
+                formData.append('engine', 'maya1');
+
+                const response = await fetch('/api/alfred/synthesize', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const audioBlob = await response.blob();
+                await playAudio(audioBlob);
+                
+            } catch (error) {
+                console.error('Maya1 synthesis failed:', error);
                 throw error;
             }
         }
