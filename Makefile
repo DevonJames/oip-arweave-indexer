@@ -1191,16 +1191,32 @@ check-memory-config: ## Check current memory configuration from .env
 # GUN Records Backup & Restore
 backup-gun-records: ## Backup all GUN records from Elasticsearch to JSON file
 	@echo "$(BLUE)📦 Backing up GUN records from Elasticsearch...$(NC)"
-	@CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep -E "oip|fitnessally" | grep -v elasticsearch | grep -v kibana | grep -v ngrok | head -1); \
+	@if [ ! -f scripts/backup-gun-records.js ]; then \
+		echo "$(RED)❌ Backup script not found: scripts/backup-gun-records.js$(NC)"; \
+		exit 1; \
+	fi; \
+	CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep -E "oip|fitnessally" | grep -v elasticsearch | grep -v kibana | grep -v ngrok | head -1); \
 	if [ -z "$$CONTAINER_NAME" ]; then \
 		echo "$(RED)❌ No OIP container found. Is the service running?$(NC)"; \
 		echo "$(YELLOW)💡 Try: make status$(NC)"; \
 		exit 1; \
 	fi; \
 	echo "$(GREEN)✅ Found container: $$CONTAINER_NAME$(NC)"; \
+	echo "$(BLUE)📂 Copying backup script to container...$(NC)"; \
+	docker cp scripts/backup-gun-records.js $$CONTAINER_NAME:/tmp/backup-gun-records.js; \
 	echo "$(BLUE)🚀 Running backup script...$(NC)"; \
-	docker exec -it $$CONTAINER_NAME node scripts/backup-gun-records.js || \
-	(docker exec $$CONTAINER_NAME node scripts/backup-gun-records.js && echo "$(GREEN)✅ Backup completed (non-interactive mode)$(NC)")
+	docker exec $$CONTAINER_NAME node /tmp/backup-gun-records.js || \
+	(docker exec -it $$CONTAINER_NAME node /tmp/backup-gun-records.js); \
+	EXIT_CODE=$$?; \
+	echo "$(BLUE)🧹 Cleaning up...$(NC)"; \
+	docker exec $$CONTAINER_NAME rm -f /tmp/backup-gun-records.js; \
+	if [ $$EXIT_CODE -eq 0 ]; then \
+		echo "$(GREEN)✅ Backup completed successfully$(NC)"; \
+		echo "$(BLUE)💡 Backup file saved to project directory$(NC)"; \
+	else \
+		echo "$(RED)❌ Backup failed with exit code $$EXIT_CODE$(NC)"; \
+		exit $$EXIT_CODE; \
+	fi
 
 restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.json)
 	@if [ -z "$(FILE)" ]; then \
@@ -1212,6 +1228,10 @@ restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.js
 		echo "$(RED)❌ Backup file not found: $(FILE)$(NC)"; \
 		exit 1; \
 	fi; \
+	if [ ! -f scripts/restore-gun-records.js ]; then \
+		echo "$(RED)❌ Restore script not found: scripts/restore-gun-records.js$(NC)"; \
+		exit 1; \
+	fi; \
 	echo "$(BLUE)📦 Restoring GUN records from $(FILE)...$(NC)"; \
 	CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep -E "oip|fitnessally" | grep -v elasticsearch | grep -v kibana | grep -v ngrok | head -1); \
 	if [ -z "$$CONTAINER_NAME" ]; then \
@@ -1219,9 +1239,18 @@ restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.js
 		exit 1; \
 	fi; \
 	echo "$(GREEN)✅ Found container: $$CONTAINER_NAME$(NC)"; \
+	echo "$(BLUE)📂 Copying restore script to container...$(NC)"; \
+	docker cp scripts/restore-gun-records.js $$CONTAINER_NAME:/tmp/restore-gun-records.js; \
 	echo "$(BLUE)📂 Copying backup file to container...$(NC)"; \
 	docker cp "$(FILE)" $$CONTAINER_NAME:/tmp/backup-restore.json; \
 	echo "$(BLUE)🚀 Running restore script...$(NC)"; \
-	docker exec $$CONTAINER_NAME node scripts/restore-gun-records.js /tmp/backup-restore.json; \
-	docker exec $$CONTAINER_NAME rm /tmp/backup-restore.json; \
-	echo "$(GREEN)✅ Restore completed$(NC)"
+	docker exec $$CONTAINER_NAME node /tmp/restore-gun-records.js /tmp/backup-restore.json; \
+	EXIT_CODE=$$?; \
+	echo "$(BLUE)🧹 Cleaning up...$(NC)"; \
+	docker exec $$CONTAINER_NAME rm -f /tmp/restore-gun-records.js /tmp/backup-restore.json; \
+	if [ $$EXIT_CODE -eq 0 ]; then \
+		echo "$(GREEN)✅ Restore completed successfully$(NC)"; \
+	else \
+		echo "$(RED)❌ Restore failed with exit code $$EXIT_CODE$(NC)"; \
+		exit $$EXIT_CODE; \
+	fi
