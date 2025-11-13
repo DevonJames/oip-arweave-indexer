@@ -117,9 +117,17 @@ class TTSRequest(BaseModel):
     language: str = "en"
 
 class TTSResponse(BaseModel):
-    audio_file: str
+    audio_file: str  # File path (for engines that use files)
     engine_used: str
     voice_used: str
+
+class TTSResponseBytes:
+    """Response object for engines that return bytes directly (no file)"""
+    def __init__(self, audio_bytes: bytes, engine_used: str, voice_used: str):
+        self.audio_bytes = audio_bytes
+        self.engine_used = engine_used
+        self.voice_used = voice_used
+        self.audio_file = None  # No file path
 
 # Add request timeout middleware
 @app.middleware("http")
@@ -733,15 +741,17 @@ class GPUTTSService:
             
             logger.info(f"   Generated {len(audio_np)} audio samples at 24kHz")
             
-            # Save to temporary WAV file
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                import soundfile as sf
-                sf.write(tmp_file.name, audio_np, 24000)  # Maya1 outputs 24kHz audio
-                
-                duration = len(audio_np) / 24000
-                file_size = os.path.getsize(tmp_file.name)
-                logger.info(f"✅ Maya1 synthesis successful: {duration:.1f}s audio, {file_size} bytes")
-                return tmp_file.name
+            # Convert numpy array directly to WAV bytes in memory (no file needed)
+            import io
+            import soundfile as sf
+            wav_buffer = io.BytesIO()
+            sf.write(wav_buffer, audio_np, 24000, format='WAV')  # Maya1 outputs 24kHz audio
+            wav_bytes = wav_buffer.getvalue()
+            wav_buffer.close()
+            
+            duration = len(audio_np) / 24000
+            logger.info(f"✅ Maya1 synthesis successful: {duration:.1f}s audio, {len(wav_bytes)} bytes")
+            return wav_bytes
                 
         except Exception as e:
             logger.error(f"❌ Maya1 TTS error: {e}")
@@ -1222,8 +1232,25 @@ class GPUTTSService:
                     # Chatterbox needs gender and emotion params
                     audio_file = await method(text, voice, gender="female", emotion="neutral")
                 elif engine_name == "maya1":
-                    # Maya1 needs gender and emotion params
-                    audio_file = await method(text, voice, gender="female", emotion="neutral")
+                    # Maya1 needs gender and emotion params - returns bytes directly
+                    audio_result = await method(text, voice, gender="female", emotion="neutral")
+                    if audio_result:
+                        # Check if it's bytes (Maya1) or file path (other engines)
+                        if isinstance(audio_result, bytes):
+                            logger.info(f"Successfully synthesized with {engine_name} (bytes)")
+                            return TTSResponseBytes(
+                                audio_bytes=audio_result,
+                                engine_used=engine_name,
+                                voice_used=voice
+                            )
+                        else:
+                            # File path (legacy behavior)
+                            logger.info(f"Successfully synthesized with {engine_name}")
+                            return TTSResponse(
+                                audio_file=audio_result,
+                                engine_used=engine_name,
+                                voice_used=voice
+                            )
                 else:
                     audio_file = await method(text)
                 
@@ -1347,17 +1374,32 @@ async def synthesize_speech(
             engine=engine
         )
         
-        if result and result.audio_file and os.path.exists(result.audio_file):
+        # Clean up temporary file
+        if audio_prompt_path and os.path.exists(audio_prompt_path):
+            try:
+                os.unlink(audio_prompt_path)
+            except:
+                pass
+        
+        # Check if result is bytes (Maya1) or file path (other engines)
+        if isinstance(result, TTSResponseBytes):
+            # Maya1 returns bytes directly - send as raw audio (like ElevenLabs)
+            logger.info(f"Successfully synthesized with {result.engine_used} (bytes: {len(result.audio_bytes)} bytes)")
+            
+            return Response(
+                content=result.audio_bytes,
+                media_type="audio/wav",
+                headers={
+                    "X-Engine-Used": result.engine_used,
+                    "X-Voice-ID": result.voice_used,
+                    "X-Voice-Cloning": "false"
+                }
+            )
+        elif result and result.audio_file and os.path.exists(result.audio_file):
+            # Legacy: engines that return file paths - return raw audio (like ElevenLabs)
             logger.info(f"Successfully synthesized with {result.engine_used}")
             
-            # Clean up temporary file
-            if audio_prompt_path and os.path.exists(audio_prompt_path):
-                try:
-                    os.unlink(audio_prompt_path)
-                except:
-                    pass
-            
-            # Read and return the audio file
+            # Read and return the audio file as raw bytes
             with open(result.audio_file, 'rb') as f:
                 audio_data = f.read()
             
@@ -1367,18 +1409,16 @@ async def synthesize_speech(
             except:
                 pass
             
-            # Return JSON format expected by backend
-            import base64
-            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-            
-            return {
-                "audio_data": audio_base64,
-                "engine": result.engine_used,
-                "voice": result.voice_used,
-                "processing_time_ms": int((time.time() - start_time) * 1000),
-                "audio_duration_ms": len(audio_data) // 48,  # Rough estimate
-                "cached": False
-            }
+            # Return raw audio (like ElevenLabs) for consistency
+            return Response(
+                content=audio_data,
+                media_type="audio/wav",
+                headers={
+                    "X-Engine-Used": result.engine_used,
+                    "X-Voice-ID": result.voice_used,
+                    "X-Voice-Cloning": "false"
+                }
+            )
         else:
             # Clean up temporary file on failure
             if audio_prompt_path and os.path.exists(audio_prompt_path):

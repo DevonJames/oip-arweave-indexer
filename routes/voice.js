@@ -966,13 +966,26 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
                         method: 'POST',
                         data: ttsParams,
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        responseType: 'arraybuffer', // Expect raw audio (like ElevenLabs)
                         timeout: 30000
                     },
                     'Kokoro TTS'
                 );
                 
-                // Convert base64 audio to buffer
-                if (kokoroResponse.data && kokoroResponse.data.audio_data) {
+                // Handle both raw audio (arraybuffer) and JSON (base64) responses
+                if (Buffer.isBuffer(kokoroResponse.data) || kokoroResponse.data instanceof ArrayBuffer) {
+                    // Raw audio response (Maya1, ElevenLabs-style)
+                    const audioBuffer = Buffer.from(kokoroResponse.data);
+                    ttsResponse = {
+                        data: audioBuffer,
+                        headers: {
+                            'content-type': 'audio/wav',
+                            'x-engine-used': kokoroResponse.headers['x-engine-used'] || kokoroResponse.headers['X-Engine-Used'] || 'unknown',
+                            'x-voice-used': kokoroResponse.headers['x-voice-id'] || kokoroResponse.headers['X-Voice-ID'] || 'unknown'
+                        }
+                    };
+                } else if (kokoroResponse.data && kokoroResponse.data.audio_data) {
+                    // JSON response with base64 (legacy engines)
                     const audioBuffer = Buffer.from(kokoroResponse.data.audio_data, 'base64');
                     ttsResponse = {
                         data: audioBuffer,
@@ -1534,16 +1547,24 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                             method: 'POST',
                             data: ttsParams,
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            responseType: 'arraybuffer', // Expect raw audio (like ElevenLabs)
                             timeout: 30000
                         },
                         'Edge TTS'
                     );
                     processingMetrics.tts_time_ms = Date.now() - ttsStartTime;
                     
-                    if (ttsResponse.data && ttsResponse.data.audio_data) {
+                    // Handle both raw audio (arraybuffer) and JSON (base64) responses
+                    if (Buffer.isBuffer(ttsResponse.data) || ttsResponse.data instanceof ArrayBuffer) {
+                        // Raw audio response (Maya1, ElevenLabs-style)
+                        audioData = Buffer.from(ttsResponse.data);
+                        engineUsed = ttsResponse.headers['x-engine-used'] || ttsResponse.headers['X-Engine-Used'] || 'unknown';
+                        console.log(`[Voice Chat] Successfully synthesized with ${engineUsed} (${processingMetrics.tts_time_ms}ms): ${audioData.length} bytes (raw audio)`);
+                    } else if (ttsResponse.data && ttsResponse.data.audio_data) {
+                        // JSON response with base64 (legacy engines)
                         audioData = Buffer.from(ttsResponse.data.audio_data, 'base64');
                         engineUsed = ttsResponse.data.engine || 'edge_tts';
-                        console.log(`[Voice Chat] Successfully synthesized with ${engineUsed} (${processingMetrics.tts_time_ms}ms): ${audioData.length} bytes`);
+                        console.log(`[Voice Chat] Successfully synthesized with ${engineUsed} (${processingMetrics.tts_time_ms}ms): ${audioData.length} bytes (base64)`);
                         console.log(`[Voice Chat] TTS processing time: ${ttsResponse.data.processing_time_ms || 'N/A'}ms, cached: ${ttsResponse.data.cached || false}`);
                     } else {
                         throw new Error('Edge TTS returned no audio data');
