@@ -618,17 +618,19 @@ class GPUTTSService:
             logger.info(f"   CODE_END_TOKEN_ID: {code_end_token_id}")
             
             # Generate SNAC tokens - use parameters from Maya1 implementation
-            # min_new_tokens ensures we generate enough tokens for SNAC
+            # CRITICAL: Model generates text tokens first, then SNAC tokens
+            # We need to continue generation until we get SNAC tokens (128266-156937)
+            # Don't stop on EOS - we need SNAC tokens which come after text
             with torch.inference_mode():
                 outputs = self.maya1_model.generate(
                     **inputs,
                     max_new_tokens=2048,
-                    min_new_tokens=28,  # Minimum tokens needed for SNAC
+                    min_new_tokens=100,  # Ensure we generate enough to reach SNAC tokens
                     temperature=0.4,
                     top_p=0.9,
                     repetition_penalty=1.1,
                     do_sample=True,
-                    eos_token_id=code_end_token_id,  # Use CODE_END_TOKEN_ID
+                    eos_token_id=None,  # Don't stop on EOS - we need SNAC tokens after text
                     pad_token_id=self.maya1_tokenizer.pad_token_id if self.maya1_tokenizer.pad_token_id is not None else self.maya1_tokenizer.eos_token_id
                 )
             
@@ -642,14 +644,21 @@ class GPUTTSService:
             
             logger.info(f"   Generated {len(snac_tokens)} SNAC tokens")
             
+            # If we got close but not enough SNAC tokens, the model might need more generation
             if len(snac_tokens) < 7:
-                logger.warning("   Insufficient SNAC tokens generated")
-                # Debug: show what tokens were actually generated
+                # Check if we're generating tokens in the right range
                 if len(generated_ids) > 0:
-                    unique_tokens = torch.unique(generated_ids).tolist()
-                    logger.warning(f"   Generated token IDs (first 20): {unique_tokens[:20]}")
-                    logger.warning(f"   Token range: min={generated_ids.min().item()}, max={generated_ids.max().item()}")
+                    max_token = generated_ids.max().item()
+                    logger.warning(f"   Insufficient SNAC tokens generated ({len(snac_tokens)} < 7)")
+                    logger.warning(f"   Generated token IDs (first 20): {generated_ids[:20].tolist()}")
+                    logger.warning(f"   Token range: min={generated_ids.min().item()}, max={max_token}")
                     logger.warning(f"   Expected SNAC range: 128266-156937")
+                    
+                    # If we're close (max token near SNAC range), model might need more tokens
+                    if max_token >= 128000 and max_token < 128266:
+                        logger.warning(f"   ⚠️ Model generated tokens up to {max_token}, just before SNAC range!")
+                        logger.warning(f"   Model may need more generation time or different parameters")
+                
                 return None
             
             # Decode SNAC tokens to audio codes
