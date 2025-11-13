@@ -2029,40 +2029,82 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 let responseText = '';
                 
                 // Configure voice settings for adaptive TTS
-                // Default to local TTS service if ElevenLabs key not available
+                // Use parsed voiceSettings from frontend, or fallback to defaults
+                const selectedEngine = voiceSettings.engine || 'edge_tts';
                 const hasElevenLabsKey = !!process.env.ELEVENLABS_API_KEY;
                 
+                // Build voiceConfig based on selected engine
                 const voiceConfig = {
-                    engine: hasElevenLabsKey ? 'elevenlabs' : 'local',
-                    voiceId: hasElevenLabsKey ? voice_id : null,
+                    engine: selectedEngine,
+                    voiceId: voice_id || null,
                     voiceSettings: {
                         stability: 0.5,
                         similarity_boost: 0.75,
                         style: 0.0,
                         use_speaker_boost: true
-                    },
-                    // Legacy format for fallback compatibility
-                    elevenlabs: hasElevenLabsKey ? {
-                        selectedVoice: voice_id,
-                        speed: speed,
-                        stability: 0.5,
-                        similarity_boost: 0.75,
-                        model_id: 'eleven_turbo_v2',
-                        style: 0.0,
-                        use_speaker_boost: true
-                    } : null,
-                    // Local TTS configuration
-                    chatterbox: {
-                        selectedVoice: 'female_expressive',
+                    }
+                };
+                
+                // Configure engine-specific settings
+                if (selectedEngine === 'elevenlabs' && hasElevenLabsKey) {
+                    voiceConfig.elevenlabs = {
+                        selectedVoice: voice_id || 'onwK4e9ZLuTAKqWW03F9',
+                        speed: speed || 1.0,
+                        stability: voiceSettings.elevenlabs?.stability || 0.5,
+                        similarity_boost: voiceSettings.elevenlabs?.similarity_boost || 0.75,
+                        model_id: voiceSettings.elevenlabs?.model_id || 'eleven_turbo_v2',
+                        style: voiceSettings.elevenlabs?.style || 0.0,
+                        use_speaker_boost: voiceSettings.elevenlabs?.use_speaker_boost !== false
+                    };
+                } else if (selectedEngine === 'maya1') {
+                    // Maya1 configuration
+                    voiceConfig.maya1 = {
+                        selectedVoice: voiceSettings.maya1?.selectedVoice || voice_id || 'male_british',
+                        exaggeration: voiceSettings.maya1?.exaggeration || 0.7,
+                        cfg_weight: voiceSettings.maya1?.cfg_weight || 0.3
+                    };
+                    // Also set chatterbox config for fallback compatibility
+                    voiceConfig.chatterbox = {
+                        selectedVoice: voiceConfig.maya1.selectedVoice,
+                        gender: 'male',
+                        emotion: 'neutral',
+                        exaggeration: voiceConfig.maya1.exaggeration,
+                        cfg_weight: voiceConfig.maya1.cfg_weight,
+                        voiceCloning: { enabled: false }
+                    };
+                } else if (selectedEngine === 'edge_tts') {
+                    // Edge TTS configuration
+                    voiceConfig.edge = {
+                        selectedVoice: voiceSettings.edge?.selectedVoice || voice_id || 'en-GB-RyanNeural',
+                        speed: voiceSettings.edge?.speed || speed || 1.0,
+                        pitch: voiceSettings.edge?.pitch || 0,
+                        volume: voiceSettings.edge?.volume || 0
+                    };
+                } else if (selectedEngine === 'chatterbox') {
+                    // Chatterbox configuration
+                    voiceConfig.chatterbox = {
+                        selectedVoice: voiceSettings.chatterbox?.selectedVoice || voice_id || 'female_expressive',
+                        gender: voiceSettings.chatterbox?.gender || 'female',
+                        emotion: voiceSettings.chatterbox?.emotion || 'expressive',
+                        exaggeration: voiceSettings.chatterbox?.exaggeration || 0.6,
+                        cfg_weight: voiceSettings.chatterbox?.cfg_weight || 0.7,
+                        voiceCloning: voiceSettings.chatterbox?.voiceCloning || { enabled: false }
+                    };
+                } else {
+                    // Fallback: use chatterbox if engine not recognized
+                    console.warn(`[Voice Converse] Unknown engine "${selectedEngine}", falling back to chatterbox`);
+                    voiceConfig.engine = 'chatterbox';
+                    voiceConfig.chatterbox = {
+                        selectedVoice: voice_id || 'female_expressive',
                         gender: 'female',
                         emotion: 'expressive',
                         exaggeration: 0.6,
                         cfg_weight: 0.7,
                         voiceCloning: { enabled: false }
-                    }
-                };
+                    };
+                }
                 
-                console.log(`[Voice Converse] Using TTS engine: ${voiceConfig.engine} (ElevenLabs available: ${hasElevenLabsKey})`);
+                console.log(`[Voice Converse] Using TTS engine: ${voiceConfig.engine} (from voiceConfig: ${selectedEngine})`);
 
                 const handleTextChunk = async (textChunk) => {
                     responseText += textChunk;
