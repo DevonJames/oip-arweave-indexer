@@ -473,10 +473,16 @@ class GPUTTSService:
                     'gender': 'male',
                     'style': 'professional'
                 },
-                'male_british': {
+                'alfred': {
                     'description': 'Realistic male voice in the 30s age with British accent. Normal pitch, warm timbre, conversational pacing',
                     'emotion_tags': [],
                     'gender': 'male',
+                    'style': 'professional'
+                },
+                'alice': {
+                    'description': 'Warm female voice with mid-Atlantic accent. Elegant and refined, with clear articulation and measured pacing',
+                    'emotion_tags': [],
+                    'gender': 'female',
                     'style': 'professional'
                 },
                 'default': {
@@ -573,6 +579,14 @@ class GPUTTSService:
             return None
             
         try:
+            # CRITICAL: Validate and log the input text
+            if not text or not text.strip():
+                logger.error("❌ Maya1 TTS: Empty text provided!")
+                return None
+            
+            logger.info(f"🎵 Maya1 TTS: Received text='{text[:100]}{'...' if len(text) > 100 else ''}' (length: {len(text)} chars)")
+            logger.info(f"🎵 Maya1 TTS: voice={voice}, gender={gender}, emotion={emotion}")
+            
             # Get voice configuration
             voice_config = self.maya1_voices.get(voice, self.maya1_voices.get('default'))
             voice_description = voice_config['description']
@@ -581,15 +595,18 @@ class GPUTTSService:
             logger.info(f"🎵 Maya1 TTS: voice={voice}, description='{voice_description}'")
             logger.info(f"   Generating SNAC tokens with transformer model...")
             
-            # Build prompt with voice description using Maya1's special token format
-            # Format: <|soh|><description="..."><|eoh|><|soa|>text<|eot_id|>
+            # Build prompt with voice description using Maya1's format
+            # CORRECT FORMAT (per Maya1 docs and test file): <description="..."> {emotion_tags} {text}
+            # NOT using special tokens <|soh|>, <|eoh|>, <|soa|>, <|eot_id|> - those are incorrect!
             emotion_tag_str = ' '.join(emotion_tags) if emotion_tags else ''
             text_with_emotions = f'{emotion_tag_str} {text}'.strip()
             
-            # Use Maya1's special token format
-            prompt = f'<|soh|><description="{voice_description}"><|eoh|><|soa|>{text_with_emotions}<|eot_id|>'
+            # Use correct Maya1 prompt format (matches documentation and test file)
+            prompt = f'<description="{voice_description}"> {text_with_emotions}'
             
-            logger.info(f"   Prompt: {prompt[:150]}...")
+            logger.info(f"   Full prompt (first 200 chars): {prompt[:200]}...")
+            logger.info(f"   Full prompt (last 100 chars): ...{prompt[-100:]}")
+            logger.info(f"   Prompt length: {len(prompt)} chars")
             
             # Tokenize input - use standard tokenization
             inputs = self.maya1_tokenizer(prompt, return_tensors="pt")
@@ -617,20 +634,15 @@ class GPUTTSService:
             
             logger.info(f"   CODE_END_TOKEN_ID: {code_end_token_id}")
             
-            # Generate SNAC tokens - use parameters from Maya1 implementation
-            # CRITICAL: Model generates text tokens first, then SNAC tokens
-            # We need to continue generation until we get SNAC tokens (128266-156937)
-            # Don't stop on EOS - we need SNAC tokens which come after text
+            # Generate SNAC tokens - use parameters matching test file and documentation
+            # Model generates SNAC tokens directly after the prompt (no text generation needed)
             with torch.inference_mode():
                 outputs = self.maya1_model.generate(
                     **inputs,
-                    max_new_tokens=2048,
-                    min_new_tokens=100,  # Ensure we generate enough to reach SNAC tokens
+                    max_new_tokens=500,  # Match test file (was 2048 - too high, causing text generation)
                     temperature=0.4,
                     top_p=0.9,
-                    repetition_penalty=1.1,
                     do_sample=True,
-                    eos_token_id=None,  # Don't stop on EOS - we need SNAC tokens after text
                     pad_token_id=self.maya1_tokenizer.pad_token_id if self.maya1_tokenizer.pad_token_id is not None else self.maya1_tokenizer.eos_token_id
                 )
             
@@ -638,6 +650,22 @@ class GPUTTSService:
             generated_ids = outputs[0, inputs['input_ids'].shape[1]:]
             
             logger.info(f"   Total generated tokens: {len(generated_ids)}")
+            
+            # CRITICAL DEBUG: Decode generated tokens to see what text is being generated
+            try:
+                # Decode all generated tokens to see what text the model is generating
+                generated_text = self.maya1_tokenizer.decode(generated_ids, skip_special_tokens=False)
+                logger.info(f"   🔍 DEBUG: Generated text tokens decode to: '{generated_text[:200]}{'...' if len(generated_text) > 200 else ''}'")
+                
+                # Also check what tokens are being generated (first 50)
+                token_ids_list = generated_ids[:50].tolist()
+                logger.info(f"   🔍 DEBUG: First 50 generated token IDs: {token_ids_list}")
+                
+                # Check if any tokens are in the SNAC range
+                snac_token_count = sum(1 for t in generated_ids if 128266 <= t <= 156937)
+                logger.info(f"   🔍 DEBUG: SNAC tokens found in first 50: {snac_token_count}")
+            except Exception as decode_error:
+                logger.warning(f"   ⚠️ Could not decode generated tokens: {decode_error}")
             
             # Filter SNAC tokens (range: 128266 to 156937 according to Maya1 spec)
             snac_tokens = [t.item() for t in generated_ids if 128266 <= t <= 156937]
@@ -924,7 +952,8 @@ class GPUTTSService:
                     'cheerful': 'en-US-JennyNeural',
                     'sad': 'en-US-AriaNeural',
                     # UK male aliases
-                    'male_british': 'en-GB-RyanNeural',
+                    'alfred': 'en-GB-RyanNeural',
+                    'male_british': 'en-GB-RyanNeural',  # Legacy alias for alfred
                     'male_uk': 'en-GB-RyanNeural',
                     'british_male': 'en-GB-RyanNeural'
                 }
@@ -1424,7 +1453,8 @@ async def get_voices():
             "male_calm": {"name": "Maya1 Male Calm", "description": "Deep, calm male voice (3B transformer)"},
             "female_cheerful": {"name": "Maya1 Female Cheerful", "description": "Upbeat, cheerful female voice (3B transformer)"},
             "male_professional": {"name": "Maya1 Male Professional", "description": "Professional, authoritative male voice (3B transformer)"},
-            "male_british": {"name": "Maya1 Male British", "description": "Sophisticated male voice with refined British accent (3B transformer)"},
+            "alfred": {"name": "Maya1 Alfred", "description": "Sophisticated male voice with refined British accent (3B transformer)"},
+            "alice": {"name": "Maya1 Alice", "description": "Warm female voice with mid-Atlantic accent, elegant and refined (3B transformer)"},
             "default": {"name": "Maya1 Default", "description": "Natural voice with balanced articulation"}
         }
         
