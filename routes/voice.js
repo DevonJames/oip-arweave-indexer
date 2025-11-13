@@ -1784,20 +1784,115 @@ router.get('/models', async (req, res) => {
  * Similar to /generate/converse but uses ALFRED's RAG system
  */
 router.post('/converse', upload.single('audio'), async (req, res) => {
-    // console.log('🎯 [ROUTE: /api/voice/converse] Processing streaming voice conversation with SSE');
-    // console.log('📥 [ROUTE: /api/voice/converse] Request body:', {
-    //     text: req.body.text || req.body.userInput,
-    //     processing_mode: req.body.processing_mode,
-    //     model: req.body.model,
-    //     pinnedDidTx: req.body.pinnedDidTx,
-    //     conversationHistory: req.body.conversationHistory ? `${(typeof req.body.conversationHistory === 'string' ? JSON.parse(req.body.conversationHistory || '[]') : req.body.conversationHistory).length} messages` : 'none',
-    //     dialogueId: req.body.dialogueId,
-    //     voiceConfig: req.body.voiceConfig ? 'provided' : 'default',
-    //     hasAudioFile: !!req.file
-    // });
+    const timestamp = new Date().toISOString();
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[${timestamp}] 🎯 [ROUTE: /api/voice/converse] POST Request Received (ID: ${requestId})`);
+    console.log(`${'='.repeat(80)}`);
+    
+    // Log all request body fields with full content
+    console.log(`[${timestamp}] 📥 Request Body Fields:`);
+    console.log(`[${timestamp}]   - text: ${req.body.text ? `"${req.body.text.substring(0, 200)}${req.body.text.length > 200 ? '...' : ''}" (${req.body.text.length} chars)` : 'undefined'}`);
+    console.log(`[${timestamp}]   - userInput: ${req.body.userInput ? `"${req.body.userInput.substring(0, 200)}${req.body.userInput.length > 200 ? '...' : ''}" (${req.body.userInput.length} chars)` : 'undefined'}`);
+    console.log(`[${timestamp}]   - processing_mode: ${req.body.processing_mode || 'undefined'}`);
+    console.log(`[${timestamp}]   - model: ${req.body.model || 'undefined'}`);
+    console.log(`[${timestamp}]   - voice_id: ${req.body.voice_id || 'undefined'}`);
+    console.log(`[${timestamp}]   - engine: ${req.body.engine || 'undefined'}`);
+    console.log(`[${timestamp}]   - speed: ${req.body.speed || 'undefined'}`);
+    console.log(`[${timestamp}]   - dialogueId: ${req.body.dialogueId || 'undefined'}`);
+    console.log(`[${timestamp}]   - pinnedDidTx: ${req.body.pinnedDidTx || 'undefined'}`);
+    console.log(`[${timestamp}]   - pinnedJsonData: ${req.body.pinnedJsonData ? 'provided (object)' : 'undefined'}`);
+    console.log(`[${timestamp}]   - existing_search_results: ${req.body.existing_search_results ? `provided (${Array.isArray(req.body.existing_search_results) ? req.body.existing_search_results.length : 'non-array'})` : 'undefined'}`);
+    console.log(`[${timestamp}]   - existingContext: ${req.body.existingContext ? `provided (${Array.isArray(req.body.existingContext) ? req.body.existingContext.length : 'non-array'})` : 'undefined'}`);
+    console.log(`[${timestamp}]   - searchParams: ${req.body.searchParams ? JSON.stringify(req.body.searchParams) : 'undefined'}`);
+    console.log(`[${timestamp}]   - include_filter_analysis: ${req.body.include_filter_analysis !== undefined ? req.body.include_filter_analysis : 'undefined'}`);
+    console.log(`[${timestamp}]   - creator_filter: ${req.body.creator_filter || 'undefined'}`);
+    console.log(`[${timestamp}]   - record_type_filter: ${req.body.record_type_filter || 'undefined'}`);
+    console.log(`[${timestamp}]   - tag_filter: ${req.body.tag_filter || 'undefined'}`);
+    
+    // Log conversation history with full content
+    if (req.body.conversationHistory) {
+        try {
+            let parsedHistory;
+            if (typeof req.body.conversationHistory === 'string') {
+                parsedHistory = JSON.parse(req.body.conversationHistory);
+            } else {
+                parsedHistory = req.body.conversationHistory;
+            }
+            console.log(`[${timestamp}]   - conversationHistory: ${Array.isArray(parsedHistory) ? `${parsedHistory.length} messages` : 'non-array'}`);
+            if (Array.isArray(parsedHistory) && parsedHistory.length > 0) {
+                console.log(`[${timestamp}]     Conversation History Content:`);
+                parsedHistory.forEach((msg, idx) => {
+                    const role = msg.role || 'unknown';
+                    const content = msg.content || msg.text || '';
+                    console.log(`[${timestamp}]       [${idx}] ${role}: "${content.substring(0, 100)}${content.length > 100 ? '...' : ''}"`);
+                });
+            }
+        } catch (err) {
+            console.log(`[${timestamp}]   - conversationHistory: ERROR parsing - ${err.message}`);
+            console.log(`[${timestamp}]     Raw value: ${typeof req.body.conversationHistory === 'string' ? req.body.conversationHistory.substring(0, 200) : JSON.stringify(req.body.conversationHistory).substring(0, 200)}`);
+        }
+    } else {
+        console.log(`[${timestamp}]   - conversationHistory: undefined`);
+    }
+    
+    // Log voice configuration with full content
+    if (req.body.voiceConfig) {
+        try {
+            const parsedVoiceConfig = typeof req.body.voiceConfig === 'string' ? JSON.parse(req.body.voiceConfig) : req.body.voiceConfig;
+            console.log(`[${timestamp}]   - voiceConfig: provided`);
+            console.log(`[${timestamp}]     Full voiceConfig: ${JSON.stringify(parsedVoiceConfig, null, 2)}`);
+        } catch (err) {
+            console.log(`[${timestamp}]   - voiceConfig: ERROR parsing - ${err.message}`);
+            console.log(`[${timestamp}]     Raw value: ${typeof req.body.voiceConfig === 'string' ? req.body.voiceConfig.substring(0, 200) : JSON.stringify(req.body.voiceConfig).substring(0, 200)}`);
+        }
+    } else {
+        console.log(`[${timestamp}]   - voiceConfig: undefined`);
+    }
+    
+    // Log file information
+    if (req.file) {
+        console.log(`[${timestamp}] 📎 Audio File:`);
+        console.log(`[${timestamp}]   - filename: ${req.file.originalname || 'unnamed'}`);
+        console.log(`[${timestamp}]   - mimetype: ${req.file.mimetype || 'unknown'}`);
+        console.log(`[${timestamp}]   - size: ${req.file.size || req.file.buffer?.length || 0} bytes`);
+        console.log(`[${timestamp}]   - fieldname: ${req.file.fieldname || 'audio'}`);
+    } else {
+        console.log(`[${timestamp}] 📎 Audio File: none`);
+    }
+    
+    // Log all other body fields that might exist
+    const loggedFields = new Set([
+        'text', 'userInput', 'processing_mode', 'model', 'voice_id', 'engine', 'speed',
+        'dialogueId', 'pinnedDidTx', 'pinnedJsonData', 'existing_search_results', 'existingContext',
+        'searchParams', 'include_filter_analysis', 'creator_filter', 'record_type_filter', 'tag_filter',
+        'conversationHistory', 'voiceConfig'
+    ]);
+    
+    const otherFields = Object.keys(req.body).filter(key => !loggedFields.has(key));
+    if (otherFields.length > 0) {
+        console.log(`[${timestamp}] 📋 Additional Request Fields:`);
+        otherFields.forEach(field => {
+            const value = req.body[field];
+            if (typeof value === 'string' && value.length > 200) {
+                console.log(`[${timestamp}]   - ${field}: "${value.substring(0, 200)}..." (${value.length} chars)`);
+            } else {
+                console.log(`[${timestamp}]   - ${field}: ${JSON.stringify(value)}`);
+            }
+        });
+    }
+    
+    // Log request headers (selective)
+    console.log(`[${timestamp}] 📡 Request Headers:`);
+    console.log(`[${timestamp}]   - content-type: ${req.headers['content-type'] || 'undefined'}`);
+    console.log(`[${timestamp}]   - content-length: ${req.headers['content-length'] || 'undefined'}`);
+    console.log(`[${timestamp}]   - user-agent: ${req.headers['user-agent'] ? req.headers['user-agent'].substring(0, 100) : 'undefined'}`);
+    
+    console.log(`${'='.repeat(80)}\n`);
     
     const startTime = Date.now();
-    console.log('Voice converse request received');
+    console.log(`[${timestamp}] ⏱️  Request processing started (ID: ${requestId})`);
     
     try {
         let inputText = '';

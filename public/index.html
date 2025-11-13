@@ -1408,6 +1408,10 @@
                 testText = `Hello! I'm your AI assistant using Google Text-to-Speech. This is a cloud-based service with excellent voice quality.`;
             } else if (engine === 'espeak') {
                 testText = `Hello! I'm your AI assistant using eSpeak TTS. This is a reliable offline text-to-speech engine.`;
+            } else if (engine === 'maya1') {
+                const exaggeration = Math.round(voiceConfig.maya1.exaggeration * 100);
+                const cfgWeight = Math.round(voiceConfig.maya1.cfg_weight * 100);
+                testText = `Hello! I'm your AI assistant powered by Maya1 TTS. This is a state-of-the-art 3 billion parameter transformer model with expressive neural synthesis. Using ${exaggeration} percent exaggeration and ${cfgWeight} percent configuration weight.`;
             } else {
                 testText = `Hello! I'm your AI assistant using ${engine} TTS. Testing voice synthesis with the selected engine.`;
             }
@@ -1419,7 +1423,8 @@
                 'elevenlabs': 'ElevenLabs',
                 'silero': 'Silero Neural TTS',
                 'gtts': 'Google TTS',
-                'espeak': 'eSpeak'
+                'espeak': 'eSpeak',
+                'maya1': 'Maya1 TTS'
             };
             
             updateStatus(`🎵 Testing ${engineNames[engine] || engine} voice...`);
