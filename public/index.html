@@ -316,7 +316,7 @@
         // Voice Engine Configuration
         const voiceConfig = {
             enabled: true,
-            selectedEngine: 'chatterbox',
+            selectedEngine: 'maya1',
             baseUrl: window.location.origin,
             // Chatterbox-specific settings
             chatterbox: {
@@ -1664,6 +1664,11 @@
                         exaggeration: voiceConfig.chatterbox.exaggeration,
                         cfg_weight: voiceConfig.chatterbox.cfg_weight,
                         voiceCloning: voiceConfig.chatterbox.voiceCloning
+                    },
+                    maya1: {
+                        selectedVoice: voiceConfig.maya1.selectedVoice,
+                        exaggeration: voiceConfig.maya1.exaggeration,
+                        cfg_weight: voiceConfig.maya1.cfg_weight
                     },
                     edge: {
                         selectedVoice: voiceConfig.edge.selectedVoice,

@@ -2189,12 +2189,56 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 // All questions now go through ALFRED's RAG system
 
                 // Step 3: Generate streaming response using ALFRED RAG system
+                // Extract voice parameters - check voiceConfig first, then fall back to req.body
+                let voice_id, engine, speed;
+                let parsedVoiceConfig = null; // Store for later use in voiceConfig building
+                
+                if (req.body.voiceConfig) {
+                    // Parse voiceConfig if it's a string
+                    parsedVoiceConfig = typeof req.body.voiceConfig === 'string' 
+                        ? JSON.parse(req.body.voiceConfig) 
+                        : req.body.voiceConfig;
+                    
+                    console.log(`[Voice Converse] DEBUG: Extracting from voiceConfig:`, JSON.stringify(parsedVoiceConfig, null, 2));
+                    
+                    // Extract from voiceConfig structure
+                    engine = parsedVoiceConfig.engine || req.body.engine || 'edge_tts';
+                    console.log(`[Voice Converse] DEBUG: Extracted engine: ${engine}`);
+                    
+                    // Get voice_id from engine-specific config or top-level
+                    if (engine === 'chatterbox' && parsedVoiceConfig.chatterbox) {
+                        voice_id = parsedVoiceConfig.chatterbox.voice_id || parsedVoiceConfig.chatterbox.selectedVoice || req.body.voice_id;
+                        speed = parsedVoiceConfig.chatterbox.speed || req.body.speed || 1.0;
+                        console.log(`[Voice Converse] DEBUG: Extracted from chatterbox config - voice_id: ${voice_id}, speed: ${speed}`);
+                    } else if (engine === 'maya1' && parsedVoiceConfig.maya1) {
+                        voice_id = parsedVoiceConfig.maya1.selectedVoice || req.body.voice_id || 'alfred';
+                        speed = req.body.speed || 1.0;
+                        console.log(`[Voice Converse] DEBUG: Extracted from maya1 config - voice_id: ${voice_id}, speed: ${speed}`);
+                    } else if (engine === 'elevenlabs' && parsedVoiceConfig.elevenlabs) {
+                        voice_id = parsedVoiceConfig.elevenlabs.selectedVoice || parsedVoiceConfig.voice_id || req.body.voice_id;
+                        speed = parsedVoiceConfig.elevenlabs.speed || parsedVoiceConfig.speed || req.body.speed || 1.0;
+                        console.log(`[Voice Converse] DEBUG: Extracted from elevenlabs config - voice_id: ${voice_id}, speed: ${speed}`);
+                    } else if (engine === 'edge_tts' && parsedVoiceConfig.edge) {
+                        voice_id = parsedVoiceConfig.edge.selectedVoice || req.body.voice_id || 'en-GB-RyanNeural';
+                        speed = parsedVoiceConfig.edge.speed || req.body.speed || 1.0;
+                        console.log(`[Voice Converse] DEBUG: Extracted from edge config - voice_id: ${voice_id}, speed: ${speed}`);
+                    } else {
+                        // Fallback: try to get from top-level voiceConfig or req.body
+                        voice_id = parsedVoiceConfig.voiceId || parsedVoiceConfig.voice_id || req.body.voice_id || (engine === 'maya1' ? 'alfred' : 'en-GB-RyanNeural');
+                        speed = parsedVoiceConfig.speed || req.body.speed || 1.0;
+                        console.log(`[Voice Converse] DEBUG: Using fallback - voice_id: ${voice_id}, speed: ${speed}`);
+                    }
+                } else {
+                    // No voiceConfig, use direct req.body fields
+                    voice_id = req.body.voice_id || 'en-GB-RyanNeural';
+                    engine = req.body.engine || 'edge_tts';
+                    speed = req.body.speed || 1.0;
+                    console.log(`[Voice Converse] DEBUG: No voiceConfig, using req.body - engine: ${engine}, voice_id: ${voice_id}`);
+                }
+                
                 const {
                     // model = 'grok-2',
                     model = 'parallel',
-                    voice_id = 'en-GB-RyanNeural',
-                    engine = 'edge_tts',
-                    speed = 1.0,
                     creator_filter = null,
                     record_type_filter = null,
                     tag_filter = null
@@ -2202,9 +2246,13 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
 
                 let responseText = '';
                 
-                // Match /chat endpoint: use req.body.engine and req.body.voice_id directly
-                // Build simple voiceConfig from request params (same as /chat)
+                // Use extracted engine and voice_id (from voiceConfig or req.body)
                 const selectedEngine = engine || 'edge_tts';
+                
+                // Map male_british to alfred for Maya1 compatibility
+                if (selectedEngine === 'maya1' && voice_id === 'male_british') {
+                    voice_id = 'alfred';
+                }
                 
                 // Convert legacy voice_id to gender/emotion format for Chatterbox (same as /chat)
                 function convertVoiceIdToChatterboxParams(voice_id) {
@@ -2258,6 +2306,17 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                         cfg_weight: chatterboxParams.cfg_weight,
                         voiceCloning: { enabled: false }
                     };
+                } else if (selectedEngine === 'elevenlabs') {
+                    // Get ElevenLabs settings from parsed voiceConfig or use defaults
+                    const elevenlabsConfig = parsedVoiceConfig?.elevenlabs || {};
+                    voiceConfig.elevenlabs = {
+                        selectedVoice: voice_id || elevenlabsConfig.selectedVoice || 'onwK4e9ZLuTAKqWW03F9',
+                        model_id: elevenlabsConfig.model_id || 'eleven_turbo_v2',
+                        stability: elevenlabsConfig.stability || 0.5,
+                        similarity_boost: elevenlabsConfig.similarity_boost || 0.75,
+                        style: elevenlabsConfig.style || 0.0,
+                        use_speaker_boost: elevenlabsConfig.use_speaker_boost !== false
+                    };
                 } else if (selectedEngine === 'edge_tts') {
                     voiceConfig.edge = {
                         selectedVoice: voice_id || 'en-GB-RyanNeural',
@@ -2288,7 +2347,7 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     };
                 }
                 
-                console.log(`[Voice Converse] Using TTS engine: ${voiceConfig.engine} (from req.body.engine: ${selectedEngine})`);
+                console.log(`[Voice Converse] Using TTS engine: ${selectedEngine} (voice_id: ${voice_id || 'default'})`);
 
                 const handleTextChunk = async (textChunk) => {
                     responseText += textChunk;
