@@ -267,32 +267,6 @@ services:
     environment:
       - CUDA_VISIBLE_DEVICES=0
       - TTS_GPU_ENABLED=true
-      - MAYA1_SERVICE_URL=http://maya1-tts-service:5003
-    networks:
-      - oip-network
-    restart: unless-stopped
-    profiles:
-      - gpu
-      - standard-gpu
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  # Dedicated Maya1 TTS Service (PyTorch 2.1+ with SNAC codec)
-  maya1-tts-service:
-    build:
-      context: ./maya1-tts-service
-      dockerfile: Dockerfile
-    ports:
-      - "${MAYA1_TTS_PORT:-5003}:5003"
-    environment:
-      - CUDA_VISIBLE_DEVICES=0
-      - TTS_GPU_ENABLED=true
-      - MAYA1_SERVICE_PORT=5003
     networks:
       - oip-network
     restart: unless-stopped
