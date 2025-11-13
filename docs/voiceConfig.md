@@ -27,15 +27,30 @@ Here are the `voiceConfig` JSON structures to pass:
 }
 ```
 
-## For Maya1 with Male British Voice:
+## For Maya1 with Alfred (British Male Voice):
 
 ```json
 {
   "engine": "maya1",
   "enabled": true,
-  "voice_id": "male_british",
+  "voice_id": "alfred",
   "maya1": {
-    "selectedVoice": "male_british",
+    "selectedVoice": "alfred",
+    "exaggeration": 0.7,
+    "cfg_weight": 0.3
+  }
+}
+```
+
+## For Maya1 with Alice (Mid-Atlantic Female Voice):
+
+```json
+{
+  "engine": "maya1",
+  "enabled": true,
+  "voice_id": "alice",
+  "maya1": {
+    "selectedVoice": "alice",
     "exaggeration": 0.7,
     "cfg_weight": 0.3
   }
@@ -46,7 +61,7 @@ Here are the `voiceConfig` JSON structures to pass:
 ```json
 {
   "engine": "maya1",
-  "voice_id": "male_british"
+  "voice_id": "alfred"
 }
 ```
 
@@ -62,9 +77,9 @@ const response = await fetch('/api/voice/converse', {
   headers: {
     'voiceConfig': JSON.stringify({
       engine: 'maya1',
-      voice_id: 'male_british',
+      voice_id: 'alfred',
       maya1: {
-        selectedVoice: 'male_british',
+        selectedVoice: 'alfred',
         exaggeration: 0.7,
         cfg_weight: 0.3
       }

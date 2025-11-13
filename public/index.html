@@ -339,7 +339,7 @@
             },
             // Maya1-specific settings
             maya1: {
-                selectedVoice: 'male_british',  // Default to British male voice
+                selectedVoice: 'alfred',  // Default to Alfred voice
                 exaggeration: 0.7,
                 cfg_weight: 0.3
             },
@@ -509,13 +509,21 @@
                         v.engine && v.engine.toLowerCase() === 'maya1'
                     );
                     
-                    // Add Maya1 British male voice (custom description)
+                    // Add Maya1 Alfred voice (custom description)
                     availableVoices.maya1.push({
-                        id: 'male_british',
-                        name: 'Maya1 Male British',
+                        id: 'alfred',
+                        name: 'Maya1 Alfred',
                         gender: 'male',
                         engine: 'maya1',
                         description: 'A sophisticated male voice with a refined British accent, clear articulation and measured pacing'
+                    });
+                    // Add Maya1 Alice voice (custom description)
+                    availableVoices.maya1.push({
+                        id: 'alice',
+                        name: 'Maya1 Alice',
+                        gender: 'female',
+                        engine: 'maya1',
+                        description: 'Warm female voice with mid-Atlantic accent, elegant and refined with clear articulation'
                     });
                     
                     // Add ElevenLabs voices (hardcoded popular ones)
@@ -617,7 +625,7 @@
                 }
             } else if (engine === 'maya1') {
                 // Default to British male voice
-                const defaultVoice = voices.find(v => v.id === 'male_british') || voices.find(v => v.gender === 'male') || voices[0];
+                const defaultVoice = voices.find(v => v.id === 'alfred') || voices.find(v => v.gender === 'male') || voices[0];
                 if (defaultVoice) {
                     voiceSelect.value = defaultVoice.id;
                     voiceConfig.maya1.selectedVoice = defaultVoice.id;
@@ -1193,9 +1201,11 @@
                 // Add engine-specific voice configuration
                 if (engine === 'maya1') {
                     // Maya1 TTS configuration
-                    const selectedVoice = voiceConfig.maya1.selectedVoice || 'male_british';
+                    const selectedVoice = voiceConfig.maya1.selectedVoice || 'alfred';
                     formData.append('voice_id', selectedVoice);
-                    formData.append('gender', 'male');  // British voice is male
+                    // Determine gender based on voice selection
+                    const isFemaleVoice = selectedVoice === 'alice' || selectedVoice.startsWith('female_');
+                    formData.append('gender', isFemaleVoice ? 'female' : 'male');
                     formData.append('emotion', 'neutral');
                     formData.append('exaggeration', voiceConfig.maya1.exaggeration.toString());
                     formData.append('cfg_weight', voiceConfig.maya1.cfg_weight.toString());

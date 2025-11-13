@@ -1079,20 +1079,116 @@ router.post('/synthesize', upload.single('audio_prompt'), async (req, res) => {
  * Complete voice chat: STT → LLM → TTS pipeline
  */
 router.post('/chat', upload.single('audio'), async (req, res) => {
-    console.log('🎯 [ROUTE: /api/voice/chat] Processing complete voice chat request (STT → RAG/LLM → TTS)');
-    console.log('📥 [ROUTE: /api/voice/chat] Request body:', {
-        text: req.body.text?.substring(0, 200) + (req.body.text?.length > 200 ? '...' : ''),
-        processing_mode: req.body.processing_mode,
-        model: req.body.model,
-        return_audio: req.body.return_audio,
-        voice_id: req.body.voice_id,
-        engine: req.body.engine,
-        pinnedDidTx: req.body.pinnedDidTx,
-        conversationHistory: req.body.conversationHistory ? `${JSON.parse(req.body.conversationHistory || '[]').length} messages` : 'none',
-        hasAudioFile: !!req.file
-    });
+    const timestamp = new Date().toISOString();
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`[${timestamp}] 🎯 [ROUTE: /api/voice/chat] POST Request Received (ID: ${requestId})`);
+    console.log(`${'='.repeat(80)}`);
+    
+    // Log all request body fields with full content
+    console.log(`[${timestamp}] 📥 Request Body Fields:`);
+    console.log(`[${timestamp}]   - text: ${req.body.text ? `"${req.body.text.substring(0, 200)}${req.body.text.length > 200 ? '...' : ''}" (${req.body.text.length} chars)` : 'undefined'}`);
+    console.log(`[${timestamp}]   - userInput: ${req.body.userInput ? `"${req.body.userInput.substring(0, 200)}${req.body.userInput.length > 200 ? '...' : ''}" (${req.body.userInput.length} chars)` : 'undefined'}`);
+    console.log(`[${timestamp}]   - processing_mode: ${req.body.processing_mode || 'undefined'}`);
+    console.log(`[${timestamp}]   - model: ${req.body.model || 'undefined'}`);
+    console.log(`[${timestamp}]   - voice_id: ${req.body.voice_id || 'undefined'}`);
+    console.log(`[${timestamp}]   - engine: ${req.body.engine || 'undefined'}`);
+    console.log(`[${timestamp}]   - speed: ${req.body.speed || 'undefined'}`);
+    console.log(`[${timestamp}]   - return_audio: ${req.body.return_audio !== undefined ? req.body.return_audio : 'undefined'}`);
+    console.log(`[${timestamp}]   - dialogueId: ${req.body.dialogueId || 'undefined'}`);
+    console.log(`[${timestamp}]   - pinnedDidTx: ${req.body.pinnedDidTx || 'undefined'}`);
+    console.log(`[${timestamp}]   - pinnedJsonData: ${req.body.pinnedJsonData ? 'provided (object)' : 'undefined'}`);
+    console.log(`[${timestamp}]   - existing_search_results: ${req.body.existing_search_results ? `provided (${Array.isArray(req.body.existing_search_results) ? req.body.existing_search_results.length : 'non-array'})` : 'undefined'}`);
+    console.log(`[${timestamp}]   - existingContext: ${req.body.existingContext ? `provided (${Array.isArray(req.body.existingContext) ? req.body.existingContext.length : 'non-array'})` : 'undefined'}`);
+    console.log(`[${timestamp}]   - searchParams: ${req.body.searchParams ? JSON.stringify(req.body.searchParams) : 'undefined'}`);
+    console.log(`[${timestamp}]   - include_filter_analysis: ${req.body.include_filter_analysis !== undefined ? req.body.include_filter_analysis : 'undefined'}`);
+    console.log(`[${timestamp}]   - creator_filter: ${req.body.creator_filter || 'undefined'}`);
+    console.log(`[${timestamp}]   - record_type_filter: ${req.body.record_type_filter || 'undefined'}`);
+    console.log(`[${timestamp}]   - tag_filter: ${req.body.tag_filter || 'undefined'}`);
+    
+    // Log conversation history with full content
+    if (req.body.conversationHistory) {
+        try {
+            let parsedHistory;
+            if (typeof req.body.conversationHistory === 'string') {
+                parsedHistory = JSON.parse(req.body.conversationHistory);
+            } else {
+                parsedHistory = req.body.conversationHistory;
+            }
+            console.log(`[${timestamp}]   - conversationHistory: ${Array.isArray(parsedHistory) ? `${parsedHistory.length} messages` : 'non-array'}`);
+            if (Array.isArray(parsedHistory) && parsedHistory.length > 0) {
+                console.log(`[${timestamp}]     Conversation History Content:`);
+                parsedHistory.forEach((msg, idx) => {
+                    const role = msg.role || 'unknown';
+                    const content = msg.content || msg.text || '';
+                    console.log(`[${timestamp}]       [${idx}] ${role}: "${content.substring(0, 100)}${content.length > 100 ? '...' : ''}"`);
+                });
+            }
+        } catch (err) {
+            console.log(`[${timestamp}]   - conversationHistory: ERROR parsing - ${err.message}`);
+            console.log(`[${timestamp}]     Raw value: ${typeof req.body.conversationHistory === 'string' ? req.body.conversationHistory.substring(0, 200) : JSON.stringify(req.body.conversationHistory).substring(0, 200)}`);
+        }
+    } else {
+        console.log(`[${timestamp}]   - conversationHistory: undefined`);
+    }
+    
+    // Log voice configuration with full content
+    if (req.body.voiceConfig) {
+        try {
+            const parsedVoiceConfig = typeof req.body.voiceConfig === 'string' ? JSON.parse(req.body.voiceConfig) : req.body.voiceConfig;
+            console.log(`[${timestamp}]   - voiceConfig: provided`);
+            console.log(`[${timestamp}]     Full voiceConfig: ${JSON.stringify(parsedVoiceConfig, null, 2)}`);
+        } catch (err) {
+            console.log(`[${timestamp}]   - voiceConfig: ERROR parsing - ${err.message}`);
+            console.log(`[${timestamp}]     Raw value: ${typeof req.body.voiceConfig === 'string' ? req.body.voiceConfig.substring(0, 200) : JSON.stringify(req.body.voiceConfig).substring(0, 200)}`);
+        }
+    } else {
+        console.log(`[${timestamp}]   - voiceConfig: undefined`);
+    }
+    
+    // Log file information
+    if (req.file) {
+        console.log(`[${timestamp}] 📎 Audio File:`);
+        console.log(`[${timestamp}]   - filename: ${req.file.originalname || 'unnamed'}`);
+        console.log(`[${timestamp}]   - mimetype: ${req.file.mimetype || 'unknown'}`);
+        console.log(`[${timestamp}]   - size: ${req.file.size || req.file.buffer?.length || 0} bytes`);
+        console.log(`[${timestamp}]   - fieldname: ${req.file.fieldname || 'audio'}`);
+    } else {
+        console.log(`[${timestamp}] 📎 Audio File: none`);
+    }
+    
+    // Log all other body fields that might exist
+    const loggedFields = new Set([
+        'text', 'userInput', 'processing_mode', 'model', 'voice_id', 'engine', 'speed', 'return_audio',
+        'dialogueId', 'pinnedDidTx', 'pinnedJsonData', 'existing_search_results', 'existingContext',
+        'searchParams', 'include_filter_analysis', 'creator_filter', 'record_type_filter', 'tag_filter',
+        'conversationHistory', 'voiceConfig'
+    ]);
+    
+    const otherFields = Object.keys(req.body).filter(key => !loggedFields.has(key));
+    if (otherFields.length > 0) {
+        console.log(`[${timestamp}] 📋 Additional Request Fields:`);
+        otherFields.forEach(field => {
+            const value = req.body[field];
+            if (typeof value === 'string' && value.length > 200) {
+                console.log(`[${timestamp}]   - ${field}: "${value.substring(0, 200)}..." (${value.length} chars)`);
+            } else {
+                console.log(`[${timestamp}]   - ${field}: ${JSON.stringify(value)}`);
+            }
+        });
+    }
+    
+    // Log request headers (selective)
+    console.log(`[${timestamp}] 📡 Request Headers:`);
+    console.log(`[${timestamp}]   - content-type: ${req.headers['content-type'] || 'undefined'}`);
+    console.log(`[${timestamp}]   - content-length: ${req.headers['content-length'] || 'undefined'}`);
+    console.log(`[${timestamp}]   - user-agent: ${req.headers['user-agent'] ? req.headers['user-agent'].substring(0, 100) : 'undefined'}`);
+    
+    console.log(`${'='.repeat(80)}\n`);
     
     const startTime = Date.now();
+    console.log(`[${timestamp}] ⏱️  Request processing started (ID: ${requestId})`);
     const processingMetrics = {
         stt_time_ms: 0,
         smart_turn_time_ms: 0,
@@ -1405,7 +1501,9 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                             'female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
                             'male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
                             'default': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
-                            'male_british': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }
+                            'alfred': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'alice': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'male_british': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }  // Legacy alias for alfred
                         };
                         
                         return voiceMatrix[voice_id] || voiceMatrix['default'];
@@ -2034,27 +2132,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
         }
         
         // Parse voice configuration from frontend
-        let voiceSettings = {
-            engine: 'edge_tts', // Use remote backend TTS
-            enabled: true,
-            edge: {
-                selectedVoice: 'en-GB-RyanNeural',
-                speed: 1.0,
-                pitch: 0,
-                volume: 0
-            }
-        };
-        
-        if (req.body.voiceConfig) {
-            try {
-                const parsedVoiceConfig = JSON.parse(req.body.voiceConfig);
-                voiceSettings = { ...voiceSettings, ...parsedVoiceConfig };
-                // console.log('🎵 Parsed voice configuration:', voiceSettings.engine, 'engine selected');
-            } catch (error) {
-                console.error('Error parsing voice configuration:', error);
-                // Continue with defaults
-            }
-        }
+        // Match /chat endpoint: use req.body.engine and req.body.voice_id directly
+        // No need to parse voiceConfig - keep it simple like /chat
         
         // Decide on thinking indicator: 30% text, 70% sound loop
         const useTextResponse = Math.random() < 0.3;
@@ -2113,7 +2192,8 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                 const {
                     // model = 'grok-2',
                     model = 'parallel',
-                    voice_id = 'onwK4e9ZLuTAKqWW03F9', // Daniel - Male British voice
+                    voice_id = 'en-GB-RyanNeural',
+                    engine = 'edge_tts',
                     speed = 1.0,
                     creator_filter = null,
                     record_type_filter = null,
@@ -2122,67 +2202,77 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
 
                 let responseText = '';
                 
-                // Configure voice settings for adaptive TTS
-                // Use parsed voiceSettings from frontend, or fallback to defaults
-                const selectedEngine = voiceSettings.engine || 'edge_tts';
-                const hasElevenLabsKey = !!process.env.ELEVENLABS_API_KEY;
+                // Match /chat endpoint: use req.body.engine and req.body.voice_id directly
+                // Build simple voiceConfig from request params (same as /chat)
+                const selectedEngine = engine || 'edge_tts';
                 
-                // Build voiceConfig based on selected engine
+                // Convert legacy voice_id to gender/emotion format for Chatterbox (same as /chat)
+                function convertVoiceIdToChatterboxParams(voice_id) {
+                    const voiceMatrix = {
+                        'female_1': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'female_2': { gender: 'female', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                        'female_expressive': { gender: 'female', emotion: 'expressive', exaggeration: 0.6, cfg_weight: 0.7 },
+                        'female_calm': { gender: 'female', emotion: 'calm', exaggeration: 0.2, cfg_weight: 0.5 },
+                        'female_dramatic': { gender: 'female', emotion: 'dramatic', exaggeration: 0.9, cfg_weight: 0.8 },
+                        'female_neutral': { gender: 'female', emotion: 'neutral', exaggeration: 0.3, cfg_weight: 0.6 },
+                        'male_1': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'male_2': { gender: 'male', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                        'male_expressive': { gender: 'male', emotion: 'expressive', exaggeration: 0.6, cfg_weight: 0.7 },
+                        'male_calm': { gender: 'male', emotion: 'calm', exaggeration: 0.2, cfg_weight: 0.5 },
+                        'male_dramatic': { gender: 'male', emotion: 'dramatic', exaggeration: 0.9, cfg_weight: 0.8 },
+                        'male_neutral': { gender: 'male', emotion: 'neutral', exaggeration: 0.3, cfg_weight: 0.6 },
+                        'chatterbox': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'edge_female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'edge_male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'edge_expressive': { gender: 'female', emotion: 'dramatic', exaggeration: 0.8, cfg_weight: 0.8 },
+                        'female': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'male': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'default': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'alfred': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'alice': { gender: 'female', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 },
+                        'male_british': { gender: 'male', emotion: 'expressive', exaggeration: 0.5, cfg_weight: 0.7 }  // Legacy alias for alfred
+                    };
+                    return voiceMatrix[voice_id] || voiceMatrix['default'];
+                }
+                
+                const chatterboxParams = convertVoiceIdToChatterboxParams(voice_id);
+                
+                // Build voiceConfig for streaming TTS (simplified to match /chat approach)
                 const voiceConfig = {
                     engine: selectedEngine,
-                    voiceId: voice_id || null,
-                    voiceSettings: {
-                        stability: 0.5,
-                        similarity_boost: 0.75,
-                        style: 0.0,
-                        use_speaker_boost: true
-                    }
+                    voiceId: voice_id || null
                 };
                 
-                // Configure engine-specific settings
-                if (selectedEngine === 'elevenlabs' && hasElevenLabsKey) {
-                    voiceConfig.elevenlabs = {
-                        selectedVoice: voice_id || 'onwK4e9ZLuTAKqWW03F9',
-                        speed: speed || 1.0,
-                        stability: voiceSettings.elevenlabs?.stability || 0.5,
-                        similarity_boost: voiceSettings.elevenlabs?.similarity_boost || 0.75,
-                        model_id: voiceSettings.elevenlabs?.model_id || 'eleven_turbo_v2',
-                        style: voiceSettings.elevenlabs?.style || 0.0,
-                        use_speaker_boost: voiceSettings.elevenlabs?.use_speaker_boost !== false
-                    };
-                } else if (selectedEngine === 'maya1') {
-                    // Maya1 configuration
+                // Configure engine-specific settings (same structure as /chat uses)
+                if (selectedEngine === 'maya1') {
                     voiceConfig.maya1 = {
-                        selectedVoice: voiceSettings.maya1?.selectedVoice || voice_id || 'male_british',
-                        exaggeration: voiceSettings.maya1?.exaggeration || 0.7,
-                        cfg_weight: voiceSettings.maya1?.cfg_weight || 0.3
+                        selectedVoice: voice_id || 'alfred',
+                        exaggeration: chatterboxParams.exaggeration,
+                        cfg_weight: chatterboxParams.cfg_weight
                     };
-                    // Also set chatterbox config for fallback compatibility
                     voiceConfig.chatterbox = {
-                        selectedVoice: voiceConfig.maya1.selectedVoice,
-                        gender: 'male',
-                        emotion: 'neutral',
-                        exaggeration: voiceConfig.maya1.exaggeration,
-                        cfg_weight: voiceConfig.maya1.cfg_weight,
+                        selectedVoice: voice_id || 'alfred',
+                        gender: chatterboxParams.gender,
+                        emotion: chatterboxParams.emotion,
+                        exaggeration: chatterboxParams.exaggeration,
+                        cfg_weight: chatterboxParams.cfg_weight,
                         voiceCloning: { enabled: false }
                     };
                 } else if (selectedEngine === 'edge_tts') {
-                    // Edge TTS configuration
                     voiceConfig.edge = {
-                        selectedVoice: voiceSettings.edge?.selectedVoice || voice_id || 'en-GB-RyanNeural',
-                        speed: voiceSettings.edge?.speed || speed || 1.0,
-                        pitch: voiceSettings.edge?.pitch || 0,
-                        volume: voiceSettings.edge?.volume || 0
+                        selectedVoice: voice_id || 'en-GB-RyanNeural',
+                        speed: speed || 1.0,
+                        pitch: 0,
+                        volume: 0
                     };
                 } else if (selectedEngine === 'chatterbox') {
-                    // Chatterbox configuration
                     voiceConfig.chatterbox = {
-                        selectedVoice: voiceSettings.chatterbox?.selectedVoice || voice_id || 'female_expressive',
-                        gender: voiceSettings.chatterbox?.gender || 'female',
-                        emotion: voiceSettings.chatterbox?.emotion || 'expressive',
-                        exaggeration: voiceSettings.chatterbox?.exaggeration || 0.6,
-                        cfg_weight: voiceSettings.chatterbox?.cfg_weight || 0.7,
-                        voiceCloning: voiceSettings.chatterbox?.voiceCloning || { enabled: false }
+                        selectedVoice: voice_id || 'female_expressive',
+                        gender: chatterboxParams.gender,
+                        emotion: chatterboxParams.emotion,
+                        exaggeration: chatterboxParams.exaggeration,
+                        cfg_weight: chatterboxParams.cfg_weight,
+                        voiceCloning: { enabled: false }
                     };
                 } else {
                     // Fallback: use chatterbox if engine not recognized
@@ -2190,15 +2280,15 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
                     voiceConfig.engine = 'chatterbox';
                     voiceConfig.chatterbox = {
                         selectedVoice: voice_id || 'female_expressive',
-                        gender: 'female',
-                        emotion: 'expressive',
-                        exaggeration: 0.6,
-                        cfg_weight: 0.7,
+                        gender: chatterboxParams.gender,
+                        emotion: chatterboxParams.emotion,
+                        exaggeration: chatterboxParams.exaggeration,
+                        cfg_weight: chatterboxParams.cfg_weight,
                         voiceCloning: { enabled: false }
                     };
                 }
                 
-                console.log(`[Voice Converse] Using TTS engine: ${voiceConfig.engine} (from voiceConfig: ${selectedEngine})`);
+                console.log(`[Voice Converse] Using TTS engine: ${voiceConfig.engine} (from req.body.engine: ${selectedEngine})`);
 
                 const handleTextChunk = async (textChunk) => {
                     responseText += textChunk;
