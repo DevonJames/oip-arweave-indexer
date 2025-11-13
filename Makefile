@@ -1203,13 +1203,14 @@ backup-gun-records: ## Backup all GUN records from Elasticsearch to JSON file
 	fi; \
 	echo "$(GREEN)✅ Found container: $$CONTAINER_NAME$(NC)"; \
 	echo "$(BLUE)📂 Copying backup script to container...$(NC)"; \
-	docker cp scripts/backup-gun-records.js $$CONTAINER_NAME:/tmp/backup-gun-records.js; \
+	docker exec $$CONTAINER_NAME mkdir -p /usr/src/app/scripts; \
+	docker cp scripts/backup-gun-records.js $$CONTAINER_NAME:/usr/src/app/scripts/backup-gun-records.js; \
 	echo "$(BLUE)🚀 Running backup script...$(NC)"; \
-	docker exec $$CONTAINER_NAME node /tmp/backup-gun-records.js || \
-	(docker exec -it $$CONTAINER_NAME node /tmp/backup-gun-records.js); \
+	docker exec -w /usr/src/app $$CONTAINER_NAME node scripts/backup-gun-records.js || \
+	(docker exec -it -w /usr/src/app $$CONTAINER_NAME node scripts/backup-gun-records.js); \
 	EXIT_CODE=$$?; \
 	echo "$(BLUE)🧹 Cleaning up...$(NC)"; \
-	docker exec $$CONTAINER_NAME rm -f /tmp/backup-gun-records.js; \
+	docker exec $$CONTAINER_NAME rm -f /usr/src/app/scripts/backup-gun-records.js; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo "$(GREEN)✅ Backup completed successfully$(NC)"; \
 		echo "$(BLUE)💡 Backup file saved to project directory$(NC)"; \
@@ -1218,10 +1219,11 @@ backup-gun-records: ## Backup all GUN records from Elasticsearch to JSON file
 		exit $$EXIT_CODE; \
 	fi
 
-restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.json)
+restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.json, REPUBLISH=true to also republish to GUN)
 	@if [ -z "$(FILE)" ]; then \
 		echo "$(RED)❌ FILE parameter required$(NC)"; \
 		echo "$(YELLOW)Usage: make restore-gun-records FILE=gun-backup-2025-11-13.json$(NC)"; \
+		echo "$(YELLOW)       make restore-gun-records FILE=gun-backup-2025-11-13.json REPUBLISH=true$(NC)"; \
 		exit 1; \
 	fi; \
 	if [ ! -f "$(FILE)" ]; then \
@@ -1232,7 +1234,12 @@ restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.js
 		echo "$(RED)❌ Restore script not found: scripts/restore-gun-records.js$(NC)"; \
 		exit 1; \
 	fi; \
-	echo "$(BLUE)📦 Restoring GUN records from $(FILE)...$(NC)"; \
+	if [ "$(REPUBLISH)" = "true" ]; then \
+		echo "$(BLUE)📦 Restoring GUN records from $(FILE) AND republishing to GUN network...$(NC)"; \
+	else \
+		echo "$(BLUE)📦 Restoring GUN records from $(FILE) to Elasticsearch only...$(NC)"; \
+		echo "$(YELLOW)💡 To also republish to GUN network, add REPUBLISH=true$(NC)"; \
+	fi; \
 	CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep -E "oip|fitnessally" | grep -v elasticsearch | grep -v kibana | grep -v ngrok | head -1); \
 	if [ -z "$$CONTAINER_NAME" ]; then \
 		echo "$(RED)❌ No OIP container found. Is the service running?$(NC)"; \
@@ -1240,14 +1247,19 @@ restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.js
 	fi; \
 	echo "$(GREEN)✅ Found container: $$CONTAINER_NAME$(NC)"; \
 	echo "$(BLUE)📂 Copying restore script to container...$(NC)"; \
-	docker cp scripts/restore-gun-records.js $$CONTAINER_NAME:/tmp/restore-gun-records.js; \
+	docker exec $$CONTAINER_NAME mkdir -p /usr/src/app/scripts; \
+	docker cp scripts/restore-gun-records.js $$CONTAINER_NAME:/usr/src/app/scripts/restore-gun-records.js; \
 	echo "$(BLUE)📂 Copying backup file to container...$(NC)"; \
-	docker cp "$(FILE)" $$CONTAINER_NAME:/tmp/backup-restore.json; \
+	docker cp "$(FILE)" $$CONTAINER_NAME:/usr/src/app/backup-restore.json; \
 	echo "$(BLUE)🚀 Running restore script...$(NC)"; \
-	docker exec $$CONTAINER_NAME node /tmp/restore-gun-records.js /tmp/backup-restore.json; \
+	if [ "$(REPUBLISH)" = "true" ]; then \
+		docker exec -w /usr/src/app -e REPUBLISH_TO_GUN=true $$CONTAINER_NAME node scripts/restore-gun-records.js backup-restore.json; \
+	else \
+		docker exec -w /usr/src/app $$CONTAINER_NAME node scripts/restore-gun-records.js backup-restore.json; \
+	fi; \
 	EXIT_CODE=$$?; \
 	echo "$(BLUE)🧹 Cleaning up...$(NC)"; \
-	docker exec $$CONTAINER_NAME rm -f /tmp/restore-gun-records.js /tmp/backup-restore.json; \
+	docker exec $$CONTAINER_NAME rm -f /usr/src/app/scripts/restore-gun-records.js /usr/src/app/backup-restore.json; \
 	if [ $$EXIT_CODE -eq 0 ]; then \
 		echo "$(GREEN)✅ Restore completed successfully$(NC)"; \
 	else \
