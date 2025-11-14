@@ -66,7 +66,33 @@ class OIPGunRegistry {
                 nodeId: this.nodeId,
                 timestamp: Date.now()
             };
+            
+            // Store the registry entry at the full path
             await this.gunHelper.putRecord(indexEntry, `${globalIndexKey}:${soul}`);
+            
+            // IMPORTANT: Also update the parent node to include a reference to this entry
+            // GUN doesn't automatically create parent-child relationships, so we need to explicitly
+            // store a reference on the parent node for discovery to work
+            try {
+                const parentIndexData = await this.gunHelper.getRecord(globalIndexKey);
+                // Extract the actual data object (remove data/meta/oip wrapper if present)
+                const parentIndex = parentIndexData?.data || parentIndexData || {};
+                
+                // Add this entry to the parent index
+                parentIndex[soul] = indexEntry;
+                
+                // Store the updated parent index
+                await this.gunHelper.putRecord({ 
+                    data: parentIndex,
+                    oip: {
+                        recordType: 'registryIndex',
+                        indexedAt: new Date().toISOString()
+                    }
+                }, globalIndexKey);
+            } catch (parentError) {
+                // If parent update fails, log but don't fail registration
+                console.warn(`⚠️ Failed to update parent registry index ${globalIndexKey}: ${parentError.message}`);
+            }
             
             // console.log('✅ Registered OIP record in GUN registry:', recordDid);
             
