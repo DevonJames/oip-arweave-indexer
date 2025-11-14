@@ -4960,6 +4960,91 @@ async function keepDBUpToDate(remapTemplates) {
     }
 }
 
+/**
+ * Query a specific block range for OIP transactions
+ * Used to fill gaps when GraphQL skips blocks
+ */
+async function queryBlockRange(minBlock, maxBlock, endpoints) {
+    const transactions = [];
+    let hasNextPage = true;
+    let afterCursor = null;
+    const maxRetries = 3;
+    
+    while (hasNextPage && transactions.length < 10000) { // Limit per chunk to prevent memory issues
+        const query = gql`
+            query {
+                transactions(
+                    block: {min: ${minBlock}, max: ${maxBlock}},
+                    tags: [
+                        { name: "Index-Method", values: ["OIP"] },
+                        { name: "Ver", values: ["0.8.0"] }
+                    ],
+                    first: 100,
+                    sort: HEIGHT_ASC,
+                    after: ${afterCursor ? `"${afterCursor}"` : null}
+                ) {
+                    edges {
+                        node {
+                            id
+                            block {
+                                height
+                                timestamp
+                            }
+                        }
+                        cursor
+                    }
+                    pageInfo {
+                        hasNextPage
+                    }
+                }
+            }
+        `;
+        
+        let response = null;
+        let endpointSuccess = false;
+        
+        for (const endpoint of endpoints) {
+            let retryCount = 0;
+            endpointSuccess = false;
+            
+            while (retryCount < maxRetries && !endpointSuccess) {
+                try {
+                    response = await request(endpoint, query);
+                    endpointSuccess = true;
+                    break;
+                } catch (error) {
+                    retryCount++;
+                    if (retryCount >= maxRetries) {
+                        break;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
+                }
+            }
+            
+            if (endpointSuccess) break;
+        }
+        
+        if (!response) {
+            console.warn(`  ⚠️  Failed to query blocks ${minBlock}-${maxBlock}, skipping...`);
+            break;
+        }
+        
+        const pageTransactions = response.transactions.edges.map(edge => ({
+            id: edge.node.id,
+            blockHeight: edge.node.block?.height || null,
+            blockTimestamp: edge.node.block?.timestamp || null
+        }));
+        
+        transactions.push(...pageTransactions);
+        hasNextPage = response.transactions.pageInfo.hasNextPage;
+        afterCursor = response.transactions.edges.length > 0
+            ? response.transactions.edges[response.transactions.edges.length - 1].cursor
+            : null;
+    }
+    
+    return transactions;
+}
+
 async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     // console.log('foundinDB:', foundInDB);
     await ensureIndexExists();
@@ -4995,6 +5080,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                         { name: "Ver", values: ["0.8.0"] }
                     ],
                     first: 100,
+                    sort: HEIGHT_ASC,
                     after: ${afterCursor ? `"${afterCursor}"` : null}
                 ) {
                     edges {
@@ -5078,15 +5164,20 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
             blockTimestamp: edge.node.block?.timestamp || null
         }));
         
-        // Log order from GraphQL for debugging
-        if (transactionCount === 0 && transactions.length > 0) {
-            console.log(`🔍 [DEBUG] GraphQL returned ${transactions.length} transactions. First 3 block heights:`, 
-                transactions.slice(0, 3).map(tx => tx.blockHeight).filter(Boolean));
-            if (transactions.length > 1) {
-                const heights = transactions.map(tx => tx.blockHeight).filter(Boolean);
+        // Log order from GraphQL for debugging (check first page and periodically)
+        if ((transactionCount === 0 || transactionCount % 500 === 0) && transactions.length > 0) {
+            const heights = transactions.map(tx => tx.blockHeight).filter(Boolean);
+            if (heights.length > 0) {
+                const minHeight = Math.min(...heights);
+                const maxHeight = Math.max(...heights);
+                console.log(`🔍 [DEBUG] GraphQL page: Blocks ${minHeight} → ${maxHeight} (${transactions.length} transactions, ${heights.length} with block height)`);
                 if (heights.length >= 2) {
                     const isDescending = heights[0] > heights[1];
                     console.log(`🔍 [DEBUG] GraphQL order: ${isDescending ? 'DESCENDING' : 'ASCENDING'} (${heights[0]} → ${heights[1]})`);
+                }
+                // Check for gaps on first page
+                if (transactionCount === 0 && minHeight > min) {
+                    console.log(`⚠️  [DEBUG] GraphQL skipped blocks ${min} to ${minHeight - 1} (${minHeight - min} blocks skipped)`);
                 }
             }
         }
@@ -5119,13 +5210,84 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     // This prevents buffering entire transaction objects in memory
     console.log(`🔎 [searchArweaveForNewTransactions] GraphQL query completed. Found ${transactionCount} transactions with OIP tags (Index-Method:OIP, Ver:0.8.0) from block ${min} onwards`);
     
-    // Sort transactions by block height (chronological order: lowest to highest)
-    // This ensures we process transactions in the order they were created on-chain
+    // Check for gaps and fill them with chunked queries
     const transactionsWithBlockHeight = transactionsToProcess.filter(tx => tx.blockHeight !== null);
     const transactionsWithoutBlockHeight = transactionsToProcess.filter(tx => tx.blockHeight === null);
     
+    let gapFilledTransactions = [];
+    
+    if (transactionsWithBlockHeight.length > 0) {
+        const heights = transactionsWithBlockHeight.map(tx => tx.blockHeight).sort((a, b) => a - b);
+        const minBlock = heights[0];
+        const maxBlock = heights[heights.length - 1];
+        console.log(`🔍 [DEBUG] Block height range in results: ${minBlock} → ${maxBlock} (${transactionsWithBlockHeight.length} transactions with block height)`);
+        console.log(`🔍 [DEBUG] Query was for block >= ${min}, but lowest block found: ${minBlock}`);
+        
+        // Detect gap and fill it with chunked queries
+        if (minBlock > min) {
+            const gapSize = minBlock - min;
+            console.log(`⚠️  [GAP DETECTED] Missing blocks ${min} to ${minBlock - 1} (${gapSize} blocks). Querying in chunks...`);
+            
+            // Query in chunks to fill the gap
+            // Use smaller chunks for large gaps to avoid overwhelming GraphQL
+            const CHUNK_SIZE = gapSize > 100000 ? 50000 : gapSize > 50000 ? 25000 : gapSize > 10000 ? 5000 : 1000;
+            let chunkStart = min;
+            let chunkEnd = Math.min(min + CHUNK_SIZE - 1, minBlock - 1);
+            let chunkCount = 0;
+            
+            while (chunkStart < minBlock) {
+                chunkCount++;
+                console.log(`  🔍 [Chunk ${chunkCount}] Querying blocks ${chunkStart} → ${chunkEnd}...`);
+                
+                try {
+                    const chunkTransactions = await queryBlockRange(chunkStart, chunkEnd, endpoints);
+                    if (chunkTransactions.length > 0) {
+                        console.log(`  ✅ [Chunk ${chunkCount}] Found ${chunkTransactions.length} transactions in blocks ${chunkStart} → ${chunkEnd}`);
+                        gapFilledTransactions = gapFilledTransactions.concat(chunkTransactions);
+                    } else {
+                        console.log(`  ⏭️  [Chunk ${chunkCount}] No transactions found in blocks ${chunkStart} → ${chunkEnd}`);
+                    }
+                } catch (error) {
+                    console.error(`  ❌ [Chunk ${chunkCount}] Error querying blocks ${chunkStart} → ${chunkEnd}:`, error.message);
+                }
+                
+                chunkStart = chunkEnd + 1;
+                chunkEnd = Math.min(chunkStart + CHUNK_SIZE - 1, minBlock - 1);
+                
+                // Rate limiting: small delay between chunks
+                if (chunkStart < minBlock) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+            
+            if (gapFilledTransactions.length > 0) {
+                console.log(`✅ [GAP FILLED] Found ${gapFilledTransactions.length} additional transactions in gap blocks ${min} → ${minBlock - 1}`);
+            } else {
+                console.log(`⚠️  [GAP] No transactions found in gap blocks ${min} → ${minBlock - 1} (may be empty or GraphQL limitation)`);
+            }
+        }
+    }
+    
+    // Merge all transactions and deduplicate by ID
+    const allTransactions = [...gapFilledTransactions, ...transactionsToProcess];
+    const transactionMap = new Map();
+    for (const tx of allTransactions) {
+        if (!transactionMap.has(tx.id)) {
+            transactionMap.set(tx.id, tx);
+        }
+    }
+    const deduplicatedTransactions = Array.from(transactionMap.values());
+    
+    if (gapFilledTransactions.length > 0) {
+        console.log(`📊 [MERGE] Total: ${deduplicatedTransactions.length} transactions (${gapFilledTransactions.length} from gap + ${transactionsToProcess.length} from main query, ${allTransactions.length - deduplicatedTransactions.length} duplicates removed)`);
+    }
+    
+    // Sort deduplicated transactions by block height (chronological order: lowest to highest)
+    const deduplicatedWithBlockHeight = deduplicatedTransactions.filter(tx => tx.blockHeight !== null);
+    const deduplicatedWithoutBlockHeight = deduplicatedTransactions.filter(tx => tx.blockHeight === null);
+    
     // Sort by block height ascending (lowest block number first = chronological)
-    transactionsWithBlockHeight.sort((a, b) => {
+    deduplicatedWithBlockHeight.sort((a, b) => {
         if (a.blockHeight === null && b.blockHeight === null) return 0;
         if (a.blockHeight === null) return 1; // Put nulls at end
         if (b.blockHeight === null) return -1;
@@ -5133,7 +5295,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     });
     
     // Combine: transactions with block height (sorted) first, then those without
-    const sortedTransactions = transactionsWithBlockHeight.concat(transactionsWithoutBlockHeight);
+    const sortedTransactions = deduplicatedWithBlockHeight.concat(deduplicatedWithoutBlockHeight);
     
     if (sortedTransactions.length > 0 && sortedTransactions[0].blockHeight && sortedTransactions[sortedTransactions.length - 1].blockHeight) {
         console.log(`🔍 [DEBUG] Sorted transactions: Block ${sortedTransactions[0].blockHeight} → Block ${sortedTransactions[sortedTransactions.length - 1].blockHeight} (chronological order)`);
