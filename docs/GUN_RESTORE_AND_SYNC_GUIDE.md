@@ -11,7 +11,63 @@ This guide walks you through:
 - You have a recent backup of GUN records from fitnessally
 - Both nodes have Elasticsearch running and accessible
 
-## Step 1: Verify Current Backup (if needed)
+## Step 1: Check Current GUN Record Count
+
+Before starting, check how many GUN records you currently have on fitnessally:
+
+```bash
+cd ~/Desktop/development/fitnessally/oip-arweave-indexer
+
+# Option 1: Use the backup script (it will show the count)
+make backup-gun-records
+
+# Option 2: Quick count check (if script exists)
+docker exec fitnessally-oip-gpu-1 node -e "
+const { elasticClient } = require('./helpers/elasticsearch');
+elasticClient.count({
+  index: 'records',
+  body: {
+    query: {
+      bool: {
+        should: [
+          { prefix: { 'oip.did': 'did:gun:' } },
+          { prefix: { 'oip.didTx': 'did:gun:' } },
+          { term: { 'oip.storage': 'gun' } }
+        ],
+        minimum_should_match: 1
+      }
+    }
+  }
+}).then(r => console.log('GUN records:', r.count));
+"
+
+# Option 3: Direct Elasticsearch query
+docker exec fitnessally-elasticsearch-1 curl -s 'http://localhost:9200/records/_count' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": {
+      "bool": {
+        "should": [
+          { "prefix": { "oip.did": "did:gun:" } },
+          { "prefix": { "oip.didTx": "did:gun:" } },
+          { "term": { "oip.storage": "gun" } }
+        ],
+        "minimum_should_match": 1
+      }
+    }
+  }' | jq '.count'
+```
+
+**Expected Result:** The backup script will show you the total count. **This is the number of records that should be restored to oip.**
+
+**Example output:**
+```
+✅ Found 1,234 GUN records total
+```
+
+**Note:** After restore, oip should have the **same count** (or very close, accounting for any duplicates that might be skipped).
+
+## Step 1b: Create Backup (if needed)
 
 If you don't have a recent backup, create one from fitnessally:
 
@@ -54,10 +110,23 @@ make restore-gun-records FILE=./data/gun-backup-YYYY-MM-DDTHH-MM-SS.json
 **Verify the restore worked:**
 ```bash
 # Check oip Elasticsearch for GUN records
-docker exec oip-elasticsearch-1 curl -s 'http://localhost:9200/records/_count?q=oip.storage:gun' | jq
+docker exec oip-elasticsearch-1 curl -s 'http://localhost:9200/records/_count' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": {
+      "bool": {
+        "should": [
+          { "prefix": { "oip.did": "did:gun:" } },
+          { "prefix": { "oip.didTx": "did:gun:" } },
+          { "term": { "oip.storage": "gun" } }
+        ],
+        "minimum_should_match": 1
+      }
+    }
+  }' | jq '.count'
 ```
 
-You should see a count matching your backup.
+**Expected:** The count should match (or be very close to) the count from Step 1. Small differences are normal if some records were duplicates or failed validation.
 
 ### 2.4: Republish to GUN network (full restore)
 
@@ -218,13 +287,26 @@ GUN sync runs automatically. Wait 5 minutes for the sync cycle to complete.
 
 ```bash
 # Check fitnessally Elasticsearch for GUN records
-docker exec fitnessally-elasticsearch-1 curl -s 'http://localhost:9200/records/_count?q=oip.storage:gun' | jq
+docker exec fitnessally-elasticsearch-1 curl -s 'http://localhost:9200/records/_count' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": {
+      "bool": {
+        "should": [
+          { "prefix": { "oip.did": "did:gun:" } },
+          { "prefix": { "oip.didTx": "did:gun:" } },
+          { "term": { "oip.storage": "gun" } }
+        ],
+        "minimum_should_match": 1
+      }
+    }
+  }' | jq '.count'
 
 # Query fitnessally API
 curl 'http://localhost:3015/api/records?source=gun&limit=10' | jq
 ```
 
-**Expected:** Records should start appearing as they sync from oip.
+**Expected:** Records should start appearing as they sync from oip. The count should gradually increase toward the original count from Step 1.
 
 ### 6.3: Monitor sync progress
 
@@ -242,13 +324,39 @@ After waiting 10-15 minutes (multiple sync cycles):
 
 ```bash
 # Count on oip
-docker exec oip-elasticsearch-1 curl -s 'http://localhost:9200/records/_count?q=oip.storage:gun' | jq
+docker exec oip-elasticsearch-1 curl -s 'http://localhost:9200/records/_count' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": {
+      "bool": {
+        "should": [
+          { "prefix": { "oip.did": "did:gun:" } },
+          { "prefix": { "oip.didTx": "did:gun:" } },
+          { "term": { "oip.storage": "gun" } }
+        ],
+        "minimum_should_match": 1
+      }
+    }
+  }' | jq '.count'
 
 # Count on fitnessally
-docker exec fitnessally-elasticsearch-1 curl -s 'http://localhost:9200/records/_count?q=oip.storage:gun' | jq
+docker exec fitnessally-elasticsearch-1 curl -s 'http://localhost:9200/records/_count' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": {
+      "bool": {
+        "should": [
+          { "prefix": { "oip.did": "did:gun:" } },
+          { "prefix": { "oip.didTx": "did:gun:" } },
+          { "term": { "oip.storage": "gun" } }
+        ],
+        "minimum_should_match": 1
+      }
+    }
+  }' | jq '.count'
 ```
 
-**Expected:** Counts should match (or be very close).
+**Expected:** Counts should match (or be very close). Both should match the original count from Step 1.
 
 ## Step 7: Test Bidirectional Sync
 

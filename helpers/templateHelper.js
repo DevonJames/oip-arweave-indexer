@@ -950,6 +950,16 @@ async function publishToGun(record, recordType, options = {}) {
                              accessControl.access_level === 'organization' ||
                              accessControl.access_level === 'shared');
         
+        // Compute soul BEFORE publishing so we can set DID in the record
+        const { GunHelper } = require('./gun');
+        const gunHelper = new GunHelper();
+        const soul = gunHelper.computeSoul(myPublicKey, options.localId, gunRecordData);
+        const did = `did:gun:${soul}`;
+        
+        // Set DID BEFORE publishing so it's stored correctly in GUN
+        gunRecordData.oip.did = did; // Primary field
+        gunRecordData.oip.didTx = did; // Backward compatibility
+        
         // Publish to GUN using publisher manager
         const publishResult = await publisherManager.publish(gunRecordData, {
             storage: 'gun',
@@ -962,9 +972,10 @@ async function publishToGun(record, recordType, options = {}) {
             userPassword: options.userPassword // May not be available during publishing
         });
         
-        // Update with final DID
-        gunRecordData.oip.did = publishResult.did; // Primary field
-        gunRecordData.oip.didTx = publishResult.did; // Backward compatibility
+        // Verify DID matches (should be the same since we computed it beforehand)
+        if (publishResult.did !== did) {
+            console.warn(`⚠️ DID mismatch: computed ${did}, got ${publishResult.did}. Using computed DID.`);
+        }
         
         // Index to Elasticsearch (reuse existing function!)
         await indexRecord(gunRecordData);
@@ -974,13 +985,16 @@ async function publishToGun(record, recordType, options = {}) {
         try {
             // MEMORY LEAK FIX: Use global gunSyncService instead of creating new instance
             if (global.gunSyncService) {
+                // Use computed soul and did for consistency
+                const registrySoul = publishResult.soul || soul;
+                const registryDid = publishResult.did || did;
                 await global.gunSyncService.registerLocalRecord(
-                    publishResult.did,
-                    publishResult.soul,
+                    registryDid,
+                    registrySoul,
                     recordType,
                     myPublicKey
                 );
-                console.log('📝 Record registered in GUN registry for sync:', publishResult.did);
+                console.log('📝 Record registered in GUN registry for sync:', registryDid);
             } else {
                 console.warn('⚠️ Global gunSyncService not available, skipping GUN registry sync');
             }
