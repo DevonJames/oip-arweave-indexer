@@ -102,7 +102,7 @@ const e = require('express');
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
 // let startBlockHeight = 1463762
 
-let startBlockHeight = 1579580;
+let startBlockHeight = 1579570;
 
 // Note: Elasticsearch client (v8+) uses Undici and manages connection pooling internally
 // The custom HTTP agent configuration is not compatible with newer ES clients
