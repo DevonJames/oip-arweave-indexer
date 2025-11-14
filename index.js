@@ -460,6 +460,20 @@ initializeIndices()
     }
     
     // If we reach here, it's not a CLI operation, so start the server
+    // But first check if we're in a CLI-only mode (no server needed)
+    const isCLIMode = args.deleteRecords || args.deleteAllRecords || args.deleteIndex || args.keepDBUpToDate;
+    
+    if (isCLIMode) {
+        console.log('⚠️  CLI mode detected but no matching command found. Exiting.');
+        console.log('💡 Available delete commands:');
+        console.log('   --deleteAllRecords --index <indexName>  (delete all records from index)');
+        console.log('   --deleteIndex --index <indexName>       (delete entire index)');
+        console.log('   --deleteRecords --index <indexName> --blockThreshold <number>');
+        console.log('   --deleteRecords --index <indexName> --did <did>');
+        console.log('   --deleteRecords --index <indexName> --indexedAt <timestamp>');
+        process.exit(1);
+    }
+    
     const serverInstance = server.listen(port, async () => {
       console.log(`Server is running on port ${port}`);
 
