@@ -242,13 +242,26 @@ async function getBlockHeightFromTxId(txId) {
         const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
         const gatewayUrls = [];
         
+        // Debug logging
+        if (process.env.DEBUG_ARIO === 'true') {
+            console.log(`🔍 [getBlockHeightFromTxId] ARIO_GATEWAY_ENABLED=${process.env.ARIO_GATEWAY_ENABLED}, useLocalGateway=${useLocalGateway}, gatewayHost=${gatewayHost}`);
+        }
+        
         // Add local gateway first if enabled
         if (useLocalGateway) {
             try {
                 const url = new URL(gatewayHost);
-                gatewayUrls.push(`${url.protocol}//${url.host}`);
+                const localGatewayUrl = `${url.protocol}//${url.host}`;
+                gatewayUrls.push(localGatewayUrl);
+                if (process.env.DEBUG_ARIO === 'true') {
+                    console.log(`🔍 [getBlockHeightFromTxId] Added local gateway: ${localGatewayUrl}`);
+                }
             } catch (error) {
                 console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+            }
+        } else {
+            if (process.env.DEBUG_ARIO === 'true') {
+                console.log(`🔍 [getBlockHeightFromTxId] Local gateway disabled, skipping`);
             }
         }
         
@@ -261,15 +274,26 @@ async function getBlockHeightFromTxId(txId) {
         // Try each gateway URL in order
         for (const gatewayBaseUrl of gatewayUrls) {
             try {
-                arweaveResponse = await axios.get(`${gatewayBaseUrl}/tx/${txId}/status`);
+                const requestUrl = `${gatewayBaseUrl}/tx/${txId}/status`;
+                if (process.env.DEBUG_ARIO === 'true') {
+                    console.log(`🔍 [getBlockHeightFromTxId] Trying: ${requestUrl}`);
+                }
+                arweaveResponse = await axios.get(requestUrl, {
+                    timeout: 10000 // 10 second timeout
+                });
                 if (gatewayBaseUrl !== gatewayUrls[0]) {
                     console.log(`✅ Using fallback gateway for tx status: ${gatewayBaseUrl}`);
+                } else if (process.env.DEBUG_ARIO === 'true') {
+                    console.log(`✅ Successfully used local gateway: ${gatewayBaseUrl}`);
                 }
                 break; // Success, exit loop
             } catch (error) {
                 lastError = error;
-                if (gatewayBaseUrl !== gatewayUrls[gatewayUrls.length - 1]) {
-                    console.warn(`⚠️  Failed to get tx status from ${gatewayBaseUrl}: ${error.message}. Trying fallback...`);
+                // Only log warnings for non-404 errors (404 might be expected if tx doesn't exist)
+                if (error.response?.status !== 404 && gatewayBaseUrl !== gatewayUrls[gatewayUrls.length - 1]) {
+                    console.warn(`⚠️  Failed to get tx status from ${gatewayBaseUrl}: ${error.message} (status: ${error.response?.status || 'N/A'}). Trying fallback...`);
+                } else if (process.env.DEBUG_ARIO === 'true') {
+                    console.log(`🔍 [getBlockHeightFromTxId] Failed ${gatewayBaseUrl}: ${error.message} (status: ${error.response?.status || 'N/A'})`);
                 }
             }
         }

@@ -72,6 +72,7 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(YELLOW)AR.IO Gateway Storage Management:$(NC)"
 	@echo "  make check-ario-storage        # Check AR.IO gateway storage location and disk space"
+	@echo "  make reset-ario-gateway        # Reset gateway to start from configured block height (deletes data)"
 	@echo ""
 	@echo "$(YELLOW)GUN Records Backup & Restore:$(NC)"
 	@echo "  make backup-gun-records        # Backup all GUN records from Elasticsearch to JSON file"
@@ -956,6 +957,43 @@ check-ario-storage: ## Check AR.IO gateway storage location and disk space
 	echo "$(BLUE)💡 Note: AR.IO gateway caches data on demand$(NC)"; \
 	echo "$(BLUE)   It doesn't store the full Arweave dataset - only what you access$(NC)"; \
 	echo "$(BLUE)   Block importing logs show metadata indexing, not full data storage$(NC)"
+
+reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height (requires ARIO_START_BLOCK_HEIGHT in .env)
+	@echo "$(YELLOW)⚠️  WARNING: This will delete all AR.IO gateway data and restart from the configured block height$(NC)"
+	@echo ""
+	@read -p "Are you sure you want to reset the AR.IO gateway? (yes/no): " confirm; \
+	if [ "$$confirm" != "yes" ]; then \
+		echo "$(RED)❌ Reset cancelled$(NC)"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep -E "^ARIO_GATEWAY_DATA_PATH=" | xargs); \
+		export $$(grep -v '^#' .env | grep -E "^ARIO_START_BLOCK_HEIGHT=" | xargs); \
+	fi; \
+	ARIO_DATA_PATH="$${ARIO_GATEWAY_DATA_PATH:-./ario_gateway_data}"; \
+	if [ -z "$$ARIO_START_BLOCK_HEIGHT" ]; then \
+		echo "$(RED)❌ Error: ARIO_START_BLOCK_HEIGHT not set in .env$(NC)"; \
+		echo "$(BLUE)💡 Set ARIO_START_BLOCK_HEIGHT=<block_height> in .env first$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(BLUE)📋 Configuration:$(NC)"; \
+	echo "  Start block height: $$ARIO_START_BLOCK_HEIGHT"; \
+	echo "  Data path: $$ARIO_DATA_PATH"; \
+	echo ""; \
+	echo "$(YELLOW)🛑 Stopping AR.IO gateway...$(NC)"; \
+	docker-compose stop ario-gateway 2>/dev/null || true; \
+	echo "$(YELLOW)🗑️  Deleting gateway data directory...$(NC)"; \
+	if [ -d "$$ARIO_DATA_PATH" ]; then \
+		rm -rf "$$ARIO_DATA_PATH"; \
+		echo "$(GREEN)✅ Data directory deleted$(NC)"; \
+	else \
+		echo "$(BLUE)ℹ️  Data directory doesn't exist (nothing to delete)$(NC)"; \
+	fi; \
+	echo ""; \
+	echo "$(GREEN)✅ Gateway reset complete$(NC)"; \
+	echo "$(BLUE)💡 Start the gateway with: make up-standard-gpu (or your profile)$(NC)"; \
+	echo "$(BLUE)   It will now sync from block $$ARIO_START_BLOCK_HEIGHT$(NC)"
 
 # Development helpers
 dev-build: ## Development: Build without cache

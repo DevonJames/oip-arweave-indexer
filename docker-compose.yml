@@ -514,10 +514,11 @@ services:
       # Enable GraphQL endpoint for local searches
       - GRAPHQL_ENABLED=true
       # Optional: Start syncing from a specific block height (set in .env as ARIO_START_BLOCK_HEIGHT)
-      # If not set, gateway will sync from genesis (block 0)
+      # If not set or empty, gateway will sync from genesis (block 0)
       # Example: ARIO_START_BLOCK_HEIGHT=1500000 (to start from block 1.5M)
-      # Note: Set START_BLOCK_HEIGHT only if ARIO_START_BLOCK_HEIGHT is defined in .env
-      - START_BLOCK_HEIGHT=${ARIO_START_BLOCK_HEIGHT:-}
+      # Note: AR.IO gateway expects START_HEIGHT (not START_BLOCK_HEIGHT)
+      # We map ARIO_START_BLOCK_HEIGHT from .env to START_HEIGHT for the container
+      - START_HEIGHT=${ARIO_START_BLOCK_HEIGHT:-}
       # Optional: Limit storage/cache size (set in .env as ARIO_MAX_STORAGE_GB)
       # If not set, gateway will cache on demand without hard limit
       # Example: ARIO_MAX_STORAGE_GB=100 (limit to 100GB cache)
