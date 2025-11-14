@@ -4919,7 +4919,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     // const min = (qtyRecordsInDB === 0) ? 1579817 : (maxArweaveBlockInDB + 1); // 12/31/2024 10pm
     
     // MEMORY LEAK FIX: Process transactions immediately instead of buffering
-    const MAX_TRANSACTIONS_PER_CYCLE = parseInt(process.env.MAX_TRANSACTIONS_PER_CYCLE) || 1000;
+    const MAX_TRANSACTIONS_PER_CYCLE = parseInt(process.env.MAX_TRANSACTIONS_PER_CYCLE) || 5000;
     let transactionCount = 0;
     let processedCount = 0;
     let hasNextPage = true;
