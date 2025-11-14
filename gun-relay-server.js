@@ -55,6 +55,13 @@ try {
                             return;
                         }
                         console.log(`💾 Storing data for soul: ${soul.substring(0, 50)}...`);
+                        console.log(`📊 Data structure:`, {
+                            hasData: !!data.data,
+                            hasOip: !!data.oip,
+                            hasMeta: !!data.meta,
+                            dataKeys: data.data ? Object.keys(data.data) : [],
+                            dataSize: JSON.stringify(data).length
+                        });
                         
                         // Sanitize data to remove any circular references or non-serializable values
                         // This helps prevent GUN radisk JSON errors
@@ -96,26 +103,22 @@ try {
                         
                         const sanitizedData = sanitizeData(data);
                         
-                        // Store data and ensure all nested properties are properly saved
+                        // Store data incrementally to avoid GUN radisk JSON errors with complex nested structures
+                        // GUN radisk has trouble with deeply nested objects, so we store top-level properties separately
                         const gunNode = gun.get(soul);
-
-                        // Put the main data structure
-                        gunNode.put(sanitizedData, (ack) => {
-                            if (ack.err) {
-                                console.error('❌ GUN put error:', ack.err);
-                                console.error('❌ Error details:', JSON.stringify(ack, null, 2));
-                                console.error('❌ Soul:', soul);
-                                console.error('❌ Data keys:', Object.keys(data || {}));
-                                if (!res.headersSent) {
-                                    res.writeHead(500);
-                                    res.end(JSON.stringify({ error: ack.err, details: 'GUN put operation failed' }));
-                                }
-                            } else {
+                        
+                        // Track completion of all storage operations
+                        let completedOps = 0;
+                        let totalOps = 0;
+                        let hasError = false;
+                        let errorMessage = null;
+                        
+                        const checkComplete = () => {
+                            completedOps++;
+                            if (completedOps >= totalOps && !hasError) {
                                 console.log('✅ Data stored successfully');
-
-                                // Note: Nested property setting removed - GUN's main put() should handle the structure
-                                // Additional nested puts were causing conflicts and JSON errors in radisk
-
+                                
+                                // Update publisher index after successful storage
                                 try {
                                     // Maintain a simple in-memory index by publisher hash prefix
                                     // Expected soul format: "<publisherHash>:<rest>"
@@ -124,8 +127,8 @@ try {
                                         const list = publisherIndex.get(prefix) || [];
                                         // Upsert by soul
                                         const existingIndex = list.findIndex(r => r.soul === soul);
-                                        const recordType = data?.oip?.recordType || data?.data?.oip?.recordType || null;
-                                        const record = { soul, data, recordType, storedAt: Date.now() };
+                                        const recordType = sanitizedData?.oip?.recordType || sanitizedData?.data?.oip?.recordType || null;
+                                        const record = { soul, data: sanitizedData, recordType, storedAt: Date.now() };
                                         if (existingIndex >= 0) list[existingIndex] = record; else list.push(record);
                                         publisherIndex.set(prefix, list);
 
@@ -136,14 +139,68 @@ try {
                                 } catch (e) {
                                     console.warn('⚠️ Failed to update in-memory index:', e.message);
                                 }
-
-                                // Add a small delay to ensure GUN has time to propagate changes
+                                
                                 setTimeout(() => {
-                                    res.writeHead(200);
-                                    res.end(JSON.stringify({ success: true, soul }));
+                                    if (!res.headersSent) {
+                                        res.writeHead(200);
+                                        res.end(JSON.stringify({ success: true, soul }));
+                                    }
                                 }, 100);
+                            } else if (hasError && completedOps >= totalOps) {
+                                if (!res.headersSent) {
+                                    res.writeHead(500);
+                                    res.end(JSON.stringify({ error: errorMessage || 'GUN storage failed', details: 'Failed to store all data properties' }));
+                                }
                             }
-                        });
+                        };
+                        
+                        // Store each top-level property separately to avoid radisk JSON errors
+                        if (sanitizedData.data) {
+                            totalOps++;
+                            gunNode.get('data').put(sanitizedData.data, (ack) => {
+                                if (ack && ack.err) {
+                                    console.error('❌ Error storing data property:', ack.err);
+                                    hasError = true;
+                                    errorMessage = ack.err;
+                                }
+                                checkComplete();
+                            });
+                        }
+                        
+                        if (sanitizedData.oip) {
+                            totalOps++;
+                            gunNode.get('oip').put(sanitizedData.oip, (ack) => {
+                                if (ack && ack.err) {
+                                    console.error('❌ Error storing oip property:', ack.err);
+                                    hasError = true;
+                                    errorMessage = ack.err;
+                                }
+                                checkComplete();
+                            });
+                        }
+                        
+                        if (sanitizedData.meta) {
+                            totalOps++;
+                            gunNode.get('meta').put(sanitizedData.meta, (ack) => {
+                                if (ack && ack.err) {
+                                    console.error('❌ Error storing meta property:', ack.err);
+                                    hasError = true;
+                                    errorMessage = ack.err;
+                                }
+                                checkComplete();
+                            });
+                        }
+                        
+                        // If no properties to store, send success immediately
+                        if (totalOps === 0) {
+                            console.log('⚠️ No data properties to store');
+                            res.writeHead(400);
+                            res.end(JSON.stringify({ error: 'No data properties found' }));
+                            return;
+                        }
+                        
+                        // Note: Removed bulk put fallback - incremental storage is the primary method
+                        // Bulk put was causing GUN radisk JSON errors with nested structures
                     } catch (parseError) {
                         console.error('❌ JSON parse error:', parseError);
                         if (!res.headersSent) {
