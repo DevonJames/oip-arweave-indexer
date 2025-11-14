@@ -11,6 +11,27 @@ PUBLIC_API_BASE_URL=
 # Arweave Configuration
 WALLET_FILE=config/arweave-keyfile.json
 
+# AR.IO Gateway Configuration (Local Arweave Gateway)
+# When running standard or standard-gpu profiles, a local AR.IO gateway is available
+# This provides direct access to the Arweave network with GraphQL support
+# Set to 'true' to use local gateway, 'false' to use arweave.net
+ARIO_GATEWAY_ENABLED=true
+# AR.IO Gateway Port (external host port - configurable for multi-stack deployments)
+# Default: 4000
+# Internal Docker network address (automatically uses service name and internal port 4000)
+# Note: Internal port is always 4000 (AR.IO gateway container requirement)
+# External port is configurable via ARIO_GATEWAY_PORT env var
+ARIO_GATEWAY_PORT=4000
+# Internal Docker network address (use service name - port always 4000 internally)
+ARIO_GATEWAY_HOST=http://ario-gateway:4000
+# External host address (for host access - uses ARIO_GATEWAY_PORT)
+# Note: This is automatically constructed from ARIO_GATEWAY_PORT, but can be overridden
+ARIO_GATEWAY_HOST_EXTERNAL=http://localhost:4000
+# AR.IO Gateway Data Storage Path
+# Path where AR.IO gateway cache/data will be stored on host filesystem
+# Default: ./ario_gateway_data (relative to project root)
+ARIO_GATEWAY_DATA_PATH=./ario_gateway_data
+
 # Turbo SDK Configuration (ArDrive)
 # These environment variables may help resolve ERR_INVALID_URL errors
 # TURBO_API=https://payment.ardrive.io
@@ -138,6 +159,7 @@ STT_SERVICE_PORT=8003
 TTS_SERVICE_PORT=8005
 SPEECH_SYNTHESIZER_PORT=8082
 GUN_RELAY_PORT=8765
+ARIO_GATEWAY_PORT=4000
 NGROK_DASHBOARD_PORT=4040
 DEBUG_PORT=9229
 NEXT_FRONTEND_PORT=3000

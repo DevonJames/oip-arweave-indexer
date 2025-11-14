@@ -14,6 +14,60 @@ const recordTypeIndexConfig = require('../config/recordTypesToIndex');
 const http = require('http');
 const https = require('https');
 
+// Helper function to get GraphQL endpoints (local AR.IO gateway first, then arweave.net fallback)
+function getGraphQLEndpoints() {
+    const endpoints = [];
+    const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
+    const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+    
+    // Always add local gateway first if enabled
+    if (useLocalGateway) {
+        try {
+            const url = new URL(gatewayHost);
+            endpoints.push(`${url.protocol}//${url.host}/graphql`);
+        } catch (error) {
+            console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+        }
+    }
+    
+    // Always add arweave.net as fallback
+    endpoints.push('https://arweave.net/graphql');
+    
+    return endpoints;
+}
+
+// Helper function to get GraphQL endpoint (backward compatibility - returns first endpoint)
+function getGraphQLEndpoint() {
+    return getGraphQLEndpoints()[0];
+}
+
+// Helper function to get gateway base URLs (local AR.IO gateway first, then arweave.net fallback)
+function getGatewayBaseUrls() {
+    const urls = [];
+    const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
+    const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+    
+    // Always add local gateway first if enabled
+    if (useLocalGateway) {
+        try {
+            const url = new URL(gatewayHost);
+            urls.push(`${url.protocol}//${url.host}`);
+        } catch (error) {
+            console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+        }
+    }
+    
+    // Always add arweave.net as fallback
+    urls.push('https://arweave.net');
+    
+    return urls;
+}
+
+// Helper function to get gateway base URL (backward compatibility - returns first URL)
+function getGatewayBaseUrl() {
+    return getGatewayBaseUrls()[0];
+}
+
 // Helper function for async filtering
 async function asyncFilter(array, predicate) {
     const results = await Promise.all(array.map(predicate));
@@ -4925,7 +4979,7 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     let hasNextPage = true;
     let afterCursor = null;  // Cursor for pagination
     let rateLimited = false;  // Track if we hit rate limit
-    const endpoint = 'https://arweave.net/graphql';
+    const endpoints = getGraphQLEndpoints(); // Get all endpoints (local first, then fallback)
     
     // Store transactions in reverse order as we process them (newest last, oldest first in processing)
     let transactionsToProcess = [];
@@ -4961,38 +5015,55 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
         `;
 
         let response;
-        let retryCount = 0;
-        const maxRetries = 3; // Retry up to 3 times
+        let lastError = null;
+        const maxRetries = 3; // Retry up to 3 times per endpoint
+        let endpointSuccess = false;
 
-        while (retryCount < maxRetries) {
-            try {
-                // Use simple request (no managed client - the agent recreation was causing worse leaks)
-                response = await request(endpoint, query);
-                break; // Break the retry loop if the request is successful
-            } catch (error) {
-                retryCount++;
-                
-                // RATE LIMIT FIX: Stop retrying immediately on 429 errors
-                if (error.status === 429 || error.message?.includes('429')) {
-                    console.warn(`⚠️  [Arweave] Rate limited (429). Setting 30-minute backoff.`);
-                    global.rateLimitBackoffUntil = Date.now() + (30 * 60 * 1000);
-                    console.warn(`    Will resume at: ${new Date(global.rateLimitBackoffUntil).toLocaleTimeString()}`);;
-                    rateLimited = true;  // Signal to break out of pagination loop
-                    response = null;
-                    break; // Exit retry loop immediately
-                }
-                
-                console.error(
-                    `Attempt ${retryCount} failed for fetching transactions:`, 
-                    error.message
-                );
-
-                if (retryCount === maxRetries) {
-                    console.error('Max retries reached. Moving to the next page.');
-                } else {
-                    console.log(`Retrying... (${retryCount}/${maxRetries})`);
+        // Try each endpoint in order (local gateway first, then arweave.net fallback)
+        for (const endpoint of endpoints) {
+            let retryCount = 0;
+            endpointSuccess = false;
+            
+            while (retryCount < maxRetries && !endpointSuccess) {
+                try {
+                    // Use simple request (no managed client - the agent recreation was causing worse leaks)
+                    response = await request(endpoint, query);
+                    endpointSuccess = true;
+                    if (endpoint !== endpoints[0]) {
+                        console.log(`✅ Using fallback endpoint: ${endpoint}`);
+                    }
+                    break; // Break the retry loop if the request is successful
+                } catch (error) {
+                    retryCount++;
+                    lastError = error;
+                    
+                    // RATE LIMIT FIX: Stop retrying immediately on 429 errors
+                    if (error.status === 429 || error.message?.includes('429')) {
+                        console.warn(`⚠️  [Arweave] Rate limited (429) on ${endpoint}. Setting 30-minute backoff.`);
+                        global.rateLimitBackoffUntil = Date.now() + (30 * 60 * 1000);
+                        console.warn(`    Will resume at: ${new Date(global.rateLimitBackoffUntil).toLocaleTimeString()}`);
+                        rateLimited = true;  // Signal to break out of pagination loop
+                        response = null;
+                        break; // Exit retry loop immediately
+                    }
+                    
+                    if (retryCount < maxRetries) {
+                        console.log(`⚠️  Attempt ${retryCount} failed on ${endpoint}: ${error.message}. Retrying...`);
+                    } else {
+                        console.warn(`❌ Max retries reached on ${endpoint}. Trying next endpoint...`);
+                    }
                 }
             }
+            
+            // If this endpoint succeeded, break out of endpoint loop
+            if (endpointSuccess) {
+                break;
+            }
+        }
+        
+        // If all endpoints failed, log and continue
+        if (!endpointSuccess) {
+            console.error(`❌ All GraphQL endpoints failed. Last error: ${lastError?.message || 'Unknown error'}`);
         }
 
         // If response is still undefined after retries, move to the next page

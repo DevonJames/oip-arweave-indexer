@@ -460,11 +460,14 @@ initializeIndices()
     }
     
     // If we reach here, it's not a CLI operation, so start the server
-    // But first check if we're in a CLI-only mode (no server needed)
-    const isCLIMode = args.deleteRecords || args.deleteAllRecords || args.deleteIndex || args.keepDBUpToDate;
+    // But first check if we're in a CLI-only mode (delete commands that didn't match valid patterns)
+    // Note: keepDBUpToDate needs the server running, so it's not included here
+    const hasInvalidDeleteCommand = (args.deleteRecords && !args.index) || 
+                                    (args.deleteAllRecords && !args.index) || 
+                                    (args.deleteIndex && !args.index);
     
-    if (isCLIMode) {
-        console.log('⚠️  CLI mode detected but no matching command found. Exiting.');
+    if (hasInvalidDeleteCommand) {
+        console.log('⚠️  Delete command detected but missing required parameters. Exiting.');
         console.log('💡 Available delete commands:');
         console.log('   --deleteAllRecords --index <indexName>  (delete all records from index)');
         console.log('   --deleteIndex --index <indexName>       (delete entire index)');
