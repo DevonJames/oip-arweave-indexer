@@ -517,13 +517,11 @@ services:
       - PORT=4000
       # Enable GraphQL endpoint for local searches
       - GRAPHQL_ENABLED=true
-      # START_HEIGHT: Set the starting block height for syncing
-      # Docker Compose reads .env automatically for variable substitution
-      # Set START_HEIGHT=1463750 in your .env file (no quotes, no spaces around =)
+      # START_HEIGHT is loaded from .env via env_file directive above
+      # DO NOT set it here in environment section - env_file handles it
+      # Set START_HEIGHT=1463750 in your .env file
       # START_HEIGHT only applies on FIRST SYNC - if gateway has existing data,
       # it will continue from where it left off. Delete data directory to reset.
-      # Note: If START_HEIGHT is not in .env, this will be empty and gateway starts from genesis
-      - START_HEIGHT=${START_HEIGHT:-}
     networks:
       - oip-network
     restart: unless-stopped
