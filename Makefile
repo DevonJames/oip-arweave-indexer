@@ -962,21 +962,67 @@ check-ario-storage: ## Check AR.IO gateway storage location and disk space
 check-ario-env: ## Check AR.IO gateway environment variables in running container
 	@echo "$(BLUE)🔍 AR.IO Gateway Environment Variables$(NC)"
 	@echo ""
-	@if docker ps | grep -q ario-gateway; then \
+	@echo "$(YELLOW)Step 1: Checking .env file:$(NC)"; \
+	if [ -f .env ]; then \
+		echo "$(GREEN)✅ .env file found$(NC)"; \
+		echo ""; \
+		echo "$(BLUE)START_HEIGHT variables in .env:$(NC)"; \
+		grep -E "^START_HEIGHT=|^ARIO_START_BLOCK_HEIGHT=" .env | grep -v "^#" || echo "$(YELLOW)⚠️  No START_HEIGHT variables found in .env$(NC)"; \
+		echo ""; \
+		echo "$(BLUE)Checking exact format (showing raw lines):$(NC)"; \
+		grep -E "^START_HEIGHT|^ARIO_START_BLOCK_HEIGHT" .env | head -2; \
+	else \
+		echo "$(RED)❌ .env file not found$(NC)"; \
+	fi; \
+	echo ""; \
+	echo "$(YELLOW)Step 2: What Docker Compose will substitute:$(NC)"; \
+	if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | xargs); \
+		echo "START_HEIGHT from shell: $${START_HEIGHT:-NOT SET}"; \
+		echo "ARIO_START_BLOCK_HEIGHT from shell: $${ARIO_START_BLOCK_HEIGHT:-NOT SET}"; \
+	fi; \
+	echo ""; \
+	if docker ps | grep -q ario-gateway; then \
 		echo "$(GREEN)✅ Gateway container is running$(NC)"; \
 		echo ""; \
-		echo "$(YELLOW)Environment variables in container:$(NC)"; \
-		docker exec $$(docker ps -q -f name=ario-gateway) env | grep -E "(START_HEIGHT|START_BLOCK|MAX_STORAGE|PORT|GRAPHQL)" | sort || echo "$(RED)❌ Could not read environment variables$(NC)"; \
-		echo ""; \
-		echo "$(YELLOW)From docker-compose config:$(NC)"; \
-		docker-compose config 2>/dev/null | grep -A 20 "ario-gateway:" | grep -E "(START_HEIGHT|START_BLOCK|MAX_STORAGE|PORT|GRAPHQL)" || echo "$(YELLOW)⚠️  Could not read docker-compose config$(NC)"; \
+		echo "$(YELLOW)Step 3: Environment variables in container:$(NC)"; \
+		CONTAINER_ID=$$(docker ps -q -f name=ario-gateway); \
+		if [ -n "$$CONTAINER_ID" ]; then \
+			echo "$(BLUE)Looking for START_HEIGHT specifically:$(NC)"; \
+			docker exec $$CONTAINER_ID env | grep "^START_HEIGHT" || echo "$(RED)❌ START_HEIGHT NOT FOUND in container$(NC)"; \
+			echo ""; \
+			echo "$(BLUE)All START/ARIO related variables:$(NC)"; \
+			docker exec $$CONTAINER_ID env | grep -E "(START|ARIO)" | sort || echo "$(YELLOW)⚠️  No START/ARIO variables found$(NC)"; \
+			echo ""; \
+			echo "$(BLUE)All environment variables (first 30):$(NC)"; \
+			docker exec $$CONTAINER_ID env | sort | head -30; \
+		else \
+			echo "$(RED)❌ Could not find gateway container$(NC)"; \
+		fi; \
 	else \
 		echo "$(YELLOW)⚠️  Gateway container is not running$(NC)"; \
-		echo "$(BLUE)Checking .env file configuration:$(NC)"; \
-		if [ -f .env ]; then \
-			grep -E "^START_HEIGHT=|^ARIO_START_BLOCK_HEIGHT=|^MAX_STORAGE_GB=|^ARIO_MAX_STORAGE_GB=" .env | grep -v "^#" || echo "$(YELLOW)⚠️  No START_HEIGHT variables found in .env$(NC)"; \
-		else \
-			echo "$(RED)❌ .env file not found$(NC)"; \
+		echo "$(BLUE)Start it with: make standard-gpu$(NC)"; \
+	fi; \
+	echo ""; \
+	echo "$(YELLOW)💡 If START_HEIGHT is not in container but is in .env:$(NC)"; \
+	echo "$(BLUE)   1. Recreate container: docker-compose stop ario-gateway && docker-compose rm -f ario-gateway$(NC)"; \
+	echo "$(BLUE)   2. Restart: make standard-gpu$(NC)"; \
+	echo ""; \
+	echo "$(YELLOW)⚠️  IMPORTANT: START_HEIGHT may only work on FIRST initialization$(NC)"; \
+	echo "$(BLUE)   If gateway has already synced blocks, it may ignore START_HEIGHT$(NC)"; \
+	echo ""; \
+	if docker ps | grep -q ario-gateway; then \
+		echo "$(BLUE)Checking data directory INSIDE container:$(NC)"; \
+		CONTAINER_ID=$$(docker ps -q -f name=ario-gateway); \
+		if [ -n "$$CONTAINER_ID" ]; then \
+			echo "$(YELLOW)Files in /data (container path):$(NC)"; \
+			docker exec $$CONTAINER_ID ls -la /data 2>/dev/null || echo "$(YELLOW)   /data directory empty or doesn't exist$(NC)"; \
+			echo ""; \
+			echo "$(YELLOW)Looking for database files:$(NC)"; \
+			docker exec $$CONTAINER_ID find /data -type f \( -name "*.db" -o -name "*.sqlite*" \) 2>/dev/null | head -10 || echo "$(BLUE)   No database files found$(NC)"; \
+			echo ""; \
+			echo "$(YELLOW)Gateway logs mentioning START_HEIGHT or block height:$(NC)"; \
+			docker logs $$CONTAINER_ID 2>&1 | grep -iE "(start|height|block.*import)" | head -10 || echo "$(BLUE)   No relevant log entries$(NC)"; \
 		fi; \
 	fi
 
@@ -1011,7 +1057,16 @@ reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height
 	docker-compose rm -f ario-gateway 2>/dev/null || true; \
 	echo "$(YELLOW)🗑️  Deleting gateway data directory...$(NC)"; \
 	if [ -d "$$ARIO_DATA_PATH" ]; then \
-		rm -rf "$$ARIO_DATA_PATH"; \
+		echo "$(BLUE)   Looking for database files that might override START_HEIGHT...$(NC)"; \
+		find "$$ARIO_DATA_PATH" -type f \( -name "*.db" -o -name "*.sqlite*" \) 2>/dev/null | while read db; do \
+			echo "$(YELLOW)   Found database: $$db$(NC)"; \
+		done; \
+		echo "$(BLUE)   Deleting ALL files including hidden ones...$(NC)"; \
+		rm -rf "$$ARIO_DATA_PATH"/* "$$ARIO_DATA_PATH"/.* 2>/dev/null; \
+		rmdir "$$ARIO_DATA_PATH" 2>/dev/null || true; \
+		if [ -d "$$ARIO_DATA_PATH" ]; then \
+			rm -rf "$$ARIO_DATA_PATH"; \
+		fi; \
 		echo "$(GREEN)✅ Data directory deleted$(NC)"; \
 	else \
 		echo "$(BLUE)ℹ️  Data directory doesn't exist (nothing to delete)$(NC)"; \
