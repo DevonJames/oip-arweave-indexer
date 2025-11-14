@@ -981,8 +981,9 @@ reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height
 	echo "  Start block height: $$ARIO_START_BLOCK_HEIGHT"; \
 	echo "  Data path: $$ARIO_DATA_PATH"; \
 	echo ""; \
-	echo "$(YELLOW)🛑 Stopping AR.IO gateway...$(NC)"; \
+	echo "$(YELLOW)🛑 Stopping and removing AR.IO gateway container...$(NC)"; \
 	docker-compose stop ario-gateway 2>/dev/null || true; \
+	docker-compose rm -f ario-gateway 2>/dev/null || true; \
 	echo "$(YELLOW)🗑️  Deleting gateway data directory...$(NC)"; \
 	if [ -d "$$ARIO_DATA_PATH" ]; then \
 		rm -rf "$$ARIO_DATA_PATH"; \
@@ -991,9 +992,18 @@ reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height
 		echo "$(BLUE)ℹ️  Data directory doesn't exist (nothing to delete)$(NC)"; \
 	fi; \
 	echo ""; \
+	echo "$(BLUE)💡 Verifying START_HEIGHT will be set correctly...$(NC)"; \
+	if docker-compose config 2>/dev/null | grep -q "START_HEIGHT=$$ARIO_START_BLOCK_HEIGHT"; then \
+		echo "$(GREEN)✅ START_HEIGHT environment variable configured correctly$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠️  Warning: START_HEIGHT might not be set correctly$(NC)"; \
+		echo "$(BLUE)   Check that ARIO_START_BLOCK_HEIGHT=$$ARIO_START_BLOCK_HEIGHT is in your .env file$(NC)"; \
+	fi; \
+	echo ""; \
 	echo "$(GREEN)✅ Gateway reset complete$(NC)"; \
-	echo "$(BLUE)💡 Start the gateway with: make up-standard-gpu (or your profile)$(NC)"; \
-	echo "$(BLUE)   It will now sync from block $$ARIO_START_BLOCK_HEIGHT$(NC)"
+	echo "$(BLUE)💡 Start the gateway with: make standard-gpu (or your profile)$(NC)"; \
+	echo "$(BLUE)   It will now sync from block $$ARIO_START_BLOCK_HEIGHT$(NC)"; \
+	echo "$(BLUE)   Note: The gateway container will be recreated with the new START_HEIGHT setting$(NC)"
 
 # Development helpers
 dev-build: ## Development: Build without cache
