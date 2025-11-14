@@ -11,10 +11,72 @@ const base64url = require('base64url');
 const arweaveConfig = require('../config/arweave.config');
 const arweave = Arweave.init(arweaveConfig);
 
+// Hardcoded fallback data for critical creator registration transactions
+// These are used when the Arweave gateway is unavailable
+const HARDCODED_TRANSACTIONS = {
+    // First creator registration - u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0
+    'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y': {
+        transactionId: 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y',
+        blockHeight: 1463761,
+        tags: [
+            { name: 'Content-Type', value: 'application/json' },
+            { name: 'Index-Method', value: 'OIP' },
+            { name: 'Ver', value: '0.7.2' },
+            { name: 'Type', value: 'Record' },
+            { name: 'Creator', value: 'u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0' },
+            { name: 'CreatorSig', value: 'kxaouVUFcvHDAPUT8xsLo7ilepwKuVNeR52Hsn/tEZwUK+TAeXb5JtszUeFBpbMy0nuYydBwFxgSmIofkwByVzOpe7j3n1QKZhGIKVGuq9HBiekNfWne/vw3kiPvl+T8bwTM+M6vvsfDTKiIqs+NYZVHWm9iebhWlfIHVdtbRmn6NxHAYtaosggep0XyOuwrVuJEsEMfl8AYS7AZPcClQxl8LMERCdeWRE6BTu0ZGMyFeV38xKOea5ccwV2A7kYfRf6iwdmpACzlh9CIkNfOQ3JC2NJK/Rs6f5sJMMjzIn84odt+7GqaBeitLI4rv6E64FSEdcPtOn0Rm2ICwuzg/jqxF4QUdRQ5t7diBPWKY0JITw+Fhw+DTL2WTYazd/1j4OlQJJefE4Of30oWGzlUvDhNui9yudc0MO/+nPBzHYxVNB6d+XZVGODgfgD/wDRH0DMtE7Fsq35s5m2JY424RSikUCyz354XY0JJuyzUCWxflKgMhL1q0/IHx4ASI7Go/wEE0H4q0F2Tutk/6F6hjyl7z5JUqnOOALPW4t5mqo53D6Milt/khaA97gLU1RO1xQdHX7LrHRWsgiulLayMN+ll6DLK+fSlISagf9yZ5f61QjxkMi8K8pEedckSwaM586RO1PJoS2pBlX2DpPl28/ZRpt/fT5Q2NfWFapNXRk=' }
+        ],
+        ver: '0.7.2',
+        creator: 'u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0',
+        creatorSig: 'kxaouVUFcvHDAPUT8xsLo7ilepwKuVNeR52Hsn/tEZwUK+TAeXb5JtszUeFBpbMy0nuYydBwFxgSmIofkwByVzOpe7j3n1QKZhGIKVGuq9HBiekNfWne/vw3kiPvl+T8bwTM+M6vvsfDTKiIqs+NYZVHWm9iebhWlfIHVdtbRmn6NxHAYtaosggep0XyOuwrVuJEsEMfl8AYS7AZPcClQxl8LMERCdeWRE6BTu0ZGMyFeV38xKOea5ccwV2A7kYfRf6iwdmpACzlh9CIkNfOQ3JC2NJK/Rs6f5sJMMjzIn84odt+7GqaBeitLI4rv6E64FSEdcPtOn0Rm2ICwuzg/jqxF4QUdRQ5t7diBPWKY0JITw+Fhw+DTL2WTYazd/1j4OlQJJefE4Of30oWGzlUvDhNui9yudc0MO/+nPBzHYxVNB6d+XZVGODgfgD/wDRH0DMtE7Fsq35s5m2JY424RSikUCyz354XY0JJuyzUCWxflKgMhL1q0/IHx4ASI7Go/wEE0H4q0F2Tutk/6F6hjyl7z5JUqnOOALPW4t5mqo53D6Milt/khaA97gLU1RO1xQdHX7LrHRWsgiulLayMN+ll6DLK+fSlISagf9yZ5f61QjxkMi8K8pEedckSwaM586RO1PJoS2pBlX2DpPl28/ZRpt/fT5Q2NfWFapNXRk=',
+        data: JSON.stringify([
+            {
+                "0": "u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0",
+                "1": "v2LPUKrpSnmzQzPr7Cfjb_vh9FD6GbRXQNqUk9miFmiWA6PtKj6gvOCiQXpr5o9u4PJcvD7jbMUNegIVj0YuOMd718qwQvXC75OZCyZlvd5Llr94pFFXhZGqlFy1ArdKhULeqgdkb-jB5dJg4u07BakmkJ8avxfKclV5jS825dw70A0lNx4R4GLD8e4-s4jp-BC9VHMR_6FAJHuGZMn2QtezF0jtmVLTKh3E6yHI2G75wwCBN5KZaOZfNNEazVAf6J-GT1H0JG1eTzH8jYIufTc9p99CX4Tzf8Ov8A8MOteM-pbJ8MQ0XDhw32F_AW9TjLqOkBprFZVaQRt8VC6Xe0r_g2ZFFokbCj8gYhF_Ezb4aRVDBhyC0Hmnwo7uFiISZrfb20iudYRM2vP7iUiZgG8wApufvKta6dByqEnuO6Jywp8vIZw0OZQMuzwCbV-3oXLWds1c8H0OkQuDOv51u14oo4720KjTW2F_eOWNTdqc2vM05K2aJg88eL7U2gUXjuLM7ZbJ3w64Mmg7FEdzNwT4K1-rbfdVjpmO6NHSgY_-j1KW2_bOWezRpWNBt4yW9csrk54YVjLDzgg2cX_jjXHaajHe27ljRV9nbBQINCOvaavMnJ8GZ-sgP0ZJttzXcrHtXCgj4JKl6RDdy6I7x1cShFb0IqaUoZSANRsGMAk",
+                "2": "Player",
+                "3": "James",
+                "t": "creatorRegistration"
+            },
+            {
+                "0": "Devon",
+                "3": 37,
+                "t": "basic"
+            }
+        ])
+    },
+    
+    // Second creator registration - iZq_A50yy5YpHNZZfQ5E5Xres3fhMa-buPOlotxbEtU
+    'iZq_A50yy5YpHNZZfQ5E5Xres3fhMa-buPOlotxbEtU': {
+        transactionId: 'iZq_A50yy5YpHNZZfQ5E5Xres3fhMa-buPOlotxbEtU',
+        blockHeight: 1579572,
+        tags: [
+            { name: 'Content-Type', value: 'application/json' },
+            { name: 'Index-Method', value: 'OIP' },
+            { name: 'Ver', value: '0.8.0' },
+            { name: 'Type', value: 'Record' },
+            { name: 'RecordType', value: 'creatorRegistration' },
+            { name: 'Creator', value: 'iZq_A50yy5YpHNZZfQ5E5Xres3fhMa-buPOlotxbEtU' },
+            { name: 'CreatorSig', value: 'YGhI+1ZmIRW4AJSFx/RJ/8BsI9ABbp2XESRzIaAFibCAhv+B8FzAj5S/VnMzvPCRSSns+ciex64wXS1ebtuRzEF4FXzeQOd9SWpviJ1gv9q3CsDGWK3JTyijzvOOD3wfkrbT3AJvHcZ8z8aWGBbuP1DltHLamOBnxkX/imE2qoL/RCf/jbbYvDRpI76EFDueXRyz94lG7EwMVj4Vne2MFWCa0HU7N8RJKuAE8VhqG6aSp1tVRIRfjW1uQQHesQa7hA5T0WaVtEUSkLfpSjUEv3OvB66JVQ2AUx5kZIHhAVEViSvBucVZ3UTZbkZw8ip4q60c8XkJ/3MUBSBv4nS8cTU2mBJyLs8haW3/4uDgBpYxWBrB3EhwHhj/R3Z223ra/Flri6ydwnqwUpAyzEPtXwNC1LplovNS0qith6FRClgjKZuZ8Jx1OQZl+G09tf1XMiYRidnhD8zTSSCiFKXbqB7WCe2XQvfokBtXuK7EKpBGGQJBwkwhnqlhEPU3psJAcsKVvsfQtBsadiPjYJcOyD7kgbdVoP1SQGl9j3fCNhk03Bp7BFWsiWUtWZQXtkmoIY3Zbtz8kA/ayuesbZNGWmnHJhSr8Wh3n86khC54b0rvClGk+K1gGtDSM+09yKyRRDo3A+SL0KVc4MafSVPP27AUYdNpmNBT6d8JtMbkG5M=' }
+        ],
+        ver: '0.8.0',
+        creator: 'iZq_A50yy5YpHNZZfQ5E5Xres3fhMa-buPOlotxbEtU',
+        creatorSig: 'YGhI+1ZmIRW4AJSFx/RJ/8BsI9ABbp2XESRzIaAFibCAhv+B8FzAj5S/VnMzvPCRSSns+ciex64wXS1ebtuRzEF4FXzeQOd9SWpviJ1gv9q3CsDGWK3JTyijzvOOD3wfkrbT3AJvHcZ8z8aWGBbuP1DltHLamOBnxkX/imE2qoL/RCf/jbbYvDRpI76EFDueXRyz94lG7EwMVj4Vne2MFWCa0HU7N8RJKuAE8VhqG6aSp1tVRIRfjW1uQQHesQa7hA5T0WaVtEUSkLfpSjUEv3OvB66JVQ2AUx5kZIHhAVEViSvBucVZ3UTZbkZw8ip4q60c8XkJ/3MUBSBv4nS8cTU2mBJyLs8haW3/4uDgBpYxWBrB3EhwHhj/R3Z223ra/Flri6ydwnqwUpAyzEPtXwNC1LplovNS0qith6FRClgjKZuZ8Jx1OQZl+G09tf1XMiYRidnhD8zTSSCiFKXbqB7WCe2XQvfokBtXuK7EKpBGGQJBwkwhnqlhEPU3psJAcsKVvsfQtBsadiPjYJcOyD7kgbdVoP1SQGl9j3fCNhk03Bp7BFWsiWUtWZQXtkmoIY3Zbtz8kA/ayuesbZNGWmnHJhSr8Wh3n86khC54b0rvClGk+K1gGtDSM+09yKyRRDo3A+SL0KVc4MafSVPP27AUYdNpmNBT6d8JtMbkG5M=',
+        data: JSON.stringify([
+            {
+                "0": "iZq_A50yy5YpHNZZfQ5E5Xres3fhMa-buPOlotxbEtU",
+                "1": "g80XM1oE_GZVzpq6yTRVX0sCj1xisWhBAA31ANiqAl9-r6_5VMOT5SiX5ujLIh1GtLefb_BtNECoTSRbosndWrhypPFzEZutT6ttBi6lPrrDJGFYdAxE8Rucfw7aZyzfMNYQfEZC-vK6Wkw4HiVllwwp2ZG--XplJyYlKSQIDt78DmLUnkRIA0c0HhPC4pct3G0lHFz7-7ychn9HYNOmEYBsaIrqX4XIE1GGOzPieyAa5DiOkWqTDBwFVglRZ1bE4VSEl-TdEpizUC8SOuAsVvjiHIXkrCP3ugkZj2mpi3VaDN6T9GhI9BtP6duXa7fU5GUbYTkArxYU9bGCpvJKVE3hoeWAq-5coaG3tV5q_vXfGcVcwbm2tz1q292kpXnQ91HIBVzaOlJgEhC-f4UvHy_4dNvYlBc8wvdUFktkPK8tpQ17a3wNSN6_qRZemvbVobLXguSqWE9jxx4F3oXSoGoYQYL_UomWnIsNRr5Gre8fwrBOc8ZTl3wdKbqDV6SlSYq0q3y41KW2V6KI_csTXyE6boTWRIoFxGBG7Z1N8Fd3_GtdFKmevEkfNnlYYAM7pcMRfD-oz8ZMXHXwD86yed-b0kh6p4yqPnYpR_NyKsURlloVvpxBwOzZqIU9d_rsmsMZDY2ZIIowSYkqkjW7ug0597_LkCpA-eyyLaijbxE",
+                "2": "Scribe",
+                "t": "svZ3lRyzSpdjdG95o106Gpn4eVdpn8HMdos8RHaAd-c"
+            }
+        ])
+    }
+};
+
 /**
  * Retrieves a transaction/data item from Arweave with its tags and data.
  * Handles both native Arweave transactions and bundled data items.
  * Uses GraphQL to get proper tags and block height information.
+ * Falls back to hardcoded data for critical creator registrations if gateway is unavailable.
  * @param {string} transactionId 
  * @returns {Object} Transaction data and tags
  */
@@ -214,6 +276,13 @@ const getTransaction = async (transactionId) => {
         };
         
     } catch (error) {
+        // Check if we have hardcoded data for this transaction
+        if (HARDCODED_TRANSACTIONS[transactionId]) {
+            console.log(`⚠️  Gateway failed for ${transactionId}, using hardcoded fallback data`);
+            console.log(`✅ This is a critical creator registration transaction with fallback support`);
+            return HARDCODED_TRANSACTIONS[transactionId];
+        }
+        
         console.error('Error fetching transaction or transaction data:', error);
         throw error;
     }

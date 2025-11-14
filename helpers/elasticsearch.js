@@ -1111,44 +1111,51 @@ async function searchCreatorByAddress(didAddress) {
                 console.log(getFileInfo(), getLineNumber(), 'Exception - creator is u4B6..., looking up registration data from hard-coded txid');
                 const hardCodedTxId = 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y';
                 const inArweaveBlock = startBlockHeight;
-                const transaction = await getTransaction(hardCodedTxId);
-                const creatorSig = transaction.creatorSig;
-                const transactionData = JSON.parse(transaction.data);
-                const creatorPublicKey = transactionData[0]["1"];
-                const handle = transactionData[0]["2"];
-                const surname = transactionData[0]["3"]
-                const name = transactionData[1]["0"];
-                const language = transactionData[1]["3"];
-                // const inArweaveBlock = await getBlockHeightFromTxId(hardCodedTxId);
-                const creatorHandle = await convertToCreatorHandle(hardCodedTxId, handle);
-                const creator = {
-                    data: {
-                        templates: [
-                            {
-                                "creatorRegistration": "creatorRegistration",
-                                "basic": "basic"
-                            }
-                        ],
-                        publicKey: creatorPublicKey,
-                        creatorHandle: creatorHandle,
-                        name: name + ' ' + surname,
-                        didAddress,
-                        signature: creatorSig
-                    },
-                    oip: {
-                        didTx: 'did:arweave:' + hardCodedTxId,
-                        inArweaveBlock,
-                        indexedAt: new Date(),
-                        ver: transaction.ver,
-                        signature: creatorSig,
-                        creator: {
+                
+                try {
+                    const transaction = await getTransaction(hardCodedTxId);
+                    const creatorSig = transaction.creatorSig;
+                    const transactionData = JSON.parse(transaction.data);
+                    const creatorPublicKey = transactionData[0]["1"];
+                    const handle = transactionData[0]["2"];
+                    const surname = transactionData[0]["3"]
+                    const name = transactionData[1]["0"];
+                    const language = transactionData[1]["3"];
+                    // const inArweaveBlock = await getBlockHeightFromTxId(hardCodedTxId);
+                    const creatorHandle = await convertToCreatorHandle(hardCodedTxId, handle);
+                    const creator = {
+                        data: {
+                            templates: [
+                                {
+                                    "creatorRegistration": "creatorRegistration",
+                                    "basic": "basic"
+                                }
+                            ],
+                            publicKey: creatorPublicKey,
                             creatorHandle: creatorHandle,
+                            name: name + ' ' + surname,
                             didAddress,
-                            didTx: 'did:arweave:' + hardCodedTxId
+                            signature: creatorSig
+                        },
+                        oip: {
+                            didTx: 'did:arweave:' + hardCodedTxId,
+                            inArweaveBlock,
+                            indexedAt: new Date(),
+                            ver: transaction.ver,
+                            signature: creatorSig,
+                            creator: {
+                                creatorHandle: creatorHandle,
+                                didAddress,
+                                didTx: 'did:arweave:' + hardCodedTxId
+                            }
                         }
                     }
+                    return creator;
+                } catch (txError) {
+                    console.error(getFileInfo(), getLineNumber(), 'Failed to fetch hardcoded creator transaction:', txError.message);
+                    console.log(getFileInfo(), getLineNumber(), 'Note: The hardcoded fallback in getTransaction should have caught this. Check arweave.js');
+                    return null;
                 }
-                return creator;
             } else {
                 return null;
             }
