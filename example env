@@ -35,7 +35,13 @@ ARIO_GATEWAY_DATA_PATH=./ario_gateway_data
 # Start syncing from a specific block height instead of genesis (block 0)
 # Useful if you only need recent data - saves time and storage
 # Example: ARIO_START_BLOCK_HEIGHT=1500000 (start from block 1.5M)
-# Leave empty or unset to sync from genesis
+# IMPORTANT: This only applies on FIRST SYNC. If the gateway has already synced data,
+# it will continue from where it left off. To start from a new block height:
+# 1. Stop the gateway: docker-compose stop ario-gateway
+# 2. Delete the data directory: rm -rf ./ario_gateway_data (or your ARIO_GATEWAY_DATA_PATH)
+# 3. Set ARIO_START_BLOCK_HEIGHT to your desired block height
+# 4. Restart: docker-compose up -d ario-gateway
+# Leave empty or unset to sync from genesis (block 0)
 # ARIO_START_BLOCK_HEIGHT=
 # AR.IO Gateway Max Storage Limit (optional)
 # Limit the cache/storage size in GB
