@@ -44,6 +44,16 @@ try {
                 req.on('end', async () => {
                     try {
                         const { soul, data } = JSON.parse(body);
+                        if (!soul) {
+                            res.writeHead(400);
+                            res.end(JSON.stringify({ error: 'soul parameter required' }));
+                            return;
+                        }
+                        if (!data) {
+                            res.writeHead(400);
+                            res.end(JSON.stringify({ error: 'data parameter required' }));
+                            return;
+                        }
                         console.log(`💾 Storing data for soul: ${soul.substring(0, 50)}...`);
                         
                         // Store data and ensure all nested properties are properly saved
@@ -53,27 +63,59 @@ try {
                         gunNode.put(data, (ack) => {
                             if (ack.err) {
                                 console.error('❌ GUN put error:', ack.err);
-                                res.writeHead(500);
-                                res.end(JSON.stringify({ error: ack.err }));
+                                console.error('❌ Error details:', JSON.stringify(ack, null, 2));
+                                console.error('❌ Soul:', soul);
+                                console.error('❌ Data keys:', Object.keys(data || {}));
+                                if (!res.headersSent) {
+                                    res.writeHead(500);
+                                    res.end(JSON.stringify({ error: ack.err, details: 'GUN put operation failed' }));
+                                }
                             } else {
                                 console.log('✅ Data stored successfully');
 
                                 // Ensure nested data is also stored by explicitly setting each property
                                 // This helps GUN properly handle complex nested structures
-                                if (data.data && typeof data.data === 'object') {
-                                    Object.keys(data.data).forEach(key => {
-                                        gunNode.get('data').get(key).put(data.data[key]);
-                                    });
-                                }
-                                if (data.meta && typeof data.meta === 'object') {
-                                    Object.keys(data.meta).forEach(key => {
-                                        gunNode.get('meta').get(key).put(data.meta[key]);
-                                    });
-                                }
-                                if (data.oip && typeof data.oip === 'object') {
-                                    Object.keys(data.oip).forEach(key => {
-                                        gunNode.get('oip').get(key).put(data.oip[key]);
-                                    });
+                                try {
+                                    if (data.data && typeof data.data === 'object') {
+                                        Object.keys(data.data).forEach(key => {
+                                            try {
+                                                const value = data.data[key];
+                                                // Only put simple values or objects that GUN can handle
+                                                if (value !== null && value !== undefined) {
+                                                    gunNode.get('data').get(key).put(value);
+                                                }
+                                            } catch (nestedError) {
+                                                console.warn(`⚠️ Failed to store nested data.${key}:`, nestedError.message);
+                                            }
+                                        });
+                                    }
+                                    if (data.meta && typeof data.meta === 'object') {
+                                        Object.keys(data.meta).forEach(key => {
+                                            try {
+                                                const value = data.meta[key];
+                                                if (value !== null && value !== undefined) {
+                                                    gunNode.get('meta').get(key).put(value);
+                                                }
+                                            } catch (nestedError) {
+                                                console.warn(`⚠️ Failed to store nested meta.${key}:`, nestedError.message);
+                                            }
+                                        });
+                                    }
+                                    if (data.oip && typeof data.oip === 'object') {
+                                        Object.keys(data.oip).forEach(key => {
+                                            try {
+                                                const value = data.oip[key];
+                                                if (value !== null && value !== undefined) {
+                                                    gunNode.get('oip').get(key).put(value);
+                                                }
+                                            } catch (nestedError) {
+                                                console.warn(`⚠️ Failed to store nested oip.${key}:`, nestedError.message);
+                                            }
+                                        });
+                                    }
+                                } catch (nestedError) {
+                                    console.warn('⚠️ Error storing nested properties (non-fatal):', nestedError.message);
+                                    // Continue - main data was stored successfully
                                 }
 
                                 try {
@@ -106,8 +148,19 @@ try {
                         });
                     } catch (parseError) {
                         console.error('❌ JSON parse error:', parseError);
-                        res.writeHead(400);
-                        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+                        if (!res.headersSent) {
+                            res.writeHead(400);
+                            res.end(JSON.stringify({ error: 'Invalid JSON: ' + parseError.message }));
+                        }
+                    }
+                });
+                
+                // Handle request errors
+                req.on('error', (error) => {
+                    console.error('❌ Request error:', error);
+                    if (!res.headersSent) {
+                        res.writeHead(500);
+                        res.end(JSON.stringify({ error: 'Request error: ' + error.message }));
                     }
                 });
                 
