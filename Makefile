@@ -26,18 +26,20 @@ help: ## Show this help message
 	@echo "$(YELLOW)Available targets:$(NC)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
-	@echo "$(YELLOW)Available profiles:$(NC)"
-	@echo "  $(GREEN)minimal$(NC)              - Core only: elasticsearch, kibana, oip (no canvas - fastest build)"
-	@echo "  $(GREEN)minimal-with-scrape$(NC)  - Core + scraping: elasticsearch, kibana, oip with canvas support"
-	@echo "  $(GREEN)standard$(NC)             - Distributed: Full stack with Chatterbox TTS + AI chat (recommended)"
-	@echo "  $(GREEN)standard-macMseries$(NC)  - Distributed: Full stack optimized for Apple Silicon Macs (CPU-based AI)"
-	@echo "  $(GREEN)standard-monolithic$(NC)  - Monolithic: Core services in one container (lacks modern AI features)"
-	@echo "  $(GREEN)gpu$(NC)                  - GPU-optimized deployment with Chatterbox TTS"
-	@echo "  $(GREEN)oip-gpu-only$(NC)         - Only GPU OIP service"
-	@echo "  $(GREEN)standard-gpu$(NC)         - Complete stack: all services + GPU acceleration + Chatterbox TTS"
-	@echo "  $(GREEN)chatterbox$(NC)           - Standard with Chatterbox TTS focus (CPU optimized)"
-	@echo "  $(GREEN)chatterbox-gpu$(NC)       - Chatterbox TTS with GPU acceleration (RTX 4090 optimized)"
-	@echo "  $(GREEN)backend-only$(NC)         - Distributed: Backend services only for Mac/iOS clients"
+@echo "$(YELLOW)Available profiles:$(NC)"
+@echo "  $(GREEN)minimal$(NC)              - Core only: elasticsearch, kibana, oip (no canvas - fastest build)"
+@echo "  $(GREEN)minimal-with-scrape$(NC)  - Core + scraping: elasticsearch, kibana, oip with canvas support"
+@echo "  $(GREEN)standard$(NC)             - Distributed: Full stack with Chatterbox TTS + AI chat (uses arweave.net)"
+@echo "  $(GREEN)standard-macMseries$(NC)  - Distributed: Full stack optimized for Apple Silicon Macs (CPU-based AI)"
+@echo "  $(GREEN)standard-monolithic$(NC)  - Monolithic: Core services in one container (lacks modern AI features)"
+@echo "  $(GREEN)standard-gpu$(NC)         - Complete stack: all services + GPU acceleration (uses arweave.net)"
+@echo "  $(GREEN)max-decentralized$(NC)    - Full decentralized: includes local AR.IO gateway (CPU)"
+@echo "  $(GREEN)max-decentralized-gpu$(NC) - Full decentralized: includes local AR.IO gateway (GPU)"
+@echo "  $(GREEN)gpu$(NC)                  - GPU-optimized deployment with Chatterbox TTS"
+@echo "  $(GREEN)oip-gpu-only$(NC)         - Only GPU OIP service"
+@echo "  $(GREEN)chatterbox$(NC)           - Standard with Chatterbox TTS focus (CPU optimized)"
+@echo "  $(GREEN)chatterbox-gpu$(NC)       - Chatterbox TTS with GPU acceleration (RTX 4090 optimized)"
+@echo "  $(GREEN)backend-only$(NC)         - Distributed: Backend services only for Mac/iOS clients"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
 	@echo "  make backend-only              # Deploy backend for Mac/iOS clients + ngrok"
@@ -194,8 +196,8 @@ stop-ngrok:
 # Validate profile
 validate-profile:
 	@case "$(PROFILE)" in \
-		minimal|minimal-with-scrape|standard|standard-macMseries|standard-monolithic|gpu|oip-gpu-only|standard-gpu|chatterbox|chatterbox-gpu|backend-only) ;; \
-		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-macMseries, standard-monolithic, gpu, oip-gpu-only, standard-gpu, chatterbox, chatterbox-gpu, or backend-only$(NC)"; exit 1 ;; \
+		minimal|minimal-with-scrape|standard|standard-macMseries|standard-monolithic|gpu|oip-gpu-only|standard-gpu|chatterbox|chatterbox-gpu|backend-only|max-decentralized|max-decentralized-gpu) ;; \
+		*) echo "$(RED)Error: Invalid profile '$(PROFILE)'. Use: minimal, minimal-with-scrape, standard, standard-macMseries, standard-monolithic, gpu, oip-gpu-only, standard-gpu, chatterbox, chatterbox-gpu, backend-only, max-decentralized, or max-decentralized-gpu$(NC)"; exit 1 ;; \
 	esac
 
 # Check if .env file exists
@@ -458,8 +460,22 @@ gpu: ## Quick deploy: GPU-optimized deployment with Chatterbox TTS + ngrok
 oip-gpu-only: ## Quick deploy: GPU OIP service only + ngrok
 	@make up PROFILE=oip-gpu-only
 
-standard-gpu: ## Quick deploy: Complete stack with GPU acceleration + Chatterbox TTS + install models + ngrok
+standard-gpu: ## Quick deploy: Complete stack with GPU acceleration + install models + ngrok (no AR.IO)
 	@make up PROFILE=standard-gpu
+	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
+	@make install-models
+	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
+	@make install-chatterbox
+
+max-decentralized: ## Quick deploy: Full stack + local AR.IO gateway (CPU)
+	@make up PROFILE=max-decentralized
+	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
+	@make install-models
+	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
+	@make install-chatterbox
+
+max-decentralized-gpu: ## Quick deploy: Full stack + local AR.IO gateway + GPU acceleration
+	@make up PROFILE=max-decentralized-gpu
 	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
 	@make install-models
 	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
@@ -547,7 +563,7 @@ rebuild-gpu: ## Quick rebuild: GPU-optimized deployment with Chatterbox TTS + ng
 rebuild-oip-gpu-only: ## Quick rebuild: GPU OIP service only + ngrok
 	@make rebuild PROFILE=oip-gpu-only
 
-rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + install models + ngrok (Chatterbox installed during Docker build)
+rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + install models + ngrok (no AR.IO, Chatterbox installed during build)
 	@make rebuild PROFILE=standard-gpu
 	@echo "$(YELLOW)⏳ Waiting for GPU services to be ready...$(NC)"
 	@for i in {1..30}; do \
@@ -578,6 +594,62 @@ rebuild-standard-gpu: ## Quick rebuild: Complete stack with GPU acceleration + i
 	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
 	@make install-models
 	@echo "$(GREEN)🎭 Chatterbox TTS installed during Docker build - GPU profile ready!$(NC)"
+
+rebuild-max-decentralized: ## Quick rebuild: Complete stack with local AR.IO gateway (CPU)
+	@make rebuild PROFILE=max-decentralized
+	@echo "$(YELLOW)⏳ Waiting for services to be ready...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -q -E "ollama.*(Up|Running)"; then \
+			echo "$(GREEN)✅ Ollama service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for Ollama service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ Ollama service didn't start in time, trying anyway...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -q -E "ario-gateway.*(Up|Running)"; then \
+			echo "$(GREEN)✅ AR.IO gateway is ready (syncing)$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for AR.IO gateway... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ AR.IO gateway didn't start in time, trying anyway...$(NC)"
+	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
+	@make install-models
+	@echo "$(YELLOW)🎭 Installing Chatterbox TTS model...$(NC)"
+	@make install-chatterbox
+
+rebuild-max-decentralized-gpu: ## Quick rebuild: Complete stack with local AR.IO gateway + GPU acceleration
+	@make rebuild PROFILE=max-decentralized-gpu
+	@echo "$(YELLOW)⏳ Waiting for GPU services to be ready...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -q -E "ollama-gpu.*(Up|Running)"; then \
+			echo "$(GREEN)✅ Ollama GPU service is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for Ollama GPU service... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ Ollama GPU service didn't start in time, trying anyway...$(NC)"
+	@for i in {1..30}; do \
+		if docker ps | grep -q -E "ario-gateway.*(Up|Running)"; then \
+			echo "$(GREEN)✅ AR.IO gateway is ready (syncing)$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for AR.IO gateway... ($$i/30)"; \
+		sleep 2; \
+	done || echo "$(YELLOW)⚠️ AR.IO gateway didn't start in time, trying anyway...$(NC)"
+	@echo "$(YELLOW)⏳ Waiting for Ollama API to be ready...$(NC)"
+	@for i in {1..20}; do \
+		if curl -s "http://localhost:$${OLLAMA_PORT:-11434}/api/tags" >/dev/null; then \
+			echo "$(GREEN)✅ Ollama API is ready$(NC)"; \
+			break; \
+		fi; \
+		echo "Waiting for Ollama API... ($$i/20)"; \
+		sleep 3; \
+	done || echo "$(YELLOW)⚠️ Ollama API didn't respond in time, trying anyway...$(NC)"
+	@echo "$(YELLOW)🤖 Installing LLM models automatically...$(NC)"
+	@make install-models
+	@echo "$(GREEN)🎭 Chatterbox TTS installed during Docker build - Max-Decentralized GPU profile ready!$(NC)"
 
 rebuild-chatterbox: ## Quick rebuild: Standard deployment with Chatterbox TTS focus (CPU) + ngrok
 	@make rebuild PROFILE=chatterbox
@@ -1058,7 +1130,7 @@ reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height
 	echo "$(YELLOW)🗑️  Deleting gateway data directory...$(NC)"; \
 	if [ -d "$$ARIO_DATA_PATH" ]; then \
 		echo "$(BLUE)   Looking for database files that might override START_HEIGHT...$(NC)"; \
-		find "$$ARIO_DATA_PATH" -type f \( -name "*.db" -o -name "*.sqlite*" \) 2>/dev/null | while read db; do \
+		find "$$ARIO_DATA_PATH" -type f \( -name "*.db" -o -name "*.sqlite*" -o -name "*lmdb*" \) 2>/dev/null | while read db; do \
 			echo "$(YELLOW)   Found database: $$db$(NC)"; \
 		done; \
 		echo "$(BLUE)   Deleting ALL files including hidden ones...$(NC)"; \
@@ -1069,8 +1141,15 @@ reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height
 		fi; \
 		echo "$(GREEN)✅ Data directory deleted$(NC)"; \
 	else \
-		echo "$(BLUE)ℹ️  Data directory doesn't exist (nothing to delete)$(NC)"; \
+		echo "$(BLUE)ℹ️  Data directory doesn't exist on host (checking container...)$(NC)"; \
 	fi; \
+	echo "$(BLUE)   Also checking INSIDE container for persistent data...$(NC)"; \
+	if docker ps -q -f name=ario-gateway | grep -q .; then \
+		echo "$(YELLOW)   Container is running - stopping it first...$(NC)"; \
+		docker-compose stop ario-gateway 2>/dev/null || true; \
+	fi; \
+	echo "$(BLUE)   If container has data in /data, it will be cleared on next start$(NC)"; \
+	echo "$(BLUE)   (Volume mount will create fresh empty directory)$(NC)"; \
 	echo ""; \
 	echo "$(BLUE)💡 Verifying START_HEIGHT will be set correctly...$(NC)"; \
 	if docker-compose config 2>/dev/null | grep -q "START_HEIGHT=$$START_HEIGHT_VAL"; then \

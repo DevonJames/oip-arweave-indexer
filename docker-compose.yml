@@ -33,6 +33,8 @@ services:
       - minimal-with-scrape
       - gpu
       - standard-gpu
+      - max-decentralized
+      - max-decentralized-gpu
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.8
@@ -53,6 +55,8 @@ services:
       - minimal-with-scrape
       - gpu
       - standard-gpu
+      - max-decentralized
+      - max-decentralized-gpu
 
   ipfs:
     image: ipfs/go-ipfs:latest
@@ -71,6 +75,8 @@ services:
       - standard
       - standard-macMseries
       - standard-gpu
+      - max-decentralized
+      - max-decentralized-gpu
 
   # Standard OIP service (for distributed deployments with AI features)
   oip:
@@ -107,6 +113,7 @@ services:
     profiles:
       - standard
       - standard-macMseries
+      - max-decentralized
 
   # Minimal OIP service (core functionality only, no AI dependencies, no canvas)
   oip-minimal:
@@ -240,6 +247,7 @@ services:
       - gpu
       - oip-gpu-only
       - standard-gpu
+      - max-decentralized-gpu
 
   # Self-hosted Speech Synthesizer (Coqui TTS) - for distributed deployments
   speech-synthesizer:
@@ -254,6 +262,7 @@ services:
     profiles:
       - standard
       - standard-macMseries
+      - max-decentralized
 
   # GPU-accelerated TTS Service (Neural Models with CUDA)
   tts-service-gpu:
@@ -271,6 +280,7 @@ services:
     profiles:
       - gpu
       - standard-gpu
+      - max-decentralized-gpu
     deploy:
       resources:
         reservations:
@@ -296,6 +306,7 @@ services:
       - standard
       - standard-macMseries
       - standard-monolithic
+      - max-decentralized
 
   # Ollama LLM service for GPU deployments (NVIDIA CUDA)
   ollama-gpu:
@@ -313,6 +324,7 @@ services:
     profiles:
       - standard-gpu
       - gpu
+      - max-decentralized-gpu
     deploy:
       resources:
         reservations:
@@ -340,6 +352,7 @@ services:
       - standard
       - standard-macMseries
       - standard-monolithic
+      - max-decentralized
 
   # Speech-to-Text Service (Whisper)
   stt-service:
@@ -359,6 +372,7 @@ services:
       - standard-monolithic
       - standard
       - standard-macMseries
+      - max-decentralized
 
   # GPU-accelerated Speech-to-Text Service (Whisper with CUDA)
   stt-service-gpu:
@@ -380,6 +394,7 @@ services:
     profiles:
       - standard-gpu
       - gpu
+      - max-decentralized-gpu
     deploy:
       resources:
         reservations:
@@ -400,6 +415,7 @@ services:
       - standard-monolithic
       - standard
       - standard-macMseries
+      - max-decentralized
 
   # Ngrok for public access - DISABLED: Using Makefile ngrok with custom domain instead
   # ngrok:
@@ -433,6 +449,7 @@ services:
     profiles:
       - standard
       - standard-macMseries
+      - max-decentralized
 
   # Ngrok for minimal profile
   ngrok-minimal:
@@ -465,6 +482,7 @@ services:
     restart: unless-stopped
     profiles:
       - standard-gpu
+      - max-decentralized-gpu
 
   # GUN Relay Service for private/temporary storage with multi-node sync support
   gun-relay:
@@ -491,6 +509,8 @@ services:
       - standard-macMseries
       - standard-gpu
       - standard-monolithic
+      - max-decentralized
+      - max-decentralized-gpu
 
   # AR.IO Gateway - Local Arweave gateway with GraphQL support
   # Provides local access to Arweave network data with minimal storage (cache on demand)
@@ -517,17 +537,18 @@ services:
       - PORT=4000
       # Enable GraphQL endpoint for local searches
       - GRAPHQL_ENABLED=true
-      # START_HEIGHT is loaded from .env via env_file directive above
-      # DO NOT set it here in environment section - env_file handles it
+      # START_HEIGHT: Explicitly pass from .env (Docker Compose reads .env for variable substitution)
       # Set START_HEIGHT=1463750 in your .env file
+      # Using ${START_HEIGHT} so Docker Compose substitutes it from .env at compose time
       # START_HEIGHT only applies on FIRST SYNC - if gateway has existing data,
       # it will continue from where it left off. Delete data directory to reset.
+      - START_HEIGHT=${START_HEIGHT}
     networks:
       - oip-network
     restart: unless-stopped
     profiles:
-      - standard
-      - standard-gpu
+      - max-decentralized
+      - max-decentralized-gpu
     healthcheck:
       # Healthcheck uses internal port 4000 (container port, not host port)
       test: ["CMD", "curl", "-f", "http://localhost:4000/ar-io/info"]
