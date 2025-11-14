@@ -370,19 +370,35 @@ try {
     });
     
     // Initialize GUN database after server is created
-    const gun = Gun({
+    // Configure peers from environment variable (for multi-node sync)
+    const gunPeers = process.env.GUN_PEERS ? process.env.GUN_PEERS.split(',').map(p => p.trim()).filter(p => p) : [];
+    
+    const gunConfig = {
         web: server,
         radisk: true,
         file: 'data',
         localStorage: false,
         multicast: false
-    });
+    };
+    
+    // Add peers if configured (for cross-node synchronization)
+    if (gunPeers.length > 0) {
+        gunConfig.peers = gunPeers;
+        console.log(`🌐 GUN peers configured: ${gunPeers.join(', ')}`);
+    }
+    
+    const gun = Gun(gunConfig);
     
     server.listen(8765, '0.0.0.0', () => {
         console.log('✅ GUN HTTP API server running on 0.0.0.0:8765');
         console.log('💾 Local GUN database with persistent storage');
         console.log('🌐 HTTP API endpoints: /put (POST), /get (GET), /list (GET)');
         console.log('📁 Media endpoints: /media/manifest (POST/GET), /media/presence (POST)');
+        if (gunPeers.length > 0) {
+            console.log(`🔗 Connected to ${gunPeers.length} external peer(s) for synchronization`);
+        } else {
+            console.log('📡 Single-node mode: No external peers configured (set GUN_EXTERNAL_PEERS to enable sync)');
+        }
         
         // Test the local GUN database
         setTimeout(() => {
