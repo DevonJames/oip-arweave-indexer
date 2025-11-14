@@ -508,6 +508,8 @@ services:
     volumes:
       # Bind mount to host filesystem for cache/data persistence
       # Set ARIO_GATEWAY_DATA_PATH in .env to customize location (default: ./ario_gateway_data)
+      # IMPORTANT: If START_HEIGHT isn't working, the gateway may have a database that stores
+      # the last synced block. Delete ALL files in this directory including hidden .db files
       - ${ARIO_GATEWAY_DATA_PATH:-./ario_gateway_data}:/data
     environment:
       # AR.IO gateway configuration
@@ -515,18 +517,13 @@ services:
       - PORT=4000
       # Enable GraphQL endpoint for local searches
       - GRAPHQL_ENABLED=true
-      # Optional: Start syncing from a specific block height
-      # Set START_HEIGHT directly in .env file (not ARIO_START_BLOCK_HEIGHT)
-      # The env_file directive will load START_HEIGHT from .env automatically
-      # If not set, gateway will sync from genesis (block 0)
-      # Example: START_HEIGHT=1500000 (to start from block 1.5M)
-      # Note: START_HEIGHT only applies on FIRST SYNC - if gateway has existing data,
+      # START_HEIGHT: Set the starting block height for syncing
+      # Docker Compose reads .env automatically for variable substitution
+      # Set START_HEIGHT=1463750 in your .env file (no quotes, no spaces around =)
+      # START_HEIGHT only applies on FIRST SYNC - if gateway has existing data,
       # it will continue from where it left off. Delete data directory to reset.
-      # Also supports ARIO_START_BLOCK_HEIGHT for backward compatibility
-      - START_HEIGHT=${START_HEIGHT:-${ARIO_START_BLOCK_HEIGHT:-}}
-      # Optional: Limit storage/cache size
-      # Set MAX_STORAGE_GB directly in .env or use ARIO_MAX_STORAGE_GB
-      - MAX_STORAGE_GB=${MAX_STORAGE_GB:-${ARIO_MAX_STORAGE_GB:-}}
+      # Note: If START_HEIGHT is not in .env, this will be empty and gateway starts from genesis
+      - START_HEIGHT=${START_HEIGHT:-}
     networks:
       - oip-network
     restart: unless-stopped
