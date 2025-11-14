@@ -46,9 +46,9 @@ const path = require('path');
 const fs = require('fs');
 const e = require('express');
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
-// let startBlockHeight = 1463762
+let startBlockHeight = 1463762
 
-let startBlockHeight = 1579580;
+// let startBlockHeight = 1579580;
 
 // Note: Elasticsearch client (v8+) uses Undici and manages connection pooling internally
 // The custom HTTP agent configuration is not compatible with newer ES clients
@@ -4946,6 +4946,10 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                     edges {
                         node {
                             id
+                            block {
+                                height
+                                timestamp
+                            }
                         }
                         cursor
                     }
@@ -4997,10 +5001,27 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
             continue;
         }
 
-        const transactions = response.transactions.edges.map(edge => edge.node);
+        const transactions = response.transactions.edges.map(edge => ({
+            id: edge.node.id,
+            blockHeight: edge.node.block?.height || null,
+            blockTimestamp: edge.node.block?.timestamp || null
+        }));
         
-        // Store for processing in reverse order (newest first)
-        transactionsToProcess = transactions.concat(transactionsToProcess);
+        // Log order from GraphQL for debugging
+        if (transactionCount === 0 && transactions.length > 0) {
+            console.log(`🔍 [DEBUG] GraphQL returned ${transactions.length} transactions. First 3 block heights:`, 
+                transactions.slice(0, 3).map(tx => tx.blockHeight).filter(Boolean));
+            if (transactions.length > 1) {
+                const heights = transactions.map(tx => tx.blockHeight).filter(Boolean);
+                if (heights.length >= 2) {
+                    const isDescending = heights[0] > heights[1];
+                    console.log(`🔍 [DEBUG] GraphQL order: ${isDescending ? 'DESCENDING' : 'ASCENDING'} (${heights[0]} → ${heights[1]})`);
+                }
+            }
+        }
+        
+        // Store transactions (will sort later for chronological processing)
+        transactionsToProcess = transactionsToProcess.concat(transactions);
         transactionCount += transactions.length;
 
         // Pagination logic
@@ -5026,11 +5047,33 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
     // MEMORY LEAK FIX: Process transactions immediately as we find them
     // This prevents buffering entire transaction objects in memory
     console.log(`🔎 [searchArweaveForNewTransactions] GraphQL query completed. Found ${transactionCount} transactions with OIP tags (Index-Method:OIP, Ver:0.8.0) from block ${min} onwards`);
-    console.log(`🔍 [keepDBUpToDate] Processing ${transactionsToProcess.length} transactions...`);
     
-    for (let i = 0; i < transactionsToProcess.length; i++) {
-        const tx = transactionsToProcess[i];
-        console.log(`📦 [Transaction ${i+1}/${transactionsToProcess.length}] Processing: ${tx.id}`);
+    // Sort transactions by block height (chronological order: lowest to highest)
+    // This ensures we process transactions in the order they were created on-chain
+    const transactionsWithBlockHeight = transactionsToProcess.filter(tx => tx.blockHeight !== null);
+    const transactionsWithoutBlockHeight = transactionsToProcess.filter(tx => tx.blockHeight === null);
+    
+    // Sort by block height ascending (lowest block number first = chronological)
+    transactionsWithBlockHeight.sort((a, b) => {
+        if (a.blockHeight === null && b.blockHeight === null) return 0;
+        if (a.blockHeight === null) return 1; // Put nulls at end
+        if (b.blockHeight === null) return -1;
+        return a.blockHeight - b.blockHeight; // Ascending order
+    });
+    
+    // Combine: transactions with block height (sorted) first, then those without
+    const sortedTransactions = transactionsWithBlockHeight.concat(transactionsWithoutBlockHeight);
+    
+    if (sortedTransactions.length > 0 && sortedTransactions[0].blockHeight && sortedTransactions[sortedTransactions.length - 1].blockHeight) {
+        console.log(`🔍 [DEBUG] Sorted transactions: Block ${sortedTransactions[0].blockHeight} → Block ${sortedTransactions[sortedTransactions.length - 1].blockHeight} (chronological order)`);
+    }
+    
+    console.log(`🔍 [keepDBUpToDate] Processing ${sortedTransactions.length} transactions in chronological order (lowest block → highest block)...`);
+    
+    for (let i = 0; i < sortedTransactions.length; i++) {
+        const tx = sortedTransactions[i];
+        const blockInfo = tx.blockHeight ? ` (block ${tx.blockHeight})` : '';
+        console.log(`📦 [Transaction ${i+1}/${sortedTransactions.length}] Processing: ${tx.id}${blockInfo}`);
         await processTransaction(tx, remapTemplates);
         processedCount++;
     }
@@ -5046,10 +5089,13 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
 
 async function processTransaction(tx, remapTemplates) {
     try {
-    // console.log(`   📡 Fetching transaction data from blockchain: ${tx.id}`);
-    const transaction = await getTransaction(tx.id);
+    // Handle both old format (just id string) and new format (object with id and blockHeight)
+    const txId = typeof tx === 'string' ? tx : tx.id;
+    
+    // console.log(`   📡 Fetching transaction data from blockchain: ${txId}`);
+    const transaction = await getTransaction(txId);
     if (!transaction || !transaction.tags) {
-        console.log(`   ⚠️  SKIPPED: Cannot find transaction or tags in chain: ${tx.id}`);
+        console.log(`   ⚠️  SKIPPED: Cannot find transaction or tags in chain: ${txId}`);
         return;
     }
     const tags = transaction.tags.reduce((acc, tag) => {
@@ -5074,9 +5120,10 @@ async function processTransaction(tx, remapTemplates) {
     } else {
         console.log(`   ⏭️  SKIPPED: Not an OIP Record or Template with Ver >= 0.8.0`);
     }
-} catch (error) {
-    console.error(`   ❌ ERROR processing transaction ${tx.id}:`, error.message);
-}
+    } catch (error) {
+        const txId = typeof tx === 'string' ? tx : tx.id;
+        console.error(`   ❌ ERROR processing transaction ${txId}:`, error.message);
+    }
 }
 
 async function processNewTemplate(transaction) {
