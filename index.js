@@ -148,14 +148,14 @@ axios.interceptors.response.use(
 validateEnvironment();
 
 // Log AR.IO Gateway configuration status
-const arioGatewayEnabled = process.env.ARIO_GATEWAY_ENABLED === 'true';
-const arioGatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
-if (arioGatewayEnabled) {
-    console.log(`🌐 AR.IO Gateway: ENABLED (${arioGatewayHost})`);
+const useLocalArioGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
+const localArioGatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
+if (useLocalArioGateway) {
+    console.log(`🌐 AR.IO Gateway: ENABLED (${localArioGatewayAddress})`);
     console.log(`   Local gateway will be tried first, falling back to arweave.net if unavailable`);
 } else {
     console.log(`🌐 AR.IO Gateway: DISABLED (using arweave.net only)`);
-    console.log(`   Set ARIO_GATEWAY_ENABLED=true in .env to enable local gateway`);
+    console.log(`   Set USE_LOCAL_ARIO_GATEWAY=true in .env to enable local gateway`);
 }
 
 // Initialize GUN Sync Service (will be started after server is ready)

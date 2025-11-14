@@ -12,21 +12,25 @@ PUBLIC_API_BASE_URL=
 WALLET_FILE=config/arweave-keyfile.json
 
 # AR.IO Gateway Configuration (Local Arweave Gateway)
-# When running standard or standard-gpu profiles, a local AR.IO gateway is available
-# This provides direct access to the Arweave network with GraphQL support
-# Set to 'true' to use local gateway, 'false' to use arweave.net
-ARIO_GATEWAY_ENABLED=true
-# AR.IO Gateway Port (external host port - configurable for multi-stack deployments)
+# For multi-stack deployments: Run ONE stack with max-decentralized or max-decentralized-gpu
+# profile to host the AR.IO gateway, then point all other stacks to it.
+# 
+# USE_LOCAL_ARIO_GATEWAY: Set to 'true' to use a local AR.IO gateway, 'false' to use arweave.net
+# Default: false (uses arweave.net)
+USE_LOCAL_ARIO_GATEWAY=false
+#
+# LOCAL_ARIO_GATEWAY_ADDRESS: Address of your AR.IO gateway (host:port or IP:port)
+# Examples:
+#   - Same machine: localhost:4000
+#   - Different machine on LAN: 192.168.1.100:4000
+#   - Docker service name (if running in same compose stack): ario-gateway:4000
+# Default: localhost:4000
+LOCAL_ARIO_GATEWAY_ADDRESS=localhost:4000
+#
+# AR.IO Gateway Port (for the stack that RUNS the gateway - max-decentralized profiles only)
+# This is the external port that the AR.IO gateway container will bind to
 # Default: 4000
-# Internal Docker network address (automatically uses service name and internal port 4000)
-# Note: Internal port is always 4000 (AR.IO gateway container requirement)
-# External port is configurable via ARIO_GATEWAY_PORT env var
 ARIO_GATEWAY_PORT=4000
-# Internal Docker network address (use service name - port always 4000 internally)
-ARIO_GATEWAY_HOST=http://ario-gateway:4000
-# External host address (for host access - uses ARIO_GATEWAY_PORT)
-# Note: This is automatically constructed from ARIO_GATEWAY_PORT, but can be overridden
-ARIO_GATEWAY_HOST_EXTERNAL=http://localhost:4000
 # AR.IO Gateway Data Storage Path
 # Path where AR.IO gateway cache/data will be stored on host filesystem
 # Default: ./ario_gateway_data (relative to project root)
