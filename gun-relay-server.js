@@ -56,11 +56,51 @@ try {
                         }
                         console.log(`💾 Storing data for soul: ${soul.substring(0, 50)}...`);
                         
+                        // Sanitize data to remove any circular references or non-serializable values
+                        // This helps prevent GUN radisk JSON errors
+                        const sanitizeData = (obj, seen = new WeakSet()) => {
+                            if (obj === null || typeof obj !== 'object') {
+                                return obj;
+                            }
+                            
+                            // Check for circular references
+                            if (seen.has(obj)) {
+                                return '[Circular]';
+                            }
+                            seen.add(obj);
+                            
+                            // Handle arrays
+                            if (Array.isArray(obj)) {
+                                return obj.map(item => sanitizeData(item, seen));
+                            }
+                            
+                            // Handle objects
+                            const sanitized = {};
+                            for (const [key, value] of Object.entries(obj)) {
+                                // Skip functions and undefined
+                                if (typeof value === 'function' || value === undefined) {
+                                    continue;
+                                }
+                                
+                                try {
+                                    sanitized[key] = sanitizeData(value, seen);
+                                } catch (e) {
+                                    console.warn(`⚠️ Failed to sanitize key ${key}:`, e.message);
+                                    sanitized[key] = '[Error serializing]';
+                                }
+                            }
+                            
+                            seen.delete(obj);
+                            return sanitized;
+                        };
+                        
+                        const sanitizedData = sanitizeData(data);
+                        
                         // Store data and ensure all nested properties are properly saved
                         const gunNode = gun.get(soul);
 
                         // Put the main data structure
-                        gunNode.put(data, (ack) => {
+                        gunNode.put(sanitizedData, (ack) => {
                             if (ack.err) {
                                 console.error('❌ GUN put error:', ack.err);
                                 console.error('❌ Error details:', JSON.stringify(ack, null, 2));
@@ -73,50 +113,8 @@ try {
                             } else {
                                 console.log('✅ Data stored successfully');
 
-                                // Ensure nested data is also stored by explicitly setting each property
-                                // This helps GUN properly handle complex nested structures
-                                try {
-                                    if (data.data && typeof data.data === 'object') {
-                                        Object.keys(data.data).forEach(key => {
-                                            try {
-                                                const value = data.data[key];
-                                                // Only put simple values or objects that GUN can handle
-                                                if (value !== null && value !== undefined) {
-                                                    gunNode.get('data').get(key).put(value);
-                                                }
-                                            } catch (nestedError) {
-                                                console.warn(`⚠️ Failed to store nested data.${key}:`, nestedError.message);
-                                            }
-                                        });
-                                    }
-                                    if (data.meta && typeof data.meta === 'object') {
-                                        Object.keys(data.meta).forEach(key => {
-                                            try {
-                                                const value = data.meta[key];
-                                                if (value !== null && value !== undefined) {
-                                                    gunNode.get('meta').get(key).put(value);
-                                                }
-                                            } catch (nestedError) {
-                                                console.warn(`⚠️ Failed to store nested meta.${key}:`, nestedError.message);
-                                            }
-                                        });
-                                    }
-                                    if (data.oip && typeof data.oip === 'object') {
-                                        Object.keys(data.oip).forEach(key => {
-                                            try {
-                                                const value = data.oip[key];
-                                                if (value !== null && value !== undefined) {
-                                                    gunNode.get('oip').get(key).put(value);
-                                                }
-                                            } catch (nestedError) {
-                                                console.warn(`⚠️ Failed to store nested oip.${key}:`, nestedError.message);
-                                            }
-                                        });
-                                    }
-                                } catch (nestedError) {
-                                    console.warn('⚠️ Error storing nested properties (non-fatal):', nestedError.message);
-                                    // Continue - main data was stored successfully
-                                }
+                                // Note: Nested property setting removed - GUN's main put() should handle the structure
+                                // Additional nested puts were causing conflicts and JSON errors in radisk
 
                                 try {
                                     // Maintain a simple in-memory index by publisher hash prefix
