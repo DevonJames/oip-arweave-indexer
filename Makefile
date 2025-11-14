@@ -72,6 +72,7 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(YELLOW)AR.IO Gateway Storage Management:$(NC)"
 	@echo "  make check-ario-storage        # Check AR.IO gateway storage location and disk space"
+	@echo "  make check-ario-env            # Check AR.IO gateway environment variables"
 	@echo "  make reset-ario-gateway        # Reset gateway to start from configured block height (deletes data)"
 	@echo ""
 	@echo "$(YELLOW)GUN Records Backup & Restore:$(NC)"
@@ -958,7 +959,28 @@ check-ario-storage: ## Check AR.IO gateway storage location and disk space
 	echo "$(BLUE)   It doesn't store the full Arweave dataset - only what you access$(NC)"; \
 	echo "$(BLUE)   Block importing logs show metadata indexing, not full data storage$(NC)"
 
-reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height (requires ARIO_START_BLOCK_HEIGHT in .env)
+check-ario-env: ## Check AR.IO gateway environment variables in running container
+	@echo "$(BLUE)🔍 AR.IO Gateway Environment Variables$(NC)"
+	@echo ""
+	@if docker ps | grep -q ario-gateway; then \
+		echo "$(GREEN)✅ Gateway container is running$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)Environment variables in container:$(NC)"; \
+		docker exec $$(docker ps -q -f name=ario-gateway) env | grep -E "(START_HEIGHT|START_BLOCK|MAX_STORAGE|PORT|GRAPHQL)" | sort || echo "$(RED)❌ Could not read environment variables$(NC)"; \
+		echo ""; \
+		echo "$(YELLOW)From docker-compose config:$(NC)"; \
+		docker-compose config 2>/dev/null | grep -A 20 "ario-gateway:" | grep -E "(START_HEIGHT|START_BLOCK|MAX_STORAGE|PORT|GRAPHQL)" || echo "$(YELLOW)⚠️  Could not read docker-compose config$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠️  Gateway container is not running$(NC)"; \
+		echo "$(BLUE)Checking .env file configuration:$(NC)"; \
+		if [ -f .env ]; then \
+			grep -E "^START_HEIGHT=|^ARIO_START_BLOCK_HEIGHT=|^MAX_STORAGE_GB=|^ARIO_MAX_STORAGE_GB=" .env | grep -v "^#" || echo "$(YELLOW)⚠️  No START_HEIGHT variables found in .env$(NC)"; \
+		else \
+			echo "$(RED)❌ .env file not found$(NC)"; \
+		fi; \
+	fi
+
+reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height (requires START_HEIGHT or ARIO_START_BLOCK_HEIGHT in .env)
 	@echo "$(YELLOW)⚠️  WARNING: This will delete all AR.IO gateway data and restart from the configured block height$(NC)"
 	@echo ""
 	@read -p "Are you sure you want to reset the AR.IO gateway? (yes/no): " confirm; \
@@ -969,16 +991,19 @@ reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height
 	echo ""; \
 	if [ -f .env ]; then \
 		export $$(grep -v '^#' .env | grep -E "^ARIO_GATEWAY_DATA_PATH=" | xargs); \
+		export $$(grep -v '^#' .env | grep -E "^START_HEIGHT=" | xargs); \
 		export $$(grep -v '^#' .env | grep -E "^ARIO_START_BLOCK_HEIGHT=" | xargs); \
 	fi; \
 	ARIO_DATA_PATH="$${ARIO_GATEWAY_DATA_PATH:-./ario_gateway_data}"; \
-	if [ -z "$$ARIO_START_BLOCK_HEIGHT" ]; then \
-		echo "$(RED)❌ Error: ARIO_START_BLOCK_HEIGHT not set in .env$(NC)"; \
-		echo "$(BLUE)💡 Set ARIO_START_BLOCK_HEIGHT=<block_height> in .env first$(NC)"; \
+	START_HEIGHT_VAL="$${START_HEIGHT:-$$ARIO_START_BLOCK_HEIGHT}"; \
+	if [ -z "$$START_HEIGHT_VAL" ]; then \
+		echo "$(RED)❌ Error: START_HEIGHT or ARIO_START_BLOCK_HEIGHT not set in .env$(NC)"; \
+		echo "$(BLUE)💡 Set START_HEIGHT=<block_height> in .env (AR.IO gateway expects this name)$(NC)"; \
+		echo "$(BLUE)   Or use ARIO_START_BLOCK_HEIGHT=<block_height> for backward compatibility$(NC)"; \
 		exit 1; \
 	fi; \
 	echo "$(BLUE)📋 Configuration:$(NC)"; \
-	echo "  Start block height: $$ARIO_START_BLOCK_HEIGHT"; \
+	echo "  Start block height: $$START_HEIGHT_VAL"; \
 	echo "  Data path: $$ARIO_DATA_PATH"; \
 	echo ""; \
 	echo "$(YELLOW)🛑 Stopping and removing AR.IO gateway container...$(NC)"; \
@@ -993,17 +1018,20 @@ reset-ario-gateway: ## Reset AR.IO gateway to start from a specific block height
 	fi; \
 	echo ""; \
 	echo "$(BLUE)💡 Verifying START_HEIGHT will be set correctly...$(NC)"; \
-	if docker-compose config 2>/dev/null | grep -q "START_HEIGHT=$$ARIO_START_BLOCK_HEIGHT"; then \
-		echo "$(GREEN)✅ START_HEIGHT environment variable configured correctly$(NC)"; \
+	if docker-compose config 2>/dev/null | grep -q "START_HEIGHT=$$START_HEIGHT_VAL"; then \
+		echo "$(GREEN)✅ START_HEIGHT environment variable configured correctly: $$START_HEIGHT_VAL$(NC)"; \
 	else \
 		echo "$(YELLOW)⚠️  Warning: START_HEIGHT might not be set correctly$(NC)"; \
-		echo "$(BLUE)   Check that ARIO_START_BLOCK_HEIGHT=$$ARIO_START_BLOCK_HEIGHT is in your .env file$(NC)"; \
+		echo "$(BLUE)   Expected: START_HEIGHT=$$START_HEIGHT_VAL$(NC)"; \
+		echo "$(BLUE)   Check that START_HEIGHT=$$START_HEIGHT_VAL is in your .env file$(NC)"; \
+		echo "$(BLUE)   Run 'make check-ario-env' to verify environment variables$(NC)"; \
 	fi; \
 	echo ""; \
 	echo "$(GREEN)✅ Gateway reset complete$(NC)"; \
 	echo "$(BLUE)💡 Start the gateway with: make standard-gpu (or your profile)$(NC)"; \
-	echo "$(BLUE)   It will now sync from block $$ARIO_START_BLOCK_HEIGHT$(NC)"; \
-	echo "$(BLUE)   Note: The gateway container will be recreated with the new START_HEIGHT setting$(NC)"
+	echo "$(BLUE)   It will now sync from block $$START_HEIGHT_VAL$(NC)"; \
+	echo "$(BLUE)   Note: The gateway container will be recreated with the new START_HEIGHT setting$(NC)"; \
+	echo "$(BLUE)   After starting, run 'make check-ario-env' to verify the environment variable is set$(NC)"
 
 # Development helpers
 dev-build: ## Development: Build without cache
