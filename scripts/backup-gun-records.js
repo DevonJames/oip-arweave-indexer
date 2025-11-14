@@ -53,16 +53,19 @@ async function backupGunRecords(outputFile = null) {
                 scroll: '1m'
             };
             
-            if (scrollId) {
-                searchParams.scroll = '1m';
-                searchParams.scrollId = scrollId;
-            }
-            
             const response = scrollId 
-                ? await elasticClient.scroll({ scroll: '1m', scrollId })
+                ? await elasticClient.scroll({ scroll: '1m', scroll_id: scrollId })
                 : await elasticClient.search(searchParams);
             
-            const hits = response.body.hits.hits;
+            // @elastic/elasticsearch returns response directly, not wrapped in .body
+            const hits = response.hits?.hits || [];
+            const totalHits = response.hits?.total?.value || response.hits?.total || 0;
+            
+            if (!hits || hits.length === 0) {
+                console.log('   No more records found');
+                break;
+            }
+            
             totalCount += hits.length;
             
             for (const hit of hits) {
@@ -72,15 +75,26 @@ async function backupGunRecords(outputFile = null) {
                 });
             }
             
-            scrollId = response.body._scroll_id;
+            // Get scroll ID from response (may be _scroll_id or scroll_id depending on version)
+            scrollId = response._scroll_id || response.scroll_id || null;
             
-            console.log(`   Found ${totalCount} records so far...`);
+            console.log(`   Found ${totalCount} records so far (total available: ${totalHits})...`);
             
-        } while (scrollId && totalCount < response.body.hits.total.value);
+            // Break if we've retrieved all records or no scroll ID
+            if (!scrollId || totalCount >= totalHits) {
+                break;
+            }
+            
+        } while (scrollId);
         
-        // Clear scroll
+        // Clear scroll (if still active)
         if (scrollId) {
-            await elasticClient.clearScroll({ scrollId });
+            try {
+                await elasticClient.clearScroll({ scroll_id: scrollId });
+            } catch (clearError) {
+                // Ignore clear scroll errors (scroll may have expired)
+                console.log('   Note: Scroll already cleared or expired');
+            }
         }
         
         console.log(`✅ Found ${allRecords.length} GUN records total`);
