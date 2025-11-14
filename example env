@@ -31,6 +31,18 @@ ARIO_GATEWAY_HOST_EXTERNAL=http://localhost:4000
 # Path where AR.IO gateway cache/data will be stored on host filesystem
 # Default: ./ario_gateway_data (relative to project root)
 ARIO_GATEWAY_DATA_PATH=./ario_gateway_data
+# AR.IO Gateway Start Block Height (optional)
+# Start syncing from a specific block height instead of genesis (block 0)
+# Useful if you only need recent data - saves time and storage
+# Example: ARIO_START_BLOCK_HEIGHT=1500000 (start from block 1.5M)
+# Leave empty or unset to sync from genesis
+# ARIO_START_BLOCK_HEIGHT=
+# AR.IO Gateway Max Storage Limit (optional)
+# Limit the cache/storage size in GB
+# Gateway will cache on demand but won't exceed this limit
+# Example: ARIO_MAX_STORAGE_GB=100 (limit to 100GB)
+# Leave empty or unset for unlimited cache (on-demand only)
+# ARIO_MAX_STORAGE_GB=
 
 # Turbo SDK Configuration (ArDrive)
 # These environment variables may help resolve ERR_INVALID_URL errors
