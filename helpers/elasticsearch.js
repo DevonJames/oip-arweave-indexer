@@ -17,16 +17,20 @@ const https = require('https');
 // Helper function to get GraphQL endpoints (local AR.IO gateway first, then arweave.net fallback)
 function getGraphQLEndpoints() {
     const endpoints = [];
-    const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
-    const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+    const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
+    const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
     
-    // Always add local gateway first if enabled
-    if (useLocalGateway) {
+    // Add local gateway first if enabled
+    if (useLocalGateway && gatewayAddress) {
         try {
-            const url = new URL(gatewayHost);
+            // Handle addresses with or without protocol
+            const addressWithProtocol = gatewayAddress.startsWith('http') 
+                ? gatewayAddress 
+                : `http://${gatewayAddress}`;
+            const url = new URL(addressWithProtocol);
             endpoints.push(`${url.protocol}//${url.host}/graphql`);
         } catch (error) {
-            console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+            console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
         }
     }
     
@@ -44,16 +48,20 @@ function getGraphQLEndpoint() {
 // Helper function to get gateway base URLs (local AR.IO gateway first, then arweave.net fallback)
 function getGatewayBaseUrls() {
     const urls = [];
-    const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
-    const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+    const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
+    const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
     
-    // Always add local gateway first if enabled
-    if (useLocalGateway) {
+    // Add local gateway first if enabled
+    if (useLocalGateway && gatewayAddress) {
         try {
-            const url = new URL(gatewayHost);
+            // Handle addresses with or without protocol
+            const addressWithProtocol = gatewayAddress.startsWith('http') 
+                ? gatewayAddress 
+                : `http://${gatewayAddress}`;
+            const url = new URL(addressWithProtocol);
             urls.push(`${url.protocol}//${url.host}`);
         } catch (error) {
-            console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+            console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
         }
     }
     

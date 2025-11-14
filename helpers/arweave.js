@@ -47,17 +47,20 @@ const getTransaction = async (transactionId) => {
             };
 
             // Try local AR.IO gateway first, then fallback to arweave.net
-            const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
-            const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+            const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
+            const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
             const graphqlEndpoints = [];
             
             // Add local gateway first if enabled
-            if (useLocalGateway) {
+            if (useLocalGateway && gatewayAddress) {
                 try {
-                    const url = new URL(gatewayHost);
+                    const addressWithProtocol = gatewayAddress.startsWith('http') 
+                        ? gatewayAddress 
+                        : `http://${gatewayAddress}`;
+                    const url = new URL(addressWithProtocol);
                     graphqlEndpoints.push(`${url.protocol}//${url.host}/graphql`);
                 } catch (error) {
-                    console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+                    console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
                 }
             }
             
@@ -109,17 +112,20 @@ const getTransaction = async (transactionId) => {
         // Now get the actual data content
         try {
             // Try local AR.IO gateway first, then fallback to arweave.net
-            const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
-            const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+            const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
+            const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
             const gatewayUrls = [];
             
             // Add local gateway first if enabled
-            if (useLocalGateway) {
+            if (useLocalGateway && gatewayAddress) {
                 try {
-                    const url = new URL(gatewayHost);
+                    const addressWithProtocol = gatewayAddress.startsWith('http') 
+                        ? gatewayAddress 
+                        : `http://${gatewayAddress}`;
+                    const url = new URL(addressWithProtocol);
                     gatewayUrls.push(`${url.protocol}//${url.host}`);
                 } catch (error) {
-                    console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+                    console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
                 }
             }
             
@@ -238,26 +244,29 @@ async function getBlockHeightFromTxId(txId) {
     try {
         // Use the txId to get the block height from Arweave network
         // Try local AR.IO gateway first, then fallback to arweave.net
-        const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
-        const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+        const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
+        const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
         const gatewayUrls = [];
         
         // Debug logging
         if (process.env.DEBUG_ARIO === 'true') {
-            console.log(`🔍 [getBlockHeightFromTxId] ARIO_GATEWAY_ENABLED=${process.env.ARIO_GATEWAY_ENABLED}, useLocalGateway=${useLocalGateway}, gatewayHost=${gatewayHost}`);
+            console.log(`🔍 [getBlockHeightFromTxId] USE_LOCAL_ARIO_GATEWAY=${process.env.USE_LOCAL_ARIO_GATEWAY}, useLocalGateway=${useLocalGateway}, gatewayAddress=${gatewayAddress}`);
         }
         
         // Add local gateway first if enabled
-        if (useLocalGateway) {
+        if (useLocalGateway && gatewayAddress) {
             try {
-                const url = new URL(gatewayHost);
+                const addressWithProtocol = gatewayAddress.startsWith('http') 
+                    ? gatewayAddress 
+                    : `http://${gatewayAddress}`;
+                const url = new URL(addressWithProtocol);
                 const localGatewayUrl = `${url.protocol}//${url.host}`;
                 gatewayUrls.push(localGatewayUrl);
                 if (process.env.DEBUG_ARIO === 'true') {
                     console.log(`🔍 [getBlockHeightFromTxId] Added local gateway: ${localGatewayUrl}`);
                 }
             } catch (error) {
-                console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+                console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
             }
         } else {
             if (process.env.DEBUG_ARIO === 'true') {
@@ -316,17 +325,20 @@ async function getBlockHeightFromTxId(txId) {
 const getCurrentBlockHeight = async () => {
     try {
         // Try local AR.IO gateway first, then fallback to arweave.net
-        const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
-        const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+        const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
+        const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
         const gatewayUrls = [];
         
         // Add local gateway first if enabled
-        if (useLocalGateway) {
+        if (useLocalGateway && gatewayAddress) {
             try {
-                const url = new URL(gatewayHost);
+                const addressWithProtocol = gatewayAddress.startsWith('http') 
+                    ? gatewayAddress 
+                    : `http://${gatewayAddress}`;
+                const url = new URL(addressWithProtocol);
                 gatewayUrls.push(`${url.protocol}//${url.host}`);
             } catch (error) {
-                console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+                console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS format: ${error.message}`);
             }
         }
         

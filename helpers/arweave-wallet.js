@@ -7,13 +7,17 @@ class ArweaveWalletManager {
         this.turboInstance = null;
         
         // Use local AR.IO gateway if enabled, otherwise use arweave.net
-        const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
-        const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+        const useLocalGateway = process.env.USE_LOCAL_ARIO_GATEWAY === 'true';
+        const gatewayAddress = process.env.LOCAL_ARIO_GATEWAY_ADDRESS || 'localhost:4000';
         
         let arweaveConfig;
-        if (useLocalGateway) {
+        if (useLocalGateway && gatewayAddress) {
             try {
-                const url = new URL(gatewayHost);
+                // Handle addresses with or without protocol
+                const addressWithProtocol = gatewayAddress.startsWith('http') 
+                    ? gatewayAddress 
+                    : `http://${gatewayAddress}`;
+                const url = new URL(addressWithProtocol);
                 arweaveConfig = {
                     host: url.hostname,
                     port: parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80),
@@ -21,9 +25,9 @@ class ArweaveWalletManager {
                     timeout: 20000,
                     logging: false
                 };
-                console.log(`✅ ArweaveWalletManager using local AR.IO gateway: ${gatewayHost}`);
+                console.log(`✅ ArweaveWalletManager using local AR.IO gateway: ${addressWithProtocol}`);
             } catch (error) {
-                console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST, falling back to arweave.net: ${error.message}`);
+                console.warn(`⚠️  Invalid LOCAL_ARIO_GATEWAY_ADDRESS, falling back to arweave.net: ${error.message}`);
                 arweaveConfig = {
                     host: 'arweave.net',
                     port: 443,
