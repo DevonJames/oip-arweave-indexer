@@ -516,11 +516,13 @@ services:
       # Optional: Start syncing from a specific block height (set in .env as ARIO_START_BLOCK_HEIGHT)
       # If not set, gateway will sync from genesis (block 0)
       # Example: ARIO_START_BLOCK_HEIGHT=1500000 (to start from block 1.5M)
-      ${ARIO_START_BLOCK_HEIGHT:+START_BLOCK_HEIGHT=${ARIO_START_BLOCK_HEIGHT}}
+      # Note: Set START_BLOCK_HEIGHT only if ARIO_START_BLOCK_HEIGHT is defined in .env
+      - START_BLOCK_HEIGHT=${ARIO_START_BLOCK_HEIGHT:-}
       # Optional: Limit storage/cache size (set in .env as ARIO_MAX_STORAGE_GB)
       # If not set, gateway will cache on demand without hard limit
       # Example: ARIO_MAX_STORAGE_GB=100 (limit to 100GB cache)
-      ${ARIO_MAX_STORAGE_GB:+MAX_STORAGE_GB=${ARIO_MAX_STORAGE_GB}}
+      # Note: Set MAX_STORAGE_GB only if ARIO_MAX_STORAGE_GB is defined in .env
+      - MAX_STORAGE_GB=${ARIO_MAX_STORAGE_GB:-}
     networks:
       - oip-network
     restart: unless-stopped
