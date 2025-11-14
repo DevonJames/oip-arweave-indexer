@@ -100,9 +100,9 @@ const path = require('path');
 const fs = require('fs');
 const e = require('express');
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
-let startBlockHeight = 1463762
+// let startBlockHeight = 1463762
 
-// let startBlockHeight = 1579580;
+let startBlockHeight = 1579580;
 
 // Note: Elasticsearch client (v8+) uses Undici and manages connection pooling internally
 // The custom HTTP agent configuration is not compatible with newer ES clients
@@ -4557,14 +4557,28 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         // console.log(getFileInfo(), getLineNumber(),'transaction:', transaction, 'transaction.data:', transaction.data, 'type of transaction.data:', typeof transaction.data);
     if (typeof transaction.data === 'string') {
         try {
-            // Attempt to parse the JSON string directly
-            transactionData = JSON.parse(`[${transaction.data.replace(/}{/g, '},{')}]`);
+            // First, try parsing as-is (in case it's already a valid JSON array)
+            let parsed = JSON.parse(transaction.data);
+            
+            // If it's already an array, use it directly
+            if (Array.isArray(parsed)) {
+                transactionData = parsed;
+            } else {
+                // If it's an object, wrap it in an array
+                transactionData = [parsed];
+            }
         } catch (error) {
-            console.error(getFileInfo(), getLineNumber(), `Invalid JSON data, skipping: ${transactionId}`);
-            return
+            // If parsing fails, try fixing malformed JSON (objects not separated properly)
+            try {
+                transactionData = JSON.parse(`[${transaction.data.replace(/}{/g, '},{')}]`);
+            } catch (secondError) {
+                console.error(getFileInfo(), getLineNumber(), `Invalid JSON data, skipping: ${transactionId}`, error.message);
+                return
+            }
         }
     } else if (typeof transaction.data === 'object') {
-        transactionData = transaction.data;
+        // If it's already an array, use it directly; otherwise wrap in array
+        transactionData = Array.isArray(transaction.data) ? transaction.data : [transaction.data];
     } else {
         console.log(getFileInfo(), getLineNumber(), 'getNewCreatorRegistrations UNSUPPORTED DATA TYPE, skipping:', transactionId);
         return
@@ -4585,15 +4599,39 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
     // }
     if (transaction.transactionId === 'eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y' || transaction.transactionId === '5lbSxo2TeD_fwZQwwCejjCUZAitJkNT63JBRdC7flgc' || transaction.transactionId === 'VPOc02NjJfJ-dYklnMTWWm3tEddEQPlmYRmJdDyzuP4') {
         // creator = creatorInfo;
-        creatorHandle = (creatorHandle !== undefined) ? creatorHandle : await convertToCreatorHandle(transaction.transactionId, JSON.parse(transaction.data)[0]["2"]);
-        block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
-        console.log('1402 transaction:', transaction);
-        creator = {
-            data: {
-                name: JSON.parse(transaction.data)[0]["3"],
-                surname: JSON.parse(transaction.data)[1]["0"],
-                language: (JSON.parse(transaction.data)[1]["3"] === 37) ? 'en' : '',
-            },
+        // Parse transaction data safely
+        let parsedData;
+        try {
+            if (typeof transaction.data === 'string') {
+                parsedData = JSON.parse(transaction.data);
+            } else if (typeof transaction.data === 'object') {
+                parsedData = transaction.data;
+            } else {
+                throw new Error(`Unsupported data type: ${typeof transaction.data}`);
+            }
+            
+            // Ensure parsedData is an array and has at least one element
+            const dataArray = Array.isArray(parsedData) ? parsedData : [parsedData];
+            if (!dataArray[0]) {
+                throw new Error('Transaction data array is empty or missing first element');
+            }
+            
+            const firstElement = dataArray[0];
+            const secondElement = dataArray[1] || {};
+            
+            if (!firstElement["2"]) {
+                throw new Error('Transaction data missing required field "2" (handle)');
+            }
+            
+            creatorHandle = (creatorHandle !== undefined) ? creatorHandle : await convertToCreatorHandle(transaction.transactionId, firstElement["2"]);
+            block = (block !== undefined) ? block : (transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId));
+            console.log('1402 transaction:', transaction);
+            creator = {
+                data: {
+                    name: firstElement["3"] || '',
+                    surname: secondElement["0"] || '',
+                    language: (secondElement["3"] === 37) ? 'en' : '',
+                },
             oip: {
                 recordType: 'creatorRegistration',
                 did: creatorInfo.data.didTx,
@@ -4609,6 +4647,12 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
                     publicKey: creatorInfo.data.publicKey,
                 }
             },
+        }
+        } catch (error) {
+            console.error(getFileInfo(), getLineNumber(), `Error parsing transaction data for special case ${transaction.transactionId}:`, error.message);
+            console.error(`  Transaction data type: ${typeof transaction.data}`);
+            console.error(`  Transaction data: ${typeof transaction.data === 'string' ? transaction.data.substring(0, 200) : JSON.stringify(transaction.data).substring(0, 200)}`);
+            throw error;
         }
     }
     else {
@@ -5569,23 +5613,70 @@ async function processNewRecord(transaction, remapTemplates = []) {
         // does not apply
         console.log(getFileInfo(), getLineNumber(), 'Processing creator registration:', transactionId, transaction);
         
-        const creatorHandle = await convertToCreatorHandle(transactionId, JSON.parse(transaction.data)[0]["2"]);
-        const data = {
-            publicKey: JSON.parse(transaction.data)[0]["1"],
-            creatorHandle: creatorHandle,
-            didAddress: 'did:arweave:' + JSON.parse(transaction.data)[0]["0"],
-            didTx: 'did:arweave:' + transactionId,
+        // Parse transaction data safely
+        let parsedData;
+        try {
+            // Debug: log what we're working with
+            console.log(`  [DEBUG] transaction.data type: ${typeof transaction.data}`);
+            console.log(`  [DEBUG] transaction.data length: ${typeof transaction.data === 'string' ? transaction.data.length : 'N/A'}`);
+            console.log(`  [DEBUG] transaction.data preview: ${typeof transaction.data === 'string' ? transaction.data.substring(0, 100) : JSON.stringify(transaction.data).substring(0, 100)}`);
+            
+            if (typeof transaction.data === 'string') {
+                parsedData = JSON.parse(transaction.data);
+            } else if (typeof transaction.data === 'object') {
+                parsedData = transaction.data;
+            } else {
+                throw new Error(`Unsupported data type: ${typeof transaction.data}`);
+            }
+            
+            console.log(`  [DEBUG] parsedData type: ${typeof parsedData}, isArray: ${Array.isArray(parsedData)}`);
+            console.log(`  [DEBUG] parsedData:`, JSON.stringify(parsedData).substring(0, 200));
+            
+            // Ensure parsedData is an array and has at least one element
+            const dataArray = Array.isArray(parsedData) ? parsedData : [parsedData];
+            console.log(`  [DEBUG] dataArray length: ${dataArray.length}`);
+            
+            if (!dataArray[0]) {
+                throw new Error('Transaction data array is empty or missing first element');
+            }
+            
+            const firstElement = dataArray[0];
+            console.log(`  [DEBUG] firstElement keys:`, Object.keys(firstElement));
+            console.log(`  [DEBUG] firstElement["0"]:`, firstElement["0"]);
+            console.log(`  [DEBUG] firstElement["1"]:`, firstElement["1"] ? firstElement["1"].substring(0, 50) + '...' : 'undefined');
+            console.log(`  [DEBUG] firstElement["2"]:`, firstElement["2"]);
+            
+            if (!firstElement["0"] || !firstElement["1"] || !firstElement["2"]) {
+                throw new Error(`Transaction data missing required fields - "0": ${!!firstElement["0"]}, "1": ${!!firstElement["1"]}, "2": ${!!firstElement["2"]}`);
+            }
+            
+            const creatorHandle = await convertToCreatorHandle(transactionId, firstElement["2"]);
+            const data = {
+                publicKey: firstElement["1"],
+                creatorHandle: creatorHandle,
+                didAddress: 'did:arweave:' + firstElement["0"],
+                didTx: 'did:arweave:' + transactionId,
+            }
+            console.log(`  [DEBUG] Created creator data:`, { didAddress: data.didAddress, creatorHandle: data.creatorHandle });
+            // console.log(getFileInfo(), getLineNumber(), 'Creator data:', data);
+            creatorInfo = {
+                data,
+            } 
+            // console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
+            const creatorRegistrationParams = {
+                transaction,
+                creatorInfo
+            }
+            await indexNewCreatorRegistration(creatorRegistrationParams)
+        } catch (error) {
+            console.error(getFileInfo(), getLineNumber(), `Error parsing creator registration data for ${transactionId}:`, error.message);
+            console.error(`  Transaction data type: ${typeof transaction.data}`);
+            console.error(`  Transaction data: ${typeof transaction.data === 'string' ? transaction.data.substring(0, 500) : JSON.stringify(transaction.data).substring(0, 500)}`);
+            if (error.stack) {
+                console.error(`  Stack:`, error.stack.split('\n').slice(0, 5).join('\n'));
+            }
+            throw error;
         }
-        // console.log(getFileInfo(), getLineNumber(), 'Creator data:', data);
-        creatorInfo = {
-            data,
-        } 
-        // console.log(getFileInfo(), getLineNumber(), 'Creator info:', creatorInfo);
-        const creatorRegistrationParams = {
-            transaction,
-            creatorInfo
-        }
-        await indexNewCreatorRegistration(creatorRegistrationParams)
     }
     
     // handle organization registration (use if, not else if, so it continues to normal record processing)
