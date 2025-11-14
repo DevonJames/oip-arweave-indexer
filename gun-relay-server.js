@@ -239,12 +239,20 @@ try {
                 // Use a counter to track when all properties are loaded
                 let pending = 3; // data, meta, oip
                 let completed = false;
+                let hasChildren = false;
 
                 const checkComplete = () => {
                     if (--pending === 0 && !completed) {
                         completed = true;
+                        // Check if this is a parent node with children (registry indexes)
+                        // If no data/meta/oip but has other properties, it's likely a parent node
                         if (Object.keys(result).length > 0) {
                             console.log('✅ Data retrieved successfully');
+                            res.writeHead(200);
+                            res.end(JSON.stringify({ success: true, data: result }));
+                        } else if (hasChildren) {
+                            // Parent node with children but no data/meta/oip - return children
+                            console.log('✅ Parent node with children retrieved');
                             res.writeHead(200);
                             res.end(JSON.stringify({ success: true, data: result }));
                         } else {
@@ -255,15 +263,61 @@ try {
                     }
                 };
 
-                // Retrieve main data
+                // Retrieve main data - handle both regular records and parent nodes with children
                 gunNode.once((mainData) => {
                     if (mainData) {
                         result._ = mainData._;
                         // Remove GUN internal properties
-                        delete mainData._;
-                        Object.assign(result, mainData);
+                        const gunInternalProps = ['_', '#', '>', '<'];
+                        
+                        // Collect all properties including potential child references
+                        const allKeys = Object.keys(mainData);
+                        const childPromises = [];
+                        
+                        allKeys.forEach(key => {
+                            if (!gunInternalProps.includes(key)) {
+                                const value = mainData[key];
+                                
+                                // Check if this looks like a child node reference (object with # property)
+                                if (typeof value === 'object' && value !== null && value['#']) {
+                                    // This is a GUN node reference - fetch the actual child data
+                                    hasChildren = true;
+                                    const childSoul = value['#'];
+                                    const childPromise = new Promise((resolve) => {
+                                        gun.get(childSoul).once((childData) => {
+                                            if (childData && typeof childData === 'object') {
+                                                const cleanChild = {};
+                                                Object.keys(childData).forEach(childKey => {
+                                                    if (!gunInternalProps.includes(childKey)) {
+                                                        cleanChild[childKey] = childData[childKey];
+                                                    }
+                                                });
+                                                if (Object.keys(cleanChild).length > 0) {
+                                                    result[key] = cleanChild;
+                                                }
+                                            }
+                                            resolve();
+                                        });
+                                    });
+                                    childPromises.push(childPromise);
+                                } else if (value !== null && value !== undefined) {
+                                    // Direct property value
+                                    result[key] = value;
+                                }
+                            }
+                        });
+                        
+                        // Wait for all child nodes to load before completing
+                        if (childPromises.length > 0) {
+                            Promise.all(childPromises).then(() => {
+                                checkComplete();
+                            });
+                        } else {
+                            checkComplete();
+                        }
+                    } else {
+                        checkComplete();
                     }
-                    checkComplete();
                 });
 
                 // Retrieve nested data if it exists
