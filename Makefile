@@ -70,6 +70,9 @@ help: ## Show this help message
 	@echo "  make migrate-elasticsearch-data # Migrate from Docker volume to host bind mount"
 	@echo "  make clean-old-es-volume       # Remove old Docker volume after migration"
 	@echo ""
+	@echo "$(YELLOW)AR.IO Gateway Storage Management:$(NC)"
+	@echo "  make check-ario-storage        # Check AR.IO gateway storage location and disk space"
+	@echo ""
 	@echo "$(YELLOW)GUN Records Backup & Restore:$(NC)"
 	@echo "  make backup-gun-records        # Backup all GUN records from Elasticsearch to JSON file"
 	@echo "  make restore-gun-records FILE=backup.json  # Restore GUN records from backup file"
@@ -907,6 +910,52 @@ check-es-storage: ## Check Elasticsearch storage location and disk space
 	else \
 		echo "$(GREEN)✅ No old Docker volume found$(NC)"; \
 	fi
+
+check-ario-storage: ## Check AR.IO gateway storage location and disk space
+	@echo "$(BLUE)📊 AR.IO Gateway Storage Information$(NC)"
+	@echo ""
+	@if [ -f .env ]; then \
+		export $$(grep -v '^#' .env | grep -E "^ARIO_GATEWAY_DATA_PATH=" | xargs); \
+		export $$(grep -v '^#' .env | grep -E "^ARIO_START_BLOCK_HEIGHT=" | xargs); \
+		export $$(grep -v '^#' .env | grep -E "^ARIO_MAX_STORAGE_GB=" | xargs); \
+	fi; \
+	ARIO_DATA_PATH="$${ARIO_GATEWAY_DATA_PATH:-./ario_gateway_data}"; \
+	echo "$(YELLOW)Configured path:$(NC) $$ARIO_DATA_PATH"; \
+	if [ -d "$$ARIO_DATA_PATH" ]; then \
+		echo "$(GREEN)✅ Directory exists$(NC)"; \
+		echo "$(YELLOW)Current size:$(NC) $$(du -sh "$$ARIO_DATA_PATH" 2>/dev/null | cut -f1 || echo 'unknown')"; \
+		echo "$(YELLOW)Disk space available:$(NC) $$(df -h "$$ARIO_DATA_PATH" | tail -1 | awk '{print $$4}')"; \
+		echo "$(YELLOW)Mount point:$(NC) $$(df -h "$$ARIO_DATA_PATH" | tail -1 | awk '{print $$6}')"; \
+		echo ""; \
+		echo "$(BLUE)Storage breakdown:$(NC)"; \
+		if [ -d "$$ARIO_DATA_PATH" ]; then \
+			du -sh "$$ARIO_DATA_PATH"/* 2>/dev/null | sort -h | tail -10 || echo "  (no subdirectories yet)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)⚠️  Directory does not exist yet$(NC)"; \
+		echo "$(BLUE)It will be created when you start the AR.IO gateway$(NC)"; \
+	fi; \
+	echo ""; \
+	if [ -n "$$ARIO_START_BLOCK_HEIGHT" ]; then \
+		echo "$(GREEN)✅ Start block height configured:$(NC) $$ARIO_START_BLOCK_HEIGHT"; \
+		echo "$(BLUE)Gateway will sync from block $$ARIO_START_BLOCK_HEIGHT onwards$(NC)"; \
+	else \
+		echo "$(YELLOW)⚠️  Start block height not set$(NC)"; \
+		echo "$(BLUE)Gateway will sync from genesis (block 0) - this may take a long time$(NC)"; \
+		echo "$(BLUE)💡 Set ARIO_START_BLOCK_HEIGHT in .env to start from a specific block$(NC)"; \
+	fi; \
+	echo ""; \
+	if [ -n "$$ARIO_MAX_STORAGE_GB" ]; then \
+		echo "$(GREEN)✅ Max storage limit configured:$(NC) $$ARIO_MAX_STORAGE_GB GB"; \
+	else \
+		echo "$(YELLOW)⚠️  Max storage limit not set$(NC)"; \
+		echo "$(BLUE)Gateway will cache on demand without hard limit$(NC)"; \
+		echo "$(BLUE)💡 Set ARIO_MAX_STORAGE_GB in .env to limit cache size$(NC)"; \
+	fi; \
+	echo ""; \
+	echo "$(BLUE)💡 Note: AR.IO gateway caches data on demand$(NC)"; \
+	echo "$(BLUE)   It doesn't store the full Arweave dataset - only what you access$(NC)"; \
+	echo "$(BLUE)   Block importing logs show metadata indexing, not full data storage$(NC)"
 
 # Development helpers
 dev-build: ## Development: Build without cache

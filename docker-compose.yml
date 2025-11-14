@@ -495,6 +495,8 @@ services:
   # AR.IO Gateway - Local Arweave gateway with GraphQL support
   # Provides local access to Arweave network data with minimal storage (cache on demand)
   # Exposes GraphQL endpoint at /graphql for local searches
+  # Note: AR.IO gateway caches data on demand - it doesn't need to sync all blocks
+  # If you see block importing logs, it's indexing metadata, not storing all data
   ario-gateway:
     image: ghcr.io/ar-io/ar-io-core:latest
     ports:
@@ -511,6 +513,14 @@ services:
       - PORT=4000
       # Enable GraphQL endpoint for local searches
       - GRAPHQL_ENABLED=true
+      # Optional: Start syncing from a specific block height (set in .env as ARIO_START_BLOCK_HEIGHT)
+      # If not set, gateway will sync from genesis (block 0)
+      # Example: ARIO_START_BLOCK_HEIGHT=1500000 (to start from block 1.5M)
+      ${ARIO_START_BLOCK_HEIGHT:+START_BLOCK_HEIGHT=${ARIO_START_BLOCK_HEIGHT}}
+      # Optional: Limit storage/cache size (set in .env as ARIO_MAX_STORAGE_GB)
+      # If not set, gateway will cache on demand without hard limit
+      # Example: ARIO_MAX_STORAGE_GB=100 (limit to 100GB cache)
+      ${ARIO_MAX_STORAGE_GB:+MAX_STORAGE_GB=${ARIO_MAX_STORAGE_GB}}
     networks:
       - oip-network
     restart: unless-stopped
