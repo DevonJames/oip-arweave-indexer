@@ -1764,11 +1764,8 @@ async function updateRecord(txid, updatedData, recordType) {
     
     // Create transaction with OIP record as data
     const Arweave = require('arweave');
-    const arweave = Arweave.init({
-      host: process.env.ARWEAVE_HOST || 'arweave.net',
-      port: process.env.ARWEAVE_PORT || 443,
-      protocol: process.env.ARWEAVE_PROTOCOL || 'https'
-    });
+    const arweaveConfig = require('../config/arweave.config');
+    const arweave = Arweave.init(arweaveConfig);
     
     // Create transaction with record data
     const transaction = await arweave.createTransaction({

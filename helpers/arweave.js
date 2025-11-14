@@ -46,10 +46,49 @@ const getTransaction = async (transactionId) => {
                 variables: { id: transactionId }
             };
 
-            const graphqlResponse = await axios.post('https://arweave.net/graphql', graphqlQuery, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 15000
-            });
+            // Try local AR.IO gateway first, then fallback to arweave.net
+            const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
+            const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+            const graphqlEndpoints = [];
+            
+            // Add local gateway first if enabled
+            if (useLocalGateway) {
+                try {
+                    const url = new URL(gatewayHost);
+                    graphqlEndpoints.push(`${url.protocol}//${url.host}/graphql`);
+                } catch (error) {
+                    console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+                }
+            }
+            
+            // Always add arweave.net as fallback
+            graphqlEndpoints.push('https://arweave.net/graphql');
+            
+            let graphqlResponse = null;
+            let lastError = null;
+            
+            // Try each endpoint in order
+            for (const graphqlEndpoint of graphqlEndpoints) {
+                try {
+                    graphqlResponse = await axios.post(graphqlEndpoint, graphqlQuery, {
+                        headers: { 'Content-Type': 'application/json' },
+                        timeout: 15000
+                    });
+                    if (graphqlEndpoint !== graphqlEndpoints[0]) {
+                        console.log(`✅ Using fallback GraphQL endpoint: ${graphqlEndpoint}`);
+                    }
+                    break; // Success, exit loop
+                } catch (error) {
+                    lastError = error;
+                    if (graphqlEndpoint !== graphqlEndpoints[graphqlEndpoints.length - 1]) {
+                        console.warn(`⚠️  GraphQL query failed on ${graphqlEndpoint}: ${error.message}. Trying fallback...`);
+                    }
+                }
+            }
+            
+            if (!graphqlResponse) {
+                throw lastError || new Error('All GraphQL endpoints failed');
+            }
 
             if (graphqlResponse.data && graphqlResponse.data.data && graphqlResponse.data.data.transaction) {
                 const txData = graphqlResponse.data.data.transaction;
@@ -69,15 +108,54 @@ const getTransaction = async (transactionId) => {
 
         // Now get the actual data content
         try {
-            // Try direct gateway fetch first for data items (avoids the native client bug)
-            const dataResponse = await axios.get(`https://arweave.net/${transactionId}`, {
-                responseType: 'text',
-                timeout: 30000
-            });
-            data = dataResponse.data;
-            // console.log(`Successfully fetched data from gateway for ${transactionId}`);
+            // Try local AR.IO gateway first, then fallback to arweave.net
+            const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
+            const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+            const gatewayUrls = [];
+            
+            // Add local gateway first if enabled
+            if (useLocalGateway) {
+                try {
+                    const url = new URL(gatewayHost);
+                    gatewayUrls.push(`${url.protocol}//${url.host}`);
+                } catch (error) {
+                    console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+                }
+            }
+            
+            // Always add arweave.net as fallback
+            gatewayUrls.push('https://arweave.net');
+            
+            let dataResponse = null;
+            let gatewayError = null;
+            
+            // Try each gateway URL in order
+            for (const gatewayBaseUrl of gatewayUrls) {
+                try {
+                    // Try direct gateway fetch first for data items (avoids the native client bug)
+                    dataResponse = await axios.get(`${gatewayBaseUrl}/${transactionId}`, {
+                        responseType: 'text',
+                        timeout: 30000
+                    });
+                    data = dataResponse.data;
+                    if (gatewayBaseUrl !== gatewayUrls[0]) {
+                        console.log(`✅ Using fallback gateway: ${gatewayBaseUrl}`);
+                    }
+                    // console.log(`Successfully fetched data from gateway for ${transactionId}`);
+                    break; // Success, exit loop
+                } catch (error) {
+                    gatewayError = error;
+                    if (gatewayBaseUrl !== gatewayUrls[gatewayUrls.length - 1]) {
+                        console.log(`⚠️  Gateway fetch failed on ${gatewayBaseUrl}: ${error.message}. Trying fallback...`);
+                    }
+                }
+            }
+            
+            if (!dataResponse) {
+                throw gatewayError || new Error('All gateway URLs failed');
+            }
         } catch (gatewayError) {
-            console.log(`Gateway fetch failed for ${transactionId}, trying native client...`);
+            console.log(`All gateway fetches failed for ${transactionId}, trying native client...`);
             
             // Fallback to native client if gateway fails
             try {
@@ -159,7 +237,46 @@ const checkBalance = async () => {
 async function getBlockHeightFromTxId(txId) {
     try {
         // Use the txId to get the block height from Arweave network
-        const arweaveResponse = await axios.get(`https://arweave.net/tx/${txId}/status`);
+        // Try local AR.IO gateway first, then fallback to arweave.net
+        const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
+        const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+        const gatewayUrls = [];
+        
+        // Add local gateway first if enabled
+        if (useLocalGateway) {
+            try {
+                const url = new URL(gatewayHost);
+                gatewayUrls.push(`${url.protocol}//${url.host}`);
+            } catch (error) {
+                console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+            }
+        }
+        
+        // Always add arweave.net as fallback
+        gatewayUrls.push('https://arweave.net');
+        
+        let arweaveResponse = null;
+        let lastError = null;
+        
+        // Try each gateway URL in order
+        for (const gatewayBaseUrl of gatewayUrls) {
+            try {
+                arweaveResponse = await axios.get(`${gatewayBaseUrl}/tx/${txId}/status`);
+                if (gatewayBaseUrl !== gatewayUrls[0]) {
+                    console.log(`✅ Using fallback gateway for tx status: ${gatewayBaseUrl}`);
+                }
+                break; // Success, exit loop
+            } catch (error) {
+                lastError = error;
+                if (gatewayBaseUrl !== gatewayUrls[gatewayUrls.length - 1]) {
+                    console.warn(`⚠️  Failed to get tx status from ${gatewayBaseUrl}: ${error.message}. Trying fallback...`);
+                }
+            }
+        }
+        
+        if (!arweaveResponse) {
+            throw lastError || new Error('All gateway URLs failed');
+        }
         const blockHeight = arweaveResponse.data.block_height;
         return blockHeight;
     } catch (error) {
@@ -174,7 +291,46 @@ async function getBlockHeightFromTxId(txId) {
  */
 const getCurrentBlockHeight = async () => {
     try {
-        const response = await axios.get('https://arweave.net/info');
+        // Try local AR.IO gateway first, then fallback to arweave.net
+        const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
+        const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+        const gatewayUrls = [];
+        
+        // Add local gateway first if enabled
+        if (useLocalGateway) {
+            try {
+                const url = new URL(gatewayHost);
+                gatewayUrls.push(`${url.protocol}//${url.host}`);
+            } catch (error) {
+                console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST format: ${error.message}`);
+            }
+        }
+        
+        // Always add arweave.net as fallback
+        gatewayUrls.push('https://arweave.net');
+        
+        let response = null;
+        let lastError = null;
+        
+        // Try each gateway URL in order
+        for (const gatewayBaseUrl of gatewayUrls) {
+            try {
+                response = await axios.get(`${gatewayBaseUrl}/info`);
+                if (gatewayBaseUrl !== gatewayUrls[0]) {
+                    console.log(`✅ Using fallback gateway for info: ${gatewayBaseUrl}`);
+                }
+                break; // Success, exit loop
+            } catch (error) {
+                lastError = error;
+                if (gatewayBaseUrl !== gatewayUrls[gatewayUrls.length - 1]) {
+                    console.warn(`⚠️  Failed to get info from ${gatewayBaseUrl}: ${error.message}. Trying fallback...`);
+                }
+            }
+        }
+        
+        if (!response) {
+            throw lastError || new Error('All gateway URLs failed');
+        }
         const blockHeight = response.data.height;
         // console.log('Current block height:', blockHeight);
         return blockHeight;

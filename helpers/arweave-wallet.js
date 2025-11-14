@@ -5,13 +5,44 @@ const fs = require('fs').promises;
 class ArweaveWalletManager {
     constructor() {
         this.turboInstance = null;
-        this.arweave = Arweave.init({
-            host: 'arweave.net',
-            port: 443,
-            protocol: 'https',
-            timeout: 20000, // Increase timeout for Arweave transactions
-            logging: false
-        });
+        
+        // Use local AR.IO gateway if enabled, otherwise use arweave.net
+        const useLocalGateway = process.env.ARIO_GATEWAY_ENABLED === 'true';
+        const gatewayHost = process.env.ARIO_GATEWAY_HOST || 'http://ario-gateway:4000';
+        
+        let arweaveConfig;
+        if (useLocalGateway) {
+            try {
+                const url = new URL(gatewayHost);
+                arweaveConfig = {
+                    host: url.hostname,
+                    port: parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80),
+                    protocol: url.protocol.replace(':', ''),
+                    timeout: 20000,
+                    logging: false
+                };
+                console.log(`✅ ArweaveWalletManager using local AR.IO gateway: ${gatewayHost}`);
+            } catch (error) {
+                console.warn(`⚠️  Invalid ARIO_GATEWAY_HOST, falling back to arweave.net: ${error.message}`);
+                arweaveConfig = {
+                    host: 'arweave.net',
+                    port: 443,
+                    protocol: 'https',
+                    timeout: 20000,
+                    logging: false
+                };
+            }
+        } else {
+            arweaveConfig = {
+                host: 'arweave.net',
+                port: 443,
+                protocol: 'https',
+                timeout: 20000,
+                logging: false
+            };
+        }
+        
+        this.arweave = Arweave.init(arweaveConfig);
     }
 
     async getTurbo() {
