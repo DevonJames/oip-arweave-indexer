@@ -193,9 +193,9 @@ console.log('\n');
 console.log('Test 5: Verifying getTransaction fallback logic...');
 
 if (arweaveSource.includes('if (HARDCODED_TRANSACTIONS[transactionId])')) {
-    console.log('✅ Fallback check logic found in getTransaction');
+    console.log('✅ Fallback check for hardcoded transactions found in catch block');
 } else {
-    console.error('❌ Fallback check logic NOT found in getTransaction');
+    console.error('❌ Fallback check NOT found in catch block');
     process.exit(1);
 }
 
@@ -203,6 +203,13 @@ if (arweaveSource.includes('using hardcoded fallback data')) {
     console.log('✅ Fallback logging message found');
 } else {
     console.error('❌ Fallback logging message NOT found');
+    process.exit(1);
+}
+
+if (arweaveSource.includes('return HARDCODED_TRANSACTIONS[transactionId]')) {
+    console.log('✅ Fallback returns complete hardcoded transaction object');
+} else {
+    console.error('❌ Fallback does NOT return hardcoded transaction');
     process.exit(1);
 }
 
