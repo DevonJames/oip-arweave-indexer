@@ -60,10 +60,22 @@ Each hardcoded transaction object contains:
 
 ### How It Works
 
-1. **Normal Operation**: `getTransaction()` attempts to fetch data from Arweave gateway
-2. **Gateway Failure**: If all gateway attempts fail, check if transaction is in `HARDCODED_TRANSACTIONS`
-3. **Fallback Response**: If found, return hardcoded data with logging
-4. **Seamless Processing**: The rest of the system processes the hardcoded data exactly as if it came from the gateway
+The implementation uses a **simple and reliable fallback approach**:
+
+1. **Try Normal Fetch**: `getTransaction()` attempts to fetch data from Arweave:
+   - GraphQL for tags and block height
+   - Gateway HTTP endpoint for transaction data
+   - Native Arweave client as last resort
+2. **On Complete Failure**: If all fetch methods fail and throw an error, the outer catch block activates
+3. **Check for Hardcoded Data**: Check if the transaction ID exists in `HARDCODED_TRANSACTIONS`
+4. **Return Hardcoded Object**: If found, return the complete hardcoded transaction object with all fields populated
+5. **Seamless Processing**: The rest of the system processes the hardcoded data exactly as if it came from the gateway
+
+This approach is simple and clean:
+- **No partial mixing**: Either fetch everything or use complete hardcoded data
+- **Single catch point**: All failures route through one outer catch block
+- **Complete object**: Hardcoded data includes all required fields (tags, data, blockHeight, ver, creator, creatorSig)
+- **Network reality**: When arweave.net is down, both GraphQL and gateway fail together, so there's no benefit to partial fallbacks
 
 ### Code Flow
 
@@ -241,11 +253,15 @@ The implementation automatically handles this conversion in the normal `getTrans
 When the fallback is activated, you'll see:
 
 ```
+GraphQL query failed for eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y: getaddrinfo EAI_AGAIN arweave.net
+All gateway fetches failed for eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y, trying native client...
+Both gateway and native client failed for eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y
+No data found for eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y
 ⚠️  Gateway failed for eqUwpy6et2egkGlkvS7c5GKi0aBsCXT6Dhlydf3GA3Y, using hardcoded fallback data
 ✅ This is a critical creator registration transaction with fallback support
 ```
 
-This helps operators understand when the system is operating in fallback mode.
+These log messages help operators understand when the system is operating in fallback mode.
 
 ## Security Considerations
 
