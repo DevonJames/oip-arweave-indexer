@@ -58,22 +58,30 @@ try {
                             } else {
                                 console.log('✅ Data stored successfully');
 
-                                // Ensure nested data is also stored by explicitly setting each property
-                                // This helps GUN properly handle complex nested structures
-                                if (data.data && typeof data.data === 'object') {
-                                    Object.keys(data.data).forEach(key => {
-                                        gunNode.get('data').get(key).put(data.data[key]);
-                                    });
-                                }
-                                if (data.meta && typeof data.meta === 'object') {
-                                    Object.keys(data.meta).forEach(key => {
-                                        gunNode.get('meta').get(key).put(data.meta[key]);
-                                    });
-                                }
-                                if (data.oip && typeof data.oip === 'object') {
-                                    Object.keys(data.oip).forEach(key => {
-                                        gunNode.get('oip').get(key).put(data.oip[key]);
-                                    });
+                                // Skip nested property setting for parent registry indexes to avoid nested paths
+                                // Parent registry indexes (like 'oip:registry:index:image') should be stored flat
+                                // Child entries (like 'oip:registry:index:image:647f79c2a338:image008') are fine with nesting
+                                const isParentRegistryIndex = soul.startsWith('oip:registry:index:') && 
+                                                              soul.split(':').length === 4; // Exactly 4 parts: oip:registry:index:image
+                                
+                                if (!isParentRegistryIndex) {
+                                    // Ensure nested data is also stored by explicitly setting each property
+                                    // This helps GUN properly handle complex nested structures
+                                    if (data.data && typeof data.data === 'object') {
+                                        Object.keys(data.data).forEach(key => {
+                                            gunNode.get('data').get(key).put(data.data[key]);
+                                        });
+                                    }
+                                    if (data.meta && typeof data.meta === 'object') {
+                                        Object.keys(data.meta).forEach(key => {
+                                            gunNode.get('meta').get(key).put(data.meta[key]);
+                                        });
+                                    }
+                                    if (data.oip && typeof data.oip === 'object') {
+                                        Object.keys(data.oip).forEach(key => {
+                                            gunNode.get('oip').get(key).put(data.oip[key]);
+                                        });
+                                    }
                                 }
 
                                 try {
@@ -232,33 +240,58 @@ try {
                 
                 console.log(`📖 Getting data for soul: ${soul.substring(0, 50)}...`);
 
+                // Check if this is a parent registry index (should be stored flat, not wrapped)
+                const isParentRegistryIndex = soul.startsWith('oip:registry:index:') && 
+                                              soul.split(':').length === 4;
+
                 // Retrieve the complete data structure including nested properties
                 const gunNode = gun.get(soul);
                 const result = {};
 
                 // Use a counter to track when all properties are loaded
-                let pending = 3; // data, meta, oip
+                let pending = isParentRegistryIndex ? 1 : 3; // For parent indexes, only check main data
                 let completed = false;
                 let hasChildren = false;
 
                 const checkComplete = () => {
                     if (--pending === 0 && !completed) {
                         completed = true;
-                        // Check if this is a parent node with children (registry indexes)
-                        // If no data/meta/oip but has other properties, it's likely a parent node
-                        if (Object.keys(result).length > 0) {
-                            console.log('✅ Data retrieved successfully');
-                            res.writeHead(200);
-                            res.end(JSON.stringify({ success: true, data: result }));
-                        } else if (hasChildren) {
-                            // Parent node with children but no data/meta/oip - return children
-                            console.log('✅ Parent node with children retrieved');
-                            res.writeHead(200);
-                            res.end(JSON.stringify({ success: true, data: result }));
+                        // For parent registry indexes, return the data directly (it's stored flat)
+                        if (isParentRegistryIndex) {
+                            // Remove GUN internal properties
+                            const gunInternalProps = ['_', '#', '>', '<'];
+                            const cleanResult = {};
+                            Object.keys(result).forEach(key => {
+                                if (!gunInternalProps.includes(key)) {
+                                    cleanResult[key] = result[key];
+                                }
+                            });
+                            if (Object.keys(cleanResult).length > 0) {
+                                console.log('✅ Parent registry index retrieved successfully');
+                                res.writeHead(200);
+                                res.end(JSON.stringify({ success: true, data: cleanResult }));
+                            } else {
+                                console.log('❌ No data found');
+                                res.writeHead(404);
+                                res.end(JSON.stringify({ error: 'Not found' }));
+                            }
                         } else {
-                            console.log('❌ No data found');
-                            res.writeHead(404);
-                            res.end(JSON.stringify({ error: 'Not found' }));
+                            // Regular records: check if this is a parent node with children (registry indexes)
+                            // If no data/meta/oip but has other properties, it's likely a parent node
+                            if (Object.keys(result).length > 0) {
+                                console.log('✅ Data retrieved successfully');
+                                res.writeHead(200);
+                                res.end(JSON.stringify({ success: true, data: result }));
+                            } else if (hasChildren) {
+                                // Parent node with children but no data/meta/oip - return children
+                                console.log('✅ Parent node with children retrieved');
+                                res.writeHead(200);
+                                res.end(JSON.stringify({ success: true, data: result }));
+                            } else {
+                                console.log('❌ No data found');
+                                res.writeHead(404);
+                                res.end(JSON.stringify({ error: 'Not found' }));
+                            }
                         }
                     }
                 };
@@ -283,6 +316,9 @@ try {
                                     // This is a GUN node reference - fetch the actual child data
                                     hasChildren = true;
                                     const childSoul = value['#'];
+                                    
+                                    // Handle nested paths like 'oip:registry:index:image/data/647f79c2a338:image008'
+                                    // GUN stores these as separate nodes, so we need to fetch them directly
                                     const childPromise = new Promise((resolve) => {
                                         gun.get(childSoul).once((childData) => {
                                             if (childData && typeof childData === 'object') {
@@ -307,6 +343,38 @@ try {
                             }
                         });
                         
+                        // Special handling for registry indexes: if we have a 'data' property with nested paths,
+                        // we need to fetch the actual nested data
+                        if (mainData.data && typeof mainData.data === 'object') {
+                            // Check if data contains references to nested paths
+                            Object.keys(mainData.data).forEach(dataKey => {
+                                const dataValue = mainData.data[dataKey];
+                                if (typeof dataValue === 'object' && dataValue !== null && dataValue['#']) {
+                                    hasChildren = true;
+                                    const nestedPath = dataValue['#'];
+                                    const nestedPromise = new Promise((resolve) => {
+                                        gun.get(nestedPath).once((nestedData) => {
+                                            if (nestedData && typeof nestedData === 'object') {
+                                                // Extract actual data from nested node
+                                                const cleanNested = {};
+                                                Object.keys(nestedData).forEach(nestedKey => {
+                                                    if (!gunInternalProps.includes(nestedKey)) {
+                                                        cleanNested[nestedKey] = nestedData[nestedKey];
+                                                    }
+                                                });
+                                                if (Object.keys(cleanNested).length > 0) {
+                                                    if (!result.data) result.data = {};
+                                                    result.data[dataKey] = cleanNested;
+                                                }
+                                            }
+                                            resolve();
+                                        });
+                                    });
+                                    childPromises.push(nestedPromise);
+                                }
+                            });
+                        }
+                        
                         // Wait for all child nodes to load before completing
                         if (childPromises.length > 0) {
                             Promise.all(childPromises).then(() => {
@@ -320,35 +388,38 @@ try {
                     }
                 });
 
-                // Retrieve nested data if it exists
-                gunNode.get('data').once((dataData) => {
-                    if (dataData) {
-                        result.data = dataData;
-                        // Remove GUN internal properties
-                        delete result.data._;
-                    }
-                    checkComplete();
-                });
+                // For parent registry indexes, skip nested data/meta/oip retrieval (stored flat)
+                if (!isParentRegistryIndex) {
+                    // Retrieve nested data if it exists
+                    gunNode.get('data').once((dataData) => {
+                        if (dataData) {
+                            result.data = dataData;
+                            // Remove GUN internal properties
+                            delete result.data._;
+                        }
+                        checkComplete();
+                    });
 
-                // Retrieve nested meta if it exists
-                gunNode.get('meta').once((metaData) => {
-                    if (metaData) {
-                        result.meta = metaData;
-                        // Remove GUN internal properties
-                        delete result.meta._;
-                    }
-                    checkComplete();
-                });
+                    // Retrieve nested meta if it exists
+                    gunNode.get('meta').once((metaData) => {
+                        if (metaData) {
+                            result.meta = metaData;
+                            // Remove GUN internal properties
+                            delete result.meta._;
+                        }
+                        checkComplete();
+                    });
 
-                // Retrieve nested oip if it exists
-                gunNode.get('oip').once((oipData) => {
-                    if (oipData) {
-                        result.oip = oipData;
-                        // Remove GUN internal properties
-                        delete result.oip._;
-                    }
-                    checkComplete();
-                });
+                    // Retrieve nested oip if it exists
+                    gunNode.get('oip').once((oipData) => {
+                        if (oipData) {
+                            result.oip = oipData;
+                            // Remove GUN internal properties
+                            delete result.oip._;
+                        }
+                        checkComplete();
+                    });
+                }
                 
             } else if (req.method === 'GET' && path === '/list') {
                 // List records by publisher hash prefix
