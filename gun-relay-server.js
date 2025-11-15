@@ -44,48 +44,38 @@ try {
                 req.on('end', async () => {
                     try {
                         const { soul, data } = JSON.parse(body);
-                        if (!soul) {
-                            res.writeHead(400);
-                            res.end(JSON.stringify({ error: 'soul parameter required' }));
-                            return;
-                        }
-                        if (!data) {
-                            res.writeHead(400);
-                            res.end(JSON.stringify({ error: 'data parameter required' }));
-                            return;
-                        }
                         console.log(`💾 Storing data for soul: ${soul.substring(0, 50)}...`);
-                        console.log(`📊 Data structure:`, {
-                            hasData: !!data.data,
-                            hasOip: !!data.oip,
-                            hasMeta: !!data.meta,
-                            dataKeys: data.data ? Object.keys(data.data) : [],
-                            dataSize: JSON.stringify(data).length
-                        });
                         
-                        // Use data as-is (older approach that works)
-                        // The data should already be properly formatted from the publish function
-                        const sanitizedData = data;
-                        
-                        // Store data using bulk put (older approach that works)
-                        // GUN radisk handles bulk puts better than incremental property storage
+                        // Store data and ensure all nested properties are properly saved
                         const gunNode = gun.get(soul);
 
                         // Put the main data structure
-                        gunNode.put(sanitizedData, (ack) => {
+                        gunNode.put(data, (ack) => {
                             if (ack.err) {
                                 console.error('❌ GUN put error:', ack.err);
-                                console.error('❌ Error details:', JSON.stringify(ack, null, 2));
-                                console.error('❌ Soul:', soul);
-                                console.error('❌ Data keys:', Object.keys(sanitizedData || {}));
-                                if (!res.headersSent) {
-                                    res.writeHead(500);
-                                    res.end(JSON.stringify({ error: ack.err, details: 'GUN put operation failed' }));
-                                }
+                                res.writeHead(500);
+                                res.end(JSON.stringify({ error: ack.err }));
                             } else {
                                 console.log('✅ Data stored successfully');
-                                
-                                // Update publisher index after successful storage
+
+                                // Ensure nested data is also stored by explicitly setting each property
+                                // This helps GUN properly handle complex nested structures
+                                if (data.data && typeof data.data === 'object') {
+                                    Object.keys(data.data).forEach(key => {
+                                        gunNode.get('data').get(key).put(data.data[key]);
+                                    });
+                                }
+                                if (data.meta && typeof data.meta === 'object') {
+                                    Object.keys(data.meta).forEach(key => {
+                                        gunNode.get('meta').get(key).put(data.meta[key]);
+                                    });
+                                }
+                                if (data.oip && typeof data.oip === 'object') {
+                                    Object.keys(data.oip).forEach(key => {
+                                        gunNode.get('oip').get(key).put(data.oip[key]);
+                                    });
+                                }
+
                                 try {
                                     // Maintain a simple in-memory index by publisher hash prefix
                                     // Expected soul format: "<publisherHash>:<rest>"
@@ -94,8 +84,8 @@ try {
                                         const list = publisherIndex.get(prefix) || [];
                                         // Upsert by soul
                                         const existingIndex = list.findIndex(r => r.soul === soul);
-                                        const recordType = sanitizedData?.oip?.recordType || sanitizedData?.data?.oip?.recordType || null;
-                                        const record = { soul, data: sanitizedData, recordType, storedAt: Date.now() };
+                                        const recordType = data?.oip?.recordType || data?.data?.oip?.recordType || null;
+                                        const record = { soul, data, recordType, storedAt: Date.now() };
                                         if (existingIndex >= 0) list[existingIndex] = record; else list.push(record);
                                         publisherIndex.set(prefix, list);
 
@@ -109,28 +99,15 @@ try {
 
                                 // Add a small delay to ensure GUN has time to propagate changes
                                 setTimeout(() => {
-                                    if (!res.headersSent) {
-                                        res.writeHead(200);
-                                        res.end(JSON.stringify({ success: true, soul }));
-                                    }
+                                    res.writeHead(200);
+                                    res.end(JSON.stringify({ success: true, soul }));
                                 }, 100);
                             }
                         });
                     } catch (parseError) {
                         console.error('❌ JSON parse error:', parseError);
-                        if (!res.headersSent) {
-                            res.writeHead(400);
-                            res.end(JSON.stringify({ error: 'Invalid JSON: ' + parseError.message }));
-                        }
-                    }
-                });
-                
-                // Handle request errors
-                req.on('error', (error) => {
-                    console.error('❌ Request error:', error);
-                    if (!res.headersSent) {
-                        res.writeHead(500);
-                        res.end(JSON.stringify({ error: 'Request error: ' + error.message }));
+                        res.writeHead(400);
+                        res.end(JSON.stringify({ error: 'Invalid JSON' }));
                     }
                 });
                 
