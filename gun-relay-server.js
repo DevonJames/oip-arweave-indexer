@@ -300,7 +300,8 @@ try {
                 // IMPORTANT: Use .on() instead of .once() to trigger peer synchronization
                 // .once() only reads local data, .on() actively requests from peers
                 let onceReceived = false;
-                const gunSubscription = gunNode.on((mainData) => {
+                let gunSubscription = null;
+                gunSubscription = gunNode.on((mainData) => {
                     if (onceReceived || !mainData) return;
                     onceReceived = true;
                     
@@ -331,7 +332,8 @@ try {
                                 // GUN stores these as separate nodes, so we need to fetch them directly
                                 const childPromise = new Promise((resolve) => {
                                     let childOnceReceived = false;
-                                    const childSubscription = gun.get(childSoul).on((childData) => {
+                                    let childSubscription = null;
+                                    childSubscription = gun.get(childSoul).on((childData) => {
                                         if (childOnceReceived || !childData) return;
                                         childOnceReceived = true;
                                         
@@ -383,7 +385,8 @@ try {
                                 const nestedPath = dataValue['#'];
                                 const nestedPromise = new Promise((resolve) => {
                                     let nestedOnceReceived = false;
-                                    const nestedSubscription = gun.get(nestedPath).on((nestedData) => {
+                                    let nestedSubscription = null;
+                                    nestedSubscription = gun.get(nestedPath).on((nestedData) => {
                                         if (nestedOnceReceived || !nestedData) return;
                                         nestedOnceReceived = true;
                                         
@@ -447,7 +450,8 @@ try {
                 if (!isParentRegistryIndex) {
                     // Retrieve nested data if it exists - use .on() to trigger peer sync
                     let dataReceived = false;
-                    const dataSubscription = gunNode.get('data').on((dataData) => {
+                    let dataSubscription = null;
+                    dataSubscription = gunNode.get('data').on((dataData) => {
                         if (dataReceived) return;
                         dataReceived = true;
                         if (dataSubscription && dataSubscription.off) {
@@ -472,7 +476,8 @@ try {
 
                     // Retrieve nested meta if it exists - use .on() to trigger peer sync
                     let metaReceived = false;
-                    const metaSubscription = gunNode.get('meta').on((metaData) => {
+                    let metaSubscription = null;
+                    metaSubscription = gunNode.get('meta').on((metaData) => {
                         if (metaReceived) return;
                         metaReceived = true;
                         if (metaSubscription && metaSubscription.off) {
@@ -497,7 +502,8 @@ try {
 
                     // Retrieve nested oip if it exists - use .on() to trigger peer sync
                     let oipReceived = false;
-                    const oipSubscription = gunNode.get('oip').on((oipData) => {
+                    let oipSubscription = null;
+                    oipSubscription = gunNode.get('oip').on((oipData) => {
                         if (oipReceived) return;
                         oipReceived = true;
                         if (oipSubscription && oipSubscription.off) {
