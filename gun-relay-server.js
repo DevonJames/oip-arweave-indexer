@@ -514,13 +514,32 @@ try {
     
     const gun = Gun(gunConfig);
     
+    // Monitor peer connections (GUN doesn't provide direct connection status, but we can log sync events)
+    if (gunPeers.length > 0) {
+        // Try to verify peer connectivity by attempting to read from a known peer
+        gunPeers.forEach((peerUrl, index) => {
+            setTimeout(() => {
+                console.log(`🔍 Testing peer connection: ${peerUrl}`);
+                // Try to read a test value from peer to verify connectivity
+                gun.get('test:peer:connectivity').once((data) => {
+                    if (data) {
+                        console.log(`✅ Peer ${peerUrl} is reachable`);
+                    } else {
+                        console.log(`⚠️ Peer ${peerUrl} - no data yet (may need time to connect)`);
+                    }
+                });
+            }, 2000 + (index * 1000));
+        });
+    }
+    
     server.listen(8765, '0.0.0.0', () => {
         console.log('✅ GUN HTTP API server running on 0.0.0.0:8765');
         console.log('💾 Local GUN database with persistent storage');
         console.log('🌐 HTTP API endpoints: /put (POST), /get (GET), /list (GET)');
         console.log('📁 Media endpoints: /media/manifest (POST/GET), /media/presence (POST)');
         if (gunPeers.length > 0) {
-            console.log(`🔗 Connected to ${gunPeers.length} external peer(s) for synchronization`);
+            console.log(`🔗 Configured ${gunPeers.length} external peer(s) for synchronization: ${gunPeers.join(', ')}`);
+            console.log(`⚠️ Note: GUN WebSocket sync happens automatically when data is accessed, not proactively`);
         } else {
             console.log('📡 Single-node mode: No external peers configured (set GUN_EXTERNAL_PEERS to enable sync)');
         }

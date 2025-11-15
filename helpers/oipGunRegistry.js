@@ -153,8 +153,10 @@ class OIPGunRegistry {
             const globalIndexKey = `${this.registryRoot}:index:${recordType}`;
             
             // Get all records of this type from registry
+            // This read will trigger GUN WebSocket sync if peers are connected
             const typeIndexResponse = await this.gunHelper.getRecord(globalIndexKey);
             if (!typeIndexResponse) {
+                // Registry index doesn't exist yet - this is normal for new record types
                 return typeRecords;
             }
             
@@ -162,6 +164,14 @@ class OIPGunRegistry {
             const typeIndex = typeIndexResponse.data || typeIndexResponse;
             if (!typeIndex || typeof typeIndex !== 'object') {
                 return typeRecords;
+            }
+            
+            // Log discovery attempt for debugging
+            const entryCount = Object.keys(typeIndex).filter(key => 
+                !key.startsWith('oip:') && !key.startsWith('_')
+            ).length;
+            if (entryCount > 0) {
+                console.log(`🔍 Found ${entryCount} entries in registry index: ${globalIndexKey}`);
             }
             
             for (const [soulKey, indexEntry] of Object.entries(typeIndex)) {
