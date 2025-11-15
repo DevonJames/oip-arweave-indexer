@@ -81,13 +81,10 @@ class OIPGunRegistry {
                 // Add this entry to the parent index
                 parentIndex[soul] = indexEntry;
                 
-                // Store the updated parent index
+                // Store the updated parent index wrapped properly for putRecord
+                // putRecord expects { data, oip, meta } structure
                 await this.gunHelper.putRecord({ 
-                    data: parentIndex,
-                    oip: {
-                        recordType: 'registryIndex',
-                        indexedAt: new Date().toISOString()
-                    }
+                    data: parentIndex
                 }, globalIndexKey);
             } catch (parentError) {
                 // If parent update fails, log but don't fail registration
@@ -147,8 +144,14 @@ class OIPGunRegistry {
             const globalIndexKey = `${this.registryRoot}:index:${recordType}`;
             
             // Get all records of this type from registry
-            const typeIndex = await this.gunHelper.getRecord(globalIndexKey);
-            if (!typeIndex) {
+            const typeIndexResponse = await this.gunHelper.getRecord(globalIndexKey);
+            if (!typeIndexResponse) {
+                return typeRecords;
+            }
+            
+            // Extract the actual index data (getRecord returns { data, oip, meta } structure)
+            const typeIndex = typeIndexResponse.data || typeIndexResponse;
+            if (!typeIndex || typeof typeIndex !== 'object') {
                 return typeRecords;
             }
             
