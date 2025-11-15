@@ -17,11 +17,14 @@ def download_maya1_models():
         logger.info("   This may take several minutes on first run...")
         
         # Check GPU availability
+        # NOTE: GPU is NOT available during Docker build - this is expected!
+        # GPU will be available at runtime when container starts with proper GPU configuration
         if torch.cuda.is_available():
-            logger.info(f"   GPU detected: {torch.cuda.get_device_name(0)}")
-            logger.info(f"   VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+            logger.info(f"   ✅ GPU detected during build: {torch.cuda.get_device_name(0)}")
+            logger.info(f"   ✅ VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
         else:
-            logger.warning("   No GPU detected - Maya1 will run on CPU (slower)")
+            logger.info("   ℹ️ No GPU detected during build (this is expected - GPU not available during Docker build)")
+            logger.info("   ℹ️ Models will download on CPU, but will use GPU at runtime if configured correctly")
         
         # Download Maya1 model and tokenizer
         try:

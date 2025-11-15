@@ -394,17 +394,38 @@ class GPUTTSService:
             logger.info("🚀 Initializing Maya1 TTS (Maya Research - 3B params)...")
             logger.info("   Checking if model files exist in cache...")
             
+            # Check GPU availability at runtime
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+                logger.info(f"   ✅ GPU detected at runtime: {gpu_name}")
+                logger.info(f"   ✅ GPU VRAM: {gpu_memory:.1f} GB")
+                logger.info(f"   ✅ CUDA version: {torch.version.cuda}")
+            else:
+                logger.warning("   ⚠️ No GPU detected at runtime - Maya1 will run on CPU (very slow)")
+                logger.warning("   ⚠️ Check Docker GPU configuration:")
+                logger.warning("      - Ensure nvidia-docker2 or nvidia-container-toolkit is installed")
+                logger.warning("      - Verify docker-compose.yml has GPU deploy.resources configuration")
+                logger.warning("      - Check: docker run --rm --gpus all nvidia/cuda:11.7.1-base-ubuntu20.04 nvidia-smi")
+            
             # Load Maya1 transformer model
             logger.info("📥 Loading Maya1 model from maya-research/maya1...")
             try:
                 self.maya1_model = AutoModelForCausalLM.from_pretrained(
                     "maya-research/maya1",
                     torch_dtype=torch.bfloat16,
-                    device_map="auto",
+                    device_map="auto",  # Automatically places model on GPU if available
                     trust_remote_code=True,
                     low_cpu_mem_usage=True
                 )
-                logger.info(f"✅ Maya1 model loaded - Device: {next(self.maya1_model.parameters()).device}")
+                # Verify which device the model is actually on
+                model_device = next(self.maya1_model.parameters()).device
+                logger.info(f"✅ Maya1 model loaded - Device: {model_device}")
+                if model_device.type == 'cuda':
+                    logger.info(f"   ✅ Model is on GPU: {torch.cuda.get_device_name(model_device.index)}")
+                else:
+                    logger.warning(f"   ⚠️ Model is on CPU - this will be very slow!")
+                    logger.warning(f"   ⚠️ Expected GPU but model loaded on CPU - check GPU configuration")
             except Exception as model_error:
                 logger.error(f"❌ Failed to load Maya1 model: {model_error}")
                 logger.error(f"   Error type: {type(model_error).__name__}")

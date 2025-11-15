@@ -274,6 +274,8 @@ services:
     environment:
       - CUDA_VISIBLE_DEVICES=0
       - TTS_GPU_ENABLED=true
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     networks:
       - oip-network
     restart: unless-stopped
