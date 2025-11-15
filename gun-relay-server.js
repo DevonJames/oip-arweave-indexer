@@ -63,59 +63,26 @@ try {
                             dataSize: JSON.stringify(data).length
                         });
                         
-                        // Sanitize data to remove any circular references or non-serializable values
-                        // This helps prevent GUN radisk JSON errors
-                        const sanitizeData = (obj, seen = new WeakSet()) => {
-                            if (obj === null || typeof obj !== 'object') {
-                                return obj;
-                            }
-                            
-                            // Check for circular references
-                            if (seen.has(obj)) {
-                                return '[Circular]';
-                            }
-                            seen.add(obj);
-                            
-                            // Handle arrays
-                            if (Array.isArray(obj)) {
-                                return obj.map(item => sanitizeData(item, seen));
-                            }
-                            
-                            // Handle objects
-                            const sanitized = {};
-                            for (const [key, value] of Object.entries(obj)) {
-                                // Skip functions and undefined
-                                if (typeof value === 'function' || value === undefined) {
-                                    continue;
-                                }
-                                
-                                try {
-                                    sanitized[key] = sanitizeData(value, seen);
-                                } catch (e) {
-                                    console.warn(`⚠️ Failed to sanitize key ${key}:`, e.message);
-                                    sanitized[key] = '[Error serializing]';
-                                }
-                            }
-                            
-                            seen.delete(obj);
-                            return sanitized;
-                        };
+                        // Use data as-is (older approach that works)
+                        // The data should already be properly formatted from the publish function
+                        const sanitizedData = data;
                         
-                        const sanitizedData = sanitizeData(data);
-                        
-                        // Store data incrementally to avoid GUN radisk JSON errors with complex nested structures
-                        // GUN radisk has trouble with deeply nested objects, so we store top-level properties separately
+                        // Store data using bulk put (older approach that works)
+                        // GUN radisk handles bulk puts better than incremental property storage
                         const gunNode = gun.get(soul);
-                        
-                        // Track completion of all storage operations
-                        let completedOps = 0;
-                        let totalOps = 0;
-                        let hasError = false;
-                        let errorMessage = null;
-                        
-                        const checkComplete = () => {
-                            completedOps++;
-                            if (completedOps >= totalOps && !hasError) {
+
+                        // Put the main data structure
+                        gunNode.put(sanitizedData, (ack) => {
+                            if (ack.err) {
+                                console.error('❌ GUN put error:', ack.err);
+                                console.error('❌ Error details:', JSON.stringify(ack, null, 2));
+                                console.error('❌ Soul:', soul);
+                                console.error('❌ Data keys:', Object.keys(sanitizedData || {}));
+                                if (!res.headersSent) {
+                                    res.writeHead(500);
+                                    res.end(JSON.stringify({ error: ack.err, details: 'GUN put operation failed' }));
+                                }
+                            } else {
                                 console.log('✅ Data stored successfully');
                                 
                                 // Update publisher index after successful storage
@@ -139,68 +106,16 @@ try {
                                 } catch (e) {
                                     console.warn('⚠️ Failed to update in-memory index:', e.message);
                                 }
-                                
+
+                                // Add a small delay to ensure GUN has time to propagate changes
                                 setTimeout(() => {
                                     if (!res.headersSent) {
                                         res.writeHead(200);
                                         res.end(JSON.stringify({ success: true, soul }));
                                     }
                                 }, 100);
-                            } else if (hasError && completedOps >= totalOps) {
-                                if (!res.headersSent) {
-                                    res.writeHead(500);
-                                    res.end(JSON.stringify({ error: errorMessage || 'GUN storage failed', details: 'Failed to store all data properties' }));
-                                }
                             }
-                        };
-                        
-                        // Store each top-level property separately to avoid radisk JSON errors
-                        if (sanitizedData.data) {
-                            totalOps++;
-                            gunNode.get('data').put(sanitizedData.data, (ack) => {
-                                if (ack && ack.err) {
-                                    console.error('❌ Error storing data property:', ack.err);
-                                    hasError = true;
-                                    errorMessage = ack.err;
-                                }
-                                checkComplete();
-                            });
-                        }
-                        
-                        if (sanitizedData.oip) {
-                            totalOps++;
-                            gunNode.get('oip').put(sanitizedData.oip, (ack) => {
-                                if (ack && ack.err) {
-                                    console.error('❌ Error storing oip property:', ack.err);
-                                    hasError = true;
-                                    errorMessage = ack.err;
-                                }
-                                checkComplete();
-                            });
-                        }
-                        
-                        if (sanitizedData.meta) {
-                            totalOps++;
-                            gunNode.get('meta').put(sanitizedData.meta, (ack) => {
-                                if (ack && ack.err) {
-                                    console.error('❌ Error storing meta property:', ack.err);
-                                    hasError = true;
-                                    errorMessage = ack.err;
-                                }
-                                checkComplete();
-                            });
-                        }
-                        
-                        // If no properties to store, send success immediately
-                        if (totalOps === 0) {
-                            console.log('⚠️ No data properties to store');
-                            res.writeHead(400);
-                            res.end(JSON.stringify({ error: 'No data properties found' }));
-                            return;
-                        }
-                        
-                        // Note: Removed bulk put fallback - incremental storage is the primary method
-                        // Bulk put was causing GUN radisk JSON errors with nested structures
+                        });
                     } catch (parseError) {
                         console.error('❌ JSON parse error:', parseError);
                         if (!res.headersSent) {
