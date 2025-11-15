@@ -21,11 +21,40 @@ class GunSyncService {
         this.cacheMaxAge = parseInt(process.env.GUN_CACHE_MAX_AGE) || 3600000; // 1 hour default
         this.lastCacheClear = Date.now();
         
+        // HTTP-based peer sync configuration (since WebSocket sync doesn't work reliably)
+        this.peerNodes = this.parsePeerNodes();
+        this.httpSyncEnabled = this.peerNodes.length > 0;
+        
         console.log('🚀 GUN Sync Service initialized:', {
             syncInterval: this.syncInterval,
             cacheMaxAge: this.cacheMaxAge,
-            nodeId: this.registry.nodeId
+            nodeId: this.registry.nodeId,
+            httpSyncEnabled: this.httpSyncEnabled,
+            peerCount: this.peerNodes.length
         });
+    }
+    
+    /**
+     * Parse peer nodes from environment variables for HTTP-based sync
+     * Converts WebSocket URLs to HTTP URLs
+     */
+    parsePeerNodes() {
+        const gunPeers = process.env.GUN_EXTERNAL_PEERS || process.env.GUN_PEERS || '';
+        if (!gunPeers) {
+            return [];
+        }
+        
+        return gunPeers.split(',')
+            .map(peer => peer.trim())
+            .filter(peer => peer)
+            .map(peer => {
+                // Convert ws://host:port/gun to http://host:port
+                const httpUrl = peer
+                    .replace('ws://', 'http://')
+                    .replace('wss://', 'https://')
+                    .replace('/gun', '');
+                return httpUrl;
+            });
     }
     
     /**
@@ -99,8 +128,27 @@ class GunSyncService {
             
             // console.log('🔄 Starting GUN record sync cycle...'); // Commented out - too verbose
             
-            // Discover records from other nodes (includes both public and private)
-            const discoveredRecords = await this.privateHandler.discoverPrivateRecords();
+            let discoveredRecords = [];
+            
+            // Try HTTP-based sync first if enabled (more reliable than WebSocket)
+            if (this.httpSyncEnabled) {
+                const httpRecords = await this.syncFromPeersViaHTTP();
+                discoveredRecords = discoveredRecords.concat(httpRecords);
+            }
+            
+            // Also try WebSocket-based discovery (fallback)
+            const wsRecords = await this.privateHandler.discoverPrivateRecords();
+            discoveredRecords = discoveredRecords.concat(wsRecords);
+            
+            // Deduplicate by soul
+            const seenSouls = new Set();
+            discoveredRecords = discoveredRecords.filter(record => {
+                if (seenSouls.has(record.soul)) {
+                    return false;
+                }
+                seenSouls.add(record.soul);
+                return true;
+            });
             
             let syncedCount = 0;
             let errorCount = 0;
@@ -130,6 +178,103 @@ class GunSyncService {
         } catch (error) {
             console.error('❌ Error in sync cycle:', error);
             this.healthMonitor.recordSyncCycle(0, 0, 1, Date.now() - startTime);
+        }
+    }
+    
+    /**
+     * Sync records from peer nodes via HTTP (bypassing unreliable WebSocket sync)
+     * @returns {Array} Array of discovered records
+     */
+    async syncFromPeersViaHTTP() {
+        const axios = require('axios');
+        const discoveredRecords = [];
+        
+        // Record types to check
+        const recordTypes = ['image', 'post', 'video', 'audio', 'text', 'recipe', 'workout', 'exercise'];
+        
+        for (const peerUrl of this.peerNodes) {
+            try {
+                console.log(`🔍 Polling peer for records: ${peerUrl}`);
+                
+                for (const recordType of recordTypes) {
+                    try {
+                        // Fetch registry index for this record type from peer
+                        const indexSoul = `oip:registry:index:${recordType}`;
+                        const response = await axios.get(`${peerUrl}/get`, {
+                            params: { soul: indexSoul },
+                            timeout: 5000
+                        });
+                        
+                        if (response.data && response.data.success && response.data.data) {
+                            const peerIndex = response.data.data;
+                            
+                            // Process each entry in the peer's registry index
+                            for (const [soul, entry] of Object.entries(peerIndex)) {
+                                // Skip GUN metadata
+                                if (soul.startsWith('_') || soul.startsWith('#') || !entry.soul) {
+                                    continue;
+                                }
+                                
+                                const recordSoul = entry.soul;
+                                const did = `did:gun:${recordSoul}`;
+                                
+                                // Skip if we already have this record
+                                if (this.processedRecords.has(did)) {
+                                    continue;
+                                }
+                                
+                                // Check if we already have this record in Elasticsearch
+                                const exists = await this.checkRecordExists(did);
+                                if (exists) {
+                                    this.processedRecords.add(did);
+                                    continue;
+                                }
+                                
+                                // Fetch the actual record from peer
+                                console.log(`📥 Fetching record from peer: ${did}`);
+                                const recordResponse = await axios.get(`${peerUrl}/get`, {
+                                    params: { soul: recordSoul },
+                                    timeout: 10000
+                                });
+                                
+                                if (recordResponse.data && recordResponse.data.success && recordResponse.data.data) {
+                                    discoveredRecords.push({
+                                        soul: recordSoul,
+                                        data: recordResponse.data.data,
+                                        sourceNodeId: entry.nodeId || 'unknown',
+                                        wasEncrypted: false // HTTP sync is for public records
+                                    });
+                                }
+                            }
+                        }
+                    } catch (typeError) {
+                        // Silently skip record types that don't exist on peer
+                        if (typeError.response && typeError.response.status === 404) {
+                            continue;
+                        }
+                        console.error(`⚠️ Error syncing ${recordType} from ${peerUrl}:`, typeError.message);
+                    }
+                }
+            } catch (peerError) {
+                console.error(`❌ Error syncing from peer ${peerUrl}:`, peerError.message);
+            }
+        }
+        
+        return discoveredRecords;
+    }
+    
+    /**
+     * Check if a record already exists in Elasticsearch
+     */
+    async checkRecordExists(did) {
+        try {
+            const result = await elasticClient.exists({
+                index: 'records',
+                id: did
+            });
+            return result;
+        } catch (error) {
+            return false;
         }
     }
     
