@@ -8,16 +8,24 @@
     <script src="/config.js"></script>
     <link rel="stylesheet" href="/css/style.css">
     <style>
+        /* Font imports - everything else is in /css/style.css */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap');
         
+        /* Temporarily override with minimal styles for legacy elements not yet migrated */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Minimal body reset - external CSS will handle the rest */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
-        body {
+        /* Remove old inline body background that was overriding the dark theme */
+        /* body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: #fafafa;
             min-height: 100vh;
@@ -3694,15 +3702,7 @@
             text-decoration: underline;
         }
 
-        @media (max-width: 768px) {
-            .documentation-content {
-                flex-direction: column;
-            }
-            
-            .documentation-sidebar {
-                width: 100%;
-            }
-        }
+        */
     </style>
 </head>
 <body>
@@ -4902,7 +4902,7 @@
 
         // Navigation functions (Updated for new interface)
         function showWelcomeInterface() {
-            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
             // No tab should be active when on home/welcome
             
             document.getElementById('welcome-interface').classList.remove('hidden');
@@ -4915,8 +4915,8 @@
         }
 
         function showSearchInterface() {
-            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[0].classList.add('active');
+            document.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-link')[0].classList.add('active');
             
             document.getElementById('welcome-interface').classList.add('hidden');
             document.getElementById('search-interface').classList.remove('hidden');
@@ -5036,8 +5036,8 @@
         }
 
         function showPublishTab() {
-            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[1].classList.add('active');
+            document.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-link')[1].classList.add('active');
             
             document.getElementById('welcome-interface').classList.add('hidden');
             document.getElementById('search-interface').classList.add('hidden');
@@ -5053,8 +5053,8 @@
         }
 
         function showDocumentationInterface() {
-            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-tab')[2].classList.add('active');
+            document.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-link')[2].classList.add('active');
             
             document.getElementById('welcome-interface').classList.add('hidden');
             document.getElementById('search-interface').classList.add('hidden');
@@ -5081,7 +5081,7 @@
             window.history.pushState({ view: 'record', didTx: didTx }, '', `#browse/record=${truncatedDidTx}`);
             
             // Hide all interfaces and nav tabs
-            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
             document.getElementById('welcome-interface').classList.add('hidden');
             document.getElementById('search-interface').classList.add('hidden');
             document.getElementById('record-view-interface').classList.remove('hidden');
