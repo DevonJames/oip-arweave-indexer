@@ -55,9 +55,9 @@ class OIPGunRegistry {
                 oipVersion: '0.8.0'
             };
             
-            // Register in node-specific registry
+            // Register in node-specific registry (for detailed tracking)
             const nodeRegistryKey = `${this.registryRoot}:nodes:${this.nodeId}`;
-            await this.gunHelper.putRecord(registryEntry, `${nodeRegistryKey}:${soul}`);
+            await this.gunHelper.putSimple(registryEntry, `${nodeRegistryKey}:${soul}`);
             
             // Register in global index for discovery
             const globalIndexKey = `${this.registryRoot}:index:${recordType}`;
@@ -67,34 +67,29 @@ class OIPGunRegistry {
                 timestamp: Date.now()
             };
             
-            // Store the registry entry at the full path
-            await this.gunHelper.putRecord(indexEntry, `${globalIndexKey}:${soul}`);
-            
-            // IMPORTANT: Also update the parent node to include a reference to this entry
-            // GUN doesn't automatically create parent-child relationships, so we need to explicitly
-            // store a reference on the parent node for discovery to work
-            // NOTE: We use direct GUN API for parent index to avoid nested paths that GUN can't traverse
+            // IMPORTANT: Update the parent index with all entries for this record type
+            // This is what sync polls to discover records
             try {
+                // Fetch current parent index
                 const parentIndexData = await this.gunHelper.getRecord(globalIndexKey);
-                // Extract the actual data object (remove data/meta/oip wrapper if present)
-                const parentIndex = parentIndexData?.data || parentIndexData || {};
+                // Extract the actual data object (may be wrapped or direct)
+                let parentIndex = {};
+                if (parentIndexData) {
+                    if (parentIndexData.data && typeof parentIndexData.data === 'object') {
+                        parentIndex = parentIndexData.data;
+                    } else if (typeof parentIndexData === 'object' && !parentIndexData.success) {
+                        // Direct object without wrapper
+                        parentIndex = parentIndexData;
+                    }
+                }
                 
                 // Add this entry to the parent index
                 parentIndex[soul] = indexEntry;
                 
-                // Store parent index directly using GUN HTTP API (not wrapped in data/meta/oip)
-                // This avoids nested paths like 'oip:registry:index:image/data/...' that GUN can't traverse
-                const axios = require('axios');
-                const gunApiUrl = this.gunHelper.apiUrl || 'http://gun-relay:8765';
-                await axios.post(`${gunApiUrl}/put`, {
-                    soul: globalIndexKey,
-                    data: parentIndex  // Store directly, not wrapped
-                }, {
-                    timeout: 10000,
-                    headers: { 'Content-Type': 'application/json' },
-                    httpAgent: axios.defaults.httpAgent,
-                    httpsAgent: axios.defaults.httpsAgent
-                });
+                // Store parent index as flat object (no data/oip/meta wrapper)
+                await this.gunHelper.putSimple(parentIndex, globalIndexKey);
+                
+                console.log(`📝 Updated registry index ${globalIndexKey} with entry ${soul}`);
             } catch (parentError) {
                 // If parent update fails, log but don't fail registration
                 console.warn(`⚠️ Failed to update parent registry index ${globalIndexKey}: ${parentError.message}`);
