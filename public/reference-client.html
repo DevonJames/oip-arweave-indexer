@@ -6,6 +6,7 @@
     <title>ΛLΞXΛNDRIΛ - A decentralized library of art, history, knowledge and memes</title>
     <link rel="icon" type="image/png" href="blue-alexandria-logo.png">
     <script src="/config.js"></script>
+    <link rel="stylesheet" href="/css/style.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap');
@@ -3708,16 +3709,16 @@
     <!-- Header -->
     <div class="header">
         <div class="header-content">
-            <div class="logo" onclick="showWelcomeInterface()" style="cursor: pointer;">
-                <img src="blue-alexandria-logo.png" alt="ALEXANDRIA" class="logo-icon">
+            <div class="logo-area" onclick="showWelcomeInterface()" style="cursor: pointer;">
+                <img src="blue-alexandria-logo.png" alt="ALEXANDRIA">
                 ΛLΞXΛNDRIΛ
             </div>
             
-            <div class="nav-tabs">
-                <div class="nav-tab active" onclick="showSearchInterface()">Browse</div>
-                <div class="nav-tab" onclick="showPublishTab()">Publish</div>
-                <div class="nav-tab" onclick="showDocumentationInterface()">Documentation</div>
-            </div>
+            <nav>
+                <a class="nav-link active" onclick="showSearchInterface()">Browse</a>
+                <a class="nav-link" onclick="showPublishTab()">Publish</a>
+                <a class="nav-link" onclick="showDocumentationInterface()">Documentation</a>
+            </nav>
             
             <div id="header-search" class="header-search hidden">
                 <input type="text" id="header-search-input" placeholder="Search the archive..." onkeydown="handleHeaderSearch(event)">
@@ -8764,7 +8765,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     
                     <div class="record-content-area">
                         <div class="record-header">
-                            <div class="record-type">${recordType}</div>
+                            <div class="record-type-badge">${recordType}</div>
                             <div class="record-date">${dateDisplay}</div>
                         </div>
                         
@@ -8802,7 +8803,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                 // Grid view layout - vertical layout (original)
                 card.innerHTML = `
                     <div class="record-header">
-                        <div class="record-type">${recordType}</div>
+                        <div class="record-type-badge">${recordType}</div>
                         <div class="record-date">${dateDisplay}</div>
                     </div>
                     
@@ -14412,7 +14413,8 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             // Show all messages
             chatState.conversation.forEach((message, index) => {
                 const messageDiv = document.createElement('div');
-                messageDiv.className = `chat-message ${message.role}`;
+                const roleClass = message.role === 'assistant' ? 'ai' : message.role;
+                messageDiv.className = `chat-message ${roleClass}`;
                 
                 const avatar = getMessageAvatar(message.role);
                 const timestamp = new Date(message.timestamp).toLocaleTimeString();
@@ -14994,7 +14996,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         
                         <div class="record-content-area">
                             <div class="record-header">
-                                <div class="record-type">${recordType}</div>
+                                <div class="record-type-badge">${recordType}</div>
                                 <div class="record-date">${dateDisplay}</div>
                             </div>
                             
@@ -15032,7 +15034,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                     // Grid view layout - vertical layout (original)
                     card.innerHTML = `
                         <div class="record-header">
-                            <div class="record-type">${recordType}</div>
+                            <div class="record-type-badge">${recordType}</div>
                             <div class="record-date">${dateDisplay}</div>
                         </div>
                         

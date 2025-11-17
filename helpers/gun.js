@@ -23,6 +23,34 @@ class GunHelper {
     }
 
     /**
+     * Put simple data directly to GUN (for registry entries, indexes, etc.)
+     * Bypasses the data/oip/meta structure wrapper
+     * @param {Object} data - The data to store (flat object)
+     * @param {string} soul - The GUN soul (unique identifier)
+     * @returns {Promise<Object>} - Result with soul
+     */
+    async putSimple(data, soul) {
+        try {
+            const response = await axios.post(`${this.apiUrl}/put`, {
+                soul: soul,
+                data: data
+            }, {
+                timeout: 10000,
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.data && response.data.success) {
+                return { soul, success: true };
+            } else {
+                throw new Error(response.data.error || 'Failed to store data');
+            }
+        } catch (error) {
+            console.error(`Failed to put simple data to GUN (${soul}):`, error.message);
+            throw error;
+        }
+    }
+
+    /**
      * Generate deterministic soul for record (shortened format)
      * @param {string} publisherPubKey - Publisher's public key
      * @param {string|null} localId - Optional local identifier
