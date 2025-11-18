@@ -404,12 +404,32 @@ class GunSyncService {
             });
             
             let registeredCount = 0;
+            let skippedCount = 0;
             const records = existingGunRecords.hits.hits;
             
             for (const hit of records) {
                 const record = hit._source;
+                
+                // Validate record structure before attempting to register
+                if (!record.oip || !record.oip.recordType || !record.oip.creator || !record.oip.creator.publicKey) {
+                    console.warn(`⚠️ Skipping invalid record during migration (missing oip/creator/recordType)`);
+                    skippedCount++;
+                    continue;
+                }
+                
                 const did = record.oip.did || record.oip.didTx;
+                if (!did || !did.startsWith('did:gun:')) {
+                    console.warn(`⚠️ Skipping record with invalid/missing DID: ${did}`);
+                    skippedCount++;
+                    continue;
+                }
+                
                 const soul = did.replace('did:gun:', '');
+                if (!soul || soul.length === 0) {
+                    console.warn(`⚠️ Skipping record with empty soul: ${did}`);
+                    skippedCount++;
+                    continue;
+                }
                 
                 try {
                     // Register in the GUN registry for discovery by other nodes
@@ -423,11 +443,12 @@ class GunSyncService {
                     registeredCount++;
                     
                 } catch (error) {
-                    console.error(`❌ Failed to register existing record ${did}:`, error);
+                    console.error(`❌ Failed to register existing record ${did}:`, error.message);
+                    skippedCount++;
                 }
             }
             
-            console.log(`✅ Migrated ${registeredCount}/${records.length} existing GUN records to registry`);
+            console.log(`✅ Migration complete: ${registeredCount} registered, ${skippedCount} skipped (${records.length} total)`);
             
         } catch (error) {
             console.error('❌ Error migrating existing records:', error);
