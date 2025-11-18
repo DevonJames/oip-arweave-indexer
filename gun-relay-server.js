@@ -58,31 +58,9 @@ try {
                             } else {
                                 console.log('✅ Data stored successfully');
 
-                                // Skip nested property setting for parent registry indexes to avoid nested paths
-                                // Parent registry indexes (like 'oip:registry:index:image') should be stored flat
-                                // Child entries (like 'oip:registry:index:image:647f79c2a338:image008') are fine with nesting
-                                const isParentRegistryIndex = soul.startsWith('oip:registry:index:') && 
-                                                              soul.split(':').length === 4; // Exactly 4 parts: oip:registry:index:image
-                                
-                                if (!isParentRegistryIndex) {
-                                    // Ensure nested data is also stored by explicitly setting each property
-                                    // This helps GUN properly handle complex nested structures
-                                    if (data.data && typeof data.data === 'object') {
-                                        Object.keys(data.data).forEach(key => {
-                                            gunNode.get('data').get(key).put(data.data[key]);
-                                        });
-                                    }
-                                    if (data.meta && typeof data.meta === 'object') {
-                                        Object.keys(data.meta).forEach(key => {
-                                            gunNode.get('meta').get(key).put(data.meta[key]);
-                                        });
-                                    }
-                                    if (data.oip && typeof data.oip === 'object') {
-                                        Object.keys(data.oip).forEach(key => {
-                                            gunNode.get('oip').get(key).put(data.oip[key]);
-                                        });
-                                    }
-                                }
+                                // REMOVED: Nested property puts were causing GUN radisk conflicts
+                                // The bulk put above (line 53) is sufficient for most cases
+                                // Nested puts can cause silent failures with complex/circular data structures
 
                                 try {
                                     // Maintain a simple in-memory index by publisher hash prefix
