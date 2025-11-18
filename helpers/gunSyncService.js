@@ -387,6 +387,28 @@ class GunSyncService {
         try {
             console.log('🔄 Migrating existing GUN records to registry...');
             
+            // Wait for gun-relay to be ready before attempting migration
+            console.log('⏳ Waiting for gun-relay to be ready...');
+            let gunReady = false;
+            let attempts = 0;
+            const maxAttempts = 30; // 30 seconds max wait
+            
+            while (!gunReady && attempts < maxAttempts) {
+                try {
+                    await this.registry.gunHelper.getRecord('test:startup');
+                    gunReady = true;
+                    console.log('✅ Gun-relay is ready, starting migration...');
+                } catch (error) {
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                    } else {
+                        console.warn('⚠️ Gun-relay not ready after 30s, skipping migration');
+                        return;
+                    }
+                }
+            }
+            
             // Get all existing GUN records from local Elasticsearch
             const existingGunRecords = await elasticClient.search({
                 index: 'records',
@@ -411,22 +433,20 @@ class GunSyncService {
                 const record = hit._source;
                 
                 // Validate record structure before attempting to register
+                // Skip records with missing or invalid OIP metadata
                 if (!record.oip || !record.oip.recordType || !record.oip.creator || !record.oip.creator.publicKey) {
-                    console.warn(`⚠️ Skipping invalid record during migration (missing oip/creator/recordType)`);
                     skippedCount++;
                     continue;
                 }
                 
                 const did = record.oip.did || record.oip.didTx;
                 if (!did || !did.startsWith('did:gun:')) {
-                    console.warn(`⚠️ Skipping record with invalid/missing DID: ${did}`);
                     skippedCount++;
                     continue;
                 }
                 
                 const soul = did.replace('did:gun:', '');
                 if (!soul || soul.length === 0) {
-                    console.warn(`⚠️ Skipping record with empty soul: ${did}`);
                     skippedCount++;
                     continue;
                 }
