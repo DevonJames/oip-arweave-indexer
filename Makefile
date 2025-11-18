@@ -158,7 +158,7 @@ start-ngrok: check-ngrok
 	DOMAIN=""; \
 	if [ -f .env ]; then \
 		echo "$(BLUE)🔑 Loading auth token and domain from .env...$(NC)"; \
-		export $$(grep -v '^#' .env | grep -E "^(NGROK_AUTH_TOKEN|NGROK_DOMAIN)=" | xargs); \
+		export $$(grep -v '^#' .env | grep -E "^(NGROK_AUTH_TOKEN|NGROK_DOMAIN|PORT)=" | xargs); \
 		DOMAIN="$$NGROK_DOMAIN"; \
 		if [ -z "$$NGROK_AUTH_TOKEN" ]; then \
 			echo "$(RED)❌ NGROK_AUTH_TOKEN is empty or not found in .env$(NC)"; \
