@@ -273,8 +273,8 @@ up: validate-profile check-env check-gpu ## Start services with specified profil
 		echo "Waiting for OIP service on port $$OIP_PORT... ($$i/30)"; \
 		sleep 2; \
 	done || echo "$(YELLOW)OIP service may still be starting on port $$OIP_PORT...$(NC)"
-	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
-		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
+	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ] || [ "$(PROFILE)" = "max-decentralized" ] || [ "$(PROFILE)" = "max-decentralized-gpu" ]; then \
+		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal, ngrok, or ngrok-gpu) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
 		$(MAKE) start-ngrok; \
 	fi
@@ -325,8 +325,8 @@ build: validate-profile check-env check-gpu ## Build and start services with spe
 		echo "Waiting for OIP service on port $$OIP_PORT... ($$i/30)"; \
 		sleep 2; \
 	done || echo "$(YELLOW)OIP service may still be starting on port $$OIP_PORT...$(NC)"
-	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
-		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
+	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ] || [ "$(PROFILE)" = "max-decentralized" ] || [ "$(PROFILE)" = "max-decentralized-gpu" ]; then \
+		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal, ngrok, or ngrok-gpu) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
 		$(MAKE) start-ngrok; \
 	fi
@@ -354,8 +354,8 @@ rebuild: validate-profile check-env check-gpu ## Rebuild and start services with
 		echo "Waiting for OIP service on port $$OIP_PORT... ($$i/30)"; \
 		sleep 2; \
 	done || echo "$(YELLOW)OIP service may still be starting on port $$OIP_PORT...$(NC)"
-	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ]; then \
-		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal) using NGROK_DOMAIN from .env$(NC)"; \
+	@if [ "$(PROFILE)" = "minimal" ] || [ "$(PROFILE)" = "standard" ] || [ "$(PROFILE)" = "standard-gpu" ] || [ "$(PROFILE)" = "standard-macMseries" ] || [ "$(PROFILE)" = "max-decentralized" ] || [ "$(PROFILE)" = "max-decentralized-gpu" ]; then \
+		echo "$(BLUE)ngrok tunnel is managed by Docker Compose (service: ngrok-minimal, ngrok, or ngrok-gpu) using NGROK_DOMAIN from .env$(NC)"; \
 	else \
 		$(MAKE) start-ngrok; \
 	fi
