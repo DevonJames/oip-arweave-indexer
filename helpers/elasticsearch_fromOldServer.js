@@ -16,7 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const e = require('express');
 // const { loadRemapTemplates, remapRecordData } = require('./templateHelper'); // Use updated remap functions
-let startBlockHeight = 1463762
+let startBlockHeight = 1579580
 // 1579580;
 
 const elasticClient = new Client({
