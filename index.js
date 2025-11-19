@@ -310,6 +310,54 @@ app.get('/admin_login', (req, res) => {
 
 app.use(bodyParser.json());
 
+// GUN Relay Proxy Routes - for cross-node synchronization
+// These routes proxy requests to the internal gun-relay service
+// Allows external nodes to access gun-relay through the public API
+app.get('/gun-relay/get', async (req, res) => {
+    try {
+        const soul = req.query.soul;
+        if (!soul) {
+            return res.status(400).json({ error: 'soul parameter required' });
+        }
+        
+        const gunRelayUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
+        const response = await axios.get(`${gunRelayUrl}/get?soul=${encodeURIComponent(soul)}`, {
+            timeout: 10000
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error('Gun relay GET proxy error:', error.message);
+        res.status(error.response?.status || 500).json({ 
+            error: error.message,
+            success: false 
+        });
+    }
+});
+
+app.post('/gun-relay/put', async (req, res) => {
+    try {
+        const { soul, data } = req.body;
+        if (!soul || !data) {
+            return res.status(400).json({ error: 'soul and data required' });
+        }
+        
+        const gunRelayUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
+        const response = await axios.post(`${gunRelayUrl}/put`, req.body, {
+            timeout: 30000,
+            headers: { 'Content-Type': 'application/json' }
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error('Gun relay PUT proxy error:', error.message);
+        res.status(error.response?.status || 500).json({ 
+            error: error.message,
+            success: false 
+        });
+    }
+});
+
+console.log('🔄 Gun relay proxy routes enabled at /gun-relay/get and /gun-relay/put');
+
 // API routes
 app.use('/api', rootRoute);
 app.use('/api/records', recordRoutes);

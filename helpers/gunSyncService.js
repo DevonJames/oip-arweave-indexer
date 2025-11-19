@@ -48,11 +48,18 @@ class GunSyncService {
             .map(peer => peer.trim())
             .filter(peer => peer)
             .map(peer => {
-                // Convert ws://host:port/gun to http://host:port
+                // If peer already has /gun-relay path (for public API proxy), use as-is
+                if (peer.includes('/gun-relay')) {
+                    return peer
+                        .replace('ws://', 'http://')
+                        .replace('wss://', 'https://');
+                }
+                
+                // Convert ws://host:port/gun to http://host:port/gun-relay (for proxy)
                 const httpUrl = peer
                     .replace('ws://', 'http://')
                     .replace('wss://', 'https://')
-                    .replace('/gun', '');
+                    .replace('/gun', '/gun-relay');
                 return httpUrl;
             });
     }
