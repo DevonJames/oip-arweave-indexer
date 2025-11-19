@@ -4236,6 +4236,12 @@ const getRecordsInDB = async (forceRefresh = false) => {
             return result;
         } else {
             for (const record of records) {
+                // Handle missing or malformed creator field
+                if (!record.oip || !record.oip.creator) {
+                    console.warn(`⚠️ Record ${record.oip?.did || 'unknown'} missing creator field, skipping normalization`);
+                    continue;
+                }
+                
                 const creatorHandle = record.oip.creator.creatorHandle || '';
                 const didAddress = record.oip.creator.didAddress || '';
                 const didTx = record.oip.creator.didTx || '';
