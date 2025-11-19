@@ -399,6 +399,14 @@ class GunHelper {
                         console.warn('⚠️ Failed to parse oip JSON string, keeping as-is');
                     }
                 }
+                // Also parse oip.creator if it's still a JSON string (nested serialization)
+                if (data.oip && typeof data.oip.creator === 'string') {
+                    try {
+                        data.oip.creator = JSON.parse(data.oip.creator);
+                    } catch (e) {
+                        console.warn('⚠️ Failed to parse oip.creator JSON string, keeping as-is');
+                    }
+                }
 
                 // Handle GUN reference objects - GUN sometimes returns { '#': 'path' } instead of actual data
                 // This can happen with nested data structures or when data isn't fully loaded
