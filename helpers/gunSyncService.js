@@ -262,6 +262,14 @@ class GunSyncService {
                                             console.warn(`⚠️ Failed to parse oip JSON for ${did}`);
                                         }
                                     }
+                                    // Also parse oip.creator if it's still a JSON string
+                                    if (fetchedData.oip && typeof fetchedData.oip.creator === 'string') {
+                                        try {
+                                            fetchedData.oip.creator = JSON.parse(fetchedData.oip.creator);
+                                        } catch (e) {
+                                            console.warn(`⚠️ Failed to parse oip.creator JSON for ${did}`);
+                                        }
+                                    }
                                     
                                     discoveredRecords.push({
                                         soul: recordSoul,
