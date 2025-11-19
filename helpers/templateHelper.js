@@ -980,8 +980,16 @@ async function publishToGun(record, recordType, options = {}) {
             console.warn(`⚠️ DID mismatch: computed ${did}, got ${publishResult.did}. Using computed DID.`);
         }
         
-        // Index to Elasticsearch (reuse existing function!)
-        await indexRecord(gunRecordData);
+        // Index to Elasticsearch - parse creator JSON string back to object for ES
+        const elasticsearchRecord = JSON.parse(JSON.stringify(gunRecordData)); // Deep clone
+        if (typeof elasticsearchRecord.oip.creator === 'string') {
+            try {
+                elasticsearchRecord.oip.creator = JSON.parse(elasticsearchRecord.oip.creator);
+            } catch (e) {
+                console.error('Failed to parse creator JSON for Elasticsearch:', e);
+            }
+        }
+        await indexRecord(elasticsearchRecord);
         console.log('GUN record indexed to Elasticsearch:', publishResult.did);
         
         // Register in GUN registry for other nodes to discover
