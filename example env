@@ -21,11 +21,11 @@ USE_LOCAL_ARIO_GATEWAY=false
 #
 # LOCAL_ARIO_GATEWAY_ADDRESS: Address of your AR.IO gateway (host:port or IP:port)
 # Examples:
-#   - Same machine: localhost:4000
-#   - Different machine on LAN: 192.168.1.100:4000
 #   - Docker service name (if running in same compose stack): ario-gateway:4000
-# Default: localhost:4000
-LOCAL_ARIO_GATEWAY_ADDRESS=localhost:4000
+#   - Host machine (accessing from outside Docker): localhost:4000
+#   - Different machine on LAN: 192.168.1.100:4000
+# Default: ario-gateway:4000 (for containerized deployments)
+LOCAL_ARIO_GATEWAY_ADDRESS=ario-gateway:4000
 #
 # AR.IO Gateway Port (for the stack that RUNS the gateway - max-decentralized profiles only)
 # This is the external port that the AR.IO gateway container will bind to

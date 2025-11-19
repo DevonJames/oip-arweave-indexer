@@ -14,6 +14,9 @@ const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 
+// Import Elasticsearch indexing function
+const { indexRecord } = require('../helpers/elasticsearch');
+
 // Configuration
 const GUN_RELAY_URL = process.env.GUN_RELAY_URL || process.env.GUN_PEERS || 'http://gun-relay:8765';
 const BATCH_SIZE = 5; // Process records in batches (reduced to avoid overwhelming server)
@@ -161,8 +164,18 @@ async function processRecord(record) {
     const result = await storeRecordInGun(soul, source.data, source.oip);
     
     if (result.success) {
-        stats.success++;
-        console.log(`✅ Restored: ${did}`);
+        // Index to Elasticsearch (CRITICAL: This was missing!)
+        try {
+            const elasticsearchRecord = {
+                data: source.data,
+                oip: source.oip
+            };
+            await indexRecord(elasticsearchRecord);
+            console.log(`📊 Indexed to Elasticsearch: ${did}`);
+        } catch (indexError) {
+            console.warn(`⚠️ Failed to index to Elasticsearch: ${did}:`, indexError.message);
+            // Continue anyway - GUN storage succeeded
+        }
 
         // Register in discovery registry
         const recordType = source.oip.recordType;
@@ -171,6 +184,9 @@ async function processRecord(record) {
         if (recordType && creatorPubKey) {
             await registerInRegistry(did, soul, recordType, creatorPubKey);
         }
+
+        stats.success++;
+        console.log(`✅ Restored: ${did}`);
     } else {
         stats.failed++;
         stats.errors.push({ did, error: result.error });
