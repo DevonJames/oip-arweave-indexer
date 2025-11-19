@@ -1505,7 +1505,7 @@ restore-gun-backup: ## Restore GUN records from backup file with proper format (
 	echo "$(BLUE)📂 Copying backup file to container...$(NC)"; \
 	docker cp "$(FILE)" $$CONTAINER_NAME:/usr/src/app/backup-to-restore.json; \
 	echo "$(BLUE)🚀 Running restore script...$(NC)"; \
-	docker exec -w /usr/src/app $$CONTAINER_NAME node scripts/restore-gun-backup.js backup-to-restore.json; \
+	docker exec -w /usr/src/app -e GUN_RELAY_URL=http://gun-relay:8765 $$CONTAINER_NAME node scripts/restore-gun-backup.js backup-to-restore.json; \
 	EXIT_CODE=$$?; \
 	echo "$(BLUE)🧹 Cleaning up...$(NC)"; \
 	docker exec $$CONTAINER_NAME rm -f /usr/src/app/scripts/restore-gun-backup.js /usr/src/app/backup-to-restore.json; \
