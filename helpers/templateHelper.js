@@ -920,7 +920,12 @@ async function publishToGun(record, recordType, options = {}) {
         const creatorSig = await signMessage(dataForSignature);
         
         // Build record for GUN (expanded format, not compressed like Arweave)
-        // IMPORTANT: Flatten creator fields to avoid GUN nested object issues
+        // IMPORTANT: Store creator as JSON string to avoid GUN nested object issues
+        const creatorObj = {
+            didAddress: `did:arweave:${myAddress}`,
+            publicKey: myPublicKey
+        };
+        
         const gunRecordData = {
             data: gunCompatibleRecord,
             oip: {
@@ -929,8 +934,7 @@ async function publishToGun(record, recordType, options = {}) {
                 indexedAt: new Date().toISOString(),
                 ver: '0.8.0',
                 signature: creatorSig,
-                creator_didAddress: `did:arweave:${myAddress}`,
-                creator_publicKey: myPublicKey
+                creator: JSON.stringify(creatorObj) // Store as JSON string!
             }
         };
         
