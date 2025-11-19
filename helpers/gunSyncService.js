@@ -245,9 +245,27 @@ class GunSyncService {
                                 });
                                 
                                 if (recordResponse.data && recordResponse.data.success && recordResponse.data.data) {
+                                    const fetchedData = recordResponse.data.data;
+                                    
+                                    // Parse JSON strings back to objects (data and oip are stored as strings in GUN)
+                                    if (typeof fetchedData.data === 'string') {
+                                        try {
+                                            fetchedData.data = JSON.parse(fetchedData.data);
+                                        } catch (e) {
+                                            console.warn(`⚠️ Failed to parse data JSON for ${did}`);
+                                        }
+                                    }
+                                    if (typeof fetchedData.oip === 'string') {
+                                        try {
+                                            fetchedData.oip = JSON.parse(fetchedData.oip);
+                                        } catch (e) {
+                                            console.warn(`⚠️ Failed to parse oip JSON for ${did}`);
+                                        }
+                                    }
+                                    
                                     discoveredRecords.push({
                                         soul: recordSoul,
-                                        data: recordResponse.data.data,
+                                        data: fetchedData,
                                         sourceNodeId: entry.nodeId || 'unknown',
                                         wasEncrypted: false // HTTP sync is for public records
                                     });
