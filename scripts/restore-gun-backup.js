@@ -15,7 +15,7 @@ const axios = require('axios');
 const path = require('path');
 
 // Configuration
-const GUN_RELAY_URL = process.env.GUN_RELAY_URL || 'http://localhost:8765';
+const GUN_RELAY_URL = process.env.GUN_RELAY_URL || process.env.GUN_PEERS || 'http://gun-relay:8765';
 const BATCH_SIZE = 10; // Process records in batches
 const DELAY_MS = 100; // Delay between batches to avoid overwhelming the server
 
