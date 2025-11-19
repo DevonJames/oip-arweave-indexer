@@ -274,6 +274,10 @@ try {
                     }
                 };
 
+                // Track if we found data/oip as JSON strings (new format)
+                let foundDataString = false;
+                let foundOipString = false;
+                
                 // Retrieve main data - handle both regular records and parent nodes with children
                 // IMPORTANT: Use .on() instead of .once() to trigger peer synchronization
                 // .once() only reads local data, .on() actively requests from peers
@@ -300,8 +304,26 @@ try {
                         if (!gunInternalProps.includes(key)) {
                             const value = mainData[key];
                             
-                            // Check if this looks like a child node reference (object with # property)
-                            if (typeof value === 'object' && value !== null && value['#']) {
+                            // NEW FORMAT: Check if data/oip are JSON strings (not nested nodes)
+                            if (key === 'data' && typeof value === 'string') {
+                                try {
+                                    result.data = JSON.parse(value);
+                                    foundDataString = true;
+                                    console.log('📦 Found data as JSON string (new format)');
+                                } catch (e) {
+                                    console.warn('⚠️ Failed to parse data JSON string');
+                                    result.data = value; // Keep as-is if parse fails
+                                }
+                            } else if (key === 'oip' && typeof value === 'string') {
+                                try {
+                                    result.oip = JSON.parse(value);
+                                    foundOipString = true;
+                                    console.log('📦 Found oip as JSON string (new format)');
+                                } catch (e) {
+                                    console.warn('⚠️ Failed to parse oip JSON string');
+                                    result.oip = value; // Keep as-is if parse fails
+                                }
+                            } else if (typeof value === 'object' && value !== null && value['#']) {
                                 // This is a GUN node reference - fetch the actual child data
                                 hasChildren = true;
                                 const childSoul = value['#'];
@@ -353,8 +375,8 @@ try {
                     });
                     
                     // Special handling for registry indexes: if we have a 'data' property with nested paths,
-                    // we need to fetch the actual nested data
-                    if (mainData.data && typeof mainData.data === 'object') {
+                    // we need to fetch the actual nested data (only if not already parsed as JSON string)
+                    if (!foundDataString && mainData.data && typeof mainData.data === 'object') {
                         // Check if data contains references to nested paths
                         Object.keys(mainData.data).forEach(dataKey => {
                             const dataValue = mainData.data[dataKey];
@@ -426,31 +448,36 @@ try {
 
                 // For parent registry indexes, skip nested data/meta/oip retrieval (stored flat)
                 if (!isParentRegistryIndex) {
-                    // Retrieve nested data if it exists - use .on() to trigger peer sync
-                    let dataReceived = false;
-                    let dataSubscription = null;
-                    dataSubscription = gunNode.get('data').on((dataData) => {
-                        if (dataReceived) return;
-                        dataReceived = true;
-                        if (dataSubscription && dataSubscription.off) {
-                            dataSubscription.off();
-                        }
-                        if (dataData) {
-                            result.data = dataData;
-                            // Remove GUN internal properties
-                            delete result.data._;
-                        }
-                        checkComplete();
-                    });
-                    setTimeout(() => {
-                        if (!dataReceived) {
+                    // Retrieve nested data if it exists - ONLY if not found as JSON string (old format)
+                    if (!foundDataString) {
+                        let dataReceived = false;
+                        let dataSubscription = null;
+                        dataSubscription = gunNode.get('data').on((dataData) => {
+                            if (dataReceived) return;
                             dataReceived = true;
                             if (dataSubscription && dataSubscription.off) {
                                 dataSubscription.off();
                             }
+                            if (dataData) {
+                                result.data = dataData;
+                                // Remove GUN internal properties
+                                delete result.data._;
+                            }
                             checkComplete();
-                        }
-                    }, 2000);
+                        });
+                        setTimeout(() => {
+                            if (!dataReceived) {
+                                dataReceived = true;
+                                if (dataSubscription && dataSubscription.off) {
+                                    dataSubscription.off();
+                                }
+                                checkComplete();
+                            }
+                        }, 2000);
+                    } else {
+                        // Data already found as JSON string, skip nested fetch
+                        pending--;
+                    }
 
                     // Retrieve nested meta if it exists - use .on() to trigger peer sync
                     let metaReceived = false;
@@ -478,31 +505,36 @@ try {
                         }
                     }, 2000);
 
-                    // Retrieve nested oip if it exists - use .on() to trigger peer sync
-                    let oipReceived = false;
-                    let oipSubscription = null;
-                    oipSubscription = gunNode.get('oip').on((oipData) => {
-                        if (oipReceived) return;
-                        oipReceived = true;
-                        if (oipSubscription && oipSubscription.off) {
-                            oipSubscription.off();
-                        }
-                        if (oipData) {
-                            result.oip = oipData;
-                            // Remove GUN internal properties
-                            delete result.oip._;
-                        }
-                        checkComplete();
-                    });
-                    setTimeout(() => {
-                        if (!oipReceived) {
+                    // Retrieve nested oip if it exists - ONLY if not found as JSON string (old format)
+                    if (!foundOipString) {
+                        let oipReceived = false;
+                        let oipSubscription = null;
+                        oipSubscription = gunNode.get('oip').on((oipData) => {
+                            if (oipReceived) return;
                             oipReceived = true;
                             if (oipSubscription && oipSubscription.off) {
                                 oipSubscription.off();
                             }
+                            if (oipData) {
+                                result.oip = oipData;
+                                // Remove GUN internal properties
+                                delete result.oip._;
+                            }
                             checkComplete();
-                        }
-                    }, 2000);
+                        });
+                        setTimeout(() => {
+                            if (!oipReceived) {
+                                oipReceived = true;
+                                if (oipSubscription && oipSubscription.off) {
+                                    oipSubscription.off();
+                                }
+                                checkComplete();
+                            }
+                        }, 2000);
+                    } else {
+                        // Oip already found as JSON string, skip nested fetch
+                        pending--;
+                    }
                 }
                 
             } else if (req.method === 'GET' && path === '/list') {
