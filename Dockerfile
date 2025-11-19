@@ -88,6 +88,7 @@ COPY speech-synthesizer ./speech-synthesizer
 COPY text-generator ./text-generator
 COPY ngrok ./ngrok
 COPY public ./public
+COPY scripts ./scripts
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY frontend ./frontend

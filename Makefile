@@ -1478,6 +1478,45 @@ backup-gun-records: ## Backup all GUN records from Elasticsearch to JSON file
 		exit $$EXIT_CODE; \
 	fi
 
+restore-gun-backup: ## Restore GUN records from backup file with proper format (use FILE=backup.json)
+	@if [ -z "$(FILE)" ]; then \
+		echo "$(RED)❌ FILE parameter required$(NC)"; \
+		echo "$(YELLOW)Usage: make restore-gun-backup FILE=gun-backup-2025-11-14.json$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$(FILE)" ]; then \
+		echo "$(RED)❌ Backup file not found: $(FILE)$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ ! -f scripts/restore-gun-backup.js ]; then \
+		echo "$(RED)❌ Restore script not found: scripts/restore-gun-backup.js$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(BLUE)📦 Restoring GUN records from $(FILE) with proper data/oip stringification...$(NC)"; \
+	CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep -E "oip|fitnessally" | grep -v elasticsearch | grep -v kibana | grep -v ngrok | head -1); \
+	if [ -z "$$CONTAINER_NAME" ]; then \
+		echo "$(RED)❌ No OIP container found. Is the service running?$(NC)"; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)✅ Found container: $$CONTAINER_NAME$(NC)"; \
+	echo "$(BLUE)📂 Copying restore script to container...$(NC)"; \
+	docker exec $$CONTAINER_NAME mkdir -p /usr/src/app/scripts; \
+	docker cp scripts/restore-gun-backup.js $$CONTAINER_NAME:/usr/src/app/scripts/restore-gun-backup.js; \
+	echo "$(BLUE)📂 Copying backup file to container...$(NC)"; \
+	docker cp "$(FILE)" $$CONTAINER_NAME:/usr/src/app/backup-to-restore.json; \
+	echo "$(BLUE)🚀 Running restore script...$(NC)"; \
+	docker exec -w /usr/src/app $$CONTAINER_NAME node scripts/restore-gun-backup.js backup-to-restore.json; \
+	EXIT_CODE=$$?; \
+	echo "$(BLUE)🧹 Cleaning up...$(NC)"; \
+	docker exec $$CONTAINER_NAME rm -f /usr/src/app/scripts/restore-gun-backup.js /usr/src/app/backup-to-restore.json; \
+	if [ $$EXIT_CODE -eq 0 ]; then \
+		echo "$(GREEN)✅ Restore completed successfully$(NC)"; \
+		echo "$(YELLOW)💡 Records are now in GUN with proper format and registered for sync$(NC)"; \
+	else \
+		echo "$(RED)❌ Restore failed with exit code $$EXIT_CODE$(NC)"; \
+		exit $$EXIT_CODE; \
+	fi
+
 restore-gun-records: ## Restore GUN records from backup file (use FILE=backup.json, REPUBLISH=true to also republish to GUN)
 	@if [ -z "$(FILE)" ]; then \
 		echo "$(RED)❌ FILE parameter required$(NC)"; \
