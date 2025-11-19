@@ -420,7 +420,12 @@ const getCurrentBlockHeight = async () => {
         // Try each gateway URL in order
         for (const gatewayBaseUrl of gatewayUrls) {
             try {
-                response = await axios.get(`${gatewayBaseUrl}/info`);
+                // AR.IO gateway uses /ar-io/info, arweave.net uses /info
+                const infoEndpoint = gatewayBaseUrl.includes('arweave.net') 
+                    ? `${gatewayBaseUrl}/info`
+                    : `${gatewayBaseUrl}/ar-io/info`;
+                
+                response = await axios.get(infoEndpoint);
                 if (gatewayBaseUrl !== gatewayUrls[0]) {
                     console.log(`✅ Using fallback gateway for info: ${gatewayBaseUrl}`);
                 }

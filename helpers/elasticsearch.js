@@ -3450,17 +3450,20 @@ async function getRecords(queryParams) {
     }
 }
 
-const getOrganizationsInDB = async () => {
+const getOrganizationsInDB = async (limit = 100) => {
     try {
-        // MEMORY LEAK FIX: Only fetch aggregated data (count and max block), not all records
-        // Previously was loading 10,000 full organization records every 5 minutes!
+        // Fetch organization records with a reasonable limit (default 100)
+        // Use limit parameter to prevent memory issues while still returning actual data
         const response = await elasticClient.search({
             index: 'organizations',
             body: {
                 query: {
                     match_all: {}
                 },
-                size: 0, // Don't fetch any records, just aggregations
+                size: limit, // Reasonable limit instead of 10,000
+                sort: [
+                    { "oip.inArweaveBlock": { order: "desc" } }
+                ],
                 aggs: {
                     count: {
                         value_count: {
@@ -3478,13 +3481,14 @@ const getOrganizationsInDB = async () => {
 
         const qtyOrganizationsInDB = response.aggregations?.count?.value || 0;
         const maxArweaveOrgBlockInDB = response.aggregations?.max_block?.value || 0;
+        const organizationsInDB = response.hits.hits.map(hit => hit._source);
 
-        // console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in organizations index (max block: ${maxArweaveOrgBlockInDB})`);
+        console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in organizations index (max block: ${maxArweaveOrgBlockInDB}), returning ${organizationsInDB.length}`);
 
         return {
             qtyOrganizationsInDB,
             maxArweaveOrgBlockInDB,
-            organizationsInDB: [] // Don't return full records - just the counts
+            organizationsInDB
         };
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error getting organizations from DB:', error);
