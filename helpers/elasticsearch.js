@@ -5184,9 +5184,41 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                     // Use simple request (no managed client - the agent recreation was causing worse leaks)
                     response = await request(endpoint, query);
                     endpointSuccess = true;
+                    
+                    // SAFETY CHECK: If using fallback endpoint, verify we're not skipping too many blocks
                     if (endpoint !== endpoints[0]) {
                         console.log(`✅ Using fallback endpoint: ${endpoint}`);
+                        
+                        // Get max block gap threshold from env (default 1000 blocks)
+                        const maxBlockGap = parseInt(process.env.MAX_BLOCK_GAP_FOR_FALLBACK) || 1000;
+                        
+                        try {
+                            // Get current block height from the fallback endpoint
+                            const currentBlockHeight = await getCurrentBlockHeight();
+                            const blockGap = currentBlockHeight - maxArweaveBlockInDB;
+                            
+                            console.log(`🔍 [SAFETY CHECK] DB at block ${maxArweaveBlockInDB}, fallback at block ${currentBlockHeight}, gap: ${blockGap} blocks`);
+                            
+                            if (blockGap > maxBlockGap) {
+                                console.error(`❌ [SAFETY CHECK FAILED] Block gap (${blockGap}) exceeds maximum allowed (${maxBlockGap})`);
+                                console.error(`   This would skip ${blockGap} blocks and could miss OIP transactions!`);
+                                console.error(`   Failing this cycle to retry local gateway on next cycle.`);
+                                console.error(`   Set MAX_BLOCK_GAP_FOR_FALLBACK in .env to adjust this threshold.`);
+                                throw new Error(`Block gap too large (${blockGap} > ${maxBlockGap}). Refusing to use fallback to prevent data loss.`);
+                            } else {
+                                console.log(`✅ [SAFETY CHECK PASSED] Block gap (${blockGap}) is within acceptable range (≤ ${maxBlockGap})`);
+                            }
+                        } catch (safetyError) {
+                            // If it's our own thrown error, re-throw it
+                            if (safetyError.message.includes('Block gap too large')) {
+                                throw safetyError;
+                            }
+                            // Otherwise, warn but continue (couldn't verify, but don't block the fallback)
+                            console.warn(`⚠️  [SAFETY CHECK] Could not verify block gap: ${safetyError.message}`);
+                            console.warn(`   Proceeding with fallback anyway (safety check failed, not blocking)`);
+                        }
                     }
+                    
                     break; // Break the retry loop if the request is successful
                 } catch (error) {
                     retryCount++;
