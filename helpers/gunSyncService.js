@@ -367,8 +367,11 @@ class GunSyncService {
      * @returns {Object} Elasticsearch-compatible record
      */
     convertGunRecordForElasticsearch(gunRecord, did, wasEncrypted = false, sourceNodeId = null) {
-        // Deep clone the record
-        const elasticsearchRecord = JSON.parse(JSON.stringify(gunRecord));
+        // Extract only the data and oip fields (strip GUN metadata)
+        const elasticsearchRecord = {
+            data: JSON.parse(JSON.stringify(gunRecord.data)),
+            oip: JSON.parse(JSON.stringify(gunRecord.oip))
+        };
         
         // Set the unified DID and storage metadata
         elasticsearchRecord.oip.did = did;
