@@ -69,6 +69,15 @@ ARIO_GATEWAY_DATA_PATH=./ario_gateway_data
 # Leave commented out to process all data
 # ANS104_UNBUNDLE_FILTER=
 # ANS104_INDEX_FILTER=
+#
+# AR.IO Gateway Fallback Safety Check
+# Maximum allowed block gap when falling back to arweave.net
+# If local AR.IO gateway fails and the fallback would skip more than this many blocks,
+# the entire cycle will fail instead of using the fallback (to prevent data loss)
+# This prevents silently missing hundreds of thousands of blocks of potential OIP transactions
+# Default: 1000 blocks (~17 hours at 2 min/block)
+# Set higher if you're okay with larger gaps, or lower for stricter data integrity
+# MAX_BLOCK_GAP_FOR_FALLBACK=1000
 
 # Turbo SDK Configuration (ArDrive)
 # These environment variables may help resolve ERR_INVALID_URL errors
