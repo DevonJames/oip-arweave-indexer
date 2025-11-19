@@ -388,10 +388,21 @@ body .filters-drawer {
     right: 0;
     top: 0;
     bottom: 0;
+    width: 400px;
+    max-width: 90vw;
     z-index: 60;
     backdrop-filter: blur(var(--blur-soft));
     background: linear-gradient(135deg, rgba(9, 9, 20, 0.96), rgba(15, 23, 42, 0.98));
     border-left: 1px solid rgba(148, 163, 255, 0.45);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+body .filters-drawer-content {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
 }
 
 /* ---------- Records grid / cards ---------- */
@@ -562,12 +573,23 @@ body .ai-drawer {
     right: 0;
     top: 0;
     bottom: 0;
+    width: 450px;
+    max-width: 90vw;
     z-index: 50;
     background:
         radial-gradient(circle at 0 0, rgba(94, 234, 212, 0.15), transparent 65%),
         linear-gradient(145deg, rgba(23, 37, 84, 0.98), rgba(30, 64, 175, 0.98));
     border-left: 1px solid rgba(129, 140, 248, 0.6);
     box-shadow: -24px 0 55px rgba(15, 23, 42, 0.95);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+body .ai-drawer-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(148, 163, 255, 0.2);
+    flex-shrink: 0;
 }
 
 body .ai-drawer .ai-drawer-content {
@@ -575,6 +597,8 @@ body .ai-drawer .ai-drawer-content {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    flex: 1;
+    overflow-y: auto;
 }
 
 /* Chat header */
