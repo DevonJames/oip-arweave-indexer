@@ -459,6 +459,15 @@ class GunSyncService {
                 }
                 
                 try {
+                    // IMPORTANT: Only register if the record actually exists in GUN
+                    // (Migration should not register records that only exist in Elasticsearch)
+                    const gunRecord = await this.registry.gunHelper.getRecord(soul);
+                    if (!gunRecord || !gunRecord.data) {
+                        // Record doesn't exist in GUN, skip registration
+                        skippedCount++;
+                        continue;
+                    }
+                    
                     // Register in the GUN registry for discovery by other nodes
                     await this.registry.registerOIPRecord(
                         did,
