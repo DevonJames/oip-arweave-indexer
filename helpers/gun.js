@@ -110,9 +110,11 @@ class GunHelper {
      */
     async putRecord(recordData, soul, options = {}) {
         try {
+            // IMPORTANT: Store data and oip as JSON strings to avoid GUN nested node references
+            // GUN creates separate nodes for nested objects, which breaks HTTP sync
             const gunRecord = {
-                data: recordData.data,
-                oip: recordData.oip,
+                data: JSON.stringify(recordData.data),
+                oip: JSON.stringify(recordData.oip),
                 meta: {
                     created: Date.now(),
                     localId: options.localId || null,
@@ -381,6 +383,22 @@ class GunHelper {
                 }
 
                 // console.log('✅ GUN record retrieved successfully via HTTP API');
+
+                // Parse JSON strings back to objects (data and oip are stored as strings to avoid nested nodes)
+                if (typeof data.data === 'string') {
+                    try {
+                        data.data = JSON.parse(data.data);
+                    } catch (e) {
+                        console.warn('⚠️ Failed to parse data JSON string, keeping as-is');
+                    }
+                }
+                if (typeof data.oip === 'string') {
+                    try {
+                        data.oip = JSON.parse(data.oip);
+                    } catch (e) {
+                        console.warn('⚠️ Failed to parse oip JSON string, keeping as-is');
+                    }
+                }
 
                 // Handle GUN reference objects - GUN sometimes returns { '#': 'path' } instead of actual data
                 // This can happen with nested data structures or when data isn't fully loaded

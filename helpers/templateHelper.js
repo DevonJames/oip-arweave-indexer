@@ -981,6 +981,7 @@ async function publishToGun(record, recordType, options = {}) {
         }
         
         // Index to Elasticsearch - parse creator JSON string back to object for ES
+        // (data and oip are objects at this point, only creator is stringified)
         const elasticsearchRecord = JSON.parse(JSON.stringify(gunRecordData)); // Deep clone
         if (typeof elasticsearchRecord.oip.creator === 'string') {
             try {

@@ -356,16 +356,24 @@ class GunSyncService {
         elasticsearchRecord.oip.didTx = did; // Backward compatibility
         elasticsearchRecord.oip.storage = 'gun';
         
-        // Parse creator from JSON string (if stored as string from GUN)
-        if (typeof elasticsearchRecord.oip.creator === 'string') {
+        // Note: GUN data/oip are stored as JSON strings but are already parsed by gunHelper.getRecord()
+        // Only parse if still in string format (shouldn't happen with updated code)
+        if (typeof elasticsearchRecord.data === 'string') {
             try {
-                elasticsearchRecord.oip.creator = JSON.parse(elasticsearchRecord.oip.creator);
+                elasticsearchRecord.data = JSON.parse(elasticsearchRecord.data);
             } catch (e) {
-                console.warn('⚠️ Failed to parse creator JSON string, keeping as-is');
+                console.warn('⚠️ Failed to parse data JSON string, keeping as-is');
+            }
+        }
+        if (typeof elasticsearchRecord.oip === 'string') {
+            try {
+                elasticsearchRecord.oip = JSON.parse(elasticsearchRecord.oip);
+            } catch (e) {
+                console.warn('⚠️ Failed to parse oip JSON string, keeping as-is');
             }
         }
         
-        // Also handle flattened format (backward compatibility)
+        // Also handle flattened creator format (backward compatibility)
         if (elasticsearchRecord.oip.creator_publicKey && elasticsearchRecord.oip.creator_didAddress) {
             elasticsearchRecord.oip.creator = {
                 publicKey: elasticsearchRecord.oip.creator_publicKey,
