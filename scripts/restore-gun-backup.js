@@ -16,8 +16,9 @@ const path = require('path');
 
 // Configuration
 const GUN_RELAY_URL = process.env.GUN_RELAY_URL || process.env.GUN_PEERS || 'http://gun-relay:8765';
-const BATCH_SIZE = 10; // Process records in batches
-const DELAY_MS = 100; // Delay between batches to avoid overwhelming the server
+const BATCH_SIZE = 5; // Process records in batches (reduced to avoid overwhelming server)
+const DELAY_MS = 500; // Delay between batches to avoid overwhelming the server (increased)
+const RETRY_DELAY = 1000; // Delay before retrying failed requests
 
 // Statistics
 const stats = {
