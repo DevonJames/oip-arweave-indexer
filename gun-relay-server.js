@@ -218,67 +218,40 @@ try {
                 
                 console.log(`📖 Getting data for soul: ${soul.substring(0, 50)}...`);
 
-                // Check if this is a parent registry index (should be stored flat, not wrapped)
-                const isParentRegistryIndex = soul.startsWith('oip:registry:index:') && 
-                                              soul.split(':').length === 4;
-
-                // Retrieve the complete data structure including nested properties
+                // Retrieve the complete data structure
                 const gunNode = gun.get(soul);
                 const result = {};
 
-                // Use a counter to track when all properties are loaded
-                let pending = isParentRegistryIndex ? 1 : 3; // For parent indexes, only check main data
+                // Use a flag to track completion (no more nested fetches needed)
                 let completed = false;
                 let hasChildren = false;
 
                 const checkComplete = () => {
-                    if (--pending === 0 && !completed) {
+                    if (!completed) {
                         completed = true;
-                        // For parent registry indexes, return the data directly (it's stored flat)
-                        if (isParentRegistryIndex) {
-                            // Remove GUN internal properties
-                            const gunInternalProps = ['_', '#', '>', '<'];
-                            const cleanResult = {};
-                            Object.keys(result).forEach(key => {
-                                if (!gunInternalProps.includes(key)) {
-                                    cleanResult[key] = result[key];
-                                }
-                            });
-                            if (Object.keys(cleanResult).length > 0) {
-                                console.log('✅ Parent registry index retrieved successfully');
-                                res.writeHead(200);
-                                res.end(JSON.stringify({ success: true, data: cleanResult }));
-                            } else {
-                                console.log('❌ No data found');
-                                res.writeHead(404);
-                                res.end(JSON.stringify({ error: 'Not found' }));
+                        
+                        // Remove GUN internal properties
+                        const gunInternalProps = ['_', '#', '>', '<'];
+                        const cleanResult = {};
+                        Object.keys(result).forEach(key => {
+                            if (!gunInternalProps.includes(key)) {
+                                cleanResult[key] = result[key];
                             }
+                        });
+                        
+                        if (Object.keys(cleanResult).length > 0) {
+                            console.log('✅ Data retrieved successfully');
+                            res.writeHead(200);
+                            res.end(JSON.stringify({ success: true, data: cleanResult }));
                         } else {
-                            // Regular records: check if this is a parent node with children (registry indexes)
-                            // If no data/meta/oip but has other properties, it's likely a parent node
-                            if (Object.keys(result).length > 0) {
-                                console.log('✅ Data retrieved successfully');
-                                res.writeHead(200);
-                                res.end(JSON.stringify({ success: true, data: result }));
-                            } else if (hasChildren) {
-                                // Parent node with children but no data/meta/oip - return children
-                                console.log('✅ Parent node with children retrieved');
-                                res.writeHead(200);
-                                res.end(JSON.stringify({ success: true, data: result }));
-                            } else {
-                                console.log('❌ No data found');
-                                res.writeHead(404);
-                                res.end(JSON.stringify({ error: 'Not found' }));
-                            }
+                            console.log('❌ No data found');
+                            res.writeHead(404);
+                            res.end(JSON.stringify({ error: 'Not found' }));
                         }
                     }
                 };
 
-                // Track if we found data/oip as JSON strings (new format)
-                let foundDataString = false;
-                let foundOipString = false;
-                
-                // Retrieve main data - handle both regular records and parent nodes with children
+                // Retrieve main data
                 // IMPORTANT: Use .on() instead of .once() to trigger peer synchronization
                 // .once() only reads local data, .on() actively requests from peers
                 let onceReceived = false;
@@ -296,143 +269,40 @@ try {
                     // Remove GUN internal properties
                     const gunInternalProps = ['_', '#', '>', '<'];
                     
-                    // Collect all properties including potential child references
-                    const allKeys = Object.keys(mainData);
-                    const childPromises = [];
-                    
-                    allKeys.forEach(key => {
+                    // Collect all properties - data/oip should be JSON strings
+                    Object.keys(mainData).forEach(key => {
                         if (!gunInternalProps.includes(key)) {
                             const value = mainData[key];
                             
-                            // NEW FORMAT: Check if data/oip are JSON strings (not nested nodes)
+                            // Parse JSON strings for data/oip (NEW FORMAT)
                             if (key === 'data' && typeof value === 'string') {
                                 try {
                                     result.data = JSON.parse(value);
-                                    foundDataString = true;
-                                    console.log('📦 Found data as JSON string (new format)');
+                                    console.log('📦 Parsed data JSON string');
                                 } catch (e) {
-                                    console.warn('⚠️ Failed to parse data JSON string');
-                                    result.data = value; // Keep as-is if parse fails
+                                    console.warn('⚠️ Failed to parse data JSON string:', e.message);
+                                    result.data = value;
                                 }
                             } else if (key === 'oip' && typeof value === 'string') {
                                 try {
                                     result.oip = JSON.parse(value);
-                                    foundOipString = true;
-                                    console.log('📦 Found oip as JSON string (new format)');
+                                    console.log('📦 Parsed oip JSON string');
                                 } catch (e) {
-                                    console.warn('⚠️ Failed to parse oip JSON string');
-                                    result.oip = value; // Keep as-is if parse fails
+                                    console.warn('⚠️ Failed to parse oip JSON string:', e.message);
+                                    result.oip = value;
                                 }
                             } else if (typeof value === 'object' && value !== null && value['#']) {
-                                // This is a GUN node reference - fetch the actual child data
+                                // Handle GUN node references for registry indexes
                                 hasChildren = true;
-                                const childSoul = value['#'];
-                                
-                                // Handle nested paths like 'oip:registry:index:image/data/647f79c2a338:image008'
-                                // GUN stores these as separate nodes, so we need to fetch them directly
-                                const childPromise = new Promise((resolve) => {
-                                    let childOnceReceived = false;
-                                    let childSubscription = null;
-                                    childSubscription = gun.get(childSoul).on((childData) => {
-                                        if (childOnceReceived || !childData) return;
-                                        childOnceReceived = true;
-                                        
-                                        if (childSubscription && childSubscription.off) {
-                                            childSubscription.off();
-                                        }
-                                        
-                                        if (childData && typeof childData === 'object') {
-                                            const cleanChild = {};
-                                            Object.keys(childData).forEach(childKey => {
-                                                if (!gunInternalProps.includes(childKey)) {
-                                                    cleanChild[childKey] = childData[childKey];
-                                                }
-                                            });
-                                            if (Object.keys(cleanChild).length > 0) {
-                                                result[key] = cleanChild;
-                                            }
-                                        }
-                                        resolve();
-                                    });
-                                    
-                                    // Timeout for child fetch
-                                    setTimeout(() => {
-                                        if (!childOnceReceived) {
-                                            childOnceReceived = true;
-                                            if (childSubscription && childSubscription.off) {
-                                                childSubscription.off();
-                                            }
-                                            resolve();
-                                        }
-                                    }, 2000);
-                                });
-                                childPromises.push(childPromise);
+                                result[key] = value;
                             } else if (value !== null && value !== undefined) {
-                                // Direct property value
+                                // Direct property value (meta, etc.)
                                 result[key] = value;
                             }
                         }
                     });
                     
-                    // Special handling for registry indexes: if we have a 'data' property with nested paths,
-                    // we need to fetch the actual nested data (only if not already parsed as JSON string)
-                    if (!foundDataString && mainData.data && typeof mainData.data === 'object') {
-                        // Check if data contains references to nested paths
-                        Object.keys(mainData.data).forEach(dataKey => {
-                            const dataValue = mainData.data[dataKey];
-                            if (typeof dataValue === 'object' && dataValue !== null && dataValue['#']) {
-                                hasChildren = true;
-                                const nestedPath = dataValue['#'];
-                                const nestedPromise = new Promise((resolve) => {
-                                    let nestedOnceReceived = false;
-                                    let nestedSubscription = null;
-                                    nestedSubscription = gun.get(nestedPath).on((nestedData) => {
-                                        if (nestedOnceReceived || !nestedData) return;
-                                        nestedOnceReceived = true;
-                                        
-                                        if (nestedSubscription && nestedSubscription.off) {
-                                            nestedSubscription.off();
-                                        }
-                                        
-                                        if (nestedData && typeof nestedData === 'object') {
-                                            // Extract actual data from nested node
-                                            const cleanNested = {};
-                                            Object.keys(nestedData).forEach(nestedKey => {
-                                                if (!gunInternalProps.includes(nestedKey)) {
-                                                    cleanNested[nestedKey] = nestedData[nestedKey];
-                                                }
-                                            });
-                                            if (Object.keys(cleanNested).length > 0) {
-                                                if (!result.data) result.data = {};
-                                                result.data[dataKey] = cleanNested;
-                                            }
-                                        }
-                                        resolve();
-                                    });
-                                    
-                                    setTimeout(() => {
-                                        if (!nestedOnceReceived) {
-                                            nestedOnceReceived = true;
-                                            if (nestedSubscription && nestedSubscription.off) {
-                                                nestedSubscription.off();
-                                            }
-                                            resolve();
-                                        }
-                                    }, 2000);
-                                });
-                                childPromises.push(nestedPromise);
-                            }
-                        });
-                    }
-                    
-                    // Wait for all child nodes to load before completing
-                    if (childPromises.length > 0) {
-                        Promise.all(childPromises).then(() => {
-                            checkComplete();
-                        });
-                    } else {
-                        checkComplete();
-                    }
+                    checkComplete();
                 });
                 
                 // Set timeout for main data fetch (in case no data exists or peers are slow)
@@ -445,97 +315,6 @@ try {
                         checkComplete();
                     }
                 }, 3000); // 3 second timeout to allow peer sync
-
-                // For parent registry indexes, skip nested data/meta/oip retrieval (stored flat)
-                if (!isParentRegistryIndex) {
-                    // Retrieve nested data if it exists - ONLY if not found as JSON string (old format)
-                    if (!foundDataString) {
-                        let dataReceived = false;
-                        let dataSubscription = null;
-                        dataSubscription = gunNode.get('data').on((dataData) => {
-                            if (dataReceived) return;
-                            dataReceived = true;
-                            if (dataSubscription && dataSubscription.off) {
-                                dataSubscription.off();
-                            }
-                            if (dataData) {
-                                result.data = dataData;
-                                // Remove GUN internal properties
-                                delete result.data._;
-                            }
-                            checkComplete();
-                        });
-                        setTimeout(() => {
-                            if (!dataReceived) {
-                                dataReceived = true;
-                                if (dataSubscription && dataSubscription.off) {
-                                    dataSubscription.off();
-                                }
-                                checkComplete();
-                            }
-                        }, 2000);
-                    } else {
-                        // Data already found as JSON string, skip nested fetch
-                        pending--;
-                    }
-
-                    // Retrieve nested meta if it exists - use .on() to trigger peer sync
-                    let metaReceived = false;
-                    let metaSubscription = null;
-                    metaSubscription = gunNode.get('meta').on((metaData) => {
-                        if (metaReceived) return;
-                        metaReceived = true;
-                        if (metaSubscription && metaSubscription.off) {
-                            metaSubscription.off();
-                        }
-                        if (metaData) {
-                            result.meta = metaData;
-                            // Remove GUN internal properties
-                            delete result.meta._;
-                        }
-                        checkComplete();
-                    });
-                    setTimeout(() => {
-                        if (!metaReceived) {
-                            metaReceived = true;
-                            if (metaSubscription && metaSubscription.off) {
-                                metaSubscription.off();
-                            }
-                            checkComplete();
-                        }
-                    }, 2000);
-
-                    // Retrieve nested oip if it exists - ONLY if not found as JSON string (old format)
-                    if (!foundOipString) {
-                        let oipReceived = false;
-                        let oipSubscription = null;
-                        oipSubscription = gunNode.get('oip').on((oipData) => {
-                            if (oipReceived) return;
-                            oipReceived = true;
-                            if (oipSubscription && oipSubscription.off) {
-                                oipSubscription.off();
-                            }
-                            if (oipData) {
-                                result.oip = oipData;
-                                // Remove GUN internal properties
-                                delete result.oip._;
-                            }
-                            checkComplete();
-                        });
-                        setTimeout(() => {
-                            if (!oipReceived) {
-                                oipReceived = true;
-                                if (oipSubscription && oipSubscription.off) {
-                                    oipSubscription.off();
-                                }
-                                checkComplete();
-                            }
-                        }, 2000);
-                    } else {
-                        // Oip already found as JSON string, skip nested fetch
-                        pending--;
-                    }
-                }
                 
             } else if (req.method === 'GET' && path === '/list') {
                 // List records by publisher hash prefix
