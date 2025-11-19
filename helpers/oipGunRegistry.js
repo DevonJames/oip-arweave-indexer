@@ -234,27 +234,16 @@ class OIPGunRegistry {
             return false;
         }
         
-        // Check creator structure (supports object, JSON string, and flattened formats)
-        let creatorObj = null;
-        
-        // Try to parse creator (might be JSON string from GUN storage)
-        if (typeof oip.creator === 'string') {
-            try {
-                creatorObj = JSON.parse(oip.creator);
-            } catch (e) {
-                console.warn(`  ⚠️ Failed to parse creator JSON string:`, oip.creator);
-            }
-        } else if (typeof oip.creator === 'object' && oip.creator !== null) {
-            creatorObj = oip.creator;
-        }
-        
-        const hasValidCreator = creatorObj && creatorObj.publicKey && creatorObj.didAddress;
+        // Check creator structure (supports object and flattened formats)
+        const hasValidCreator = oip.creator && 
+                                typeof oip.creator === 'object' && 
+                                oip.creator.publicKey && 
+                                oip.creator.didAddress;
         const hasFlatCreator = oip.creator_publicKey && oip.creator_didAddress;
         
         if (!hasValidCreator && !hasFlatCreator) {
             console.warn(`  ⚠️ Missing creator fields`);
-            console.warn(`    Creator value:`, oip.creator);
-            console.warn(`    Parsed:`, creatorObj);
+            console.warn(`    Creator:`, oip.creator);
             console.warn(`    Flat fields: creator_publicKey=${!!oip.creator_publicKey}, creator_didAddress=${!!oip.creator_didAddress}`);
             return false;
         }

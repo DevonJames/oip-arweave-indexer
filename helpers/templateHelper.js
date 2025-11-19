@@ -920,12 +920,7 @@ async function publishToGun(record, recordType, options = {}) {
         const creatorSig = await signMessage(dataForSignature);
         
         // Build record for GUN (expanded format, not compressed like Arweave)
-        // IMPORTANT: Store creator as JSON string to avoid GUN nested object issues
-        const creatorObj = {
-            didAddress: `did:arweave:${myAddress}`,
-            publicKey: myPublicKey
-        };
-        
+        // Note: data and oip will be stringified in gun.js putRecord() to avoid nested nodes
         const gunRecordData = {
             data: gunCompatibleRecord,
             oip: {
@@ -934,7 +929,10 @@ async function publishToGun(record, recordType, options = {}) {
                 indexedAt: new Date().toISOString(),
                 ver: '0.8.0',
                 signature: creatorSig,
-                creator: JSON.stringify(creatorObj) // Store as JSON string!
+                creator: {
+                    didAddress: `did:arweave:${myAddress}`,
+                    publicKey: myPublicKey
+                }
             }
         };
         
@@ -980,16 +978,8 @@ async function publishToGun(record, recordType, options = {}) {
             console.warn(`⚠️ DID mismatch: computed ${did}, got ${publishResult.did}. Using computed DID.`);
         }
         
-        // Index to Elasticsearch - parse creator JSON string back to object for ES
-        // (data and oip are objects at this point, only creator is stringified)
+        // Index to Elasticsearch (gunRecordData is already in object form, just clone it)
         const elasticsearchRecord = JSON.parse(JSON.stringify(gunRecordData)); // Deep clone
-        if (typeof elasticsearchRecord.oip.creator === 'string') {
-            try {
-                elasticsearchRecord.oip.creator = JSON.parse(elasticsearchRecord.oip.creator);
-            } catch (e) {
-                console.error('Failed to parse creator JSON for Elasticsearch:', e);
-            }
-        }
         await indexRecord(elasticsearchRecord);
         console.log('GUN record indexed to Elasticsearch:', publishResult.did);
         
