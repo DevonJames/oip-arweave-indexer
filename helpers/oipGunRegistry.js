@@ -234,8 +234,14 @@ class OIPGunRegistry {
             return false;
         }
         
-        // Check creator structure
-        if (!oip.creator.publicKey || !oip.creator.didAddress) {
+        // Check creator structure (supports both nested and flattened formats)
+        const hasNestedCreator = oip.creator && oip.creator.publicKey && oip.creator.didAddress;
+        const hasFlatCreator = oip.creator_publicKey && oip.creator_didAddress;
+        
+        if (!hasNestedCreator && !hasFlatCreator) {
+            console.warn(`  ⚠️ Missing creator fields in both formats`);
+            console.warn(`    Nested: creator=${!!oip.creator}, publicKey=${!!oip.creator?.publicKey}, didAddress=${!!oip.creator?.didAddress}`);
+            console.warn(`    Flat: creator_publicKey=${!!oip.creator_publicKey}, creator_didAddress=${!!oip.creator_didAddress}`);
             return false;
         }
         

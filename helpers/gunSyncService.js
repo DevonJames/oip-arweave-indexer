@@ -356,6 +356,17 @@ class GunSyncService {
         elasticsearchRecord.oip.didTx = did; // Backward compatibility
         elasticsearchRecord.oip.storage = 'gun';
         
+        // Reconstruct nested creator object from flattened format (if needed)
+        if (elasticsearchRecord.oip.creator_publicKey && elasticsearchRecord.oip.creator_didAddress) {
+            elasticsearchRecord.oip.creator = {
+                publicKey: elasticsearchRecord.oip.creator_publicKey,
+                didAddress: elasticsearchRecord.oip.creator_didAddress
+            };
+            // Clean up flattened fields
+            delete elasticsearchRecord.oip.creator_publicKey;
+            delete elasticsearchRecord.oip.creator_didAddress;
+        }
+        
         // Add sync metadata
         if (wasEncrypted) {
             elasticsearchRecord.oip.wasEncrypted = true;
