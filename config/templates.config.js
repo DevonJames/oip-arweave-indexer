@@ -7,7 +7,6 @@ module.exports = {
         associatedURLOnWeb: "eVTn36AY0JdLI_jzj9FivxrxtvlkVQIPI5ma-1x0E2c",
         text: "of_eh0kGy65uYD0xsTh7Qe6JVTfJ2oFoA7xp4H7t7YI",
         image: "AkZnE1VckJJlRamgNJuIGE7KrYwDcCciWOMrMh68V4o",
-        audio: "9MrI8kJvBJ-u7uvgngMZ-gMo5RREDwey8G7mJEUOpdo",
         video: "G73WplyxpNDOgDSFO6CP3O6hZXq8kNJXxkCqx3sgd1s",
         post: "op6y-d_6bqivJ2a2oWQnbylD4X_LH6eQyR6rCGqtVZ8",
         podcast: "MojoZlLKaH-cHy_HbaGBlBA7Mxzf8dJl4MQZzFQAkMY",
@@ -34,6 +33,8 @@ module.exports = {
         accessControl: "aaZpleo8blkm72kL96UYjTyBPp4F4Wux-Yo3Lu6luvQ",
         music: "rBv4wFs5LUJuMlTkIwXBuZRe3bwZ0KpIoEo3JDsK7ys",
         summaryNutritionalInfoPerServing: "y6Bx-UUGxti0x_o9bni74nA5ykFY2qYyzrzTAoF05rA",
-        exerciseMETvalues: "VNMiuJdCoVvQ_5BkCXIySzksCQLqTOs1MogSmmgcNhc"
+        exerciseMETvalues: "VNMiuJdCoVvQ_5BkCXIySzksCQLqTOs1MogSmmgcNhc",
+        notes: "uH3cFr1nyid6KcIXKyox8dKgdh6VG8ugwVaRhDZ5uk8",
+        audio: "ku1zNjA19b9zLXR-ujud2L36F61k7Vulj62cMNRwQTE"
     },
 };
