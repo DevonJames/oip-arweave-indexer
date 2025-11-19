@@ -246,6 +246,21 @@ Organizations are stored in **two separate Elasticsearch indices**:
 
 **Endpoint**: `GET /api/organizations`
 
+**Query Parameters**:
+- `limit` (optional): Number of organizations to return (default: 100, max: 1000)
+
+**Example Requests**:
+```bash
+# Get organizations (default limit 100)
+GET /api/organizations
+
+# Get specific number of organizations
+GET /api/organizations?limit=50
+
+# Get maximum organizations
+GET /api/organizations?limit=1000
+```
+
 **Response**:
 ```json
 {

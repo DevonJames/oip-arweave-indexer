@@ -19,7 +19,9 @@ const router = express.Router();
 
 router.get('/', async (req, res) => {
     try {
-        const organizations = await getOrganizationsInDB()
+        // Support optional limit parameter (default 100, max 1000)
+        const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
+        const organizations = await getOrganizationsInDB(limit);
         res.status(200).json(
             organizations
         );

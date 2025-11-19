@@ -14,14 +14,18 @@ const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 
-// Import Elasticsearch indexing function
+// Import Elasticsearch indexing function and GUN registry
 const { indexRecord } = require('../helpers/elasticsearch');
+const { OIPGunRegistry } = require('../helpers/oipGunRegistry');
 
 // Configuration
 const GUN_RELAY_URL = process.env.GUN_RELAY_URL || process.env.GUN_PEERS || 'http://gun-relay:8765';
 const BATCH_SIZE = 5; // Process records in batches (reduced to avoid overwhelming server)
 const DELAY_MS = 500; // Delay between batches to avoid overwhelming the server (increased)
 const RETRY_DELAY = 1000; // Delay before retrying failed requests
+
+// Initialize GUN registry for proper record registration
+const registry = new OIPGunRegistry();
 
 // Statistics
 const stats = {
@@ -79,64 +83,7 @@ async function storeRecordInGun(soul, data, oip) {
     }
 }
 
-/**
- * Register record in discovery registry
- */
-async function registerInRegistry(did, soul, recordType, creatorPubKey) {
-    try {
-        // Extract creator public key from the record
-        const registryEntry = {
-            did: did,
-            soul: soul,
-            recordType: recordType,
-            creatorPubKey: creatorPubKey,
-            nodeId: 'restore-script',
-            timestamp: Date.now(),
-            oipVersion: '0.8.0'
-        };
-
-        // Register in global index
-        const indexSoul = `oip:registry:index:${recordType}`;
-        
-        // First, get current index
-        let currentIndex = {};
-        try {
-            const getResponse = await axios.get(`${GUN_RELAY_URL}/get`, {
-                params: { soul: indexSoul },
-                timeout: 10000
-            });
-            
-            if (getResponse.data && getResponse.data.success && getResponse.data.data) {
-                currentIndex = getResponse.data.data;
-                // Remove GUN internal properties
-                delete currentIndex._;
-            }
-        } catch (e) {
-            // Index doesn't exist yet, that's ok
-        }
-
-        // Add this entry
-        currentIndex[soul] = {
-            soul: soul,
-            nodeId: 'restore-script',
-            timestamp: Date.now()
-        };
-
-        // Store updated index
-        const putResponse = await axios.post(`${GUN_RELAY_URL}/put`, {
-            soul: indexSoul,
-            data: currentIndex
-        }, {
-            timeout: 10000,
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        return putResponse.data && putResponse.data.success;
-    } catch (error) {
-        console.warn(`⚠️ Registry registration failed for ${did}:`, error.message);
-        return false; // Non-fatal, continue restoration
-    }
-}
+// Removed manual registerInRegistry function - now using OIPGunRegistry.registerOIPRecord()
 
 /**
  * Process a single record
@@ -177,12 +124,18 @@ async function processRecord(record) {
             // Continue anyway - GUN storage succeeded
         }
 
-        // Register in discovery registry
+        // Register in discovery registry using proper OIPGunRegistry
         const recordType = source.oip.recordType;
         const creatorPubKey = source.oip.creator?.publicKey;
         
         if (recordType && creatorPubKey) {
-            await registerInRegistry(did, soul, recordType, creatorPubKey);
+            try {
+                await registry.registerOIPRecord(did, soul, recordType, creatorPubKey);
+                console.log(`📝 Registered in GUN registry: ${did}`);
+            } catch (registryError) {
+                console.warn(`⚠️ Failed to register in GUN registry: ${did}:`, registryError.message);
+                // Continue anyway - record is stored and indexed
+            }
         }
 
         stats.success++;
