@@ -217,17 +217,20 @@ class OIPGunRegistry {
     isValidOIPRecord(record) {
         // Check basic OIP structure
         if (!record || !record.oip || !record.data) {
+            console.warn(`  ⚠️ Missing basic structure: record=${!!record}, oip=${!!record?.oip}, data=${!!record?.data}`);
             return false;
         }
         
         // Check required OIP fields
         const oip = record.oip;
         if (!oip.ver || !oip.recordType || !oip.creator) {
+            console.warn(`  ⚠️ Missing OIP fields: ver=${!!oip.ver}, recordType=${!!oip.recordType}, creator=${!!oip.creator}`);
             return false;
         }
         
         // Check version compatibility
         if (typeof oip.ver !== 'string' || !oip.ver.startsWith('0.8')) {
+            console.warn(`  ⚠️ Version incompatible: ${oip.ver} (expected 0.8.x)`);
             return false;
         }
         
