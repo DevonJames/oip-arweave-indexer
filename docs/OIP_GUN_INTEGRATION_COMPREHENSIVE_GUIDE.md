@@ -490,12 +490,39 @@ oip:registry
         └── soul3 → {nodeId, timestamp}
 ```
 
+**Registry Entry Formats:**
+
+Registry entries can be stored in two formats, and the sync service handles both automatically:
+
+**Format 1: Direct Object (Preferred)**
+```json
+{
+  "647f79c2a338:record1": {
+    "soul": "647f79c2a338:record1",
+    "nodeId": "node-production-1",
+    "timestamp": 1234567890
+  }
+}
+```
+
+**Format 2: GUN Node Reference (Legacy/Restore)**
+```json
+{
+  "647f79c2a338:record1": {
+    "#": "oip:registry:index:image/647f79c2a338:record1"
+  }
+}
+```
+
+When encountering a node reference (`#` property), the sync service uses the registry key itself as the soul and fetches the actual record data from GUN. This ensures compatibility with records created by restoration scripts or older versions.
+
 **OIP Record Identification Strategy:**
 Instead of scanning the entire GUN network, the system uses structured registry approach:
 
 1. **Hierarchical Registry Structure**: Organized by node and record type
 2. **OIP Record Validation**: Must have `oip` object with `ver`, `recordType`, `creator`
 3. **Efficient Discovery**: Scan registry by record type, skip own node, validate structure
+4. **Format Flexibility**: Handles both direct objects and GUN node references
 
 #### **Data Flow Architecture**
 
@@ -515,9 +542,21 @@ Instead of scanning the entire GUN network, the system uses structured registry 
 3. Fetches record data from GUN network
 4. Validates OIP record structure
 5. Converts format: JSON strings → arrays
-6. Indexes in local Elasticsearch
-7. Updates sync metrics and health status
+6. Stores record to local GUN (enables further propagation)
+7. Indexes record in local Elasticsearch (enables queries)
+8. Registers record in local registry (enables discovery by other nodes)
+9. Updates sync metrics and health status
 ```
+
+**CRITICAL: Multi-Hop Sync Support**
+
+Synced records are treated identically to locally published records:
+- ✅ Stored in local GUN database (not just Elasticsearch)
+- ✅ Registered in local discovery registry
+- ✅ Can be discovered and synced by third-party nodes
+- ✅ Enables full mesh synchronization across all nodes
+
+Without steps 6 and 8, records would be "dead-end syncs" - they'd appear in queries on the receiving node but couldn't propagate further to other nodes.
 
 **Record Format Transformations:**
 
@@ -1066,6 +1105,163 @@ node scripts/migrate-existing-gun-records.js --dry-run
 - `didTx` parameter still works (aliased to `did`)
 - Alfred AI automatically includes GUN records in search results
 
+## 💾 **Backup and Restore**
+
+### **Backup GUN Records**
+
+Export all GUN records from Elasticsearch to a JSON backup file:
+
+```bash
+# Create backup
+make backup-gun-records
+
+# Backup saved to: gun-backup-YYYY-MM-DDTHH-mm-ss-sssZ.json
+```
+
+**Backup Format:**
+```json
+{
+  "metadata": {
+    "backupDate": "2025-11-20T12:00:00.000Z",
+    "source": "elasticsearch",
+    "totalRecords": 1203
+  },
+  "records": [
+    {
+      "_id": "did:gun:647f79c2a338:record1",
+      "_source": {
+        "data": { /* record data */ },
+        "oip": {
+          "did": "did:gun:647f79c2a338:record1",
+          "recordType": "image",
+          "creator": { /* creator info */ }
+        }
+      }
+    }
+  ]
+}
+```
+
+### **Restore GUN Records**
+
+Restore records from backup with proper format and registry registration:
+
+```bash
+# Restore from backup file
+make restore-gun-backup FILE=gun-backup-2025-11-14.json
+```
+
+**Restoration Process:**
+1. **Store to GUN**: Records stored as JSON strings (data/oip fields)
+2. **Index to Elasticsearch**: Records indexed for queries
+3. **Register in Registry**: Records registered in discovery registry
+4. **Enable Sync**: Records become immediately discoverable by other nodes
+
+**What Gets Restored:**
+- ✅ All record data (data, oip fields)
+- ✅ Creator information
+- ✅ Access control metadata
+- ✅ Registry entries for discovery
+
+**Important Notes:**
+- Records are restored with original DIDs
+- Duplicates are skipped (based on DID)
+- Batch processing prevents overwhelming the server
+- Progress is displayed during restoration
+
+### **Disaster Recovery**
+
+If GUN data becomes corrupted:
+
+```bash
+# 1. Stop services
+docker-compose stop oip-oip-1
+
+# 2. Wipe corrupted GUN storage
+docker volume rm <project>_gundata
+
+# 3. Restart services
+docker-compose up -d
+
+# 4. Restore from backup
+make restore-gun-backup FILE=your-backup.json
+
+# 5. Verify sync is working
+curl -X POST http://localhost:3005/api/health/gun-sync/force
+```
+
+### **Backup Best Practices**
+
+1. **Regular Backups**: Schedule daily backups via cron
+2. **Multiple Locations**: Store backups in multiple locations
+3. **Test Restores**: Periodically test restoration process
+4. **Backup Before Updates**: Always backup before major updates
+5. **Clean Old Backups**: Keep last 7-30 days of backups
+
+## 🔍 **Elasticsearch Query Considerations**
+
+### **Field Mapping Issue**
+
+The `oip.recordType` field is mapped as `text` (analyzed), not `keyword` (exact match).
+
+**Impact:**
+```javascript
+// Simple record types work fine:
+"image" → tokenized as ["image"] → ✅ queries work
+
+// CamelCase record types get tokenized:
+"userFitnessProfile" → tokenized as ["user", "fitness", "profile"] → ⚠️ needs match query
+```
+
+**Current Solution:**
+
+Queries use `match` instead of `term` to handle text field tokenization:
+
+```javascript
+// OLD (broken for camelCase):
+must.push({ term: { "oip.recordType.keyword": recordType } });
+
+// NEW (works for all record types):
+must.push({ match: { "oip.recordType": recordType } });
+```
+
+**Future Improvement:**
+
+Reindex with proper keyword mapping:
+
+```json
+{
+  "mappings": {
+    "properties": {
+      "oip": {
+        "properties": {
+          "recordType": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 256
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Then queries can use exact matching:
+```javascript
+must.push({ term: { "oip.recordType.keyword": recordType } });
+```
+
+**Affected Record Types:**
+- ✅ Simple: `image`, `post`, `video`, `audio`, `text`, `recipe`, `workout`, `exercise`
+- ⚠️ CamelCase: `userFitnessProfile`, `workoutSchedule`, `mealPlan`, `exerciseResult`, `workoutCompletion`, `weightEntry`, `shoppingList`, `userFitnessAchievment`, `conversationSession`, `multiResolutionGif`
+
+All record types now work correctly with the `match` query approach.
+
 ## 🎯 **Key Benefits**
 
 1. **True User Ownership**: Individual HD wallets for cryptographic ownership
@@ -1085,13 +1281,16 @@ node scripts/migrate-existing-gun-records.js --dry-run
 - Per-user encryption with unique salts
 - Organization DID-based encryption
 - Domain-based Auto-Enroll membership policy
-- Cross-node GUN record synchronization
+- Cross-node GUN record synchronization with multi-hop support
+- Registry-based record discovery (supports both direct objects and node references)
+- Complete backup and restore pipeline
 - Mnemonic export/import for wallet portability
 - Unified user interface with wallet management
 - Organization decryption queue system
 - Media upload and distribution system
 - BitTorrent seeding and peer discovery
 - HTTP streaming with range request support
+- Elasticsearch query compatibility for all record types (text field handling)
 
 ### **⚠️ Not Yet Implemented**
 - Invite-Only membership policy
