@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.7.1-runtime-ubuntu20.04
+FROM nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
 
 # Set timezone to avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -48,14 +48,9 @@ RUN pip3 install --no-cache-dir \
 # Pre-install tokenizers (prevents broken 0.21.x source build with puccinialin error)
 RUN pip3 install --no-cache-dir 'tokenizers>=0.13,<0.20'
 
-# Install ctranslate2 compatible with CUDA 11.7 (versions before 3.20.0 work without cuDNN 9)
-RUN pip3 install --no-cache-dir ctranslate2==3.17.1
-
-# Install faster-whisper compatible with ctranslate2 3.17.1
+# Install OpenAI Whisper (uses PyTorch, works with CUDA 11.7 without cuDNN issues)
 RUN pip3 install --no-cache-dir \
-    --timeout=300 \
-    --retries=5 \
-    faster-whisper==0.9.0 \
+    openai-whisper \
     librosa
 
 # Create models directory
@@ -65,7 +60,8 @@ RUN mkdir -p /app/models
 COPY . .
 
 # Set environment variables for GPU
-# Note: int8 on CUDA works without cuDNN (float16 requires cuDNN 9+ which needs CUDA 12+)
+# Add cuDNN library path
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 ENV CUDA_VISIBLE_DEVICES=0
 ENV WHISPER_DEVICE=cuda
 ENV WHISPER_COMPUTE_TYPE=int8
@@ -73,5 +69,5 @@ ENV WHISPER_COMPUTE_TYPE=int8
 # Expose port
 EXPOSE 8003
 
-# Run the service
-CMD ["uvicorn", "whisper_service:app", "--host", "0.0.0.0", "--port", "8003"] 
+# Run the service (using OpenAI Whisper which works better with CUDA 11.7)
+CMD ["uvicorn", "whisper_service_openai:app", "--host", "0.0.0.0", "--port", "8003"] 
