@@ -384,7 +384,7 @@ services:
     environment:
       - WHISPER_MODEL=${WHISPER_MODEL:-base}
       - WHISPER_DEVICE=${WHISPER_DEVICE:-cuda}
-      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-float16}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
       - CUDA_VISIBLE_DEVICES=0
     ports:
       - "${STT_SERVICE_PORT:-8003}:8003"
