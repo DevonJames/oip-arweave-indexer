@@ -7,6 +7,7 @@
 const { OIPGunRegistry } = require('./oipGunRegistry');
 const { PrivateRecordHandler } = require('./privateRecordHandler');
 const { processRecordForElasticsearch, indexRecord, elasticClient } = require('./elasticsearch');
+const { defaultTemplates } = require('../config/templates.config');
 
 class GunSyncService {
     constructor() {
@@ -32,6 +33,29 @@ class GunSyncService {
             httpSyncEnabled: this.httpSyncEnabled,
             peerCount: this.peerNodes.length
         });
+    }
+    
+    /**
+     * Get record types to sync based on configuration
+     * Uses RECORD_TYPE_INDEX_MODE and RECORD_TYPE_INDEX_WHITELIST/BLACKLIST from .env
+     */
+    getRecordTypesToSync() {
+        const mode = process.env.RECORD_TYPE_INDEX_MODE || 'all';
+        const allTypes = Object.keys(defaultTemplates);
+        
+        if (mode === 'all') {
+            return allTypes;
+        } else if (mode === 'whitelist') {
+            const whitelist = process.env.RECORD_TYPE_INDEX_WHITELIST || '';
+            const types = whitelist.split(',').map(t => t.trim()).filter(t => t);
+            return types.length > 0 ? types : allTypes;
+        } else if (mode === 'blacklist') {
+            const blacklist = process.env.RECORD_TYPE_INDEX_BLACKLIST || '';
+            const excludeTypes = new Set(blacklist.split(',').map(t => t.trim()).filter(t => t));
+            return allTypes.filter(t => !excludeTypes.has(t));
+        }
+        
+        return allTypes;
     }
     
     /**
@@ -196,8 +220,9 @@ class GunSyncService {
         const axios = require('axios');
         const discoveredRecords = [];
         
-        // Record types to check
-        const recordTypes = ['image', 'post', 'video', 'audio', 'text', 'recipe', 'workout', 'exercise'];
+        // Get record types from configuration
+        const recordTypes = this.getRecordTypesToSync();
+        console.log(`📋 Syncing record types (${process.env.RECORD_TYPE_INDEX_MODE || 'all'}):`, recordTypes);
         
         for (const peerUrl of this.peerNodes) {
             try {
