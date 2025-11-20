@@ -6,6 +6,7 @@
 
 const { GunHelper } = require('./gun');
 const { elasticClient } = require('./elasticsearch');
+const { defaultTemplates } = require('../config/templates.config');
 
 class OIPGunRegistry {
     constructor() {
@@ -32,6 +33,29 @@ class OIPGunRegistry {
         // Generate based on server info
         const serverInfo = `${process.env.HOSTNAME || 'unknown'}:${process.env.PORT || 3005}:${Date.now()}`;
         return crypto.createHash('sha256').update(serverInfo).digest('hex').slice(0, 16);
+    }
+    
+    /**
+     * Get record types based on configuration
+     * Uses RECORD_TYPE_INDEX_MODE and RECORD_TYPE_INDEX_WHITELIST/BLACKLIST from .env
+     */
+    getRecordTypes() {
+        const mode = process.env.RECORD_TYPE_INDEX_MODE || 'all';
+        const allTypes = Object.keys(defaultTemplates);
+        
+        if (mode === 'all') {
+            return allTypes;
+        } else if (mode === 'whitelist') {
+            const whitelist = process.env.RECORD_TYPE_INDEX_WHITELIST || '';
+            const types = whitelist.split(',').map(t => t.trim()).filter(t => t);
+            return types.length > 0 ? types : allTypes;
+        } else if (mode === 'blacklist') {
+            const blacklist = process.env.RECORD_TYPE_INDEX_BLACKLIST || '';
+            const excludeTypes = new Set(blacklist.split(',').map(t => t.trim()).filter(t => t));
+            return allTypes.filter(t => !excludeTypes.has(t));
+        }
+        
+        return allTypes;
     }
     
     /**
@@ -113,11 +137,8 @@ class OIPGunRegistry {
             // console.log('🔍 Discovering OIP records from other nodes...'); // Commented out - too verbose
             const discoveredRecords = [];
             
-            // Scan all record types in the global registry
-            const recordTypes = [
-                'post', 'image', 'video', 'audio', 'text', 'recipe', 'workout', 'exercise',
-                'conversationSession', 'media', 'creatorRegistration', 'organization'
-            ];
+            // Get record types from configuration
+            const recordTypes = this.getRecordTypes();
             
             for (const recordType of recordTypes) {
                 const typeRecords = await this.discoverRecordsOfType(recordType);
@@ -283,8 +304,8 @@ class OIPGunRegistry {
                 recordsByType: {}
             };
             
-            // Count records by type
-            const recordTypes = ['post', 'image', 'video', 'audio', 'conversationSession', 'media'];
+            // Get record types from configuration
+            const recordTypes = this.getRecordTypes();
             
             for (const recordType of recordTypes) {
                 const globalIndexKey = `${this.registryRoot}:index:${recordType}`;
