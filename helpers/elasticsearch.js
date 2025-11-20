@@ -3577,7 +3577,7 @@ const buildElasticsearchQuery = (params) => {
     // Filter by record type
     if (params.recordType) {
         must.push({
-            term: { "oip.recordType": params.recordType } // Use text field, not .keyword (field isn't mapped with keyword subfield)
+            match: { "oip.recordType": params.recordType } // Use match for text field (analyzed, not exact match)
         });
     }
     
