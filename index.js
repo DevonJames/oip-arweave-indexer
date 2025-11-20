@@ -40,6 +40,7 @@ const photoRoutes = require('./routes/photo');
 const recipesRoutes = require('./routes/recipes');
 const narrationRoutes = require('./routes/narration');
 const documentationRoutes = require('./routes/documentation');
+const notesRoutes = require('./routes/notes');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 const axios = require('axios');
 const { getTracker } = require('./helpers/memoryTracker');
@@ -392,6 +393,8 @@ app.use('/api/cleanup', cleanupRoutes);
 app.use('/api', narrationRoutes);
 // Documentation routes
 app.use('/api/documentation', documentationRoutes);
+// Notes routes (Alfred Meeting Notes)
+app.use('/api/notes', notesRoutes);
 
 // Make io available to routes
 app.set('io', io);

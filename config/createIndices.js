@@ -175,6 +175,181 @@ async function createSwapsIndex() {
 }
 
 /**
+ * Creates the index for Alfred Meeting Notes
+ */
+async function createNotesIndex() {
+    try {
+        const indexName = 'notes';
+        console.log(`Checking if ${indexName} index exists...`);
+        
+        const indexExists = await client.indices.exists({
+            index: indexName
+        }).catch(err => {
+            console.error(`Error checking if index exists: ${err.message}`);
+            return { body: false };
+        });
+        
+        if (indexExists.statusCode === 404 || indexExists.body === false) {
+            console.log(`Creating ${indexName} index...`);
+            
+            try {
+                await client.indices.create({
+                    index: indexName,
+                    body: {
+                        mappings: {
+                            properties: {
+                                // OIP metadata
+                                did: { type: 'keyword' },
+                                noteHash: { type: 'keyword' },
+                                userPublicKey: { type: 'keyword' },
+                                storage: { type: 'keyword' },
+                                indexedAt: { type: 'date' },
+                                
+                                // Note metadata
+                                note_type: { type: 'keyword' },
+                                created_at: { type: 'date' },
+                                ended_at: { type: 'date' },
+                                device_type: { type: 'keyword' },
+                                capture_location: { type: 'text' },
+                                
+                                // Transcription
+                                transcription_status: { type: 'keyword' },
+                                transcript_did: { type: 'keyword' },
+                                transcription_engine_did: { type: 'keyword' },
+                                
+                                // Summary fields
+                                summary_key_points: { type: 'text' },
+                                summary_decisions: { type: 'text' },
+                                summary_action_item_texts: { type: 'text' },
+                                summary_action_item_assignees: { type: 'keyword' },
+                                summary_action_item_due_texts: { type: 'text' },
+                                summary_open_questions: { type: 'text' },
+                                summary_version: { type: 'integer' },
+                                sentiment_overall: { type: 'keyword' },
+                                
+                                // Participants
+                                participant_display_names: { type: 'keyword' },
+                                participant_roles: { type: 'keyword' },
+                                
+                                // Calendar
+                                calendar_event_id: { type: 'keyword' },
+                                calendar_start_time: { type: 'date' },
+                                calendar_end_time: { type: 'date' },
+                                
+                                // Chunking
+                                chunking_strategy: { type: 'keyword' },
+                                chunk_count: { type: 'integer' },
+                                
+                                // Auto-generated
+                                topics_auto: { type: 'keyword' },
+                                keywords_auto: { type: 'keyword' },
+                                
+                                // Flags
+                                is_archived: { type: 'boolean' },
+                                is_pinned: { type: 'boolean' },
+                                user_edits_present: { type: 'boolean' }
+                            }
+                        },
+                        settings: {
+                            number_of_shards: 1,
+                            number_of_replicas: 0
+                        }
+                    }
+                });
+                console.log(`Index ${indexName} created successfully`);
+            } catch (createError) {
+                if (createError.meta?.body?.error?.type === 'resource_already_exists_exception') {
+                    console.log(`Index ${indexName} already exists (created by another process)`);
+                } else {
+                    throw createError;
+                }
+            }
+        } else {
+            console.log(`Index ${indexName} already exists`);
+        }
+    } catch (error) {
+        console.warn(`Warning: Error during ${indexName} index creation: ${error.message}`);
+    }
+}
+
+/**
+ * Creates the index for note chunks
+ */
+async function createNoteChunksIndex() {
+    try {
+        const indexName = 'noteChunks';
+        console.log(`Checking if ${indexName} index exists...`);
+        
+        const indexExists = await client.indices.exists({
+            index: indexName
+        }).catch(err => {
+            console.error(`Error checking if index exists: ${err.message}`);
+            return { body: false };
+        });
+        
+        if (indexExists.statusCode === 404 || indexExists.body === false) {
+            console.log(`Creating ${indexName} index...`);
+            
+            try {
+                await client.indices.create({
+                    index: indexName,
+                    body: {
+                        mappings: {
+                            properties: {
+                                // OIP metadata
+                                did: { type: 'keyword' },
+                                localId: { type: 'keyword' },
+                                noteHash: { type: 'keyword' },
+                                noteDid: { type: 'keyword' },
+                                userPublicKey: { type: 'keyword' },
+                                storage: { type: 'keyword' },
+                                indexedAt: { type: 'date' },
+                                
+                                // Chunk data
+                                chunk_index: { type: 'integer' },
+                                start_time_ms: { type: 'long' },
+                                end_time_ms: { type: 'long' },
+                                text: { type: 'text' },
+                                speaker_label: { type: 'keyword' },
+                                
+                                // Metadata
+                                is_marked_important: { type: 'boolean' },
+                                sentiment: { type: 'keyword' },
+                                confidence_score: { type: 'float' },
+                                
+                                // Derived from parent note (for filtering)
+                                note_type: { type: 'keyword' },
+                                participant_display_names: { type: 'keyword' },
+                                calendar_event_id: { type: 'keyword' }
+                            }
+                        },
+                        settings: {
+                            number_of_shards: 1,
+                            number_of_replicas: 0,
+                            // Enable best_fields for text search on chunks
+                            index: {
+                                max_result_window: 10000
+                            }
+                        }
+                    }
+                });
+                console.log(`Index ${indexName} created successfully`);
+            } catch (createError) {
+                if (createError.meta?.body?.error?.type === 'resource_already_exists_exception') {
+                    console.log(`Index ${indexName} already exists (created by another process)`);
+                } else {
+                    throw createError;
+                }
+            }
+        } else {
+            console.log(`Index ${indexName} already exists`);
+        }
+    } catch (error) {
+        console.warn(`Warning: Error during ${indexName} index creation: ${error.message}`);
+    }
+}
+
+/**
  * Initialize all indices without exiting the process
  * @returns {Promise} Promise that resolves when all indices are initialized
  */
@@ -194,7 +369,9 @@ async function initializeIndices() {
         await Promise.all([
             createContentPaymentsIndex(),
             createNotificationsIndex(),
-            createSwapsIndex()
+            createSwapsIndex(),
+            createNotesIndex(),
+            createNoteChunksIndex()
         ]);
         
         console.log('All indices initialized successfully');
@@ -209,5 +386,7 @@ module.exports = {
     createContentPaymentsIndex,
     createNotificationsIndex,
     createSwapsIndex,
+    createNotesIndex,
+    createNoteChunksIndex,
     initializeIndices
 }; 
