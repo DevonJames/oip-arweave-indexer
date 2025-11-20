@@ -242,12 +242,29 @@ class GunSyncService {
                             
                             // Process each entry in the peer's registry index
                             for (const [soul, entry] of Object.entries(peerIndex)) {
-                                // Skip GUN metadata
-                                if (soul.startsWith('_') || soul.startsWith('#') || !entry.soul) {
+                                // Skip GUN metadata properties
+                                if (soul.startsWith('_') || soul.startsWith('#')) {
                                     continue;
                                 }
                                 
-                                const recordSoul = entry.soul;
+                                // Handle both direct entries and GUN node references
+                                let recordSoul = soul; // Default: use the key as the soul
+                                
+                                if (entry && typeof entry === 'object') {
+                                    if (entry.soul) {
+                                        // Direct entry with soul property
+                                        recordSoul = entry.soul;
+                                    } else if (entry['#']) {
+                                        // GUN node reference - the soul is the key itself
+                                        // We'll fetch the actual record, not the registry entry
+                                        recordSoul = soul;
+                                    } else {
+                                        // Unknown structure, skip
+                                        console.warn(`⚠️ Unknown registry entry structure for ${soul}`);
+                                        continue;
+                                    }
+                                }
+                                
                                 const did = `did:gun:${recordSoul}`;
                                 
                                 // Skip if we already have this record
