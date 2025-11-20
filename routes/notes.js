@@ -465,6 +465,9 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             token
         );
         
+        // Extract chunk DIDs for the note record
+        const chunkDids = chunkResults.map(chunk => chunk.did);
+        
         console.log(`✅ [Step 9] Created ${chunkResults.length} chunk records`);
 
         // ========================================
@@ -514,7 +517,8 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             calendar_start_time,
             calendar_end_time,
             chunking_strategy,
-            chunk_count: chunks.length
+            chunk_count: chunks.length,
+            chunk_ids: chunkDids
         };
 
         let noteRecordDid = null;

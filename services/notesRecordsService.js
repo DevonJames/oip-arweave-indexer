@@ -148,10 +148,10 @@ class NotesRecordsService {
         try {
             const localId = `${noteHash}:${chunk.chunk_index}`;
 
-            // Use LLM-generated tags if available, otherwise use base tags
+            // Use only LLM-generated tags
             const chunkTags = chunk.tags && chunk.tags.length > 0 
-                ? [...chunk.tags, 'alfred-note-chunk', `note-type-${noteType.toLowerCase()}`]
-                : ['alfred-note-chunk', `note-type-${noteType.toLowerCase()}`];
+                ? chunk.tags
+                : [];
 
             const recordData = {
                 basic: {
@@ -221,7 +221,7 @@ class NotesRecordsService {
                     description: payload.description || 'Alfred Notes capture',
                     date: Math.floor(Date.now() / 1000),
                     language: payload.language || 'en',
-                    tagItems: payload.tags || ['alfred-note', `note-type-${payload.note_type.toLowerCase()}`]
+                    tagItems: payload.tags || []
                 },
                 // Add audio object with full template fields if audio metadata provided
                 audio: payload.audio_meta ? {
@@ -275,7 +275,7 @@ class NotesRecordsService {
                     
                     chunking_strategy: payload.chunking_strategy,
                     chunk_count: payload.chunk_count,
-                    chunk_ids: []
+                    chunk_ids: payload.chunk_ids || []
                 },
                 accessControl: {
                     access_level: 'private',
