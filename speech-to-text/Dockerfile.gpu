@@ -48,13 +48,14 @@ RUN pip3 install --no-cache-dir \
 # Pre-install tokenizers (prevents broken 0.21.x source build with puccinialin error)
 RUN pip3 install --no-cache-dir 'tokenizers>=0.13,<0.20'
 
-# Install faster-whisper and audio processing libs (depends on av)
-# Pin to known stable version (1.0.3) - avoids broken dependencies in newer versions
+# Install ctranslate2 compatible with CUDA 11.7 (versions before 3.20.0 work without cuDNN 9)
+RUN pip3 install --no-cache-dir ctranslate2==3.17.1
+
+# Install faster-whisper compatible with ctranslate2 3.17.1
 RUN pip3 install --no-cache-dir \
     --timeout=300 \
     --retries=5 \
-    --only-binary=:all: \
-    faster-whisper==1.0.3 \
+    faster-whisper==0.9.0 \
     librosa
 
 # Create models directory
