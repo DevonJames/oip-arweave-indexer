@@ -80,27 +80,32 @@ class OrganizationEncryption {
             // Check membership based on organization's membership policy
             const membershipPolicy = orgData.membershipPolicy;
             
-            if (membershipPolicy === 1 || membershipPolicy === 'app-user-auto') {
+            // Normalize policy for comparison (handle various formats)
+            const normalizedPolicy = typeof membershipPolicy === 'string' 
+                ? membershipPolicy.toLowerCase().replace(/[\s-_]/g, '') 
+                : membershipPolicy;
+            
+            if (membershipPolicy === 1 || normalizedPolicy === 'appuserauto' || normalizedPolicy === 'autoenrollappusers') {
                 // Auto-Enroll App Users: Check if request came from organization's domain
                 return await this.checkDomainBasedMembership(organization, requestInfo);
                 
-            } else if (membershipPolicy === 0 || membershipPolicy === 'invite-only') {
+            } else if (membershipPolicy === 0 || normalizedPolicy === 'inviteonly') {
                 // Invite Only: Check invitation list (not yet implemented)
                 console.log(`⚠️ Invite-only membership not yet implemented for: ${organizationDid}`);
                 return false;
                 
-            } else if (membershipPolicy === 2 || membershipPolicy === 'token-gated') {
+            } else if (membershipPolicy === 2 || normalizedPolicy === 'tokengated') {
                 // Token-Gated: Check token ownership (not yet implemented)
                 console.log(`⚠️ Token-gated membership not yet implemented for: ${organizationDid}`);
                 return false;
                 
-            } else if (membershipPolicy === 3 || membershipPolicy === 'open-join') {
+            } else if (membershipPolicy === 3 || normalizedPolicy === 'openjoin') {
                 // Open Join: Anyone can be a member
                 console.log(`✅ Open-join policy, user is member: ${organizationDid}`);
                 return true;
                 
             } else {
-                // console.warn(`⚠️ Unknown membership policy: ${membershipPolicy} for ${organizationDid}`);
+                console.warn(`⚠️ Unknown membership policy: ${membershipPolicy} (normalized: ${normalizedPolicy}) for ${organizationDid}`);
                 return false;
             }
             
