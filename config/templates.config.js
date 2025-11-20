@@ -35,6 +35,7 @@ module.exports = {
         summaryNutritionalInfoPerServing: "y6Bx-UUGxti0x_o9bni74nA5ykFY2qYyzrzTAoF05rA",
         exerciseMETvalues: "VNMiuJdCoVvQ_5BkCXIySzksCQLqTOs1MogSmmgcNhc",
         notes: "uH3cFr1nyid6KcIXKyox8dKgdh6VG8ugwVaRhDZ5uk8",
-        audio: "ku1zNjA19b9zLXR-ujud2L36F61k7Vulj62cMNRwQTE"
+        audio: "ku1zNjA19b9zLXR-ujud2L36F61k7Vulj62cMNRwQTE",
+        transcriptionEngine: "L_HMK9eKnpS093XRWhZtxN1-4V2D7d_b3XwdjriRcgc"
     },
 };
