@@ -220,9 +220,9 @@ class GunSyncService {
         const axios = require('axios');
         const discoveredRecords = [];
         
-        // Get record types from configuration
+        // Get all record types to sync from peers
         const recordTypes = this.getRecordTypesToSync();
-        console.log(`📋 Syncing record types (${process.env.RECORD_TYPE_INDEX_MODE || 'all'}):`, recordTypes);
+        console.log(`📋 Syncing all record types from peers:`, recordTypes);
         
         for (const peerUrl of this.peerNodes) {
             try {
@@ -367,13 +367,37 @@ class GunSyncService {
                 return false;
             }
             
+            // Store to local GUN database (so it can be queried and synced to other nodes)
+            try {
+                await this.registry.gunHelper.putRecord(data, soul, {
+                    localId: soul.split(':')[1] || null,
+                    encrypt: wasEncrypted
+                });
+                console.log(`💾 Stored to local GUN: ${did}`);
+            } catch (gunError) {
+                console.warn(`⚠️ Failed to store to GUN (continuing with Elasticsearch): ${gunError.message}`);
+            }
+            
             // Index to Elasticsearch using existing indexRecord function
             await indexRecord(elasticsearchRecord);
+            console.log(`📊 Indexed to Elasticsearch: ${did}`);
+            
+            // Register in local registry (so other nodes can discover it)
+            try {
+                const recordType = data.oip?.recordType;
+                const creatorPubKey = data.oip?.creator?.publicKey;
+                if (recordType && creatorPubKey) {
+                    await this.registry.registerOIPRecord(did, soul, recordType, creatorPubKey);
+                    console.log(`📝 Registered in local registry: ${did}`);
+                }
+            } catch (registryError) {
+                console.warn(`⚠️ Failed to register in local registry: ${registryError.message}`);
+            }
             
             // Mark as processed
             this.processedRecords.add(did);
             
-            console.log(`✅ Successfully synced and indexed ${wasEncrypted ? 'private' : 'public'} record: ${did}`);
+            console.log(`✅ Successfully synced record: ${did}`);
             return true;
             
         } catch (error) {

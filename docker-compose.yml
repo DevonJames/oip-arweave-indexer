@@ -530,9 +530,10 @@ services:
     volumes:
       # Bind mount to host filesystem for cache/data persistence
       # Set ARIO_GATEWAY_DATA_PATH in .env to customize location (default: ./ario_gateway_data)
-      # IMPORTANT: If START_HEIGHT isn't working, the gateway may have a database that stores
+      # IMPORTANT: AR.IO gateway stores data in /app/data (not /data)
+      # If START_HEIGHT isn't working, the gateway may have a database that stores
       # the last synced block. Delete ALL files in this directory including hidden .db files
-      - ${ARIO_GATEWAY_DATA_PATH:-./ario_gateway_data}:/data
+      - ${ARIO_GATEWAY_DATA_PATH:-./ario_gateway_data}:/app/data
     environment:
       # AR.IO gateway configuration
       # Internal container port is always 4000 (AR.IO gateway expects this)
