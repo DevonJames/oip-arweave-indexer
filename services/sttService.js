@@ -7,7 +7,7 @@ const FormData = require('form-data');
 const fs = require('fs');
 const { Readable } = require('stream');
 
-const STT_SERVICE_URL = process.env.STT_SERVICE || 'http://localhost:3010';
+const STT_SERVICE_URL = process.env.STT_SERVICE_URL || 'http://localhost:8003';
 
 class STTService {
     constructor() {
