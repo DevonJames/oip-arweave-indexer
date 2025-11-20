@@ -3747,7 +3747,7 @@ const buildElasticsearchQuery = (params) => {
             }
         });
     } else if (params.user) {
-        // Authenticated users: show public records + their own private records
+        // Authenticated users: show public records + their own private records + organization records (membership checked in post-processing)
         const userPubKey = params.user.publicKey || params.user.publisherPubKey;
         
         if (userPubKey) {
@@ -3765,7 +3765,9 @@ const buildElasticsearchQuery = (params) => {
                                 { term: { "data.accessControl.owner_public_key.keyword": userPubKey } },
                                 { term: { "data.accessControl.created_by.keyword": userPubKey } },
                                 // Private records owned by this user (via conversationSession)
-                                { term: { "data.conversationSession.owner_public_key.keyword": userPubKey } }
+                                { term: { "data.conversationSession.owner_public_key.keyword": userPubKey } },
+                                // Organization records (membership will be checked in post-processing)
+                                { term: { "data.accessControl.access_level.keyword": "organization" } }
                             ],
                             minimum_should_match: 1
                         }
