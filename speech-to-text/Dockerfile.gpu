@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
+FROM nvidia/cuda:11.7.1-runtime-ubuntu20.04
 
 # Set timezone to avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Install Python dependencies with GPU support
+# Install Python dependencies
 RUN pip3 install --upgrade pip
 
 # Install PyTorch with CUDA support (cached layer)
@@ -32,25 +32,25 @@ RUN pip3 install --no-cache-dir \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu117
 
 # Pre-install av separately with extended timeout (most problematic package)
-# This creates a separate cached Docker layer
-# Note: Using av>=11.0.0 for Cython 3.x compatibility (av 10.x has build issues)
 RUN pip3 install --timeout=300 --retries=5 'av>=11.0.0,<13.0.0'
 
-# Install stable dependencies (cached layer if av doesn't change)
+# Install stable dependencies
 RUN pip3 install --no-cache-dir \
-    fastapi==0.104.1 \
-    uvicorn==0.24.0 \
-    python-multipart==0.0.6 \
-    httpx==0.25.2 \
-    pydantic==2.5.0 \
+    fastapi \
+    uvicorn \
+    python-multipart \
+    pydantic \
     numpy
 
-# Pre-install tokenizers (prevents broken 0.21.x source build with puccinialin error)
+# Pre-install tokenizers
 RUN pip3 install --no-cache-dir 'tokenizers>=0.13,<0.20'
 
-# Install OpenAI Whisper (uses PyTorch, works with CUDA 11.7 without cuDNN issues)
+# Install faster-whisper
 RUN pip3 install --no-cache-dir \
-    openai-whisper \
+    --timeout=300 \
+    --retries=5 \
+    --only-binary=:all: \
+    faster-whisper \
     librosa
 
 # Create models directory
@@ -59,15 +59,13 @@ RUN mkdir -p /app/models
 # Copy service files
 COPY . .
 
-# Set environment variables for GPU
-# Add cuDNN library path
-ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+# Set environment variables - USE CPU TO AVOID cuDNN ISSUES
 ENV CUDA_VISIBLE_DEVICES=0
-ENV WHISPER_DEVICE=cuda
+ENV WHISPER_DEVICE=cpu
 ENV WHISPER_COMPUTE_TYPE=int8
 
 # Expose port
 EXPOSE 8003
 
-# Run the service (using OpenAI Whisper which works better with CUDA 11.7)
-CMD ["uvicorn", "whisper_service_openai:app", "--host", "0.0.0.0", "--port", "8003"] 
+# Run the service
+CMD ["uvicorn", "whisper_service:app", "--host", "0.0.0.0", "--port", "8003"]
