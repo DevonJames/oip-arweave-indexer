@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alfred Notes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-blue: #007AFF;
+            --primary-blue-light: #E8F4FF;
+            --secondary-purple: #5856D6;
+            --bg-light: #F2F2F7;
+            --bg-white: #FFFFFF;
+            --text-primary: #000000;
+            --text-secondary: #3C3C43;
+            --text-tertiary: #8E8E93;
+            --border-color: #C6C6C8;
+            --red: #FF3B30;
+            --green: #34C759;
+            --success-green: #28A745;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--bg-light);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        /* Main Container */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 100%;
+        }
+
+        /* Header */
+        .app-header {
+            background: var(--bg-white);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+        }
+
+        .app-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .logout-btn {
+            padding: 6px 12px;
+            background: var(--red);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        /* Content Area */
+        .app-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .view-container {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .view-container.active {
+            display: flex;
+        }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            background: var(--bg-white);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 20px;
+            cursor: pointer;
+            color: var(--text-tertiary);
+            border: none;
+            background: none;
+            font-size: 10px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-item.active {
+            color: var(--primary-blue);
+        }
+
+        .nav-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        /* Home View */
+        .home-view {
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .record-button {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-blue), var(--secondary-purple));
+            border: none;
+            color: white;
+            font-size: 48px;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(88, 86, 214, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .record-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 12px 32px rgba(88, 86, 214, 0.4);
+        }
+
+        .record-button.recording {
+            background: var(--red);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .template-selector {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .template-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .template-card {
+            background: var(--bg-white);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .template-card:hover {
+            border-color: var(--primary-blue);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .template-card.selected {
+            border-color: var(--primary-blue);
+            background: var(--primary-blue-light);
+        }
+
+        .template-icon {
+            font-size: 36px;
+            margin-bottom: 8px;
+        }
+
+        .template-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* Library View */
+        .library-view {
+            background: var(--bg-light);
+        }
+
+        .library-header {
+            background: var(--bg-white);
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            background: var(--bg-light);
+            border-radius: 10px;
+            padding: 10px 15px;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .search-bar input {
+            flex: 1;
+            border: none;
+            background: none;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .filter-button {
+            padding: 8px 16px;
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .notes-list {
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .note-card {
+            background: var(--bg-white);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .note-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .note-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .note-badge {
+            background: var(--secondary-purple);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .note-preview {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .note-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        /* Chat View */
+        .chat-view {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: var(--bg-white);
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .chat-toggle {
+            display: flex;
+            background: var(--bg-light);
+            border-radius: 10px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .chat-toggle-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chat-toggle-btn.active {
+            background: var(--bg-white);
+            color: var(--primary-blue);
+            box-shadow: var(--shadow);
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            max-width: 80%;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary-blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            background: var(--bg-white);
+            padding: 12px 16px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .message.user .message-content {
+            background: var(--primary-blue);
+            color: white;
+        }
+
+        .message-text {
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .chat-input-container {
+            background: var(--bg-white);
+            border-top: 1px solid var(--border-color);
+            padding: 16px 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 15px;
+            outline: none;
+            resize: none;
+            font-family: inherit;
+            min-height: 44px;
+            max-height: 120px;
+        }
+
+        .send-button {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .send-button:disabled {
+            background: var(--border-color);
+            cursor: not-allowed;
+        }
+
+        /* Settings View */
+        .settings-view {
+            background: var(--bg-light);
+            padding: 20px;
+        }
+
+        .settings-section {
+            background: var(--bg-white);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--bg-light);
+        }
+
+        .setting-row:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label {
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        .setting-description {
+            font-size: 13px;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 51px;
+            height: 31px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--border-color);
+            transition: 0.4s;
+            border-radius: 31px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 27px;
+            width: 27px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: var(--success-green);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        .model-select {
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+            background: var(--bg-light);
+            cursor: pointer;
+            outline: none;
+        }
+
+        /* Note Detail View */
+        .note-detail-view {
+            padding: 20px;
+            background: var(--bg-light);
+        }
+
+        .note-detail-header {
+            background: var(--bg-white);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .note-detail-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .note-detail-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: var(--text-tertiary);
+        }
+
+        .summary-section {
+            background: var(--bg-white);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .summary-heading {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .summary-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .summary-list li {
+            padding-left: 24px;
+            position: relative;
+            font-size: 15px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .summary-list li:before {
+            content: "•";
+            position: absolute;
+            left: 8px;
+            color: var(--primary-blue);
+            font-weight: bold;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            gap: 16px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Auth Modal */
+        .auth-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .auth-modal.hidden {
+            display: none;
+        }
+
+        .auth-card {
+            background: var(--bg-white);
+            padding: 32px;
+            border-radius: 16px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .auth-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary-blue);
+        }
+
+        .primary-button {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .primary-button:hover {
+            background: #0056CC;
+        }
+
+        .secondary-button {
+            width: 100%;
+            padding: 14px;
+            background: var(--bg-light);
+            color: var(--text-primary);
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .auth-toggle {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .auth-toggle a {
+            color: var(--primary-blue);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-white);
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 1001;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.hidden {
+            display: none;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.success {
+            border-left: 4px solid var(--green);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--red);
+        }
+
+        /* Recording Panel */
+        .recording-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-white);
+            padding: 24px;
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            z-index: 999;
+        }
+
+        .recording-panel.active {
+            display: flex;
+        }
+
+        .recording-timer {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--red);
+        }
+
+        .recording-status {
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        .stop-recording-btn {
+            padding: 14px 32px;
+            background: var(--red);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--text-tertiary);
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .empty-text {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .app-container {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+        }
+
+        /* Hide scrollbar but keep functionality */
+        .view-container::-webkit-scrollbar,
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .view-container::-webkit-scrollbar-thumb,
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <div class="app-header">
+            <div class="app-title">Alfred Notes</div>
+            <div class="user-info">
+                <span id="userEmail">Loading...</span>
+                <button class="logout-btn" onclick="alfredApp.logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Content Views -->
+        <div class="app-content">
+            <!-- Home View -->
+            <div id="homeView" class="view-container active">
+                <div class="home-view">
+                    <button class="record-button" id="recordButton" onclick="alfredApp.toggleRecording()">
+                        <span id="recordIcon">🎤</span>
+                    </button>
+
+                    <div class="template-selector">
+                        <h3 class="template-title">Select Template</h3>
+                        <div class="template-grid">
+                            <div class="template-card selected" data-template="meeting">
+                                <div class="template-icon">👥</div>
+                                <div class="template-name">Meeting</div>
+                            </div>
+                            <div class="template-card" data-template="1on1">
+                                <div class="template-icon">👤</div>
+                                <div class="template-name">1:1</div>
+                            </div>
+                            <div class="template-card" data-template="standup">
+                                <div class="template-icon">🚩</div>
+                                <div class="template-name">Standup</div>
+                            </div>
+                            <div class="template-card" data-template="idea">
+                                <div class="template-icon">💡</div>
+                                <div class="template-name">Idea / Brain Dump</div>
+                            </div>
+                            <div class="template-card" data-template="reflection">
+                                <div class="template-icon">❤️</div>
+                                <div class="template-name">Daily Reflection</div>
+                            </div>
+                            <div class="template-card" data-template="interview">
+                                <div class="template-icon">🎓</div>
+                                <div class="template-name">Interview / Lecture</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Library View -->
+            <div id="libraryView" class="view-container">
+                <div class="library-view">
+                    <div class="library-header">
+                        <div class="search-bar">
+                            <span>🔍</span>
+                            <input type="text" placeholder="Search notes..." id="searchInput" onkeyup="alfredApp.searchNotes()">
+                        </div>
+                        <button class="filter-button" onclick="alfredApp.toggleFilters()">🔽 Advanced Search & Filters</button>
+                    </div>
+                    <div class="notes-list" id="notesList">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <div>Loading your notes...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat View -->
+            <div id="chatView" class="view-container">
+                <div class="chat-view">
+                    <div class="chat-header">
+                        <div class="chat-toggle">
+                            <button class="chat-toggle-btn active" data-ai="alfred" onclick="alfredApp.switchAI('alfred')">Alfred</button>
+                            <button class="chat-toggle-btn" data-ai="alice" onclick="alfredApp.switchAI('alice')">Alice</button>
+                        </div>
+                    </div>
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message">
+                            <div class="message-avatar">A</div>
+                            <div class="message-content">
+                                <div class="message-text">Hello! I'm Alfred. I've analyzed your note "Idea – Nov 20, 2025 4:25PM". Ask me anything about it - I have access to the full transcript, summary, and related content.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <textarea class="chat-input" id="chatInput" placeholder="Ask Alfred anything..." rows="1"></textarea>
+                        <button class="send-button" id="sendButton" onclick="alfredApp.sendMessage()">➤</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="settingsView" class="view-container">
+                <div class="settings-view">
+                    <div class="settings-section">
+                        <h2 class="section-title">Alfred Backend</h2>
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Enable Backend Processing</div>
+                                <div class="setting-description">Upload recordings to Alfred backend for transcription, summarization, and RAG indexing</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="backendToggle" checked onchange="alfredApp.updateSettings()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Backend API</div>
+                                <div class="setting-description">https://api.oip.onl</div>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">Token Status</div>
+                            <div style="color: var(--success-green); font-weight: 600;">✓ Token configured</div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h2 class="section-title">Upload to Web Server</h2>
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Store audio files on web server</div>
+                                <div class="setting-description">Enable HTTP access to your recordings</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="webServerToggle" checked onchange="alfredApp.updateSettings()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h2 class="section-title">LLM Model</h2>
+                        <div class="setting-row">
+                            <div class="setting-label">Select the model for summarization</div>
+                            <select class="model-select" id="modelSelect" onchange="alfredApp.updateSettings()">
+                                <option value="llama3.2:3b" selected>Llama 3.2 3B (Fast, good quality - recommended)</option>
+                                <option value="llama3.2:1b">Llama 3.2 1B (Fastest, lower quality)</option>
+                                <option value="llama3.1:8b">Llama 3.1 8B (Slower, best quality)</option>
+                                <option value="gemma2:2b">Gemma 2 2B (Alternative lightweight model)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h2 class="section-title">About</h2>
+                        <div class="setting-row">
+                            <div class="setting-label">Alfred Meeting Notes</div>
+                            <div class="setting-description">Version 1.0.0</div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">Backend API</div>
+                            <div class="setting-description">https://api.oip.onl</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Note Detail View -->
+            <div id="noteDetailView" class="view-container">
+                <div class="note-detail-view">
+                    <div style="margin-bottom: 20px;">
+                        <button class="secondary-button" onclick="alfredApp.showView('libraryView')" style="width: auto; padding: 10px 20px;">← Back to Library</button>
+                    </div>
+                    <div class="note-detail-header">
+                        <h1 class="note-detail-title" id="noteDetailTitle">Note Title</h1>
+                        <div class="note-detail-meta">
+                            <span id="noteDetailDate">Nov 20, 2025</span>
+                            <span id="noteDetailDuration">0m</span>
+                        </div>
+                    </div>
+
+                    <div class="summary-section">
+                        <h2 class="summary-heading">Key Summary</h2>
+                        <ul class="summary-list" id="keySummary">
+                            <li>Loading...</li>
+                        </ul>
+                    </div>
+
+                    <div class="summary-section">
+                        <h2 class="summary-heading">Action Items</h2>
+                        <ul class="summary-list" id="actionItems">
+                            <li>Loading...</li>
+                        </ul>
+                    </div>
+
+                    <div class="summary-section">
+                        <h2 class="summary-heading">Open Questions</h2>
+                        <ul class="summary-list" id="openQuestions">
+                            <li>Loading...</li>
+                        </ul>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <button class="primary-button" onclick="alfredApp.chatAboutNote()">💬 Chat with Alfred about this note</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <button class="nav-item active" onclick="alfredApp.showView('homeView')" data-view="homeView">
+                <div class="nav-icon">🏠</div>
+                <div>Home</div>
+            </button>
+            <button class="nav-item" onclick="alfredApp.showView('libraryView')" data-view="libraryView">
+                <div class="nav-icon">📚</div>
+                <div>Library</div>
+            </button>
+            <button class="nav-item" onclick="alfredApp.showView('chatView')" data-view="chatView">
+                <div class="nav-icon">💬</div>
+                <div>Chat</div>
+            </button>
+            <button class="nav-item" onclick="alfredApp.showView('settingsView')" data-view="settingsView">
+                <div class="nav-icon">⚙️</div>
+                <div>Settings</div>
+            </button>
+        </div>
+
+        <!-- Recording Panel -->
+        <div class="recording-panel" id="recordingPanel">
+            <div class="recording-timer" id="recordingTimer">00:00</div>
+            <div class="recording-status">Recording...</div>
+            <button class="stop-recording-btn" onclick="alfredApp.stopRecording()">⏹ Stop Recording</button>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div class="auth-modal" id="authModal">
+        <div class="auth-card">
+            <h2 class="auth-title">Welcome to Alfred Notes</h2>
+            <div id="loginForm">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="loginEmail" placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password">
+                </div>
+                <button class="primary-button" onclick="alfredApp.login()">Login</button>
+                <div class="auth-toggle">
+                    Don't have an account? <a href="#" onclick="alfredApp.showRegister()">Register</a>
+                </div>
+            </div>
+            <div id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="registerEmail" placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="registerPassword" placeholder="Choose a password">
+                </div>
+                <button class="primary-button" onclick="alfredApp.register()">Register</button>
+                <div class="auth-toggle">
+                    Already have an account? <a href="#" onclick="alfredApp.showLogin()">Login</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast hidden" id="toast">
+        <span id="toastIcon">✓</span>
+        <span id="toastMessage">Success!</span>
+    </div>
+
+    <script>
+        // Alfred Notes Web Application
+        const alfredApp = {
+            // State
+            currentView: 'homeView',
+            currentAI: 'alfred',
+            selectedTemplate: 'meeting',
+            isRecording: false,
+            recordingStartTime: null,
+            recordingInterval: null,
+            mediaRecorder: null,
+            audioChunks: [],
+            token: localStorage.getItem('alfred_token'),
+            userEmail: localStorage.getItem('alfred_email'),
+            baseURL: 'https://api.oip.onl',
+            notes: [],
+            currentNote: null,
+            chatHistory: [],
+
+            // Initialize app
+            init() {
+                console.log('Initializing Alfred Notes...');
+                
+                // Check authentication
+                if (!this.token) {
+                    this.showAuthModal();
+                } else {
+                    this.hideAuthModal();
+                    this.loadUserData();
+                    this.loadNotes();
+                }
+
+                // Setup template selection
+                document.querySelectorAll('.template-card').forEach(card => {
+                    card.addEventListener('click', () => {
+                        document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                        this.selectedTemplate = card.dataset.template;
+                    });
+                });
+
+                // Setup chat input
+                const chatInput = document.getElementById('chatInput');
+                chatInput.addEventListener('input', () => {
+                    chatInput.style.height = 'auto';
+                    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+                });
+
+                chatInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+            },
+
+            // Authentication
+            showAuthModal() {
+                document.getElementById('authModal').classList.remove('hidden');
+            },
+
+            hideAuthModal() {
+                document.getElementById('authModal').classList.add('hidden');
+            },
+
+            showLogin() {
+                document.getElementById('loginForm').style.display = 'block';
+                document.getElementById('registerForm').style.display = 'none';
+            },
+
+            showRegister() {
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('registerForm').style.display = 'block';
+            },
+
+            async login() {
+                const email = document.getElementById('loginEmail').value;
+                const password = document.getElementById('loginPassword').value;
+
+                if (!email || !password) {
+                    this.showToast('Please fill in all fields', 'error');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.baseURL}/api/user/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.token = data.token;
+                        this.userEmail = email;
+                        localStorage.setItem('alfred_token', data.token);
+                        localStorage.setItem('alfred_email', email);
+                        this.hideAuthModal();
+                        this.loadUserData();
+                        this.loadNotes();
+                        this.showToast('Login successful!', 'success');
+                    } else {
+                        this.showToast(data.error || 'Login failed', 'error');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showToast('Login failed: ' + error.message, 'error');
+                }
+            },
+
+            async register() {
+                const email = document.getElementById('registerEmail').value;
+                const password = document.getElementById('registerPassword').value;
+
+                if (!email || !password) {
+                    this.showToast('Please fill in all fields', 'error');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.baseURL}/api/user/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.token = data.token;
+                        this.userEmail = email;
+                        localStorage.setItem('alfred_token', data.token);
+                        localStorage.setItem('alfred_email', email);
+                        this.hideAuthModal();
+                        this.loadUserData();
+                        this.showToast('Registration successful!', 'success');
+                    } else {
+                        this.showToast(data.error || 'Registration failed', 'error');
+                    }
+                } catch (error) {
+                    console.error('Registration error:', error);
+                    this.showToast('Registration failed: ' + error.message, 'error');
+                }
+            },
+
+            logout() {
+                localStorage.removeItem('alfred_token');
+                localStorage.removeItem('alfred_email');
+                this.token = null;
+                this.userEmail = null;
+                this.notes = [];
+                this.chatHistory = [];
+                location.reload();
+            },
+
+            loadUserData() {
+                document.getElementById('userEmail').textContent = this.userEmail || 'User';
+            },
+
+            // View Management
+            showView(viewId) {
+                document.querySelectorAll('.view-container').forEach(view => {
+                    view.classList.remove('active');
+                });
+                document.getElementById(viewId).classList.add('active');
+
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.dataset.view === viewId) {
+                        item.classList.add('active');
+                    }
+                });
+
+                this.currentView = viewId;
+
+                // Load data for view
+                if (viewId === 'libraryView') {
+                    this.loadNotes();
+                }
+            },
+
+            // Recording
+            async toggleRecording() {
+                if (this.isRecording) {
+                    this.stopRecording();
+                } else {
+                    this.startRecording();
+                }
+            },
+
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        this.audioChunks.push(event.data);
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        this.processRecording();
+                    };
+
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    this.recordingStartTime = Date.now();
+
+                    // Update UI
+                    document.getElementById('recordButton').classList.add('recording');
+                    document.getElementById('recordIcon').textContent = '⏸';
+                    document.getElementById('recordingPanel').classList.add('active');
+
+                    // Start timer
+                    this.recordingInterval = setInterval(() => {
+                        const elapsed = Math.floor((Date.now() - this.recordingStartTime) / 1000);
+                        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                        const seconds = (elapsed % 60).toString().padStart(2, '0');
+                        document.getElementById('recordingTimer').textContent = `${minutes}:${seconds}`;
+                    }, 1000);
+
+                    this.showToast('Recording started', 'success');
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    this.showToast('Could not start recording: ' + error.message, 'error');
+                }
+            },
+
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording) {
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+
+                    // Stop all audio tracks
+                    this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+
+                    // Update UI
+                    document.getElementById('recordButton').classList.remove('recording');
+                    document.getElementById('recordIcon').textContent = '🎤';
+                    document.getElementById('recordingPanel').classList.remove('active');
+
+                    // Clear timer
+                    if (this.recordingInterval) {
+                        clearInterval(this.recordingInterval);
+                        this.recordingInterval = null;
+                    }
+                }
+            },
+
+            async processRecording() {
+                this.showToast('Processing recording...', 'success');
+
+                const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                formData.append('start_time', new Date(this.recordingStartTime).toISOString());
+                formData.append('end_time', new Date().toISOString());
+                formData.append('note_type', this.selectedTemplate);
+                formData.append('device_type', 'web');
+                
+                // Get settings
+                const model = document.getElementById('modelSelect').value;
+                const addToWebServer = document.getElementById('webServerToggle').checked;
+                formData.append('model', model);
+                formData.append('addToWebServer', addToWebServer);
+
+                try {
+                    const response = await fetch(`${this.baseURL}/api/notes/from-audio`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.token}`
+                        },
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.showToast('Note created successfully!', 'success');
+                        // Reload notes
+                        await this.loadNotes();
+                        // Switch to library view
+                        this.showView('libraryView');
+                    } else {
+                        this.showToast('Error processing recording: ' + result.error, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error uploading recording:', error);
+                    this.showToast('Error uploading recording: ' + error.message, 'error');
+                }
+            },
+
+            // Notes
+            async loadNotes() {
+                const notesList = document.getElementById('notesList');
+                notesList.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading your notes...</div></div>';
+
+                try {
+                    const response = await fetch(`${this.baseURL}/api/records?source=gun&recordType=notes&sortBy=date:desc&limit=50`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.token}`
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.records && data.records.length > 0) {
+                        this.notes = data.records;
+                        this.renderNotes(this.notes);
+                    } else {
+                        notesList.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-icon">📝</div>
+                                <div class="empty-text">No notes yet</div>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('Error loading notes:', error);
+                    notesList.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">⚠️</div>
+                            <div class="empty-text">Error loading notes</div>
+                        </div>
+                    `;
+                }
+            },
+
+            renderNotes(notes) {
+                const notesList = document.getElementById('notesList');
+                
+                if (notes.length === 0) {
+                    notesList.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">🔍</div>
+                            <div class="empty-text">No notes found</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                notesList.innerHTML = notes.map(note => {
+                    const title = note.data?.basic?.name || 'Untitled Note';
+                    const preview = note.data?.notes?.summary_key_points?.[0] || 'No summary available';
+                    const date = new Date(note.data?.basic?.date * 1000).toLocaleDateString();
+                    const noteType = note.data?.notes?.note_type || 'note';
+                    const duration = Math.round((note.data?.audio?.durationSec || 0) / 60);
+
+                    return `
+                        <div class="note-card" onclick="alfredApp.viewNote('${note.oip.did}')">
+                            <div class="note-header">
+                                <div class="note-title">${title}</div>
+                                <div class="note-badge">${noteType}</div>
+                            </div>
+                            <div class="note-preview">${preview}</div>
+                            <div class="note-meta">
+                                <span>${date} • ${duration}m</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            async searchNotes() {
+                const query = document.getElementById('searchInput').value.toLowerCase();
+                
+                if (!query) {
+                    this.renderNotes(this.notes);
+                    return;
+                }
+
+                const filtered = this.notes.filter(note => {
+                    const title = (note.data?.basic?.name || '').toLowerCase();
+                    const summary = (note.data?.notes?.summary_key_points || []).join(' ').toLowerCase();
+                    return title.includes(query) || summary.includes(query);
+                });
+
+                this.renderNotes(filtered);
+            },
+
+            toggleFilters() {
+                this.showToast('Advanced filters coming soon!', 'success');
+            },
+
+            async viewNote(did) {
+                try {
+                    const response = await fetch(`${this.baseURL}/api/records?source=gun&did=${did}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.token}`
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.records && data.records.length > 0) {
+                        this.currentNote = data.records[0];
+                        this.displayNoteDetail(this.currentNote);
+                        this.showView('noteDetailView');
+                    }
+                } catch (error) {
+                    console.error('Error loading note:', error);
+                    this.showToast('Error loading note', 'error');
+                }
+            },
+
+            displayNoteDetail(note) {
+                document.getElementById('noteDetailTitle').textContent = note.data?.basic?.name || 'Untitled Note';
+                
+                const date = new Date(note.data?.basic?.date * 1000).toLocaleDateString();
+                const duration = Math.round((note.data?.audio?.durationSec || 0) / 60);
+                document.getElementById('noteDetailDate').textContent = date;
+                document.getElementById('noteDetailDuration').textContent = `${duration}m`;
+
+                // Key Summary
+                const keySummary = note.data?.notes?.summary_key_points || [];
+                document.getElementById('keySummary').innerHTML = keySummary.length > 0
+                    ? keySummary.map(point => `<li>${point}</li>`).join('')
+                    : '<li>No summary available</li>';
+
+                // Action Items
+                const actionItems = note.data?.notes?.summary_action_item_texts || [];
+                document.getElementById('actionItems').innerHTML = actionItems.length > 0
+                    ? actionItems.map(item => `<li>${item}</li>`).join('')
+                    : '<li>No action items</li>';
+
+                // Open Questions
+                const openQuestions = note.data?.notes?.summary_open_questions || [];
+                document.getElementById('openQuestions').innerHTML = openQuestions.length > 0
+                    ? openQuestions.map(q => `<li>${q}</li>`).join('')
+                    : '<li>No open questions</li>';
+            },
+
+            // Chat
+            switchAI(ai) {
+                this.currentAI = ai;
+                document.querySelectorAll('.chat-toggle-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.ai === ai) {
+                        btn.classList.add('active');
+                    }
+                });
+
+                // Update chat messages
+                const avatar = ai === 'alfred' ? 'A' : 'Al';
+                document.querySelector('.message-avatar').textContent = avatar;
+                
+                const greeting = ai === 'alfred' 
+                    ? "Hello! I'm Alfred. I've analyzed your note. Ask me anything about it - I have access to the full transcript, summary, and related content."
+                    : "Hello! I'm Alice. I've analyzed your note. Ask me anything about it - I have access to the full transcript, summary, and related content.";
+                    
+                document.querySelector('.message-text').textContent = greeting;
+            },
+
+            async sendMessage() {
+                const input = document.getElementById('chatInput');
+                const message = input.value.trim();
+
+                if (!message) return;
+
+                // Add user message to chat
+                this.addMessageToChat(message, 'user');
+                input.value = '';
+                input.style.height = 'auto';
+
+                // Prepare request
+                const body = {
+                    text: message,
+                    processing_mode: 'rag',
+                    model: document.getElementById('modelSelect').value,
+                    return_audio: false
+                };
+
+                // Add context if viewing a note
+                if (this.currentNote) {
+                    body.pinnedDidTx = this.currentNote.oip.did;
+                }
+
+                try {
+                    const response = await fetch(`${this.baseURL}/api/voice/chat`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.token}`
+                        },
+                        body: JSON.stringify(body)
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success && data.response_text) {
+                        this.addMessageToChat(data.response_text, this.currentAI);
+                    } else {
+                        this.addMessageToChat('Sorry, I encountered an error processing your request.', this.currentAI);
+                    }
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    this.addMessageToChat('Sorry, I encountered an error: ' + error.message, this.currentAI);
+                }
+            },
+
+            addMessageToChat(text, sender) {
+                const chatMessages = document.getElementById('chatMessages');
+                const isUser = sender === 'user';
+                const avatar = isUser ? 'U' : (this.currentAI === 'alfred' ? 'A' : 'Al');
+
+                const messageHTML = `
+                    <div class="message ${isUser ? 'user' : ''}">
+                        <div class="message-avatar">${avatar}</div>
+                        <div class="message-content">
+                            <div class="message-text">${text}</div>
+                        </div>
+                    </div>
+                `;
+
+                chatMessages.insertAdjacentHTML('beforeend', messageHTML);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            },
+
+            chatAboutNote() {
+                this.showView('chatView');
+                // Clear previous chat
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.innerHTML = `
+                    <div class="message">
+                        <div class="message-avatar">${this.currentAI === 'alfred' ? 'A' : 'Al'}</div>
+                        <div class="message-content">
+                            <div class="message-text">I'm ready to answer questions about "${this.currentNote.data.basic.name}". What would you like to know?</div>
+                        </div>
+                    </div>
+                `;
+            },
+
+            // Settings
+            updateSettings() {
+                this.showToast('Settings updated', 'success');
+            },
+
+            // UI Helpers
+            showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                const icon = document.getElementById('toastIcon');
+                const msg = document.getElementById('toastMessage');
+
+                toast.className = `toast ${type}`;
+                icon.textContent = type === 'success' ? '✓' : '⚠';
+                msg.textContent = message;
+
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
+        };
+
+        // Initialize app when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => alfredApp.init());
+        } else {
+            alfredApp.init();
+        }
+    </script>
+</body>
+</html>
+
