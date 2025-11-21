@@ -142,9 +142,10 @@ class NotesRecordsService {
      * @param {number} captureDate - Capture date (ms)
      * @param {string} userPublicKey - User's HD wallet public key
      * @param {string} token - JWT token
+     * @param {string} noteDid - Note DID to reference (optional)
      * @returns {Promise<object>} Created record info
      */
-    async createNoteChunkRecord(noteHash, chunk, noteType, captureDate, userPublicKey, token) {
+    async createNoteChunkRecord(noteHash, chunk, noteType, captureDate, userPublicKey, token, noteDid = null) {
         try {
             const localId = `${noteHash}:${chunk.chunk_index}`;
 
@@ -162,7 +163,7 @@ class NotesRecordsService {
                     tagItems: chunkTags
                 },
                 noteChunks: {
-                    note_ref: null, // Can be populated later
+                    note_ref: noteDid || null,
                     chunk_index: chunk.chunk_index,
                     start_time_ms: chunk.start_time_ms,
                     end_time_ms: chunk.end_time_ms,
@@ -312,6 +313,47 @@ class NotesRecordsService {
     }
 
     /**
+     * Update note record with chunk IDs
+     * @param {string} noteHash - Note hash
+     * @param {string} noteDid - Note DID
+     * @param {array} chunkDids - Array of chunk DIDs
+     * @param {string} userPublicKey - User's HD wallet public key
+     * @param {string} token - JWT token
+     * @returns {Promise<object>} Update result
+     */
+    async updateNoteChunkIds(noteHash, noteDid, chunkDids, userPublicKey, token) {
+        try {
+            console.log(`📝 [Notes Records] Updating note with ${chunkDids.length} chunk IDs`);
+
+            const updateData = {
+                notes: {
+                    chunk_ids: chunkDids
+                }
+            };
+
+            const response = await axios.patch(
+                `${this.apiBaseUrl}/api/records/update?did=${noteDid}`,
+                updateData,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 30000
+                }
+            );
+
+            return {
+                success: true,
+                did: noteDid
+            };
+        } catch (error) {
+            console.error('❌ [Notes Records] Failed to update note with chunk IDs:', error.message);
+            throw new Error(`Note update failed: ${error.message}`);
+        }
+    }
+
+    /**
      * Compute deterministic note hash from transcript
      * @param {string} transcriptText - Full transcript text
      * @returns {string} SHA256 hash (hex)
@@ -340,13 +382,14 @@ class NotesRecordsService {
      * @param {number} captureDate - Capture date (ms)
      * @param {string} userPublicKey - User's HD wallet public key
      * @param {string} token - JWT token
+     * @param {string} noteDid - Note DID to reference (optional)
      * @returns {Promise<array>} Array of created chunk DIDs
      */
-    async createAllNoteChunks(noteHash, chunks, noteType, captureDate, userPublicKey, token) {
+    async createAllNoteChunks(noteHash, chunks, noteType, captureDate, userPublicKey, token, noteDid = null) {
         console.log(`📦 [Notes Records] Creating ${chunks.length} note chunks...`);
 
         const chunkPromises = chunks.map(chunk =>
-            this.createNoteChunkRecord(noteHash, chunk, noteType, captureDate, userPublicKey, token)
+            this.createNoteChunkRecord(noteHash, chunk, noteType, captureDate, userPublicKey, token, noteDid)
         );
 
         // Execute in parallel with some concurrency control

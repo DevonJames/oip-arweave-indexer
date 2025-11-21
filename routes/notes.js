@@ -453,25 +453,9 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
         });
         
         console.log('✅ [Step 9] Chunk tags generated');
-        console.log(`🗂️ [Step 9] Creating note chunk records...`);
-        
-        const captureDate = new Date(start_time).getTime();
-        const chunkResults = await notesRecordsService.createAllNoteChunks(
-            noteHash,
-            chunks,
-            note_type,
-            captureDate,
-            userPublicKey,
-            token
-        );
-        
-        // Extract chunk DIDs for the note record
-        const chunkDids = chunkResults.map(chunk => chunk.did);
-        
-        console.log(`✅ [Step 9] Created ${chunkResults.length} chunk records`);
 
         // ========================================
-        // STEP 10: Create Notes Record
+        // STEP 10: Create Notes Record (before chunks so they can reference it)
         // ========================================
         console.log('📋 [Step 10] Creating main note record...');
         
@@ -480,12 +464,8 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
         const actionItemAssignees = summary.action_items.map(item => item.assignee || 'unassigned');
         const actionItemDueDates = summary.action_items.map(item => item.due_text || 'no date');
 
-        // Build tag list: LLM-generated tags + base tags
-        const noteTags = [
-            ...summary.tags, // LLM-generated tags from summary
-            'alfred-note', // Base tag (hyphenated for consistency)
-            `note-type-${note_type.toLowerCase()}` // Note type tag
-        ];
+        // Use only LLM-generated tags
+        const noteTags = summary.tags || [];
 
         const notePayload = {
             title: router._generateNoteTitle(note_type, participantNames, transcriptionResult.text),
@@ -518,7 +498,7 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             calendar_end_time,
             chunking_strategy,
             chunk_count: chunks.length,
-            chunk_ids: chunkDids
+            chunk_ids: [] // Will be populated after chunks are created
         };
 
         let noteRecordDid = null;
@@ -541,14 +521,49 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
         }
 
         // ========================================
-        // STEP 11: Cleanup & Return Response
+        // STEP 11: Create Note Chunk Records (with note_ref)
         // ========================================
-        console.log('🧹 [Step 11] Cleaning up...');
+        console.log(`🗂️ [Step 11] Creating note chunk records with note reference...`);
+        
+        const captureDate = new Date(start_time).getTime();
+        const chunkResults = await notesRecordsService.createAllNoteChunks(
+            noteHash,
+            chunks,
+            note_type,
+            captureDate,
+            userPublicKey,
+            token,
+            noteRecordDid // Pass note DID so chunks can reference it
+        );
+        
+        // Extract chunk DIDs
+        const chunkDids = chunkResults.map(chunk => chunk.did);
+        
+        console.log(`✅ [Step 11] Created ${chunkResults.length} chunk records`);
+
+        // Update note record with chunk_ids
+        try {
+            await notesRecordsService.updateNoteChunkIds(
+                noteHash,
+                noteRecordDid,
+                chunkDids,
+                userPublicKey,
+                token
+            );
+            console.log('✅ [Step 11] Note updated with chunk IDs');
+        } catch (error) {
+            console.warn('⚠️ [Step 11] Failed to update note with chunk IDs (non-fatal):', error.message);
+        }
+
+        // ========================================
+        // STEP 12: Cleanup & Return Response
+        // ========================================
+        console.log('🧹 [Step 12] Cleaning up...');
         
         // Delete temporary audio file
         if (tempFilePath && fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
-            console.log('✅ [Step 11] Temporary file deleted');
+            console.log('✅ [Step 12] Temporary file deleted');
         }
 
         // Return success response
