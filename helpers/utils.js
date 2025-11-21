@@ -201,14 +201,35 @@ const getTemplateTxidByName = (templateName) => {
     return templateConfigTxid ? templateConfigTxid : null;
 };
 
-const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnly = false, summarizeRecipe = false, addRecipeNutritionalSummary = null) => {
-    if (resolveDepth === 0 || !record) {
+const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnly = false, summarizeRecipe = false, addRecipeNutritionalSummary = null, visited = new Set()) => {
+    // Handle NaN, undefined, or 0 depth - stop recursion
+    if (!resolveDepth || resolveDepth === 0 || isNaN(resolveDepth) || !record) {
         return record;
     }
 
     if (!record.data || typeof record.data !== 'object') {
         console.error(getFileInfo(), getLineNumber(), 'record.data is not an object:', record.data);
         return record;
+    }
+
+    // Get the record's DID to track visits
+    const recordDid = record.oip?.did || record.oip?.didTx;
+    
+    // Check if we've already visited this record in the current resolution chain
+    if (recordDid && visited.has(recordDid)) {
+        // Return a shallow reference instead of recursing
+        return {
+            oip: record.oip,
+            data: {
+                basic: record.data?.basic || {}
+            },
+            _circular: true  // Mark this as a circular reference for debugging
+        };
+    }
+    
+    // Add this record to the visited set for this resolution chain
+    if (recordDid) {
+        visited.add(recordDid);
     }
 
     // First resolve all DIDs to names/records
@@ -225,7 +246,9 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         const name = refRecord.data?.basic?.name || properties[key]; // fallback to DID if no name found
                         properties[key] = name;
                     } else {
-                        let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary);
+                        // Create a new visited set for this branch to track the resolution chain
+                        const branchVisited = new Set(visited);
+                        let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited);
                         
                         // Apply recipe summary if this is a recipe record and summarizeRecipe is enabled
                         if (summarizeRecipe && addRecipeNutritionalSummary && resolvedRef.oip?.recordType === 'recipe' && resolvedRef.data?.recipe) {
@@ -247,7 +270,9 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                                 const name = refRecord.data?.basic?.name || properties[key][i]; // fallback to DID if no name found
                                 properties[key][i] = name;
                             } else {
-                                let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary);
+                                // Create a new visited set for this branch to track the resolution chain
+                                const branchVisited = new Set(visited);
+                                let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited);
                                 
                                 // Apply recipe summary if this is a recipe record and summarizeRecipe is enabled
                                 if (summarizeRecipe && addRecipeNutritionalSummary && resolvedRef.oip?.recordType === 'recipe' && resolvedRef.data?.recipe) {
