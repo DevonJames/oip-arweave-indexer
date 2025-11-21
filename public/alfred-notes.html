@@ -1327,8 +1327,607 @@
     </div>
 
     <script>
-        /* existing JS from your file (unchanged) */
-        /* ... paste the full <script> from your original file here ... */
+        // Alfred Notes Application
+        const alfredApp = {
+            // State
+            state: {
+                isRecording: false,
+                mediaRecorder: null,
+                audioChunks: [],
+                recordingStartTime: null,
+                selectedTemplate: 'MEETING',
+                notes: [],
+                currentNote: null,
+                jwtToken: localStorage.getItem('alfred_jwt_token'),
+                userEmail: localStorage.getItem('alfred_user_email'),
+                settings: {
+                    backendEnabled: true,
+                    webServerUpload: true,
+                    model: 'llama3.2:3b'
+                }
+            },
+
+            // Initialize app
+            init() {
+                console.log('🎙️ Alfred Notes initializing...');
+                
+                // Check authentication
+                if (!this.state.jwtToken) {
+                    this.showAuthModal();
+                } else {
+                    this.hideAuthModal();
+                    this.loadUserInfo();
+                    this.loadNotes();
+                }
+
+                // Setup template selection
+                this.setupTemplateSelection();
+                
+                // Setup event listeners
+                this.setupEventListeners();
+                
+                console.log('✅ Alfred Notes ready');
+            },
+
+            // Setup template cards
+            setupTemplateSelection() {
+                const cards = document.querySelectorAll('.template-card');
+                cards.forEach(card => {
+                    card.addEventListener('click', () => {
+                        cards.forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                        this.state.selectedTemplate = card.dataset.template;
+                    });
+                });
+            },
+
+            // Setup event listeners
+            setupEventListeners() {
+                // Enter key for login
+                ['loginEmail', 'loginPassword'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') this.login();
+                        });
+                    }
+                });
+
+                // Enter key for register
+                ['registerEmail', 'registerPassword'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') this.register();
+                        });
+                    }
+                });
+
+                // Chat input enter
+                const chatInput = document.getElementById('chatInput');
+                if (chatInput) {
+                    chatInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            this.sendMessage();
+                        }
+                    });
+                }
+            },
+
+            // Authentication
+            async login() {
+                const email = document.getElementById('loginEmail').value.trim();
+                const password = document.getElementById('loginPassword').value;
+
+                if (!email || !password) {
+                    this.showToast('Please enter email and password', 'error');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('https://api.oip.onl/api/user/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.state.jwtToken = data.token;
+                        this.state.userEmail = email;
+                        localStorage.setItem('alfred_jwt_token', data.token);
+                        localStorage.setItem('alfred_user_email', email);
+                        
+                        this.hideAuthModal();
+                        this.loadUserInfo();
+                        this.loadNotes();
+                        this.showToast('Logged in successfully', 'success');
+                    } else {
+                        this.showToast(data.error || 'Login failed', 'error');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showToast('Login failed: ' + error.message, 'error');
+                }
+            },
+
+            async register() {
+                const email = document.getElementById('registerEmail').value.trim();
+                const password = document.getElementById('registerPassword').value;
+
+                if (!email || !password) {
+                    this.showToast('Please enter email and password', 'error');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('https://api.oip.onl/api/user/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.state.jwtToken = data.token;
+                        this.state.userEmail = email;
+                        localStorage.setItem('alfred_jwt_token', data.token);
+                        localStorage.setItem('alfred_user_email', email);
+                        
+                        this.hideAuthModal();
+                        this.loadUserInfo();
+                        this.showToast('Account created successfully', 'success');
+                    } else {
+                        this.showToast(data.error || 'Registration failed', 'error');
+                    }
+                } catch (error) {
+                    console.error('Registration error:', error);
+                    this.showToast('Registration failed: ' + error.message, 'error');
+                }
+            },
+
+            logout() {
+                this.state.jwtToken = null;
+                this.state.userEmail = null;
+                this.state.notes = [];
+                localStorage.removeItem('alfred_jwt_token');
+                localStorage.removeItem('alfred_user_email');
+                this.showAuthModal();
+                this.showToast('Logged out successfully', 'success');
+            },
+
+            showAuthModal() {
+                const modal = document.getElementById('authModal');
+                if (modal) modal.classList.remove('hidden');
+            },
+
+            hideAuthModal() {
+                const modal = document.getElementById('authModal');
+                if (modal) modal.classList.add('hidden');
+            },
+
+            showLogin() {
+                document.getElementById('loginForm').style.display = 'block';
+                document.getElementById('registerForm').style.display = 'none';
+            },
+
+            showRegister() {
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('registerForm').style.display = 'block';
+            },
+
+            loadUserInfo() {
+                const userEmailEl = document.getElementById('userEmail');
+                if (userEmailEl) {
+                    userEmailEl.textContent = this.state.userEmail || 'User';
+                }
+            },
+
+            // Recording
+            async toggleRecording() {
+                if (this.state.isRecording) {
+                    this.stopRecording();
+                } else {
+                    await this.startRecording();
+                }
+            },
+
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.state.mediaRecorder = new MediaRecorder(stream);
+                    this.state.audioChunks = [];
+                    this.state.recordingStartTime = Date.now();
+
+                    this.state.mediaRecorder.ondataavailable = (event) => {
+                        this.state.audioChunks.push(event.data);
+                    };
+
+                    this.state.mediaRecorder.onstop = () => {
+                        this.processRecording();
+                    };
+
+                    this.state.mediaRecorder.start();
+                    this.state.isRecording = true;
+
+                    // Update UI
+                    document.getElementById('recordButton').classList.add('recording');
+                    document.getElementById('recordIcon').textContent = '⏸';
+                    document.getElementById('recordingPanel').classList.add('active');
+                    this.startRecordingTimer();
+
+                    console.log('🎙️ Recording started');
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    this.showToast('Failed to access microphone', 'error');
+                }
+            },
+
+            stopRecording() {
+                if (this.state.mediaRecorder && this.state.isRecording) {
+                    this.state.mediaRecorder.stop();
+                    this.state.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                    this.state.isRecording = false;
+
+                    // Update UI
+                    document.getElementById('recordButton').classList.remove('recording');
+                    document.getElementById('recordIcon').textContent = '🎤';
+                    document.getElementById('recordingPanel').classList.remove('active');
+                    this.stopRecordingTimer();
+
+                    console.log('⏹️ Recording stopped');
+                }
+            },
+
+            startRecordingTimer() {
+                this.recordingTimerInterval = setInterval(() => {
+                    const elapsed = Date.now() - this.state.recordingStartTime;
+                    const seconds = Math.floor(elapsed / 1000);
+                    const minutes = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    document.getElementById('recordingTimer').textContent = 
+                        `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                }, 1000);
+            },
+
+            stopRecordingTimer() {
+                if (this.recordingTimerInterval) {
+                    clearInterval(this.recordingTimerInterval);
+                    this.recordingTimerInterval = null;
+                }
+            },
+
+            async processRecording() {
+                const audioBlob = new Blob(this.state.audioChunks, { type: 'audio/webm' });
+                const endTime = Date.now();
+                
+                this.showToast('Processing recording...', 'success');
+
+                try {
+                    await this.uploadNote(audioBlob, this.state.recordingStartTime, endTime);
+                } catch (error) {
+                    console.error('Error processing recording:', error);
+                    this.showToast('Failed to process recording', 'error');
+                }
+            },
+
+            async uploadNote(audioBlob, startTime, endTime) {
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                formData.append('start_time', new Date(startTime).toISOString());
+                formData.append('end_time', new Date(endTime).toISOString());
+                formData.append('note_type', this.state.selectedTemplate.toLowerCase());
+                formData.append('device_type', 'web');
+                formData.append('model', this.state.settings.model);
+                formData.append('addToWebServer', this.state.settings.webServerUpload);
+
+                try {
+                    const response = await fetch('https://api.oip.onl/api/notes/from-audio', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        },
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showToast('Note created successfully!', 'success');
+                        this.loadNotes();
+                    } else {
+                        this.showToast('Failed to create note: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    this.showToast('Failed to upload note', 'error');
+                }
+            },
+
+            // Notes Management
+            async loadNotes() {
+                if (!this.state.jwtToken) return;
+
+                try {
+                    const response = await fetch('https://api.oip.onl/api/records?source=gun&recordType=notes&limit=50&sortBy=date:desc', {
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.records) {
+                        this.state.notes = data.records;
+                        this.renderNotesList();
+                    }
+                } catch (error) {
+                    console.error('Error loading notes:', error);
+                }
+            },
+
+            renderNotesList() {
+                const notesList = document.getElementById('notesList');
+                if (!notesList) return;
+
+                if (this.state.notes.length === 0) {
+                    notesList.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">📝</div>
+                            <div class="empty-text">No notes yet. Start recording!</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                notesList.innerHTML = this.state.notes.map(note => {
+                    const basic = note.data?.basic || {};
+                    const noteData = note.data?.notes || {};
+                    const date = basic.date ? new Date(basic.date * 1000).toLocaleDateString() : 'Unknown';
+                    const duration = noteData.audio_ref ? '5m' : 'N/A';
+                    const preview = basic.description || noteData.summary_key_points?.[0] || 'No preview available';
+
+                    return `
+                        <div class="note-card" onclick="alfredApp.viewNote('${note.did}')">
+                            <div class="note-header">
+                                <div class="note-title">${basic.name || 'Untitled Note'}</div>
+                                <div class="note-badge">${noteData.note_type || 'note'}</div>
+                            </div>
+                            <div class="note-preview">${preview.substring(0, 150)}...</div>
+                            <div class="note-meta">
+                                <span>📅 ${date}</span>
+                                <span>⏱️ ${duration}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            },
+
+            async viewNote(noteDid) {
+                try {
+                    const response = await fetch(`https://api.oip.onl/api/records?source=gun&did=${noteDid}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.records && data.records[0]) {
+                        this.state.currentNote = data.records[0];
+                        this.renderNoteDetail();
+                        this.showView('noteDetailView');
+                    }
+                } catch (error) {
+                    console.error('Error loading note:', error);
+                    this.showToast('Failed to load note', 'error');
+                }
+            },
+
+            renderNoteDetail() {
+                if (!this.state.currentNote) return;
+
+                const basic = this.state.currentNote.data?.basic || {};
+                const noteData = this.state.currentNote.data?.notes || {};
+
+                document.getElementById('noteDetailTitle').textContent = basic.name || 'Untitled Note';
+                document.getElementById('noteDetailDate').textContent = 
+                    basic.date ? new Date(basic.date * 1000).toLocaleDateString() : 'Unknown';
+                document.getElementById('noteDetailDuration').textContent = '5m';
+
+                // Key Summary
+                const keySummary = document.getElementById('keySummary');
+                if (keySummary) {
+                    const keyPoints = noteData.summary_key_points || [];
+                    keySummary.innerHTML = keyPoints.length > 0 
+                        ? keyPoints.map(point => `<li>${point}</li>`).join('')
+                        : '<li>No key points available</li>';
+                }
+
+                // Action Items
+                const actionItems = document.getElementById('actionItems');
+                if (actionItems) {
+                    const actions = noteData.summary_action_item_texts || [];
+                    actionItems.innerHTML = actions.length > 0
+                        ? actions.map(action => `<li>${action}</li>`).join('')
+                        : '<li>No action items</li>';
+                }
+
+                // Open Questions
+                const openQuestions = document.getElementById('openQuestions');
+                if (openQuestions) {
+                    const questions = noteData.summary_open_questions || [];
+                    openQuestions.innerHTML = questions.length > 0
+                        ? questions.map(q => `<li>${q}</li>`).join('')
+                        : '<li>No open questions</li>';
+                }
+            },
+
+            // Chat
+            chatAboutNote() {
+                if (!this.state.currentNote) return;
+                this.showView('chatView');
+                this.addMessage('system', `Loaded note: ${this.state.currentNote.data?.basic?.name}`);
+            },
+
+            async sendMessage() {
+                const input = document.getElementById('chatInput');
+                const question = input.value.trim();
+                if (!question || !this.state.currentNote) return;
+
+                input.value = '';
+
+                this.addMessage('user', question);
+
+                try {
+                    const response = await fetch('https://api.oip.onl/api/notes/converse', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            noteDid: this.state.currentNote.did,
+                            question: question,
+                            model: this.state.settings.model
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.addMessage('assistant', data.answer);
+                    } else {
+                        this.addMessage('assistant', 'Sorry, I encountered an error.');
+                    }
+                } catch (error) {
+                    console.error('Chat error:', error);
+                    this.addMessage('assistant', 'Sorry, I encountered an error.');
+                }
+            },
+
+            addMessage(role, text) {
+                const chatMessages = document.getElementById('chatMessages');
+                if (!chatMessages) return;
+
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${role}`;
+                
+                const avatarDiv = document.createElement('div');
+                avatarDiv.className = 'message-avatar';
+                avatarDiv.textContent = role === 'user' ? 'U' : 'A';
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                contentDiv.innerHTML = `<div class="message-text">${text}</div>`;
+
+                messageDiv.appendChild(avatarDiv);
+                messageDiv.appendChild(contentDiv);
+                chatMessages.appendChild(messageDiv);
+
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            },
+
+            switchAI(ai) {
+                document.querySelectorAll('.chat-toggle-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.ai === ai) {
+                        btn.classList.add('active');
+                    }
+                });
+            },
+
+            // Views
+            showView(viewId) {
+                document.querySelectorAll('.view-container').forEach(view => {
+                    view.classList.remove('active');
+                });
+                document.getElementById(viewId)?.classList.add('active');
+
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.dataset.view === viewId) {
+                        item.classList.add('active');
+                    }
+                });
+
+                if (viewId === 'libraryView') {
+                    this.loadNotes();
+                }
+            },
+
+            // Settings
+            updateSettings() {
+                this.state.settings.backendEnabled = document.getElementById('backendToggle')?.checked ?? true;
+                this.state.settings.webServerUpload = document.getElementById('webServerToggle')?.checked ?? true;
+                this.state.settings.model = document.getElementById('modelSelect')?.value ?? 'llama3.2:3b';
+                this.showToast('Settings updated', 'success');
+            },
+
+            // Search
+            searchNotes() {
+                const searchInput = document.getElementById('searchInput');
+                const query = searchInput?.value.toLowerCase() || '';
+                
+                if (!query) {
+                    this.renderNotesList();
+                    return;
+                }
+
+                const filtered = this.state.notes.filter(note => {
+                    const basic = note.data?.basic || {};
+                    const noteData = note.data?.notes || {};
+                    return (basic.name || '').toLowerCase().includes(query) ||
+                           (basic.description || '').toLowerCase().includes(query) ||
+                           (noteData.summary_key_points || []).some(p => p.toLowerCase().includes(query));
+                });
+
+                const notesList = document.getElementById('notesList');
+                if (!notesList) return;
+
+                if (filtered.length === 0) {
+                    notesList.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">🔍</div>
+                            <div class="empty-text">No notes found matching "${query}"</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                this.state.notes = filtered;
+                this.renderNotesList();
+            },
+
+            toggleFilters() {
+                this.showToast('Advanced filters coming soon!', 'success');
+            },
+
+            // Toast notifications
+            showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                if (!toast) return;
+
+                toast.className = `toast ${type}`;
+                document.getElementById('toastMessage').textContent = message;
+                document.getElementById('toastIcon').textContent = type === 'success' ? '✓' : '⚠';
+                toast.classList.remove('hidden');
+
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
+        };
+
+        // Initialize app when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => alfredApp.init());
+        } else {
+            alfredApp.init();
+        }
     </script>
 </body>
 </html>
