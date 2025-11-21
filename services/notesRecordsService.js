@@ -313,27 +313,93 @@ class NotesRecordsService {
     }
 
     /**
-     * Update note record with chunk IDs
-     * @param {string} noteHash - Note hash
-     * @param {string} noteDid - Note DID
+     * Update note record with chunk IDs by re-publishing with same localId
+     * @param {string} noteHash - Note hash (localId)
+     * @param {object} notePayload - Original note payload
      * @param {array} chunkDids - Array of chunk DIDs
      * @param {string} userPublicKey - User's HD wallet public key
      * @param {string} token - JWT token
      * @returns {Promise<object>} Update result
      */
-    async updateNoteChunkIds(noteHash, noteDid, chunkDids, userPublicKey, token) {
+    async updateNoteChunkIds(noteHash, notePayload, chunkDids, userPublicKey, token) {
         try {
-            console.log(`📝 [Notes Records] Updating note with ${chunkDids.length} chunk IDs`);
+            console.log(`📝 [Notes Records] Re-publishing note with ${chunkDids.length} chunk IDs`);
 
-            const updateData = {
+            // Update the payload with chunk IDs
+            const updatedPayload = {
+                ...notePayload,
+                chunk_ids: chunkDids
+            };
+
+            // Build the complete record data
+            const recordData = {
+                basic: {
+                    name: updatedPayload.title || `Note ${new Date().toISOString()}`,
+                    description: updatedPayload.description || 'Alfred Notes capture',
+                    date: Math.floor(Date.now() / 1000),
+                    language: updatedPayload.language || 'en',
+                    tagItems: updatedPayload.tags || []
+                },
+                audio: updatedPayload.audio_meta ? {
+                    webUrl: updatedPayload.audio_meta.webUrl || '',
+                    arweaveAddress: updatedPayload.audio_meta.arweaveAddress || '',
+                    ipfsAddress: updatedPayload.audio_meta.ipfsAddress || '',
+                    bittorrentAddress: updatedPayload.audio_meta.bittorrentAddress || '',
+                    filename: updatedPayload.audio_meta.filename || '',
+                    size: updatedPayload.audio_meta.size || 0,
+                    durationSec: updatedPayload.audio_meta.durationSec || 0,
+                    audioCodec: updatedPayload.audio_meta.audioCodec || 'UNKNOWN',
+                    contentType: updatedPayload.audio_meta.contentType || '',
+                    thumbnails: [],
+                    creator: userPublicKey
+                } : undefined,
                 notes: {
-                    chunk_ids: chunkDids
+                    note_type: updatedPayload.note_type,
+                    created_at: updatedPayload.created_at,
+                    ended_at: updatedPayload.ended_at,
+                    device_type: updatedPayload.device_type,
+                    capture_location: updatedPayload.capture_location || null,
+                    audio_ref: updatedPayload.audio_ref || null,
+                    transcription_engine: updatedPayload.transcription_engine_did || null,
+                    transcription_status: updatedPayload.transcription_status,
+                    transcript_full_text: updatedPayload.transcript_did || null,
+                    user_edits_present: false,
+                    summary_key_points: updatedPayload.summary_key_points || [],
+                    summary_decisions: updatedPayload.summary_decisions || [],
+                    summary_action_item_texts: updatedPayload.summary_action_item_texts || [],
+                    summary_action_item_assignees: updatedPayload.summary_action_item_assignees || [],
+                    summary_action_item_due_texts: updatedPayload.summary_action_item_due_texts || [],
+                    summary_open_questions: updatedPayload.summary_open_questions || [],
+                    summary_version: 1,
+                    participant_display_names: updatedPayload.participant_display_names || [],
+                    participant_person_refs: [],
+                    participant_emails: [],
+                    participant_roles: updatedPayload.participant_roles || [],
+                    calendar_event_id: updatedPayload.calendar_event_id || null,
+                    calendar_start_time: updatedPayload.calendar_start_time || null,
+                    calendar_end_time: updatedPayload.calendar_end_time || null,
+                    linked_projects: [],
+                    topics_auto: updatedPayload.topics_auto || [],
+                    keywords_auto: updatedPayload.keywords_auto || [],
+                    sentiment_overall: updatedPayload.sentiment_overall || 'NEUTRAL',
+                    chunking_strategy: updatedPayload.chunking_strategy,
+                    chunk_count: updatedPayload.chunk_count,
+                    chunk_ids: chunkDids  // Updated chunk IDs
+                },
+                accessControl: {
+                    access_level: 'private',
+                    owner_public_key: userPublicKey,
+                    created_by: userPublicKey,
+                    created_timestamp: Date.now(),
+                    last_modified_timestamp: Date.now(),
+                    version: '1.0.0'
                 }
             };
 
-            const response = await axios.patch(
-                `${this.apiBaseUrl}/api/records/update?did=${noteDid}`,
-                updateData,
+            // Re-publish with same localId to update the record
+            const response = await axios.post(
+                `${this.apiBaseUrl}/api/records/newRecord?recordType=notes&storage=gun&localId=${noteHash}`,
+                recordData,
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -345,7 +411,7 @@ class NotesRecordsService {
 
             return {
                 success: true,
-                did: noteDid
+                did: response.data.did
             };
         } catch (error) {
             console.error('❌ [Notes Records] Failed to update note with chunk IDs:', error.message);

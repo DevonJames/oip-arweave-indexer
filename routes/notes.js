@@ -541,16 +541,16 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
         
         console.log(`✅ [Step 11] Created ${chunkResults.length} chunk records`);
 
-        // Update note record with chunk_ids
+        // Update note record with chunk_ids by re-publishing
         try {
             await notesRecordsService.updateNoteChunkIds(
                 noteHash,
-                noteRecordDid,
+                notePayload,
                 chunkDids,
                 userPublicKey,
                 token
             );
-            console.log('✅ [Step 11] Note updated with chunk IDs');
+            console.log('✅ [Step 11] Note re-published with chunk IDs');
         } catch (error) {
             console.warn('⚠️ [Step 11] Failed to update note with chunk IDs (non-fatal):', error.message);
         }
@@ -918,12 +918,13 @@ router.post('/converse', authenticateToken, async (req, res) => {
 
         const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
         
-        // Step 1: Retrieve the main note record
-        console.log('[ALFRED Notes RAG] Step 1: Fetching note record...');
+        // Step 1: Retrieve the main note record with resolveDepth=1 to include transcript
+        console.log('[ALFRED Notes RAG] Step 1: Fetching note record with embedded references...');
         const noteResults = await getRecords({
             source: 'gun',
             did: noteDid,
             limit: 1,
+            resolveDepth: 1,  // Resolve nested references (transcript, chunks)
             user: req.user,
             isAuthenticated: true
         });
@@ -941,56 +942,75 @@ router.post('/converse', authenticateToken, async (req, res) => {
         
         console.log(`[ALFRED Notes RAG] ✅ Found note: "${noteBasic.name}"`);
 
-        // Step 2: Retrieve the full transcript
+        // Step 2: Extract the full transcript (already embedded with resolveDepth=1)
         let transcriptText = '';
-        const transcriptDid = noteData.transcript_full_text;
+        const transcriptData = noteData.transcript_full_text;
         
-        if (transcriptDid) {
-            console.log('[ALFRED Notes RAG] Step 2: Fetching transcript...');
-            try {
-                const transcriptResults = await getRecords({
-                    source: 'gun',
-                    did: transcriptDid,
-                    limit: 1,
-                    user: req.user,
-                    isAuthenticated: true
-                });
-                
-                if (transcriptResults.records && transcriptResults.records.length > 0) {
-                    transcriptText = transcriptResults.records[0].data?.text?.value || '';
-                    console.log(`[ALFRED Notes RAG] ✅ Retrieved transcript (${transcriptText.length} chars)`);
+        if (transcriptData) {
+            console.log('[ALFRED Notes RAG] Step 2: Extracting embedded transcript...');
+            
+            // Check if transcript is already resolved (embedded object)
+            if (typeof transcriptData === 'object' && transcriptData.data?.text?.value) {
+                transcriptText = transcriptData.data.text.value;
+                console.log(`[ALFRED Notes RAG] ✅ Extracted embedded transcript (${transcriptText.length} chars)`);
+            } 
+            // Fallback: if it's just a DID string, fetch it separately
+            else if (typeof transcriptData === 'string') {
+                try {
+                    const transcriptResults = await getRecords({
+                        source: 'gun',
+                        did: transcriptData,
+                        limit: 1,
+                        user: req.user,
+                        isAuthenticated: true
+                    });
+                    
+                    if (transcriptResults.records && transcriptResults.records.length > 0) {
+                        transcriptText = transcriptResults.records[0].data?.text?.value || '';
+                        console.log(`[ALFRED Notes RAG] ✅ Fetched transcript separately (${transcriptText.length} chars)`);
+                    }
+                } catch (error) {
+                    console.warn('[ALFRED Notes RAG] ⚠️ Failed to fetch transcript:', error.message);
                 }
-            } catch (error) {
-                console.warn('[ALFRED Notes RAG] ⚠️ Failed to fetch transcript:', error.message);
             }
         }
 
-        // Step 3: Retrieve all note chunks
+        // Step 3: Retrieve all note chunks (if not already empty/missing)
         const chunkDids = noteData.chunk_ids || [];
         let chunks = [];
         
         if (chunkDids.length > 0) {
             console.log(`[ALFRED Notes RAG] Step 3: Fetching ${chunkDids.length} chunks...`);
             try {
-                const chunkPromises = chunkDids.map(chunkDid =>
-                    getRecords({
-                        source: 'gun',
-                        did: chunkDid,
-                        limit: 1,
-                        user: req.user,
-                        isAuthenticated: true
-                    })
-                );
-                
-                const chunkResults = await Promise.all(chunkPromises);
-                chunks = chunkResults
-                    .filter(result => result.records && result.records.length > 0)
-                    .map(result => result.records[0]);
-                
-                console.log(`[ALFRED Notes RAG] ✅ Retrieved ${chunks.length} chunks`);
+                // Check if first item is already an object (resolved via resolveDepth)
+                if (typeof chunkDids[0] === 'object' && chunkDids[0].data) {
+                    // Chunks are already embedded
+                    chunks = chunkDids;
+                    console.log(`[ALFRED Notes RAG] ✅ Using ${chunks.length} embedded chunks`);
+                } else {
+                    // Chunks are DIDs, need to fetch them
+                    const chunkPromises = chunkDids.map(chunkDid =>
+                        getRecords({
+                            source: 'gun',
+                            did: chunkDid,
+                            limit: 1,
+                            user: req.user,
+                            isAuthenticated: true
+                        })
+                    );
+                    
+                    const chunkResults = await Promise.all(chunkPromises);
+                    chunks = chunkResults
+                        .filter(result => result.records && result.records.length > 0)
+                        .map(result => result.records[0]);
+                    
+                    console.log(`[ALFRED Notes RAG] ✅ Retrieved ${chunks.length} chunks`);
+                }
             } catch (error) {
                 console.warn('[ALFRED Notes RAG] ⚠️ Failed to fetch chunks:', error.message);
             }
+        } else {
+            console.log('[ALFRED Notes RAG] Step 3: No chunks found (chunk_ids is empty)');
         }
 
         // Step 4: Find related notes and chunks using tags
