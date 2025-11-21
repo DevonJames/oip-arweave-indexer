@@ -867,27 +867,27 @@
                     <div class="template-selector">
                         <h3 class="template-title">Select Template</h3>
                         <div class="template-grid">
-                            <div class="template-card selected" data-template="meeting">
+                            <div class="template-card selected" data-template="MEETING">
                                 <div class="template-icon">👥</div>
                                 <div class="template-name">Meeting</div>
                             </div>
-                            <div class="template-card" data-template="1on1">
+                            <div class="template-card" data-template="ONE_ON_ONE">
                                 <div class="template-icon">👤</div>
                                 <div class="template-name">1:1</div>
                             </div>
-                            <div class="template-card" data-template="standup">
+                            <div class="template-card" data-template="STANDUP">
                                 <div class="template-icon">🚩</div>
                                 <div class="template-name">Standup</div>
                             </div>
-                            <div class="template-card" data-template="idea">
+                            <div class="template-card" data-template="IDEA">
                                 <div class="template-icon">💡</div>
                                 <div class="template-name">Idea / Brain Dump</div>
                             </div>
-                            <div class="template-card" data-template="reflection">
+                            <div class="template-card" data-template="REFLECTION">
                                 <div class="template-icon">❤️</div>
                                 <div class="template-name">Daily Reflection</div>
                             </div>
-                            <div class="template-card" data-template="interview">
+                            <div class="template-card" data-template="INTERVIEW">
                                 <div class="template-icon">🎓</div>
                                 <div class="template-name">Interview / Lecture</div>
                             </div>
@@ -1124,7 +1124,7 @@
             // State
             currentView: 'homeView',
             currentAI: 'alfred',
-            selectedTemplate: 'meeting',
+            selectedTemplate: 'MEETING',
             isRecording: false,
             recordingStartTime: null,
             recordingInterval: null,
@@ -1464,14 +1464,14 @@
                     const title = note.data?.basic?.name || 'Untitled Note';
                     const preview = note.data?.notes?.summary_key_points?.[0] || 'No summary available';
                     const date = new Date(note.data?.basic?.date * 1000).toLocaleDateString();
-                    const noteType = note.data?.notes?.note_type || 'note';
+                    const noteType = note.data?.notes?.note_type || 'OTHER';
                     const duration = Math.round((note.data?.audio?.durationSec || 0) / 60);
 
                     return `
                         <div class="note-card" onclick="alfredApp.viewNote('${note.oip.did}')">
                             <div class="note-header">
                                 <div class="note-title">${title}</div>
-                                <div class="note-badge">${noteType}</div>
+                                <div class="note-badge">${this.formatNoteType(noteType)}</div>
                             </div>
                             <div class="note-preview">${preview}</div>
                             <div class="note-meta">
@@ -1669,6 +1669,20 @@
                 setTimeout(() => {
                     toast.classList.add('hidden');
                 }, 3000);
+            },
+
+            // Format note type for display
+            formatNoteType(noteType) {
+                const typeMap = {
+                    'MEETING': 'Meeting',
+                    'ONE_ON_ONE': '1:1',
+                    'STANDUP': 'Standup',
+                    'IDEA': 'Idea',
+                    'REFLECTION': 'Reflection',
+                    'INTERVIEW': 'Interview',
+                    'OTHER': 'Other'
+                };
+                return typeMap[noteType] || noteType.toLowerCase();
             }
         };
 

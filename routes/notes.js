@@ -1106,8 +1106,7 @@ router.post('/converse', authenticateToken, async (req, res) => {
         console.log(`  - Related content: ${relatedContent.length} items`);
 
         // Step 6: Prepare ALFRED query with note-specific context
-        const { getALFREDInstance } = require('../helpers/alfred');
-        const alfredInstance = getALFREDInstance();
+        const alfredInstance = require('../helpers/alfred');
         
         // Build a comprehensive prompt that includes the note context
         const enhancedQuestion = `${question}

@@ -263,7 +263,7 @@ FormData:
 - audio: File (webm/wav/mp3)
 - start_time: ISO 8601 timestamp
 - end_time: ISO 8601 timestamp
-- note_type: "meeting" | "1on1" | "standup" | "idea" | "reflection" | "interview"
+- note_type: "MEETING" | "ONE_ON_ONE" | "STANDUP" | "IDEA" | "REFLECTION" | "INTERVIEW" | "OTHER"
 - device_type: "web"
 - model: "llama3.2:3b" | "llama3.2:1b" | "llama3.1:8b" | "gemma2:2b"
 - addToWebServer: boolean
@@ -303,8 +303,8 @@ Response:
         "audio": {
           "durationSec": 300
         },
-        "notes": {
-          "note_type": "standup",
+          "notes": {
+            "note_type": "STANDUP",
           "summary_key_points": ["Point 1", "Point 2"],
           "summary_action_item_texts": ["Action 1"],
           "summary_open_questions": ["Question 1"]
