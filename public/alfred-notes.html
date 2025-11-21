@@ -16,7 +16,7 @@
         }
 
         :root {
-            /* Neo-retro palette */
+            /* Neo-retro palette - DARK MODE (default) */
             --primary-blue: #5B8CFF;
             --primary-blue-light: #25294A;
             --secondary-purple: #B084FF;
@@ -49,6 +49,90 @@
             --transition-fast: 0.18s ease-out;
         }
 
+        /* LIGHT MODE - Retro-futuristic pastel palette */
+        [data-theme="light"] {
+            --primary-blue: #4A7BFF;
+            --primary-blue-light: #E8ECFF;
+            --secondary-purple: #9B6FFF;
+            --accent-cyan: #00D4D4;
+            --accent-pink: #FF5DC4;
+
+            --bg-deep: #F5F6FA;
+            --bg-light: #FAFBFF;
+            --bg-panel: #FFFFFF;
+            --bg-elevated: #F8F9FE;
+            --bg-chip: #EFF1F9;
+
+            --text-primary: #1A1D2E;
+            --text-secondary: #4A5373;
+            --text-tertiary: #7A8099;
+
+            --border-subtle: rgba(74, 83, 115, 0.12);
+            --border-strong: rgba(74, 83, 115, 0.25);
+
+            --red: #FF4757;
+            --green: #2ECC71;
+            --success-green: #2ECC71;
+
+            --shadow-soft: 0 18px 45px rgba(74, 83, 115, 0.15);
+            --shadow-chip: 0 0 0 1px rgba(74, 83, 115, 0.08);
+        }
+
+        /* Light mode specific adjustments */
+        [data-theme="light"] .record-button {
+            box-shadow:
+                0 20px 40px rgba(74, 83, 115, 0.25),
+                0 0 35px rgba(0, 212, 212, 0.4);
+        }
+
+        [data-theme="light"] .record-button:hover {
+            box-shadow:
+                0 26px 48px rgba(74, 83, 115, 0.35),
+                0 0 45px rgba(0, 212, 212, 0.5);
+        }
+
+        [data-theme="light"] .record-button.recording {
+            box-shadow:
+                0 20px 40px rgba(74, 83, 115, 0.35),
+                0 0 40px rgba(255, 71, 87, 0.6);
+        }
+
+        [data-theme="light"] .app-title {
+            text-shadow: 0 0 8px rgba(0, 212, 212, 0.5);
+        }
+
+        [data-theme="light"] .nav-item.active {
+            box-shadow: 0 0 0 1px rgba(0, 212, 212, 0.4), 0 0 20px rgba(0, 212, 212, 0.4);
+        }
+
+        [data-theme="light"] .template-card:hover {
+            box-shadow: 0 18px 40px rgba(74, 83, 115, 0.25);
+        }
+
+        [data-theme="light"] .note-card:hover {
+            box-shadow: 0 22px 46px rgba(74, 83, 115, 0.25);
+        }
+
+        [data-theme="light"] .auth-modal {
+            background: radial-gradient(circle at top, rgba(74, 123, 255, 0.15), transparent 60%) rgba(245, 246, 250, 0.92);
+        }
+
+        [data-theme="light"] .send-button {
+            box-shadow: 0 0 20px rgba(0, 212, 212, 0.6);
+        }
+
+        [data-theme="light"] .primary-button {
+            box-shadow: 0 16px 34px rgba(74, 83, 115, 0.25), 0 0 26px rgba(0, 212, 212, 0.5);
+        }
+
+        [data-theme="light"] .recording-panel {
+            border: 1px solid rgba(255, 71, 87, 0.5);
+        }
+
+        [data-theme="light"] .logout-btn {
+            color: var(--text-primary);
+        }
+
         body {
             font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background:
@@ -59,6 +143,15 @@
             color: var(--text-primary);
             overflow: hidden;
             -webkit-font-smoothing: antialiased;
+            transition: background 0.3s ease;
+        }
+
+        [data-theme="light"] body {
+            background:
+                radial-gradient(circle at 0% 0%, rgba(74, 123, 255, 0.12), transparent 55%),
+                radial-gradient(circle at 100% 0%, rgba(255, 93, 196, 0.12), transparent 55%),
+                radial-gradient(circle at 50% 100%, rgba(0, 212, 212, 0.08), transparent 55%),
+                linear-gradient(145deg, #F5F6FA 0%, #FAFBFF 40%, #F8F9FE 100%);
         }
 
         /* Global cards / glass */
@@ -130,6 +223,27 @@
             border-radius: 999px;
             background: rgba(15, 20, 50, 0.9);
             border: 1px solid var(--border-subtle);
+        }
+
+        .theme-toggle {
+            padding: 6px 12px;
+            background: var(--bg-chip);
+            color: var(--accent-cyan);
+            border: 1px solid var(--border-subtle);
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+        }
+
+        .theme-toggle:hover {
+            background: var(--bg-elevated);
+            transform: scale(1.08);
         }
 
         .logout-btn {
@@ -1058,6 +1172,9 @@
         <div class="app-header">
             <div class="app-title">Alfred Notes</div>
             <div class="user-info">
+                <button class="theme-toggle" onclick="alfredApp.toggleTheme()" title="Toggle theme" id="themeToggle">
+                    🌙
+                </button>
                 <span id="userEmail">Loading...</span>
                 <button class="logout-btn" onclick="alfredApp.logout()">Logout</button>
             </div>
@@ -1340,6 +1457,7 @@
                 currentNote: null,
                 jwtToken: localStorage.getItem('alfred_jwt_token'),
                 userEmail: localStorage.getItem('alfred_user_email'),
+                theme: localStorage.getItem('alfred_theme') || 'dark',
                 settings: {
                     backendEnabled: true,
                     webServerUpload: true,
@@ -1350,6 +1468,9 @@
             // Initialize app
             init() {
                 console.log('🎙️ Alfred Notes initializing...');
+                
+                // Initialize theme
+                this.initTheme();
                 
                 // Check authentication
                 if (!this.state.jwtToken) {
@@ -1619,7 +1740,7 @@
                 formData.append('audio', audioBlob, 'recording.webm');
                 formData.append('start_time', new Date(startTime).toISOString());
                 formData.append('end_time', new Date(endTime).toISOString());
-                formData.append('note_type', this.state.selectedTemplate.toLowerCase());
+                formData.append('note_type', this.state.selectedTemplate); // Keep uppercase - backend expects: MEETING, ONE_ON_ONE, STANDUP, IDEA, REFLECTION, INTERVIEW, OTHER
                 formData.append('device_type', 'web');
                 formData.append('model', this.state.settings.model);
                 formData.append('addToWebServer', this.state.settings.webServerUpload);
@@ -1919,6 +2040,38 @@
                 setTimeout(() => {
                     toast.classList.add('hidden');
                 }, 3000);
+            },
+
+            // Theme management
+            initTheme() {
+                // Apply saved theme
+                document.documentElement.setAttribute('data-theme', this.state.theme);
+                this.updateThemeIcon();
+            },
+
+            toggleTheme() {
+                // Toggle between light and dark
+                this.state.theme = this.state.theme === 'dark' ? 'light' : 'dark';
+                
+                // Save to localStorage
+                localStorage.setItem('alfred_theme', this.state.theme);
+                
+                // Apply theme
+                document.documentElement.setAttribute('data-theme', this.state.theme);
+                
+                // Update icon
+                this.updateThemeIcon();
+                
+                // Show toast
+                this.showToast(`Switched to ${this.state.theme} mode`, 'success');
+            },
+
+            updateThemeIcon() {
+                const themeToggle = document.getElementById('themeToggle');
+                if (themeToggle) {
+                    themeToggle.textContent = this.state.theme === 'dark' ? '☀️' : '🌙';
+                    themeToggle.title = this.state.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+                }
             }
         };
 
