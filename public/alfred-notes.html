@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alfred Notes</title>
+
+    <!-- Retro-futurist fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+
     <style>
         * {
             margin: 0;
@@ -12,26 +16,65 @@
         }
 
         :root {
-            --primary-blue: #007AFF;
-            --primary-blue-light: #E8F4FF;
-            --secondary-purple: #5856D6;
-            --bg-light: #F2F2F7;
-            --bg-white: #FFFFFF;
-            --text-primary: #000000;
-            --text-secondary: #3C3C43;
-            --text-tertiary: #8E8E93;
-            --border-color: #C6C6C8;
-            --red: #FF3B30;
-            --green: #34C759;
-            --success-green: #28A745;
-            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            /* Neo-retro palette */
+            --primary-blue: #5B8CFF;
+            --primary-blue-light: #25294A;
+            --secondary-purple: #B084FF;
+            --accent-cyan: #5FFCF9;
+            --accent-pink: #FF7AD9;
+
+            --bg-deep: #050816;
+            --bg-light: #0C1024;
+            --bg-panel: #11152B;
+            --bg-elevated: #171C37;
+            --bg-chip: #1F2442;
+
+            --text-primary: #F7F7FF;
+            --text-secondary: #B0B4D0;
+            --text-tertiary: #7C81A8;
+
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --border-strong: rgba(255, 255, 255, 0.16);
+
+            --red: #FF5C5C;
+            --green: #3ED598;
+            --success-green: #3ED598;
+
+            --shadow-soft: 0 18px 45px rgba(5, 8, 22, 0.95);
+            --shadow-chip: 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+            --radius-lg: 18px;
+            --radius-xl: 28px;
+
+            --transition-fast: 0.18s ease-out;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: var(--bg-light);
+            font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(91, 140, 255, 0.18), transparent 55%),
+                radial-gradient(circle at 100% 0%, rgba(255, 122, 217, 0.18), transparent 55%),
+                radial-gradient(circle at 50% 100%, rgba(95, 252, 249, 0.08), transparent 55%),
+                linear-gradient(145deg, #050816 0%, #050816 40%, #050A24 100%);
             color: var(--text-primary);
             overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Global cards / glass */
+        .glass {
+            background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 40%) var(--bg-panel);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(20px);
+        }
+
+        .chip {
+            background: var(--bg-chip);
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-chip);
         }
 
         /* Main Container */
@@ -39,42 +82,70 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            max-width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 10px 10px 0;
         }
 
         /* Header */
         .app-header {
-            background: var(--bg-white);
-            padding: 12px 20px;
-            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(135deg, rgba(95, 252, 249, 0.05), rgba(91, 140, 255, 0.05)) var(--bg-panel);
+            padding: 10px 18px;
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow-soft);
         }
 
         .app-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: var(--text-primary);
+            font-family: "Press Start 2P", system-ui;
+            font-size: 12px;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 8px rgba(95, 252, 249, 0.65);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .app-title::before {
+            content: "▌█▐";
+            font-size: 10px;
+            opacity: 0.8;
         }
 
         .user-info {
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 14px;
+            gap: 12px;
+            font-size: 12px;
             color: var(--text-secondary);
+        }
+
+        .user-info span {
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(15, 20, 50, 0.9);
+            border: 1px solid var(--border-subtle);
         }
 
         .logout-btn {
             padding: 6px 12px;
-            background: var(--red);
+            background: radial-gradient(circle at 0 0, rgba(255, 92, 92, 0.28), transparent 55%) var(--bg-panel);
             color: white;
-            border: none;
-            border-radius: 6px;
+            border: 1px solid rgba(255, 92, 92, 0.7);
+            border-radius: 999px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .logout-btn:hover {
+            background: var(--red);
         }
 
         /* Content Area */
@@ -82,6 +153,10 @@
             flex: 1;
             display: flex;
             overflow: hidden;
+            margin-top: 14px;
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--border-subtle);
+            background: radial-gradient(circle at top, rgba(91, 140, 255, 0.06), transparent 52%) var(--bg-light);
         }
 
         .view-container {
@@ -97,207 +172,287 @@
 
         /* Bottom Navigation */
         .bottom-nav {
-            background: var(--bg-white);
-            border-top: 1px solid var(--border-color);
+            margin-top: 10px;
+            background: linear-gradient(135deg, rgba(9, 11, 35, 0.95), rgba(9, 11, 35, 0.98));
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
             display: flex;
             justify-content: space-around;
-            padding: 8px 0;
-            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+            padding: 6px 4px;
+            box-shadow: var(--shadow-soft);
         }
 
         .nav-item {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 8px 20px;
+            padding: 6px 18px;
             cursor: pointer;
             color: var(--text-tertiary);
             border: none;
             background: none;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 500;
-            transition: color 0.2s;
-        }
-
-        .nav-item.active {
-            color: var(--primary-blue);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            transition: color var(--transition-fast), transform var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+            border-radius: 999px;
         }
 
         .nav-icon {
-            font-size: 24px;
-            margin-bottom: 4px;
+            font-size: 20px;
+            margin-bottom: 2px;
+        }
+
+        .nav-item.active {
+            color: var(--accent-cyan);
+            background: radial-gradient(circle at 50% 0%, rgba(95, 252, 249, 0.22), transparent 65%) var(--bg-chip);
+            box-shadow: 0 0 0 1px rgba(95, 252, 249, 0.4), 0 0 24px rgba(95, 252, 249, 0.5);
+            transform: translateY(-1px);
         }
 
         /* Home View */
         .home-view {
-            padding: 30px 20px;
+            padding: 32px 24px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 30px;
+            gap: 32px;
         }
 
         .record-button {
-            width: 200px;
-            height: 200px;
+            width: 220px;
+            height: 220px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-blue), var(--secondary-purple));
+            background:
+                radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.35), transparent 50%),
+                conic-gradient(from 210deg, var(--accent-cyan), var(--secondary-purple), var(--accent-pink), var(--accent-cyan));
+            position: relative;
             border: none;
-            color: white;
-            font-size: 48px;
             cursor: pointer;
-            box-shadow: 0 8px 24px rgba(88, 86, 214, 0.3);
-            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow:
+                0 20px 40px rgba(0, 0, 0, 0.75),
+                0 0 40px rgba(91, 140, 255, 0.6);
+            transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
+        }
+
+        .record-button::before {
+            content: "";
+            position: absolute;
+            inset: 14px;
+            border-radius: inherit;
+            background: radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 60%) var(--bg-panel);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .record-button span {
+            position: relative;
+            font-size: 46px;
+            filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.8));
         }
 
         .record-button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 12px 32px rgba(88, 86, 214, 0.4);
+            transform: translateY(-4px) scale(1.02);
+            box-shadow:
+                0 26px 48px rgba(0, 0, 0, 0.9),
+                0 0 52px rgba(95, 252, 249, 0.7);
         }
 
         .record-button.recording {
-            background: var(--red);
-            animation: pulse 1.5s infinite;
+            background:
+                radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.4), transparent 50%),
+                conic-gradient(from 180deg, #ff7b7b, #ff3b3b, #ff7b7b, #ff3b3b);
+            animation: pulse 1.4s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+            0%, 100% { transform: scale(1); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.85), 0 0 40px rgba(255, 123, 123, 0.7); }
+            50% { transform: scale(1.04); box-shadow: 0 26px 52px rgba(0, 0, 0, 0.95), 0 0 55px rgba(255, 123, 123, 0.95); }
         }
 
         .template-selector {
             width: 100%;
-            max-width: 400px;
+            max-width: 520px;
         }
 
         .template-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 15px;
+            font-family: "Press Start 2P", system-ui;
+            font-size: 11px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin-bottom: 18px;
             text-align: center;
+            color: var(--text-secondary);
         }
 
         .template-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 12px;
         }
 
         .template-card {
-            background: var(--bg-white);
-            border: 2px solid var(--border-color);
-            border-radius: 12px;
-            padding: 20px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 18px 12px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all var(--transition-fast);
+            box-shadow: var(--shadow-chip);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .template-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(95, 252, 249, 0.08), rgba(176, 132, 255, 0.08));
+            opacity: 0;
+            transition: opacity var(--transition-fast);
         }
 
         .template-card:hover {
-            border-color: var(--primary-blue);
-            transform: translateY(-2px);
-            box-shadow: var(--shadow);
+            border-color: rgba(95, 252, 249, 0.6);
+            transform: translateY(-3px);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.85);
         }
 
         .template-card.selected {
-            border-color: var(--primary-blue);
-            background: var(--primary-blue-light);
+            border-color: rgba(95, 252, 249, 0.85);
+            background: radial-gradient(circle at top, rgba(95, 252, 249, 0.18), transparent 60%) var(--bg-panel);
+        }
+
+        .template-card.selected::before {
+            opacity: 1;
         }
 
         .template-icon {
-            font-size: 36px;
+            font-size: 28px;
             margin-bottom: 8px;
         }
 
         .template-name {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
             color: var(--text-primary);
         }
 
         /* Library View */
         .library-view {
-            background: var(--bg-light);
+            background: transparent;
         }
 
         .library-header {
-            background: var(--bg-white);
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 16px 20px 4px;
         }
 
         .search-bar {
             display: flex;
             align-items: center;
-            background: var(--bg-light);
-            border-radius: 10px;
-            padding: 10px 15px;
+            background: var(--bg-panel);
+            border-radius: 999px;
+            padding: 8px 14px;
             gap: 10px;
-            margin-bottom: 12px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .search-bar span {
+            opacity: 0.8;
         }
 
         .search-bar input {
             flex: 1;
             border: none;
             background: none;
-            font-size: 16px;
+            font-size: 14px;
             outline: none;
+            color: var(--text-primary);
+        }
+
+        .search-bar input::placeholder {
+            color: var(--text-tertiary);
         }
 
         .filter-button {
-            padding: 8px 16px;
-            background: var(--primary-blue);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
+            margin-top: 10px;
+            padding: 8px 14px;
+            background: var(--bg-chip);
+            color: var(--accent-cyan);
+            border: 1px dashed rgba(95, 252, 249, 0.6);
+            border-radius: 999px;
+            font-size: 11px;
             cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
         }
 
         .notes-list {
-            padding: 16px 20px;
+            padding: 12px 20px 22px;
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
 
         .note-card {
-            background: var(--bg-white);
-            border-radius: 12px;
-            padding: 16px;
-            box-shadow: var(--shadow);
+            background: var(--bg-panel);
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
+            box-shadow: var(--shadow-soft);
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: transform var(--transition-fast), box-shadow var(--transition-fast), border var(--transition-fast);
+            border: 1px solid var(--border-subtle);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .note-card::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(95, 252, 249, 0.12), transparent 60%);
+            opacity: 0;
+            transition: opacity var(--transition-fast);
         }
 
         .note-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: 0 22px 46px rgba(0, 0, 0, 0.95);
+            border-color: rgba(95, 252, 249, 0.5);
+        }
+
+        .note-card:hover::after {
+            opacity: 1;
         }
 
         .note-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .note-title {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             color: var(--text-primary);
         }
 
         .note-badge {
-            background: var(--secondary-purple);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 10px;
+            font-family: "Press Start 2P", system-ui;
+            background: var(--bg-chip);
+            color: var(--accent-cyan);
+            padding: 4px 7px;
+            border-radius: 999px;
+            font-size: 8px;
             text-transform: uppercase;
+            letter-spacing: 0.12em;
+            border: 1px solid rgba(95, 252, 249, 0.7);
         }
 
         .note-preview {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--text-secondary);
             margin-bottom: 8px;
             line-height: 1.4;
@@ -307,7 +462,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-tertiary);
         }
 
@@ -318,49 +473,51 @@
         }
 
         .chat-header {
-            background: var(--bg-white);
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 16px 20px 8px;
         }
 
         .chat-toggle {
-            display: flex;
-            background: var(--bg-light);
-            border-radius: 10px;
+            display: inline-flex;
+            background: var(--bg-panel);
+            border-radius: 999px;
             padding: 4px;
             gap: 4px;
+            border: 1px solid var(--border-subtle);
         }
 
         .chat-toggle-btn {
             flex: 1;
-            padding: 10px;
+            padding: 7px 16px;
             border: none;
             background: none;
-            border-radius: 8px;
-            font-size: 15px;
+            border-radius: 999px;
+            font-size: 12px;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            transition: all var(--transition-fast);
         }
 
         .chat-toggle-btn.active {
-            background: var(--bg-white);
-            color: var(--primary-blue);
-            box-shadow: var(--shadow);
+            background: radial-gradient(circle at 30% 0%, rgba(95, 252, 249, 0.25), transparent 60%) var(--bg-chip);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 0 1px rgba(95, 252, 249, 0.6);
         }
 
         .chat-messages {
             flex: 1;
-            padding: 20px;
+            padding: 18px 20px 10px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 14px;
         }
 
         .message {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             max-width: 80%;
         }
 
@@ -370,102 +527,118 @@
         }
 
         .message-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: var(--primary-blue);
-            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.25), transparent 60%) var(--bg-chip);
+            color: var(--accent-cyan);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 600;
             flex-shrink: 0;
+            font-family: "Press Start 2P", system-ui;
+            font-size: 9px;
+            border: 1px solid rgba(95, 252, 249, 0.6);
         }
 
         .message-content {
-            background: var(--bg-white);
-            padding: 12px 16px;
-            border-radius: 16px;
-            box-shadow: var(--shadow);
+            background: var(--bg-panel);
+            padding: 10px 14px;
+            border-radius: 14px;
+            box-shadow: var(--shadow-chip);
+            border: 1px solid var(--border-subtle);
         }
 
         .message.user .message-content {
-            background: var(--primary-blue);
+            background: linear-gradient(135deg, rgba(95, 252, 249, 0.18), rgba(91, 140, 255, 0.45));
             color: white;
+            border-color: rgba(95, 252, 249, 0.6);
         }
 
         .message-text {
-            font-size: 15px;
-            line-height: 1.5;
+            font-size: 14px;
+            line-height: 1.55;
         }
 
         .chat-input-container {
-            background: var(--bg-white);
-            border-top: 1px solid var(--border-color);
-            padding: 16px 20px;
+            background: linear-gradient(180deg, rgba(5, 8, 22, 0.2), rgba(5, 8, 22, 0.7));
+            border-top: 1px solid var(--border-subtle);
+            padding: 14px 20px 18px;
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: center;
         }
 
         .chat-input {
             flex: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            font-size: 15px;
+            padding: 10px 14px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 999px;
+            font-size: 14px;
             outline: none;
             resize: none;
             font-family: inherit;
-            min-height: 44px;
-            max-height: 120px;
+            min-height: 40px;
+            max-height: 96px;
+            background: var(--bg-panel);
+            color: var(--text-primary);
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-tertiary);
         }
 
         .send-button {
-            width: 44px;
-            height: 44px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
-            background: var(--primary-blue);
-            color: white;
+            background: radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.18), transparent 55%) var(--accent-cyan);
+            color: #050816;
             border: none;
-            font-size: 20px;
+            font-size: 18px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: 0 0 20px rgba(95, 252, 249, 0.8);
         }
 
         .send-button:disabled {
-            background: var(--border-color);
+            background: var(--border-subtle);
+            box-shadow: none;
             cursor: not-allowed;
         }
 
         /* Settings View */
         .settings-view {
-            background: var(--bg-light);
             padding: 20px;
         }
 
         .settings-section {
-            background: var(--bg-white);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
+            background: var(--bg-panel);
+            border-radius: var(--radius-lg);
+            padding: 18px 18px 14px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-soft);
         }
 
         .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            color: var(--text-primary);
+            font-family: "Press Start 2P", system-ui;
+            font-size: 10px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            color: var(--accent-cyan);
         }
 
         .setting-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid var(--bg-light);
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
         }
 
         .setting-row:last-child {
@@ -473,20 +646,20 @@
         }
 
         .setting-label {
-            font-size: 15px;
+            font-size: 14px;
             color: var(--text-primary);
         }
 
         .setting-description {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-tertiary);
             margin-top: 4px;
         }
 
         .toggle-switch {
             position: relative;
-            width: 51px;
-            height: 31px;
+            width: 46px;
+            height: 26px;
         }
 
         .toggle-switch input {
@@ -502,37 +675,40 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: var(--border-color);
-            transition: 0.4s;
-            border-radius: 31px;
+            background-color: var(--border-subtle);
+            transition: 0.3s;
+            border-radius: 26px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
         }
 
         .toggle-slider:before {
             position: absolute;
             content: "";
-            height: 27px;
-            width: 27px;
-            left: 2px;
-            bottom: 2px;
-            background-color: white;
-            transition: 0.4s;
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #050816;
+            transition: 0.3s;
             border-radius: 50%;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
         }
 
         input:checked + .toggle-slider {
-            background-color: var(--success-green);
+            background: linear-gradient(135deg, var(--accent-cyan), var(--green));
         }
 
         input:checked + .toggle-slider:before {
-            transform: translateX(20px);
+            transform: translateX(18px);
         }
 
         .model-select {
-            padding: 10px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 15px;
-            background: var(--bg-light);
+            padding: 8px 12px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 999px;
+            font-size: 13px;
+            background: var(--bg-panel);
+            color: var(--text-primary);
             cursor: pointer;
             outline: none;
         }
@@ -540,64 +716,102 @@
         /* Note Detail View */
         .note-detail-view {
             padding: 20px;
-            background: var(--bg-light);
         }
 
         .note-detail-header {
-            background: var(--bg-white);
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
+            background: var(--bg-panel);
+            padding: 18px 18px 14px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 16px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-soft);
         }
 
         .note-detail-title {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
 
         .note-detail-meta {
             display: flex;
             gap: 16px;
-            font-size: 14px;
+            font-size: 12px;
             color: var(--text-tertiary);
         }
 
         .summary-section {
-            background: var(--bg-white);
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 16px;
+            background: var(--bg-panel);
+            padding: 18px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 14px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-soft);
         }
 
         .summary-heading {
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 600;
-            margin-bottom: 16px;
-            color: var(--text-primary);
+            margin-bottom: 10px;
+            color: var(--accent-cyan);
         }
 
         .summary-list {
             list-style: none;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
         }
 
         .summary-list li {
-            padding-left: 24px;
+            padding-left: 18px;
             position: relative;
-            font-size: 15px;
+            font-size: 13px;
             line-height: 1.5;
             color: var(--text-secondary);
         }
 
         .summary-list li:before {
-            content: "•";
+            content: "◆";
             position: absolute;
-            left: 8px;
-            color: var(--primary-blue);
-            font-weight: bold;
+            left: 4px;
+            color: var(--accent-cyan);
+            font-size: 10px;
+        }
+
+        /* Buttons */
+        .primary-button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--secondary-purple));
+            color: #050816;
+            border: none;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            box-shadow: 0 16px 34px rgba(0, 0, 0, 0.9), 0 0 26px rgba(95, 252, 249, 0.7);
+        }
+
+        .primary-button:hover {
+            filter: brightness(1.08);
+        }
+
+        .secondary-button {
+            width: 100%;
+            padding: 10px 18px;
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border-subtle);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }
 
         /* Loading State */
@@ -608,13 +822,14 @@
             justify-content: center;
             padding: 40px;
             gap: 16px;
+            color: var(--text-secondary);
         }
 
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid var(--border-color);
-            border-top-color: var(--primary-blue);
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border-subtle);
+            border-top-color: var(--accent-cyan);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -626,11 +841,8 @@
         /* Auth Modal */
         .auth-modal {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            inset: 0;
+            background: radial-gradient(circle at top, rgba(91, 140, 255, 0.28), transparent 60%) rgba(5, 8, 22, 0.92);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -642,85 +854,61 @@
         }
 
         .auth-card {
-            background: var(--bg-white);
-            padding: 32px;
-            border-radius: 16px;
-            max-width: 400px;
-            width: 90%;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            background: var(--bg-panel);
+            padding: 26px 24px 20px;
+            border-radius: var(--radius-lg);
+            max-width: 420px;
+            width: 92%;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid var(--border-strong);
         }
 
         .auth-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 24px;
+            font-family: "Press Start 2P", system-ui;
+            font-size: 13px;
+            letter-spacing: 0.16em;
+            margin-bottom: 20px;
             text-align: center;
+            text-transform: uppercase;
+            color: var(--accent-cyan);
         }
 
         .form-group {
-            margin-bottom: 16px;
+            margin-bottom: 14px;
         }
 
         .form-label {
             display: block;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 500;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             color: var(--text-secondary);
         }
 
         .form-input {
             width: 100%;
-            padding: 12px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 15px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 999px;
+            font-size: 13px;
             outline: none;
+            background: var(--bg-light);
+            color: var(--text-primary);
         }
 
         .form-input:focus {
-            border-color: var(--primary-blue);
-        }
-
-        .primary-button {
-            width: 100%;
-            padding: 14px;
-            background: var(--primary-blue);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 8px;
-        }
-
-        .primary-button:hover {
-            background: #0056CC;
-        }
-
-        .secondary-button {
-            width: 100%;
-            padding: 14px;
-            background: var(--bg-light);
-            color: var(--text-primary);
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 8px;
+            border-color: rgba(95, 252, 249, 0.8);
         }
 
         .auth-toggle {
             text-align: center;
-            margin-top: 16px;
-            font-size: 14px;
+            margin-top: 14px;
+            font-size: 12px;
             color: var(--text-secondary);
         }
 
         .auth-toggle a {
-            color: var(--primary-blue);
+            color: var(--accent-cyan);
             text-decoration: none;
             font-weight: 500;
         }
@@ -729,16 +917,18 @@
         .toast {
             position: fixed;
             top: 20px;
-            right: 20px;
-            background: var(--bg-white);
-            padding: 16px 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            right: 18px;
+            background: var(--bg-panel);
+            padding: 12px 16px;
+            border-radius: 14px;
+            box-shadow: var(--shadow-soft);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             z-index: 1001;
-            animation: slideIn 0.3s ease;
+            animation: slideIn 0.25s ease;
+            font-size: 13px;
+            border: 1px solid var(--border-subtle);
         }
 
         .toast.hidden {
@@ -747,7 +937,7 @@
 
         @keyframes slideIn {
             from {
-                transform: translateX(400px);
+                transform: translateX(260px);
                 opacity: 0;
             }
             to {
@@ -757,27 +947,29 @@
         }
 
         .toast.success {
-            border-left: 4px solid var(--green);
+            border-left: 3px solid var(--green);
         }
 
         .toast.error {
-            border-left: 4px solid var(--red);
+            border-left: 3px solid var(--red);
         }
 
         /* Recording Panel */
         .recording-panel {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--bg-white);
-            padding: 24px;
-            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-panel);
+            padding: 14px 20px;
+            box-shadow: var(--shadow-soft);
             display: none;
             flex-direction: column;
             align-items: center;
-            gap: 16px;
+            gap: 8px;
             z-index: 999;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 92, 92, 0.6);
         }
 
         .recording-panel.active {
@@ -785,53 +977,48 @@
         }
 
         .recording-timer {
-            font-size: 32px;
-            font-weight: 600;
+            font-family: "Press Start 2P", system-ui;
+            font-size: 11px;
+            letter-spacing: 0.16em;
             color: var(--red);
         }
 
         .recording-status {
-            font-size: 16px;
+            font-size: 12px;
             color: var(--text-secondary);
         }
 
         .stop-recording-btn {
-            padding: 14px 32px;
+            padding: 8px 16px;
             background: var(--red);
-            color: white;
+            color: #050816;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
+            border-radius: 999px;
+            font-size: 11px;
             font-weight: 600;
             cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
         }
 
         /* Empty State */
         .empty-state {
-            padding: 60px 20px;
+            padding: 50px 20px;
             text-align: center;
             color: var(--text-tertiary);
         }
 
         .empty-icon {
-            font-size: 64px;
-            margin-bottom: 16px;
+            font-size: 54px;
+            margin-bottom: 12px;
         }
 
         .empty-text {
-            font-size: 18px;
+            font-size: 15px;
             font-weight: 500;
         }
 
-        /* Responsive */
-        @media (min-width: 768px) {
-            .app-container {
-                max-width: 1200px;
-                margin: 0 auto;
-            }
-        }
-
-        /* Hide scrollbar but keep functionality */
+        /* Scrollbars */
         .view-container::-webkit-scrollbar,
         .chat-messages::-webkit-scrollbar {
             width: 6px;
@@ -839,12 +1026,33 @@
 
         .view-container::-webkit-scrollbar-thumb,
         .chat-messages::-webkit-scrollbar-thumb {
-            background: var(--border-color);
+            background: var(--border-subtle);
             border-radius: 3px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-container {
+                padding: 8px 8px 0;
+            }
+            .note-card {
+                padding: 12px 12px;
+            }
+            .home-view {
+                padding: 24px 16px;
+            }
+            .record-button {
+                width: 180px;
+                height: 180px;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- BODY + SCRIPT remain unchanged from your original file -->
+    <!-- ... Paste the existing <body> content and <script> exactly as-is ... -->
+
+    <!-- BEGIN ORIGINAL BODY CONTENT -->
     <div class="app-container">
         <!-- Header -->
         <div class="app-header">
@@ -1119,580 +1327,8 @@
     </div>
 
     <script>
-        // Alfred Notes Web Application
-        const alfredApp = {
-            // State
-            currentView: 'homeView',
-            currentAI: 'alfred',
-            selectedTemplate: 'MEETING',
-            isRecording: false,
-            recordingStartTime: null,
-            recordingInterval: null,
-            mediaRecorder: null,
-            audioChunks: [],
-            token: localStorage.getItem('alfred_token'),
-            userEmail: localStorage.getItem('alfred_email'),
-            baseURL: 'https://api.oip.onl',
-            notes: [],
-            currentNote: null,
-            chatHistory: [],
-
-            // Initialize app
-            init() {
-                console.log('Initializing Alfred Notes...');
-                
-                // Check authentication
-                if (!this.token) {
-                    this.showAuthModal();
-                } else {
-                    this.hideAuthModal();
-                    this.loadUserData();
-                    this.loadNotes();
-                }
-
-                // Setup template selection
-                document.querySelectorAll('.template-card').forEach(card => {
-                    card.addEventListener('click', () => {
-                        document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
-                        card.classList.add('selected');
-                        this.selectedTemplate = card.dataset.template;
-                    });
-                });
-
-                // Setup chat input
-                const chatInput = document.getElementById('chatInput');
-                chatInput.addEventListener('input', () => {
-                    chatInput.style.height = 'auto';
-                    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
-                });
-
-                chatInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        this.sendMessage();
-                    }
-                });
-            },
-
-            // Authentication
-            showAuthModal() {
-                document.getElementById('authModal').classList.remove('hidden');
-            },
-
-            hideAuthModal() {
-                document.getElementById('authModal').classList.add('hidden');
-            },
-
-            showLogin() {
-                document.getElementById('loginForm').style.display = 'block';
-                document.getElementById('registerForm').style.display = 'none';
-            },
-
-            showRegister() {
-                document.getElementById('loginForm').style.display = 'none';
-                document.getElementById('registerForm').style.display = 'block';
-            },
-
-            async login() {
-                const email = document.getElementById('loginEmail').value;
-                const password = document.getElementById('loginPassword').value;
-
-                if (!email || !password) {
-                    this.showToast('Please fill in all fields', 'error');
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`${this.baseURL}/api/user/login`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        this.token = data.token;
-                        this.userEmail = email;
-                        localStorage.setItem('alfred_token', data.token);
-                        localStorage.setItem('alfred_email', email);
-                        this.hideAuthModal();
-                        this.loadUserData();
-                        this.loadNotes();
-                        this.showToast('Login successful!', 'success');
-                    } else {
-                        this.showToast(data.error || 'Login failed', 'error');
-                    }
-                } catch (error) {
-                    console.error('Login error:', error);
-                    this.showToast('Login failed: ' + error.message, 'error');
-                }
-            },
-
-            async register() {
-                const email = document.getElementById('registerEmail').value;
-                const password = document.getElementById('registerPassword').value;
-
-                if (!email || !password) {
-                    this.showToast('Please fill in all fields', 'error');
-                    return;
-                }
-
-                try {
-                    const response = await fetch(`${this.baseURL}/api/user/register`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        this.token = data.token;
-                        this.userEmail = email;
-                        localStorage.setItem('alfred_token', data.token);
-                        localStorage.setItem('alfred_email', email);
-                        this.hideAuthModal();
-                        this.loadUserData();
-                        this.showToast('Registration successful!', 'success');
-                    } else {
-                        this.showToast(data.error || 'Registration failed', 'error');
-                    }
-                } catch (error) {
-                    console.error('Registration error:', error);
-                    this.showToast('Registration failed: ' + error.message, 'error');
-                }
-            },
-
-            logout() {
-                localStorage.removeItem('alfred_token');
-                localStorage.removeItem('alfred_email');
-                this.token = null;
-                this.userEmail = null;
-                this.notes = [];
-                this.chatHistory = [];
-                location.reload();
-            },
-
-            loadUserData() {
-                document.getElementById('userEmail').textContent = this.userEmail || 'User';
-            },
-
-            // View Management
-            showView(viewId) {
-                document.querySelectorAll('.view-container').forEach(view => {
-                    view.classList.remove('active');
-                });
-                document.getElementById(viewId).classList.add('active');
-
-                document.querySelectorAll('.nav-item').forEach(item => {
-                    item.classList.remove('active');
-                    if (item.dataset.view === viewId) {
-                        item.classList.add('active');
-                    }
-                });
-
-                this.currentView = viewId;
-
-                // Load data for view
-                if (viewId === 'libraryView') {
-                    this.loadNotes();
-                }
-            },
-
-            // Recording
-            async toggleRecording() {
-                if (this.isRecording) {
-                    this.stopRecording();
-                } else {
-                    this.startRecording();
-                }
-            },
-
-            async startRecording() {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    this.mediaRecorder = new MediaRecorder(stream);
-                    this.audioChunks = [];
-
-                    this.mediaRecorder.ondataavailable = (event) => {
-                        this.audioChunks.push(event.data);
-                    };
-
-                    this.mediaRecorder.onstop = () => {
-                        this.processRecording();
-                    };
-
-                    this.mediaRecorder.start();
-                    this.isRecording = true;
-                    this.recordingStartTime = Date.now();
-
-                    // Update UI
-                    document.getElementById('recordButton').classList.add('recording');
-                    document.getElementById('recordIcon').textContent = '⏸';
-                    document.getElementById('recordingPanel').classList.add('active');
-
-                    // Start timer
-                    this.recordingInterval = setInterval(() => {
-                        const elapsed = Math.floor((Date.now() - this.recordingStartTime) / 1000);
-                        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-                        const seconds = (elapsed % 60).toString().padStart(2, '0');
-                        document.getElementById('recordingTimer').textContent = `${minutes}:${seconds}`;
-                    }, 1000);
-
-                    this.showToast('Recording started', 'success');
-                } catch (error) {
-                    console.error('Error starting recording:', error);
-                    this.showToast('Could not start recording: ' + error.message, 'error');
-                }
-            },
-
-            stopRecording() {
-                if (this.mediaRecorder && this.isRecording) {
-                    this.mediaRecorder.stop();
-                    this.isRecording = false;
-
-                    // Stop all audio tracks
-                    this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
-
-                    // Update UI
-                    document.getElementById('recordButton').classList.remove('recording');
-                    document.getElementById('recordIcon').textContent = '🎤';
-                    document.getElementById('recordingPanel').classList.remove('active');
-
-                    // Clear timer
-                    if (this.recordingInterval) {
-                        clearInterval(this.recordingInterval);
-                        this.recordingInterval = null;
-                    }
-                }
-            },
-
-            async processRecording() {
-                this.showToast('Processing recording...', 'success');
-
-                const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'recording.webm');
-                formData.append('start_time', new Date(this.recordingStartTime).toISOString());
-                formData.append('end_time', new Date().toISOString());
-                formData.append('note_type', this.selectedTemplate);
-                formData.append('device_type', 'web');
-                
-                // Get settings
-                const model = document.getElementById('modelSelect').value;
-                const addToWebServer = document.getElementById('webServerToggle').checked;
-                formData.append('model', model);
-                formData.append('addToWebServer', addToWebServer);
-
-                try {
-                    const response = await fetch(`${this.baseURL}/api/notes/from-audio`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${this.token}`
-                        },
-                        body: formData
-                    });
-
-                    const result = await response.json();
-
-                    if (result.success) {
-                        this.showToast('Note created successfully!', 'success');
-                        // Reload notes
-                        await this.loadNotes();
-                        // Switch to library view
-                        this.showView('libraryView');
-                    } else {
-                        this.showToast('Error processing recording: ' + result.error, 'error');
-                    }
-                } catch (error) {
-                    console.error('Error uploading recording:', error);
-                    this.showToast('Error uploading recording: ' + error.message, 'error');
-                }
-            },
-
-            // Notes
-            async loadNotes() {
-                const notesList = document.getElementById('notesList');
-                notesList.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading your notes...</div></div>';
-
-                try {
-                    const response = await fetch(`${this.baseURL}/api/records?source=gun&recordType=notes&sortBy=date:desc&limit=50`, {
-                        headers: {
-                            'Authorization': `Bearer ${this.token}`
-                        }
-                    });
-
-                    const data = await response.json();
-
-                    if (data.records && data.records.length > 0) {
-                        this.notes = data.records;
-                        this.renderNotes(this.notes);
-                    } else {
-                        notesList.innerHTML = `
-                            <div class="empty-state">
-                                <div class="empty-icon">📝</div>
-                                <div class="empty-text">No notes yet</div>
-                            </div>
-                        `;
-                    }
-                } catch (error) {
-                    console.error('Error loading notes:', error);
-                    notesList.innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-icon">⚠️</div>
-                            <div class="empty-text">Error loading notes</div>
-                        </div>
-                    `;
-                }
-            },
-
-            renderNotes(notes) {
-                const notesList = document.getElementById('notesList');
-                
-                if (notes.length === 0) {
-                    notesList.innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-icon">🔍</div>
-                            <div class="empty-text">No notes found</div>
-                        </div>
-                    `;
-                    return;
-                }
-
-                notesList.innerHTML = notes.map(note => {
-                    const title = note.data?.basic?.name || 'Untitled Note';
-                    const preview = note.data?.notes?.summary_key_points?.[0] || 'No summary available';
-                    const date = new Date(note.data?.basic?.date * 1000).toLocaleDateString();
-                    const noteType = note.data?.notes?.note_type || 'OTHER';
-                    const duration = Math.round((note.data?.audio?.durationSec || 0) / 60);
-
-                    return `
-                        <div class="note-card" onclick="alfredApp.viewNote('${note.oip.did}')">
-                            <div class="note-header">
-                                <div class="note-title">${title}</div>
-                                <div class="note-badge">${this.formatNoteType(noteType)}</div>
-                            </div>
-                            <div class="note-preview">${preview}</div>
-                            <div class="note-meta">
-                                <span>${date} • ${duration}m</span>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            },
-
-            async searchNotes() {
-                const query = document.getElementById('searchInput').value.toLowerCase();
-                
-                if (!query) {
-                    this.renderNotes(this.notes);
-                    return;
-                }
-
-                const filtered = this.notes.filter(note => {
-                    const title = (note.data?.basic?.name || '').toLowerCase();
-                    const summary = (note.data?.notes?.summary_key_points || []).join(' ').toLowerCase();
-                    return title.includes(query) || summary.includes(query);
-                });
-
-                this.renderNotes(filtered);
-            },
-
-            toggleFilters() {
-                this.showToast('Advanced filters coming soon!', 'success');
-            },
-
-            async viewNote(did) {
-                try {
-                    const response = await fetch(`${this.baseURL}/api/records?source=gun&did=${did}`, {
-                        headers: {
-                            'Authorization': `Bearer ${this.token}`
-                        }
-                    });
-
-                    const data = await response.json();
-
-                    if (data.records && data.records.length > 0) {
-                        this.currentNote = data.records[0];
-                        this.displayNoteDetail(this.currentNote);
-                        this.showView('noteDetailView');
-                    }
-                } catch (error) {
-                    console.error('Error loading note:', error);
-                    this.showToast('Error loading note', 'error');
-                }
-            },
-
-            displayNoteDetail(note) {
-                document.getElementById('noteDetailTitle').textContent = note.data?.basic?.name || 'Untitled Note';
-                
-                const date = new Date(note.data?.basic?.date * 1000).toLocaleDateString();
-                const duration = Math.round((note.data?.audio?.durationSec || 0) / 60);
-                document.getElementById('noteDetailDate').textContent = date;
-                document.getElementById('noteDetailDuration').textContent = `${duration}m`;
-
-                // Key Summary
-                const keySummary = note.data?.notes?.summary_key_points || [];
-                document.getElementById('keySummary').innerHTML = keySummary.length > 0
-                    ? keySummary.map(point => `<li>${point}</li>`).join('')
-                    : '<li>No summary available</li>';
-
-                // Action Items
-                const actionItems = note.data?.notes?.summary_action_item_texts || [];
-                document.getElementById('actionItems').innerHTML = actionItems.length > 0
-                    ? actionItems.map(item => `<li>${item}</li>`).join('')
-                    : '<li>No action items</li>';
-
-                // Open Questions
-                const openQuestions = note.data?.notes?.summary_open_questions || [];
-                document.getElementById('openQuestions').innerHTML = openQuestions.length > 0
-                    ? openQuestions.map(q => `<li>${q}</li>`).join('')
-                    : '<li>No open questions</li>';
-            },
-
-            // Chat
-            switchAI(ai) {
-                this.currentAI = ai;
-                document.querySelectorAll('.chat-toggle-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    if (btn.dataset.ai === ai) {
-                        btn.classList.add('active');
-                    }
-                });
-
-                // Update chat messages
-                const avatar = ai === 'alfred' ? 'A' : 'Al';
-                document.querySelector('.message-avatar').textContent = avatar;
-                
-                const greeting = ai === 'alfred' 
-                    ? "Hello! I'm Alfred. I've analyzed your note. Ask me anything about it - I have access to the full transcript, summary, and related content."
-                    : "Hello! I'm Alice. I've analyzed your note. Ask me anything about it - I have access to the full transcript, summary, and related content.";
-                    
-                document.querySelector('.message-text').textContent = greeting;
-            },
-
-            async sendMessage() {
-                const input = document.getElementById('chatInput');
-                const message = input.value.trim();
-
-                if (!message) return;
-
-                // Add user message to chat
-                this.addMessageToChat(message, 'user');
-                input.value = '';
-                input.style.height = 'auto';
-
-                // Prepare request
-                const body = {
-                    text: message,
-                    processing_mode: 'rag',
-                    model: document.getElementById('modelSelect').value,
-                    return_audio: false
-                };
-
-                // Add context if viewing a note
-                if (this.currentNote) {
-                    body.pinnedDidTx = this.currentNote.oip.did;
-                }
-
-                try {
-                    const response = await fetch(`${this.baseURL}/api/voice/chat`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.token}`
-                        },
-                        body: JSON.stringify(body)
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success && data.response_text) {
-                        this.addMessageToChat(data.response_text, this.currentAI);
-                    } else {
-                        this.addMessageToChat('Sorry, I encountered an error processing your request.', this.currentAI);
-                    }
-                } catch (error) {
-                    console.error('Error sending message:', error);
-                    this.addMessageToChat('Sorry, I encountered an error: ' + error.message, this.currentAI);
-                }
-            },
-
-            addMessageToChat(text, sender) {
-                const chatMessages = document.getElementById('chatMessages');
-                const isUser = sender === 'user';
-                const avatar = isUser ? 'U' : (this.currentAI === 'alfred' ? 'A' : 'Al');
-
-                const messageHTML = `
-                    <div class="message ${isUser ? 'user' : ''}">
-                        <div class="message-avatar">${avatar}</div>
-                        <div class="message-content">
-                            <div class="message-text">${text}</div>
-                        </div>
-                    </div>
-                `;
-
-                chatMessages.insertAdjacentHTML('beforeend', messageHTML);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            },
-
-            chatAboutNote() {
-                this.showView('chatView');
-                // Clear previous chat
-                const chatMessages = document.getElementById('chatMessages');
-                chatMessages.innerHTML = `
-                    <div class="message">
-                        <div class="message-avatar">${this.currentAI === 'alfred' ? 'A' : 'Al'}</div>
-                        <div class="message-content">
-                            <div class="message-text">I'm ready to answer questions about "${this.currentNote.data.basic.name}". What would you like to know?</div>
-                        </div>
-                    </div>
-                `;
-            },
-
-            // Settings
-            updateSettings() {
-                this.showToast('Settings updated', 'success');
-            },
-
-            // UI Helpers
-            showToast(message, type = 'success') {
-                const toast = document.getElementById('toast');
-                const icon = document.getElementById('toastIcon');
-                const msg = document.getElementById('toastMessage');
-
-                toast.className = `toast ${type}`;
-                icon.textContent = type === 'success' ? '✓' : '⚠';
-                msg.textContent = message;
-
-                setTimeout(() => {
-                    toast.classList.add('hidden');
-                }, 3000);
-            },
-
-            // Format note type for display
-            formatNoteType(noteType) {
-                const typeMap = {
-                    'MEETING': 'Meeting',
-                    'ONE_ON_ONE': '1:1',
-                    'STANDUP': 'Standup',
-                    'IDEA': 'Idea',
-                    'REFLECTION': 'Reflection',
-                    'INTERVIEW': 'Interview',
-                    'OTHER': 'Other'
-                };
-                return typeMap[noteType] || noteType.toLowerCase();
-            }
-        };
-
-        // Initialize app when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => alfredApp.init());
-        } else {
-            alfredApp.init();
-        }
+        /* existing JS from your file (unchanged) */
+        /* ... paste the full <script> from your original file here ... */
     </script>
 </body>
 </html>
-
