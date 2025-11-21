@@ -133,6 +133,77 @@
             color: var(--text-primary);
         }
 
+        /* Icon styling for light/dark mode */
+        .icon {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            object-fit: contain;
+        }
+
+        .icon-nav {
+            width: 24px;
+            height: 24px;
+            filter: brightness(0) saturate(100%) invert(52%) sepia(13%) saturate(537%) hue-rotate(200deg) brightness(92%) contrast(85%);
+            transition: filter var(--transition-fast);
+        }
+
+        .nav-item.active .icon-nav {
+            filter: brightness(0) saturate(100%) invert(84%) sepia(45%) saturate(2907%) hue-rotate(134deg) brightness(101%) contrast(97%);
+        }
+
+        .icon-record {
+            width: 60px;
+            height: 60px;
+            filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(7500%) hue-rotate(21deg) brightness(104%) contrast(104%);
+        }
+
+        .icon-template {
+            width: 32px;
+            height: 32px;
+            filter: brightness(0) saturate(100%) invert(84%) sepia(45%) saturate(2907%) hue-rotate(134deg) brightness(101%) contrast(97%);
+            margin-bottom: 8px;
+        }
+
+        .icon-theme {
+            width: 20px;
+            height: 20px;
+            filter: brightness(0) saturate(100%) invert(84%) sepia(45%) saturate(2907%) hue-rotate(134deg) brightness(101%) contrast(97%);
+        }
+
+        .icon-note-badge {
+            width: 14px;
+            height: 14px;
+            filter: brightness(0) saturate(100%) invert(84%) sepia(45%) saturate(2907%) hue-rotate(134deg) brightness(101%) contrast(97%);
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        /* Light mode icon adjustments */
+        [data-theme="light"] .icon-nav {
+            filter: brightness(0) saturate(100%) invert(27%) sepia(11%) saturate(1234%) hue-rotate(200deg) brightness(96%) contrast(92%);
+        }
+
+        [data-theme="light"] .nav-item.active .icon-nav {
+            filter: brightness(0) saturate(100%) invert(58%) sepia(92%) saturate(2449%) hue-rotate(158deg) brightness(97%) contrast(101%);
+        }
+
+        [data-theme="light"] .icon-record {
+            filter: brightness(0) saturate(100%) invert(15%) sepia(8%) saturate(3318%) hue-rotate(200deg) brightness(95%) contrast(95%);
+        }
+
+        [data-theme="light"] .icon-template {
+            filter: brightness(0) saturate(100%) invert(58%) sepia(92%) saturate(2449%) hue-rotate(158deg) brightness(97%) contrast(101%);
+        }
+
+        [data-theme="light"] .icon-theme {
+            filter: brightness(0) saturate(100%) invert(58%) sepia(92%) saturate(2449%) hue-rotate(158deg) brightness(97%) contrast(101%);
+        }
+
+        [data-theme="light"] .icon-note-badge {
+            filter: brightness(0) saturate(100%) invert(58%) sepia(92%) saturate(2449%) hue-rotate(158deg) brightness(97%) contrast(101%);
+        }
+
         body {
             font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background:
@@ -316,6 +387,10 @@
         .nav-icon {
             font-size: 20px;
             margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 28px;
         }
 
         .nav-item.active {
@@ -363,6 +438,9 @@
             position: relative;
             font-size: 46px;
             filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.8));
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .record-button:hover {
@@ -401,8 +479,10 @@
 
         .template-grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 12px;
+            max-width: 600px;
+            margin: 0 auto;
         }
 
         .template-card {
@@ -445,6 +525,10 @@
         .template-icon {
             font-size: 28px;
             margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 40px;
         }
 
         .template-name {
@@ -1125,6 +1209,19 @@
         .empty-icon {
             font-size: 54px;
             margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-icon img {
+            width: 64px;
+            height: 64px;
+            filter: brightness(0) saturate(100%) invert(52%) sepia(13%) saturate(537%) hue-rotate(200deg) brightness(92%) contrast(85%);
+        }
+
+        [data-theme="light"] .empty-icon img {
+            filter: brightness(0) saturate(100%) invert(58%) sepia(92%) saturate(2449%) hue-rotate(158deg) brightness(97%) contrast(101%);
         }
 
         .empty-text {
@@ -1173,7 +1270,7 @@
             <div class="app-title">Alfred Notes</div>
             <div class="user-info">
                 <button class="theme-toggle" onclick="alfredApp.toggleTheme()" title="Toggle theme" id="themeToggle">
-                    🌙
+                    <img src="icons/noun-moon-4600451.svg" alt="Theme" class="icon-theme" id="themeIcon">
                 </button>
                 <span id="userEmail">Loading...</span>
                 <button class="logout-btn" onclick="alfredApp.logout()">Logout</button>
@@ -1186,35 +1283,55 @@
             <div id="homeView" class="view-container active">
                 <div class="home-view">
                     <button class="record-button" id="recordButton" onclick="alfredApp.toggleRecording()">
-                        <span id="recordIcon">🎤</span>
+                        <span id="recordIcon">
+                            <img src="icons/noun-microphone-7208171.svg" alt="Record" class="icon-record">
+                        </span>
                     </button>
 
                     <div class="template-selector">
                         <h3 class="template-title">Select Template</h3>
                         <div class="template-grid">
                             <div class="template-card selected" data-template="MEETING">
-                                <div class="template-icon">👥</div>
+                                <div class="template-icon">
+                                    <img src="icons/noun-group-7945444.svg" alt="Meeting" class="icon-template">
+                                </div>
                                 <div class="template-name">Meeting</div>
                             </div>
                             <div class="template-card" data-template="ONE_ON_ONE">
-                                <div class="template-icon">👤</div>
+                                <div class="template-icon">
+                                    <img src="icons/noun-partner-4253508.svg" alt="1:1" class="icon-template">
+                                </div>
                                 <div class="template-name">1:1</div>
                             </div>
                             <div class="template-card" data-template="STANDUP">
-                                <div class="template-icon">🚩</div>
+                                <div class="template-icon">
+                                    <img src="icons/noun-checklist-8032577.svg" alt="Standup" class="icon-template">
+                                </div>
                                 <div class="template-name">Standup</div>
                             </div>
                             <div class="template-card" data-template="IDEA">
-                                <div class="template-icon">💡</div>
+                                <div class="template-icon">
+                                    <img src="icons/noun-innovation-7945253.svg" alt="Idea" class="icon-template">
+                                </div>
                                 <div class="template-name">Idea / Brain Dump</div>
                             </div>
                             <div class="template-card" data-template="REFLECTION">
-                                <div class="template-icon">❤️</div>
+                                <div class="template-icon">
+                                    <img src="icons/noun-thinking-5552685.svg" alt="Reflection" class="icon-template">
+                                </div>
                                 <div class="template-name">Daily Reflection</div>
                             </div>
                             <div class="template-card" data-template="INTERVIEW">
-                                <div class="template-icon">🎓</div>
+                                <div class="template-icon">
+                                    <img src="icons/noun-training-7945372.svg" alt="Interview" class="icon-template">
+                                </div>
                                 <div class="template-name">Interview / Lecture</div>
+                            </div>
+                            <div class="template-card" data-template="OTHER">
+                                <div class="template-icon">
+                                    <img src="icons/noun-notes-7945433.svg" alt="Other" class="icon-template">
+                                </div>
+                                <div class="template-name">Other</div>
                             </div>
                         </div>
                     </div>
@@ -1377,19 +1494,27 @@
         <!-- Bottom Navigation -->
         <div class="bottom-nav">
             <button class="nav-item active" onclick="alfredApp.showView('homeView')" data-view="homeView">
-                <div class="nav-icon">🏠</div>
+                <div class="nav-icon">
+                    <img src="icons/noun-home-8131209.svg" alt="Home" class="icon-nav">
+                </div>
                 <div>Home</div>
             </button>
             <button class="nav-item" onclick="alfredApp.showView('libraryView')" data-view="libraryView">
-                <div class="nav-icon">📚</div>
-                <div>Library</div>
+                <div class="nav-icon">
+                    <img src="icons/noun-notebook-7945455.svg" alt="Notes" class="icon-nav">
+                </div>
+                <div>Notes</div>
             </button>
             <button class="nav-item" onclick="alfredApp.showView('chatView')" data-view="chatView">
-                <div class="nav-icon">💬</div>
-                <div>Chat</div>
+                <div class="nav-icon">
+                    <img src="icons/alfred-buttler.png" alt="Alfred" class="icon-nav">
+                </div>
+                <div>Alfred</div>
             </button>
             <button class="nav-item" onclick="alfredApp.showView('settingsView')" data-view="settingsView">
-                <div class="nav-icon">⚙️</div>
+                <div class="nav-icon">
+                    <img src="icons/noun-setting-4468047.svg" alt="Settings" class="icon-nav">
+                </div>
                 <div>Settings</div>
             </button>
         </div>
@@ -1488,6 +1613,39 @@
                 this.setupEventListeners();
                 
                 console.log('✅ Alfred Notes ready');
+            },
+
+            // Helper function to convert enum CODE to display name
+            getEnumDisplayName(enumCode, enumType = 'note_type') {
+                const enumMappings = {
+                    note_type: {
+                        'MEETING': 'Meeting',
+                        'ONE_ON_ONE': '1:1',
+                        'STANDUP': 'Standup',
+                        'IDEA': 'Idea',
+                        'REFLECTION': 'Reflection',
+                        'INTERVIEW': 'Interview',
+                        'OTHER': 'Other'
+                    },
+                    device_type: {
+                        'IPHONE': 'iPhone',
+                        'MAC': 'Mac',
+                        'WATCH': 'Watch',
+                        'OTHER': 'Other'
+                    },
+                    transcription_status: {
+                        'PENDING': 'Pending',
+                        'COMPLETE': 'Complete',
+                        'FAILED': 'Failed'
+                    },
+                    sentiment_overall: {
+                        'NEGATIVE': 'Negative',
+                        'NEUTRAL': 'Neutral',
+                        'POSITIVE': 'Positive'
+                    }
+                };
+
+                return enumMappings[enumType]?.[enumCode] || enumCode;
             },
 
             // Setup template cards
@@ -1676,7 +1834,10 @@
 
                     // Update UI
                     document.getElementById('recordButton').classList.add('recording');
-                    document.getElementById('recordIcon').textContent = '⏸';
+                    const recordIcon = document.getElementById('recordIcon');
+                    if (recordIcon) {
+                        recordIcon.innerHTML = '<img src="icons/noun-microphone-7208171.svg" alt="Recording" class="icon-record">';
+                    }
                     document.getElementById('recordingPanel').classList.add('active');
                     this.startRecordingTimer();
 
@@ -1695,7 +1856,10 @@
 
                     // Update UI
                     document.getElementById('recordButton').classList.remove('recording');
-                    document.getElementById('recordIcon').textContent = '🎤';
+                    const recordIcon = document.getElementById('recordIcon');
+                    if (recordIcon) {
+                        recordIcon.innerHTML = '<img src="icons/noun-microphone-7208171.svg" alt="Record" class="icon-record">';
+                    }
                     document.getElementById('recordingPanel').classList.remove('active');
                     this.stopRecordingTimer();
 
@@ -1741,7 +1905,7 @@
                 formData.append('start_time', new Date(startTime).toISOString());
                 formData.append('end_time', new Date(endTime).toISOString());
                 formData.append('note_type', this.state.selectedTemplate); // Keep uppercase - backend expects: MEETING, ONE_ON_ONE, STANDUP, IDEA, REFLECTION, INTERVIEW, OTHER
-                formData.append('device_type', 'web');
+                formData.append('device_type', 'OTHER'); // Backend expects: IPHONE, MAC, WATCH, OTHER
                 formData.append('model', this.state.settings.model);
                 formData.append('addToWebServer', this.state.settings.webServerUpload);
 
@@ -1797,7 +1961,9 @@
                 if (this.state.notes.length === 0) {
                     notesList.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-icon">📝</div>
+                            <div class="empty-icon">
+                                <img src="icons/noun-notes-7945433.svg" alt="No notes">
+                            </div>
                             <div class="empty-text">No notes yet. Start recording!</div>
                         </div>
                     `;
@@ -1810,12 +1976,18 @@
                     const date = basic.date ? new Date(basic.date * 1000).toLocaleDateString() : 'Unknown';
                     const duration = noteData.audio_ref ? '5m' : 'N/A';
                     const preview = basic.description || noteData.summary_key_points?.[0] || 'No preview available';
+                    
+                    // Convert enum CODE to display name
+                    const noteTypeDisplay = this.getEnumDisplayName(noteData.note_type, 'note_type');
 
                     return `
                         <div class="note-card" onclick="alfredApp.viewNote('${note.did}')">
                             <div class="note-header">
                                 <div class="note-title">${basic.name || 'Untitled Note'}</div>
-                                <div class="note-badge">${noteData.note_type || 'note'}</div>
+                                <div class="note-badge">
+                                    <img src="icons/noun-notes-7945433.svg" alt="" class="icon-note-badge">
+                                    ${noteTypeDisplay || 'note'}
+                                </div>
                             </div>
                             <div class="note-preview">${preview.substring(0, 150)}...</div>
                             <div class="note-meta">
@@ -2012,7 +2184,9 @@
                 if (filtered.length === 0) {
                     notesList.innerHTML = `
                         <div class="empty-state">
-                            <div class="empty-icon">🔍</div>
+                            <div class="empty-icon">
+                                <img src="icons/noun-notebook-7945455.svg" alt="No results">
+                            </div>
                             <div class="empty-text">No notes found matching "${query}"</div>
                         </div>
                     `;
@@ -2067,9 +2241,13 @@
             },
 
             updateThemeIcon() {
+                const themeIcon = document.getElementById('themeIcon');
                 const themeToggle = document.getElementById('themeToggle');
-                if (themeToggle) {
-                    themeToggle.textContent = this.state.theme === 'dark' ? '☀️' : '🌙';
+                if (themeIcon && themeToggle) {
+                    // In dark mode, show sun icon (to switch TO light mode)
+                    // In light mode, show moon icon (to switch TO dark mode)
+                    themeIcon.src = this.state.theme === 'dark' ? 'icons/noun-sun-4646269.svg' : 'icons/noun-moon-4600451.svg';
+                    themeIcon.alt = this.state.theme === 'dark' ? 'Light mode' : 'Dark mode';
                     themeToggle.title = this.state.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
                 }
             }

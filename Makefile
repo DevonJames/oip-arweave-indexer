@@ -77,6 +77,11 @@ help: ## Show this help message
 	@echo "  make check-ario-env            # Check AR.IO gateway environment variables"
 	@echo "  make reset-ario-gateway        # Reset gateway to start from configured block height (deletes data)"
 	@echo ""
+	@echo "$(YELLOW)GUN Security Management:$(NC)"
+	@echo "  make verify-gun-security       # Verify GUN network isolation and security"
+	@echo "  make check-gun-peers           # Check GUN peer configuration and status"
+	@echo "  make gun-peer-logs             # Show GUN relay peer connection logs"
+	@echo ""
 	@echo "$(YELLOW)GUN Records Backup & Restore:$(NC)"
 	@echo "  make backup-gun-records        # Backup all GUN records from Elasticsearch to JSON file"
 	@echo "  make restore-gun-records FILE=backup.json  # Restore GUN records from backup file"
@@ -1445,6 +1450,39 @@ check-memory-config: ## Check current memory configuration from .env
 		if [ -n "$$TOTAL_MEM" ]; then \
 			echo "$(BLUE)System Memory: $${TOTAL_MEM}MB$(NC)"; \
 		fi; \
+	fi
+
+# GUN Security Management
+verify-gun-security: ## Verify GUN network isolation and peer configuration
+	@echo "$(BLUE)🔒 Verifying GUN network security...$(NC)"
+	@chmod +x ./scripts/verify-gun-security.sh
+	@./scripts/verify-gun-security.sh
+
+check-gun-peers: ## Check GUN peer configuration and status
+	@echo "$(BLUE)🔍 Checking GUN peer configuration...$(NC)"
+	@echo ""
+	@echo "$(YELLOW).env configuration:$(NC)"
+	@grep "GUN_EXTERNAL_PEERS=" .env || echo "  GUN_EXTERNAL_PEERS not set (isolated mode)"
+	@echo ""
+	@CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep gun-relay | head -1); \
+	if [ -n "$$CONTAINER_NAME" ]; then \
+		echo "$(YELLOW)Container environment:$(NC)"; \
+		docker exec $$CONTAINER_NAME sh -c 'echo "  GUN_PEERS=$$GUN_PEERS"' || echo "  (could not read)"; \
+		echo ""; \
+		echo "$(YELLOW)Peer status endpoint:$(NC)"; \
+		curl -s http://localhost:$${GUN_RELAY_PORT:-8765}/peers/status 2>/dev/null | jq . || echo "  (endpoint not reachable)"; \
+	else \
+		echo "$(RED)❌ GUN relay container not running$(NC)"; \
+	fi
+
+gun-peer-logs: ## Show GUN relay logs filtered for peer connection information
+	@echo "$(BLUE)🔍 GUN relay peer connection logs...$(NC)"
+	@CONTAINER_NAME=$$(docker ps --format "{{.Names}}" | grep gun-relay | head -1); \
+	if [ -n "$$CONTAINER_NAME" ]; then \
+		echo "$(YELLOW)Recent peer-related logs:$(NC)"; \
+		docker logs $$CONTAINER_NAME 2>&1 | grep -E "(peer|GUN peers configured|SECURITY|isolated)" | tail -20; \
+	else \
+		echo "$(RED)❌ GUN relay container not running$(NC)"; \
 	fi
 
 # GUN Records Backup & Restore

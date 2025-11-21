@@ -20,6 +20,15 @@ The OIP (Open Index Protocol) platform has been enhanced with comprehensive GUN 
 
 ## 🔐 **Security Architecture**
 
+### **⚠️ Important Security Update (November 2025)**
+
+**Network Isolation is Critical**: GUN network security has been hardened with peer whitelist validation and automatic discovery prevention. Records in GUN are NOT encrypted in the registry (only content is encrypted), so network isolation is essential to prevent metadata leakage to the public GUN network.
+
+**📖 See**: 
+- [GUN Security Configuration Guide](./GUN_SECURITY_CONFIGURATION.md) - Complete security documentation
+- [GUN Security Quick Reference](./GUN_SECURITY_QUICK_REFERENCE.md) - Immediate action items
+- Security verification: `make verify-gun-security`
+
 ### **Three-Tier Encryption System**
 
 | Access Level | Encryption Type | Key Source | Who Can Decrypt | Cross-Node Sync |
