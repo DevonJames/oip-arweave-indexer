@@ -56,11 +56,19 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
         // ========================================
         // STEP 1: Validate Request
         // ========================================
-        if (!req.file) {
+        // Either audio file OR transcript must be provided
+        const hasAudioFile = !!req.file;
+        const hasTranscript = !!req.body.transcript;
+        
+        if (!hasAudioFile && !hasTranscript) {
             return res.status(400).json({
                 success: false,
-                error: 'No audio file provided'
+                error: 'Either audio file or transcript must be provided'
             });
+        }
+        
+        if (hasTranscript && !hasAudioFile) {
+            console.log('📝 [Step 1] Transcript provided without audio file (text-only mode)');
         }
 
         const {
@@ -70,6 +78,7 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             device_type,
             capture_location,
             transcription_engine_id,
+            transcript, // Optional: Pre-existing transcript to skip speech-to-text
             chunking_strategy = 'BY_TIME_30S',
             participant_display_names,
             participant_roles,
@@ -169,7 +178,9 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             }
         }
 
-        tempFilePath = req.file.path;
+        if (hasAudioFile) {
+            tempFilePath = req.file.path;
+        }
         const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
         const token = req.headers.authorization.split(' ')[1];
 
@@ -181,40 +192,50 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
         }
 
         // ========================================
-        // STEP 2: Upload Audio File via /api/media/upload
+        // STEP 2: Upload Audio File via /api/media/upload (Skip if no audio)
         // ========================================
-        console.log('📼 [Step 2] Uploading audio file...');
+        let audioBuffer, audioSize, audioHash, durationSec;
         
-        const audioBuffer = fs.readFileSync(tempFilePath);
-        const audioSize = audioBuffer.length;
-        const audioHash = crypto.createHash('sha256').update(audioBuffer).digest('hex');
-        const durationSec = Math.round((endDate - startDate) / 1000);
-
-        // Parse boolean params
-        const shouldAddToWebServer = addToWebServer === 'true' || addToWebServer === true;
-        const shouldAddToBitTorrent = addToBitTorrent === 'true' || addToBitTorrent === true;
-        const shouldAddToIPFS = addToIPFS === 'true' || addToIPFS === true;
-
-        console.log(`📤 [Step 2] Storage options: WebServer=${shouldAddToWebServer}, BitTorrent=${shouldAddToBitTorrent}, IPFS=${shouldAddToIPFS}`);
-
-        let audioMeta = {
-            audioHash,
-            durationSec,
-            audioCodec: router._detectCodecFromMime(req.file.mimetype),
-            contentType: req.file.mimetype,
-            size: audioSize,
-            filename: req.file.originalname || `note_audio_${Date.now()}.${router._getExtensionFromMime(req.file.mimetype)}`,
-            webUrl: null,
-            arweaveAddress: null,
-            ipfsAddress: null,
-            bittorrentAddress: null,
-            magnetURI: null
-        };
+        if (hasAudioFile) {
+            console.log('📼 [Step 2] Uploading audio file...');
+            
+            audioBuffer = fs.readFileSync(tempFilePath);
+            audioSize = audioBuffer.length;
+            audioHash = crypto.createHash('sha256').update(audioBuffer).digest('hex');
+            durationSec = Math.round((endDate - startDate) / 1000);
+        } else {
+            console.log('📝 [Step 2] No audio file, skipping upload...');
+            durationSec = Math.round((endDate - startDate) / 1000);
+        }
 
         const notesRecordsService = getNotesRecordsService();
         
-        // Upload audio file using /api/media/upload endpoint
-        try {
+        let audioMeta = null;
+        
+        if (hasAudioFile) {
+            // Parse boolean params
+            const shouldAddToWebServer = addToWebServer === 'true' || addToWebServer === true;
+            const shouldAddToBitTorrent = addToBitTorrent === 'true' || addToBitTorrent === true;
+            const shouldAddToIPFS = addToIPFS === 'true' || addToIPFS === true;
+
+            console.log(`📤 [Step 2] Storage options: WebServer=${shouldAddToWebServer}, BitTorrent=${shouldAddToBitTorrent}, IPFS=${shouldAddToIPFS}`);
+
+            audioMeta = {
+                audioHash,
+                durationSec,
+                audioCodec: router._detectCodecFromMime(req.file.mimetype),
+                contentType: req.file.mimetype,
+                size: audioSize,
+                filename: req.file.originalname || `note_audio_${Date.now()}.${router._getExtensionFromMime(req.file.mimetype)}`,
+                webUrl: null,
+                arweaveAddress: null,
+                ipfsAddress: null,
+                bittorrentAddress: null,
+                magnetURI: null
+            };
+            
+            // Upload audio file using /api/media/upload endpoint
+            try {
             const FormData = require('form-data');
             const uploadForm = new FormData();
             uploadForm.append('file', audioBuffer, {
@@ -287,69 +308,89 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
                     }
                 }
             }
-        } catch (uploadError) {
-            console.warn('⚠️ [Step 2] Media upload failed (continuing with basic metadata):', uploadError.message);
-        }
+            } catch (uploadError) {
+                console.warn('⚠️ [Step 2] Media upload failed (continuing with basic metadata):', uploadError.message);
+            }
+        } // End if (hasAudioFile)
 
         // ========================================
-        // STEP 3: Resolve Transcription Engine
+        // STEP 3: Resolve Transcription Engine (Skip if transcript provided)
         // ========================================
-        console.log('🔍 [Step 3] Resolving transcription engine...');
-        
         let transcriptionEngineRecord = null;
         let transcriptionEngineDid = null;
         
-        if (transcription_engine_id) {
-            try {
-                const engineResults = await getRecords({
-                    recordType: 'transcriptionEngine',
-                    fieldName: 'transcriptionEngine.engine_id',
-                    fieldSearch: transcription_engine_id,
-                    fieldMatchMode: 'exact',
-                    limit: 1
-                });
+        if (transcript) {
+            console.log('📝 [Step 3] Transcript provided, skipping transcription engine resolution');
+        } else {
+            console.log('🔍 [Step 3] Resolving transcription engine...');
+            
+            if (transcription_engine_id) {
+                try {
+                    const engineResults = await getRecords({
+                        recordType: 'transcriptionEngine',
+                        fieldName: 'transcriptionEngine.engine_id',
+                        fieldSearch: transcription_engine_id,
+                        fieldMatchMode: 'exact',
+                        limit: 1
+                    });
 
-                if (engineResults.records && engineResults.records.length > 0) {
-                    transcriptionEngineRecord = engineResults.records[0];
-                    transcriptionEngineDid = transcriptionEngineRecord.oip?.did || transcriptionEngineRecord.oip?.didTx;
-                    console.log('✅ [Step 3] Found transcription engine:', transcription_engine_id);
-                } else {
-                    console.warn('⚠️ [Step 3] Transcription engine not found:', transcription_engine_id);
-                    return res.status(422).json({
+                    if (engineResults.records && engineResults.records.length > 0) {
+                        transcriptionEngineRecord = engineResults.records[0];
+                        transcriptionEngineDid = transcriptionEngineRecord.oip?.did || transcriptionEngineRecord.oip?.didTx;
+                        console.log('✅ [Step 3] Found transcription engine:', transcription_engine_id);
+                    } else {
+                        console.warn('⚠️ [Step 3] Transcription engine not found:', transcription_engine_id);
+                        return res.status(422).json({
+                            success: false,
+                            error: `Transcription engine not configured: ${transcription_engine_id}`
+                        });
+                    }
+                } catch (error) {
+                    console.error('❌ [Step 3] Engine lookup failed:', error.message);
+                    return res.status(500).json({
                         success: false,
-                        error: `Transcription engine not configured: ${transcription_engine_id}`
+                        error: 'Failed to lookup transcription engine'
                     });
                 }
-            } catch (error) {
-                console.error('❌ [Step 3] Engine lookup failed:', error.message);
-                return res.status(500).json({
-                    success: false,
-                    error: 'Failed to lookup transcription engine'
-                });
             }
         }
 
         // ========================================
-        // STEP 4: Run Speech-to-Text
+        // STEP 4: Run Speech-to-Text (Skip if transcript provided)
         // ========================================
-        console.log('🎤 [Step 4] Running speech-to-text...');
-        
-        const sttService = getSTTService();
         let transcriptionResult;
         
-        try {
-            transcriptionResult = await sttService.transcribe(tempFilePath, transcriptionEngineRecord);
-            console.log('✅ [Step 4] Transcription complete');
-            console.log(`   Language: ${transcriptionResult.language}`);
-            console.log(`   Text length: ${transcriptionResult.text.length} chars`);
-            console.log(`   Segments: ${transcriptionResult.segments.length}`);
-        } catch (error) {
-            console.error('❌ [Step 4] Transcription failed:', error.message);
-            return res.status(502).json({
-                success: false,
-                error: 'Speech-to-text processing failed',
-                details: error.message
-            });
+        if (transcript) {
+            console.log('📝 [Step 4] Using provided transcript, skipping speech-to-text...');
+            console.log(`   Text length: ${transcript.length} chars`);
+            
+            // Create a transcriptionResult object compatible with the rest of the flow
+            transcriptionResult = {
+                text: transcript,
+                language: 'en', // Default to English when transcript is provided
+                segments: [] // Empty segments array when using pre-existing transcript
+            };
+            
+            console.log('✅ [Step 4] Transcript ready');
+        } else {
+            console.log('🎤 [Step 4] Running speech-to-text...');
+            
+            const sttService = getSTTService();
+            
+            try {
+                transcriptionResult = await sttService.transcribe(tempFilePath, transcriptionEngineRecord);
+                console.log('✅ [Step 4] Transcription complete');
+                console.log(`   Language: ${transcriptionResult.language}`);
+                console.log(`   Text length: ${transcriptionResult.text.length} chars`);
+                console.log(`   Segments: ${transcriptionResult.segments.length}`);
+            } catch (error) {
+                console.error('❌ [Step 4] Transcription failed:', error.message);
+                return res.status(502).json({
+                    success: false,
+                    error: 'Speech-to-text processing failed',
+                    details: error.message
+                });
+            }
         }
 
         // ========================================

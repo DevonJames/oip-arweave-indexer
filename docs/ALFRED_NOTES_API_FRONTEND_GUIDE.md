@@ -42,11 +42,17 @@ Upload an audio recording and create a complete note with AI processing.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `audio` | File | Audio file (formats: .m4a, .wav, .mp3, .webm, .ogg) |
+| `audio` | File | Audio file (formats: .m4a, .wav, .mp3, .webm, .ogg) - **Optional if `transcript` provided** |
+| `transcript` | String | Pre-existing transcript text - **Optional if `audio` provided** |
 | `start_time` | String (ISO 8601) | Recording start timestamp (e.g., "2025-11-20T10:00:00Z") |
 | `end_time` | String (ISO 8601) | Recording end timestamp |
 | `note_type` | String | Type of note: "meeting", "lecture", "interview", "voice_memo", "other" |
 | `device_type` | String | Device used: "mobile", "web", "desktop" |
+
+**Note**: Either `audio` OR `transcript` must be provided:
+- If `audio` is provided: Audio will be uploaded, transcribed, and processed
+- If `transcript` is provided: Transcription step will be skipped, provided text used directly  
+- If both provided: Audio file is used and `transcript` is ignored
 
 ### Optional Parameters
 
@@ -76,10 +82,12 @@ Upload an audio recording and create a complete note with AI processing.
 
 ---
 
-## JavaScript Example Request
+## JavaScript Example Requests
+
+### Example 1: With Audio File (Full Transcription)
 
 ```javascript
-// Using Fetch API
+// Using Fetch API with audio file
 async function uploadMeetingNote(audioFile, jwtToken) {
   const formData = new FormData();
   
@@ -87,16 +95,16 @@ async function uploadMeetingNote(audioFile, jwtToken) {
   formData.append('audio', audioFile);
   formData.append('start_time', '2025-11-20T10:00:00Z');
   formData.append('end_time', '2025-11-20T11:30:00Z');
-  formData.append('note_type', 'meeting');
-  formData.append('device_type', 'mobile');
+  formData.append('note_type', 'MEETING');
+  formData.append('device_type', 'IPHONE');
   
   // Optional fields
   formData.append('model', 'llama3.2:3b');
   formData.append('addToWebServer', 'true');
   formData.append('addToBitTorrent', 'false');
   formData.append('addToIPFS', 'false');
-  formData.append('participant_names', 'John Smith,Jane Doe,Bob Wilson');
-  formData.append('participant_roles', 'Product Manager,Lead Engineer,Designer');
+  formData.append('participant_display_names', JSON.stringify(['John Smith', 'Jane Doe', 'Bob Wilson']));
+  formData.append('participant_roles', JSON.stringify(['Product Manager', 'Lead Engineer', 'Designer']));
   
   const response = await fetch('https://api.oip.onl/api/notes/from-audio', {
     method: 'POST',
@@ -110,6 +118,50 @@ async function uploadMeetingNote(audioFile, jwtToken) {
   return result;
 }
 ```
+
+### Example 2: With Pre-existing Transcript (Skip Transcription)
+
+```javascript
+// Using pre-existing transcript (no audio file needed)
+async function createNoteFromTranscript(transcript, jwtToken) {
+  const formData = new FormData();
+  
+  // Required fields
+  formData.append('transcript', transcript); // Provide transcript instead of audio
+  formData.append('start_time', '2025-11-20T10:00:00Z');
+  formData.append('end_time', '2025-11-20T11:30:00Z');
+  formData.append('note_type', 'MEETING');
+  formData.append('device_type', 'MAC');
+  
+  // Optional fields
+  formData.append('model', 'parallel'); // Use parallel model racing
+  formData.append('participant_display_names', JSON.stringify(['Alice', 'Bob']));
+  formData.append('participant_roles', JSON.stringify(['Manager', 'Developer']));
+  
+  const response = await fetch('https://api.oip.onl/api/notes/from-audio', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`
+    },
+    body: formData
+  });
+  
+  const result = await response.json();
+  return result;
+}
+
+// Example usage
+const sampleTranscript = `This is my meeting. I am meeting with Mr. Matthew James and we are talking about Legos and sweatshirts and sounds and going to Grandma's house and he would very much like to go to Grandma's house. That is what his goal is. But I think the decision is that that won't be happening today, but it will probably be happening soon but maybe not necessarily tomorrow because Grandma is going to be going on a trip.`;
+
+const result = await createNoteFromTranscript(sampleTranscript, myJwtToken);
+console.log('Note created:', result.noteDid);
+```
+
+**Benefits of Using Transcript Parameter:**
+- ⚡ **Faster processing** - Skips speech-to-text step entirely
+- 💰 **Lower costs** - No transcription API usage
+- 🔒 **Privacy** - No need to upload audio file if you already have the transcript
+- 🔄 **Flexibility** - Useful for importing notes from other sources
 
 ---
 
