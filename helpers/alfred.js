@@ -1562,12 +1562,18 @@ JSON Response:`;
         // Build context from content items
         let context = '';
         
-        try {
-            contentItems.forEach((item, index) => {
-                context += `\n--- Source ${index + 1}: ${item.title} ---\n`;
-                if (item.description) context += `Description: ${item.description}\n`;
-                if (item.fullText) context += `Full Content: ${item.fullText}\n`;
-                if (item.articleText) context += `Article: ${item.articleText}\n`;
+        // SPECIAL CASE: If existingContext is provided (e.g., from notes endpoint), use it directly
+        if (options.existingContext && typeof options.existingContext === 'string' && options.existingContext.length > 0) {
+            console.log(`[ALFRED] 📋 Using pre-formatted existingContext (${options.existingContext.length} chars) instead of building from contentItems`);
+            context = options.existingContext;
+        } else {
+            // Build context from content items (normal flow)
+            try {
+                contentItems.forEach((item, index) => {
+                    context += `\n--- Source ${index + 1}: ${item.title} ---\n`;
+                    if (item.description) context += `Description: ${item.description}\n`;
+                    if (item.fullText) context += `Full Content: ${item.fullText}\n`;
+                    if (item.articleText) context += `Article: ${item.articleText}\n`;
                 
                 // Include documentation-specific information
                 if (item.type === 'documentation') {
@@ -1695,11 +1701,16 @@ JSON Response:`;
                 
                 context += `Type: ${item.type}\n`;
             });
+            } catch (error) {
+                console.warn('[ALFRED] Error building context from contentItems:', error.message);
+                // Continue with empty context if building fails
+            }
+        }
 
-            // Tailor guidance for single-record and record-type-specific questions
-            const isSingleRecord = Boolean(appliedFilters && appliedFilters.singleRecordMode);
-            const dominantType = contentItems.length > 0 ? contentItems[0].type : null;
-            let extraDirectives = '';
+        // Tailor guidance for single-record and record-type-specific questions
+        const isSingleRecord = Boolean(appliedFilters && appliedFilters.singleRecordMode);
+        const dominantType = contentItems.length > 0 ? contentItems[0].type : null;
+        let extraDirectives = '';
 
             if (isSingleRecord) {
                 extraDirectives += `\nYou are answering about a single specific record only. Do not describe that you "found a record"—answer the user's question directly using this record's details.`;
@@ -1787,6 +1798,7 @@ Answer the question directly and conversationally:`;
                         };
                     } else {
                         // Assume it's an Ollama model
+                        console.log(`[ALFRED] 📡 Calling Ollama at ${this.ollamaBaseUrl} with model ${requestedModel}...`);
                         const ollamaResponse = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
                             model: requestedModel,
                             prompt: prompt,
@@ -1800,9 +1812,11 @@ Answer the question directly and conversationally:`;
                                 stop: ["\n\n", "Question:", "Explanation:", "Note:"]
                             }
                         }, {
-                            timeout: 25000
+                            timeout: 15000, // Reduced from 25s to 15s for faster failure detection
+                            validateStatus: (status) => status < 500 // Accept 4xx errors for better error messages
                         });
                         
+                        console.log(`[ALFRED] ✅ Ollama responded with ${ollamaResponse.data?.response?.trim()?.length || 0} chars`);
                         return {
                             answer: ollamaResponse.data?.response?.trim() || "I couldn't generate a response.",
                             model_used: requestedModel,
@@ -1811,9 +1825,19 @@ Answer the question directly and conversationally:`;
                         };
                     }
                 } catch (error) {
-                    console.error(`[ALFRED] Specific model ${requestedModel} failed:`, error.message);
-                    // Fall back to racing if specific model fails
+                    console.error(`[ALFRED] ❌ Specific model ${requestedModel} failed:`, error.message);
+                    if (error.code === 'ECONNREFUSED') {
+                        console.error(`[ALFRED] ❌ Ollama is not running! Cannot connect to ${this.ollamaBaseUrl}`);
+                        // Return a user-friendly error instead of falling back
+                        throw new Error(`Ollama service is not running. Please start it with: make backend-only`);
+                    }
+                    if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+                        console.error(`[ALFRED] ❌ Ollama request timed out after 15 seconds`);
+                        throw new Error(`Ollama service timed out. It may be overloaded or unresponsive.`);
+                    }
+                    // Fall back to racing if specific model fails for other reasons
                     console.log(`[ALFRED] ⚠️ Falling back to parallel racing...`);
+                    // Don't return here - let it fall through to parallel racing
                 }
             }
             
@@ -2410,11 +2434,23 @@ Please provide a helpful, conversational answer starting with "I didn't find any
             
         } catch (error) {
             console.error('[RAG] Error processing query:', error);
+            // Provide specific error messages for common issues
+            let errorAnswer = "I'm having trouble accessing my knowledge base right now. Could you try rephrasing your question?";
+            
+            if (error.message.includes('Ollama service is not running')) {
+                errorAnswer = "⚠️ The AI service (Ollama) is not running. Please start it with: `make backend-only` or `make standard` from the project directory.";
+            } else if (error.message.includes('Ollama service timed out')) {
+                errorAnswer = "⚠️ The AI service (Ollama) is overloaded or unresponsive. Please check the service status or try again in a moment.";
+            } else if (error.code === 'ECONNREFUSED' || error.message.includes('connect')) {
+                errorAnswer = "⚠️ Cannot connect to the AI service. Please ensure Ollama is running (try: `make backend-only`).";
+            }
+            
             return {
-                answer: "I'm having trouble accessing my knowledge base right now. Could you try rephrasing your question?",
+                answer: errorAnswer,
                 sources: [],
                 context_used: false,
-                error: error.message
+                error: error.message,
+                error_code: error.code
             };
         }
     }

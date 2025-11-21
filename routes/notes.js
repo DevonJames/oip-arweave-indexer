@@ -1128,11 +1128,8 @@ router.post('/converse', authenticateToken, async (req, res) => {
         // Step 6: Prepare ALFRED query with note-specific context
         const alfredInstance = require('../helpers/alfred');
         
-        // Build a comprehensive prompt that includes the note context
-        const enhancedQuestion = `${question}
-
-CONTEXT:
-You are answering questions about a specific meeting note.
+        // Build a comprehensive context string that includes all note information
+        const contextString = `You are answering questions about a specific meeting note.
 
 Note Title: ${context.currentNote.title}
 Note Type: ${context.currentNote.type}
@@ -1142,17 +1139,18 @@ ${context.currentNote.participants.length > 0 ? `Participants: ${context.current
 ${context.currentNote.summary.key_points.length > 0 ? `Key Points from Summary:
 ${context.currentNote.summary.key_points.map((point, i) => `${i + 1}. ${point}`).join('\n')}` : ''}
 
-${context.currentNote.summary.decisions.length > 0 ? `\nDecisions Made:
+${context.currentNote.summary.decisions.length > 0 ? `Decisions Made:
 ${context.currentNote.summary.decisions.map((decision, i) => `${i + 1}. ${decision}`).join('\n')}` : ''}
 
-${context.currentNote.summary.action_items.texts.length > 0 ? `\nAction Items:
+${context.currentNote.summary.action_items.texts.length > 0 ? `Action Items:
 ${context.currentNote.summary.action_items.texts.map((text, i) => 
     `${i + 1}. ${text} (Assignee: ${context.currentNote.summary.action_items.assignees[i]}, Due: ${context.currentNote.summary.action_items.due_dates[i]})`
 ).join('\n')}` : ''}
 
-${transcriptText ? `\nFull Transcript:\n${transcriptText.substring(0, 4000)}${transcriptText.length > 4000 ? '...' : ''}` : ''}
+${transcriptText ? `Full Transcript:
+${transcriptText}` : ''}
 
-${context.relatedContent.length > 0 ? `\nRelated Content from Other Notes:
+${context.relatedContent.length > 0 ? `Related Content from Other Notes:
 ${context.relatedContent.map((item, i) => {
     if (item.type === 'chunk') {
         return `${i + 1}. [Chunk] ${item.text.substring(0, 200)}... (Tags: ${item.tags.join(', ')})`;
@@ -1161,14 +1159,17 @@ ${context.relatedContent.map((item, i) => {
     }
 }).join('\n')}` : ''}`;
 
-        // Call ALFRED with the enhanced context
         console.log('[ALFRED Notes RAG] Step 6: Calling ALFRED for response...');
+        console.log(`[ALFRED Notes RAG] Context string length: ${contextString.length} chars`);
+        
+        // Call ALFRED with the pre-formatted context string
+        // By passing pinnedJsonData AND existingContext, the existingContext will be used as the prompt context
         const alfredOptions = {
             model: model,
             conversationHistory: conversationHistory,
-            pinnedJsonData: context, // Pass structured context
-            useFieldExtraction: true,
-            existingContext: enhancedQuestion
+            pinnedJsonData: context, // Pass structured context (for metadata)
+            existingContext: contextString, // Pass formatted context string (for LLM prompt)
+            useFieldExtraction: true
         };
 
         const alfredResponse = await alfredInstance.query(question, alfredOptions);
@@ -1190,15 +1191,29 @@ ${context.relatedContent.map((item, i) => {
                 transcript_length: transcriptText.length
             },
             model: alfredResponse.model || model,
-            sources: alfredResponse.sources || []
+            sources: alfredResponse.sources || [],
+            // Include error info if present (e.g., Ollama unavailable)
+            error: alfredResponse.error || undefined,
+            error_code: alfredResponse.error_code || undefined
         });
 
     } catch (error) {
         console.error('[ALFRED Notes RAG] ❌ Error:', error);
+        
+        // Provide specific error messages for common issues
+        let errorMessage = 'Failed to process question about note';
+        let errorDetails = error.message;
+        
+        if (error.message.includes('Ollama') || error.code === 'ECONNREFUSED') {
+            errorMessage = 'AI service unavailable';
+            errorDetails = 'Ollama is not running. Please start it with: make backend-only';
+        }
+        
         res.status(500).json({
             success: false,
-            error: 'Failed to process question about note',
-            details: error.message
+            error: errorMessage,
+            details: errorDetails,
+            error_code: error.code
         });
     }
 });
