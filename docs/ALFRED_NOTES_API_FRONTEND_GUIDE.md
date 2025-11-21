@@ -607,6 +607,227 @@ async function uploadWithErrorHandling(audioFile, options) {
 
 ---
 
+## RAG (Conversational AI) Endpoint
+
+### POST `/api/notes/converse`
+
+Ask questions about a specific note using AI with full context retrieval.
+
+**Authentication:** Required (JWT token)
+
+**Request Body:**
+
+```javascript
+{
+  "noteDid": "did:gun:034d41b0c8bd:a3f8c9d2...",  // Required: DID of the note to query
+  "question": "What were the main action items from this meeting?",  // Required
+  "model": "llama3.2:3b",  // Optional: LLM model (default: llama3.2:3b)
+  "conversationHistory": [],  // Optional: Previous conversation messages
+  "includeRelated": true,  // Optional: Include related notes/chunks (default: true)
+  "maxRelated": 5  // Optional: Max related items to include (default: 5)
+}
+```
+
+**Example Request:**
+
+```javascript
+async function askAboutNote(noteDid, question, jwtToken) {
+  const response = await fetch('https://api.oip.onl/api/notes/converse', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwtToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      noteDid: noteDid,
+      question: question,
+      model: 'llama3.2:3b',
+      includeRelated: true
+    })
+  });
+  
+  return await response.json();
+}
+
+// Usage
+const result = await askAboutNote(
+  'did:gun:034d41b0c8bd:a3f8c9d2...',
+  'What decisions were made about the API architecture?',
+  jwtToken
+);
+
+console.log(result.answer);
+```
+
+**Response Format:**
+
+```json
+{
+  "success": true,
+  "answer": "Based on the meeting, several key decisions were made about the API architecture: 1) The team decided to use GraphQL instead of REST for new endpoints...",
+  "context": {
+    "note": {
+      "did": "did:gun:034d41b0c8bd:a3f8c9d2...",
+      "title": "Team Standup - Nov 20",
+      "type": "meeting"
+    },
+    "chunks_count": 3,
+    "related_content_count": 5,
+    "transcript_length": 1523
+  },
+  "model": "llama3.2:3b",
+  "sources": [
+    {
+      "type": "record",
+      "title": "Note chunk 0",
+      "recordType": "noteChunks"
+    }
+  ]
+}
+```
+
+**What Gets Included in Context:**
+
+The RAG endpoint automatically retrieves and includes:
+
+1. **Main Note Data:**
+   - Title, type, date, participants
+   - Summary (key points, decisions, action items, questions)
+   - Topics, keywords, sentiment, tags
+
+2. **Full Transcript:**
+   - Complete transcription text for detailed context
+
+3. **Note Chunks:**
+   - All chunks with their text, timestamps, and tags
+   - Allows AI to reference specific time segments
+
+4. **Related Content:**
+   - Other notes with matching tags
+   - Chunks from other notes with similar topics
+   - Limited to `maxRelated` items (default: 5)
+
+**Use Cases:**
+
+```javascript
+// 1. Ask about specific details
+await askAboutNote(noteDid, "Who was assigned the API refactoring task?", token);
+
+// 2. Summarize portions
+await askAboutNote(noteDid, "What did Jane say about the mobile release?", token);
+
+// 3. Find connections
+await askAboutNote(noteDid, "What other meetings discussed similar topics?", token);
+
+// 4. Extract information
+await askAboutNote(noteDid, "List all the action items with their assignees", token);
+
+// 5. Contextual follow-ups (with conversation history)
+const response1 = await askAboutNote(noteDid, "What was discussed about the API?", token);
+const response2 = await fetch('https://api.oip.onl/api/notes/converse', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    noteDid: noteDid,
+    question: "When is the deadline for that?",
+    conversationHistory: [
+      { role: 'user', content: "What was discussed about the API?" },
+      { role: 'assistant', content: response1.answer }
+    ]
+  })
+});
+```
+
+**Available LLM Models:**
+
+- `llama3.2:3b` - Fast, good quality (default)
+- `llama3.2:1b` - Fastest, lower quality
+- `llama3.1:8b` - Slower, best quality
+- `gemma2:2b` - Alternative lightweight model
+- `gpt-4o` - OpenAI (requires API key)
+- `gpt-4o-mini` - OpenAI faster model
+- `grok-beta` - xAI Grok model
+- `parallel` - Race multiple models, use fastest
+
+**Error Handling:**
+
+```javascript
+try {
+  const result = await askAboutNote(noteDid, question, token);
+  
+  if (!result.success) {
+    console.error('Error:', result.error);
+  } else {
+    console.log('Answer:', result.answer);
+  }
+} catch (error) {
+  if (error.response?.status === 404) {
+    console.error('Note not found');
+  } else if (error.response?.status === 401) {
+    console.error('Authentication failed');
+  } else {
+    console.error('Failed to get answer:', error.message);
+  }
+}
+```
+
+**Building a Chat Interface:**
+
+```javascript
+class NoteChatSession {
+  constructor(noteDid, jwtToken) {
+    this.noteDid = noteDid;
+    this.jwtToken = jwtToken;
+    this.history = [];
+  }
+  
+  async ask(question) {
+    const response = await fetch('https://api.oip.onl/api/notes/converse', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.jwtToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        noteDid: this.noteDid,
+        question: question,
+        conversationHistory: this.history,
+        includeRelated: true
+      })
+    });
+    
+    const result = await response.json();
+    
+    // Update conversation history
+    this.history.push({
+      role: 'user',
+      content: question
+    });
+    this.history.push({
+      role: 'assistant',
+      content: result.answer
+    });
+    
+    return result;
+  }
+  
+  clearHistory() {
+    this.history = [];
+  }
+}
+
+// Usage
+const chat = new NoteChatSession(noteDid, jwtToken);
+const response1 = await chat.ask("What was this meeting about?");
+const response2 = await chat.ask("Who participated?");
+const response3 = await chat.ask("What were their main concerns?");
+```
+
+---
+
 ## Support
 
 For questions or issues, contact the backend team or refer to:
