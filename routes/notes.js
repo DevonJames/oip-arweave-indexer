@@ -137,7 +137,7 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
         if (!chunkingService.isValidStrategy(chunking_strategy)) {
             return res.status(400).json({
                 success: false,
-                error: `Invalid chunking_strategy. Must be one of: BY_TIME_15S, BY_TIME_30S, BY_TIME_60S, BY_SENTENCE, BY_PARAGRAPH`
+                error: `Invalid chunking_strategy. Must be one of: BY_TIME_15S, BY_TIME_30S, BY_TIME_60S, BY_SENTENCE, BY_PARAGRAPH, BY_SPEAKER`
             });
         }
 
@@ -885,6 +885,304 @@ function _getExtensionFromMime(mimeType) {
 // Attach helpers to router for access in handlers
 router._generateNoteTitle = _generateNoteTitle;
 router._getExtensionFromMime = _getExtensionFromMime;
+
+/**
+ * POST /api/notes/converse
+ * RAG (Retrieval Augmented Generation) endpoint for conversing about notes
+ * Accepts a note DID and question, retrieves full context, finds related content, and generates AI response
+ */
+router.post('/converse', authenticateToken, async (req, res) => {
+    try {
+        const { 
+            noteDid,
+            question,
+            model = 'llama3.2:3b',
+            conversationHistory = [],
+            includeRelated = true,
+            maxRelated = 5
+        } = req.body;
+
+        console.log(`\n${'='.repeat(80)}`);
+        console.log(`[ALFRED Notes RAG] Processing question about note: ${noteDid}`);
+        console.log(`[ALFRED Notes RAG] Question: "${question}"`);
+        console.log(`[ALFRED Notes RAG] Model: ${model}`);
+        console.log(`${'='.repeat(80)}\n`);
+
+        // Validate inputs
+        if (!noteDid || !question) {
+            return res.status(400).json({
+                success: false,
+                error: 'Both noteDid and question are required'
+            });
+        }
+
+        const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+        
+        // Step 1: Retrieve the main note record
+        console.log('[ALFRED Notes RAG] Step 1: Fetching note record...');
+        const noteResults = await getRecords({
+            source: 'gun',
+            did: noteDid,
+            limit: 1,
+            user: req.user,
+            isAuthenticated: true
+        });
+
+        if (!noteResults.records || noteResults.records.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Note not found'
+            });
+        }
+
+        const noteRecord = noteResults.records[0];
+        const noteData = noteRecord.data?.notes || {};
+        const noteBasic = noteRecord.data?.basic || {};
+        
+        console.log(`[ALFRED Notes RAG] ✅ Found note: "${noteBasic.name}"`);
+
+        // Step 2: Retrieve the full transcript
+        let transcriptText = '';
+        const transcriptDid = noteData.transcript_full_text;
+        
+        if (transcriptDid) {
+            console.log('[ALFRED Notes RAG] Step 2: Fetching transcript...');
+            try {
+                const transcriptResults = await getRecords({
+                    source: 'gun',
+                    did: transcriptDid,
+                    limit: 1,
+                    user: req.user,
+                    isAuthenticated: true
+                });
+                
+                if (transcriptResults.records && transcriptResults.records.length > 0) {
+                    transcriptText = transcriptResults.records[0].data?.text?.value || '';
+                    console.log(`[ALFRED Notes RAG] ✅ Retrieved transcript (${transcriptText.length} chars)`);
+                }
+            } catch (error) {
+                console.warn('[ALFRED Notes RAG] ⚠️ Failed to fetch transcript:', error.message);
+            }
+        }
+
+        // Step 3: Retrieve all note chunks
+        const chunkDids = noteData.chunk_ids || [];
+        let chunks = [];
+        
+        if (chunkDids.length > 0) {
+            console.log(`[ALFRED Notes RAG] Step 3: Fetching ${chunkDids.length} chunks...`);
+            try {
+                const chunkPromises = chunkDids.map(chunkDid =>
+                    getRecords({
+                        source: 'gun',
+                        did: chunkDid,
+                        limit: 1,
+                        user: req.user,
+                        isAuthenticated: true
+                    })
+                );
+                
+                const chunkResults = await Promise.all(chunkPromises);
+                chunks = chunkResults
+                    .filter(result => result.records && result.records.length > 0)
+                    .map(result => result.records[0]);
+                
+                console.log(`[ALFRED Notes RAG] ✅ Retrieved ${chunks.length} chunks`);
+            } catch (error) {
+                console.warn('[ALFRED Notes RAG] ⚠️ Failed to fetch chunks:', error.message);
+            }
+        }
+
+        // Step 4: Find related notes and chunks using tags
+        let relatedContent = [];
+        
+        if (includeRelated && noteBasic.tagItems && noteBasic.tagItems.length > 0) {
+            console.log(`[ALFRED Notes RAG] Step 4: Finding related content using tags: ${noteBasic.tagItems.join(', ')}`);
+            
+            try {
+                // Search for related note chunks
+                const relatedChunksResults = await getRecords({
+                    source: 'gun',
+                    recordType: 'noteChunks',
+                    tags: noteBasic.tagItems.join(','),
+                    limit: maxRelated,
+                    user: req.user,
+                    isAuthenticated: true
+                });
+                
+                if (relatedChunksResults.records && relatedChunksResults.records.length > 0) {
+                    // Filter out chunks from the current note
+                    const otherChunks = relatedChunksResults.records.filter(chunk => 
+                        chunk.data?.noteChunks?.note_ref !== noteDid
+                    );
+                    
+                    relatedContent.push(...otherChunks);
+                    console.log(`[ALFRED Notes RAG] ✅ Found ${otherChunks.length} related chunks from other notes`);
+                }
+
+                // Search for related notes
+                const relatedNotesResults = await getRecords({
+                    source: 'gun',
+                    recordType: 'notes',
+                    tags: noteBasic.tagItems.join(','),
+                    limit: maxRelated,
+                    user: req.user,
+                    isAuthenticated: true
+                });
+                
+                if (relatedNotesResults.records && relatedNotesResults.records.length > 0) {
+                    // Filter out the current note
+                    const otherNotes = relatedNotesResults.records.filter(note => 
+                        note.did !== noteDid
+                    );
+                    
+                    relatedContent.push(...otherNotes);
+                    console.log(`[ALFRED Notes RAG] ✅ Found ${otherNotes.length} related notes`);
+                }
+            } catch (error) {
+                console.warn('[ALFRED Notes RAG] ⚠️ Failed to fetch related content:', error.message);
+            }
+        }
+
+        // Step 5: Build comprehensive context
+        console.log('[ALFRED Notes RAG] Step 5: Building context for ALFRED...');
+        
+        const context = {
+            currentNote: {
+                title: noteBasic.name,
+                type: noteData.note_type,
+                date: new Date(noteData.created_at).toISOString(),
+                participants: noteData.participant_display_names || [],
+                roles: noteData.participant_roles || [],
+                tags: noteBasic.tagItems || [],
+                summary: {
+                    key_points: noteData.summary_key_points || [],
+                    decisions: noteData.summary_decisions || [],
+                    action_items: {
+                        texts: noteData.summary_action_item_texts || [],
+                        assignees: noteData.summary_action_item_assignees || [],
+                        due_dates: noteData.summary_action_item_due_texts || []
+                    },
+                    open_questions: noteData.summary_open_questions || []
+                },
+                topics: noteData.topics_auto || [],
+                keywords: noteData.keywords_auto || [],
+                sentiment: noteData.sentiment_overall || 'NEUTRAL'
+            },
+            transcript: transcriptText,
+            chunks: chunks.map(chunk => ({
+                index: chunk.data?.noteChunks?.chunk_index,
+                text: chunk.data?.noteChunks?.text,
+                time_range: {
+                    start_ms: chunk.data?.noteChunks?.start_time_ms,
+                    end_ms: chunk.data?.noteChunks?.end_time_ms
+                },
+                tags: chunk.data?.basic?.tagItems || []
+            })),
+            relatedContent: relatedContent.slice(0, maxRelated).map(item => {
+                if (item.recordType === 'noteChunks') {
+                    return {
+                        type: 'chunk',
+                        text: item.data?.noteChunks?.text,
+                        tags: item.data?.basic?.tagItems || [],
+                        from_note: item.data?.noteChunks?.note_ref
+                    };
+                } else if (item.recordType === 'notes') {
+                    return {
+                        type: 'note',
+                        title: item.data?.basic?.name,
+                        summary: item.data?.notes?.summary_key_points?.slice(0, 3) || [],
+                        tags: item.data?.basic?.tagItems || [],
+                        did: item.did
+                    };
+                }
+                return null;
+            }).filter(Boolean)
+        };
+
+        console.log('[ALFRED Notes RAG] Context built:');
+        console.log(`  - Transcript: ${transcriptText.length} chars`);
+        console.log(`  - Chunks: ${chunks.length}`);
+        console.log(`  - Related content: ${relatedContent.length} items`);
+
+        // Step 6: Prepare ALFRED query with note-specific context
+        const alfred = require('../helpers/alfred');
+        const alfredInstance = alfred.getALFREDInstance ? alfred.getALFREDInstance() : new alfred.ALFRED();
+        
+        // Build a comprehensive prompt that includes the note context
+        const enhancedQuestion = `${question}
+
+CONTEXT:
+You are answering questions about a specific meeting note.
+
+Note Title: ${context.currentNote.title}
+Note Type: ${context.currentNote.type}
+Date: ${context.currentNote.date}
+${context.currentNote.participants.length > 0 ? `Participants: ${context.currentNote.participants.join(', ')}` : ''}
+
+${context.currentNote.summary.key_points.length > 0 ? `Key Points from Summary:
+${context.currentNote.summary.key_points.map((point, i) => `${i + 1}. ${point}`).join('\n')}` : ''}
+
+${context.currentNote.summary.decisions.length > 0 ? `\nDecisions Made:
+${context.currentNote.summary.decisions.map((decision, i) => `${i + 1}. ${decision}`).join('\n')}` : ''}
+
+${context.currentNote.summary.action_items.texts.length > 0 ? `\nAction Items:
+${context.currentNote.summary.action_items.texts.map((text, i) => 
+    `${i + 1}. ${text} (Assignee: ${context.currentNote.summary.action_items.assignees[i]}, Due: ${context.currentNote.summary.action_items.due_dates[i]})`
+).join('\n')}` : ''}
+
+${transcriptText ? `\nFull Transcript:\n${transcriptText.substring(0, 4000)}${transcriptText.length > 4000 ? '...' : ''}` : ''}
+
+${context.relatedContent.length > 0 ? `\nRelated Content from Other Notes:
+${context.relatedContent.map((item, i) => {
+    if (item.type === 'chunk') {
+        return `${i + 1}. [Chunk] ${item.text.substring(0, 200)}... (Tags: ${item.tags.join(', ')})`;
+    } else {
+        return `${i + 1}. [Note] ${item.title} - ${item.summary.join('; ')}`;
+    }
+}).join('\n')}` : ''}`;
+
+        // Call ALFRED with the enhanced context
+        console.log('[ALFRED Notes RAG] Step 6: Calling ALFRED for response...');
+        const alfredOptions = {
+            model: model,
+            conversationHistory: conversationHistory,
+            pinnedJsonData: context, // Pass structured context
+            useFieldExtraction: true,
+            existingContext: enhancedQuestion
+        };
+
+        const alfredResponse = await alfredInstance.query(question, alfredOptions);
+        
+        console.log(`[ALFRED Notes RAG] ✅ Response generated (${alfredResponse.answer.length} chars)`);
+
+        // Return the response
+        res.json({
+            success: true,
+            answer: alfredResponse.answer,
+            context: {
+                note: {
+                    did: noteDid,
+                    title: context.currentNote.title,
+                    type: context.currentNote.type
+                },
+                chunks_count: chunks.length,
+                related_content_count: relatedContent.length,
+                transcript_length: transcriptText.length
+            },
+            model: alfredResponse.model || model,
+            sources: alfredResponse.sources || []
+        });
+
+    } catch (error) {
+        console.error('[ALFRED Notes RAG] ❌ Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process question about note',
+            details: error.message
+        });
+    }
+});
 
 module.exports = router;
 
