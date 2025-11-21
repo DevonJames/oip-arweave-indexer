@@ -14,12 +14,6 @@ class GunHelper {
         
         this.encryptionEnabled = process.env.GUN_ENABLE_ENCRYPTION === 'true';
         this.defaultPrivacy = process.env.GUN_DEFAULT_PRIVACY === 'true';
-        
-        console.log('GUN Helper initialized with HTTP API:', {
-            apiUrl: this.apiUrl,
-            encryptionEnabled: this.encryptionEnabled,
-            defaultPrivacy: this.defaultPrivacy
-        });
     }
 
     /**
@@ -124,8 +118,6 @@ class GunHelper {
 
             // Handle encryption for private records with smart encryption strategy
             if (options.encrypt) {
-                console.log('🔒 Encrypting GUN record with smart encryption strategy');
-                
                 const userPublicKey = options.userPublicKey || options.publisherPubKey;
                 const userPassword = options.userPassword;
                 const accessControl = options.accessControl;
@@ -141,7 +133,6 @@ class GunHelper {
                 const encryptionStrategy = await orgEncryption.determineEncryptionStrategy(accessControl, userPublicKey);
                 
                 if (!encryptionStrategy.encrypt) {
-                    console.log('🔓 No encryption needed for public record');
                     return; // Don't encrypt public records
                 }
                 
@@ -157,7 +148,6 @@ class GunHelper {
                     encryptionMetadata.encryptionType = 'organization';
                     encryptionMetadata.encryptedForOrganization = encryptionStrategy.organizationDid;
                     encryptionMetadata.sharedWith = encryptionStrategy.sharedWith;
-                    console.log(`🏢 Using organization encryption for: ${encryptionStrategy.organizationDid}`);
                     
                 } else {
                     // Use per-user encryption (default for private records)
@@ -166,14 +156,11 @@ class GunHelper {
                             const { getUserGunEncryptionSalt, generateUserEncryptionKey } = require('../routes/user');
                             const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
                             encryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
-                            console.log('🔑 Using user-specific encryption key with personal salt');
                         } catch (error) {
-                            console.warn('🔑 Failed to get user salt, falling back to public key only:', error.message);
                             encryptionKey = crypto.pbkdf2Sync(userPublicKey, 'oip-gun-fallback', 100000, 32, 'sha256');
                         }
                     } else {
                         encryptionKey = crypto.pbkdf2Sync(userPublicKey, 'oip-gun-fallback', 100000, 32, 'sha256');
-                        console.log('🔑 Using public key only encryption (no password available)');
                     }
                     
                     encryptionMetadata.encryptionType = 'per-user';
@@ -197,8 +184,6 @@ class GunHelper {
                 
                 // Apply encryption metadata
                 Object.assign(gunRecord.meta, encryptionMetadata);
-                
-                console.log(`✅ Encrypted record using ${encryptionStrategy.encryptionType} encryption`);
             }
 
             // console.log('📡 Sending HTTP PUT request to GUN API...');
@@ -274,8 +259,6 @@ class GunHelper {
                 
                 // Handle encrypted data with smart decryption strategy
                 if (data.meta && data.meta.encrypted && data.meta.encryptionMethod === 'aes-256-gcm') {
-                    console.log('🔓 Decrypting GUN record with smart decryption strategy');
-
                     const userPublicKey = options.userPublicKey;
                     const userPassword = options.userPassword;
                     const encryptionType = data.meta.encryptionType;
@@ -288,7 +271,6 @@ class GunHelper {
                     
                     if (encryptionType === 'organization') {
                         // Use organization decryption
-                        console.log('🏢 Attempting organization decryption');
                         const { OrganizationEncryption } = require('./organizationEncryption');
                         const orgEncryption = new OrganizationEncryption();
                         
@@ -296,13 +278,11 @@ class GunHelper {
                             // For organization decryption, we need to pass request info for membership validation
                             decryptionResult = await orgEncryption.decryptWithOrganizationKey(data, userPublicKey);
                         } catch (orgError) {
-                            console.warn('🏢 Organization decryption failed:', orgError.message);
                             throw new Error(`Organization decryption failed: ${orgError.message}`);
                         }
                         
                     } else if (encryptionType === 'per-user' || data.meta.encryptedBy) {
                         // Use per-user decryption
-                        console.log('👤 Attempting per-user decryption');
                         const encryptedBy = data.meta.encryptedBy;
                         
                         if (encryptedBy && encryptedBy !== userPublicKey) {
@@ -316,14 +296,11 @@ class GunHelper {
                                 const { getUserGunEncryptionSalt, generateUserEncryptionKey } = require('../routes/user');
                                 const userSalt = await getUserGunEncryptionSalt(userPublicKey, userPassword);
                                 decryptionKey = generateUserEncryptionKey(userPublicKey, userSalt);
-                                console.log('🔑 Using user-specific decryption key with personal salt');
                             } catch (error) {
-                                console.warn('🔑 Failed to get user salt for decryption, falling back to public key only:', error.message);
                                 decryptionKey = crypto.pbkdf2Sync(userPublicKey, 'oip-gun-fallback', 100000, 32, 'sha256');
                             }
                         } else {
                             decryptionKey = crypto.pbkdf2Sync(userPublicKey, 'oip-gun-fallback', 100000, 32, 'sha256');
-                            console.log('🔑 Using public key only decryption (no password available)');
                         }
 
                         const iv = Buffer.from(data.data.iv, 'base64');
@@ -348,7 +325,6 @@ class GunHelper {
                         
                     } else {
                         // Legacy encryption without type metadata
-                        console.log('🔄 Attempting legacy decryption');
                         const legacyKey = crypto.pbkdf2Sync('gun-encryption-key', 'salt', 100000, 32, 'sha256');
                         
                         const iv = Buffer.from(data.data.iv, 'base64');
@@ -371,9 +347,6 @@ class GunHelper {
                             oip: data.oip
                         };
                     }
-
-                    console.log('🔍 Backend decrypted data structure:', decryptionResult.data);
-                    console.log('🔍 Backend decrypted conversationSession:', decryptionResult.data?.conversationSession);
 
                     // Return the decrypted data with metadata
                     return {
@@ -404,9 +377,6 @@ class GunHelper {
                 // Handle GUN reference objects - GUN sometimes returns { '#': 'path' } instead of actual data
                 // This can happen with nested data structures or when data isn't fully loaded
                 if (data.data && typeof data.data === 'object' && data.data['#'] && !data.meta?.wasEncrypted) {
-                    console.log('🔍 Data contains GUN references, this indicates incomplete data retrieval');
-                    console.log('🔍 Reference path:', data.data['#']);
-
                     // For now, return the data as-is since we can't easily resolve references via HTTP API
                     // The frontend will need to handle this case
                     return data;
@@ -474,8 +444,6 @@ class GunHelper {
         const { limit = 50, offset = 0, recordType } = options;
         
         try {
-            console.log('📡 Listing user records via HTTP API...');
-            
             // Create hash of the public key (first 12 chars) to match GUN soul format
             const pubKeyHash = crypto.createHash('sha256')
                 .update(publisherPubKey)
@@ -505,8 +473,6 @@ class GunHelper {
                 const processedRecords = await Promise.all(records.map(async (record) => {
                     // Handle encrypted data if present
                     if (record.meta && record.meta.encrypted && record.meta.encryptionMethod === 'aes-256-gcm') {
-                        console.log('🔓 Decrypting GUN record');
-                        
                         const key = crypto.scryptSync('gun-encryption-key', 'salt', 32);
                         const iv = Buffer.from(record.data.iv, 'hex');
                         const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
@@ -525,10 +491,8 @@ class GunHelper {
                     };
                 }));
 
-                console.log('✅ Retrieved', processedRecords.length, 'GUN records via HTTP API');
                 return processedRecords;
             } else {
-                console.log('No records found for publisher');
                 return [];
             }
 
@@ -559,7 +523,6 @@ class GunHelper {
                         console.error('GUN delete error:', ack.err);
                         reject(new Error(`GUN delete failed: ${ack.err}`));
                     } else {
-                        console.log('GUN record deleted successfully:', soul);
                         resolve(true);
                     }
                 });

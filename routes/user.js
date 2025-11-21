@@ -602,11 +602,14 @@ router.post('/login', async (req, res) => {
         const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
         if (!isPasswordValid) {
+            console.log(`❌ Invalid password provided for user: "${email}"`);
             return res.status(400).json({ 
                 success: false, // Add this line
                 error: 'Invalid password' 
             });
         }
+
+        console.log(`✅ Password validated successfully for user: "${email}"`);
 
         // Check if user needs GUN encryption salt (for existing users)
         if (!user.encryptedGunSalt) {
@@ -764,12 +767,18 @@ router.post('/login', async (req, res) => {
             isAdmin: user.isAdmin 
         }, JWT_SECRET, { expiresIn: '45d' });
         
-        return res.status(200).json({
+        console.log(`🔑 JWT token generated successfully for user: "${email}"`);
+        
+        const response = {
             success: true,
             message: 'Login successful',
             token, // Return the JWT token
             publicKey: user.publicKey // NEW: Return public key for client awareness
-        });
+        };
+        
+        console.log(`✅ JWT token delivered in response for user: "${email}"`);
+        
+        return res.status(200).json(response);
     } catch (error) {
         console.error('Error logging in user:', error);
         res.status(500).json({ error: 'Internal server error' });

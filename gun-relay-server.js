@@ -34,8 +34,6 @@ try {
         const parsedUrl = url.parse(req.url, true);
         const path = parsedUrl.pathname;
         
-        console.log(`📡 ${req.method} ${path}`);
-        
         try {
             if (req.method === 'POST' && path === '/put') {
                 // Handle PUT operations
@@ -44,7 +42,6 @@ try {
                 req.on('end', async () => {
                     try {
                         const { soul, data } = JSON.parse(body);
-                        console.log(`💾 Storing data for soul: ${soul.substring(0, 50)}...`);
                         
                         // Store data and ensure all nested properties are properly saved
                         const gunNode = gun.get(soul);
@@ -56,7 +53,6 @@ try {
                                 res.writeHead(500);
                                 res.end(JSON.stringify({ error: ack.err }));
                             } else {
-                                console.log('✅ Data stored successfully');
 
                                 // REMOVED: Nested property puts were causing GUN radisk conflicts
                                 // The bulk put above (line 53) is sufficient for most cases
@@ -112,8 +108,6 @@ try {
                             return;
                         }
                         
-                        console.log(`📡 Publishing media manifest: ${mediaId}`);
-                        
                         // Store manifest in GUN
                         const manifestSoul = `media:${mediaId}`;
                         gun.get(manifestSoul).put(manifest, (ack) => {
@@ -122,7 +116,6 @@ try {
                                 res.writeHead(500);
                                 res.end(JSON.stringify({ error: ack.err }));
                             } else {
-                                console.log('✅ Media manifest stored successfully');
                                 res.writeHead(200);
                                 res.end(JSON.stringify({ 
                                     success: true, 
@@ -148,16 +141,13 @@ try {
                     return;
                 }
                 
-                console.log(`📖 Getting media manifest: ${mediaId}`);
                 const manifestSoul = `media:${mediaId}`;
                 
                 gun.get(manifestSoul).once((data) => {
                     if (data) {
-                        console.log('✅ Media manifest retrieved successfully');
                         res.writeHead(200);
                         res.end(JSON.stringify(data));
                     } else {
-                        console.log('❌ Media manifest not found');
                         res.writeHead(404);
                         res.end(JSON.stringify({ error: 'Manifest not found' }));
                     }
@@ -177,8 +167,6 @@ try {
                             return;
                         }
                         
-                        console.log(`📡 Updating presence for ${mediaId}: ${peerId}`);
-                        
                         const presenceData = {
                             peerId,
                             protocols: protocols || {},
@@ -194,7 +182,6 @@ try {
                                 res.writeHead(500);
                                 res.end(JSON.stringify({ error: ack.err }));
                             } else {
-                                console.log('✅ Presence updated successfully');
                                 res.writeHead(200);
                                 res.end(JSON.stringify({ success: true }));
                             }
@@ -216,8 +203,6 @@ try {
                     return;
                 }
                 
-                console.log(`📖 Getting data for soul: ${soul.substring(0, 50)}...`);
-
                 // Retrieve the complete data structure
                 const gunNode = gun.get(soul);
                 const result = {};
@@ -240,11 +225,9 @@ try {
                         });
                         
                         if (Object.keys(cleanResult).length > 0) {
-                            console.log('✅ Data retrieved successfully');
                             res.writeHead(200);
                             res.end(JSON.stringify({ success: true, data: cleanResult }));
                         } else {
-                            console.log('❌ No data found');
                             res.writeHead(404);
                             res.end(JSON.stringify({ error: 'Not found' }));
                         }
@@ -278,17 +261,13 @@ try {
                             if (key === 'data' && typeof value === 'string') {
                                 try {
                                     result.data = JSON.parse(value);
-                                    console.log('📦 Parsed data JSON string');
                                 } catch (e) {
-                                    console.warn('⚠️ Failed to parse data JSON string:', e.message);
                                     result.data = value;
                                 }
                             } else if (key === 'oip' && typeof value === 'string') {
                                 try {
                                     result.oip = JSON.parse(value);
-                                    console.log('📦 Parsed oip JSON string');
                                 } catch (e) {
-                                    console.warn('⚠️ Failed to parse oip JSON string:', e.message);
                                     result.oip = value;
                                 }
                             } else if (typeof value === 'object' && value !== null && value['#']) {
@@ -329,7 +308,6 @@ try {
                         timestamp: new Date().toISOString()
                     };
                     
-                    console.log('📊 Peer status requested:', peerStatus);
                     res.writeHead(200);
                     res.end(JSON.stringify(peerStatus, null, 2));
                 } catch (error) {
@@ -350,8 +328,6 @@ try {
                     res.end(JSON.stringify({ error: 'publisherHash parameter required' }));
                     return;
                 }
-
-                console.log(`📃 Listing records for publisherHash=${publisherHash}, limit=${limit}, offset=${offset}, recordType=${recordType || 'any'}`);
 
                 const respond = (records) => {
                     let filtered = records;
@@ -461,43 +437,25 @@ try {
     
     const gun = Gun(gunConfig);
     
-    // Monitor peer connections (GUN doesn't provide direct connection status, but we can log sync events)
+    // Monitor peer connections (silent test - errors only)
     if (gunPeers.length > 0) {
-        // Try to verify peer connectivity by attempting to read from a known peer
         gunPeers.forEach((peerUrl, index) => {
             setTimeout(() => {
-                console.log(`🔍 Testing peer connection: ${peerUrl}`);
-                // Try to read a test value from peer to verify connectivity
                 gun.get('test:peer:connectivity').once((data) => {
-                    if (data) {
-                        console.log(`✅ Peer ${peerUrl} is reachable`);
-                    } else {
-                        console.log(`⚠️ Peer ${peerUrl} - no data yet (may need time to connect)`);
-                    }
+                    // Silent test - no logging unless there's an error
                 });
             }, 2000 + (index * 1000));
         });
     }
     
     server.listen(8765, '0.0.0.0', () => {
-        console.log('✅ GUN HTTP API server running on 0.0.0.0:8765');
-        console.log('💾 Local GUN database with persistent storage');
-        console.log('🌐 HTTP API endpoints: /put (POST), /get (GET), /list (GET)');
-        console.log('📁 Media endpoints: /media/manifest (POST/GET), /media/presence (POST)');
-        if (gunPeers.length > 0) {
-            console.log(`🔗 Configured ${gunPeers.length} external peer(s) for synchronization: ${gunPeers.join(', ')}`);
-            console.log(`⚠️ Note: GUN WebSocket sync happens automatically when data is accessed, not proactively`);
-        } else {
-            console.log('📡 Single-node mode: No external peers configured (set GUN_EXTERNAL_PEERS to enable sync)');
-        }
+        console.log('✅ GUN relay server ready on port 8765');
         
-        // Test the local GUN database
+        // Test the local GUN database (silent unless error)
         setTimeout(() => {
             gun.get('test:startup').put({ test: true, timestamp: Date.now() }, (ack) => {
                 if (ack.err) {
                     console.error('❌ Local GUN test failed:', ack.err);
-                } else {
-                    console.log('✅ Local GUN database working - ready for HTTP API operations');
                 }
             });
         }, 1000);
