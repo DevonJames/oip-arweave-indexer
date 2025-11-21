@@ -93,11 +93,9 @@ class GunSyncService {
      */
     async start() {
         if (this.isRunning) {
-            console.log('⚠️ GUN Sync Service is already running');
             return;
         }
         
-        console.log('🚀 Starting GUN Record Sync Service...');
         this.isRunning = true;
         
         try {
@@ -112,10 +110,7 @@ class GunSyncService {
                 await this.performSync();
             }, this.syncInterval);
             
-            console.log('✅ GUN Record Sync Service started successfully');
-            
         } catch (error) {
-            console.error('❌ Failed to start GUN Sync Service:', error);
             this.isRunning = false;
             throw error;
         }
@@ -126,19 +121,15 @@ class GunSyncService {
      */
     stop() {
         if (!this.isRunning) {
-            console.log('⚠️ GUN Sync Service is not running');
             return;
         }
         
-        console.log('🛑 Stopping GUN Record Sync Service...');
         this.isRunning = false;
         
         if (this.syncTimer) {
             clearInterval(this.syncTimer);
             this.syncTimer = null;
         }
-        
-        console.log('✅ GUN Record Sync Service stopped');
     }
     
     /**
@@ -151,13 +142,12 @@ class GunSyncService {
             // Memory management: Periodically clear the cache to prevent memory leaks
             const timeSinceLastClear = Date.now() - this.lastCacheClear;
             if (timeSinceLastClear >= this.cacheMaxAge) {
-                const cacheSize = this.processedRecords.size;
                 this.clearProcessedCache();
                 this.lastCacheClear = Date.now();
-                console.log(`🗑️ Auto-cleared GUN cache (${cacheSize} records) after ${Math.round(timeSinceLastClear / 60000)} minutes`);
             }
             
-            // console.log('🔄 Starting GUN record sync cycle...'); // Commented out - too verbose
+            // Single log at start of sync
+            console.log('🔄 GUN sync starting...');
             
             let discoveredRecords = [];
             
@@ -193,7 +183,6 @@ class GunSyncService {
                         errorCount++;
                     }
                 } catch (error) {
-                    console.error('❌ Error processing individual record:', error);
                     errorCount++;
                 }
             }
@@ -201,13 +190,11 @@ class GunSyncService {
             const duration = Date.now() - startTime;
             this.healthMonitor.recordSyncCycle(discoveredRecords.length, syncedCount, errorCount, duration);
             
-            // Only log if records were actually discovered or synced
-            if (discoveredRecords.length > 0 || syncedCount > 0 || errorCount > 0) {
-                console.log(`✅ GUN sync: ${syncedCount}/${discoveredRecords.length} records synced (${errorCount} errors) in ${duration}ms`);
-            }
+            // Single log with results at end
+            console.log(`✅ GUN sync complete: ${syncedCount} successful, ${errorCount} failed (${duration}ms)`);
             
         } catch (error) {
-            console.error('❌ Error in sync cycle:', error);
+            console.error('❌ GUN sync error:', error.message);
             this.healthMonitor.recordSyncCycle(0, 0, 1, Date.now() - startTime);
         }
     }
@@ -222,12 +209,9 @@ class GunSyncService {
         
         // Get all record types to sync from peers
         const recordTypes = this.getRecordTypesToSync();
-        console.log(`📋 Syncing all record types from peers:`, recordTypes);
         
         for (const peerUrl of this.peerNodes) {
             try {
-                console.log(`🔍 Polling peer for records: ${peerUrl}`);
-                
                 for (const recordType of recordTypes) {
                     try {
                         // Fetch registry index for this record type from peer
@@ -280,7 +264,6 @@ class GunSyncService {
                                 }
                                 
                                 // Fetch the actual record from peer
-                                console.log(`📥 Fetching record from peer: ${did}`);
                                 const recordResponse = await axios.get(`${peerUrl}/get`, {
                                     params: { soul: recordSoul },
                                     timeout: 10000
@@ -361,11 +344,8 @@ class GunSyncService {
                 return false;
             }
             
-            console.log(`📥 Processing ${wasEncrypted ? 'private' : 'public'} record: ${did} from node ${sourceNodeId}`);
-            
             // Validate the record structure
             if (!this.registry.isValidOIPRecord(data)) {
-                console.warn(`⚠️ Invalid OIP record structure, skipping: ${did}`);
                 return false;
             }
             
@@ -379,7 +359,6 @@ class GunSyncService {
             });
             
             if (exists.body) {
-                console.log(`⏭️ Record already exists in Elasticsearch: ${did}`);
                 this.processedRecords.add(did);
                 return false;
             }
@@ -390,14 +369,12 @@ class GunSyncService {
                     localId: soul.split(':')[1] || null,
                     encrypt: wasEncrypted
                 });
-                console.log(`💾 Stored to local GUN: ${did}`);
             } catch (gunError) {
-                console.warn(`⚠️ Failed to store to GUN (continuing with Elasticsearch): ${gunError.message}`);
+                // Continue with Elasticsearch even if GUN storage fails
             }
             
             // Index to Elasticsearch using existing indexRecord function
             await indexRecord(elasticsearchRecord);
-            console.log(`📊 Indexed to Elasticsearch: ${did}`);
             
             // Register in local registry (so other nodes can discover it)
             try {
@@ -405,20 +382,16 @@ class GunSyncService {
                 const creatorPubKey = data.oip?.creator?.publicKey;
                 if (recordType && creatorPubKey) {
                     await this.registry.registerOIPRecord(did, soul, recordType, creatorPubKey);
-                    console.log(`📝 Registered in local registry: ${did}`);
                 }
             } catch (registryError) {
-                console.warn(`⚠️ Failed to register in local registry: ${registryError.message}`);
+                // Ignore registry errors
             }
             
             // Mark as processed
             this.processedRecords.add(did);
-            
-            console.log(`✅ Successfully synced record: ${did}`);
             return true;
             
         } catch (error) {
-            console.error('❌ Error processing discovered record:', error);
             return false;
         }
     }
@@ -467,10 +440,7 @@ class GunSyncService {
         
         // Convert JSON string arrays back to actual arrays using existing function
         // This is critical for maintaining data format consistency
-        const processedRecord = processRecordForElasticsearch(elasticsearchRecord);
-        
-        console.log(`🔄 Converted GUN record format for Elasticsearch: ${did}`);
-        return processedRecord;
+        return processRecordForElasticsearch(elasticsearchRecord);
     }
     
     /**
@@ -483,9 +453,8 @@ class GunSyncService {
     async registerLocalRecord(recordDid, soul, recordType, creatorPubKey) {
         try {
             await this.registry.registerOIPRecord(recordDid, soul, recordType, creatorPubKey);
-            console.log('📝 Registered local record in GUN registry:', recordDid);
         } catch (error) {
-            console.error('❌ Failed to register local record:', error);
+            // Ignore registration errors
         }
     }
     
@@ -494,10 +463,7 @@ class GunSyncService {
      */
     async migrateExistingRecords() {
         try {
-            console.log('🔄 Migrating existing GUN records to registry...');
-            
             // Wait for gun-relay to be ready before attempting migration
-            console.log('⏳ Waiting for gun-relay to be ready...');
             let gunReady = false;
             let attempts = 0;
             const maxAttempts = 30; // 30 seconds max wait
@@ -506,13 +472,11 @@ class GunSyncService {
                 try {
                     await this.registry.gunHelper.getRecord('test:startup');
                     gunReady = true;
-                    console.log('✅ Gun-relay is ready, starting migration...');
                 } catch (error) {
                     attempts++;
                     if (attempts < maxAttempts) {
                         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
                     } else {
-                        console.warn('⚠️ Gun-relay not ready after 30s, skipping migration');
                         return;
                     }
                 }
@@ -581,15 +545,16 @@ class GunSyncService {
                     registeredCount++;
                     
                 } catch (error) {
-                    console.error(`❌ Failed to register existing record ${did}:`, error.message);
                     skippedCount++;
                 }
             }
             
-            console.log(`✅ Migration complete: ${registeredCount} registered, ${skippedCount} skipped (${records.length} total)`);
+            if (registeredCount > 0) {
+                console.log(`✅ GUN migration: ${registeredCount} records registered`);
+            }
             
         } catch (error) {
-            console.error('❌ Error migrating existing records:', error);
+            // Ignore migration errors
         }
     }
     
@@ -641,7 +606,6 @@ class GunSyncService {
             throw new Error('Sync service is not running');
         }
         
-        console.log('🔄 Forcing immediate sync cycle...');
         await this.performSync();
     }
     
@@ -649,9 +613,7 @@ class GunSyncService {
      * Clear processed records cache (for testing or reset)
      */
     clearProcessedCache() {
-        const previousSize = this.processedRecords.size;
         this.processedRecords.clear();
-        console.log(`🗑️ Cleared processed records cache (${previousSize} records)`);
     }
 }
 
@@ -714,7 +676,6 @@ class SyncHealthMonitor {
             averageSyncTime: 0,
             syncCycles: 0
         };
-        console.log('📊 Health monitor metrics reset');
     }
 }
 
