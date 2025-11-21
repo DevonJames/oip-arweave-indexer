@@ -316,6 +316,28 @@ try {
                     }
                 }, 3000); // 3 second timeout to allow peer sync
                 
+            } else if (req.method === 'GET' && path === '/peers/status') {
+                // SECURITY: Endpoint to verify peer connections and network isolation
+                try {
+                    const peerStatus = {
+                        configuredPeers: validatedPeers || [],
+                        peerCount: validatedPeers ? validatedPeers.length : 0,
+                        allowedDomains: allowedDomains,
+                        isolationMode: validatedPeers && validatedPeers.length > 0 ? 'multi-node' : 'isolated',
+                        multicastDisabled: true,
+                        axeDisabled: true,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    console.log('📊 Peer status requested:', peerStatus);
+                    res.writeHead(200);
+                    res.end(JSON.stringify(peerStatus, null, 2));
+                } catch (error) {
+                    console.error('❌ Error getting peer status:', error);
+                    res.writeHead(500);
+                    res.end(JSON.stringify({ error: error.message }));
+                }
+                
             } else if (req.method === 'GET' && path === '/list') {
                 // List records by publisher hash prefix
                 const publisherHash = parsedUrl.query.publisherHash;
@@ -393,18 +415,48 @@ try {
     // Configure peers from environment variable (for multi-node sync)
     const gunPeers = process.env.GUN_PEERS ? process.env.GUN_PEERS.split(',').map(p => p.trim()).filter(p => p) : [];
     
+    // SECURITY: Whitelist of allowed peer domains (only sync with controlled nodes)
+    const allowedDomains = [
+        'rockhoppersgame.com',
+        'api.oip.onl',
+        'oip.fitnessally.io',
+        'localhost',
+        '127.0.0.1',
+        'gun-relay'  // Docker internal service name
+    ];
+    
+    // Validate peers against whitelist
+    const validatedPeers = gunPeers.filter(peer => {
+        const isValid = allowedDomains.some(domain => peer.includes(domain));
+        if (!isValid) {
+            console.error(`🚨 SECURITY WARNING: Rejected unauthorized GUN peer: ${peer}`);
+            console.error(`🚨 Only peers from controlled domains are allowed: ${allowedDomains.join(', ')}`);
+        }
+        return isValid;
+    });
+    
+    if (validatedPeers.length !== gunPeers.length) {
+        console.error(`🚨 SECURITY: Blocked ${gunPeers.length - validatedPeers.length} unauthorized peer(s)`);
+        console.error(`🚨 Rejected peers: ${gunPeers.filter(p => !validatedPeers.includes(p)).join(', ')}`);
+    }
+    
     const gunConfig = {
         web: server,
         radisk: true,
         file: 'data',
         localStorage: false,
-        multicast: false
+        multicast: false,  // Disable multicast peer discovery
+        // SECURITY: Explicitly disable other automatic discovery mechanisms
+        axe: false  // Disable GUN's automatic peer exchange/discovery
     };
     
     // Add peers if configured (for cross-node synchronization)
-    if (gunPeers.length > 0) {
-        gunConfig.peers = gunPeers;
-        console.log(`🌐 GUN peers configured: ${gunPeers.join(', ')}`);
+    if (validatedPeers.length > 0) {
+        gunConfig.peers = validatedPeers;
+        console.log(`🔒 GUN peers configured (validated): ${validatedPeers.join(', ')}`);
+        console.log(`🔒 GUN network isolated to ${validatedPeers.length} controlled node(s)`);
+    } else {
+        console.log(`🔒 GUN running in isolated mode (no external peers)`);
     }
     
     const gun = Gun(gunConfig);
