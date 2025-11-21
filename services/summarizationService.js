@@ -166,7 +166,7 @@ IMPORTANT:
 - Sentiment should be one of: NEGATIVE, NEUTRAL, or POSITIVE
 - Topics should be high-level themes discussed (3-5 items)
 - Keywords should be specific terms or concepts mentioned (5-10 items)
-- Tags should be short, lowercase, hyphenated labels suitable for search/filtering (5-10 items, e.g., "product-development", "budget-planning", "team-coordination")
+- Tags should be short, lowercase labels with underscores instead of spaces, suitable for search/filtering (5-10 items, e.g., "product_development", "budget_planning", "team_coordination")
 
 TRANSCRIPT:
 ${text}
