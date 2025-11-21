@@ -1712,30 +1712,30 @@ JSON Response:`;
         const dominantType = contentItems.length > 0 ? contentItems[0].type : null;
         let extraDirectives = '';
 
-            if (isSingleRecord) {
-                extraDirectives += `\nYou are answering about a single specific record only. Do not describe that you "found a record"—answer the user's question directly using this record's details.`;
-                if (dominantType === 'recipe') {
-                    extraDirectives += `\nFor recipe questions (e.g., "how do I make this"), return clear, numbered cooking steps. If steps are present in the data (instructions or method), enumerate them; otherwise infer reasonable steps from the ingredients and any timing fields. Include prep time, cook time, total time, and servings if available. Keep it actionable and concise.\nAlso normalize text for clarity: expand tbsp→tablespoon(s), tsp→teaspoon(s), and read numeric ranges like 2–4 as "2 to 4".`;
-                } else if (dominantType === 'exercise') {
-                    extraDirectives += `\nFor exercise questions, provide step-by-step instructions and key cues (muscle groups, sets/reps, equipment).`;
-                }
+        if (isSingleRecord) {
+            extraDirectives += `\nYou are answering about a single specific record only. Do not describe that you "found a record"—answer the user's question directly using this record's details.`;
+            if (dominantType === 'recipe') {
+                extraDirectives += `\nFor recipe questions (e.g., "how do I make this"), return clear, numbered cooking steps. If steps are present in the data (instructions or method), enumerate them; otherwise infer reasonable steps from the ingredients and any timing fields. Include prep time, cook time, total time, and servings if available. Keep it actionable and concise.\nAlso normalize text for clarity: expand tbsp→tablespoon(s), tsp→teaspoon(s), and read numeric ranges like 2–4 as "2 to 4".`;
+            } else if (dominantType === 'exercise') {
+                extraDirectives += `\nFor exercise questions, provide step-by-step instructions and key cues (muscle groups, sets/reps, equipment).`;
             }
+        }
 
-            // Compose recent conversation history for additional grounding
-            let convoSection = '';
-            try {
-                const history = Array.isArray(options.conversationHistory) ? options.conversationHistory : [];
-                if (history.length > 0) {
-                    const recent = history.slice(-8).map(m => {
-                        const role = (m.role || 'user').toUpperCase();
-                        const content = (m.content || '').toString().replace(/\s+/g, ' ').trim().substring(0, 300);
-                        return `${role}: ${content}`;
-                    }).join('\n');
-                    convoSection = `\nConversation so far:\n${recent}\n`;
-                }
-            } catch (_) { /* ignore */ }
+        // Compose recent conversation history for additional grounding
+        let convoSection = '';
+        try {
+            const history = Array.isArray(options.conversationHistory) ? options.conversationHistory : [];
+            if (history.length > 0) {
+                const recent = history.slice(-8).map(m => {
+                    const role = (m.role || 'user').toUpperCase();
+                    const content = (m.content || '').toString().replace(/\s+/g, ' ').trim().substring(0, 300);
+                    return `${role}: ${content}`;
+                }).join('\n');
+                convoSection = `\nConversation so far:\n${recent}\n`;
+            }
+        } catch (_) { /* ignore */ }
 
-            const prompt = `You are ALFRED, an AI assistant that answers questions directly and clearly. You have access to specific information from articles and documents. Your job is to answer the user's question using this information.
+        const prompt = `You are ALFRED, an AI assistant that answers questions directly and clearly. You have access to specific information from articles and documents. Your job is to answer the user's question using this information.
 
 Information available:
 ${context}
@@ -1772,75 +1772,76 @@ Examples of BAD responses for recipes:
 
 Answer the question directly and conversationally:`;
 
-            console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
+        console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
+        
+        // Check if a specific model was requested (bypass racing)
+        const requestedModel = options.model;
+        const shouldRace = !requestedModel || requestedModel === 'parallel';
+        
+        if (!shouldRace) {
+            console.log(`[ALFRED] 🎯 Using specific model (no racing): ${requestedModel}`);
             
-            // Check if a specific model was requested (bypass racing)
-            const requestedModel = options.model;
-            const shouldRace = !requestedModel || requestedModel === 'parallel';
-            
-            if (!shouldRace) {
-                console.log(`[ALFRED] 🎯 Using specific model (no racing): ${requestedModel}`);
-                
-                // Use only the requested model
-                try {
-                    let response;
-                    if (this.isCloudModel(requestedModel)) {
-                        response = await this.callCloudModel(requestedModel, prompt, {
+            // Use only the requested model
+            try {
+                let response;
+                if (this.isCloudModel(requestedModel)) {
+                    response = await this.callCloudModel(requestedModel, prompt, {
+                        temperature: 0.4,
+                        max_tokens: 700,
+                        stop: null
+                    });
+                    return {
+                        answer: response.trim(),
+                        model_used: requestedModel,
+                        context_length: context.length,
+                        source: this.cloudModels[requestedModel]?.provider || 'cloud'
+                    };
+                } else {
+                    // Assume it's an Ollama model
+                    console.log(`[ALFRED] 📡 Calling Ollama at ${this.ollamaBaseUrl} with model ${requestedModel}...`);
+                    const ollamaResponse = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
+                        model: requestedModel,
+                        prompt: prompt,
+                        stream: false,
+                        options: {
                             temperature: 0.4,
-                            max_tokens: 700,
-                            stop: null
-                        });
-                        return {
-                            answer: response.trim(),
-                            model_used: requestedModel,
-                            context_length: context.length,
-                            source: this.cloudModels[requestedModel]?.provider || 'cloud'
-                        };
-                    } else {
-                        // Assume it's an Ollama model
-                        console.log(`[ALFRED] 📡 Calling Ollama at ${this.ollamaBaseUrl} with model ${requestedModel}...`);
-                        const ollamaResponse = await axios.post(`${this.ollamaBaseUrl}/api/generate`, {
-                            model: requestedModel,
-                            prompt: prompt,
-                            stream: false,
-                            options: {
-                                temperature: 0.4,
-                                top_p: 0.9,
-                                top_k: 40,
-                                repeat_penalty: 1.1,
-                                num_predict: 512,
-                                stop: ["\n\n", "Question:", "Explanation:", "Note:"]
-                            }
-                        }, {
-                            timeout: 15000, // Reduced from 25s to 15s for faster failure detection
-                            validateStatus: (status) => status < 500 // Accept 4xx errors for better error messages
-                        });
-                        
-                        console.log(`[ALFRED] ✅ Ollama responded with ${ollamaResponse.data?.response?.trim()?.length || 0} chars`);
-                        return {
-                            answer: ollamaResponse.data?.response?.trim() || "I couldn't generate a response.",
-                            model_used: requestedModel,
-                            context_length: context.length,
-                            source: 'ollama'
-                        };
-                    }
-                } catch (error) {
-                    console.error(`[ALFRED] ❌ Specific model ${requestedModel} failed:`, error.message);
-                    if (error.code === 'ECONNREFUSED') {
-                        console.error(`[ALFRED] ❌ Ollama is not running! Cannot connect to ${this.ollamaBaseUrl}`);
-                        // Return a user-friendly error instead of falling back
-                        throw new Error(`Ollama service is not running. Please start it with: make backend-only`);
-                    }
-                    if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
-                        console.error(`[ALFRED] ❌ Ollama request timed out after 15 seconds`);
-                        throw new Error(`Ollama service timed out. It may be overloaded or unresponsive.`);
-                    }
-                    // Fall back to racing if specific model fails for other reasons
-                    console.log(`[ALFRED] ⚠️ Falling back to parallel racing...`);
-                    // Don't return here - let it fall through to parallel racing
+                            top_p: 0.9,
+                            top_k: 40,
+                            repeat_penalty: 1.1,
+                            num_predict: 512,
+                            stop: ["\n\n", "Question:", "Explanation:", "Note:"]
+                        }
+                    }, {
+                        timeout: 15000, // Reduced from 25s to 15s for faster failure detection
+                        validateStatus: (status) => status < 500 // Accept 4xx errors for better error messages
+                    });
+                    
+                    console.log(`[ALFRED] ✅ Ollama responded with ${ollamaResponse.data?.response?.trim()?.length || 0} chars`);
+                    return {
+                        answer: ollamaResponse.data?.response?.trim() || "I couldn't generate a response.",
+                        model_used: requestedModel,
+                        context_length: context.length,
+                        source: 'ollama'
+                    };
                 }
+            } catch (error) {
+                console.error(`[ALFRED] ❌ Specific model ${requestedModel} failed:`, error.message);
+                if (error.code === 'ECONNREFUSED') {
+                    console.error(`[ALFRED] ❌ Ollama is not running! Cannot connect to ${this.ollamaBaseUrl}`);
+                    // Return a user-friendly error instead of falling back
+                    throw new Error(`Ollama service is not running. Please start it with: make backend-only`);
+                }
+                if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+                    console.error(`[ALFRED] ❌ Ollama request timed out after 15 seconds`);
+                    throw new Error(`Ollama service timed out. It may be overloaded or unresponsive.`);
+                }
+                // Fall back to racing if specific model fails for other reasons
+                console.log(`[ALFRED] ⚠️ Falling back to parallel racing...`);
+                // Don't return here - let it fall through to parallel racing
             }
-            
+        }
+        
+        try {
             console.log(`[ALFRED] 🏁 Starting parallel LLM race with ${this.openaiApiKey ? 'OpenAI + ' : ''}${this.xaiApiKey ? 'Grok-4 + Grok-4-Fast + ' : ''}Ollama (${this.defaultModel})`);
             
             // Create parallel requests - local LLM with shorter timeout + cloud fallbacks
