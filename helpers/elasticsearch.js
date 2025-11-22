@@ -1923,6 +1923,272 @@ const addRecipeNutritionalSummary = async (record, recordsInDB, fieldPrefix = 's
     }
 };
 
+/**
+ * Search notes with query-based semantic matching
+ * Used for RAG-based note search when user doesn't know exact note
+ * @param {Object} queryParams - Search parameters including noteSearchQuery, noteAttendees, dateStart, dateEnd
+ * @returns {Object} Search results with scored note chunks
+ */
+async function searchNotesWithQuery(queryParams) {
+    const {
+        noteSearchQuery,
+        noteAttendees,
+        dateStart,
+        dateEnd,
+        user,
+        isAuthenticated,
+        limit = 10
+    } = queryParams;
+    
+    console.log('[Note Search] Starting RAG-based note search');
+    console.log(`  Query: "${noteSearchQuery}"`);
+    console.log(`  Attendees: ${noteAttendees || 'none'}`);
+    console.log(`  Date Range: ${dateStart || 'none'} to ${dateEnd || 'none'}`);
+    
+    try {
+        // Step 1: Search noteChunks with date filtering
+        console.log('[Note Search] Step 1: Searching noteChunks...');
+        
+        const chunkSearchParams = {
+            source: 'gun',
+            recordType: 'noteChunks',
+            resolveDepth: 0,
+            limit: 100, // Get more chunks for better scoring
+            user,
+            isAuthenticated
+        };
+        
+        // Add date filtering if provided
+        if (dateStart) chunkSearchParams.dateStart = dateStart;
+        if (dateEnd) chunkSearchParams.dateEnd = dateEnd;
+        
+        // Get all noteChunks in date range (recursively call getRecords WITHOUT noteSearchQuery to avoid infinite loop)
+        const chunkResults = await getRecordsInternal(chunkSearchParams);
+        const chunks = chunkResults.records || [];
+        
+        console.log(`[Note Search] Found ${chunks.length} chunks in date range`);
+        
+        if (chunks.length === 0) {
+            return {
+                message: 'No notes found in the specified date range',
+                searchResults: 0,
+                records: [],
+                auth: {
+                    authenticated: isAuthenticated || false,
+                    user: user || null
+                }
+            };
+        }
+        
+        // Step 2: Score chunks based on query match (tags and text)
+        console.log('[Note Search] Step 2: Scoring chunks based on query match...');
+        
+        const scoredChunks = chunks.map(chunk => {
+            const tags = chunk.data?.basic?.tagItems || [];
+            const text = chunk.data?.noteChunks?.text || '';
+            const noteRef = chunk.data?.noteChunks?.note_ref;
+            
+            let score = 0;
+            let matchDetails = {
+                tagMatches: 0,
+                textMatches: 0
+            };
+            
+            // Normalize query for matching
+            const queryTerms = noteSearchQuery.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+            
+            // Score tag matches (higher weight)
+            tags.forEach(tag => {
+                const tagLower = tag.toLowerCase();
+                queryTerms.forEach(term => {
+                    if (tagLower.includes(term)) {
+                        score += 3; // Higher weight for tag matches
+                        matchDetails.tagMatches++;
+                    }
+                });
+            });
+            
+            // Score text matches (lower weight)
+            const textLower = text.toLowerCase();
+            queryTerms.forEach(term => {
+                const regex = new RegExp(`\\b${term}\\w*\\b`, 'gi');
+                const matches = textLower.match(regex);
+                if (matches) {
+                    score += matches.length; // Count each occurrence
+                    matchDetails.textMatches += matches.length;
+                }
+            });
+            
+            return {
+                chunk,
+                noteRef,
+                score,
+                matchDetails
+            };
+        }).filter(item => item.score > 0); // Only keep chunks with matches
+        
+        // Sort by score
+        scoredChunks.sort((a, b) => b.score - a.score);
+        
+        console.log(`[Note Search] Scored ${scoredChunks.length} chunks with matches`);
+        
+        if (scoredChunks.length === 0) {
+            return {
+                message: 'No notes found matching the search query',
+                searchResults: 0,
+                records: [],
+                auth: {
+                    authenticated: isAuthenticated || false,
+                    user: user || null
+                }
+            };
+        }
+        
+        // Step 3: Group by note and aggregate scores
+        console.log('[Note Search] Step 3: Grouping chunks by parent note...');
+        
+        const noteScores = {};
+        scoredChunks.forEach(({ noteRef, score, matchDetails }) => {
+            if (!noteRef) return;
+            
+            if (!noteScores[noteRef]) {
+                noteScores[noteRef] = {
+                    noteDid: noteRef,
+                    chunkScore: 0,
+                    totalMatches: 0,
+                    tagMatches: 0,
+                    textMatches: 0,
+                    chunkCount: 0
+                };
+            }
+            
+            noteScores[noteRef].chunkScore += score;
+            noteScores[noteRef].tagMatches += matchDetails.tagMatches;
+            noteScores[noteRef].textMatches += matchDetails.textMatches;
+            noteScores[noteRef].totalMatches += (matchDetails.tagMatches + matchDetails.textMatches);
+            noteScores[noteRef].chunkCount++;
+        });
+        
+        const noteDids = Object.keys(noteScores);
+        console.log(`[Note Search] Found ${noteDids.length} unique notes with matches`);
+        
+        // Step 4: Fetch parent notes
+        console.log('[Note Search] Step 4: Fetching parent notes...');
+        
+        const noteRecords = [];
+        for (const noteDid of noteDids) {
+            try {
+                const noteResult = await getRecordsInternal({
+                    source: 'gun',
+                    recordType: 'notes',
+                    did: noteDid,
+                    limit: 1,
+                    user,
+                    isAuthenticated
+                });
+                
+                if (noteResult.records && noteResult.records.length > 0) {
+                    noteRecords.push({
+                        note: noteResult.records[0],
+                        scores: noteScores[noteDid]
+                    });
+                }
+            } catch (error) {
+                console.warn(`[Note Search] Failed to fetch note ${noteDid}:`, error.message);
+            }
+        }
+        
+        console.log(`[Note Search] Retrieved ${noteRecords.length} parent notes`);
+        
+        // Step 5: Score notes based on attendee matching (if provided)
+        if (noteAttendees) {
+            console.log('[Note Search] Step 5: Scoring notes based on attendee matching...');
+            
+            const requestedAttendees = noteAttendees.split(',').map(name => name.trim().toLowerCase());
+            
+            noteRecords.forEach(({ note, scores }) => {
+                const participantNames = note.data?.notes?.participant_display_names || [];
+                
+                let attendeeScore = 0;
+                let attendeeMatches = 0;
+                
+                requestedAttendees.forEach(requestedName => {
+                    participantNames.forEach(participantName => {
+                        const participantLower = (participantName || '').toLowerCase();
+                        
+                        // Fuzzy matching: check if either contains the other
+                        if (participantLower.includes(requestedName) || requestedName.includes(participantLower)) {
+                            attendeeScore += 5; // High weight for attendee matches
+                            attendeeMatches++;
+                        }
+                    });
+                });
+                
+                scores.attendeeScore = attendeeScore;
+                scores.attendeeMatches = attendeeMatches;
+            });
+        } else {
+            // No attendee filtering
+            noteRecords.forEach(({ scores }) => {
+                scores.attendeeScore = 0;
+                scores.attendeeMatches = 0;
+            });
+        }
+        
+        // Step 6: Calculate final scores and rank notes
+        console.log('[Note Search] Step 6: Calculating final scores and ranking...');
+        
+        noteRecords.forEach(({ scores }) => {
+            // Final score = chunk relevance + attendee matching
+            scores.finalScore = scores.chunkScore + scores.attendeeScore;
+        });
+        
+        // Sort by final score
+        noteRecords.sort((a, b) => b.scores.finalScore - a.scores.finalScore);
+        
+        // Step 7: Return top N results
+        const topResults = noteRecords.slice(0, parseInt(limit));
+        
+        console.log('[Note Search] Top results:');
+        topResults.forEach((result, index) => {
+            const { note, scores } = result;
+            console.log(`  ${index + 1}. ${note.data?.basic?.name || 'Untitled'}`);
+            console.log(`     - Final Score: ${scores.finalScore}`);
+            console.log(`     - Chunk Score: ${scores.chunkScore} (${scores.chunkCount} chunks, ${scores.totalMatches} matches)`);
+            console.log(`     - Attendee Score: ${scores.attendeeScore} (${scores.attendeeMatches} matches)`);
+            console.log(`     - DID: ${note.did}`);
+        });
+        
+        // Return results in standard format
+        return {
+            message: 'Note search results',
+            searchResults: topResults.length,
+            totalNotesScored: noteRecords.length,
+            totalChunksSearched: chunks.length,
+            records: topResults.map(({ note, scores }) => ({
+                ...note,
+                searchScores: scores // Include scoring details
+            })),
+            auth: {
+                authenticated: isAuthenticated || false,
+                user: user || null
+            }
+        };
+        
+    } catch (error) {
+        console.error('[Note Search] Error during note search:', error);
+        throw error;
+    }
+}
+
+// Internal version of getRecords that bypasses noteSearchQuery special handling
+// Used by searchNotesWithQuery to avoid infinite recursion
+async function getRecordsInternal(queryParams) {
+    // Remove noteSearchQuery to prevent recursion
+    const { noteSearchQuery, ...cleanParams } = queryParams;
+    return await getRecords(cleanParams);
+}
+
 async function getRecords(queryParams) {
 
     const {
@@ -1980,7 +2246,14 @@ async function getRecords(queryParams) {
         fieldSearch, // New parameter: value to search for in a specific field path
         fieldName, // New parameter: dot-notation path to field (e.g., 'recipe.course', 'data.basic.name')
         fieldMatchMode = 'partial', // New parameter: 'exact' or 'partial' matching (default: 'partial')
+        noteSearchQuery, // NEW: Special parameter for RAG-based note search (searches tags and text)
+        noteAttendees, // NEW: Comma-separated list of attendee names for note search
     } = queryParams;
+    
+    // Special handling for noteSearchQuery parameter (for RAG-based note search)
+    if (noteSearchQuery) {
+        return await searchNotesWithQuery(queryParams);
+    }
 
     // Normalize DID parameter for backward compatibility
     const normalizedDid = did || didTx;
