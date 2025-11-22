@@ -383,6 +383,11 @@
             box-shadow: var(--shadow-soft);
         }
 
+        [data-theme="light"] .bottom-nav {
+            background: linear-gradient(135deg, rgba(239, 241, 249, 0.95), rgba(255, 255, 255, 0.98));
+            border: 1px solid rgba(74, 83, 115, 0.12);
+        }
+
         .nav-item {
             display: flex;
             flex-direction: column;
@@ -1537,7 +1542,8 @@
                         <div class="chat-mode-row">
                             <div class="chat-toggle">
                                 <button class="chat-toggle-btn active" data-mode="chat" onclick="alfredApp.switchChatMode('chat')">Chat</button>
-                                <button class="chat-toggle-btn" data-mode="notes" onclick="alfredApp.switchChatMode('notes')">My Notes</button>
+                                <button class="chat-toggle-btn" data-mode="notes" onclick="alfredApp.switchChatMode('notes')">All Notes</button>
+                                <button class="chat-toggle-btn" data-mode="selected" onclick="alfredApp.switchChatMode('selected')" id="selectedNoteBtn" style="display: none;">Selected Note</button>
                             </div>
                             <button class="info-button" onclick="alfredApp.showModeInfo()" title="Learn about chat modes">i</button>
                         </div>
@@ -1567,9 +1573,15 @@
                             </div>
                         </div>
                         <div class="info-modal-section">
-                            <div class="info-modal-section-title">📚 My Notes Mode</div>
+                            <div class="info-modal-section-title">📚 All Notes Mode</div>
                             <div class="info-modal-section-text">
                                 Searches across all your meeting notes to find relevant information. Ask questions like "What did we discuss about the API last week?" or "Who was assigned to the design task?" and Alfred will search your notes, find the most relevant one, and answer based on that content.
+                            </div>
+                        </div>
+                        <div class="info-modal-section">
+                            <div class="info-modal-section-title">📝 Selected Note Mode</div>
+                            <div class="info-modal-section-text">
+                                Ask questions about a specific note you're viewing. When you click "Chat with Alfred about this note" from a note detail page, this mode is automatically activated and all questions will be answered using only that note's content, transcript, and summary.
                             </div>
                         </div>
                     </div>
@@ -1792,7 +1804,8 @@
                 },
                 isEditingApiUrl: false,
                 currentAI: 'alfred',
-                chatMode: 'chat', // 'chat' or 'notes'
+                chatMode: 'chat', // 'chat', 'notes', or 'selected'
+                selectedNoteForChat: null, // The note DID when in 'selected' mode
                 conversationHistory: []
             },
 
@@ -2309,23 +2322,51 @@
             chatAboutNote() {
                 if (!this.state.currentNote) return;
                 
+                // Store the note DID for selected note mode
+                this.state.selectedNoteForChat = this.state.currentNote.did || this.state.currentNote.oip?.did;
+                
+                // Set mode to 'selected'
+                this.state.chatMode = 'selected';
+                
                 // Clear conversation history for new note chat
                 this.state.conversationHistory = [];
+                
+                // Show and activate the "Selected Note" button
+                const selectedNoteBtn = document.getElementById('selectedNoteBtn');
+                if (selectedNoteBtn) {
+                    selectedNoteBtn.style.display = 'block';
+                }
+                
+                // Update toggle buttons to show "Selected Note" as active
+                document.querySelectorAll('.chat-toggle-btn[data-mode]').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.mode === 'selected') {
+                        btn.classList.add('active');
+                    }
+                });
                 
                 // Initialize chat view with note context
                 const chatMessages = document.getElementById('chatMessages');
                 if (chatMessages) {
                     chatMessages.innerHTML = '';
                     
+                    const noteName = this.state.currentNote.data?.basic?.name || 'Untitled';
                     const welcomeMessage = document.createElement('div');
                     welcomeMessage.className = 'message';
                     welcomeMessage.innerHTML = `
                         <div class="message-avatar">A</div>
                         <div class="message-content">
-                            <div class="message-text">Hello! I've analyzed your note "${this.state.currentNote.data?.basic?.name || 'Untitled'}". Ask me anything about it - I have access to the full transcript, summary, and related content.</div>
+                            <div class="message-text">Hello! I've analyzed your note "${noteName}". Ask me anything about it - I have access to the full transcript, summary, and related content.</div>
                         </div>
                     `;
                     chatMessages.appendChild(welcomeMessage);
+                }
+                
+                // Update placeholder
+                const chatInput = document.getElementById('chatInput');
+                if (chatInput) {
+                    const noteName = this.state.currentNote.data?.basic?.name || 'this note';
+                    chatInput.placeholder = `Ask about "${noteName}"...`;
                 }
                 
                 this.showView('chatView', true); // Keep context
@@ -2353,15 +2394,21 @@
                         conversationHistory: this.state.conversationHistory.slice(-10) // Keep last 5 exchanges (10 messages)
                     };
 
-                    // If we have a current note (RAG mode), include it
-                    if (this.state.currentNote) {
-                        requestBody.noteDid = this.state.currentNote.did;
-                    }
-                    // If in "My Notes" mode, enable allNotes search
-                    else if (this.state.chatMode === 'notes') {
+                    // Determine which mode we're in and set appropriate parameters
+                    if (this.state.chatMode === 'selected' && this.state.selectedNoteForChat) {
+                        // Selected Note mode - query specific note
+                        requestBody.noteDid = this.state.selectedNoteForChat;
+                        console.log('📝 Selected Note mode - using DID:', this.state.selectedNoteForChat);
+                    } else if (this.state.chatMode === 'notes') {
+                        // All Notes mode - search across all notes
                         requestBody.allNotes = true;
+                        console.log('📚 All Notes mode - searching all notes');
+                    } else {
+                        // Chat mode - pure LLM
+                        console.log('💬 Chat mode - pure LLM');
                     }
-                    // Otherwise it's pure LLM mode (no note context, allNotes=false)
+
+                    console.log('🚀 Sending request:', requestBody);
 
                     const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/converse`, {
                         method: 'POST',
@@ -2375,7 +2422,7 @@
                     const data = await response.json();
 
                     if (data.success) {
-                        // If in My Notes mode and we got search context, show which note was found
+                        // If in All Notes mode and we got search context, show which note was found
                         let answerText = data.answer;
                         if (this.state.chatMode === 'notes' && data.context?.search) {
                             const noteTitle = data.context.note?.title || 'a note';
@@ -2453,18 +2500,35 @@
                 // Clear conversation history when switching modes
                 this.state.conversationHistory = [];
                 
+                // If switching away from selected mode, clear the selected note and hide the button
+                if (mode !== 'selected') {
+                    this.state.selectedNoteForChat = null;
+                    this.state.currentNote = null;
+                    
+                    const selectedNoteBtn = document.getElementById('selectedNoteBtn');
+                    if (selectedNoteBtn) {
+                        selectedNoteBtn.style.display = 'none';
+                    }
+                }
+                
                 // Update placeholder text based on mode
                 const chatInput = document.getElementById('chatInput');
                 if (chatInput) {
                     if (mode === 'notes') {
                         chatInput.placeholder = 'Ask about your notes (e.g., "What did we discuss about the API last week?")';
+                    } else if (mode === 'selected') {
+                        const noteName = this.state.currentNote?.data?.basic?.name || 'this note';
+                        chatInput.placeholder = `Ask about "${noteName}"...`;
                     } else {
                         chatInput.placeholder = 'Ask Alfred anything...';
                     }
                 }
                 
+                // Reinitialize chat view with new mode
+                this.initChatView();
+                
                 // Show toast to inform user
-                const modeText = mode === 'notes' ? 'My Notes' : 'Chat';
+                const modeText = mode === 'notes' ? 'All Notes' : mode === 'selected' ? 'Selected Note' : 'Chat';
                 this.showToast(`Switched to ${modeText} mode`, 'success');
             },
 
@@ -2486,17 +2550,30 @@
                 const chatMessages = document.getElementById('chatMessages');
                 if (!chatMessages) return;
 
-                // Clear current note for general LLM mode
-                this.state.currentNote = null;
+                // Clear current note and selected note for general modes
+                if (this.state.chatMode !== 'selected') {
+                    this.state.currentNote = null;
+                    this.state.selectedNoteForChat = null;
+                }
+                
                 this.state.conversationHistory = [];
 
                 chatMessages.innerHTML = '';
+
+                // Hide Selected Note button if not in selected mode
+                const selectedNoteBtn = document.getElementById('selectedNoteBtn');
+                if (selectedNoteBtn && this.state.chatMode !== 'selected') {
+                    selectedNoteBtn.style.display = 'none';
+                }
 
                 // Update placeholder based on current mode
                 const chatInput = document.getElementById('chatInput');
                 if (chatInput) {
                     if (this.state.chatMode === 'notes') {
                         chatInput.placeholder = 'Ask about your notes (e.g., "What did we discuss about the API last week?")';
+                    } else if (this.state.chatMode === 'selected') {
+                        const noteName = this.state.currentNote?.data?.basic?.name || 'this note';
+                        chatInput.placeholder = `Ask about "${noteName}"...`;
                     } else {
                         chatInput.placeholder = 'Ask Alfred anything...';
                     }
@@ -2510,6 +2587,11 @@
                     welcomeText = this.state.currentAI === 'alfred' 
                         ? "Hello! I'm Alfred. I can search across all your meeting notes to help you find information. Try asking questions like 'What did we discuss about the API last week?' or 'Who was assigned to the design task?'"
                         : "Hello! I'm Alice. I can search across all your meeting notes to help you find information. Ask me anything about your notes!";
+                } else if (this.state.chatMode === 'selected') {
+                    const noteName = this.state.currentNote?.data?.basic?.name || 'this note';
+                    welcomeText = this.state.currentAI === 'alfred' 
+                        ? `Hello! I'm Alfred. I've analyzed your note "${noteName}". Ask me anything about it - I have access to the full transcript, summary, and related content.`
+                        : `Hello! I'm Alice. I've analyzed your note "${noteName}". Ask me anything about it!`;
                 } else {
                     welcomeText = this.state.currentAI === 'alfred' 
                         ? "Hello! I'm Alfred, your AI assistant. I can help you with any questions, tasks, or creative projects. What would you like to know?"
