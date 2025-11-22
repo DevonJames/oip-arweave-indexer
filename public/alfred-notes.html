@@ -204,6 +204,14 @@
             filter: brightness(0) saturate(100%) invert(58%) sepia(92%) saturate(2449%) hue-rotate(158deg) brightness(97%) contrast(101%);
         }
 
+        .note-meta img {
+            filter: brightness(0) saturate(100%) invert(82%) sepia(51%) saturate(2450%) hue-rotate(125deg) brightness(102%) contrast(97%);
+        }
+
+        [data-theme="light"] .note-meta img {
+            filter: brightness(0) saturate(100%) invert(58%) sepia(92%) saturate(2449%) hue-rotate(158deg) brightness(97%) contrast(101%);
+        }
+
         body {
             font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background:
@@ -294,6 +302,14 @@
             border-radius: 999px;
             background: rgba(15, 20, 50, 0.9);
             border: 1px solid var(--border-subtle);
+        }
+
+        [data-theme="light"] .app-header {
+            background: linear-gradient(135deg, rgba(0, 212, 212, 0.08), rgba(74, 123, 255, 0.08)) var(--bg-panel);
+        }
+
+        [data-theme="light"] .user-info span {
+            background: rgba(239, 241, 249, 0.95);
         }
 
         .theme-toggle {
@@ -441,6 +457,16 @@
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        .icon-record {
+            width: 60px;
+            height: 60px;
+            filter: brightness(0) saturate(100%) invert(82%) sepia(51%) saturate(2450%) hue-rotate(125deg) brightness(102%) contrast(97%);
+        }
+
+        [data-theme="light"] .icon-record {
+            filter: brightness(0) saturate(100%) invert(58%) sepia(92%) saturate(2449%) hue-rotate(158deg) brightness(97%) contrast(101%);
         }
 
         .record-button:hover {
@@ -901,14 +927,40 @@
         }
 
         .model-select {
-            padding: 8px 12px;
+            padding: 10px 16px;
             border: 1px solid var(--border-subtle);
-            border-radius: 999px;
+            border-radius: 12px;
             font-size: 13px;
-            background: var(--bg-panel);
+            font-family: "Space Grotesk", sans-serif;
+            font-weight: 500;
+            background: var(--bg-elevated);
             color: var(--text-primary);
             cursor: pointer;
             outline: none;
+            transition: all var(--transition-fast);
+            width: 100%;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%235FFCF9' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        .model-select:hover {
+            border-color: var(--accent-cyan);
+            background: var(--bg-panel);
+            box-shadow: 0 0 0 2px rgba(95, 252, 249, 0.15);
+        }
+
+        .model-select:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(95, 252, 249, 0.25);
+        }
+
+        .model-select option {
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            padding: 10px;
         }
 
         /* Note Detail View */
@@ -1327,12 +1379,6 @@
                                 </div>
                                 <div class="template-name">Interview / Lecture</div>
                             </div>
-                            <div class="template-card" data-template="OTHER">
-                                <div class="template-icon">
-                                    <img src="icons/noun-notes-7945433.svg" alt="Other" class="icon-template">
-                                </div>
-                                <div class="template-name">Other</div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1624,8 +1670,7 @@
                         'STANDUP': 'Standup',
                         'IDEA': 'Idea',
                         'REFLECTION': 'Reflection',
-                        'INTERVIEW': 'Interview',
-                        'OTHER': 'Other'
+                        'INTERVIEW': 'Interview'
                     },
                     device_type: {
                         'IPHONE': 'iPhone',
@@ -1937,6 +1982,7 @@
                 if (!this.state.jwtToken) return;
 
                 try {
+                    console.log('📝 Loading notes...');
                     const response = await fetch('https://api.oip.onl/api/records?source=gun&recordType=notes&limit=50&sortBy=date:desc', {
                         headers: {
                             'Authorization': `Bearer ${this.state.jwtToken}`
@@ -1944,13 +1990,25 @@
                     });
 
                     const data = await response.json();
+                    console.log('📝 Notes API response:', {
+                        recordCount: data.records?.length || 0,
+                        authenticated: data.auth?.authenticated,
+                        sampleNote: data.records?.[0] ? {
+                            hasDid: !!data.records[0].did,
+                            hasOipDid: !!data.records[0].oip?.did,
+                            didValue: data.records[0].oip?.did || data.records[0].did
+                        } : null
+                    });
                     
                     if (data.records) {
                         this.state.notes = data.records;
                         this.renderNotesList();
+                        console.log(`✅ Loaded ${data.records.length} notes`);
+                    } else {
+                        console.warn('⚠️ No records in response');
                     }
                 } catch (error) {
-                    console.error('Error loading notes:', error);
+                    console.error('❌ Error loading notes:', error);
                 }
             },
 
@@ -1980,8 +2038,11 @@
                     // Convert enum CODE to display name
                     const noteTypeDisplay = this.getEnumDisplayName(noteData.note_type, 'note_type');
 
+                    // Get DID from correct location (oip.did or top-level did for backward compatibility)
+                    const noteDid = note.oip?.did || note.did;
+                    
                     return `
-                        <div class="note-card" onclick="alfredApp.viewNote('${note.did}')">
+                        <div class="note-card" onclick="alfredApp.viewNote('${noteDid}')">
                             <div class="note-header">
                                 <div class="note-title">${basic.name || 'Untitled Note'}</div>
                                 <div class="note-badge">
@@ -1991,7 +2052,7 @@
                             </div>
                             <div class="note-preview">${preview.substring(0, 150)}...</div>
                             <div class="note-meta">
-                                <span>📅 ${date}</span>
+                                <span><img src="icons/noun-calendar-8032539.svg" alt="Date" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px; opacity: 0.7;"> ${date}</span>
                                 <span>⏱️ ${duration}</span>
                             </div>
                         </div>
@@ -2001,6 +2062,14 @@
 
             async viewNote(noteDid) {
                 try {
+                    console.log('📖 Viewing note with DID:', noteDid);
+                    
+                    if (!noteDid || noteDid === 'undefined') {
+                        console.error('❌ Invalid DID:', noteDid);
+                        this.showToast('Invalid note ID', 'error');
+                        return;
+                    }
+                    
                     const response = await fetch(`https://api.oip.onl/api/records?source=gun&did=${noteDid}`, {
                         headers: {
                             'Authorization': `Bearer ${this.state.jwtToken}`
@@ -2010,12 +2079,16 @@
                     const data = await response.json();
                     
                     if (data.records && data.records[0]) {
+                        console.log('✅ Note loaded successfully');
                         this.state.currentNote = data.records[0];
                         this.renderNoteDetail();
                         this.showView('noteDetailView');
+                    } else {
+                        console.warn('⚠️ No note found with DID:', noteDid);
+                        this.showToast('Note not found', 'error');
                     }
                 } catch (error) {
-                    console.error('Error loading note:', error);
+                    console.error('❌ Error loading note:', error);
                     this.showToast('Failed to load note', 'error');
                 }
             },
