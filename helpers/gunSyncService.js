@@ -218,11 +218,16 @@ class GunSyncService {
                         const indexSoul = `oip:registry:index:${recordType}`;
                         const response = await axios.get(`${peerUrl}/get`, {
                             params: { soul: indexSoul },
-                            timeout: 5000
+                            timeout: 5000,
+                            // MEMORY LEAK FIX: Explicitly use global HTTP agents
+                            httpAgent: axios.defaults.httpAgent,
+                            httpsAgent: axios.defaults.httpsAgent
                         });
                         
                         if (response.data && response.data.success && response.data.data) {
-                            const peerIndex = response.data.data;
+                            // MEMORY LEAK FIX: Extract data and nullify response reference
+                            const peerIndex = JSON.parse(JSON.stringify(response.data.data));
+                            response.data = null; // Allow GC to reclaim response buffer
                             
                             // Process each entry in the peer's registry index
                             for (const [soul, entry] of Object.entries(peerIndex)) {
@@ -266,11 +271,16 @@ class GunSyncService {
                                 // Fetch the actual record from peer
                                 const recordResponse = await axios.get(`${peerUrl}/get`, {
                                     params: { soul: recordSoul },
-                                    timeout: 10000
+                                    timeout: 10000,
+                                    // MEMORY LEAK FIX: Explicitly use global HTTP agents
+                                    httpAgent: axios.defaults.httpAgent,
+                                    httpsAgent: axios.defaults.httpsAgent
                                 });
                                 
                                 if (recordResponse.data && recordResponse.data.success && recordResponse.data.data) {
-                                    const fetchedData = recordResponse.data.data;
+                                    // MEMORY LEAK FIX: Deep clone data and nullify response reference
+                                    const fetchedData = JSON.parse(JSON.stringify(recordResponse.data.data));
+                                    recordResponse.data = null; // Allow GC to reclaim response buffer
                                     
                                     // Parse JSON strings back to objects (data and oip are stored as strings in GUN)
                                     if (typeof fetchedData.data === 'string') {

@@ -129,6 +129,30 @@ axios.interceptors.response.use(
           cleanup();
         }
       });
+    } else if (response.data && typeof response.data === 'object') {
+      // MEMORY LEAK FIX: Also track and cleanup JSON responses from GUN sync
+      // These can accumulate in external memory and not get GC'd promptly
+      try {
+        const dataSize = JSON.stringify(response.data).length;
+        if (dataSize > 100 * 1024) { // Log JSON responses > 100KB
+          console.log(`📦 [Axios] Large JSON response: ${(dataSize / 1024).toFixed(1)}KB from ${response.config.url || 'unknown'}`);
+        }
+        
+        // Add cleanup helper to force GC after response is processed
+        setTimeout(() => {
+          if (response.data) {
+            response.data = null;
+            if (global.gc && dataSize > 1024 * 1024) {
+              setImmediate(() => {
+                global.gc();
+                console.log(`🧹 [Axios] Released ${(dataSize / 1024).toFixed(1)}KB JSON response`);
+              });
+            }
+          }
+        }, 2000); // 2 second delay to allow processing
+      } catch (e) {
+        // Circular reference or other JSON issue, skip tracking
+      }
     }
     return response;
   },
@@ -323,7 +347,10 @@ app.get('/gun-relay/get', async (req, res) => {
         
         const gunRelayUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
         const response = await axios.get(`${gunRelayUrl}/get?soul=${encodeURIComponent(soul)}`, {
-            timeout: 10000
+            timeout: 10000,
+            // MEMORY LEAK FIX: Explicitly use global HTTP agents
+            httpAgent: httpAgent,
+            httpsAgent: httpsAgent
         });
         res.json(response.data);
     } catch (error) {
@@ -345,7 +372,10 @@ app.post('/gun-relay/put', async (req, res) => {
         const gunRelayUrl = process.env.GUN_PEERS || 'http://gun-relay:8765';
         const response = await axios.post(`${gunRelayUrl}/put`, req.body, {
             timeout: 30000,
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            // MEMORY LEAK FIX: Explicitly use global HTTP agents
+            httpAgent: httpAgent,
+            httpsAgent: httpsAgent
         });
         res.json(response.data);
     } catch (error) {
