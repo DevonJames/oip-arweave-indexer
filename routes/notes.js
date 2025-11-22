@@ -940,30 +940,231 @@ router.post('/converse', authenticateToken, async (req, res) => {
             model = 'llama3.2:3b',
             conversationHistory = [],
             includeRelated = true,
-            maxRelated = 5
+            maxRelated = 5,
+            allNotes = false  // NEW: Search across all user's notes
         } = req.body;
 
         console.log(`\n${'='.repeat(80)}`);
-        console.log(`[ALFRED Notes RAG] Processing question about note: ${noteDid}`);
-        console.log(`[ALFRED Notes RAG] Question: "${question}"`);
-        console.log(`[ALFRED Notes RAG] Model: ${model}`);
+        console.log(`[ALFRED Notes] Processing question${noteDid ? ` about note: ${noteDid}` : allNotes ? ' (All Notes Search)' : ' (LLM mode)'}`);
+        console.log(`[ALFRED Notes] Question: "${question}"`);
+        console.log(`[ALFRED Notes] Model: ${model}`);
+        if (allNotes) console.log(`[ALFRED Notes] Mode: Search across all notes`);
         console.log(`${'='.repeat(80)}\n`);
 
         // Validate inputs
-        if (!noteDid || !question) {
+        if (!question) {
             return res.status(400).json({
                 success: false,
-                error: 'Both noteDid and question are required'
+                error: 'Question is required'
             });
         }
 
         const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
         
+        // ========================================
+        // MODE 1: All Notes Search (no specific noteDid)
+        // ========================================
+        if (!noteDid && allNotes) {
+            console.log('[ALFRED Notes All Notes Mode] Extracting search parameters from question...');
+            
+            const alfredInstance = require('../helpers/alfred');
+            
+            // Use LLM to extract date range, attendee names, and primary subject from the question
+            const extractionPrompt = `You are helping extract structured information from a user's question about their meeting notes.
+
+User's question: "${question}"
+
+Please extract the following information and respond ONLY with a JSON object (no markdown, no explanation):
+
+{
+  "dateRange": {
+    "hasDate": true/false,
+    "startDate": "YYYY-MM-DD" or null,
+    "endDate": "YYYY-MM-DD" or null
+  },
+  "attendees": ["Name1", "Name2"] or [],
+  "primarySubject": "main topic or subject they're asking about"
+}
+
+Rules:
+- If they mention a specific date, use that for both startDate and endDate
+- If they mention "last week", calculate the date range
+- If they mention "yesterday", calculate that date
+- If they mention "today", use today's date
+- If they mention a date range like "last month", calculate the range
+- If no date mentioned, set hasDate to false and dates to null
+- Extract any person names mentioned as attendees
+- The primarySubject should be the main topic they're asking about (2-5 words)
+- Respond with ONLY the JSON object`;
+
+            try {
+                console.log('[ALFRED Notes] Calling LLM to extract search parameters...');
+                
+                const extractionResponse = await alfredInstance.query(extractionPrompt, {
+                    model: model,
+                    useFieldExtraction: false
+                });
+                
+                console.log('[ALFRED Notes] LLM extraction response:', extractionResponse.answer);
+                
+                // Parse the LLM response to extract structured data
+                let extractedInfo;
+                try {
+                    // Try to parse the response as JSON
+                    const jsonMatch = extractionResponse.answer.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        extractedInfo = JSON.parse(jsonMatch[0]);
+                    } else {
+                        throw new Error('No JSON found in response');
+                    }
+                } catch (parseError) {
+                    console.warn('[ALFRED Notes] Failed to parse LLM extraction, using defaults:', parseError.message);
+                    extractedInfo = {
+                        dateRange: { hasDate: false, startDate: null, endDate: null },
+                        attendees: [],
+                        primarySubject: question.substring(0, 50) // Use first 50 chars as fallback
+                    };
+                }
+                
+                console.log('[ALFRED Notes] Extracted info:');
+                console.log(`  - Date Range: ${extractedInfo.dateRange.hasDate ? `${extractedInfo.dateRange.startDate} to ${extractedInfo.dateRange.endDate}` : 'none'}`);
+                console.log(`  - Attendees: ${extractedInfo.attendees.length > 0 ? extractedInfo.attendees.join(', ') : 'none'}`);
+                console.log(`  - Primary Subject: ${extractedInfo.primarySubject}`);
+                
+                // Build search parameters
+                const searchParams = {
+                    noteSearchQuery: extractedInfo.primarySubject,
+                    user: req.user,
+                    isAuthenticated: true,
+                    limit: 10
+                };
+                
+                // Add date filtering if dates were extracted
+                if (extractedInfo.dateRange.hasDate) {
+                    if (extractedInfo.dateRange.startDate) {
+                        // Convert to Unix timestamp (start of day)
+                        const startDate = new Date(extractedInfo.dateRange.startDate + 'T00:00:00Z');
+                        searchParams.dateStart = Math.floor(startDate.getTime() / 1000);
+                    }
+                    if (extractedInfo.dateRange.endDate) {
+                        // Convert to Unix timestamp (end of day)
+                        const endDate = new Date(extractedInfo.dateRange.endDate + 'T23:59:59Z');
+                        searchParams.dateEnd = Math.floor(endDate.getTime() / 1000);
+                    }
+                }
+                
+                // Add attendee filtering if attendees were extracted
+                if (extractedInfo.attendees.length > 0) {
+                    searchParams.noteAttendees = extractedInfo.attendees.join(',');
+                }
+                
+                console.log('[ALFRED Notes] Searching notes with parameters:', searchParams);
+                
+                // Search for matching notes
+                const searchResults = await getRecords(searchParams);
+                
+                console.log(`[ALFRED Notes] Found ${searchResults.searchResults} matching notes`);
+                
+                if (searchResults.searchResults === 0) {
+                    return res.json({
+                        success: true,
+                        answer: `I couldn't find any notes matching your search criteria. ${extractedInfo.dateRange.hasDate ? `I looked for notes from ${extractedInfo.dateRange.startDate} to ${extractedInfo.dateRange.endDate}` : 'Try providing a date range or more specific details about the meeting.'} ${extractedInfo.attendees.length > 0 ? `with attendees: ${extractedInfo.attendees.join(', ')}` : ''}`,
+                        context: {
+                            mode: 'allNotes',
+                            searchQuery: extractedInfo.primarySubject,
+                            dateRange: extractedInfo.dateRange,
+                            attendees: extractedInfo.attendees,
+                            resultsFound: 0
+                        },
+                        model: model,
+                        sources: []
+                    });
+                }
+                
+                // Get the top-ranked note
+                const topNote = searchResults.records[0];
+                const topNoteDid = topNote.did;
+                const searchScores = topNote.searchScores;
+                
+                console.log('[ALFRED Notes] Top note selected:', topNote.data?.basic?.name);
+                console.log(`  - DID: ${topNoteDid}`);
+                console.log(`  - Final Score: ${searchScores.finalScore}`);
+                console.log(`  - Chunk Score: ${searchScores.chunkScore} (${searchScores.chunkCount} chunks)`);
+                console.log(`  - Attendee Score: ${searchScores.attendeeScore} (${searchScores.attendeeMatches} matches)`);
+                
+                // Now proceed to RAG mode with the top note
+                // We'll use the existing RAG logic below by setting noteDid
+                // and falling through to the RAG section
+                console.log('[ALFRED Notes] Proceeding to RAG mode with top-ranked note...');
+                
+                // Override noteDid with the top result and continue to RAG mode below
+                req.body.noteDid = topNoteDid;
+                
+                // Add search context to be included in the response
+                req.searchContext = {
+                    mode: 'allNotes',
+                    searchQuery: extractedInfo.primarySubject,
+                    dateRange: extractedInfo.dateRange,
+                    attendees: extractedInfo.attendees,
+                    totalResults: searchResults.searchResults,
+                    topNoteScore: searchScores
+                };
+                
+                // Continue to RAG mode with the selected note
+                // (Don't return here, let it fall through to the RAG logic below)
+                
+            } catch (error) {
+                console.error('[ALFRED Notes] Error in all notes search:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Failed to search notes',
+                    details: error.message
+                });
+            }
+        }
+        
+        // ========================================
+        // MODE 2: Pure LLM Mode (no noteDid, no allNotes)
+        // ========================================
+        if (!req.body.noteDid && !allNotes) {
+            console.log('[ALFRED Notes] Running in pure LLM mode (no note context)');
+            
+            const alfredInstance = require('../helpers/alfred');
+            
+            const alfredOptions = {
+                model: model,
+                conversationHistory: conversationHistory,
+                useFieldExtraction: false
+            };
+
+            const alfredResponse = await alfredInstance.query(question, alfredOptions);
+            
+            console.log(`[ALFRED Notes] ✅ Response generated (${alfredResponse.answer.length} chars)`);
+
+            return res.json({
+                success: true,
+                answer: alfredResponse.answer,
+                context: {
+                    mode: 'llm'
+                },
+                model: alfredResponse.model || model,
+                sources: alfredResponse.sources || [],
+                error: alfredResponse.error || undefined,
+                error_code: alfredResponse.error_code || undefined
+            });
+        }
+
+        // ========================================
+        // MODE 3: RAG Mode with Specific Note
+        // ========================================
+        // Get the noteDid (either from request or from allNotes search above)
+        const targetNoteDid = req.body.noteDid;
+        
         // Step 1: Retrieve the main note record with resolveDepth=1 to include transcript
-        console.log('[ALFRED Notes RAG] Step 1: Fetching note record with embedded references...');
+        console.log('[ALFRED Notes RAG Mode] Step 1: Fetching note record with embedded references...');
         const noteResults = await getRecords({
             source: 'gun',
-            did: noteDid,
+            did: targetNoteDid,
             limit: 1,
             resolveDepth: 1,  // Resolve nested references (transcript, chunks)
             user: req.user,
@@ -1218,19 +1419,26 @@ ${context.relatedContent.map((item, i) => {
         console.log(`[ALFRED Notes RAG] ✅ Response generated (${alfredResponse.answer.length} chars)`);
 
         // Return the response
-        res.json({
-            success: true,
-            answer: alfredResponse.answer,
-            context: {
+        const responseContext = {
                 note: {
-                    did: noteDid,
+                did: targetNoteDid,
                     title: context.currentNote.title,
                     type: context.currentNote.type
                 },
                 chunks_count: chunks.length,
                 related_content_count: relatedContent.length,
                 transcript_length: transcriptText.length
-            },
+        };
+        
+        // If this came from an allNotes search, include the search context
+        if (req.searchContext) {
+            responseContext.search = req.searchContext;
+        }
+        
+        res.json({
+            success: true,
+            answer: alfredResponse.answer,
+            context: responseContext,
             model: alfredResponse.model || model,
             sources: alfredResponse.sources || [],
             // Include error info if present (e.g., Ollama unavailable)
