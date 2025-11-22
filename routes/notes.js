@@ -1002,10 +1002,14 @@ router.post('/converse', authenticateToken, async (req, res) => {
         if (!noteDid && allNotes) {
             console.log('[ALFRED Notes All Notes Mode] Extracting search parameters from question...');
             
-            const alfredInstance = require('../helpers/alfred');
+            // Get today's date for the prompt
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
             
             // Use LLM to extract date range, attendee names, and primary subject from the question
             const extractionPrompt = `You are helping extract structured information from a user's question about their meeting notes.
+
+Today's date is: ${todayStr}
 
 User's question: "${question}"
 
@@ -1024,40 +1028,100 @@ Please extract the following information and respond ONLY with a JSON object (no
 Rules:
 - If they mention a specific date, use that for both startDate and endDate
 - If they mention "last week", calculate the date range
-- If they mention "yesterday", calculate that date
-- If they mention "today", use today's date
+- If they mention "yesterday", calculate that date (${todayStr} minus 1 day)
+- If they mention "today", use today's date (${todayStr})
 - If they mention a date range like "last month", calculate the range
 - If no date mentioned, set hasDate to false and dates to null
-- Extract any person names mentioned as attendees
+- Extract any person names mentioned as attendees (not generic terms like "we" or "the team")
 - The primarySubject should be the main topic they're asking about (2-5 words)
-- Respond with ONLY the JSON object`;
+- Respond with ONLY the JSON object, no markdown code blocks`;
 
             try {
-                console.log('[ALFRED Notes] Calling LLM to extract search parameters...');
+                console.log('[ALFRED Notes] Calling LLM directly to extract search parameters...');
                 
-                const extractionResponse = await alfredInstance.query(extractionPrompt, {
-                    model: model,
-                    useFieldExtraction: false
-                });
+                // Call LLM directly without RAG to avoid searching for records
+                const axios = require('axios');
+                let extractionResponse;
                 
-                console.log('[ALFRED Notes] LLM extraction response:', extractionResponse.answer);
+                // Try Ollama first
+                try {
+                    const ollamaResponse = await axios.post('http://localhost:11434/api/generate', {
+                        model: model,
+                        prompt: extractionPrompt,
+                        stream: false
+                    }, { timeout: 30000 });
+                    
+                    extractionResponse = { answer: ollamaResponse.data.response };
+                } catch (ollamaError) {
+                    console.warn('[ALFRED Notes] Ollama unavailable, falling back to simpler extraction');
+                    // Fallback: do simple extraction ourselves
+                    extractionResponse = { answer: null };
+                }
+                
+                console.log('[ALFRED Notes] LLM extraction response:', extractionResponse.answer ? extractionResponse.answer.substring(0, 200) : 'null');
                 
                 // Parse the LLM response to extract structured data
                 let extractedInfo;
-                try {
-                    // Try to parse the response as JSON
-                    const jsonMatch = extractionResponse.answer.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        extractedInfo = JSON.parse(jsonMatch[0]);
-                    } else {
-                        throw new Error('No JSON found in response');
+                if (extractionResponse.answer) {
+                    try {
+                        // Try to parse the response as JSON
+                        const jsonMatch = extractionResponse.answer.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            extractedInfo = JSON.parse(jsonMatch[0]);
+                        } else {
+                            throw new Error('No JSON found in response');
+                        }
+                    } catch (parseError) {
+                        console.warn('[ALFRED Notes] Failed to parse LLM extraction, using fallback:', parseError.message);
+                        extractedInfo = null;
                     }
-                } catch (parseError) {
-                    console.warn('[ALFRED Notes] Failed to parse LLM extraction, using defaults:', parseError.message);
+                }
+                
+                // Fallback: Simple keyword-based extraction if LLM failed
+                if (!extractedInfo) {
+                    console.log('[ALFRED Notes] Using simple keyword-based extraction');
+                    const questionLower = question.toLowerCase();
+                    
+                    // Extract date information
+                    let dateRange = { hasDate: false, startDate: null, endDate: null };
+                    
+                    if (questionLower.includes('today')) {
+                        dateRange = {
+                            hasDate: true,
+                            startDate: todayStr,
+                            endDate: todayStr
+                        };
+                    } else if (questionLower.includes('yesterday')) {
+                        const yesterday = new Date(today);
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        const yesterdayStr = yesterday.toISOString().split('T')[0];
+                        dateRange = {
+                            hasDate: true,
+                            startDate: yesterdayStr,
+                            endDate: yesterdayStr
+                        };
+                    } else if (questionLower.includes('last week')) {
+                        const weekAgo = new Date(today);
+                        weekAgo.setDate(weekAgo.getDate() - 7);
+                        const weekAgoStr = weekAgo.toISOString().split('T')[0];
+                        dateRange = {
+                            hasDate: true,
+                            startDate: weekAgoStr,
+                            endDate: todayStr
+                        };
+                    }
+                    
+                    // Simple subject extraction (remove common words)
+                    const words = question.split(/\s+/).filter(w => 
+                        w.length > 3 && 
+                        !['what', 'when', 'where', 'who', 'how', 'did', 'the', 'was', 'were', 'are', 'about', 'from', 'meeting', 'today', 'yesterday'].includes(w.toLowerCase())
+                    );
+                    const primarySubject = words.slice(0, 5).join(' ');
+                    
                     extractedInfo = {
-                        dateRange: { hasDate: false, startDate: null, endDate: null },
+                        dateRange,
                         attendees: [],
-                        primarySubject: question.substring(0, 50) // Use first 50 chars as fallback
+                        primarySubject: primarySubject || question.substring(0, 50)
                     };
                 }
                 
@@ -1118,8 +1182,31 @@ Rules:
                 
                 // Get the top-ranked note
                 const topNote = searchResults.records[0];
-                const topNoteDid = topNote.did;
                 const searchScores = topNote.searchScores;
+                
+                // Debug: Log the full note structure
+                console.log('[ALFRED Notes] Top note structure:', {
+                    hasDid: !!topNote.did,
+                    hasOip: !!topNote.oip,
+                    oipDid: topNote.oip?.did,
+                    oipDidTx: topNote.oip?.didTx,
+                    name: topNote.data?.basic?.name
+                });
+                
+                // The DID should be in note.did (set by elasticsearch.js from oip.did)
+                // If not there, try oip.did directly
+                const topNoteDid = topNote.did || topNote.oip?.did || topNote.oip?.didTx;
+                
+                if (!topNoteDid) {
+                    console.error('[ALFRED Notes] Error: Top note has no DID!');
+                    console.error('Note object keys:', Object.keys(topNote));
+                    console.error('Note.oip keys:', topNote.oip ? Object.keys(topNote.oip) : 'no oip');
+                    return res.status(500).json({
+                        success: false,
+                        error: 'Found matching note but it has no DID',
+                        details: 'Internal error: note record missing DID field'
+                    });
+                }
                 
                 console.log('[ALFRED Notes] Top note selected:', topNote.data?.basic?.name);
                 console.log(`  - DID: ${topNoteDid}`);
@@ -1344,11 +1431,24 @@ Rules:
         // Step 5: Build comprehensive context
         console.log('[ALFRED Notes RAG] Step 5: Building context for ALFRED...');
         
+        // Safe date conversion
+        let noteDateStr = 'Unknown';
+        try {
+            if (noteData.created_at) {
+                const noteDate = new Date(noteData.created_at);
+                if (!isNaN(noteDate.getTime())) {
+                    noteDateStr = noteDate.toISOString();
+                }
+            }
+        } catch (dateError) {
+            console.warn('[ALFRED Notes RAG] Invalid date for note:', dateError.message);
+        }
+        
         const context = {
             currentNote: {
                 title: noteBasic.name,
                 type: noteData.note_type,
-                date: new Date(noteData.created_at).toISOString(),
+                date: noteDateStr,
                 participants: noteData.participant_display_names || [],
                 roles: noteData.participant_roles || [],
                 tags: noteBasic.tagItems || [],

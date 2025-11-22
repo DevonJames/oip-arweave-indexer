@@ -1988,6 +1988,15 @@ async function searchNotesWithQuery(queryParams) {
             const text = chunk.data?.noteChunks?.text || '';
             const noteRef = chunk.data?.noteChunks?.note_ref;
             
+            // Debug: Log chunk structure
+            if (!noteRef) {
+                console.warn(`[Note Search] Chunk missing note_ref:`, {
+                    chunkDid: chunk.did || chunk.oip?.did,
+                    hasNoteChunks: !!chunk.data?.noteChunks,
+                    noteChunksKeys: chunk.data?.noteChunks ? Object.keys(chunk.data.noteChunks) : []
+                });
+            }
+            
             let score = 0;
             let matchDetails = {
                 tagMatches: 0,
@@ -2049,7 +2058,10 @@ async function searchNotesWithQuery(queryParams) {
         
         const noteScores = {};
         scoredChunks.forEach(({ noteRef, score, matchDetails }) => {
-            if (!noteRef) return;
+            if (!noteRef) {
+                console.warn('[Note Search] Skipping chunk with no noteRef');
+                return;
+            }
             
             if (!noteScores[noteRef]) {
                 noteScores[noteRef] = {
@@ -2071,6 +2083,7 @@ async function searchNotesWithQuery(queryParams) {
         
         const noteDids = Object.keys(noteScores);
         console.log(`[Note Search] Found ${noteDids.length} unique notes with matches`);
+        console.log(`[Note Search] Note DIDs from chunks:`, noteDids);
         
         // Step 4: Fetch parent notes
         console.log('[Note Search] Step 4: Fetching parent notes...');
@@ -2088,8 +2101,38 @@ async function searchNotesWithQuery(queryParams) {
                 });
                 
                 if (noteResult.records && noteResult.records.length > 0) {
+                    const note = noteResult.records[0];
+                    
+                    // Debug: Check what the note object structure actually is
+                    console.log(`[Note Search Debug] Fetched note for ${noteDid}:`);
+                    console.log(`  - Top-level keys:`, Object.keys(note));
+                    console.log(`  - note.did exists: ${note.did !== undefined}, value: ${note.did}`);
+                    console.log(`  - note.oip exists: ${note.oip !== undefined}`);
+                    if (note.oip) {
+                        console.log(`  - note.oip keys:`, Object.keys(note.oip));
+                        console.log(`  - note.oip.did: ${note.oip.did}`);
+                        console.log(`  - note.oip.didTx: ${note.oip.didTx}`);
+                    }
+                    console.log(`  - noteDid (from chunk.note_ref): ${noteDid}`);
+                    
+                    // The DID should be in oip.did for note records (per user)
+                    // Make sure we expose it at the root level for consistency
+                    if (!note.did && note.oip) {
+                        note.did = note.oip.did || note.oip.didTx;
+                        console.log(`  - Set note.did from oip: ${note.did}`);
+                    }
+                    
+                    // If still no DID, use the noteDid we queried with (from chunk.note_ref)
+                    // This should always work since chunk.note_ref has the parent note's DID
+                    if (!note.did) {
+                        console.warn(`[Note Search] Note has no DID in oip.did or oip.didTx, using chunk.note_ref: ${noteDid}`);
+                        note.did = noteDid;
+                    }
+                    
+                    console.log(`  - Final note.did: ${note.did}`);
+                    
                     noteRecords.push({
-                        note: noteResult.records[0],
+                        note,
                         scores: noteScores[noteDid]
                     });
                 }
@@ -2152,11 +2195,13 @@ async function searchNotesWithQuery(queryParams) {
         console.log('[Note Search] Top results:');
         topResults.forEach((result, index) => {
             const { note, scores } = result;
+            // The DID should be in note.did (which we set from oip.did)
+            const noteDid = note.did || 'MISSING_DID';
             console.log(`  ${index + 1}. ${note.data?.basic?.name || 'Untitled'}`);
             console.log(`     - Final Score: ${scores.finalScore}`);
             console.log(`     - Chunk Score: ${scores.chunkScore} (${scores.chunkCount} chunks, ${scores.totalMatches} matches)`);
             console.log(`     - Attendee Score: ${scores.attendeeScore} (${scores.attendeeMatches} matches)`);
-            console.log(`     - DID: ${note.did}`);
+            console.log(`     - DID: ${noteDid}`);
         });
         
         // Return results in standard format
