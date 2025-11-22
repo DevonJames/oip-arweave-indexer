@@ -299,15 +299,25 @@ class GunSyncService {
                             }
                         }
                     } catch (typeError) {
-                        // Silently skip record types that don't exist on peer
+                        // Silently skip record types that don't exist on peer or timeout
                         if (typeError.response && typeError.response.status === 404) {
                             continue;
                         }
-                        console.error(`⚠️ Error syncing ${recordType} from ${peerUrl}:`, typeError.message);
+                        // Skip timeout and network errors (common and not critical)
+                        if (typeError.code === 'ECONNABORTED' || typeError.code === 'ETIMEDOUT' || 
+                            typeError.code === 'EAI_AGAIN' || typeError.message.includes('timeout')) {
+                            continue;
+                        }
+                        // Only log unexpected errors
+                        console.error(`❌ Error syncing ${recordType} from ${peerUrl}:`, typeError.message);
                     }
                 }
             } catch (peerError) {
-                console.error(`❌ Error syncing from peer ${peerUrl}:`, peerError.message);
+                // Only log non-network errors
+                if (peerError.code !== 'ECONNABORTED' && peerError.code !== 'ETIMEDOUT' && 
+                    peerError.code !== 'EAI_AGAIN' && !peerError.message.includes('timeout')) {
+                    console.error(`❌ Error syncing from peer ${peerUrl}:`, peerError.message);
+                }
             }
         }
         
