@@ -327,7 +327,7 @@ app.get('/gun-relay/get', async (req, res) => {
         });
         res.json(response.data);
     } catch (error) {
-        console.error('Gun relay GET proxy error:', error.message);
+        // Silent - 404s are normal when records don't exist
         res.status(error.response?.status || 500).json({ 
             error: error.message,
             success: false 
@@ -349,7 +349,10 @@ app.post('/gun-relay/put', async (req, res) => {
         });
         res.json(response.data);
     } catch (error) {
-        console.error('Gun relay PUT proxy error:', error.message);
+        // Only log non-404 errors
+        if (error.response?.status !== 404) {
+            console.error('Gun relay PUT error:', error.message);
+        }
         res.status(error.response?.status || 500).json({ 
             error: error.message,
             success: false 

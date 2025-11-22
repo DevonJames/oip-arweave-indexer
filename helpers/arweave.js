@@ -387,9 +387,15 @@ async function getBlockHeightFromTxId(txId) {
     }
 }
 
+// Cache for last successful block height to gracefully handle temporary network failures
+let cachedBlockHeight = null;
+let lastBlockHeightFetchTime = null;
+const BLOCK_HEIGHT_CACHE_TTL = 60000; // 1 minute TTL for cache
+
 /**
  * Retrieves the current block height of the Arweave blockchain.
- * @returns {Promise<number>} The current block height.
+ * Caches the last successful value to gracefully handle temporary network failures.
+ * @returns {Promise<number|null>} The current block height, or cached/null on failure.
  */
 const getCurrentBlockHeight = async () => {
     try {
@@ -442,11 +448,33 @@ const getCurrentBlockHeight = async () => {
             throw lastError || new Error('All gateway URLs failed');
         }
         const blockHeight = response.data.height;
-        // console.log('Current block height:', blockHeight);
+        
+        // Update cache on successful fetch
+        cachedBlockHeight = blockHeight;
+        lastBlockHeightFetchTime = Date.now();
+        
         return blockHeight;
     } catch (error) {
-        console.error('Error fetching current block height:', error);
-        throw error; // Rethrow the error to handle it in the calling function
+        // Gracefully handle network failures by returning cached value
+        const errorCode = error.code || error.errno;
+        const isNetworkError = errorCode === 'EAI_AGAIN' || errorCode === 'ENOTFOUND' || errorCode === 'ETIMEDOUT';
+        
+        if (isNetworkError) {
+            // Minimal logging for known network issues
+            if (cachedBlockHeight) {
+                const cacheAge = Date.now() - (lastBlockHeightFetchTime || 0);
+                const cacheAgeMinutes = Math.floor(cacheAge / 60000);
+                console.warn(`⚠️  Arweave network temporarily unreachable (${errorCode}). Using cached block height: ${cachedBlockHeight} (${cacheAgeMinutes}m old)`);
+                return cachedBlockHeight;
+            } else {
+                console.warn(`⚠️  Arweave network temporarily unreachable (${errorCode}) and no cache available. Returning null.`);
+                return null;
+            }
+        } else {
+            // For unexpected errors, log more details but still don't throw
+            console.error(`Error fetching current block height (${error.message}). Returning cached value or null.`);
+            return cachedBlockHeight || null;
+        }
     }
 };
 

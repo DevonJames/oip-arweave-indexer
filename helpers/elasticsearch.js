@@ -3641,7 +3641,11 @@ async function getRecords(queryParams) {
         // console.log('es 982 resolvedRecords:', resolvedRecords.length);
 
         let currentBlockHeight = await getCurrentBlockHeight();
-        let progress = Math.round((maxArweaveBlockInDB - startBlockHeight) / (currentBlockHeight - startBlockHeight)  * 100);
+        // Handle case where block height fetch fails (network issues) - use 0 for progress calculation
+        let progress = 0;
+        if (currentBlockHeight && currentBlockHeight > startBlockHeight) {
+            progress = Math.round((maxArweaveBlockInDB - startBlockHeight) / (currentBlockHeight - startBlockHeight)  * 100);
+        }
         const searchResults = resolvedRecords.length;
         if (summarizeTags === 'true') {
             console.log(`📊 [Tag Summary] Starting tag summarization with ${resolvedRecords.length} records`);
@@ -5515,18 +5519,24 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
                         try {
                             // Get current block height from the fallback endpoint
                             const currentBlockHeight = await getCurrentBlockHeight();
-                            const blockGap = currentBlockHeight - maxArweaveBlockInDB;
                             
-                            console.log(`🔍 [SAFETY CHECK] DB at block ${maxArweaveBlockInDB}, fallback at block ${currentBlockHeight}, gap: ${blockGap} blocks`);
-                            
-                            if (blockGap > maxBlockGap) {
-                                console.error(`❌ [SAFETY CHECK FAILED] Block gap (${blockGap}) exceeds maximum allowed (${maxBlockGap})`);
-                                console.error(`   This would skip ${blockGap} blocks and could miss OIP transactions!`);
-                                console.error(`   Failing this cycle to retry local gateway on next cycle.`);
-                                console.error(`   Set MAX_BLOCK_GAP_FOR_FALLBACK in .env to adjust this threshold.`);
-                                throw new Error(`Block gap too large (${blockGap} > ${maxBlockGap}). Refusing to use fallback to prevent data loss.`);
+                            // Skip safety check if block height unavailable (network issues)
+                            if (!currentBlockHeight) {
+                                console.warn(`⚠️  [SAFETY CHECK SKIPPED] Cannot fetch current block height due to network issues. Proceeding with caution.`);
                             } else {
-                                console.log(`✅ [SAFETY CHECK PASSED] Block gap (${blockGap}) is within acceptable range (≤ ${maxBlockGap})`);
+                                const blockGap = currentBlockHeight - maxArweaveBlockInDB;
+                                
+                                console.log(`🔍 [SAFETY CHECK] DB at block ${maxArweaveBlockInDB}, fallback at block ${currentBlockHeight}, gap: ${blockGap} blocks`);
+                                
+                                if (blockGap > maxBlockGap) {
+                                    console.error(`❌ [SAFETY CHECK FAILED] Block gap (${blockGap}) exceeds maximum allowed (${maxBlockGap})`);
+                                    console.error(`   This would skip ${blockGap} blocks and could miss OIP transactions!`);
+                                    console.error(`   Failing this cycle to retry local gateway on next cycle.`);
+                                    console.error(`   Set MAX_BLOCK_GAP_FOR_FALLBACK in .env to adjust this threshold.`);
+                                    throw new Error(`Block gap too large (${blockGap} > ${maxBlockGap}). Refusing to use fallback to prevent data loss.`);
+                                } else {
+                                    console.log(`✅ [SAFETY CHECK PASSED] Block gap (${blockGap}) is within acceptable range (≤ ${maxBlockGap})`);
+                                }
                             }
                         } catch (safetyError) {
                             // If it's our own thrown error, re-throw it
@@ -6147,7 +6157,11 @@ async function processNewRecord(transaction, remapTemplates = []) {
     let currentBlockHeight = await getCurrentBlockHeight();
     // Use block height from GraphQL data instead of making additional API calls
     let inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
-    let progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
+    // Handle case where block height fetch fails (network issues)
+    let progress = 0;
+    if (currentBlockHeight && currentBlockHeight > startBlockHeight) {
+        progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
+    }
     console.log(getFileInfo(), getLineNumber(), `Indexing Progress: ${progress}% (Block: ${inArweaveBlock})`);
     // let dataArray = [];
     // dataArray.push(transactionData);

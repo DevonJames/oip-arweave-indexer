@@ -186,9 +186,7 @@ class OIPGunRegistry {
             const entryCount = Object.keys(typeIndex).filter(key => 
                 !key.startsWith('oip:') && !key.startsWith('_')
             ).length;
-            if (entryCount > 0) {
-                console.log(`🔍 Found ${entryCount} entries in registry index: ${globalIndexKey}`);
-            }
+            // Silent - this is normal operation
             
             for (const [soulKey, indexEntry] of Object.entries(typeIndex)) {
                 // Skip metadata entries
@@ -238,7 +236,7 @@ class OIPGunRegistry {
     isValidOIPRecord(record) {
         // Check basic OIP structure
         if (!record || !record.oip || !record.data) {
-            console.warn(`  ⚠️ Missing basic structure: record=${!!record}, oip=${!!record?.oip}, data=${!!record?.data}`);
+            // Silent - invalid records are common during sync
             return false;
         }
         

@@ -10,6 +10,11 @@ function apiLogger(req, res, next) {
         return next();
     }
 
+    // Skip gun-relay internal sync requests (too verbose)
+    if (req.path.startsWith('/gun-relay/')) {
+        return next();
+    }
+
     const timezone = process.env.LOG_TIMEZONE || process.env.TZ || 'UTC';
     
     // Simple localized timestamp
