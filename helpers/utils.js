@@ -338,10 +338,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
 
 // Middleware to verify the JWT token
 const authenticateToken = (req, res, next) => {
-    console.log('Authenticating token...', req.headers, req.body, req.user);
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    console.log('token:', token);
 
     if (!token) {
         return res.status(401).json({ error: 'No token provided' });

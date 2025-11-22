@@ -898,11 +898,8 @@ function convertArraysForGUN(obj) {
 
 async function publishToGun(record, recordType, options = {}) {
     try {
-        console.log('Publishing record to GUN:', { recordType, options });
-        
         // Convert arrays to JSON strings for GUN compatibility
         const gunCompatibleRecord = convertArraysForGUN(record);
-        console.log('Converted arrays to JSON strings for GUN compatibility');
         
         // Get publisher info (reuse existing logic)
         const fs = require('fs');
