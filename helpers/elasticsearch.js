@@ -1,6 +1,6 @@
 const { Client } = require('@elastic/elasticsearch');
 const Arweave = require('arweave');
-const { getTransaction, getBlockHeightFromTxId, getCurrentBlockHeight } = require('./arweave');
+const { getTransaction, getBlockHeightFromTxId, getCurrentBlockHeight, getCachedBlockHeight } = require('./arweave');
 // const { resolveRecords, getLineNumber } = require('../helpers/utils');
 const { setIsProcessing } = require('../helpers/processingState');  // Adjust the path as needed
 const arweaveConfig = require('../config/arweave.config');
@@ -3640,8 +3640,10 @@ async function getRecords(queryParams) {
 
         // console.log('es 982 resolvedRecords:', resolvedRecords.length);
 
-        let currentBlockHeight = await getCurrentBlockHeight();
-        // Handle case where block height fetch fails (network issues) - use 0 for progress calculation
+        // Use cached block height from keepDBUpToDate (no network call)
+        const currentBlockHeight = getCachedBlockHeight();
+        
+        // Calculate progress using cached block height - use 0 if cache unavailable
         let progress = 0;
         if (currentBlockHeight && currentBlockHeight > startBlockHeight) {
             progress = Math.round((maxArweaveBlockInDB - startBlockHeight) / (currentBlockHeight - startBlockHeight)  * 100);
@@ -6154,10 +6156,14 @@ async function processNewRecord(transaction, remapTemplates = []) {
     }
     // console.log(getFileInfo(), getLineNumber());
     let record;
-    let currentBlockHeight = await getCurrentBlockHeight();
+    
+    // Use cached block height from keepDBUpToDate (no network call)
+    const currentBlockHeight = getCachedBlockHeight();
+    
     // Use block height from GraphQL data instead of making additional API calls
     let inArweaveBlock = transaction.blockHeight || await getBlockHeightFromTxId(transaction.transactionId);
-    // Handle case where block height fetch fails (network issues)
+    
+    // Calculate progress using cached block height - use 0 if cache unavailable
     let progress = 0;
     if (currentBlockHeight && currentBlockHeight > startBlockHeight) {
         progress = Math.round((inArweaveBlock - startBlockHeight) / (currentBlockHeight - startBlockHeight) * 100);
