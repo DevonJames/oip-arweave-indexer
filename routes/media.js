@@ -196,12 +196,6 @@ router.get('/:mediaId', optionalAuth, async (req, res) => {
     const filePath = path.join(mediaIdDir, 'original');
     const manifestPath = path.join(mediaIdDir, 'manifest.json');
 
-    console.log('📥 Media request:', {
-      mediaId,
-      authenticated: !!req.user,
-      user: req.user?.email
-    });
-
     // Check if file exists
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'Media not found' });
@@ -270,8 +264,6 @@ router.get('/:mediaId', optionalAuth, async (req, res) => {
       const stream = fs.createReadStream(filePath);
       stream.pipe(res);
     }
-
-    console.log('✅ Served media file:', mediaId);
 
   } catch (error) {
     console.error('❌ Failed to serve media:', error);
