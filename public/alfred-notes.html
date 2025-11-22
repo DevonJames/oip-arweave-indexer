@@ -730,6 +730,129 @@
             box-shadow: 0 0 0 1px rgba(95, 252, 249, 0.6);
         }
 
+        .chat-mode-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .info-button {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 1.5px solid var(--accent-cyan);
+            background: transparent;
+            color: var(--accent-cyan);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        .info-button:hover {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+            box-shadow: 0 0 12px rgba(95, 252, 249, 0.4);
+        }
+
+        [data-theme="light"] .info-button {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        [data-theme="light"] .info-button:hover {
+            background: var(--accent-cyan);
+            color: white;
+        }
+
+        .info-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 20px;
+        }
+
+        .info-modal.active {
+            display: flex;
+        }
+
+        .info-modal-content {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        }
+
+        .info-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .info-modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        .info-modal-close {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: var(--bg-chip);
+            border-radius: 50%;
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+        }
+
+        .info-modal-close:hover {
+            background: var(--accent-cyan);
+            color: var(--bg-primary);
+        }
+
+        .info-modal-body {
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .info-modal-section {
+            margin-bottom: 16px;
+        }
+
+        .info-modal-section-title {
+            font-weight: 600;
+            color: var(--accent-cyan);
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .info-modal-section-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
         .chat-messages {
             flex: 1;
             padding: 18px 20px 10px;
@@ -1411,6 +1534,13 @@
                             <button class="chat-toggle-btn active" data-ai="alfred" onclick="alfredApp.switchAI('alfred')">Alfred</button>
                             <button class="chat-toggle-btn" data-ai="alice" onclick="alfredApp.switchAI('alice')">Alice</button>
                         </div>
+                        <div class="chat-mode-row">
+                            <div class="chat-toggle">
+                                <button class="chat-toggle-btn active" data-mode="chat" onclick="alfredApp.switchChatMode('chat')">Chat</button>
+                                <button class="chat-toggle-btn" data-mode="notes" onclick="alfredApp.switchChatMode('notes')">My Notes</button>
+                            </div>
+                            <button class="info-button" onclick="alfredApp.showModeInfo()" title="Learn about chat modes">i</button>
+                        </div>
                     </div>
                     <div class="chat-messages" id="chatMessages">
                         <!-- Messages will be dynamically inserted here -->
@@ -1418,6 +1548,30 @@
                     <div class="chat-input-container">
                         <textarea class="chat-input" id="chatInput" placeholder="Ask Alfred anything..." rows="1"></textarea>
                         <button class="send-button" id="sendButton" onclick="alfredApp.sendMessage()">➤</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Modal -->
+            <div id="infoModal" class="info-modal" onclick="alfredApp.closeInfoModal(event)">
+                <div class="info-modal-content" onclick="event.stopPropagation()">
+                    <div class="info-modal-header">
+                        <div class="info-modal-title">Chat Modes</div>
+                        <button class="info-modal-close" onclick="alfredApp.closeInfoModal()">×</button>
+                    </div>
+                    <div class="info-modal-body">
+                        <div class="info-modal-section">
+                            <div class="info-modal-section-title">💬 Chat Mode</div>
+                            <div class="info-modal-section-text">
+                                General-purpose AI assistant. Ask any question and get helpful responses. This mode doesn't search your notes - it's like having a conversation with a knowledgeable assistant about any topic.
+                            </div>
+                        </div>
+                        <div class="info-modal-section">
+                            <div class="info-modal-section-title">📚 My Notes Mode</div>
+                            <div class="info-modal-section-text">
+                                Searches across all your meeting notes to find relevant information. Ask questions like "What did we discuss about the API last week?" or "Who was assigned to the design task?" and Alfred will search your notes, find the most relevant one, and answer based on that content.
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1638,6 +1792,7 @@
                 },
                 isEditingApiUrl: false,
                 currentAI: 'alfred',
+                chatMode: 'chat', // 'chat' or 'notes'
                 conversationHistory: []
             },
 
@@ -1732,6 +1887,16 @@
                         el.addEventListener('keypress', (e) => {
                             if (e.key === 'Enter') this.register();
                         });
+                    }
+                });
+
+                // Escape key to close info modal
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        const modal = document.getElementById('infoModal');
+                        if (modal && modal.classList.contains('active')) {
+                            this.closeInfoModal();
+                        }
                     }
                 });
 
@@ -2192,7 +2357,11 @@
                     if (this.state.currentNote) {
                         requestBody.noteDid = this.state.currentNote.did;
                     }
-                    // Otherwise it's pure LLM mode (no note context)
+                    // If in "My Notes" mode, enable allNotes search
+                    else if (this.state.chatMode === 'notes') {
+                        requestBody.allNotes = true;
+                    }
+                    // Otherwise it's pure LLM mode (no note context, allNotes=false)
 
                     const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/converse`, {
                         method: 'POST',
@@ -2206,7 +2375,14 @@
                     const data = await response.json();
 
                     if (data.success) {
-                        this.addMessage('assistant', data.answer);
+                        // If in My Notes mode and we got search context, show which note was found
+                        let answerText = data.answer;
+                        if (this.state.chatMode === 'notes' && data.context?.search) {
+                            const noteTitle = data.context.note?.title || 'a note';
+                            answerText = `📝 Found in "${noteTitle}"\n\n${data.answer}`;
+                        }
+                        
+                        this.addMessage('assistant', answerText);
                         
                         // Add assistant response to history
                         this.state.conversationHistory.push({
@@ -2235,7 +2411,10 @@
 
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'message-content';
-                contentDiv.innerHTML = `<div class="message-text">${text}</div>`;
+                
+                // Convert newlines to <br> tags and preserve formatting
+                const formattedText = text.replace(/\n/g, '<br>');
+                contentDiv.innerHTML = `<div class="message-text">${formattedText}</div>`;
 
                 messageDiv.appendChild(avatarDiv);
                 messageDiv.appendChild(contentDiv);
@@ -2247,7 +2426,7 @@
             switchAI(ai) {
                 this.state.currentAI = ai;
                 
-                document.querySelectorAll('.chat-toggle-btn').forEach(btn => {
+                document.querySelectorAll('.chat-toggle-btn[data-ai]').forEach(btn => {
                     btn.classList.remove('active');
                     if (btn.dataset.ai === ai) {
                         btn.classList.add('active');
@@ -2261,6 +2440,48 @@
                 this.initChatView();
             },
 
+            switchChatMode(mode) {
+                this.state.chatMode = mode;
+                
+                document.querySelectorAll('.chat-toggle-btn[data-mode]').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.mode === mode) {
+                        btn.classList.add('active');
+                    }
+                });
+
+                // Clear conversation history when switching modes
+                this.state.conversationHistory = [];
+                
+                // Update placeholder text based on mode
+                const chatInput = document.getElementById('chatInput');
+                if (chatInput) {
+                    if (mode === 'notes') {
+                        chatInput.placeholder = 'Ask about your notes (e.g., "What did we discuss about the API last week?")';
+                    } else {
+                        chatInput.placeholder = 'Ask Alfred anything...';
+                    }
+                }
+                
+                // Show toast to inform user
+                const modeText = mode === 'notes' ? 'My Notes' : 'Chat';
+                this.showToast(`Switched to ${modeText} mode`, 'success');
+            },
+
+            showModeInfo() {
+                const modal = document.getElementById('infoModal');
+                if (modal) {
+                    modal.classList.add('active');
+                }
+            },
+
+            closeInfoModal(event) {
+                const modal = document.getElementById('infoModal');
+                if (modal && (!event || event.target === modal)) {
+                    modal.classList.remove('active');
+                }
+            },
+
             initChatView() {
                 const chatMessages = document.getElementById('chatMessages');
                 if (!chatMessages) return;
@@ -2271,15 +2492,34 @@
 
                 chatMessages.innerHTML = '';
 
+                // Update placeholder based on current mode
+                const chatInput = document.getElementById('chatInput');
+                if (chatInput) {
+                    if (this.state.chatMode === 'notes') {
+                        chatInput.placeholder = 'Ask about your notes (e.g., "What did we discuss about the API last week?")';
+                    } else {
+                        chatInput.placeholder = 'Ask Alfred anything...';
+                    }
+                }
+
                 const welcomeMessage = document.createElement('div');
                 welcomeMessage.className = 'message';
+                
+                let welcomeText;
+                if (this.state.chatMode === 'notes') {
+                    welcomeText = this.state.currentAI === 'alfred' 
+                        ? "Hello! I'm Alfred. I can search across all your meeting notes to help you find information. Try asking questions like 'What did we discuss about the API last week?' or 'Who was assigned to the design task?'"
+                        : "Hello! I'm Alice. I can search across all your meeting notes to help you find information. Ask me anything about your notes!";
+                } else {
+                    welcomeText = this.state.currentAI === 'alfred' 
+                        ? "Hello! I'm Alfred, your AI assistant. I can help you with any questions, tasks, or creative projects. What would you like to know?"
+                        : "Hello! I'm Alice, your AI assistant. I can help you with any questions, tasks, or creative projects. What would you like to know?";
+                }
+                
                 welcomeMessage.innerHTML = `
                     <div class="message-avatar">${this.state.currentAI === 'alfred' ? 'A' : 'L'}</div>
                     <div class="message-content">
-                        <div class="message-text">${this.state.currentAI === 'alfred' 
-                            ? "Hello! I'm Alfred, your AI assistant. I can help you with any questions, tasks, or creative projects. What would you like to know?"
-                            : "Hello! I'm Alice, your AI assistant. I can help you with any questions, tasks, or creative projects. What would you like to know?"
-                        }</div>
+                        <div class="message-text">${welcomeText}</div>
                     </div>
                 `;
                 chatMessages.appendChild(welcomeMessage);

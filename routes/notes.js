@@ -945,10 +945,11 @@ router.post('/converse', authenticateToken, async (req, res) => {
         } = req.body;
 
         console.log(`\n${'='.repeat(80)}`);
-        console.log(`[ALFRED Notes] Processing question${noteDid ? ` about note: ${noteDid}` : allNotes ? ' (All Notes Search)' : ' (LLM mode)'}`);
+        console.log(`[ALFRED Notes] Processing question${noteDid ? ` about note: ${noteDid}` : allNotes ? ' (All Notes Search)' : ' (Direct LLM mode)'}`);
         console.log(`[ALFRED Notes] Question: "${question}"`);
         console.log(`[ALFRED Notes] Model: ${model}`);
         if (allNotes) console.log(`[ALFRED Notes] Mode: Search across all notes`);
+        if (allNotes === false) console.log(`[ALFRED Notes] Mode: Direct LLM (skip RAG)`);
         console.log(`${'='.repeat(80)}\n`);
 
         // Validate inputs
@@ -960,6 +961,40 @@ router.post('/converse', authenticateToken, async (req, res) => {
         }
 
         const userPublicKey = req.user.publicKey || req.user.publisherPubKey;
+        
+        // ========================================
+        // FAST PATH: Explicit Direct LLM Mode (allNotes=false)
+        // ========================================
+        // When allNotes is explicitly set to false, skip all RAG/classification
+        // and go directly to LLM for fastest response
+        if (allNotes === false && !noteDid) {
+            console.log('[ALFRED Notes Fast Path] allNotes=false, going directly to LLM...');
+            
+            const alfredInstance = require('../helpers/alfred');
+            
+            const alfredOptions = {
+                model: model,
+                conversationHistory: conversationHistory,
+                useFieldExtraction: false
+            };
+
+            const alfredResponse = await alfredInstance.query(question, alfredOptions);
+            
+            console.log(`[ALFRED Notes Fast Path] ✅ Response generated (${alfredResponse.answer.length} chars)`);
+
+            return res.json({
+                success: true,
+                answer: alfredResponse.answer,
+                context: {
+                    mode: 'direct_llm',
+                    fastPath: true
+                },
+                model: alfredResponse.model || model,
+                sources: alfredResponse.sources || [],
+                error: alfredResponse.error || undefined,
+                error_code: alfredResponse.error_code || undefined
+            });
+        }
         
         // ========================================
         // MODE 1: All Notes Search (no specific noteDid)
