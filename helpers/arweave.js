@@ -393,8 +393,25 @@ let lastBlockHeightFetchTime = null;
 const BLOCK_HEIGHT_CACHE_TTL = 60000; // 1 minute TTL for cache
 
 /**
- * Retrieves the current block height of the Arweave blockchain.
+ * Retrieves the cached block height without making a network call.
+ * Used by API endpoints to avoid blocking on network requests.
+ * @returns {number|null} The cached block height, or null if no cache available.
+ */
+const getCachedBlockHeight = () => {
+    if (cachedBlockHeight) {
+        const cacheAge = Date.now() - (lastBlockHeightFetchTime || 0);
+        const cacheAgeMinutes = Math.floor(cacheAge / 60000);
+        if (cacheAgeMinutes > 60) {
+            console.warn(`⚠️  Block height cache is stale (${cacheAgeMinutes}m old). Consider checking keepDBUpToDate process.`);
+        }
+    }
+    return cachedBlockHeight;
+};
+
+/**
+ * Retrieves the current block height of the Arweave blockchain from the network.
  * Caches the last successful value to gracefully handle temporary network failures.
+ * Should primarily be called by keepDBUpToDate to refresh the cache periodically.
  * @returns {Promise<number|null>} The current block height, or cached/null on failure.
  */
 const getCurrentBlockHeight = async () => {
@@ -553,6 +570,7 @@ module.exports = {
     checkBalance,
     getBlockHeightFromTxId,
     getCurrentBlockHeight,
+    getCachedBlockHeight,
     upfrontFunding,
     lazyFunding,
     arweave,
