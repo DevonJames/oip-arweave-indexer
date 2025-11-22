@@ -793,7 +793,6 @@ const processRecordForElasticsearch = (record) => {
 const indexRecord = async (record) => {
     const recordId = record?.oip?.did || record?.oip?.didTx;
     console.log(`\n      💾 [indexRecord] Attempting to index/update record: ${recordId}`);
-    console.log(`      📊 [indexRecord] Record status: ${record?.oip?.recordStatus}`);
     try {
         // Enforce record type indexing policy as a safety net
         const typeForIndex = record?.oip?.recordType;
@@ -4334,7 +4333,22 @@ const buildElasticsearchQuery = (params) => {
     if (params.fieldSearch && params.fieldName) {
         const fieldPath = `data.${params.fieldName}`;
         
-        if (params.fieldMatchMode === 'exact') {
+        // Detect if the search value is numeric (for proper query construction)
+        const isNumericSearch = !isNaN(params.fieldSearch) && !isNaN(parseFloat(params.fieldSearch));
+        
+        if (isNumericSearch) {
+            // For numeric fields, use term query without .keyword suffix
+            const numericValue = parseFloat(params.fieldSearch);
+            must.push({
+                nested: {
+                    path: "data",
+                    query: {
+                        term: { [fieldPath]: numericValue }
+                    }
+                }
+            });
+        } else if (params.fieldMatchMode === 'exact') {
+            // For text fields with exact match
             must.push({
                 nested: {
                     path: "data",
@@ -4344,7 +4358,7 @@ const buildElasticsearchQuery = (params) => {
                 }
             });
         } else {
-            // Partial match (default)
+            // For text fields with partial match (default)
             must.push({
                 nested: {
                     path: "data",

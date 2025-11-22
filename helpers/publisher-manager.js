@@ -32,7 +32,6 @@ class PublisherManager {
         } = options;
 
         const targetStorage = storage || blockchain;
-        console.log(`Publishing to ${targetStorage} using ${this.publishers[targetStorage]} provider`);
 
         try {
             if (targetStorage === 'arweave') {
@@ -168,7 +167,6 @@ class PublisherManager {
      * @returns {Promise<Object>} - Publishing result with DID
      */
     async publishToGun(data, options) {
-        console.log('Publishing to GUN network...');
         
         try {
             const { GunHelper } = require('./gun');
