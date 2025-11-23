@@ -116,13 +116,10 @@ let startBlockHeight = 1579570;
 // The custom HTTP agent configuration is not compatible with newer ES clients
 // Connection pooling is handled automatically by the client
 //
-// NOTE: Periodic ES client recreation was DISABLED as it caused connection failures
-// and was not the source of the memory leak. The GraphQL client is the real culprit.
+// MEMORY LEAK FIX: Disable compression and enable immediate response cleanup
+// External memory accumulation may be from Undici response buffers not being GC'd
 
-// ES client - single persistent instance
-// Recreation disabled: causes "NoLivingConnectionsError" and breaks all queries
-// The 60 MB/min leak is from GraphQL/other sources, not ES client
-
+// ES client - single persistent instance with memory-conscious settings
 const elasticClient = new Client({
     node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
     auth: {
@@ -130,7 +127,9 @@ const elasticClient = new Client({
         password: process.env.ELASTICCLIENTPASSWORD
     },
     maxRetries: 3,
-    requestTimeout: 30000
+    requestTimeout: 30000,
+    compression: false, // Disable compression to reduce memory overhead
+    enableMetaHeader: false // Disable telemetry to reduce overhead
 });
 
 console.log('✅ [ES Client] Created Elasticsearch client (persistent)');
