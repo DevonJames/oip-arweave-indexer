@@ -130,12 +130,9 @@ const elasticClient = new Client({
     requestTimeout: 30000,
     compression: false, // Disable compression to reduce memory overhead
     enableMetaHeader: false, // Disable telemetry to reduce overhead
-    // MEMORY LEAK FIX: Disable connection pooling and set response size limit
-    // Keeping connections alive causes buffer accumulation in Undici
-    agent: {
-        keepAlive: false // Don't reuse connections - prevents buffer accumulation
-    },
-    maxResponseSize: 100 * 1024 * 1024 // 100MB max response size to prevent massive buffer allocation
+    maxResponseSize: 100 * 1024 * 1024 // MEMORY LEAK FIX: 100MB max response size to prevent massive buffer allocation
+    // Note: Explicit buffer cleanup (searchResponse = null) is the primary memory leak fix
+    // Undici (ES v8+ HTTP client) doesn't support agent configuration like the old HTTP client
 });
 
 console.log('✅ [ES Client] Created Elasticsearch client (persistent)');
