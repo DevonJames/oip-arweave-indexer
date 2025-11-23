@@ -6,6 +6,7 @@
 
 const { OIPGunRegistry } = require('./oipGunRegistry');
 const { PrivateRecordHandler } = require('./privateRecordHandler');
+const { GunDeletionRegistry } = require('./gunDeletionRegistry');
 const { processRecordForElasticsearch, indexRecord, elasticClient } = require('./elasticsearch');
 const { defaultTemplates } = require('../config/templates.config');
 
@@ -13,6 +14,7 @@ class GunSyncService {
     constructor() {
         this.registry = new OIPGunRegistry();
         this.privateHandler = new PrivateRecordHandler();
+        this.deletionRegistry = new GunDeletionRegistry(this.registry.gunHelper);
         this.isRunning = false;
         this.syncInterval = parseInt(process.env.GUN_SYNC_INTERVAL) || 900000; // 15 minutes default (was 5 min - testing memory correlation)
         this.processedRecords = new Set(); // Track processed records to avoid duplicates
@@ -31,7 +33,8 @@ class GunSyncService {
             cacheMaxAge: this.cacheMaxAge,
             nodeId: this.registry.nodeId,
             httpSyncEnabled: this.httpSyncEnabled,
-            peerCount: this.peerNodes.length
+            peerCount: this.peerNodes.length,
+            deletionRegistryEnabled: true
         });
     }
     
@@ -170,6 +173,33 @@ class GunSyncService {
                 seenSouls.add(record.soul);
                 return true;
             });
+            
+            // Filter out records that are marked as deleted in the deletion registry
+            console.log(`🗑️ Checking ${discoveredRecords.length} records against deletion registry...`);
+            const filteredRecords = [];
+            let deletedCount = 0;
+            
+            for (const record of discoveredRecords) {
+                const did = `did:gun:${record.soul}`;
+                const isDeleted = await this.deletionRegistry.isDeleted(did);
+                
+                if (isDeleted) {
+                    console.log(`  ⚠️ Skipping deleted record: ${did}`);
+                    deletedCount++;
+                    
+                    // If we have it locally, remove it (in case it was synced before deletion)
+                    await this.deletionRegistry.processLocalDeletion(did);
+                    continue;
+                }
+                
+                filteredRecords.push(record);
+            }
+            
+            if (deletedCount > 0) {
+                console.log(`✅ Filtered out ${deletedCount} deleted records`);
+            }
+            
+            discoveredRecords = filteredRecords;
             
             let syncedCount = 0;
             let errorCount = 0;
