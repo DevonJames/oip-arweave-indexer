@@ -14,7 +14,7 @@ class GunSyncService {
         this.registry = new OIPGunRegistry();
         this.privateHandler = new PrivateRecordHandler();
         this.isRunning = false;
-        this.syncInterval = parseInt(process.env.GUN_SYNC_INTERVAL) || 300000; // 5 minutes default (was 30s - too aggressive)
+        this.syncInterval = parseInt(process.env.GUN_SYNC_INTERVAL) || 900000; // 15 minutes default (was 5 min - testing memory correlation)
         this.processedRecords = new Set(); // Track processed records to avoid duplicates
         this.healthMonitor = new SyncHealthMonitor();
         
@@ -193,6 +193,17 @@ class GunSyncService {
             // Single log with results at end
             console.log(`✅ GUN sync complete: ${syncedCount} successful, ${errorCount} failed (${duration}ms)`);
             
+            // MEMORY LEAK FIX: Aggressive cleanup after sync completes
+            discoveredRecords = null;
+            
+            // Force garbage collection if available and sync took >1 minute
+            if (global.gc && duration > 60000) {
+                setImmediate(() => {
+                    global.gc();
+                    console.log(`🧹 [GUN Sync] Forced GC after ${Math.round(duration/1000)}s sync cycle`);
+                });
+            }
+            
         } catch (error) {
             console.error('❌ GUN sync error:', error.message);
             this.healthMonitor.recordSyncCycle(0, 0, 1, Date.now() - startTime);
@@ -329,6 +340,11 @@ class GunSyncService {
                     console.error(`❌ Error syncing from peer ${peerUrl}:`, peerError.message);
                 }
             }
+        }
+        
+        // MEMORY LEAK FIX: Force GC after HTTP sync if we processed many records
+        if (global.gc && discoveredRecords.length > 20) {
+            setImmediate(() => global.gc());
         }
         
         return discoveredRecords;
