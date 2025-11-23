@@ -424,10 +424,12 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
         console.log('Ownership verified. Proceeding with deletion.');
         
         // For Arweave records, publish a blockchain delete message first
+        // For GUN records, add to distributed deletion registry
         // This ensures deletion propagates to all nodes in the network
         // NOTE: Publishing the delete message also deletes the record locally via deleteRecordFromDB
         let deleteMessageTxId = null;
         let alreadyDeleted = false;
+        let gunRegistryDeletion = false;
         const recordStatus = recordToDelete.oip?.recordStatus;
         const isPendingRecord = recordStatus === "pending confirmation in Arweave";
         
@@ -480,6 +482,29 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
                     // Continue with local deletion even if blockchain message fails
                 }
             }
+        } else if (didToDelete.startsWith('did:gun:')) {
+            // For GUN records, add to distributed deletion registry
+            // This ensures deletion propagates across all nodes during sync
+            try {
+                console.log('📝 Marking GUN record as deleted in distributed deletion registry...');
+                
+                const { GunDeletionRegistry } = require('../helpers/gunDeletionRegistry');
+                const gunHelper = new GunHelper();
+                const deletionRegistry = new GunDeletionRegistry(gunHelper);
+                
+                const marked = await deletionRegistry.markDeleted(didToDelete, user.publicKey);
+                
+                if (marked) {
+                    gunRegistryDeletion = true;
+                    console.log('✅ GUN record marked as deleted in registry');
+                    console.log('✅ Deletion will propagate to all nodes during sync');
+                } else {
+                    console.warn('⚠️ Failed to mark record in deletion registry, will still delete locally');
+                }
+            } catch (error) {
+                console.error('⚠️ Failed to mark record in deletion registry:', error);
+                // Continue with local deletion even if registry update fails
+            }
         }
         
         // Only try to delete from local index if not already deleted during blockchain message publishing
@@ -502,7 +527,11 @@ router.post('/deleteRecord', authenticateToken, async (req, res) => {
                 recordStatus: recordStatus
             };
             
-            if (deleteMessageTxId) {
+            if (gunRegistryDeletion) {
+                response.blockchainDeletion = false;
+                response.gunRegistryDeletion = true;
+                response.propagationNote = 'GUN deletion registry updated. Deletion will propagate to all nodes during sync.';
+            } else if (deleteMessageTxId) {
                 response.deleteMessageTxId = deleteMessageTxId;
                 response.blockchainDeletion = true;
                 response.propagationNote = 'Delete message published to blockchain. Deletion will propagate to all nodes during sync.';

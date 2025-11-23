@@ -129,6 +129,57 @@ class OIPGunRegistry {
     }
     
     /**
+     * Unregister an OIP record from the distributed registry
+     * Used when a record is deleted from the system
+     * @param {string} recordDid - The DID of the record to unregister
+     */
+    async unregisterOIPRecord(recordDid) {
+        try {
+            console.log(`🗑️ Unregistering OIP record from GUN registry: ${recordDid}`);
+            
+            // Extract soul from DID
+            const soul = recordDid.replace('did:gun:', '');
+            
+            // Find the record type by checking each type's index
+            const recordTypes = this.getRecordTypes();
+            let foundType = null;
+            
+            for (const recordType of recordTypes) {
+                const globalIndexKey = `${this.registryRoot}:index:${recordType}`;
+                const typeIndex = await this.gunHelper.getRecord(globalIndexKey);
+                
+                if (typeIndex && typeIndex[soul]) {
+                    foundType = recordType;
+                    break;
+                }
+            }
+            
+            if (!foundType) {
+                console.warn(`⚠️ Record ${recordDid} not found in registry (may already be unregistered)`);
+                return;
+            }
+            
+            // Remove from node-specific registry
+            const nodeRegistryKey = `${this.registryRoot}:nodes:${this.nodeId}`;
+            const nodeEntryKey = `${nodeRegistryKey}:${soul}`;
+            await this.gunHelper.deleteRecord(nodeEntryKey);
+            console.log(`  ✓ Removed from node registry: ${nodeEntryKey}`);
+            
+            // Remove from global index
+            const globalIndexKey = `${this.registryRoot}:index:${foundType}`;
+            const indexUpdate = { [soul]: null }; // Setting to null removes it from GUN
+            await this.gunHelper.putSimple(indexUpdate, globalIndexKey);
+            console.log(`  ✓ Removed from global index: ${globalIndexKey}`);
+            
+            console.log(`✅ OIP record unregistered: ${recordDid}`);
+            
+        } catch (error) {
+            console.error(`❌ Failed to unregister OIP record ${recordDid}:`, error.message || error);
+            // Don't throw - unregister is best-effort
+        }
+    }
+    
+    /**
      * Discover OIP records from other nodes
      * @returns {Array} Array of discovered records with metadata
      */
