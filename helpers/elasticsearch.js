@@ -129,7 +129,13 @@ const elasticClient = new Client({
     maxRetries: 3,
     requestTimeout: 30000,
     compression: false, // Disable compression to reduce memory overhead
-    enableMetaHeader: false // Disable telemetry to reduce overhead
+    enableMetaHeader: false, // Disable telemetry to reduce overhead
+    // MEMORY LEAK FIX: Disable connection pooling and set response size limit
+    // Keeping connections alive causes buffer accumulation in Undici
+    agent: {
+        keepAlive: false // Don't reuse connections - prevents buffer accumulation
+    },
+    maxResponseSize: 100 * 1024 * 1024 // 100MB max response size to prevent massive buffer allocation
 });
 
 console.log('✅ [ES Client] Created Elasticsearch client (persistent)');
@@ -287,11 +293,13 @@ function remapRecordData(record, remapTemplate, templateName) {
 // Search for records by specific fields
 async function searchByField(index, field, value) {
     try {
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index,
             body: { query: { match: { [field]: value } } }
         });
-        return searchResponse.hits.hits.map(hit => hit._source);
+        const results = searchResponse.hits.hits.map(hit => hit._source);
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+        return results;
     } catch (error) {
         console.error(`Error searching ${index} by ${field}:`, error);
         return [];
@@ -305,19 +313,21 @@ const findTemplateByTxId = (txId, templates) => {
 const searchRecordByTxId = async (txid) => {
     // console.log('searching by txid:', txid);
     try {
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index: 'records',
             body: {
                 query: createDIDQuery("did:arweave:" + txid)
             }
         });
 
+        let result = null;
         if (searchResponse.hits.hits.length > 0) {
-            return searchResponse.hits.hits[0]._source;
+            result = searchResponse.hits.hits[0]._source;
         } else {
             console.log(getFileInfo(), getLineNumber(), 'No record found for txid:', txid);
-            return null;
         }
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+        return result;
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error searching for record by txid:', error);
         throw error;
@@ -848,7 +858,7 @@ const indexRecord = async (record) => {
 
 const getTemplatesInDB = async () => {
     try {
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index: 'templates',
             body: {
                 query: {
@@ -858,6 +868,8 @@ const getTemplatesInDB = async () => {
             }
         });
         const templatesInDB = searchResponse.hits.hits.map(hit => hit._source);
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+        
         const qtyTemplatesInDB = templatesInDB.length;
         
         // Filter out templates with "pending confirmation in Arweave" status when calculating max block height
@@ -884,11 +896,13 @@ const getTemplatesInDB = async () => {
 // Retrieve all templates from the database - might be deprecated already
 async function getTemplates() {
     try {
-        const response = await elasticClient.search({
+        let response = await elasticClient.search({
             index: 'templates',
             body: { query: { match_all: {} }, size: 1000 }
         });
-        return response.hits.hits.map(hit => hit._source);
+        const results = response.hits.hits.map(hit => hit._source);
+        response = null; // MEMORY LEAK FIX: Release response buffer immediately
+        return results;
     } catch (error) {
         console.error('Error retrieving templates:', error);
         return [];
@@ -896,7 +910,7 @@ async function getTemplates() {
 }
 
 async function searchTemplateByTxId(templateTxid) {
-    const searchResponse = await elasticClient.search({
+    let searchResponse = await elasticClient.search({
         index: 'templates',
         body: {
             query: {
@@ -908,11 +922,13 @@ async function searchTemplateByTxId(templateTxid) {
     
     // Check if any results were found
     if (searchResponse.hits.hits.length === 0) {
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
         console.log(`Template not found in database for TxId: ${templateTxid}`);
         return null;
     }
     
     template = searchResponse.hits.hits[0]._source;
+    searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
     // console.log('12345 template:', template);
     return template
 }
@@ -940,7 +956,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
 
             // First, search in the records index
-            const recordsSearchResponse = await elasticClient.search({
+            let recordsSearchResponse = await elasticClient.search({
                 index: 'records',
                 body: {
                     query: createDIDQuery(didTxToDelete)
@@ -950,6 +966,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             if (recordsSearchResponse.hits.hits.length > 0) {
                 // Found in records index, delete it
                 const recordId = recordsSearchResponse.hits.hits[0]._id;
+                recordsSearchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
                 const response = await elasticClient.delete({
                     index: 'records',
                     id: recordId
@@ -957,10 +974,11 @@ async function deleteRecordFromDB(creatorDid, transaction) {
                 console.log(getFileInfo(), getLineNumber(), 'Record deleted from records index:', response);
                 return;
             }
+            recordsSearchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
 
             // If not found in records, search in organizations index
             console.log(getFileInfo(), getLineNumber(), 'Record not found in records index, checking organizations index');
-            const organizationsSearchResponse = await elasticClient.search({
+            let organizationsSearchResponse = await elasticClient.search({
                 index: 'organizations',
                 body: {
                     query: createDIDQuery(didTxToDelete)
@@ -970,6 +988,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             if (organizationsSearchResponse.hits.hits.length > 0) {
                 // Found in organizations index, delete it
                 const orgId = organizationsSearchResponse.hits.hits[0]._id;
+                organizationsSearchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
                 const response = await elasticClient.delete({
                     index: 'organizations',
                     id: orgId
@@ -977,6 +996,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
                 console.log(getFileInfo(), getLineNumber(), 'Organization deleted from organizations index:', response);
                 return;
             }
+            organizationsSearchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
 
             // If not found in either index, log and exit
             console.log(getFileInfo(), getLineNumber(), 'No record found with the specified ID in records or organizations indices:', didTxToDelete);
@@ -1033,7 +1053,7 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, template deletion authorized');
 
             // First, check if the template exists
-            const searchResponse = await elasticClient.search({
+            let searchResponse = await elasticClient.search({
                 index: 'templates',
                 body: {
                     query: createDIDQuery(didTxToDelete)
@@ -1041,12 +1061,15 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
             });
 
             if (searchResponse.hits.hits.length === 0) {
+                searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
                 console.log(getFileInfo(), getLineNumber(), 'No template found with the specified ID:', didTxToDelete);
                 return;
             }
 
             const template = searchResponse.hits.hits[0]._source;
             const templateTxId = template.data.TxId;
+            const templateId = searchResponse.hits.hits[0]._id;
+            searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
             
             // Check if any records are using this template
             const templateInUse = await checkTemplateUsage(templateTxId);
@@ -1057,7 +1080,6 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
             }
 
             // If template is not in use, proceed with deletion
-            const templateId = searchResponse.hits.hits[0]._id;
 
             const response = await elasticClient.delete({
                 index: 'templates',
@@ -1079,7 +1101,7 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
 async function searchCreatorByAddress(didAddress) {
     // console.log(getFileInfo(), getLineNumber(), 'searchCreatorByAddress:', didAddress)
     try {
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index: 'creatorregistrations',
             body: {
                 query: {
@@ -1092,6 +1114,7 @@ async function searchCreatorByAddress(didAddress) {
 
         if (searchResponse.hits.hits.length > 0) {
             const creatorRecord = searchResponse.hits.hits[0]._source;
+            searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
             // console.log(getFileInfo(), getLineNumber(), 'Creator found for address:', didAddress);
             const creatorInfo = {
                 data: { 
@@ -1104,6 +1127,7 @@ async function searchCreatorByAddress(didAddress) {
             // console.log(getFileInfo(), getLineNumber(), 'Creator found for address:', didAddress, creatorInfo);
             return creatorInfo;
         } else {
+            searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
             console.log(getFileInfo(), getLineNumber(), 'Error - No creator found in db for address:', didAddress);
             if (didAddress === 'did:arweave:u4B6d5ddggsotOiG86D-KPkeW23qQNdqaXo_ZcdI3k0') {
                 console.log(getFileInfo(), getLineNumber(), 'Exception - creator is u4B6..., looking up registration data from hard-coded txid');
@@ -2430,7 +2454,7 @@ async function getRecords(queryParams) {
         //     }
         // }, null, 2));
         
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index: 'records',
             body: {
                 query: esQuery,
@@ -2442,13 +2466,13 @@ async function getRecords(queryParams) {
         
         // Extract records from search response
         let records = searchResponse.hits.hits.map(hit => hit._source);
+        const totalHits = searchResponse.hits.total.value;
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately after extracting data
 
         console.log('🔍 [DEBUG] ES returned', records.length, 'records');
         if (records.length > 0 && records.length <= 3) {
             records.forEach(r => console.log('  -', r.oip?.recordType, r.oip?.did, r.data?.workoutSchedule?.scheduled_date));
         }
-
-        const totalHits = searchResponse.hits.total.value;
         
         // console.log(`✅ [ES Query] Retrieved ${records.length} records (total: ${totalHits})`);
         
@@ -3776,7 +3800,7 @@ const getOrganizationsInDB = async (limit = 100) => {
     try {
         // Fetch organization records with a reasonable limit (default 100)
         // Use limit parameter to prevent memory issues while still returning actual data
-        const response = await elasticClient.search({
+        let response = await elasticClient.search({
             index: 'organizations',
             body: {
                 query: {
@@ -3804,6 +3828,7 @@ const getOrganizationsInDB = async (limit = 100) => {
         const qtyOrganizationsInDB = response.aggregations?.count?.value || 0;
         const maxArweaveOrgBlockInDB = response.aggregations?.max_block?.value || 0;
         const organizationsInDB = response.hits.hits.map(hit => hit._source);
+        response = null; // MEMORY LEAK FIX: Release response buffer immediately
 
         console.log(getFileInfo(), getLineNumber(), `Found ${qtyOrganizationsInDB} organizations in organizations index (max block: ${maxArweaveOrgBlockInDB}), returning ${organizationsInDB.length}`);
 
@@ -3824,7 +3849,7 @@ const getOrganizationsInDB = async (limit = 100) => {
 
 const getCreatorsInDB = async () => {
     try {
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index: 'creatorregistrations',
             body: {
                 query: {
@@ -3835,6 +3860,8 @@ const getCreatorsInDB = async () => {
         });
 
         const creatorsInDB = searchResponse.hits.hits.map(hit => hit._source);
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+        
         if (creatorsInDB.length === 0) {
             console.log(getFileInfo(), getLineNumber(),  'Error - No creators found in DB')
             return { qtyCreatorsInDB: 0, maxArweaveCreatorRegBlockInDB: 0, creators: [] };
@@ -3865,18 +3892,19 @@ const getCreatorsInDB = async () => {
 
 async function searchRecordInDB(didTx) {
     // console.log(getFileInfo(), getLineNumber(), 'Searching record in DB for didTx:', didTx);
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index: 'records',
             body: {
                 query: createDIDQuery(didTx)
             }
         });
     // console.log(getFileInfo(), getLineNumber(), 'Search response:', JSON.stringify(searchResponse, null, 2));
+    let result = null;
     if (searchResponse.hits.hits.length > 0) {
-        return searchResponse.hits.hits[0]._source;
-    } else {
-        return null;
+        result = searchResponse.hits.hits[0]._source;
     }
+    searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+    return result;
 }
 
 // MEMORY LEAK FIX: Add caching to prevent loading 5000 records on every API call
@@ -4556,7 +4584,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
 
         // console.log(getFileInfo(), getLineNumber(), 'Fetching fresh records from Elasticsearch...');
         
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index: 'records',
             body: {
                 query: {
@@ -4566,6 +4594,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
             }
         });
         const records = searchResponse.hits.hits.map(hit => hit._source);
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately after extracting data
         
         // records.forEach(record => {
         //     console.log(getFileInfo(), getLineNumber(), 'record.oip:', record.oip.creator, record.oip.recordType, record.oip.didTx);
@@ -4646,7 +4675,7 @@ const clearRecordsCache = () => {
 
 const findCreatorsByHandle = async (handle) => {
     try {
-        const searchResponse = await elasticClient.search({
+        let searchResponse = await elasticClient.search({
             index: 'creatorregistrations',
             body: {
                 query: {
@@ -4667,7 +4696,9 @@ const findCreatorsByHandle = async (handle) => {
                 }
             }
         });
-        return searchResponse.hits.hits.map(hit => hit._source);
+        const results = searchResponse.hits.hits.map(hit => hit._source);
+        searchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
+        return results;
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error searching for creators by handle:', error);
         throw error;
@@ -4706,7 +4737,7 @@ const convertToCreatorHandle = async (txId, handle) => {
 const findOrganizationsByHandle = async (orgHandle) => {
     try {
         console.log(getFileInfo(), getLineNumber(), 'Searching for organizations with handle:', orgHandle);
-        const response = await elasticClient.search({
+        let response = await elasticClient.search({
             index: 'organizations', // Use dedicated organizations index
             body: {
                 query: {
@@ -4717,7 +4748,9 @@ const findOrganizationsByHandle = async (orgHandle) => {
             }
         });
         console.log(getFileInfo(), getLineNumber(), 'Found', response.hits.hits.length, 'organizations with handle:', orgHandle);
-        return response.hits.hits.map(hit => hit._source);
+        const results = response.hits.hits.map(hit => hit._source);
+        response = null; // MEMORY LEAK FIX: Release response buffer immediately
+        return results;
     } catch (error) {
         console.error(getFileInfo(), getLineNumber(), 'Error searching for organizations by handle:', error);
         throw error;
@@ -6195,7 +6228,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
             
             // Check if the target is a template by searching the templates index
             try {
-                const templateSearch = await elasticClient.search({
+                let templateSearch = await elasticClient.search({
                     index: 'templates',
                     body: {
                         query: createDIDQuery(targetDid)
@@ -6205,6 +6238,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 if (templateSearch.hits.hits.length > 0) {
                     // Double-check that it's actually a template record type
                     const foundTemplate = templateSearch.hits.hits[0]._source;
+                    templateSearch = null; // MEMORY LEAK FIX: Release response buffer immediately
                     if (foundTemplate.oip && foundTemplate.oip.recordType === 'template') {
                         console.log(getFileInfo(), getLineNumber(), 'SAFETY: Skipping old-format template deletion:', targetDid);
                         return { records: newRecords, recordsToDelete };
@@ -6212,6 +6246,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                         console.log(getFileInfo(), getLineNumber(), 'Found in templates index but not a template record type, proceeding:', targetDid, 'recordType:', foundTemplate.oip?.recordType);
                     }
                 } else {
+                    templateSearch = null; // MEMORY LEAK FIX: Release response buffer immediately
                     console.log(getFileInfo(), getLineNumber(), 'Target is not a template, proceeding with record deletion:', targetDid);
                 }
             } catch (error) {
@@ -6539,7 +6574,7 @@ const getRecordTypesSummary = async () => {
     try {
         // Since the recordType field is mapped as 'text', we need to use a different approach
         // We'll fetch all records and manually count the recordTypes
-        const response = await elasticClient.search({
+        let response = await elasticClient.search({
             index: 'records',
             body: {
                 size: 10000, // Fetch a large number of records to get all
@@ -6555,6 +6590,8 @@ const getRecordTypesSummary = async () => {
         // Manual aggregation since the field doesn't support terms aggregation
         const recordTypeCounts = {};
         const records = response.hits.hits;
+        const totalRecords = response.hits.total.value || response.hits.total;
+        response = null; // MEMORY LEAK FIX: Release response buffer immediately
 
         records.forEach(hit => {
             const recordType = hit._source?.oip?.recordType;
@@ -6570,9 +6607,6 @@ const getRecordTypesSummary = async () => {
                 count: recordTypeCounts[recordType]
             }))
             .sort((a, b) => b.count - a.count);
-
-        // Get total count
-        const totalRecords = response.hits.total.value || response.hits.total;
 
         console.log(getFileInfo(), getLineNumber(), `Found ${recordTypeArray.length} different record types across ${totalRecords} total records`);
 
