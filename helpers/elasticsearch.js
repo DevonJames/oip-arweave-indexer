@@ -330,7 +330,7 @@ function remapRecordData(record, remapTemplate, templateName) {
 // Search for records by specific fields
 async function searchByField(index, field, value) {
     try {
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index,
             body: { query: { match: { [field]: value } } }
         });
@@ -350,7 +350,7 @@ const findTemplateByTxId = (txId, templates) => {
 const searchRecordByTxId = async (txid) => {
     // console.log('searching by txid:', txid);
     try {
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index: 'records',
             body: {
                 query: createDIDQuery("did:arweave:" + txid)
@@ -492,7 +492,7 @@ const ensureIndexExists = async () => {
     try {
         let templatesExists;
         try {
-            const existsResponse = await elasticClient.indices.exists({ index: 'templates' });
+            const existsResponse = await getElasticsearchClient().indices.exists({ index: 'templates' });
             templatesExists = existsResponse.body !== undefined ? existsResponse.body : existsResponse;
             // console.log('🔍 Templates index exists check:', templatesExists);
         } catch (existsError) {
@@ -503,7 +503,7 @@ const ensureIndexExists = async () => {
         if (!templatesExists) {
             // console.log('📝 Creating new templates index with correct mapping...');
             try {
-                await elasticClient.indices.create({
+                await getElasticsearchClient().indices.create({
                     index: 'templates',
                     body: {
                         settings: {
@@ -555,7 +555,7 @@ const ensureIndexExists = async () => {
                 console.log('✅ Templates index created with correct mapping');
                 
                 // Show the created mapping
-                const newMapping = await elasticClient.indices.getMapping({ index: 'templates' });
+                const newMapping = await getElasticsearchClient().indices.getMapping({ index: 'templates' });
                 console.log('📋 New templates mapping structure:', JSON.stringify(newMapping.body.templates.mappings.properties.data.properties.fieldsInTemplate, null, 2));
                 
             } catch (error) {
@@ -568,10 +568,10 @@ const ensureIndexExists = async () => {
         } else {
             // console.log('✅ Templates index already exists');
         }
-        const recordsExists = await elasticClient.indices.exists({ index: 'records' });
+        const recordsExists = await getElasticsearchClient().indices.exists({ index: 'records' });
         if (!recordsExists.body) {
             try {
-                await elasticClient.indices.create({
+                await getElasticsearchClient().indices.create({
                     index: 'records',
                     body: {
                         settings: {
@@ -611,10 +611,10 @@ const ensureIndexExists = async () => {
                 }
             }
         }
-        const creatorsExists = await elasticClient.indices.exists({ index: 'creatorregistrations' });
+        const creatorsExists = await getElasticsearchClient().indices.exists({ index: 'creatorregistrations' });
         if (!creatorsExists.body) {
             try {
-                await elasticClient.indices.create({
+                await getElasticsearchClient().indices.create({
                     index: 'creatorregistrations',
                     body: {
                         mappings: {
@@ -657,10 +657,10 @@ const ensureIndexExists = async () => {
             }
         }
         
-        const organizationsExists = await elasticClient.indices.exists({ index: 'organizations' });
+        const organizationsExists = await getElasticsearchClient().indices.exists({ index: 'organizations' });
         if (!organizationsExists.body) {
             try {
-                await elasticClient.indices.create({
+                await getElasticsearchClient().indices.create({
                     index: 'organizations',
                     body: {
                         mappings: {
@@ -705,11 +705,11 @@ const ensureIndexExists = async () => {
 
 const ensureUserIndexExists = async () => {
     try {
-        const indexExists = await elasticClient.indices.exists({ index: 'users' });
+        const indexExists = await getElasticsearchClient().indices.exists({ index: 'users' });
         console.log(`Index exists check for 'users':`, indexExists);  // Log existence check result
         
         if (!indexExists.body) {
-            await elasticClient.indices.create({
+            await getElasticsearchClient().indices.create({
                 index: 'users',
                 body: {
                     mappings: {
@@ -785,7 +785,7 @@ const ensureUserIndexExists = async () => {
 // General function to index a document
 async function indexDocument(index, id, body) {
     try {
-        const response = await elasticClient.index({ index, id, body, refresh: 'wait_for' });
+        const response = await getElasticsearchClient().index({ index, id, body, refresh: 'wait_for' });
         console.log(`Document ${response.result} in ${index} with ID: ${id}`);
     } catch (error) {
         console.error(`Error indexing document in ${index} with ID ${id}:`, error);
@@ -852,7 +852,7 @@ const indexRecord = async (record) => {
             throw new Error('Record must have either oip.did or oip.didTx field');
         }
         
-        const existingRecord = await elasticClient.exists({
+        const existingRecord = await getElasticsearchClient().exists({
             index: 'records',
             id: recordId
         });
@@ -862,7 +862,7 @@ const indexRecord = async (record) => {
             // Update existing record - process for Elasticsearch compatibility
             const processedRecord = processRecordForElasticsearch(record);
             
-            const response = await elasticClient.update({
+            const response = await getElasticsearchClient().update({
                 index: 'records',
                 id: recordId,
                 body: {
@@ -879,7 +879,7 @@ const indexRecord = async (record) => {
             // Create new record - but first process any JSON string arrays for Elasticsearch compatibility
             const processedRecord = processRecordForElasticsearch(record);
             
-            const response = await elasticClient.index({
+            const response = await getElasticsearchClient().index({
                 index: 'records',
                 id: recordId, // Use unified DID as the ID
                 body: processedRecord,
@@ -895,7 +895,7 @@ const indexRecord = async (record) => {
 
 const getTemplatesInDB = async () => {
     try {
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index: 'templates',
             body: {
                 query: {
@@ -933,7 +933,7 @@ const getTemplatesInDB = async () => {
 // Retrieve all templates from the database - might be deprecated already
 async function getTemplates() {
     try {
-        let response = await elasticClient.search({
+        let response = await getElasticsearchClient().search({
             index: 'templates',
             body: { query: { match_all: {} }, size: 1000 }
         });
@@ -947,7 +947,7 @@ async function getTemplates() {
 }
 
 async function searchTemplateByTxId(templateTxid) {
-    let searchResponse = await elasticClient.search({
+    let searchResponse = await getElasticsearchClient().search({
         index: 'templates',
         body: {
             query: {
@@ -993,7 +993,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, deletion authorized')
 
             // First, search in the records index
-            let recordsSearchResponse = await elasticClient.search({
+            let recordsSearchResponse = await getElasticsearchClient().search({
                 index: 'records',
                 body: {
                     query: createDIDQuery(didTxToDelete)
@@ -1004,7 +1004,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
                 // Found in records index, delete it
                 const recordId = recordsSearchResponse.hits.hits[0]._id;
                 recordsSearchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
-                const response = await elasticClient.delete({
+                const response = await getElasticsearchClient().delete({
                     index: 'records',
                     id: recordId
                 });
@@ -1015,7 +1015,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
 
             // If not found in records, search in organizations index
             console.log(getFileInfo(), getLineNumber(), 'Record not found in records index, checking organizations index');
-            let organizationsSearchResponse = await elasticClient.search({
+            let organizationsSearchResponse = await getElasticsearchClient().search({
                 index: 'organizations',
                 body: {
                     query: createDIDQuery(didTxToDelete)
@@ -1026,7 +1026,7 @@ async function deleteRecordFromDB(creatorDid, transaction) {
                 // Found in organizations index, delete it
                 const orgId = organizationsSearchResponse.hits.hits[0]._id;
                 organizationsSearchResponse = null; // MEMORY LEAK FIX: Release response buffer immediately
-                const response = await elasticClient.delete({
+                const response = await getElasticsearchClient().delete({
                     index: 'organizations',
                     id: orgId
                 });
@@ -1090,7 +1090,7 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
             console.log(getFileInfo(), getLineNumber(), 'same creator, template deletion authorized');
 
             // First, check if the template exists
-            let searchResponse = await elasticClient.search({
+            let searchResponse = await getElasticsearchClient().search({
                 index: 'templates',
                 body: {
                     query: createDIDQuery(didTxToDelete)
@@ -1118,7 +1118,7 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
 
             // If template is not in use, proceed with deletion
 
-            const response = await elasticClient.delete({
+            const response = await getElasticsearchClient().delete({
                 index: 'templates',
                 id: templateId
             });
@@ -1138,7 +1138,7 @@ async function deleteTemplateFromDB(creatorDid, transaction) {
 async function searchCreatorByAddress(didAddress) {
     // console.log(getFileInfo(), getLineNumber(), 'searchCreatorByAddress:', didAddress)
     try {
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index: 'creatorregistrations',
             body: {
                 query: {
@@ -2418,7 +2418,7 @@ async function getRecords(queryParams) {
             
             // DEBUG: Test if ANY workoutSchedule records exist at all
             try {
-                const testQuery = await elasticClient.search({
+                const testQuery = await getElasticsearchClient().search({
                     index: 'records',
                     body: {
                         query: { term: { "oip.recordType.keyword": "workoutSchedule" } },
@@ -2436,7 +2436,7 @@ async function getRecords(queryParams) {
                 }
                 
                 // DEBUG: Test the EXACT record we know exists
-                const exactRecordQuery = await elasticClient.search({
+                const exactRecordQuery = await getElasticsearchClient().search({
                     index: 'records',
                     body: {
                         query: { term: { "oip.did.keyword": "did:gun:647f79c2a338:workout_1762473600_kqo31tblt" } },
@@ -2464,7 +2464,7 @@ async function getRecords(queryParams) {
             
             // Debug: Fetch a sample exercise to see actual field structure
             try {
-                const sampleExercise = await elasticClient.search({
+                const sampleExercise = await getElasticsearchClient().search({
                     index: 'records',
                     body: {
                         query: { term: { "oip.recordType.keyword": "exercise" } },
@@ -2491,7 +2491,7 @@ async function getRecords(queryParams) {
         //     }
         // }, null, 2));
         
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index: 'records',
             body: {
                 query: esQuery,
@@ -3837,7 +3837,7 @@ const getOrganizationsInDB = async (limit = 100) => {
     try {
         // Fetch organization records with a reasonable limit (default 100)
         // Use limit parameter to prevent memory issues while still returning actual data
-        let response = await elasticClient.search({
+        let response = await getElasticsearchClient().search({
             index: 'organizations',
             body: {
                 query: {
@@ -3886,7 +3886,7 @@ const getOrganizationsInDB = async (limit = 100) => {
 
 const getCreatorsInDB = async () => {
     try {
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index: 'creatorregistrations',
             body: {
                 query: {
@@ -3929,7 +3929,7 @@ const getCreatorsInDB = async () => {
 
 async function searchRecordInDB(didTx) {
     // console.log(getFileInfo(), getLineNumber(), 'Searching record in DB for didTx:', didTx);
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index: 'records',
             body: {
                 query: createDIDQuery(didTx)
@@ -4621,7 +4621,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
 
         // console.log(getFileInfo(), getLineNumber(), 'Fetching fresh records from Elasticsearch...');
         
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index: 'records',
             body: {
                 query: {
@@ -4712,7 +4712,7 @@ const clearRecordsCache = () => {
 
 const findCreatorsByHandle = async (handle) => {
     try {
-        let searchResponse = await elasticClient.search({
+        let searchResponse = await getElasticsearchClient().search({
             index: 'creatorregistrations',
             body: {
                 query: {
@@ -4774,7 +4774,7 @@ const convertToCreatorHandle = async (txId, handle) => {
 const findOrganizationsByHandle = async (orgHandle) => {
     try {
         console.log(getFileInfo(), getLineNumber(), 'Searching for organizations with handle:', orgHandle);
-        let response = await elasticClient.search({
+        let response = await getElasticsearchClient().search({
             index: 'organizations', // Use dedicated organizations index
             body: {
                 query: {
@@ -4920,7 +4920,7 @@ async function indexNewOrganizationRegistration(organizationRegistrationParams) 
     console.log(getFileInfo(), getLineNumber(), 'Organization to index:', organization);
     
     try {
-        const response = await elasticClient.index({
+        const response = await getElasticsearchClient().index({
             index: 'organizations', // Use dedicated organizations index
             id: organization.oip.did,
             body: organization
@@ -5239,7 +5239,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
 
     
     newCreators.forEach(async (creator) => {
-        const existingCreator = await elasticClient.exists({
+        const existingCreator = await getElasticsearchClient().exists({
             index: 'creatorregistrations',
             id: creator.oip.did || creator.oip.didTx
         });
@@ -5247,7 +5247,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
 
         if (!existingCreator.body) {
             try {
-                await elasticClient.index({
+                await getElasticsearchClient().index({
                     index: 'creatorregistrations',
                     id: creator.oip.did || creator.oip.didTx,
                     body: creator,
@@ -5262,7 +5262,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
             console.log(getFileInfo(), getLineNumber(), `Creator already exists: ${result.oip.didTx}`);
             // const creatorId = existingCreator.hits.hits[0]._id;
             try {
-                await elasticClient.delete({
+                await getElasticsearchClient().delete({
                     index: 'creatorregistrations',
                     id: creator.oip.did || creator.oip.didTx
                 });
@@ -5276,7 +5276,7 @@ async function indexNewCreatorRegistration(creatorRegistrationParams) {
         console.log(getFileInfo(), getLineNumber());
 
         try {
-            await elasticClient.index({
+            await getElasticsearchClient().index({
                 index: 'creatorregistrations',
                 body: creator,
                 id: creator.oip.did || creator.oip.didTx,
@@ -5962,7 +5962,7 @@ async function processNewTemplate(transaction) {
         }
 
         try {
-            const existingTemplate = await elasticClient.exists({
+            const existingTemplate = await getElasticsearchClient().exists({
                 index: 'templates',
                 id: oip.did
             });
@@ -6009,7 +6009,7 @@ async function processNewTemplate(transaction) {
             
             if (existingTemplate.body) {
                 // Update existing pending template with confirmed data
-                const response = await elasticClient.update({
+                const response = await getElasticsearchClient().update({
                     index: 'templates',
                     id: oip.didTx,
                     body: {
@@ -6023,7 +6023,7 @@ async function processNewTemplate(transaction) {
                 console.log(getFileInfo(), getLineNumber(), `✅ Template updated successfully: ${oip.did}`, response.result);
             } else {
                 // Create new template
-                const indexResult = await elasticClient.index({
+                const indexResult = await getElasticsearchClient().index({
                     index: 'templates',
                     id: oip.did,
                     body: finalTemplate,
@@ -6265,7 +6265,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
             
             // Check if the target is a template by searching the templates index
             try {
-                let templateSearch = await elasticClient.search({
+                let templateSearch = await getElasticsearchClient().search({
                     index: 'templates',
                     body: {
                         query: createDIDQuery(targetDid)
@@ -6320,7 +6320,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
         if (!record.data || !record.oip) {
             console.log(getFileInfo(), getLineNumber(), `${record.oip.didTx} is missing required data, cannot be indexed.`);
         } else {
-            const existingRecord = await elasticClient.exists({
+            const existingRecord = await getElasticsearchClient().exists({
                 index: 'records',
                 id: record.oip.didTx
             });
@@ -6408,7 +6408,7 @@ async function processNewRecord(transaction, remapTemplates = []) {
                 console.log(getFileInfo(), getLineNumber(), `${record.oip.didTx} is missing required data, cannot be indexed.`);
             } else {
                 console.log(getFileInfo(), getLineNumber(), '🔍 Checking if record exists in DB...');
-                const existingRecord = await elasticClient.exists({
+                const existingRecord = await getElasticsearchClient().exists({
                     index: 'records',
                     id: record.oip.didTx
                 });
@@ -6476,7 +6476,7 @@ async function verifyAdmin(req, res, next) {
         }
 
         // Fetch the user from Elasticsearch
-        const user = await elasticClient.get({
+        const user = await getElasticsearchClient().get({
             index: 'users',
             id: userId
         });
@@ -6507,7 +6507,7 @@ async function verifyAdmin(req, res, next) {
 
 const deleteRecordsByIndexedAt = async (index, dateThreshold) => {
     try {
-        const response = await elasticClient.deleteByQuery({
+        const response = await getElasticsearchClient().deleteByQuery({
             index,
             body: {
                 query: {
@@ -6530,7 +6530,7 @@ const deleteRecordsByIndexedAt = async (index, dateThreshold) => {
 
 const deleteRecordsByBlock = async (index, blockThreshold) => {
     try {
-        const response = await elasticClient.deleteByQuery({
+        const response = await getElasticsearchClient().deleteByQuery({
             index,
             body: {
                 query: {
@@ -6553,7 +6553,7 @@ const deleteRecordsByBlock = async (index, blockThreshold) => {
 
 const deleteRecordsByDID = async (index, did) => {
     try {
-        const response = await elasticClient.deleteByQuery({
+        const response = await getElasticsearchClient().deleteByQuery({
             index,
             body: {
                 query: createDIDQuery(did)
@@ -6570,7 +6570,7 @@ const deleteRecordsByDID = async (index, did) => {
 
 const deleteRecordsByIndex = async (index) => {
     try {
-        const response = await elasticClient.deleteByQuery({
+        const response = await getElasticsearchClient().deleteByQuery({
             index,
             body: {
                 query: {
@@ -6590,7 +6590,7 @@ const deleteRecordsByIndex = async (index) => {
 const deleteIndex = async (indexName) => {
     try {
         // Check if index exists first
-        const exists = await elasticClient.indices.exists({ index: indexName });
+        const exists = await getElasticsearchClient().indices.exists({ index: indexName });
         
         if (!exists) {
             console.log(`Index '${indexName}' does not exist.`);
@@ -6598,7 +6598,7 @@ const deleteIndex = async (indexName) => {
         }
 
         // Delete the entire index
-        const response = await elasticClient.indices.delete({ index: indexName });
+        const response = await getElasticsearchClient().indices.delete({ index: indexName });
         console.log(`Successfully deleted index '${indexName}'.`);
         return response;
     } catch (error) {
@@ -6611,7 +6611,7 @@ const getRecordTypesSummary = async () => {
     try {
         // Since the recordType field is mapped as 'text', we need to use a different approach
         // We'll fetch all records and manually count the recordTypes
-        let response = await elasticClient.search({
+        let response = await getElasticsearchClient().search({
             index: 'records',
             body: {
                 size: 10000, // Fetch a large number of records to get all
@@ -6701,5 +6701,6 @@ module.exports = {
     addRecipeNutritionalSummary,
     clearRecordsCache,
     calculateRecipeNutrition,
+    getElasticsearchClient, // Export the getter function for external use
     elasticClient: elasticClientProxy // Export proxy instead of direct client reference
 };
