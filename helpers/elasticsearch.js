@@ -116,26 +116,66 @@ let startBlockHeight = 1579570;
 // The custom HTTP agent configuration is not compatible with newer ES clients
 // Connection pooling is handled automatically by the client
 //
-// MEMORY LEAK FIX: Disable compression and enable immediate response cleanup
-// External memory accumulation may be from Undici response buffers not being GC'd
+// MEMORY LEAK FIX: Periodically recreate ES client to clear Undici's connection pool
+// Undici accumulates response buffers in external memory that don't get GC'd properly
+// Recreating the client forces closure of connections and buffer cleanup
 
-// ES client - single persistent instance with memory-conscious settings
-const elasticClient = new Client({
-    node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
-    auth: {
-        username: process.env.ELASTICCLIENTUSERNAME,
-        password: process.env.ELASTICCLIENTPASSWORD
-    },
-    maxRetries: 3,
-    requestTimeout: 30000,
-    compression: false, // Disable compression to reduce memory overhead
-    enableMetaHeader: false, // Disable telemetry to reduce overhead
-    maxResponseSize: 100 * 1024 * 1024 // MEMORY LEAK FIX: 100MB max response size to prevent massive buffer allocation
-    // Note: Explicit buffer cleanup (searchResponse = null) is the primary memory leak fix
-    // Undici (ES v8+ HTTP client) doesn't support agent configuration like the old HTTP client
-});
+let elasticClient;
+let clientCreatedAt = Date.now();
+const CLIENT_MAX_AGE = parseInt(process.env.ES_CLIENT_RECREATION_INTERVAL) || 300000; // 5 minutes default
 
-console.log('✅ [ES Client] Created Elasticsearch client (persistent)');
+function createElasticsearchClient() {
+    const client = new Client({
+        node: process.env.ELASTICSEARCHHOST || 'http://elasticsearch:9200',
+        auth: {
+            username: process.env.ELASTICCLIENTUSERNAME,
+            password: process.env.ELASTICCLIENTPASSWORD
+        },
+        maxRetries: 3,
+        requestTimeout: 30000,
+        compression: false, // Disable compression to reduce memory overhead
+        enableMetaHeader: false, // Disable telemetry to reduce overhead
+        maxResponseSize: 100 * 1024 * 1024 // 100MB max response size
+    });
+    
+    clientCreatedAt = Date.now();
+    console.log(`✅ [ES Client] Created new Elasticsearch client (will recreate in ${CLIENT_MAX_AGE/1000}s)`);
+    return client;
+}
+
+function getElasticsearchClient() {
+    const clientAge = Date.now() - clientCreatedAt;
+    
+    // Recreate client if it's too old (to clear Undici's connection pool)
+    if (clientAge > CLIENT_MAX_AGE) {
+        console.log(`🔄 [ES Client] Client is ${Math.round(clientAge/1000)}s old, recreating to clear Undici buffers...`);
+        
+        // Close old client's connections
+        if (elasticClient) {
+            try {
+                elasticClient.close();
+                console.log(`🔒 [ES Client] Closed old client connections`);
+            } catch (error) {
+                console.warn(`⚠️  [ES Client] Error closing old client:`, error.message);
+            }
+        }
+        
+        elasticClient = createElasticsearchClient();
+        
+        // Force GC to clean up old Undici buffers
+        if (global.gc) {
+            setImmediate(() => {
+                global.gc();
+                console.log(`🧹 [ES Client] Forced GC after client recreation`);
+            });
+        }
+    }
+    
+    return elasticClient;
+}
+
+// Create initial client
+elasticClient = createElasticsearchClient();
 
 // GraphQL client management REMOVED - was making leak worse
 // The 'request()' function from graphql-request works better than managed client
@@ -6619,6 +6659,16 @@ const getRecordTypesSummary = async () => {
     }
 };
 
+// MEMORY LEAK FIX: Create a Proxy that automatically gets the current ES client
+// This allows all code to transparently use the periodically-recreated client
+const elasticClientProxy = new Proxy({}, {
+    get(target, prop) {
+        const client = getElasticsearchClient();
+        const value = client[prop];
+        return typeof value === 'function' ? value.bind(client) : value;
+    }
+});
+
 module.exports = {
     ensureIndexExists,
     ensureUserIndexExists,
@@ -6651,5 +6701,5 @@ module.exports = {
     addRecipeNutritionalSummary,
     clearRecordsCache,
     calculateRecipeNutrition,
-    elasticClient
+    elasticClient: elasticClientProxy // Export proxy instead of direct client reference
 };
