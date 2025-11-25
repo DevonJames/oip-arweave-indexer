@@ -980,8 +980,13 @@ router.post('/converse', authenticateToken, async (req, res) => {
         console.log(`[ALFRED Notes] Processing question${noteDid ? ` about note: ${noteDid}` : allNotes ? ' (All Notes Search)' : ' (Direct LLM mode)'}`);
         console.log(`[ALFRED Notes] Question: "${question}"`);
         console.log(`[ALFRED Notes] Model: ${model}`);
-        if (allNotes) console.log(`[ALFRED Notes] Mode: Search across all notes`);
-        if (allNotes === false) console.log(`[ALFRED Notes] Mode: Direct LLM (skip RAG)`);
+        if (noteDid) {
+            console.log(`[ALFRED Notes] Mode: Selected Note RAG (using full transcript + summary + chunks)`);
+        } else if (allNotes) {
+            console.log(`[ALFRED Notes] Mode: Search across all notes`);
+        } else if (allNotes === false && !noteDid) {
+            console.log(`[ALFRED Notes] Mode: Direct LLM (skip RAG)`);
+        }
         console.log(`${'='.repeat(80)}\n`);
 
         // Validate inputs
