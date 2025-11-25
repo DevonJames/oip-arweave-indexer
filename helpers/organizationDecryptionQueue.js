@@ -103,19 +103,29 @@ class OrganizationDecryptionQueue {
             console.log(`🔓 Decrypting queued records for organization: ${organizationDid}`);
             
             // Get all queued records for this organization
-            const queuedRecords = await elasticClient.search({
-                index: 'organization_decrypt_queue',
-                body: {
-                    query: {
-                        bool: {
-                            must: [
-                                { term: { organizationDid: organizationDid } },
-                                { term: { status: 'pending' } }
-                            ]
+            let queuedRecords;
+            try {
+                queuedRecords = await elasticClient.search({
+                    index: 'organization_decrypt_queue',
+                    body: {
+                        query: {
+                            bool: {
+                                must: [
+                                    { term: { organizationDid: organizationDid } },
+                                    { term: { status: 'pending' } }
+                                ]
+                            }
                         }
                     }
+                });
+            } catch (indexError) {
+                // If index doesn't exist, there's nothing to decrypt - this is not an error
+                if (indexError.meta?.body?.error?.type === 'index_not_found_exception') {
+                    console.log(`ℹ️  No organization decryption queue exists yet (index not found)`);
+                    return;
                 }
-            });
+                throw indexError; // Re-throw if it's a different error
+            }
             
             for (const hit of queuedRecords.hits.hits) {
                 const queueItem = hit._source;
@@ -265,6 +275,10 @@ class OrganizationDecryptionQueue {
             };
             
         } catch (error) {
+            // If index doesn't exist, return empty stats
+            if (error.meta?.body?.error?.type === 'index_not_found_exception') {
+                return { total: 0, byStatus: [], byOrganization: [], indexExists: false };
+            }
             console.error('❌ Error getting queue status:', error);
             return { error: error.message };
         }

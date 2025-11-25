@@ -430,6 +430,97 @@
             gap: 32px;
         }
 
+        .home-mode-toggle {
+            display: flex;
+            gap: 8px;
+            background: var(--bg-chip);
+            padding: 4px;
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .mode-toggle-btn {
+            padding: 10px 24px;
+            border-radius: 999px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .mode-toggle-btn.active {
+            background: var(--accent-cyan);
+            color: var(--bg-panel);
+        }
+
+        .mode-toggle-btn:hover:not(.active) {
+            color: var(--text-primary);
+            background: rgba(95, 252, 249, 0.1);
+        }
+
+        .home-mode-content {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .upload-form {
+            width: 100%;
+            max-width: 520px;
+        }
+
+        .upload-area {
+            background: var(--bg-panel);
+            border: 2px dashed var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 48px 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            margin-bottom: 24px;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(95, 252, 249, 0.05);
+        }
+
+        .upload-area.drag-over {
+            border-color: var(--accent-cyan);
+            background: rgba(95, 252, 249, 0.1);
+        }
+
+        .upload-text {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .upload-formats {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .form-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
         .record-button {
             width: 220px;
             height: 220px;
@@ -1462,11 +1553,79 @@
             <!-- Home View -->
             <div id="homeView" class="view-container active">
                 <div class="home-view">
-                    <button class="record-button" id="recordButton" onclick="alfredApp.toggleRecording()">
-                        <span id="recordIcon">
-                            <img src="icons/noun-microphone-7208171.svg" alt="Record" class="icon-record">
-                        </span>
-                    </button>
+                    <!-- Mode Toggle -->
+                    <div class="home-mode-toggle">
+                        <button class="mode-toggle-btn active" data-mode="record" onclick="alfredApp.switchHomeMode('record')">🎙️ Record</button>
+                        <button class="mode-toggle-btn" data-mode="upload" onclick="alfredApp.switchHomeMode('upload')">📤 Upload Audio</button>
+                    </div>
+
+                    <!-- Record Mode -->
+                    <div id="recordMode" class="home-mode-content">
+                        <button class="record-button" id="recordButton" onclick="alfredApp.toggleRecording()">
+                            <span id="recordIcon">
+                                <img src="icons/noun-microphone-7208171.svg" alt="Record" class="icon-record">
+                            </span>
+                        </button>
+                    </div>
+
+                    <!-- Upload Mode -->
+                    <div id="uploadMode" class="home-mode-content" style="display: none;">
+                        <div class="upload-form">
+                            <div class="upload-area" id="uploadArea">
+                                <img src="icons/noun-microphone-7208171.svg" alt="Upload" style="width: 48px; height: 48px; opacity: 0.5; margin-bottom: 12px;">
+                                <div class="upload-text">Click to select or drag & drop audio file</div>
+                                <div class="upload-formats">Supports: MP3, M4A, WAV, WebM, FLAC, OGG</div>
+                                <input type="file" id="audioFileInput" accept="audio/*" style="display: none;" onchange="alfredApp.handleAudioFileSelect(event)">
+                            </div>
+                            
+                            <div id="uploadFormFields" style="display: none;">
+                                <div class="form-group">
+                                    <label class="form-label">Start Time</label>
+                                    <input type="datetime-local" id="uploadStartTime" class="form-input" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">End Time</label>
+                                    <input type="datetime-local" id="uploadEndTime" class="form-input" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Device Type</label>
+                                    <select id="uploadDeviceType" class="form-input">
+                                        <option value="IPHONE">iPhone</option>
+                                        <option value="MAC">Mac</option>
+                                        <option value="WATCH">Apple Watch</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Participant Names (comma-separated)</label>
+                                    <input type="text" id="uploadParticipantNames" class="form-input" placeholder="John Doe, Jane Smith">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Participant Roles (comma-separated)</label>
+                                    <input type="text" id="uploadParticipantRoles" class="form-input" placeholder="CEO, CTO">
+                                </div>
+                                
+                                <div class="form-group" style="display: flex; gap: 16px; align-items: center;">
+                                    <label class="form-checkbox">
+                                        <input type="checkbox" id="uploadAddToWebServer" checked>
+                                        <span>Add to Web Server</span>
+                                    </label>
+                                    <label class="form-checkbox">
+                                        <input type="checkbox" id="uploadAddToBitTorrent">
+                                        <span>Add to BitTorrent</span>
+                                    </label>
+                                </div>
+                                
+                                <button class="primary-button" onclick="alfredApp.uploadAudioFile()" style="width: 100%; margin-top: 8px;">
+                                    📤 Upload & Process
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="template-selector">
                         <h3 class="template-title">Select Template</h3>
@@ -1810,7 +1969,9 @@
                 currentAI: 'alfred',
                 chatMode: 'chat', // 'chat', 'notes', or 'selected'
                 selectedNoteForChat: null, // The note DID when in 'selected' mode
-                conversationHistory: []
+                conversationHistory: [],
+                homeMode: 'record', // 'record' or 'upload'
+                selectedAudioFile: null
             },
 
             // Initialize app
@@ -1906,6 +2067,32 @@
                         });
                     }
                 });
+
+                // Drag and drop for audio upload
+                const uploadArea = document.getElementById('uploadArea');
+                if (uploadArea) {
+                    uploadArea.addEventListener('click', () => {
+                        document.getElementById('audioFileInput').click();
+                    });
+
+                    uploadArea.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        uploadArea.classList.add('drag-over');
+                    });
+
+                    uploadArea.addEventListener('dragleave', () => {
+                        uploadArea.classList.remove('drag-over');
+                    });
+
+                    uploadArea.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        uploadArea.classList.remove('drag-over');
+                        const files = e.dataTransfer.files;
+                        if (files.length > 0) {
+                            this.handleAudioFileSelect({ target: { files } });
+                        }
+                    });
+                }
 
                 // Escape key to close info modal
                 document.addEventListener('keydown', (e) => {
