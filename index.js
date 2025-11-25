@@ -70,72 +70,62 @@ axios.defaults.httpAgent = httpAgent;
 axios.defaults.httpsAgent = httpsAgent;
 
 // MEMORY LEAK FIX: Add axios response interceptor to clean up arraybuffers
-// This prevents 47GB+ external memory leaks from TTS audio and image downloads
+// This prevents external memory leaks from images, GIFs, and audio downloads
+// CRITICAL: Response buffers MUST be copied before they're released by cleanup timers
 axios.interceptors.response.use(
   (response) => {
-    // If response contains arraybuffer data, implement immediate cleanup
+    // If response contains arraybuffer data, implement aggressive cleanup
     if (response.config.responseType === 'arraybuffer' && response.data) {
       const originalData = response.data;
       const bufferSize = originalData.byteLength || originalData.length || 0;
       
-      // Log large buffers being created
-      if (bufferSize > 1024 * 1024) { // > 1MB
-        console.log(`📦 [Axios] Created ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer from ${response.config.url}`);
+      // Log large buffers being created (even small ones for images/GIFs add up)
+      if (bufferSize > 100 * 1024) { // > 100KB
+        const url = response.config.url || 'unknown';
+        const sizeStr = bufferSize > 1024 * 1024 
+          ? `${(bufferSize / 1024 / 1024).toFixed(2)}MB`
+          : `${Math.round(bufferSize / 1024)}KB`;
+        console.log(`📦 [Axios Buffer] Created ${sizeStr} from ${url.substring(0, 80)}`);
       }
       
-      // Create a proxy to track when the data is accessed
-      let dataAccessed = false;
-      const dataProxy = new Proxy(originalData, {
-        get(target, prop) {
-          dataAccessed = true;
-          return target[prop];
-        }
-      });
+      // WARNING: The original buffer WILL be nulled after processing
+      // Code using this response MUST copy the buffer if it needs to retain it
+      // Example: Buffer.from(response.data) creates a copy
       
-      // Override the response data with our proxy
-      Object.defineProperty(response, 'data', {
-        get() {
-          return dataProxy;
-        },
-        set(value) {
-          // Allow setting to null for cleanup
-          if (value === null) {
-            response._data = null;
-            return;
-          }
-          response._data = value;
-        }
-      });
+      // Store reference for cleanup
+      response._originalBuffer = originalData;
+      response._bufferSize = bufferSize;
       
-      // Immediate cleanup after data is accessed
-      const cleanup = () => {
-        if (dataAccessed && response._data) {
-          response._data = null;
+      // AGGRESSIVE cleanup - null the buffer after a very short delay
+      // This forces developers to copy buffers explicitly if needed
+      const cleanupTimer = setTimeout(() => {
+        if (response._originalBuffer) {
+          response._originalBuffer = null;
+          response.data = null;
+          
+          // Force GC for buffers > 1MB
           if (global.gc && bufferSize > 1024 * 1024) {
             setImmediate(() => {
               global.gc();
-              console.log(`🧹 [Axios] Released ${Math.round(bufferSize / 1024 / 1024)}MB arraybuffer`);
+              const sizeStr = bufferSize > 1024 * 1024 
+                ? `${(bufferSize / 1024 / 1024).toFixed(2)}MB`
+                : `${Math.round(bufferSize / 1024)}KB`;
+              console.log(`🧹 [Axios Buffer] Released ${sizeStr}`);
             });
           }
         }
-      };
+      }, 500); // 500ms - very aggressive cleanup
       
-      // Clean up after a short delay to allow the data to be processed
-      setTimeout(cleanup, 1000); // 1 second instead of 30 seconds
+      // Store cleanup timer so it can be cleared if needed
+      response._cleanupTimer = cleanupTimer;
       
-      // Also clean up on next tick if data was accessed
-      setImmediate(() => {
-        if (dataAccessed) {
-          cleanup();
-        }
-      });
     } else if (response.data && typeof response.data === 'object') {
       // MEMORY LEAK FIX: Also track and cleanup JSON responses from GUN sync
       // These can accumulate in external memory and not get GC'd promptly
       try {
         const dataSize = JSON.stringify(response.data).length;
         if (dataSize > 100 * 1024) { // Log JSON responses > 100KB
-          console.log(`📦 [Axios] Large JSON response: ${(dataSize / 1024).toFixed(1)}KB from ${response.config.url || 'unknown'}`);
+          console.log(`📦 [Axios JSON] ${(dataSize / 1024).toFixed(1)}KB from ${response.config.url || 'unknown'}`);
         }
         
         // Add cleanup helper to force GC after response is processed
@@ -145,7 +135,7 @@ axios.interceptors.response.use(
             if (global.gc && dataSize > 1024 * 1024) {
               setImmediate(() => {
                 global.gc();
-                console.log(`🧹 [Axios] Released ${(dataSize / 1024).toFixed(1)}KB JSON response`);
+                console.log(`🧹 [Axios JSON] Released ${(dataSize / 1024).toFixed(1)}KB`);
               });
             }
           }
