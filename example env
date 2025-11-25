@@ -146,6 +146,23 @@ LLAMA_MODEL=llama3.2:3b
 # HuggingFace token (optional - for some restricted models)
 HUGGINGFACE_TOKEN=
 
+# LLM Timeout Configuration
+# Timeout for LLM API calls (summarization, chunk tagging) in milliseconds
+# Increase for long meetings (35+ minutes of audio generates long transcripts)
+# Default: 300000 (5 minutes)
+LLM_TIMEOUT_MS=300000
+
+# Chunk Tagging Configuration (for Alfred Notes)
+# CHUNK_TAG_BATCH_SIZE: Number of chunks to process simultaneously
+# Lower values = less system load, higher values = faster but may overwhelm LLM
+# Default: 10
+CHUNK_TAG_BATCH_SIZE=10
+
+# CHUNK_TAG_BATCH_DELAY_MS: Delay between batches in milliseconds
+# Prevents overwhelming the LLM service with too many simultaneous requests
+# Default: 1000 (1 second)
+CHUNK_TAG_BATCH_DELAY_MS=1000
+
 # Voice Services Configuration
 STT_SERVICE_URL=http://stt-service:8003
 TTS_SERVICE_URL=http://tts-service:5002
@@ -181,6 +198,12 @@ GUN_NODE_ID_OVERRIDE=
 GUN_SYNC_PRIVATE_RECORDS=true
 GUN_SYNC_TRUSTED_NODES=
 GUN_EXTERNAL_PEERS=
+
+# GUN Registry Timeout Configuration
+# Timeout for GUN registry writes (putSimple operations) in milliseconds
+# Increase for high-load scenarios with many simultaneous writes (e.g., 80+ chunks)
+# Default: 30000 (30 seconds)
+GUN_REGISTRY_TIMEOUT_MS=30000
 
 # Custom Public Directory Configuration
 # Set to 'true' to serve static files from parent directory's public/ folder

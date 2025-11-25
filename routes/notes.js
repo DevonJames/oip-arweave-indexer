@@ -88,7 +88,8 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
             model = 'parallel', // LLM model selection (supports 'parallel', 'gpt-4o-mini', 'grok-beta', etc.)
             addToWebServer = 'false',
             addToBitTorrent = 'false',
-            addToIPFS = 'false'
+            addToIPFS = 'false',
+            generateChunkTags = 'false' // Optional: Enable LLM-based tag generation for chunks (increases processing time)
         } = req.body;
 
         // Validate required fields
@@ -478,22 +479,53 @@ router.post('/from-audio', authenticateToken, upload.single('audio'), async (req
         }
 
         // ========================================
-        // STEP 9: Generate Tags for Chunks & Create Records
+        // STEP 9: Generate Tags for Chunks (Optional)
         // ========================================
-        console.log(`🗂️ [Step 9] Generating tags for ${chunks.length} chunks...`);
+        const shouldGenerateChunkTags = generateChunkTags === 'true' || generateChunkTags === true;
         
-        // Generate tags for each chunk in parallel
-        const chunkTagPromises = chunks.map(chunk => 
-            summarizationService.generateChunkTags(chunk.text, note_type, model)
-        );
-        const chunkTags = await Promise.all(chunkTagPromises);
-        
-        // Attach tags to chunks
-        chunks.forEach((chunk, index) => {
-            chunk.tags = chunkTags[index] || [];
-        });
-        
-        console.log('✅ [Step 9] Chunk tags generated');
+        if (shouldGenerateChunkTags) {
+            console.log(`🗂️ [Step 9] Generating tags for ${chunks.length} chunks (batched)...`);
+            
+            // Batch chunk tag generation to avoid overwhelming the system
+            const BATCH_SIZE = parseInt(process.env.CHUNK_TAG_BATCH_SIZE) || 10;
+            const BATCH_DELAY_MS = parseInt(process.env.CHUNK_TAG_BATCH_DELAY_MS) || 1000;
+            
+            for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+                const batch = chunks.slice(i, i + BATCH_SIZE);
+                const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+                const totalBatches = Math.ceil(chunks.length / BATCH_SIZE);
+                
+                console.log(`🏷️ [Step 9] Processing batch ${batchNumber}/${totalBatches} (${batch.length} chunks)...`);
+                
+                const batchPromises = batch.map(chunk => 
+                    summarizationService.generateChunkTags(chunk.text, note_type, model)
+                        .catch(err => {
+                            console.warn(`⚠️ [Step 9] Failed to generate tags for chunk: ${err.message}`);
+                            return [];
+                        })
+                );
+                
+                const batchTags = await Promise.all(batchPromises);
+                
+                // Attach tags to chunks
+                batch.forEach((chunk, batchIndex) => {
+                    chunk.tags = batchTags[batchIndex] || [];
+                });
+                
+                // Add delay between batches to avoid overwhelming the LLM
+                if (i + BATCH_SIZE < chunks.length) {
+                    await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+                }
+            }
+            
+            console.log('✅ [Step 9] Chunk tags generated');
+        } else {
+            console.log('⏭️  [Step 9] Chunk tag generation skipped (disabled)');
+            // Set empty tags for all chunks
+            chunks.forEach(chunk => {
+                chunk.tags = [];
+            });
+        }
 
         // ========================================
         // STEP 10: Create Notes Record (before chunks so they can reference it)

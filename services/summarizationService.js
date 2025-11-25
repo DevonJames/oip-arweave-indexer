@@ -219,7 +219,7 @@ JSON RESPONSE:`;
                         'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 60000
+                    timeout: parseInt(process.env.LLM_TIMEOUT_MS) || 300000 // 5 minutes default for long meetings
                 });
                 
                 return response.data.choices[0].message.content;
@@ -232,7 +232,7 @@ JSON RESPONSE:`;
                     ],
                     stream: false
                 }, {
-                    timeout: 60000
+                    timeout: parseInt(process.env.LLM_TIMEOUT_MS) || 300000 // 5 minutes default for long meetings
                 });
                 
                 return response.data.message.content;
@@ -404,7 +404,7 @@ JSON RESPONSE:`;
             // Fallback timeout
             setTimeout(() => {
                 if (!winnerFound) resolve(null);
-            }, 60000); // 60 second timeout for summarization
+            }, parseInt(process.env.LLM_TIMEOUT_MS) || 300000); // 5 minutes default for long meetings
         });
         
         const winner = await racePromise;
@@ -436,7 +436,7 @@ JSON RESPONSE:`;
                     'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                     'Content-Type': 'application/json'
                 },
-                timeout: 60000
+                timeout: parseInt(process.env.LLM_TIMEOUT_MS) || 300000 // 5 minutes default
             });
             
             return {
@@ -469,7 +469,7 @@ JSON RESPONSE:`;
                     'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
                     'Content-Type': 'application/json'
                 },
-                timeout: 60000
+                timeout: parseInt(process.env.LLM_TIMEOUT_MS) || 300000 // 5 minutes default
             });
             
             return {
@@ -501,7 +501,7 @@ JSON RESPONSE:`;
                     num_predict: 2000
                 }
             }, {
-                timeout: 60000
+                timeout: parseInt(process.env.LLM_TIMEOUT_MS) || 300000 // 5 minutes default
             });
             
             return {
