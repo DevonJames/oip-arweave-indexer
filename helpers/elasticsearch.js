@@ -8,7 +8,7 @@ const arweave = Arweave.init(arweaveConfig);
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 const semver = require('semver');
-const { gql, request } = require('graphql-request');
+const { gql, GraphQLClient } = require('graphql-request');
 const { validateTemplateFields, verifySignature, getTemplateTxidByName, txidToDid, getLineNumber, resolveRecords } = require('./utils');
 const recordTypeIndexConfig = require('../config/recordTypesToIndex');
 const http = require('http');
@@ -177,9 +177,82 @@ function getElasticsearchClient() {
 // Create initial client
 elasticClient = createElasticsearchClient();
 
-// GraphQL client management REMOVED - was making leak worse
-// The 'request()' function from graphql-request works better than managed client
-// Failed DNS lookups were creating leaked sockets with the managed approach
+// MEMORY LEAK FIX: Configure GraphQL client with proper HTTP agent management
+// The graphql-request library creates HTTP connections that accumulate if not properly managed
+// This is the source of the Socket/TCPConnectWrap leaks observed in memory profiling
+
+// Create HTTP agents for GraphQL requests with keepAlive: false to prevent socket accumulation
+const graphqlHttpAgent = new http.Agent({
+    keepAlive: false,       // Force socket closure after each request
+    maxSockets: 25,         // Limit concurrent connections
+    maxFreeSockets: 0,      // Don't cache free sockets
+    timeout: 30000          // Socket timeout
+});
+
+const graphqlHttpsAgent = new https.Agent({
+    keepAlive: false,
+    maxSockets: 25,
+    maxFreeSockets: 0,
+    timeout: 30000
+});
+
+// GraphQL client instances (one per endpoint to handle local vs. remote)
+let graphqlClients = new Map();
+let graphqlClientsCreatedAt = Date.now();
+const GRAPHQL_CLIENT_MAX_AGE = parseInt(process.env.GRAPHQL_CLIENT_RECREATION_INTERVAL) || 1800000; // 30 minutes default
+
+function createGraphQLClients() {
+    const endpoints = getGraphQLEndpoints();
+    const clients = new Map();
+    
+    endpoints.forEach(endpoint => {
+        // Determine which agent to use based on protocol
+        const isHttps = endpoint.startsWith('https://');
+        const agent = isHttps ? graphqlHttpsAgent : graphqlHttpAgent;
+        
+        clients.set(endpoint, new GraphQLClient(endpoint, {
+            fetch: (url, options = {}) => {
+                // Use node-fetch with our custom agents
+                const nodeFetch = require('node-fetch');
+                return nodeFetch(url, {
+                    ...options,
+                    agent: agent
+                });
+            },
+            timeout: 30000
+        }));
+    });
+    
+    graphqlClientsCreatedAt = Date.now();
+    console.log(`✅ [GraphQL Client] Created GraphQL clients for ${clients.size} endpoint(s) (will recreate in ${GRAPHQL_CLIENT_MAX_AGE/1000}s)`);
+    return clients;
+}
+
+function getGraphQLClients() {
+    const clientAge = Date.now() - graphqlClientsCreatedAt;
+    
+    // Recreate clients if they're too old (to clear accumulated sockets/buffers)
+    if (clientAge > GRAPHQL_CLIENT_MAX_AGE) {
+        console.log(`🔄 [GraphQL Client] Clients are ${Math.round(clientAge/1000)}s old, recreating to clear socket accumulation...`);
+        
+        // Clear old clients
+        graphqlClients.clear();
+        graphqlClients = createGraphQLClients();
+        
+        // Force GC to clean up old connections
+        if (global.gc) {
+            setImmediate(() => {
+                global.gc();
+                console.log(`🧹 [GraphQL Client] Forced GC after client recreation`);
+            });
+        }
+    }
+    
+    return graphqlClients;
+}
+
+// Create initial GraphQL clients
+graphqlClients = createGraphQLClients();
 
 // Helper function for backward-compatible DID queries
 function createDIDQuery(targetDid) {
@@ -5481,13 +5554,20 @@ async function queryBlockRange(minBlock, maxBlock, endpoints) {
         let response = null;
         let endpointSuccess = false;
         
+        const clients = getGraphQLClients();
         for (const endpoint of endpoints) {
             let retryCount = 0;
             endpointSuccess = false;
+            const client = clients.get(endpoint);
+            
+            if (!client) {
+                console.warn(`⚠️  No GraphQL client found for endpoint: ${endpoint}`);
+                continue;
+            }
             
             while (retryCount < maxRetries && !endpointSuccess) {
                 try {
-                    response = await request(endpoint, query);
+                    response = await client.request(query);
                     endpointSuccess = true;
                     break;
                 } catch (error) {
@@ -5584,14 +5664,21 @@ async function searchArweaveForNewTransactions(foundInDB, remapTemplates) {
         let endpointSuccess = false;
 
         // Try each endpoint in order (local gateway first, then arweave.net fallback)
+        const clients = getGraphQLClients();
         for (const endpoint of endpoints) {
             let retryCount = 0;
             endpointSuccess = false;
+            const client = clients.get(endpoint);
+            
+            if (!client) {
+                console.warn(`⚠️  No GraphQL client found for endpoint: ${endpoint}`);
+                continue;
+            }
             
             while (retryCount < maxRetries && !endpointSuccess) {
                 try {
-                    // Use simple request (no managed client - the agent recreation was causing worse leaks)
-                    response = await request(endpoint, query);
+                    // Use managed GraphQL client with proper HTTP agent configuration
+                    response = await client.request(query);
                     endpointSuccess = true;
                     
                     // SAFETY CHECK: If using fallback endpoint, verify we're not skipping too many blocks
