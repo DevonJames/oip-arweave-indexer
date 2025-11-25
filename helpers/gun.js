@@ -29,7 +29,7 @@ class GunHelper {
                 soul: soul,
                 data: data
             }, {
-                timeout: 10000,
+                timeout: parseInt(process.env.GUN_REGISTRY_TIMEOUT_MS) || 30000, // 30 seconds for high-load operations
                 headers: { 'Content-Type': 'application/json' }
             });
 
