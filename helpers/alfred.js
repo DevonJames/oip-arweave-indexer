@@ -1735,9 +1735,12 @@ JSON Response:`;
             }
         } catch (_) { /* ignore */ }
 
-        const prompt = `You are ALFRED, an AI assistant that answers questions directly and clearly. You have access to specific information from articles and documents. Your job is to answer the user's question using this information.
+        // Determine if we're working with a complete note/transcript (existingContext mode)
+        const isCompleteNote = options.existingContext && typeof options.existingContext === 'string' && options.existingContext.length > 0;
+        
+        const prompt = `You are ALFRED, an AI assistant that answers questions directly and clearly. You have access to ${isCompleteNote ? 'a complete meeting note with full transcript' : 'specific information from articles and documents'}. Your job is to answer the user's question using this information.
 
-Information available:
+${isCompleteNote ? 'COMPLETE MEETING NOTE AND TRANSCRIPT:' : 'Information available:'}
 ${context}
 
 ${convoSection}
@@ -1745,13 +1748,20 @@ ${convoSection}
 User's Question: ${question}
 
 CRITICAL INSTRUCTIONS:
-1. Answer the user's question DIRECTLY using the information provided above
-2. For questions like "Who is the president?" - look for the current president's name in the articles and state it clearly
+${isCompleteNote ? `1. You are analyzing a COMPLETE meeting transcript. The FULL TRANSCRIPT is included above.
+2. Search through the ENTIRE transcript carefully from start to finish
+3. Look for ANY mention of: future meetings, scheduling, "next time", dates, follow-ups, calendar items, or time commitments
+4. The information might be mentioned casually in conversation - search thoroughly
+5. Answer the user's question DIRECTLY using the information you find - don't say "according to" or "I found"
+6. For meeting transcripts, check: Summary sections (key points, decisions, action items), Transcript text, Participant discussions about scheduling
+7. DO NOT give generic responses like "I don't have current information" - you have the COMPLETE transcript
+8. If you truly cannot find it after searching the entire transcript, say "I searched the complete transcript but didn't find any mention of [their question]. The meeting focused on [main topics]."` : `1. CAREFULLY READ through ALL the information provided above, including full transcripts
+2. Answer the user's question DIRECTLY using the information you find
 3. For factual questions, extract the specific facts that answer the question
 4. DO NOT say "I found information about..." or "According to the article..." 
-5. DO NOT summarize articles unless specifically asked to summarize
-6. If the information doesn't contain the answer, say "I don't have current information about that in my database, but based on my general knowledge..."
-7. FOR RECIPE STEP-BY-STEP QUESTIONS:
+5. DO NOT summarize unless specifically asked to summarize
+6. If you cannot find the answer, say "I couldn't find that information in the provided content."`}
+9. FOR RECIPE STEP-BY-STEP QUESTIONS:
    - Look at conversation history to find which step number was last mentioned
    - If user asks "next?", "then what?", "after that?", provide ONLY the NEXT step number
    - DO NOT repeat what they already did
@@ -1773,6 +1783,10 @@ Examples of BAD responses for recipes:
 Answer the question directly and conversationally:`;
 
         console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
+        console.log(`[ALFRED] Context length: ${context.length} chars, Prompt total length: ${prompt.length} chars`);
+        if (isCompleteNote) {
+            console.log(`[ALFRED] 📝 Complete note mode - transcript will be searched thoroughly`);
+        }
         
         // Check if a specific model was requested (bypass racing)
         const requestedModel = options.model;
