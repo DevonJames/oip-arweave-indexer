@@ -2307,6 +2307,157 @@
                 }
             },
 
+            // Home Mode Switching (Record vs Upload)
+            switchHomeMode(mode) {
+                this.state.homeMode = mode;
+                
+                // Update toggle buttons
+                document.querySelectorAll('.mode-toggle-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.mode === mode);
+                });
+                
+                // Show/hide appropriate mode content
+                document.getElementById('recordMode').style.display = mode === 'record' ? 'flex' : 'none';
+                document.getElementById('uploadMode').style.display = mode === 'upload' ? 'flex' : 'none';
+                
+                console.log('🔄 Switched to', mode, 'mode');
+            },
+
+            // Audio File Upload
+            handleAudioFileSelect(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                // Validate file type
+                const validTypes = ['audio/mp3', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/flac', 'audio/ogg'];
+                if (!validTypes.some(type => file.type.includes(type.split('/')[1]))) {
+                    this.showToast('Invalid file type. Please select an audio file.', 'error');
+                    return;
+                }
+                
+                this.state.selectedAudioFile = file;
+                
+                // Update UI to show file selected
+                const uploadArea = document.getElementById('uploadArea');
+                uploadArea.innerHTML = `
+                    <img src="icons/noun-microphone-7208171.svg" alt="Audio" style="width: 48px; height: 48px; opacity: 0.7; margin-bottom: 12px;">
+                    <div class="upload-text" style="color: var(--accent-cyan);">✓ ${file.name}</div>
+                    <div class="upload-formats">${(file.size / (1024 * 1024)).toFixed(2)} MB</div>
+                    <div style="margin-top: 12px; font-size: 12px; color: var(--text-tertiary); cursor: pointer;" onclick="alfredApp.clearAudioFile()">Click to select a different file</div>
+                `;
+                
+                // Show form fields
+                document.getElementById('uploadFormFields').style.display = 'block';
+                
+                // Set default times (now and now + 5 minutes)
+                const now = new Date();
+                const endTime = new Date(now.getTime() + 5 * 60000);
+                document.getElementById('uploadStartTime').value = now.toISOString().slice(0, 16);
+                document.getElementById('uploadEndTime').value = endTime.toISOString().slice(0, 16);
+                
+                console.log('📁 File selected:', file.name, file.type, file.size);
+            },
+
+            clearAudioFile() {
+                this.state.selectedAudioFile = null;
+                document.getElementById('audioFileInput').value = '';
+                
+                // Reset upload area
+                const uploadArea = document.getElementById('uploadArea');
+                uploadArea.innerHTML = `
+                    <img src="icons/noun-microphone-7208171.svg" alt="Upload" style="width: 48px; height: 48px; opacity: 0.5; margin-bottom: 12px;">
+                    <div class="upload-text">Click to select or drag & drop audio file</div>
+                    <div class="upload-formats">Supports: MP3, M4A, WAV, WebM, FLAC, OGG</div>
+                `;
+                
+                // Hide form fields
+                document.getElementById('uploadFormFields').style.display = 'none';
+            },
+
+            async uploadAudioFile() {
+                if (!this.state.selectedAudioFile) {
+                    this.showToast('Please select an audio file first', 'error');
+                    return;
+                }
+                
+                if (!this.state.jwtToken) {
+                    this.showToast('Please login first', 'error');
+                    this.showAuthModal();
+                    return;
+                }
+                
+                try {
+                    console.log('📤 Uploading audio file...');
+                    this.showToast('Uploading and processing audio...', 'info');
+                    
+                    // Get form values
+                    const startTime = document.getElementById('uploadStartTime').value;
+                    const endTime = document.getElementById('uploadEndTime').value;
+                    const noteType = this.state.selectedTemplate;
+                    const deviceType = document.getElementById('uploadDeviceType').value;
+                    const participantNames = document.getElementById('uploadParticipantNames').value;
+                    const participantRoles = document.getElementById('uploadParticipantRoles').value;
+                    const addToWebServer = document.getElementById('uploadAddToWebServer').checked;
+                    const addToBitTorrent = document.getElementById('uploadAddToBitTorrent').checked;
+                    
+                    // Validate required fields
+                    if (!startTime || !endTime) {
+                        this.showToast('Please fill in start and end times', 'error');
+                        return;
+                    }
+                    
+                    // Convert times to ISO format
+                    const startTimeISO = new Date(startTime).toISOString();
+                    const endTimeISO = new Date(endTime).toISOString();
+                    
+                    // Build form data
+                    const formData = new FormData();
+                    formData.append('audio', this.state.selectedAudioFile);
+                    formData.append('start_time', startTimeISO);
+                    formData.append('end_time', endTimeISO);
+                    formData.append('note_type', noteType);
+                    formData.append('device_type', deviceType);
+                    formData.append('model', this.state.settings.selectedModel || 'parallel');
+                    formData.append('addToWebServer', addToWebServer ? 'true' : 'false');
+                    formData.append('addToBitTorrent', addToBitTorrent ? 'true' : 'false');
+                    
+                    // Add participants if provided
+                    if (participantNames.trim()) {
+                        formData.append('participant_display_names', JSON.stringify(
+                            participantNames.split(',').map(n => n.trim()).filter(n => n)
+                        ));
+                    }
+                    if (participantRoles.trim()) {
+                        formData.append('participant_roles', JSON.stringify(
+                            participantRoles.split(',').map(r => r.trim()).filter(r => r)
+                        ));
+                    }
+                    
+                    // Upload to backend
+                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/from-audio`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        },
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showToast('Note created successfully!', 'success');
+                        this.clearAudioFile();
+                        this.switchHomeMode('record'); // Switch back to record mode
+                        this.loadNotes(); // Refresh notes list
+                    } else {
+                        this.showToast('Failed to create note: ' + (data.error || 'Unknown error'), 'error');
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    this.showToast('Failed to upload note', 'error');
+                }
+            },
+
             async processRecording() {
                 const audioBlob = new Blob(this.state.audioChunks, { type: 'audio/webm' });
                 const endTime = Date.now();
