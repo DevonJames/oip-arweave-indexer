@@ -392,9 +392,53 @@ app.use('/api/organizations', organizationRoutes);
 app.use('/api/scrape', scrapeRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/generate', generateRoutes);
-app.use('/api/generate/media', express.static(path.join(__dirname, 'media')));
+// MEMORY LEAK FIX: Configure express.static with aggressive caching and memory limits
+// Without proper configuration, serving 100+ GIFs/minute accumulates buffers faster than GC
+const mediaStaticOptions = {
+    etag: true,              // Enable ETags for browser caching
+    lastModified: true,      // Enable Last-Modified header
+    maxAge: '1y',           // Cache for 1 year (GIFs don't change)
+    immutable: true,        // Tell browsers these files never change
+    setHeaders: (res, filePath) => {
+        // Aggressive caching for images/GIFs to prevent repeated requests
+        if (filePath.endsWith('.gif') || filePath.endsWith('.jpg') || filePath.endsWith('.png') || filePath.endsWith('.svg')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+    }
+};
+
+// MEMORY LEAK FIX: Middleware to force buffer cleanup after serving static files
+// This prevents accumulation of file buffers when serving 100+ GIFs/minute
+const forceStaticCleanup = (req, res, next) => {
+    const originalEnd = res.end;
+    const originalWrite = res.write;
+    let bufferReleased = false;
+    
+    // Wrap res.end to force cleanup
+    res.end = function(...args) {
+        const result = originalEnd.apply(this, args);
+        
+        // Force buffer release after response is sent
+        if (!bufferReleased && global.gc) {
+            bufferReleased = true;
+            setImmediate(() => {
+                global.gc();
+                // Only log occasionally to avoid log spam
+                if (Math.random() < 0.01) { // 1% of requests
+                    console.log(`🧹 [Static] Forced GC after serving ${req.path}`);
+                }
+            });
+        }
+        
+        return result;
+    };
+    
+    next();
+};
+
+app.use('/api/generate/media', forceStaticCleanup, express.static(path.join(__dirname, 'media'), mediaStaticOptions));
 // Serve web-accessible media files
-app.use('/media', express.static(path.join(__dirname, 'data', 'media', 'web')));
+app.use('/media', forceStaticCleanup, express.static(path.join(__dirname, 'data', 'media', 'web'), mediaStaticOptions));
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/workout', workoutRoutes);
