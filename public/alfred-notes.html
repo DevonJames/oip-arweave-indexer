@@ -1520,7 +1520,10 @@
                             <span>🔍</span>
                             <input type="text" placeholder="Search notes..." id="searchInput" onkeyup="alfredApp.searchNotes()">
                         </div>
-                        <button class="filter-button" onclick="alfredApp.toggleFilters()">🔽 Advanced Search & Filters</button>
+                        <div style="display: flex; gap: 8px; margin-top: 10px;">
+                            <button class="filter-button" onclick="alfredApp.toggleFilters()">🔽 Advanced Search & Filters</button>
+                            <button class="filter-button" onclick="alfredApp.refreshNotesFromBackend()" style="border-color: rgba(95, 252, 249, 0.8); background: rgba(95, 252, 249, 0.1);"><img src="icons/noun-reset-3749886.svg" alt="" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px; opacity: 0.9;"> Refresh from Backend</button>
+                        </div>
                     </div>
                     <div class="notes-list" id="notesList">
                         <div class="loading">
@@ -1665,8 +1668,9 @@
             <!-- Note Detail View -->
             <div id="noteDetailView" class="view-container">
                 <div class="note-detail-view">
-                    <div style="margin-bottom: 20px;">
+                    <div style="margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap;">
                         <button class="secondary-button" onclick="alfredApp.showView('libraryView')" style="width: auto; padding: 10px 20px;">← Back to Library</button>
+                        <button class="filter-button" onclick="alfredApp.fillMissingAnalysis()" style="border-color: rgba(95, 252, 249, 0.8); background: rgba(95, 252, 249, 0.1); padding: 10px 20px;"><img src="icons/noun-reset-3749886.svg" alt="" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px; opacity: 0.9;"> Fill in Missing Analysis</button>
                     </div>
                     <div class="note-detail-header">
                         <h1 class="note-detail-title" id="noteDetailTitle">Note Title</h1>
@@ -2198,6 +2202,64 @@
                 }
             },
 
+            async refreshNotesFromBackend() {
+                if (!this.state.jwtToken) {
+                    this.showToast('Please login first', 'error');
+                    return;
+                }
+
+                try {
+                    console.log('🔄 Refreshing notes from backend...');
+                    this.showToast('Fetching notes from backend...', 'info');
+                    
+                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/records?recordType=notes&source=gun&sort=byDate:desc`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    console.log('🔄 Backend response:', {
+                        recordCount: data.records?.length || 0,
+                        authenticated: data.auth?.authenticated
+                    });
+                    
+                    if (data.records && data.records.length > 0) {
+                        // Get existing DIDs to avoid duplicates
+                        const existingDids = new Set(
+                            this.state.notes.map(note => note.oip?.did || note.did).filter(Boolean)
+                        );
+
+                        // Filter out notes that already exist
+                        const newNotes = data.records.filter(note => {
+                            const noteDid = note.oip?.did || note.did;
+                            return noteDid && !existingDids.has(noteDid);
+                        });
+
+                        if (newNotes.length > 0) {
+                            // Add new notes to the beginning of the list
+                            this.state.notes = [...newNotes, ...this.state.notes];
+                            this.renderNotesList();
+                            console.log(`✅ Added ${newNotes.length} new notes from backend`);
+                            this.showToast(`Added ${newNotes.length} new note${newNotes.length > 1 ? 's' : ''} from backend`, 'success');
+                        } else {
+                            console.log('ℹ️ No new notes found on backend');
+                            this.showToast('No new notes found on backend', 'info');
+                        }
+                    } else {
+                        console.log('ℹ️ No notes returned from backend');
+                        this.showToast('No notes found on backend', 'info');
+                    }
+                } catch (error) {
+                    console.error('❌ Error refreshing notes from backend:', error);
+                    this.showToast(`Failed to refresh: ${error.message}`, 'error');
+                }
+            },
+
             renderNotesList() {
                 const notesList = document.getElementById('notesList');
                 if (!notesList) return;
@@ -2315,6 +2377,166 @@
                     openQuestions.innerHTML = questions.length > 0
                         ? questions.map(q => `<li>${q}</li>`).join('')
                         : '<li>No open questions</li>';
+                }
+            },
+
+            async fillMissingAnalysis() {
+                if (!this.state.currentNote) {
+                    this.showToast('No note loaded', 'error');
+                    return;
+                }
+
+                try {
+                    console.log('🔍 Filling in missing analysis...');
+                    this.showToast('Analyzing note content...', 'info');
+
+                    const noteData = this.state.currentNote.data?.notes || {};
+                    
+                    // Check if transcript DID exists
+                    const transcriptDid = noteData.transcript_full_text;
+                    if (!transcriptDid) {
+                        this.showToast('No transcript available for this note', 'error');
+                        return;
+                    }
+
+                    // Fetch the transcript
+                    console.log('📄 Fetching transcript:', transcriptDid);
+                    const transcriptResponse = await fetch(`${this.state.settings.apiBaseUrl}/api/records?recordType=text&source=gun&did=${transcriptDid}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        }
+                    });
+
+                    const transcriptData = await transcriptResponse.json();
+                    const transcriptText = transcriptData.records?.[0]?.data?.text?.value;
+                    
+                    if (!transcriptText) {
+                        this.showToast('Could not retrieve transcript text', 'error');
+                        return;
+                    }
+
+                    console.log('✅ Transcript retrieved, length:', transcriptText.length);
+
+                    // Format participants
+                    const participantNames = noteData.participant_display_names || [];
+                    const participantRoles = noteData.participant_roles || [];
+                    
+                    let participantsFormatted = '';
+                    if (participantNames.length > 0) {
+                        participantsFormatted = participantNames.map((name, idx) => {
+                            const role = participantRoles[idx] || '';
+                            return role ? `${name} (${role})` : name;
+                        }).join(', ');
+                    } else if (participantRoles.length > 0) {
+                        participantsFormatted = participantRoles.join(', ');
+                    }
+
+                    // Identify empty fields
+                    const fieldsToFill = [];
+                    const fieldChecks = {
+                        'summary_key_points': noteData.summary_key_points,
+                        'summary_decisions': noteData.summary_decisions,
+                        'summary_action_item_texts': noteData.summary_action_item_texts,
+                        'summary_action_item_assignees': noteData.summary_action_item_assignees,
+                        'summary_action_item_due_texts': noteData.summary_action_item_due_texts,
+                        'summary_open_questions': noteData.summary_open_questions,
+                        'topics_auto': noteData.topics_auto,
+                        'keywords_auto': noteData.keywords_auto
+                    };
+
+                    for (const [field, value] of Object.entries(fieldChecks)) {
+                        if (!value || (Array.isArray(value) && value.length === 0)) {
+                            fieldsToFill.push(field);
+                        }
+                    }
+
+                    if (fieldsToFill.length === 0) {
+                        this.showToast('All analysis fields are already filled', 'info');
+                        return;
+                    }
+
+                    console.log('📋 Fields to fill:', fieldsToFill);
+
+                    // Build LLM prompt
+                    const prompt = `Analyze this meeting transcript and provide missing analysis fields.
+
+TRANSCRIPT:
+${transcriptText}
+
+${participantsFormatted ? `PARTICIPANTS: ${participantsFormatted}\n` : ''}
+MISSING FIELDS TO FILL: ${fieldsToFill.join(', ')}
+
+Please provide a JSON object with ONLY the missing fields from this list:
+- summary_key_points: array of key discussion points (3-7 items)
+- summary_decisions: array of decisions made (if any)
+- summary_action_item_texts: array of action items identified
+- summary_action_item_assignees: array of who is responsible (parallel to action_item_texts, use "unassigned" if unclear)
+- summary_action_item_due_texts: array of due dates (parallel to action_item_texts, use "no date" if not specified)
+- summary_open_questions: array of unresolved questions or issues
+- topics_auto: array of high-level topics discussed (3-5 items)
+- keywords_auto: array of important keywords and concepts (5-10 items)
+
+Return ONLY a JSON object with the missing fields. Example format:
+{
+  "summary_key_points": ["point 1", "point 2"],
+  "summary_decisions": ["decision 1"],
+  "topics_auto": ["topic1", "topic2"]
+}
+
+JSON:`;
+
+                    // Call LLM
+                    console.log('🤖 Calling LLM for analysis...');
+                    const llmResponse = await fetch(`${this.state.settings.apiBaseUrl}/api/alfred/generate`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.state.jwtToken}`
+                        },
+                        body: JSON.stringify({
+                            prompt: prompt,
+                            model: this.state.settings.selectedModel || 'llama3.2:3b'
+                        })
+                    });
+
+                    const llmData = await llmResponse.json();
+                    let analysis;
+
+                    try {
+                        // Try to parse JSON from response
+                        const jsonMatch = llmData.response.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            analysis = JSON.parse(jsonMatch[0]);
+                        } else {
+                            throw new Error('No JSON found in response');
+                        }
+                    } catch (parseError) {
+                        console.error('❌ Failed to parse LLM response:', parseError);
+                        this.showToast('Failed to parse analysis results', 'error');
+                        return;
+                    }
+
+                    console.log('✅ Analysis received:', Object.keys(analysis));
+
+                    // Update the current note with new analysis
+                    for (const [field, value] of Object.entries(analysis)) {
+                        if (fieldsToFill.includes(field) && value) {
+                            this.state.currentNote.data.notes[field] = value;
+                        }
+                    }
+
+                    // Re-render the note detail view
+                    this.renderNoteDetail();
+                    
+                    this.showToast(`Filled in ${Object.keys(analysis).length} missing field(s)`, 'success');
+                    console.log('✅ Missing analysis fields filled successfully');
+
+                    // TODO: Optionally save the updated note back to the backend
+                    // This would require a PATCH endpoint for notes
+
+                } catch (error) {
+                    console.error('❌ Error filling missing analysis:', error);
+                    this.showToast(`Failed to fill analysis: ${error.message}`, 'error');
                 }
             },
 
