@@ -2212,7 +2212,7 @@
                     console.log('🔄 Refreshing notes from backend...');
                     this.showToast('Fetching notes from backend...', 'info');
                     
-                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/records?recordType=notes&source=gun&sort=byDate:desc`, {
+                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/records?recordType=notes&source=gun&sort=date:desc`, {
                         headers: {
                             'Authorization': `Bearer ${this.state.jwtToken}`
                         }
