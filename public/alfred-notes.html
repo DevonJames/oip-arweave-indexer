@@ -826,6 +826,31 @@
             box-shadow: 0 0 0 1px rgba(95, 252, 249, 0.6);
         }
 
+        .chat-model-selector {
+            padding: 7px 12px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: 999px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all var(--transition-fast);
+        }
+
+        .chat-model-selector:hover {
+            border-color: rgba(95, 252, 249, 0.4);
+            background: var(--bg-chip);
+        }
+
+        .chat-model-selector:focus {
+            border-color: rgba(95, 252, 249, 0.6);
+            box-shadow: 0 0 0 2px rgba(95, 252, 249, 0.1);
+        }
+
         .chat-mode-row {
             display: flex;
             align-items: center;
@@ -1697,9 +1722,17 @@
             <div id="chatView" class="view-container">
                 <div class="chat-view">
                     <div class="chat-header">
-                        <div class="chat-toggle">
-                            <button class="chat-toggle-btn active" data-ai="alfred" onclick="alfredApp.switchAI('alfred')">Alfred</button>
-                            <button class="chat-toggle-btn" data-ai="alice" onclick="alfredApp.switchAI('alice')">Alice</button>
+                        <div style="display: flex; align-items: center; gap: 12px; justify-content: center;">
+                            <div class="chat-toggle">
+                                <button class="chat-toggle-btn active" data-ai="alfred" onclick="alfredApp.switchAI('alfred')">Alfred</button>
+                                <button class="chat-toggle-btn" data-ai="alice" onclick="alfredApp.switchAI('alice')">Alice</button>
+                            </div>
+                            <select class="chat-model-selector" id="chatModelSelect" onchange="alfredApp.updateChatModel(this.value)">
+                                <option value="parallel">Parallel (All Models)</option>
+                                <option value="llama3.2:3b">Llama 3.2 (3B)</option>
+                                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                                <option value="grok-beta">Grok Beta</option>
+                            </select>
                         </div>
                         <div class="chat-mode-row">
                             <div class="chat-toggle">
@@ -1983,6 +2016,12 @@
                 
                 // Initialize API URL display
                 this.updateApiUrlDisplay();
+                
+                // Initialize chat model selector
+                const chatModelSelect = document.getElementById('chatModelSelect');
+                if (chatModelSelect) {
+                    chatModelSelect.value = this.state.settings.model;
+                }
                 
                 // Check authentication
                 if (!this.state.jwtToken) {
@@ -2417,7 +2456,7 @@
                     formData.append('end_time', endTimeISO);
                     formData.append('note_type', noteType);
                     formData.append('device_type', deviceType);
-                    formData.append('model', this.state.settings.selectedModel || 'parallel');
+                    formData.append('model', this.state.settings.model || 'parallel');
                     formData.append('addToWebServer', addToWebServer ? 'true' : 'false');
                     formData.append('addToBitTorrent', addToBitTorrent ? 'true' : 'false');
                     
@@ -2833,7 +2872,7 @@ JSON:`;
                         },
                         body: JSON.stringify({
                             prompt: prompt,
-                            model: this.state.settings.selectedModel || 'llama3.2:3b'
+                            model: this.state.settings.model || 'llama3.2:3b'
                         })
                     });
 
@@ -3045,6 +3084,12 @@ JSON:`;
                 
                 // Clear chat messages and show welcome message
                 this.initChatView();
+            },
+
+            updateChatModel(model) {
+                this.state.settings.model = model;
+                console.log(`🤖 Chat model updated to: ${model}`);
+                this.showToast(`Model changed to ${model}`, 'success');
             },
 
             switchChatMode(mode) {
