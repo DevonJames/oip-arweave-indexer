@@ -289,7 +289,7 @@ class ALFRED {
             if (!apiKey) {
                 throw new Error('XAI_API_KEY environment variable is required for Grok models');
             }
-            console.log(`[ALFRED] XAI API Key available: ${apiKey ? 'Yes' : 'No'}, Length: ${apiKey ? apiKey.length : 0}`);
+            // Removed verbose XAI API key logging
         } else if (modelConfig.provider === 'openai') {
             apiKey = this.openaiApiKey;
             if (!apiKey) {
@@ -321,8 +321,7 @@ class ALFRED {
             stop: finalOptions.stop
         };
 
-        console.log(`[ALFRED] 🌐 Calling ${modelConfig.provider} API for ${modelName} at ${modelConfig.apiUrl}`);
-        // console.log(`[ALFRED] Request body:`, JSON.stringify(requestBody, null, 2));
+        // Removed verbose API call logging
 
         try {
             const response = await axios.post(modelConfig.apiUrl, requestBody, {
@@ -479,7 +478,7 @@ Question: "${question}"
 
 JSON Response:`;
             
-            console.log(`[ALFRED] 🤖 Using ${modelToUse} to analyze question: "${question}"`);
+            // Removed verbose model analysis logging
             
             let rawResponse;
             
@@ -508,7 +507,7 @@ JSON Response:`;
                 rawResponse = response.data?.response?.trim() || '';
             }
             
-            console.log(`[ALFRED] 🤖 raw response from ${modelToUse}: "${rawResponse}"`);
+            // Removed verbose raw response logging
             
             // Try to parse JSON response with multiple strategies
             let analysis;
@@ -554,7 +553,7 @@ JSON Response:`;
                 secondEntity: String(analysis.second_entity || '').trim()
             };
             
-            console.log(`[ALFRED] 🎯 ${modelToUse} analysis result:`, result);
+            // Removed verbose analysis result logging
             return result;
             
         } catch (error) {
@@ -591,7 +590,7 @@ JSON Response:`;
                 }
             }
             
-            console.log(`[ALFRED] 🔄 Enhanced fallback analysis: category=${category}, entity="${primaryEntity}", modifiers=[${modifiers.join(', ')}]`);
+            // Removed verbose fallback analysis logging
             
             return {
                 isFollowUp: false,
@@ -608,7 +607,7 @@ JSON Response:`;
      * and refining results using tag analysis
      */
     async processQuestion(question, options = {}) {
-        console.log(`[ALFRED] Processing question: "${question}"`);
+        // Removed verbose question processing logging
         const { existingContext = null, selectedModel = null, searchParams = {} } = options;
         // Detect stepwise intent up front so it also applies to forced-context flows
         const stepIntent = this.detectStepwiseIntent(question, options.conversationHistory || []);
@@ -643,14 +642,14 @@ JSON Response:`;
             const analysis = await this.analyzeQuestionWithLLM(question, selectedModel, contextForAnalysis);
             let { isFollowUp, category, primaryEntity, modifiers, secondEntity } = analysis;
 
-            console.log(`[ALFRED] LLM Question Analysis Result:`, analysis);
+            // Removed verbose LLM analysis result logging
             
             // Post-process: Check for category mismatch to prevent false follow-ups
             if (isFollowUp && existingContext && existingContext.length > 0) {
                 const contextRecordTypes = [...new Set(existingContext.map(r => r.recordType).filter(Boolean))];
                 const questionCategory = category === 'news' ? 'post' : category;
                 
-                console.log(`[ALFRED] 🔍 Category mismatch check: Question="${questionCategory}", Context types=[${contextRecordTypes.join(', ')}]`);
+                // Removed verbose category mismatch check logging
                 
                 if (contextRecordTypes.length > 0 && !contextRecordTypes.includes(questionCategory)) {
                     console.log(`[ALFRED] 🚨 Category mismatch detected! Question category: "${questionCategory}", Context types: [${contextRecordTypes.join(', ')}] - overriding follow-up to false`);
@@ -662,8 +661,7 @@ JSON Response:`;
             
             // Check if this is a follow-up question with existing context
             if (existingContext && existingContext.length > 0 && isFollowUp) {
-                console.log(`[ALFRED] 🔄 Detected follow-up question, using existing context (${existingContext.length} records) instead of new search`);
-                console.log(`[ALFRED] 🔄 Existing context:`, existingContext);
+                // Removed verbose follow-up detection logging
                 // Determine record type from existing context or analysis
                 const contextRecordType = existingContext[0]?.recordType || 
                                         category || 'unknown';
@@ -685,7 +683,7 @@ JSON Response:`;
             const subject = primaryEntity;
             // if the category is news, set recordType to post, otherwise is the category
             const recordType = category === 'news' ? 'post' : category;
-            console.log(`[ALFRED] LLM Analysis - FollowUp: "${isFollowUp}", Subject: "${subject}", Modifiers: [${modifiers.join(', ')}], RecordType: "${recordType}", SecondEntity: "${secondEntity}"`);
+            // Removed verbose LLM analysis details logging
             
             // Step 2: Perform initial search
             const initialFilters = this.buildInitialFilters(subject, recordType, options);
@@ -700,7 +698,7 @@ JSON Response:`;
             
             if (initialResults.records.length === 1) {
                 // Perfect match - proceed directly to content extraction
-                console.log(`[ALFRED] Perfect match found, proceeding to content extraction`);
+                // Removed verbose perfect match logging
                 return this.extractAndFormatContent(question, initialResults.records, initialFilters, modifiers, optionsWithStep);
             }
             
@@ -717,11 +715,11 @@ JSON Response:`;
                     if (secondEntity && secondEntity.length > 0) {
                         termsForRefinement.push(secondEntity);
                     }
-                    console.log(`[ALFRED] Multiple recipe results (${initialResults.records.length}), attempting tag refinement with LLM terms: [${termsForRefinement.join(', ')}]`);
+                    // Removed verbose refinement attempt logging
                 } else if (modifiers.length > 0) {
                     // For non-recipes, only refine if we have explicit modifiers
                     shouldRefine = true;
-                    console.log(`[ALFRED] Multiple results (${initialResults.records.length}) with modifiers, attempting tag refinement`);
+                    // Removed verbose refinement attempt logging
                 }
 
                 // before refineSearchWithTags, we need to refineSearchWithCuisine
@@ -729,22 +727,21 @@ JSON Response:`;
                 if (shouldRefine) {
                     const refinedResult = await this.refineSearchWithCuisine(question, subject, termsForRefinement, recordType, options);
                     if (refinedResult) {
-                        console.log(`[ALFRED] Successfully refined with cuisine:`, refinedResult);
-                        console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.search_results_count} results`);
+                        // Removed verbose refinement success logging
                         // return refinedResult;
                         
                         if (refinedResult.search_results_count > 1) {
                             
                             const furtherRefinedResult1 = await this.refineSearchWithTags(question, subject, termsForRefinement, recordType, options);
                             if (furtherRefinedResult1) {
-                                console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${furtherRefinedResult1.search_results_count} results`);
+                                // Removed verbose refinement success logging
                                 shouldRefine = false;
                                 // return this.extractAndFormatContent(question, furtherRefinedResult1, initialFilters, modifiers, options);
                                 return furtherRefinedResult1;
                             }
                         } 
                         if (refinedResult.search_results_count === 1) {
-                            console.log(`[ALFRED] ✅ Successfully refined from ${initialResults.records.length} to ${refinedResult.search_results_count} results`);
+                            // Removed verbose refinement success logging
                             shouldRefine = false;
                             // return this.extractAndFormatContent(question, refinedResult, initialFilters, modifiers, options);
                             return refinedResult;
@@ -917,7 +914,7 @@ JSON Response:`;
         // Return remaining modifiers that weren't used in the subject
         const remainingModifiers = foundModifiers.filter(mod => !subject.includes(mod));
         
-        console.log(`[ALFRED] Recipe parsing: "${cleanedQuestion}" -> subject: "${subject}", modifiers: [${remainingModifiers.join(', ')}]`);
+            // Removed verbose recipe parsing logging
         
         return { subject, modifiers: remainingModifiers };
     }
@@ -993,7 +990,7 @@ JSON Response:`;
      */
     async performSearch(filters) {
         try {
-            console.log(`[ALFRED] Performing search with filters:`, filters);
+            // Removed verbose search filters logging
             const results = await getRecords(filters);
             
             return {
@@ -1038,11 +1035,11 @@ JSON Response:`;
             const matchingTags = this.findMatchingTags(modifiers, tagResults.tagSummary);
             
             if (matchingTags.length === 0) {
-                console.log(`[ALFRED] No matching tags found for modifiers: [${modifiers.join(', ')}]`);
+                // Removed verbose no matching tags logging
                 return null;
             }
             
-            console.log(`[ALFRED] Found matching tags for refinement: [${matchingTags.join(', ')}]`);
+            // Removed verbose matching tags logging
             
             // Perform refined search with tags
             const refinedFilters = {
@@ -1122,7 +1119,7 @@ JSON Response:`;
                     options
                 );
             } else {
-                console.log(`[ALFRED] No cuisine results found for: ${modifiers.join(', ')}`);
+                // Removed verbose no cuisine results logging
                 return null;
             }
         } catch (error) {
@@ -1181,7 +1178,7 @@ JSON Response:`;
             .split(/\s+/)
             .filter(word => word.length > 2);
         
-        console.log(`[ALFRED] Searching for keywords in documentation: ${questionKeywords.join(', ')}`);
+        // Removed verbose keyword search logging
         
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
@@ -1205,7 +1202,7 @@ JSON Response:`;
                 const titleLower = sectionTitle.toLowerCase();
                 if (questionKeywords.some(keyword => titleLower.includes(keyword))) {
                     inRelevantSection = true;
-                    console.log(`[ALFRED] Found relevant section: ${sectionTitle}`);
+                    // Removed verbose relevant section logging
                 }
             } else {
                 currentSection += line + '\n';
@@ -1215,7 +1212,7 @@ JSON Response:`;
                     const lineLower = line.toLowerCase();
                     if (questionKeywords.some(keyword => lineLower.includes(keyword))) {
                         inRelevantSection = true;
-                        console.log(`[ALFRED] Found relevant content in line: ${line.substring(0, 100)}...`);
+                        // Removed verbose line match logging
                     }
                 }
             }
@@ -1264,7 +1261,7 @@ JSON Response:`;
 
                 // Handle markdown documentation content
                 if (recordType === 'documentation' && record.data?.content) {
-                    console.log(`[ALFRED] Processing markdown documentation: ${record.data.title || 'Documentation'}`);
+                    // Removed verbose markdown processing logging
                     
                     // Extract relevant sections from markdown content based on the question
                     const markdownContent = record.data.content;
@@ -1278,7 +1275,7 @@ JSON Response:`;
                         fullContent: markdownContent.substring(0, 8000) // Limit to prevent overflow
                     };
                     
-                    console.log(`[ALFRED] Extracted ${relevantSections.length} relevant sections from documentation`);
+                    // Removed verbose section extraction logging
                 }
                 
                 // Extract full text for post records
@@ -1289,7 +1286,7 @@ JSON Response:`;
                             const fullText = await this.fetchFullTextContent(fullTextUrl, content.title);
                             if (fullText) {
                                 content.fullText = fullText.substring(0, 8000); // Limit to prevent overflow
-                                console.log(`[ALFRED] Retrieved ${fullText.length} characters of full text for: ${content.title}`);
+                                // Removed verbose full text retrieval logging
                             }
                         } catch (error) {
                             console.warn(`[ALFRED] Failed to fetch full text:`, error.message);
@@ -1333,7 +1330,7 @@ JSON Response:`;
                     } else if (record.data.summaryNutritionalInfo) {
                         // Legacy support: if old records have summaryNutritionalInfo
                         content.nutrition = record.data.summaryNutritionalInfo;
-                        console.log(`[ALFRED] Included legacy nutritional info for recipe: ${content.title}`);
+                        // Removed verbose nutritional info logging
                     }
                     
                     // Include serving information
@@ -1385,8 +1382,7 @@ JSON Response:`;
                     // Include comprehensive exercise data for exercise records
                     const exerciseData = record.data.exercise || {};
                     
-                    console.log(`[ALFRED] 🏋️ Processing exercise record: ${content.title}, recordType: ${recordType}`);
-                    console.log(`[ALFRED] 🏋️ Exercise data keys:`, Object.keys(exerciseData));
+                    // Removed verbose exercise processing logging
                     
                     // Include detailed exercise instructions
                     content.instructions = exerciseData.instructions || [];
@@ -1404,15 +1400,12 @@ JSON Response:`;
                     // Include full exercise data for comprehensive analysis
                     content.exerciseData = exerciseData;
                     
-                    console.log(`[ALFRED] Enhanced exercise data for: ${content.title} (muscles: ${content.muscleGroups.join(', ')}, equipment: ${content.equipmentRequired.join(', ')}, instructions: ${content.instructions.length} steps)`);
+                    // Removed verbose enhanced exercise data logging
                 } else if (recordType === 'workout') {
                     // Include comprehensive workout data including aggregated info from resolved exercises (resolveDepth=2)
                     const workoutData = record.data.workout || {};
 
-                    console.log(`[ALFRED] 🏃 Processing workout record: ${content.title}`);
-                    console.log(`[ALFRED] 🏃 Workout data keys:`, Object.keys(workoutData));
-                    console.log(`[ALFRED] 🏃 Workout exercise field type:`, typeof workoutData.exercise);
-                    console.log(`[ALFRED] 🏃 Workout exercise field is array:`, Array.isArray(workoutData.exercise));
+                    // Removed verbose workout processing logging
 
                     content.totalDurationMinutes = workoutData.total_duration_minutes || workoutData.totalDurationMinutes || null;
                     content.estimatedCaloriesBurned = workoutData.estimated_calories_burned || workoutData.calories || null;
@@ -1424,7 +1417,7 @@ JSON Response:`;
 
                     // Extract and normalize exercises
                     const exercises = Array.isArray(workoutData.exercise) ? workoutData.exercise : [];
-                    console.log(`[ALFRED] 🏃 Number of exercises in workout:`, exercises.length);
+                    // Removed verbose workout exercise count logging
                     
                     const aggregatedEquipment = new Set();
                     const aggregatedMuscles = new Set();

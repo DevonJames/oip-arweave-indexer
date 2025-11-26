@@ -642,7 +642,7 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
         
         if (processingMode === 'llm') {
             // Parallel requests to multiple models with TRUE RACING
-            console.log(`[Direct LLM Non-Streaming] 🏁 Racing parallel requests: OpenAI, Grok-4, Mistral, ${process.env.DEFAULT_LLM_MODEL || 'llama3.2:3b'}`);
+            // Removed verbose LLM race logging
             
             const requests = [];
             
@@ -669,7 +669,7 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
                         if (!winnerFound && result && result.response) {
                             winnerFound = true;
                             const raceTime = Date.now() - startTime;
-                            console.log(`[Direct LLM Non-Streaming] 🏆 FIRST TO FINISH: ${result.source} in ${raceTime}ms`);
+                            // Removed verbose LLM race winner logging
                             resolve(result);
                         }
                     }).catch(() => {
@@ -688,15 +688,14 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
             if (winner) {
                 fullResponse = winner.response;
                 modelUsed = winner.source;
-                console.log(`[Direct LLM Non-Streaming] ✅ Winner: ${winner.source} (${Date.now() - startTime}ms)`);
-                console.log(`[Direct LLM Non-Streaming] 📤 Winner response preview:`, fullResponse.substring(0, 300) + (fullResponse.length > 300 ? '...' : ''));
+                // Removed verbose LLM winner result logging
                 
                 // Log all results after (non-blocking)
                 Promise.allSettled(requests).then(results => {
                     const resultSummary = results.map((r, i) => 
                         r.status === 'fulfilled' && r.value ? `✅ ${r.value.source}` : '❌ failed'
                     ).join(', ');
-                    console.log(`[Direct LLM Non-Streaming] All completed: ${resultSummary}`);
+                    // Removed verbose LLM completion summary logging
                 });
             } else {
                 throw new Error('All LLM requests failed');
@@ -705,7 +704,7 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
         } else if (processingMode.startsWith('llm-')) {
             // Specific model request
             const modelName = processingMode.replace('llm-', '');
-            console.log(`[Direct LLM Non-Streaming] Using specific model: ${modelName}`);
+            // Removed verbose model selection logging
             
             let result;
             if (modelName.startsWith('gpt-') || modelName.includes('openai')) {
@@ -721,8 +720,7 @@ async function processDirectLLMNonStreaming(inputText, processingMode, model, co
             if (result && result.response) {
                 fullResponse = result.response;
                 modelUsed = result.source;
-                console.log(`[Direct LLM Non-Streaming] Response from ${modelName} (${Date.now() - startTime}ms)`);
-                console.log(`[Direct LLM Non-Streaming] 📤 Response preview:`, fullResponse.substring(0, 300) + (fullResponse.length > 300 ? '...' : ''));
+                // Removed verbose LLM response logging
             } else {
                 throw new Error(`Failed to get response from ${modelName}`);
             }
@@ -1245,7 +1243,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             processingMetrics.stt_time_ms = Date.now() - sttStartTime;
 
             inputText = sttResponse.data.text;
-            console.log(`[Voice Chat] STT transcription (${processingMetrics.stt_time_ms}ms): "${inputText}"`);
+            // Removed verbose STT transcription logging
             
             // Enhanced: Smart Turn endpoint prediction (if enabled)
             let smartTurnResult = null;
@@ -1256,7 +1254,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     processingMetrics.smart_turn_time_ms = Date.now() - smartTurnStartTime;
                     
                     if (smartTurnResult) {
-                        console.log(`[Voice Chat] Smart Turn result (${processingMetrics.smart_turn_time_ms}ms): complete=${smartTurnResult.is_complete}, prob=${smartTurnResult.probability.toFixed(3)}`);
+                        // Removed verbose smart turn result logging
                     }
                 } catch (error) {
                     console.warn(`[Voice Chat] Smart Turn prediction failed: ${error.message}`);
@@ -1315,10 +1313,10 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
         } else {
             // Check processing mode preference (new parameter)
             const processingMode = req.body.processing_mode || 'rag'; // Default to RAG
-            console.log(`[Voice Chat] Processing mode: ${processingMode} for question: "${inputText}"`);
+            // Removed verbose processing mode logging
             
             if (processingMode === 'rag') {
-                console.log(`[Voice Chat] Using RAG for question: "${inputText}"`);
+                // Removed verbose RAG mode logging
                 
                 // Use RAG service to get context-aware response
 
@@ -1343,7 +1341,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 }
                 if (Array.isArray(convo) && convo.length > 0) {
                     ragOptions.conversationHistory = convo;
-                    console.log(`[Voice Chat] Using conversation history with ${convo.length} messages`);
+                    // Removed verbose conversation history logging
                 }
             } catch (_) { /* ignore */ }
             
@@ -1352,7 +1350,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             if (req.body.existing_search_results && Array.isArray(req.body.existing_search_results)) {
                 ragOptions.existingContext = req.body.existing_search_results.map(record => {
                     const recordType = record.oip?.recordType || record.recordType || 'unknown';
-                    console.log(`[Voice Chat] Stripping record: ${record.data?.basic?.name || 'Untitled'} - recordType: ${recordType} (from ${record.oip ? 'oip' : 'existing recordType'})`);
+                    // Removed verbose record stripping logging
                     return {
                         data: record.data,
                         recordType: recordType,
@@ -1363,7 +1361,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             } else if (req.body.existingContext && Array.isArray(req.body.existingContext)) {
                 ragOptions.existingContext = req.body.existingContext.map(record => {
                     const recordType = record.oip?.recordType || record.recordType || 'unknown';
-                    console.log(`[Voice Chat] Stripping existing context record: ${record.data?.basic?.name || 'Untitled'} - recordType: ${recordType} (from ${record.oip ? 'oip' : 'existing recordType'})`);
+                    // Removed verbose context record stripping logging
                     return {
                         data: record.data,
                         recordType: recordType,
@@ -1376,7 +1374,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             // Pass searchParams for context-aware analysis (includes recordType for domain context)
             if (req.body.searchParams && typeof req.body.searchParams === 'object') {
                 ragOptions.searchParams = { ...ragOptions.searchParams, ...req.body.searchParams };
-                console.log(`[Voice Chat] Using search params:`, ragOptions.searchParams);
+                // Removed verbose search params logging
             }
             
             // If pinned JSON data is supplied by the client, bypass search and answer about that JSON data
@@ -1399,10 +1397,10 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
             processingMetrics.rag_time_ms = Date.now() - ragStartTime;
             
             responseText = ragResponse.answer;
-            console.log(`[Voice Chat] RAG processing (${processingMetrics.rag_time_ms}ms): Generated ${responseText.length} chars`);
+            // Removed verbose RAG processing result logging
             
             } else if (processingMode === 'llm' || processingMode.startsWith('llm-')) {
-                console.log(`[Voice Chat] Using direct LLM mode: ${processingMode} for question: "${inputText}"`);
+                // Removed verbose direct LLM mode logging
                 
                 try {
                     const llmStartTime = Date.now();
@@ -1420,7 +1418,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                     processingMetrics.rag_time_ms = Date.now() - llmStartTime; // Reuse rag_time_ms field
                     
                     responseText = llmResult.answer;
-                    console.log(`[Voice Chat] Direct LLM processing (${processingMetrics.rag_time_ms}ms): Generated ${responseText.length} chars`);
+                    // Removed verbose direct LLM processing result logging
                     
                     // Create mock RAG response for compatibility
                     ragResponse = {
@@ -1462,7 +1460,7 @@ router.post('/chat', upload.single('audio'), async (req, res) => {
                 processingMetrics.rag_time_ms = Date.now() - ragStartTime;
                 
                 responseText = ragResponse.answer;
-                console.log(`[Voice Chat] Fallback RAG processing (${processingMetrics.rag_time_ms}ms): Generated ${responseText.length} chars`);
+                // Removed verbose fallback RAG processing result logging
             }
 
         }

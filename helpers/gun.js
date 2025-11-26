@@ -517,18 +517,26 @@ class GunHelper {
      */
     async deleteRecord(soul) {
         try {
-            return new Promise((resolve, reject) => {
-                this.gun.get(soul).put(null, (ack) => {
-                    if (ack.err) {
-                        console.error('GUN delete error:', ack.err);
-                        reject(new Error(`GUN delete failed: ${ack.err}`));
-                    } else {
-                        resolve(true);
-                    }
-                });
+            // Use HTTP API to delete (put null to the soul)
+            const response = await axios.post(`${this.apiUrl}/put`, {
+                soul: soul,
+                data: null  // Setting to null deletes the record in GUN
+            }, {
+                timeout: 10000,
+                headers: { 'Content-Type': 'application/json' }
             });
+
+            if (response.data && response.data.success) {
+                return true;
+            } else {
+                throw new Error(response.data.error || 'Failed to delete record');
+            }
         } catch (error) {
-            console.error('Error in deleteRecord:', error);
+            // If record doesn't exist (404), that's fine - already deleted
+            if (error.response && error.response.status === 404) {
+                return true;
+            }
+            console.error(`Error in deleteRecord (${soul}):`, error.message);
             throw error;
         }
     }

@@ -149,9 +149,6 @@ class GunSyncService {
                 this.lastCacheClear = Date.now();
             }
             
-            // Single log at start of sync
-            console.log('🔄 GUN sync starting...');
-            
             let discoveredRecords = [];
             
             // Try HTTP-based sync first if enabled (more reliable than WebSocket)
@@ -175,7 +172,6 @@ class GunSyncService {
             });
             
             // Filter out records that are marked as deleted in the deletion registry
-            console.log(`🗑️ Checking ${discoveredRecords.length} records against deletion registry...`);
             const filteredRecords = [];
             let deletedCount = 0;
             
@@ -184,7 +180,6 @@ class GunSyncService {
                 const isDeleted = await this.deletionRegistry.isDeleted(did);
                 
                 if (isDeleted) {
-                    console.log(`  ⚠️ Skipping deleted record: ${did}`);
                     deletedCount++;
                     
                     // If we have it locally, remove it (in case it was synced before deletion)
@@ -196,7 +191,7 @@ class GunSyncService {
             }
             
             if (deletedCount > 0) {
-                console.log(`✅ Filtered out ${deletedCount} deleted records`);
+                console.log(`✅ Filtered ${deletedCount} deleted records`);
             }
             
             discoveredRecords = filteredRecords;
@@ -220,18 +215,17 @@ class GunSyncService {
             const duration = Date.now() - startTime;
             this.healthMonitor.recordSyncCycle(discoveredRecords.length, syncedCount, errorCount, duration);
             
-            // Single log with results at end
-            console.log(`✅ GUN sync complete: ${syncedCount} successful, ${errorCount} failed (${duration}ms)`);
+            // Only log if there was activity
+            if (syncedCount > 0 || errorCount > 0) {
+                console.log(`✅ GUN sync: ${syncedCount} synced, ${errorCount} errors (${Math.round(duration/1000)}s)`);
+            }
             
             // MEMORY LEAK FIX: Aggressive cleanup after sync completes
             discoveredRecords = null;
             
             // Force garbage collection if available and sync took >1 minute
             if (global.gc && duration > 60000) {
-                setImmediate(() => {
-                    global.gc();
-                    console.log(`🧹 [GUN Sync] Forced GC after ${Math.round(duration/1000)}s sync cycle`);
-                });
+                setImmediate(() => global.gc());
             }
             
         } catch (error) {
@@ -251,6 +245,10 @@ class GunSyncService {
         // Get all record types to sync from peers
         const recordTypes = this.getRecordTypesToSync();
         
+        // MEMORY LEAK FIX: Track and limit concurrent requests to prevent buffer accumulation
+        let requestCount = 0;
+        const MAX_CONCURRENT_REQUESTS = 5;
+        
         for (const peerUrl of this.peerNodes) {
             try {
                 for (const recordType of recordTypes) {
@@ -265,10 +263,11 @@ class GunSyncService {
                             httpsAgent: axios.defaults.httpsAgent
                         });
                         
+                        requestCount++;
+                        
                         if (response.data && response.data.success && response.data.data) {
-                            // MEMORY LEAK FIX: Extract data and nullify response reference
-                            const peerIndex = JSON.parse(JSON.stringify(response.data.data));
-                            response.data = null; // Allow GC to reclaim response buffer
+                            // MEMORY LEAK FIX: Extract only what we need, don't deep clone large objects
+                            const peerIndex = response.data.data;
                             
                             // Process each entry in the peer's registry index
                             for (const [soul, entry] of Object.entries(peerIndex)) {
@@ -318,10 +317,11 @@ class GunSyncService {
                                     httpsAgent: axios.defaults.httpsAgent
                                 });
                                 
+                                requestCount++;
+                                
                                 if (recordResponse.data && recordResponse.data.success && recordResponse.data.data) {
-                                    // MEMORY LEAK FIX: Deep clone data and nullify response reference
-                                    const fetchedData = JSON.parse(JSON.stringify(recordResponse.data.data));
-                                    recordResponse.data = null; // Allow GC to reclaim response buffer
+                                    // MEMORY LEAK FIX: Extract only what we need
+                                    const fetchedData = recordResponse.data.data;
                                     
                                     // Parse JSON strings back to objects (data and oip are stored as strings in GUN)
                                     if (typeof fetchedData.data === 'string') {
@@ -346,6 +346,11 @@ class GunSyncService {
                                         sourceNodeId: entry.nodeId || 'unknown',
                                         wasEncrypted: false // HTTP sync is for public records
                                     });
+                                }
+                                
+                                // MEMORY LEAK FIX: Force GC every MAX_CONCURRENT_REQUESTS to prevent buffer accumulation
+                                if (global.gc && requestCount % MAX_CONCURRENT_REQUESTS === 0) {
+                                    setImmediate(() => global.gc());
                                 }
                             }
                         }
@@ -372,8 +377,8 @@ class GunSyncService {
             }
         }
         
-        // MEMORY LEAK FIX: Force GC after HTTP sync if we processed many records
-        if (global.gc && discoveredRecords.length > 20) {
+        // MEMORY LEAK FIX: Always force GC after HTTP sync to clean up request buffers
+        if (global.gc && requestCount > 10) {
             setImmediate(() => global.gc());
         }
         

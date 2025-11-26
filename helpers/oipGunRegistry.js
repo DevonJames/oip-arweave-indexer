@@ -135,8 +135,6 @@ class OIPGunRegistry {
      */
     async unregisterOIPRecord(recordDid) {
         try {
-            console.log(`🗑️ Unregistering OIP record from GUN registry: ${recordDid}`);
-            
             // Extract soul from DID
             const soul = recordDid.replace('did:gun:', '');
             
@@ -155,7 +153,7 @@ class OIPGunRegistry {
             }
             
             if (!foundType) {
-                console.warn(`⚠️ Record ${recordDid} not found in registry (may already be unregistered)`);
+                // Silently skip if not found
                 return;
             }
             
@@ -163,18 +161,17 @@ class OIPGunRegistry {
             const nodeRegistryKey = `${this.registryRoot}:nodes:${this.nodeId}`;
             const nodeEntryKey = `${nodeRegistryKey}:${soul}`;
             await this.gunHelper.deleteRecord(nodeEntryKey);
-            console.log(`  ✓ Removed from node registry: ${nodeEntryKey}`);
             
             // Remove from global index
             const globalIndexKey = `${this.registryRoot}:index:${foundType}`;
             const indexUpdate = { [soul]: null }; // Setting to null removes it from GUN
             await this.gunHelper.putSimple(indexUpdate, globalIndexKey);
-            console.log(`  ✓ Removed from global index: ${globalIndexKey}`);
-            
-            console.log(`✅ OIP record unregistered: ${recordDid}`);
             
         } catch (error) {
-            console.error(`❌ Failed to unregister OIP record ${recordDid}:`, error.message || error);
+            // Only log unexpected errors
+            if (!error.message.includes('not found')) {
+                console.error(`❌ Failed to unregister ${recordDid}:`, error.message);
+            }
             // Don't throw - unregister is best-effort
         }
     }
