@@ -3369,10 +3369,7 @@ Answer the question directly and conversationally:`;
             
             console.log(`[ALFRED] 💬 Response generated (${result.answer?.length || 0} chars)`);
             console.log(`[ALFRED] 📊 Context used: ${result.context_used ? 'YES' : 'NO'}`);
-            if (result.context_used) {
-                console.log(`[ALFRED] 📝 Context length: ${result.context_used.length} chars`);
-                console.log(`[ALFRED] 📝 Context preview (first 1000 chars): ${result.context_used.substring(0, 1000)}...`);
-            }
+            console.log(`[ALFRED] 📝 Answer preview: ${result.answer?.substring(0, 200)}...`);
             
             return result;
         } catch (error) {
