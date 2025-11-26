@@ -64,6 +64,10 @@ const SMART_TURN_URL = process.env.SMART_TURN_URL || 'http://localhost:8010';
 
 // Enhanced voice pipeline settings
 const SMART_TURN_ENABLED = process.env.SMART_TURN_ENABLED === 'true';
+
+// MEMORY LEAK FIX (2024-11-26): Removed thinking sound caching
+// Clients now play local thinking-v1.wav asset instead of receiving 307KB base64 data
+// This eliminates the largest per-request payload in the voice API
 const SMART_TURN_MIN_PROB = parseFloat(process.env.SMART_TURN_MIN_PROB || '0.55');
 const VAD_ENABLED = process.env.VAD_ENABLED === 'true';
 const ENHANCED_PIPELINE_ENABLED = SMART_TURN_ENABLED || VAD_ENABLED;
@@ -2165,25 +2169,16 @@ router.post('/converse', upload.single('audio'), async (req, res) => {
             success: true,
             dialogueId: dialogueId,
             thinkingIndicator: thinkingIndicator
+            // MEMORY LEAK FIX: No thinkingSound audio data sent!
+            // Mobile app plays local thinking-v1.wav asset based on thinkingIndicator.type
+            // This eliminates 307KB base64 transfer per request (614KB with duplicate requests)
         };
         
-        // If using sound, include the audio in the response
-        if (!useTextResponse) {
-            try {
-                const thinkingSoundPath = path.join(__dirname, '../soundfx/thinking-v1.wav');
-                const thinkingAudio = fs.readFileSync(thinkingSoundPath);
-                response.thinkingSound = {
-                    audio: thinkingAudio.toString('base64'),
-                    duration: 2300,
-                    loop: true,
-                    format: 'wav'
-                };
-                console.log(`[Voice Converse] 🔊 Including thinking sound in POST response (${thinkingAudio.length} bytes)`);
-            } catch (soundError) {
-                console.warn(`[Voice Converse] Failed to load thinking sound:`, soundError.message);
-                // Fallback to text if sound fails
-                thinkingIndicator.type = 'text';
-            }
+        // Log which indicator type we're using (no audio transfer needed!)
+        if (thinkingIndicator.type === 'sound') {
+            console.log(`[Voice Converse] 🎵 Client will play local thinking sound (0 bytes transferred)`);
+        } else {
+            console.log(`[Voice Converse] 📝 Using text thinking indicator`);
         }
         
         res.json(response);
@@ -2914,7 +2909,24 @@ router.get('/open-stream', (req, res) => {
                 // Clean up if no more clients
                 if (stream.clients.size === 0) {
                     console.log(`No more voice clients for dialogueId: ${dialogueId}. Cleaning up.`);
+                    
+                    // MEMORY LEAK FIX: Aggressively clear all data before deleting
+                    if (stream.data && Array.isArray(stream.data)) {
+                        const dataSize = stream.data.length;
+                        stream.data.splice(0, stream.data.length); // Remove all elements
+                        stream.data = null;
+                        if (dataSize > 10) {
+                            console.log(`🧹 [Voice Cleanup] Cleared ${dataSize} buffered messages`);
+                        }
+                    }
+                    stream.clients.clear();
+                    
                     ongoingDialogues.delete(dialogueId);
+                    
+                    // Force GC if we just cleaned up a large dialogue
+                    if (global.gc) {
+                        setImmediate(() => global.gc());
+                    }
                 }
             }
         });

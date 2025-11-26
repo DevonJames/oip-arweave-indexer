@@ -52,9 +52,10 @@ class MemoryLeakTracker {
         const handleCount = handles.length;
         const requestCount = requests.length;
         
-        // Explicitly null out to help GC
-        handles.length = 0;
-        requests.length = 0;
+        // CRITICAL FIX: Completely destroy references by replacing arrays
+        // Setting length = 0 doesn't release object references!
+        handles.splice(0, handles.length); // Actually removes elements
+        requests.splice(0, requests.length);
 
         const sample = {
             timestamp: Date.now(),
@@ -74,14 +75,24 @@ class MemoryLeakTracker {
 
         this.samples.push(sample);
         
-        // Keep only recent samples
-        if (this.samples.length > this.maxSamples) {
-            this.samples.shift();
+        // MEMORY LEAK FIX: Keep max 30 samples instead of 60 to reduce memory footprint
+        // With aggressive voice usage, even metadata can accumulate
+        const MAX_SAMPLES = 30;
+        if (this.samples.length > MAX_SAMPLES) {
+            // Remove oldest samples
+            this.samples.splice(0, this.samples.length - MAX_SAMPLES);
         }
 
         // Analyze for leaks
         if (this.samples.length >= 3) {
             this.analyzeGrowth();
+        }
+        
+        // MEMORY LEAK FIX: Force GC after sample if external memory is very high
+        if (memUsage.external > 10 * 1024 * 1024 * 1024 && global.gc) { // > 10GB
+            setImmediate(() => {
+                global.gc();
+            });
         }
     }
 
