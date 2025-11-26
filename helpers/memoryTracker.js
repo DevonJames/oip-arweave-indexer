@@ -16,12 +16,8 @@ class MemoryLeakTracker {
     }
 
     start() {
-        if (this.tracking) {
-            console.log('⚠️  Memory tracker already running');
-            return;
-        }
+        if (this.tracking) return;
 
-        console.log('🔍 Starting memory leak tracker...');
         this.tracking = true;
         this.trackingIntervalId = setInterval(() => this.takeSample(), this.trackingInterval);
         
@@ -32,7 +28,6 @@ class MemoryLeakTracker {
     stop() {
         if (!this.tracking) return;
         
-        console.log('🛑 Stopping memory leak tracker...');
         clearInterval(this.trackingIntervalId);
         this.tracking = false;
     }

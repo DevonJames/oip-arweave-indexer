@@ -11,6 +11,12 @@ class GunDeletionRegistry {
         this.gunHelper = gunHelper;
         this.registryRoot = 'oip:deleted:records';
         this.indexSoul = `${this.registryRoot}:index`;
+        
+        // MEMORY LEAK FIX: Track recently processed deletions to avoid infinite loops
+        // Map of DID -> timestamp of last processing
+        this.recentlyProcessed = new Map();
+        // Only reprocess deletions after 24 hours
+        this.reprocessInterval = 24 * 60 * 60 * 1000; // 24 hours in ms
     }
     
     /**
@@ -22,8 +28,6 @@ class GunDeletionRegistry {
      */
     async markDeleted(did, deletedBy) {
         try {
-            console.log(`📝 Marking ${did} as deleted in GUN deletion registry...`);
-            
             const entry = {
                 deletedAt: Date.now(),
                 deletedBy: deletedBy,
@@ -40,7 +44,7 @@ class GunDeletionRegistry {
             const indexEntry = { [did]: true };
             await this.gunHelper.putSimple(indexEntry, this.indexSoul);
             
-            console.log(`✅ Deletion entry created in GUN registry: ${soul}`);
+            console.log(`✅ Marked ${did} as deleted in GUN deletion registry`);
             return true;
             
         } catch (error) {
@@ -123,7 +127,12 @@ class GunDeletionRegistry {
      */
     async processLocalDeletion(did) {
         try {
-            console.log(`🗑️ Processing local deletion for ${did}...`);
+            // MEMORY LEAK FIX: Skip if recently processed (avoid infinite loop)
+            const lastProcessed = this.recentlyProcessed.get(did);
+            if (lastProcessed && (Date.now() - lastProcessed) < this.reprocessInterval) {
+                // Silently skip - already processed recently
+                return true;
+            }
             
             let deletedSomething = false;
             
@@ -131,23 +140,26 @@ class GunDeletionRegistry {
             try {
                 await elasticClient.delete({
                     index: 'records',
-                    id: did,
-                    ignore: [404] // Ignore if already deleted
+                    id: did
                 });
-                console.log(`  ✓ Removed from Elasticsearch`);
                 deletedSomething = true;
             } catch (esError) {
-                console.warn(`  ⚠️ Elasticsearch deletion failed (may not exist):`, esError.message);
+                // If record doesn't exist (404), that's fine - already deleted
+                if (esError.meta && esError.meta.statusCode !== 404) {
+                    console.warn(`⚠️ Elasticsearch deletion failed for ${did}:`, esError.message);
+                }
             }
             
             // 2. Remove from local GUN storage
             try {
                 const soul = did.replace('did:gun:', '');
                 await this.gunHelper.deleteRecord(soul);
-                console.log(`  ✓ Removed from local GUN storage`);
                 deletedSomething = true;
             } catch (gunError) {
-                console.warn(`  ⚠️ GUN deletion failed (may not exist):`, gunError.message);
+                // Only log if not a 404-equivalent error
+                if (!gunError.message.includes('404') && !gunError.message.includes('not found')) {
+                    console.warn(`⚠️ GUN deletion failed for ${did}:`, gunError.message);
+                }
             }
             
             // 3. Remove from OIP registry (so it doesn't show up in discovery)
@@ -155,16 +167,28 @@ class GunDeletionRegistry {
                 const { OIPGunRegistry } = require('./oipGunRegistry');
                 const registry = new OIPGunRegistry();
                 await registry.unregisterOIPRecord(did);
-                console.log(`  ✓ Removed from OIP registry`);
                 deletedSomething = true;
             } catch (regError) {
-                console.warn(`  ⚠️ Registry removal failed (may not exist):`, regError.message);
+                // Only log unexpected errors
+                if (!regError.message.includes('not found') && !regError.message.includes('may already be unregistered')) {
+                    console.warn(`⚠️ Registry removal failed for ${did}:`, regError.message);
+                }
             }
             
             if (deletedSomething) {
-                console.log(`✅ Local deletion processed for ${did}`);
-            } else {
-                console.log(`ℹ️ Record ${did} was already deleted locally`);
+                console.log(`✅ Deleted ${did}`);
+            }
+            
+            // MEMORY LEAK FIX: Mark as recently processed to avoid reprocessing
+            this.recentlyProcessed.set(did, Date.now());
+            
+            // MEMORY LEAK FIX: Cleanup old entries from recentlyProcessed to prevent memory growth
+            // Only keep entries from last 48 hours
+            const cutoffTime = Date.now() - (2 * this.reprocessInterval);
+            for (const [cachedDid, timestamp] of this.recentlyProcessed.entries()) {
+                if (timestamp < cutoffTime) {
+                    this.recentlyProcessed.delete(cachedDid);
+                }
             }
             
             return true;
@@ -182,8 +206,6 @@ class GunDeletionRegistry {
      */
     async unmarkDeleted(did) {
         try {
-            console.log(`🔄 Unmarking ${did} as deleted...`);
-            
             // Remove individual entry
             const soul = `${this.registryRoot}:${did}`;
             await this.gunHelper.deleteRecord(soul);
@@ -192,7 +214,6 @@ class GunDeletionRegistry {
             const indexEntry = { [did]: null }; // Setting to null removes it
             await this.gunHelper.putSimple(indexEntry, this.indexSoul);
             
-            console.log(`✅ Deletion mark removed for ${did}`);
             return true;
             
         } catch (error) {

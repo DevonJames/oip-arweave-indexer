@@ -989,7 +989,10 @@ const getTemplatesInDB = async () => {
         );
         const pendingTemplatesCount = templatesInDB.length - confirmedTemplates.length;
         if (pendingTemplatesCount > 0) {
-            console.log(getFileInfo(), getLineNumber(), `Found ${pendingTemplatesCount} pending templates (will re-process when confirmed)`);
+            // Only log if pending templates exist
+            if (pendingTemplatesCount > 0) {
+                console.log(getFileInfo(), getLineNumber(), `Found ${pendingTemplatesCount} pending templates`);
+            }
         }
         const maxArweaveBlockInDB = confirmedTemplates.length > 0 
             ? Math.max(...confirmedTemplates.map(template => template.oip.inArweaveBlock)) || 0
@@ -3986,7 +3989,10 @@ const getCreatorsInDB = async () => {
             );
             const pendingCreatorsCount = creatorsInDB.length - confirmedCreators.length;
             if (pendingCreatorsCount > 0) {
-                console.log(getFileInfo(), getLineNumber(), `Found ${pendingCreatorsCount} pending creators (will re-process when confirmed)`);
+                // Only log if pending creators exist
+                if (pendingCreatorsCount > 0) {
+                    console.log(getFileInfo(), getLineNumber(), `Found ${pendingCreatorsCount} pending creators`);
+                }
             }
             const maxArweaveCreatorRegBlockInDB = confirmedCreators.length > 0 
                 ? Math.max(...confirmedCreators.map(creator => creator.oip.inArweaveBlock))
@@ -4688,7 +4694,7 @@ const getRecordsInDB = async (forceRefresh = false) => {
         
         // Return cached data if it's still fresh and not forcing refresh
         if (!forceRefresh && recordsCache && (now - cacheTimestamp) < CACHE_DURATION) {
-            console.log(getFileInfo(), getLineNumber(), 'Using cached records data');
+            // Removed verbose cached data logging
             return recordsCache;
         }
 
@@ -4751,7 +4757,10 @@ const getRecordsInDB = async (forceRefresh = false) => {
                 const minBlockInPending = Math.min(...pendingRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)));
                 const maxBlockInPending = Math.max(...pendingRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)));
                 const blockRangeStr = !isNaN(minBlockInPending) && !isNaN(maxBlockInPending) ? ` (block range: ${minBlockInPending}-${maxBlockInPending})` : '';
-                console.log(getFileInfo(), getLineNumber(), `Found ${pendingRecordsCount} pending records (will re-process when confirmed on chain)${blockRangeStr}`);
+                // Only log if significant number of pending records
+                if (pendingRecordsCount > 10) {
+                    console.log(getFileInfo(), getLineNumber(), `Found ${pendingRecordsCount} pending records${blockRangeStr}`);
+                }
             }
             const maxArweaveBlockInDB = confirmedRecords.length > 0 
                 ? Math.max(...confirmedRecords.map(record => record.oip.inArweaveBlock).filter(value => !isNaN(value)))
