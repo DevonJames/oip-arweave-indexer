@@ -20,6 +20,9 @@ class GunSyncService {
         this.processedRecords = new Set(); // Track processed records to avoid duplicates
         this.healthMonitor = new SyncHealthMonitor();
         
+        // MEMORY LEAK FIX: Track permanently failed records to prevent infinite retry loops
+        this.permanentlyFailedRecords = new Set();
+        
         // Memory management: Clear cache every hour to prevent memory leaks
         this.cacheMaxAge = parseInt(process.env.GUN_CACHE_MAX_AGE) || 3600000; // 1 hour default
         this.lastCacheClear = Date.now();
@@ -177,6 +180,12 @@ class GunSyncService {
             
             for (const record of discoveredRecords) {
                 const did = `did:gun:${record.soul}`;
+                
+                // MEMORY LEAK FIX: Skip permanently failed records to prevent infinite retry loops
+                if (this.permanentlyFailedRecords.has(did)) {
+                    continue;
+                }
+                
                 const isDeleted = await this.deletionRegistry.isDeleted(did);
                 
                 if (isDeleted) {
@@ -206,9 +215,30 @@ class GunSyncService {
                         syncedCount++;
                     } else {
                         errorCount++;
+                        const did = `did:gun:${discoveredRecord.soul}`;
+                        
+                        // MEMORY LEAK FIX: Mark as permanently failed after first attempt
+                        // These are usually schema mismatch errors that will never resolve
+                        this.permanentlyFailedRecords.add(did);
+                        console.error(`❌ GUN sync failed for ${did} - marked as permanently failed (will not retry)`);
+                        
+                        // Force GC to clean up any buffers from this failed attempt
+                        if (global.gc) {
+                            setImmediate(() => global.gc());
+                        }
                     }
                 } catch (error) {
                     errorCount++;
+                    const did = `did:gun:${discoveredRecord.soul}`;
+                    
+                    // MEMORY LEAK FIX: Mark as permanently failed
+                    this.permanentlyFailedRecords.add(did);
+                    console.error(`❌ GUN sync error for ${did}:`, error.message, '- marked as permanently failed');
+                    
+                    // Force GC to clean up any buffers from this failed attempt
+                    if (global.gc) {
+                        setImmediate(() => global.gc());
+                    }
                 }
             }
             
@@ -417,6 +447,7 @@ class GunSyncService {
             
             // Validate the record structure
             if (!this.registry.isValidOIPRecord(data)) {
+                console.warn(`⚠️ Invalid OIP record structure for ${did}, skipping`);
                 return false;
             }
             
@@ -685,6 +716,15 @@ class GunSyncService {
      */
     clearProcessedCache() {
         this.processedRecords.clear();
+        
+        // MEMORY LEAK FIX: Limit permanently failed records to prevent unbounded growth
+        // Keep only last 1000 failed records
+        if (this.permanentlyFailedRecords.size > 1000) {
+            const failedArray = Array.from(this.permanentlyFailedRecords);
+            this.permanentlyFailedRecords.clear();
+            // Keep only most recent 500
+            failedArray.slice(-500).forEach(did => this.permanentlyFailedRecords.add(did));
+        }
     }
 }
 

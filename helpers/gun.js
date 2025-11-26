@@ -34,12 +34,26 @@ class GunHelper {
             });
 
             if (response.data && response.data.success) {
+                // MEMORY LEAK FIX: Clean up response buffer
+                response.data = null;
                 return { soul, success: true };
             } else {
                 throw new Error(response.data.error || 'Failed to store data');
             }
         } catch (error) {
+            // MEMORY LEAK FIX: Aggressively clean up error response buffers
+            if (error.response) {
+                error.response.data = null;
+                error.response = null;
+            }
+            console.error(`[Axios Error] ${error.message} from ${this.apiUrl}/put`);
             console.error(`Failed to put simple data to GUN (${soul}):`, error.message);
+            
+            // MEMORY LEAK FIX: Force GC after failed GUN operations
+            if (global.gc) {
+                setImmediate(() => global.gc());
+            }
+            
             throw error;
         }
     }
@@ -203,6 +217,8 @@ class GunHelper {
             });
 
             if (response.data.success) {
+                // MEMORY LEAK FIX: Clean up response buffer
+                response.data = null;
                 // console.log('✅ GUN record stored successfully via HTTP API');
                 return { 
                     soul, 
@@ -214,6 +230,17 @@ class GunHelper {
             }
 
         } catch (error) {
+            // MEMORY LEAK FIX: Aggressively clean up error response buffers
+            if (error.response) {
+                error.response.data = null;
+                error.response = null;
+            }
+            
+            // MEMORY LEAK FIX: Force GC after failed GUN operations
+            if (global.gc) {
+                setImmediate(() => global.gc());
+            }
+            
             if (error.code === 'ECONNREFUSED') {
                 throw new Error('GUN relay not accessible - check if gun-relay service is running');
             } else if (error.code === 'ETIMEDOUT') {
@@ -393,6 +420,12 @@ class GunHelper {
                     lastError = error;
                     retryCount++;
                     
+                    // MEMORY LEAK FIX: Clean up error response buffers immediately
+                    if (error.response) {
+                        error.response.data = null;
+                        error.response = null;
+                    }
+                    
                     // If 404, don't retry - record doesn't exist
                     if (error.response && error.response.status === 404) {
                         return null;
@@ -409,11 +442,24 @@ class GunHelper {
             // If we exhausted retries, log but don't crash
             if (lastError) {
                 console.error(`⚠️  Error in getRecord after ${maxRetries} retries:`, lastError.message);
+                
+                // MEMORY LEAK FIX: Force GC after repeated failures
+                if (global.gc) {
+                    setImmediate(() => global.gc());
+                }
+                
                 return null; // Return null instead of throwing
             }
             
         } catch (error) {
             console.error('❌ Unexpected error in getRecord:', error.message);
+            
+            // MEMORY LEAK FIX: Clean up any remaining buffers
+            if (error.response) {
+                error.response.data = null;
+                error.response = null;
+            }
+            
             return null; // Return null instead of throwing
         }
     }
