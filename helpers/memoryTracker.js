@@ -13,6 +13,11 @@ class MemoryLeakTracker {
         this.alertThreshold = options.alertThreshold || 5000; // 5GB growth
         this.tracking = false;
         this.suspects = new Map();
+        
+        // MEMORY LEAK FIX: Circuit breaker to prevent tracker from worsening severe leaks
+        // When external memory exceeds this threshold, stop accessing handles/requests
+        this.circuitBreakerThreshold = 50 * 1024 * 1024 * 1024; // 50GB external memory
+        this.circuitBreakerActive = false;
     }
 
     start() {
@@ -36,21 +41,42 @@ class MemoryLeakTracker {
         const memUsage = process.memoryUsage();
         const heapStats = v8.getHeapStatistics();
         
-        // MEMORY LEAK FIX: Get counts without keeping references to objects
-        // Storing handle/request objects prevents garbage collection
-        const handles = process._getActiveHandles();
-        const requests = process._getActiveRequests();
+        // MEMORY LEAK FIX: Circuit breaker - stop accessing handles when external memory is critically high
+        // Accessing handles/requests during severe leaks may prevent GC from cleaning up
+        let handleCount = 0;
+        let requestCount = 0;
+        let handleTypes = {};
+        let requestTypes = {};
         
-        // Count types immediately then discard the object references
-        const handleTypes = this._countTypes(handles);
-        const requestTypes = this._countTypes(requests);
-        const handleCount = handles.length;
-        const requestCount = requests.length;
-        
-        // CRITICAL FIX: Completely destroy references by replacing arrays
-        // Setting length = 0 doesn't release object references!
-        handles.splice(0, handles.length); // Actually removes elements
-        requests.splice(0, requests.length);
+        if (memUsage.external > this.circuitBreakerThreshold) {
+            if (!this.circuitBreakerActive) {
+                this.circuitBreakerActive = true;
+                console.warn(`🔴 [Memory Tracker] Circuit breaker activated - external memory at ${(memUsage.external / 1024 / 1024 / 1024).toFixed(1)}GB`);
+                console.warn(`🔴 [Memory Tracker] Stopping handle/request tracking to avoid worsening leak`);
+            }
+            // Skip handle/request tracking during critical memory conditions
+        } else {
+            if (this.circuitBreakerActive) {
+                this.circuitBreakerActive = false;
+                console.log(`✅ [Memory Tracker] Circuit breaker deactivated - external memory normalized`);
+            }
+            
+            // MEMORY LEAK FIX: Get counts without keeping references to objects
+            // Storing handle/request objects prevents garbage collection
+            const handles = process._getActiveHandles();
+            const requests = process._getActiveRequests();
+            
+            // Count types immediately then discard the object references
+            handleTypes = this._countTypes(handles);
+            requestTypes = this._countTypes(requests);
+            handleCount = handles.length;
+            requestCount = requests.length;
+            
+            // CRITICAL FIX: Completely destroy references by replacing arrays
+            // Setting length = 0 doesn't release object references!
+            handles.splice(0, handles.length); // Actually removes elements
+            requests.splice(0, requests.length);
+        }
 
         const sample = {
             timestamp: Date.now(),
