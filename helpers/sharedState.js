@@ -16,6 +16,17 @@ setInterval(() => {
         // Remove dialogues that haven't been accessed in 30 minutes
         if (timeSinceActivity > DIALOGUE_TIMEOUT) {
             console.log(`🧹 [Memory Cleanup] Removing stale dialogue ${dialogueId} (inactive for ${Math.round(timeSinceActivity / 60000)} minutes)`);
+            
+            // MEMORY LEAK FIX: Aggressively clear dialogue data before deleting
+            if (dialogue.data && Array.isArray(dialogue.data)) {
+                // Clear any buffered audio/text data
+                dialogue.data.splice(0, dialogue.data.length);
+                dialogue.data = null;
+            }
+            if (dialogue.clients) {
+                dialogue.clients.clear();
+            }
+            
             ongoingDialogues.delete(dialogueId);
             cleanedCount++;
         }

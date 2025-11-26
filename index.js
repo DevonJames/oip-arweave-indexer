@@ -750,14 +750,18 @@ initializeIndices()
             }
           }
 
-          // Start memory leak tracker
-          const memTracker = getTracker({
-              trackingInterval: 60000, // Sample every 1 minute
-              maxSamples: 60, // Keep last 60 samples (1 hour)
-              alertThreshold: 5000 // Alert if > 5GB growth
-          });
-          memTracker.start();
-          console.log('🔍 [STARTUP] Memory leak tracker started (fixed to not store object references)');
+          // Start memory leak tracker (can be disabled via DISABLE_MEMORY_TRACKER=true)
+          if (process.env.DISABLE_MEMORY_TRACKER !== 'true') {
+              const memTracker = getTracker({
+                  trackingInterval: 60000, // Sample every 1 minute
+                  maxSamples: 30, // Keep last 30 samples (30 min) - reduced to lower memory footprint
+                  alertThreshold: 5000 // Alert if > 5GB growth
+              });
+              memTracker.start();
+              console.log('🔍 [STARTUP] Memory leak tracker started (30 samples max, aggressive cleanup enabled)');
+          } else {
+              console.log('⚠️ [STARTUP] Memory leak tracker DISABLED via env var (testing memory leak in tracker itself)');
+          }
 
           setTimeout(async () => {
               console.log("🚀 [STARTUP] Starting first keepDBUpToDate cycle...");
