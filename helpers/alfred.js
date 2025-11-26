@@ -1409,6 +1409,11 @@ JSON Response:`;
                     // Include comprehensive workout data including aggregated info from resolved exercises (resolveDepth=2)
                     const workoutData = record.data.workout || {};
 
+                    console.log(`[ALFRED] 🏃 Processing workout record: ${content.title}`);
+                    console.log(`[ALFRED] 🏃 Workout data keys:`, Object.keys(workoutData));
+                    console.log(`[ALFRED] 🏃 Workout exercise field type:`, typeof workoutData.exercise);
+                    console.log(`[ALFRED] 🏃 Workout exercise field is array:`, Array.isArray(workoutData.exercise));
+
                     content.totalDurationMinutes = workoutData.total_duration_minutes || workoutData.totalDurationMinutes || null;
                     content.estimatedCaloriesBurned = workoutData.estimated_calories_burned || workoutData.calories || null;
                     content.includesWarmup = Boolean(workoutData.includesWarmup);
@@ -1419,18 +1424,38 @@ JSON Response:`;
 
                     // Extract and normalize exercises
                     const exercises = Array.isArray(workoutData.exercise) ? workoutData.exercise : [];
+                    console.log(`[ALFRED] 🏃 Number of exercises in workout:`, exercises.length);
+                    
                     const aggregatedEquipment = new Set();
                     const aggregatedMuscles = new Set();
 
                     content.exercises = exercises.map((ex, idx) => {
+                        console.log(`[ALFRED] 🏃 Processing exercise #${idx + 1}:`, typeof ex);
+                        
+                        // Check if exercise is resolved (has data property) or is just a DID string
+                        if (typeof ex === 'string') {
+                            console.log(`[ALFRED] ⚠️  Exercise #${idx + 1} is a DID string (not resolved):`, ex);
+                            return {
+                                name: `Exercise ${idx + 1} (unresolved)`,
+                                did: ex,
+                                instructions: []
+                            };
+                        }
+                        
                         const exBasic = ex?.data?.basic || {};
                         const exData = ex?.data?.exercise || {};
                         const name = exBasic.name || `Exercise ${idx + 1}`;
+                        
+                        console.log(`[ALFRED] 🏃 Exercise #${idx + 1} name:`, name);
+                        console.log(`[ALFRED] 🏃 Exercise #${idx + 1} has data.exercise:`, !!exData);
+                        console.log(`[ALFRED] 🏃 Exercise #${idx + 1} instructions:`, Array.isArray(exData.instructions) ? `${exData.instructions.length} steps` : 'none');
+                        
                         const equipment = Array.isArray(exData.equipmentRequired) ? exData.equipmentRequired : [];
                         const muscles = Array.isArray(exData.muscleGroups) ? exData.muscleGroups : [];
                         equipment.forEach(item => aggregatedEquipment.add(String(item)));
                         muscles.forEach(m => aggregatedMuscles.add(String(m)));
-                        return {
+                        
+                        const exerciseContent = {
                             name,
                             difficulty: exData.difficulty || null,
                             category: exData.category || null,
@@ -1444,6 +1469,10 @@ JSON Response:`;
                             muscleGroups: muscles,
                             instructions: Array.isArray(exData.instructions) ? exData.instructions : []
                         };
+                        
+                        console.log(`[ALFRED] 🏃 Exercise #${idx + 1} extracted content:`, JSON.stringify(exerciseContent, null, 2));
+                        
+                        return exerciseContent;
                     });
 
                     content.workoutEquipment = Array.from(aggregatedEquipment);
@@ -1693,6 +1722,14 @@ JSON Response:`;
                             if (ex.equipmentRequired?.length) pieces.push(`Eq: ${ex.equipmentRequired.join('/')}`);
                             if (ex.muscleGroups?.length) pieces.push(`Muscles: ${ex.muscleGroups.join(', ')}`);
                             context += pieces.join(' | ') + `\n`;
+                            
+                            // Add detailed instructions for each exercise if available
+                            if (ex.instructions && ex.instructions.length > 0) {
+                                context += `   Instructions for ${ex.name}:\n`;
+                                ex.instructions.forEach((step, stepIdx) => {
+                                    context += `   ${stepIdx + 1}. ${step}\n`;
+                                });
+                            }
                         });
                     }
                     if (item.instructions) context += `\nWorkout Instructions: ${item.instructions}\n`;
@@ -1718,6 +1755,8 @@ JSON Response:`;
                 extraDirectives += `\nFor recipe questions (e.g., "how do I make this"), return clear, numbered cooking steps. If steps are present in the data (instructions or method), enumerate them; otherwise infer reasonable steps from the ingredients and any timing fields. Include prep time, cook time, total time, and servings if available. Keep it actionable and concise.\nAlso normalize text for clarity: expand tbsp→tablespoon(s), tsp→teaspoon(s), and read numeric ranges like 2–4 as "2 to 4".`;
             } else if (dominantType === 'exercise') {
                 extraDirectives += `\nFor exercise questions, provide step-by-step instructions and key cues (muscle groups, sets/reps, equipment).`;
+            } else if (dominantType === 'workout') {
+                extraDirectives += `\nFor workout questions, check the conversation history to see which exercise the user is currently on (it may say "exercise #2 of 5" or similar). When answering questions about "this exercise", refer to the specific exercise they're currently on from the Exercises list. Provide detailed instructions for that specific exercise, including muscle groups, equipment, and step-by-step form cues.`;
             }
         }
 
@@ -1784,6 +1823,12 @@ Answer the question directly and conversationally:`;
 
         console.log(`[ALFRED] Generating RAG response for question: "${question}"`);
         console.log(`[ALFRED] Context length: ${context.length} chars, Prompt total length: ${prompt.length} chars`);
+        console.log(`[ALFRED] 📋 Context being sent to LLM:`);
+        if (context.length > 3000) {
+            console.log(context.substring(0, 3000) + `\n... (truncated, total ${context.length} chars)`);
+        } else {
+            console.log(context);
+        }
         if (isCompleteNote) {
             console.log(`[ALFRED] 📝 Complete note mode - transcript will be searched thoroughly`);
         }
@@ -3280,16 +3325,30 @@ Answer the question directly and conversationally:`;
                 limit: 1
             };
 
-            // console.log(`[ALFRED] 📥 Loading single record for DID: ${didTx} with`, fetchParams);
+            console.log(`[ALFRED] 📥 Loading single record for DID: ${didTx} with`, fetchParams);
             const single = await getRecords(fetchParams);
             const records = (single && Array.isArray(single.records)) ? single.records.slice(0, 1) : [];
 
             if (records.length === 0) {
+                console.log(`[ALFRED] ❌ No record found for pinned DID: ${didTx}`);
                 return this.formatEmptyResult(
                     question,
                     { search: didTx, recordType: 'unknown', resolveDepth: 2 },
                     'Pinned record not found'
                 );
+            }
+
+            console.log(`[ALFRED] ✅ Record fetched successfully:`);
+            console.log(`[ALFRED]   - Record Type: ${records[0].oip?.recordType}`);
+            console.log(`[ALFRED]   - Record Name: ${records[0].data?.basic?.name}`);
+            console.log(`[ALFRED]   - Record DID: ${records[0].oip?.did || records[0].oip?.didTx}`);
+            
+            // Log the full record structure (truncated for large records)
+            const recordJson = JSON.stringify(records[0], null, 2);
+            if (recordJson.length > 5000) {
+                console.log(`[ALFRED]   - Record Data (first 5000 chars): ${recordJson.substring(0, 5000)}...`);
+            } else {
+                console.log(`[ALFRED]   - Record Data: ${recordJson}`);
             }
 
             // Applied filters metadata
@@ -3302,8 +3361,20 @@ Answer the question directly and conversationally:`;
                 singleRecordMode: true
             };
 
+            console.log(`[ALFRED] 🔍 Applied filters:`, appliedFilters);
+            console.log(`[ALFRED] ❓ Question: "${question}"`);
+
             // Build rich content and generate response (reuses type-specific context + nutrition)
-            return this.extractAndFormatContent(question, records, appliedFilters, [], options);
+            const result = await this.extractAndFormatContent(question, records, appliedFilters, [], options);
+            
+            console.log(`[ALFRED] 💬 Response generated (${result.answer?.length || 0} chars)`);
+            console.log(`[ALFRED] 📊 Context used: ${result.context_used ? 'YES' : 'NO'}`);
+            if (result.context_used) {
+                console.log(`[ALFRED] 📝 Context length: ${result.context_used.length} chars`);
+                console.log(`[ALFRED] 📝 Context preview (first 1000 chars): ${result.context_used.substring(0, 1000)}...`);
+            }
+            
+            return result;
         } catch (error) {
             console.error('[ALFRED] Error in answerQuestionAboutRecord:', error);
             return this.formatErrorResult(question, error.message);
