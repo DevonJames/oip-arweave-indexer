@@ -9,6 +9,7 @@ const { PrivateRecordHandler } = require('./privateRecordHandler');
 const { GunDeletionRegistry } = require('./gunDeletionRegistry');
 const { processRecordForElasticsearch, indexRecord, elasticClient } = require('./elasticsearch');
 const { defaultTemplates } = require('../config/templates.config');
+const memoryDiagnostics = require('./memoryDiagnostics');
 
 class GunSyncService {
     constructor() {
@@ -143,6 +144,7 @@ class GunSyncService {
      */
     async performSync() {
         const startTime = Date.now();
+        const endTracking = memoryDiagnostics.trackOperation('gun_sync', 'Full sync cycle');
         
         try {
             // Memory management: Periodically clear the cache to prevent memory leaks
@@ -261,6 +263,9 @@ class GunSyncService {
         } catch (error) {
             console.error('❌ GUN sync error:', error.message);
             this.healthMonitor.recordSyncCycle(0, 0, 1, Date.now() - startTime);
+        } finally {
+            // Track memory at the end of the sync cycle (success or failure)
+            await endTracking();
         }
     }
     

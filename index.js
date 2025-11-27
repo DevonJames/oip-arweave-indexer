@@ -44,6 +44,8 @@ const notesRoutes = require('./routes/notes');
 const { getMediaSeeder } = require('./services/mediaSeeder');
 const axios = require('axios');
 const { getTracker } = require('./helpers/memoryTracker');
+const memoryDiagnostics = require('./helpers/memoryDiagnostics');
+const { trackRequestMemory } = require('./middleware/memoryTrackingMiddleware');
 
 dotenv.config();
 
@@ -199,6 +201,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Clean API logging
 app.use(apiLogger);
+
+// MEMORY DIAGNOSTICS: Track memory growth per request (only when enabled via env)
+app.use(trackRequestMemory);
 
 // CORS middleware configuration
 const corsOptions = {

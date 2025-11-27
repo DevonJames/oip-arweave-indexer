@@ -1,45 +1,37 @@
 /**
  * Real-time Memory Leak Tracker
  * Tracks memory growth and identifies likely sources
+ * 
+ * DISABLED: This tracker has been replaced by the new memoryDiagnostics system
+ * which is safer, more accurate, and doesn't contribute to logging overhead.
  */
 
 const v8 = require('v8');
 
 class MemoryLeakTracker {
     constructor(options = {}) {
-        this.trackingInterval = options.trackingInterval || 60000; // 1 minute
-        this.samples = [];
-        this.maxSamples = options.maxSamples || 60; // Keep last 60 samples
-        this.alertThreshold = options.alertThreshold || 5000; // 5GB growth
-        this.tracking = false;
-        this.suspects = new Map();
+        // DISABLED: This tracker is no longer active
+        // It was potentially contributing to memory issues via logging and handle tracking
+        this.enabled = false;
+        console.log('🔍 [Memory Tracker] DISABLED - replaced by memoryDiagnostics system (set MEMORY_DIAGNOSTICS_ENABLED=true to use new system)');
         
-        // MEMORY LEAK FIX: Circuit breaker to prevent tracker from worsening severe leaks
-        // When external memory exceeds this threshold, stop accessing handles/requests
-        this.circuitBreakerThreshold = 50 * 1024 * 1024 * 1024; // 50GB external memory
-        this.circuitBreakerActive = false;
+        // Return early - all methods will be no-ops
+        this.tracking = false;
     }
 
     start() {
-        if (this.tracking) return;
-
-        this.tracking = true;
-        this.trackingIntervalId = setInterval(() => this.takeSample(), this.trackingInterval);
-        
-        // Take initial sample
-        this.takeSample();
+        // NO-OP: Tracker disabled
+        return;
     }
 
     stop() {
-        if (!this.tracking) return;
-        
-        clearInterval(this.trackingIntervalId);
-        this.tracking = false;
+        // NO-OP: Tracker disabled
+        return;
     }
 
     takeSample() {
-        const memUsage = process.memoryUsage();
-        const heapStats = v8.getHeapStatistics();
+        // NO-OP: Tracker disabled
+        return;
         
         // MEMORY LEAK FIX: Circuit breaker - stop accessing handles when external memory is critically high
         // Accessing handles/requests during severe leaks may prevent GC from cleaning up
