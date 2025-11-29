@@ -201,7 +201,7 @@ const getTemplateTxidByName = (templateName) => {
     return templateConfigTxid ? templateConfigTxid : null;
 };
 
-const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnly = false, summarizeRecipe = false, addRecipeNutritionalSummary = null, visited = new Set()) => {
+const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnly = false, summarizeRecipe = false, addRecipeNutritionalSummary = null, visited = new Set(), resolveFieldNames = null, currentDepth = 0) => {
     // Handle NaN, undefined, or 0 depth - stop recursion
     if (!resolveDepth || resolveDepth === 0 || isNaN(resolveDepth) || !record) {
         return record;
@@ -232,23 +232,53 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
         visited.add(recordDid);
     }
 
+    // Determine if we're at the deepest level (where resolveNamesOnly should apply)
+    const isDeepestLevel = resolveDepth === 1;
+    const shouldResolveNamesOnly = resolveNamesOnly && isDeepestLevel;
+
+    // Helper function to check if a field path should be resolved
+    const shouldResolveField = (category, key) => {
+        // If no resolveFieldNames specified, resolve all fields
+        if (!resolveFieldNames || resolveFieldNames.length === 0) {
+            return true;
+        }
+        
+        // Check if this field matches any of the specified paths
+        // Support both "data.category.key" and "category.key" formats
+        const fieldPath = `data.${category}.${key}`;
+        const shortFieldPath = `${category}.${key}`;
+        
+        return resolveFieldNames.some(targetPath => 
+            targetPath === fieldPath || 
+            targetPath === shortFieldPath ||
+            targetPath === `data.${shortFieldPath}` ||
+            fieldPath.startsWith(targetPath + '.') ||
+            shortFieldPath.startsWith(targetPath + '.')
+        );
+    };
+
     // First resolve all DIDs to names/records
     for (const category of Object.keys(record.data)) {
         const properties = record.data[category];
         for (const key of Object.keys(properties)) {
+            // Check if this field should be resolved based on resolveFieldNames
+            if (!shouldResolveField(category, key)) {
+                continue; // Skip this field if it's not in the resolveFieldNames list
+            }
+
             if (typeof properties[key] === 'string' && properties[key].startsWith('did:')) {
                 const refRecord = recordsInDB.find(record => 
                     (record.oip.did || record.oip.didTx) === properties[key]
                 );
                 if (refRecord) {
-                    if (resolveNamesOnly) {
-                        // Only return the name from the basic data
+                    if (shouldResolveNamesOnly) {
+                        // Only return the name from the basic data (at deepest level)
                         const name = refRecord.data?.basic?.name || properties[key]; // fallback to DID if no name found
                         properties[key] = name;
                     } else {
                         // Create a new visited set for this branch to track the resolution chain
                         const branchVisited = new Set(visited);
-                        let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited);
+                        let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited, resolveFieldNames, currentDepth + 1);
                         
                         // Apply recipe summary if this is a recipe record and summarizeRecipe is enabled
                         if (summarizeRecipe && addRecipeNutritionalSummary && resolvedRef.oip?.recordType === 'recipe' && resolvedRef.data?.recipe) {
@@ -265,14 +295,14 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                             (record.oip.did || record.oip.didTx) === properties[key][i]
                         );
                         if (refRecord) {
-                            if (resolveNamesOnly) {
-                                // Only return the name from the basic data
+                            if (shouldResolveNamesOnly) {
+                                // Only return the name from the basic data (at deepest level)
                                 const name = refRecord.data?.basic?.name || properties[key][i]; // fallback to DID if no name found
                                 properties[key][i] = name;
                             } else {
                                 // Create a new visited set for this branch to track the resolution chain
                                 const branchVisited = new Set(visited);
-                                let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited);
+                                let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited, resolveFieldNames, currentDepth + 1);
                                 
                                 // Apply recipe summary if this is a recipe record and summarizeRecipe is enabled
                                 if (summarizeRecipe && addRecipeNutritionalSummary && resolvedRef.oip?.recordType === 'recipe' && resolvedRef.data?.recipe) {
@@ -289,7 +319,8 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
     }
 
     // AFTER DID resolution, handle special recipe merging for resolveNamesOnly
-    if (resolveNamesOnly && record.data.recipe) {
+    // Only apply this at the deepest level
+    if (shouldResolveNamesOnly && record.data.recipe) {
         const recipeData = record.data.recipe;
         
         // If this is a recipe with ingredient and ingredient_comment fields

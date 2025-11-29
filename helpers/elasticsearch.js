@@ -2375,6 +2375,7 @@ async function getRecords(queryParams) {
         template,
         resolveDepth,
         resolveNamesOnly = false,
+        resolveFieldName, // NEW: Comma-separated field paths to resolve (e.g., "data.basic.avatar,data.workout.exercise")
         summarizeRecipe = false,
         hideDateReadable = false,
         hideNullValues = false,
@@ -3431,6 +3432,24 @@ async function getRecords(queryParams) {
             console.log(`After noDuplicates filtering, ${records.length} unique records remain`);
         }
 
+        // Parse resolveFieldName parameter if provided
+        let resolveFieldNamesArray = null;
+        if (resolveFieldName) {
+            if (typeof resolveFieldName === 'string') {
+                // Split comma-separated string and trim whitespace
+                resolveFieldNamesArray = resolveFieldName
+                    .split(',')
+                    .map(field => field.trim())
+                    .filter(field => field.length > 0);
+            } else if (Array.isArray(resolveFieldName)) {
+                resolveFieldNamesArray = resolveFieldName;
+            }
+            
+            if (resolveFieldNamesArray && resolveFieldNamesArray.length > 0) {
+                console.log(`Resolving only specified fields: ${resolveFieldNamesArray.join(', ')}`);
+            }
+        }
+
         // Resolve records if resolveDepth is specified
         let resolvedRecords = await Promise.all(records.map(async (record) => {
             let resolvedRecord = await resolveRecords(
@@ -3439,7 +3458,10 @@ async function getRecords(queryParams) {
                 recordsInDB, 
                 resolveNamesOnly === 'true' || resolveNamesOnly === true,
                 summarizeRecipe === 'true' || summarizeRecipe === true,
-                addRecipeNutritionalSummary
+                addRecipeNutritionalSummary,
+                new Set(), // visited set
+                resolveFieldNamesArray, // NEW: field names to resolve
+                0 // NEW: current depth starts at 0
             );
             return resolvedRecord;
         }));
