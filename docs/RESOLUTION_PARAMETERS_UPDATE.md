@@ -350,6 +350,10 @@ GET /api/records?recordType=workout&resolveDepth=2&resolveFieldName=data.workout
    - Added `shouldResolveField` helper function
    - Updated field resolution loop to check `shouldResolveField`
    - Pass `resolveFieldNames` and `currentDepth + 1` in recursive calls
+   - **CRITICAL FIX**: Added on-demand record fetching for cross-storage references
+     - When a record is not found in `recordsInDB`, fetch it from Elasticsearch
+     - Solves issue where GUN records referencing Arweave records weren't resolving
+     - Addresses 5000-record cache limit by fetching missing records dynamically
 
 2. **`helpers/elasticsearch.js`**
    - Added `resolveFieldName` to `getRecords` function parameters
@@ -464,6 +468,118 @@ console.assert(typeof recipe.data.basic.avatar === 'object');
 if (recipe.data.recipe.featuredImage) {
     console.assert(recipe.data.recipe.featuredImage.startsWith('did:'));
 }
+```
+
+## Cross-Storage Resolution Fix
+
+### Problem: GUN Records Referencing Arweave Records
+
+**Issue Discovered:** When a GUN record (private/encrypted) references an Arweave record (public/permanent), the resolution would fail even with correct `resolveFieldName` and `resolveDepth` parameters.
+
+**Root Cause:** 
+The `recordsInDB` array used for resolution was limited to 5000 cached records from `getRecordsInDB()`. If the referenced Arweave record wasn't in that initial batch, it couldn't be resolved.
+
+```javascript
+// Old behavior:
+const refRecord = recordsInDB.find(record => 
+    (record.oip.did || record.oip.didTx) === properties[key]
+);
+if (refRecord) {
+    // Resolve the record
+} else {
+    // Leave as DID string ❌ Not resolved!
+}
+```
+
+**Solution Implemented:**
+Added on-demand record fetching from Elasticsearch when a referenced record is not found in the cache.
+
+```javascript
+// New behavior:
+let refRecord = recordsInDB.find(record => 
+    (record.oip.did || record.oip.didTx) === properties[key]
+);
+
+// If not found in cache, fetch from Elasticsearch
+if (!refRecord) {
+    console.log(`🔍 [Resolution] Record not in cache, fetching from ES: ${properties[key]}`);
+    try {
+        refRecord = await searchRecordInDB(properties[key]);
+        if (refRecord) {
+            console.log(`✅ [Resolution] Successfully fetched record from ES`);
+            // Add to recordsInDB for future resolutions in this batch
+            recordsInDB.push(refRecord);
+        }
+    } catch (error) {
+        console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
+    }
+}
+
+if (refRecord) {
+    // Resolve the record ✅ Now works!
+}
+```
+
+### Benefits of This Fix
+
+✅ **Cross-Storage Resolution:** GUN records can now properly reference Arweave records  
+✅ **No Cache Limit:** Not limited by the 5000-record cache size  
+✅ **On-Demand Fetching:** Only fetches records that are actually referenced  
+✅ **Cache Addition:** Fetched records are added to cache for subsequent resolutions  
+✅ **Selective Resolution:** Works perfectly with `resolveFieldName` parameter  
+
+### Example: Meal Plan Referencing Recipe
+
+**Before Fix:**
+```json
+{
+  "mealPlan": {
+    "meal_reference": [
+      "did:arweave:3J0kvLCdV_eWqgvHANekbpcI4yGxVGrDy3RS1xbUYCM"  // ❌ Not resolved
+    ]
+  }
+}
+```
+
+**After Fix:**
+```json
+{
+  "mealPlan": {
+    "meal_reference": [
+      {  // ✅ Fully resolved!
+        "data": {
+          "basic": {
+            "name": "Chipotle Bowls",
+            "description": "Healthy Mexican-style bowl recipe"
+          },
+          "recipe": {
+            "ingredient": [...],
+            "instructions": "..."
+          }
+        },
+        "oip": {
+          "did": "did:arweave:3J0kvLCdV_eWqgvHANekbpcI4yGxVGrDy3RS1xbUYCM",
+          "recordType": "recipe"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Console Logging
+
+The fix includes helpful console logging to track resolution:
+
+```
+🔍 [Resolution] Record not in cache, fetching from ES: did:arweave:3J0kvLCdV_eWqgvHANekbpcI4yGxVGrDy3RS1xbUYCM
+✅ [Resolution] Successfully fetched record from ES: Chipotle Bowls
+```
+
+If a record truly doesn't exist:
+```
+⚠️  [Resolution] Could not find referenced record: did:arweave:nonexistent123
+   Record not found in recordsInDB (4889 records) nor in Elasticsearch
 ```
 
 ## Troubleshooting

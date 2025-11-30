@@ -212,6 +212,9 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
         return record;
     }
 
+    // Import searchRecordInDB for on-demand record fetching
+    const { searchRecordInDB } = require('./elasticsearch');
+
     // Get the record's DID to track visits
     const recordDid = record.oip?.did || record.oip?.didTx;
     
@@ -267,9 +270,25 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
             }
 
             if (typeof properties[key] === 'string' && properties[key].startsWith('did:')) {
-                const refRecord = recordsInDB.find(record => 
+                let refRecord = recordsInDB.find(record => 
                     (record.oip.did || record.oip.didTx) === properties[key]
                 );
+                
+                // If not found in recordsInDB, fetch from Elasticsearch
+                if (!refRecord) {
+                    console.log(`🔍 [Resolution] Record not in cache, fetching from ES: ${properties[key]}`);
+                    try {
+                        refRecord = await searchRecordInDB(properties[key]);
+                        if (refRecord) {
+                            console.log(`✅ [Resolution] Successfully fetched record from ES: ${refRecord.data?.basic?.name || properties[key]}`);
+                            // Add to recordsInDB for future resolutions in this batch
+                            recordsInDB.push(refRecord);
+                        }
+                    } catch (error) {
+                        console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
+                    }
+                }
+                
                 if (refRecord) {
                     if (shouldResolveNamesOnly) {
                         // Only return the name from the basic data (at deepest level)
@@ -287,13 +306,33 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                         
                         properties[key] = resolvedRef;
                     }
+                } else {
+                    // DEBUG: Log when a referenced record is not found
+                    console.log(`⚠️  [Resolution] Could not find referenced record: ${properties[key]} in field ${category}.${key}`);
+                    console.log(`   Record not found in recordsInDB (${recordsInDB.length} records) nor in Elasticsearch`);
                 }
             } else if (Array.isArray(properties[key])) {
                 for (let i = 0; i < properties[key].length; i++) {
                     if (typeof properties[key][i] === 'string' && properties[key][i].startsWith('did:')) {
-                        const refRecord = recordsInDB.find(record => 
+                        let refRecord = recordsInDB.find(record => 
                             (record.oip.did || record.oip.didTx) === properties[key][i]
                         );
+                        
+                        // If not found in recordsInDB, fetch from Elasticsearch
+                        if (!refRecord) {
+                            console.log(`🔍 [Resolution] Record not in cache, fetching from ES: ${properties[key][i]}`);
+                            try {
+                                refRecord = await searchRecordInDB(properties[key][i]);
+                                if (refRecord) {
+                                    console.log(`✅ [Resolution] Successfully fetched record from ES: ${refRecord.data?.basic?.name || properties[key][i]}`);
+                                    // Add to recordsInDB for future resolutions in this batch
+                                    recordsInDB.push(refRecord);
+                                }
+                            } catch (error) {
+                                console.error(`❌ [Resolution] Error fetching record from ES:`, error.message);
+                            }
+                        }
+                        
                         if (refRecord) {
                             if (shouldResolveNamesOnly) {
                                 // Only return the name from the basic data (at deepest level)
@@ -311,6 +350,10 @@ const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnl
                                 
                                 properties[key][i] = resolvedRef;
                             }
+                        } else {
+                            // DEBUG: Log when a referenced record is not found
+                            console.log(`⚠️  [Resolution] Could not find referenced record: ${properties[key][i]} in field ${category}.${key}[${i}]`);
+                            console.log(`   Record not found in recordsInDB (${recordsInDB.length} records) nor in Elasticsearch`);
                         }
                     }
                 }
