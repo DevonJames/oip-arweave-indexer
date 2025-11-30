@@ -2,168 +2,119 @@
 
 ## Overview
 
-This document describes the updates to the `resolveDepth` and `resolveNamesOnly` parameters in the OIP records resolution system, plus the addition of a new `resolveFieldName` parameter.
+This document details the behavior of record resolution parameters in the OIP system, specifically `resolveDepth`, `resolveNamesOnly`, and the new `resolveFieldName` parameter. These parameters control how deeply and selectively dref (decentralized reference) fields are resolved when fetching records via the `/api/records` endpoint.
 
-## Changes Made
+## Problem Statement
 
-### 1. Fixed `resolveNamesOnly` Behavior
+### Original Issue with `resolveNamesOnly`
 
-**Previous Behavior (INCORRECT):**
-- When `resolveNamesOnly=true`, it applied at ALL depth levels
-- Example: With `resolveDepth=2` and `resolveNamesOnly=true`:
-  - Depth 1: Only names resolved (❌ incorrect)
-  - Depth 2: Only names resolved
+The user suspected that `resolveNamesOnly` was applying at all depths of resolution, which was not the desired behavior. The intended behavior was:
 
-**New Behavior (CORRECT):**
-- `resolveNamesOnly` now only applies at the **deepest level** of resolution
-- Example: With `resolveDepth=2` and `resolveNamesOnly=true`:
-  - Depth 1: Full records resolved ✅
-  - Depth 2: Only names resolved ✅
+- `resolveNamesOnly` should **only apply at the deepest level** of resolution
+- If `resolveDepth=2`, then at depth 1, full records should be resolved, and only at depth 2 should names be resolved
 
-**Why This Matters:**
-- Allows you to get full context at intermediate levels
-- Only simplifies to names at the final depth
-- More useful for complex data structures with multiple levels of references
+### Need for Selective Field Resolution
 
-### 2. Added `resolveFieldName` Parameter
+There was no way to specify which specific dref fields should be resolved. All drefs in a record were resolved, which could lead to:
+- Excessive data fetching
+- Larger API response payloads
+- Unnecessary resolution of unused fields
 
-**Purpose:** 
-Selectively resolve only specific fields instead of all dref fields in a record.
+## Solution Implementation
 
-**Format:**
-- Comma-separated string: `"data.basic.avatar,data.workout.exercise"`
-- Array: `["data.basic.avatar", "data.workout.exercise"]`
+### 1. `resolveNamesOnly` - Deepest Level Only
 
-**Field Path Formats Supported:**
-- Full path: `data.basic.avatar`
-- Short path: `basic.avatar`
-- Category path: `workout.exercise`
+The `resolveRecords` function now correctly applies `resolveNamesOnly` **only at the deepest level** of resolution.
 
-**Behavior:**
-- If `resolveFieldName` is provided, ONLY the specified fields will have their drefs resolved
-- All other dref fields will remain as DIDs
-- If `resolveFieldName` is NOT provided, ALL dref fields are resolved (default behavior)
-
-## API Usage Examples
-
-### Example 1: Basic Usage - Resolve Names Only at Deepest Level
-
-**Request:**
-```http
-GET /api/records?recordType=workout&resolveDepth=2&resolveNamesOnly=true&limit=5
-```
-
-**Behavior:**
-- Resolves workout records
-- At depth 1: Exercises are fully resolved (complete exercise records)
-- At depth 2: Any drefs within exercises are resolved as names only
-
-**Use Case:** 
-Get full exercise details but simplify any nested references (like equipment references) to just names.
-
-### Example 2: Selective Field Resolution
-
-**Request:**
-```http
-GET /api/records?recordType=workout&resolveDepth=2&resolveFieldName=data.workout.exercise&limit=5
-```
-
-**Behavior:**
-- Resolves workout records
-- Only resolves the `data.workout.exercise` field (array of exercise drefs)
-- All other dref fields remain as DIDs
-- Useful when you only need specific relationships resolved
-
-**Use Case:**
-Performance optimization when you only need specific fields resolved, avoiding unnecessary dref lookups.
-
-### Example 3: Multiple Field Resolution
-
-**Request:**
-```http
-GET /api/records?recordType=recipe&resolveDepth=1&resolveFieldName=data.recipe.ingredient,data.basic.avatar&limit=10
-```
-
-**Behavior:**
-- Resolves recipe records
-- Only resolves:
-  - `data.recipe.ingredient` (array of ingredient drefs)
-  - `data.basic.avatar` (avatar image dref)
-- All other dref fields remain as DIDs
-
-**Use Case:**
-Get ingredient details and avatar images, but skip resolving other references (like categories, creators, etc.).
-
-### Example 4: Combined - Selective Fields + Names Only at Deep Level
-
-**Request:**
-```http
-GET /api/records?recordType=workout&resolveDepth=2&resolveNamesOnly=true&resolveFieldName=data.workout.exercise&limit=5
-```
-
-**Behavior:**
-- Only resolves `data.workout.exercise` field
-- At depth 1: Full exercise records
-- At depth 2: Any drefs within exercises resolved as names only
-
-**Use Case:**
-Focus on exercise details with minimal nested data - perfect for workout lists where you need exercise info but not deep equipment details.
-
-### Example 5: Short Path Format
-
-**Request:**
-```http
-GET /api/records?recordType=recipe&resolveDepth=1&resolveFieldName=recipe.ingredient,basic.avatar
-```
-
-**Behavior:**
-- Same as Example 3, but using shorter field paths
-- Both `recipe.ingredient` and `data.recipe.ingredient` are recognized
-- Resolves ingredients and avatar only
-
-## Implementation Details
-
-### Function Signature Changes
-
-**`resolveRecords` in `helpers/utils.js`:**
+**Implementation Details:**
 
 ```javascript
-// OLD signature:
-async function resolveRecords(
-    record, 
-    resolveDepth, 
-    recordsInDB, 
-    resolveNamesOnly = false, 
-    summarizeRecipe = false, 
-    addRecipeNutritionalSummary = null, 
-    visited = new Set()
-)
-
-// NEW signature:
-async function resolveRecords(
-    record, 
-    resolveDepth, 
-    recordsInDB, 
-    resolveNamesOnly = false, 
-    summarizeRecipe = false, 
-    addRecipeNutritionalSummary = null, 
-    visited = new Set(),
-    resolveFieldNames = null,  // NEW: Array of field paths to resolve
-    currentDepth = 0            // NEW: Track current depth in recursion
-)
-```
-
-### Key Logic Changes
-
-**1. Deepest Level Detection:**
-```javascript
-// Determine if we're at the deepest level (where resolveNamesOnly should apply)
+// In helpers/utils.js, line 235-237
 const isDeepestLevel = resolveDepth === 1;
 const shouldResolveNamesOnly = resolveNamesOnly && isDeepestLevel;
 ```
 
-**2. Field Path Matching:**
+**How it works:**
+- At each level of recursion, we check if `resolveDepth === 1` (the deepest level)
+- `resolveNamesOnly` is only applied when we're at the deepest level
+- At all other levels, full records are resolved
+
+**Example:**
+
 ```javascript
+// Query with resolveDepth=2 and resolveNamesOnly=true
+GET /api/records?recordType=workout&resolveDepth=2&resolveNamesOnly=true
+
+// Behavior:
+// - At depth 1 (resolveDepth=2): Full exercise records are resolved
+// - At depth 2 (resolveDepth=1): Only exercise names are resolved (if exercises reference other records)
+```
+
+**Before/After Comparison:**
+
+```javascript
+// BEFORE (incorrect behavior):
+// resolveDepth=2, resolveNamesOnly=true
+{
+  workout: {
+    exercise: ["Push-ups", "Squats"]  // Names only at ALL levels
+  }
+}
+
+// AFTER (correct behavior):
+// resolveDepth=2, resolveNamesOnly=true
+{
+  workout: {
+    exercise: [
+      {
+        // Full exercise record at depth 1
+        data: {
+          basic: { name: "Push-ups" },
+          exercise: {
+            exerciseType: "main",
+            equipmentRequired: "none"
+            // If exercise references another record, THAT would be resolved as name only
+          }
+        }
+      },
+      { /* full Squats record */ }
+    ]
+  }
+}
+```
+
+### 2. `resolveFieldName` - Selective Field Resolution
+
+A new parameter `resolveFieldName` allows you to specify which dref fields should be resolved, rather than resolving all drefs.
+
+**Implementation Details:**
+
+```javascript
+// In helpers/elasticsearch.js, lines 3435-3451
+let resolveFieldNamesArray = null;
+if (resolveFieldName) {
+    if (typeof resolveFieldName === 'string') {
+        // Split comma-separated string and trim whitespace
+        resolveFieldNamesArray = resolveFieldName
+            .split(',')
+            .map(field => field.trim())
+            .filter(field => field.length > 0);
+    } else if (Array.isArray(resolveFieldName)) {
+        resolveFieldNamesArray = resolveFieldName;
+    }
+    
+    if (resolveFieldNamesArray && resolveFieldNamesArray.length > 0) {
+        console.log(`Resolving only specified fields: ${resolveFieldNamesArray.join(', ')}`);
+    }
+}
+```
+
+**Field Matching Logic:**
+
+The `shouldResolveField` helper function supports flexible field path matching:
+
+```javascript
+// In helpers/utils.js, lines 240-258
 const shouldResolveField = (category, key) => {
     // If no resolveFieldNames specified, resolve all fields
     if (!resolveFieldNames || resolveFieldNames.length === 0) {
@@ -171,6 +122,7 @@ const shouldResolveField = (category, key) => {
     }
     
     // Check if this field matches any of the specified paths
+    // Support both "data.category.key" and "category.key" formats
     const fieldPath = `data.${category}.${key}`;
     const shortFieldPath = `${category}.${key}`;
     
@@ -184,12 +136,159 @@ const shouldResolveField = (category, key) => {
 };
 ```
 
-**3. Recipe Merging Logic:**
+**Supported Field Path Formats:**
+
+- Full path: `data.basic.avatar`
+- Short path: `basic.avatar`
+- Prefix matching: `data.workout` (matches all fields in workout category)
+- Short prefix: `workout` (matches all fields in workout category)
+
+## API Usage
+
+### Parameter: `resolveFieldName`
+
+**Type:** String (comma-separated field paths)
+
+**Format:** `field1,field2,field3`
+
+**Examples:**
+
+```bash
+# Resolve only avatar field
+GET /api/records?resolveDepth=2&resolveFieldName=data.basic.avatar
+
+# Resolve only exercise field in workout
+GET /api/records?recordType=workout&resolveDepth=2&resolveFieldName=data.workout.exercise
+
+# Resolve multiple fields
+GET /api/records?resolveDepth=2&resolveFieldName=data.basic.avatar,data.workout.exercise
+
+# Resolve all fields in a category (prefix matching)
+GET /api/records?resolveDepth=2&resolveFieldName=data.workout
+```
+
+### Combined Parameters
+
+You can combine `resolveDepth`, `resolveNamesOnly`, and `resolveFieldName`:
+
+```bash
+# Example 1: Resolve only exercise field, names only at deepest level
+GET /api/records?recordType=workout&resolveDepth=2&resolveNamesOnly=true&resolveFieldName=data.workout.exercise
+
+# Example 2: Resolve multiple fields, full records
+GET /api/records?recordType=recipe&resolveDepth=3&resolveFieldName=data.recipe.ingredient,data.basic.avatar
+
+# Example 3: Resolve all workout fields, names at deepest level
+GET /api/records?recordType=workout&resolveDepth=2&resolveNamesOnly=true&resolveFieldName=data.workout
+```
+
+## Use Cases
+
+### Use Case 1: Workout with Exercise Names Only at Deepest Level
+
+**Scenario:** You want to show a workout with full exercise details, but if exercises reference other records, only show those names.
+
+**Query:**
 ```javascript
-// AFTER DID resolution, handle special recipe merging for resolveNamesOnly
-// Only apply this at the deepest level
-if (shouldResolveNamesOnly && record.data.recipe) {
-    // ... recipe-specific logic
+{
+  recordType: 'workout',
+  resolveDepth: 2,
+  resolveNamesOnly: true
+}
+```
+
+**Result:**
+```javascript
+{
+  data: {
+    workout: {
+      exercise: [
+        {
+          // Full exercise record
+          data: {
+            basic: { name: "Push-ups" },
+            exercise: {
+              exerciseType: "main",
+              equipmentRequired: "none",
+              videoReference: "Tutorial Video"  // Name only (if this was a dref)
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+### Use Case 2: Resolve Only Avatar, Not Exercise References
+
+**Scenario:** You want to show user avatars but not resolve exercise references in a workout.
+
+**Query:**
+```javascript
+{
+  recordType: 'workout',
+  resolveDepth: 2,
+  resolveFieldName: 'data.basic.avatar'
+}
+```
+
+**Result:**
+```javascript
+{
+  data: {
+    basic: {
+      avatar: {
+        // Full avatar record
+        data: {
+          basic: { name: "User Avatar" },
+          image: { url: "https://..." }
+        }
+      }
+    },
+    workout: {
+      exercise: [
+        "did:arweave:exercise1",  // NOT resolved (not in resolveFieldName)
+        "did:arweave:exercise2"
+      ]
+    }
+  }
+}
+```
+
+### Use Case 3: Resolve Multiple Specific Fields
+
+**Scenario:** You want to show recipe ingredients and the creator's avatar, but nothing else.
+
+**Query:**
+```javascript
+{
+  recordType: 'recipe',
+  resolveDepth: 2,
+  resolveFieldName: 'data.recipe.ingredient,data.basic.avatar'
+}
+```
+
+**Result:**
+```javascript
+{
+  data: {
+    basic: {
+      avatar: {
+        // Full avatar record
+        data: { /* ... */ }
+      }
+    },
+    recipe: {
+      ingredient: [
+        {
+          // Full ingredient record
+          data: { /* ... */ }
+        }
+      ],
+      featuredImage: "did:arweave:img123"  // NOT resolved (not in resolveFieldName)
+    }
+  }
 }
 ```
 
@@ -197,173 +296,238 @@ if (shouldResolveNamesOnly && record.data.recipe) {
 
 ### Benefits of `resolveFieldName`
 
-**Before (resolving all fields):**
+**Before (resolving all drefs):**
 ```javascript
-// Workout with 10 exercises, each exercise has 3 equipment drefs
-// Total dref lookups: 10 exercises + 30 equipment = 40 lookups
-GET /api/records?recordType=workout&resolveDepth=2&limit=10
+// Query without resolveFieldName
+GET /api/records?recordType=workout&resolveDepth=2
+
+// Resolves:
+// - basic.avatar (100KB)
+// - basic.featuredImage (500KB)
+// - workout.exercise (10 exercises × 50KB = 500KB)
+// - workout.videoTutorial (200KB)
+// Total: ~1.3MB response
 ```
 
 **After (selective resolution):**
 ```javascript
-// Same workout, but only resolve exercises (not equipment)
-// Total dref lookups: 10 exercises = 10 lookups
-// 75% reduction in database lookups!
-GET /api/records?recordType=workout&resolveDepth=1&resolveFieldName=workout.exercise&limit=10
+// Query with resolveFieldName
+GET /api/records?recordType=workout&resolveDepth=2&resolveFieldName=data.workout.exercise
+
+// Resolves only:
+// - workout.exercise (10 exercises × 50KB = 500KB)
+// Total: ~500KB response (60% reduction!)
 ```
 
-**Performance Gains:**
-- Fewer database lookups
-- Smaller response payloads
-- Faster API response times
-- Reduced memory usage
-- Better for mobile/bandwidth-constrained clients
+### Performance Recommendations
+
+1. **Use `resolveFieldName` when you know which fields you need**
+   - Reduces payload size
+   - Faster response times
+   - Lower memory usage
+
+2. **Use `resolveNamesOnly` for preview/list views**
+   - Even faster than selective resolution
+   - Minimal payload
+   - Great for displaying lists of related items
+
+3. **Combine both for optimal performance**
+   ```javascript
+   {
+     resolveDepth: 2,
+     resolveNamesOnly: true,
+     resolveFieldName: 'data.workout.exercise'
+   }
+   ```
+
+## Code Changes Summary
+
+### Files Modified
+
+1. **`helpers/utils.js`**
+   - Modified `resolveRecords` function signature to accept `resolveFieldNames` and `currentDepth`
+   - Added `isDeepestLevel` and `shouldResolveNamesOnly` flags
+   - Added `shouldResolveField` helper function
+   - Updated field resolution loop to check `shouldResolveField`
+   - Pass `resolveFieldNames` and `currentDepth + 1` in recursive calls
+
+2. **`helpers/elasticsearch.js`**
+   - Added `resolveFieldName` to `getRecords` function parameters
+   - Added parsing logic for comma-separated `resolveFieldName` string
+   - Pass `resolveFieldNamesArray` and `currentDepth` to `resolveRecords`
+
+### Key Implementation Points
+
+**1. Depth Tracking:**
+```javascript
+// helpers/utils.js, line 204
+const resolveRecords = async (record, resolveDepth, recordsInDB, resolveNamesOnly = false, 
+    summarizeRecipe = false, addRecipeNutritionalSummary = null, visited = new Set(), 
+    resolveFieldNames = null, currentDepth = 0) => {
+```
+
+**2. Deepest Level Check:**
+```javascript
+// helpers/utils.js, lines 235-237
+const isDeepestLevel = resolveDepth === 1;
+const shouldResolveNamesOnly = resolveNamesOnly && isDeepestLevel;
+```
+
+**3. Field Filtering:**
+```javascript
+// helpers/utils.js, lines 264-267
+if (!shouldResolveField(category, key)) {
+    continue; // Skip this field if it's not in the resolveFieldNames list
+}
+```
+
+**4. Recursive Resolution:**
+```javascript
+// helpers/utils.js, line 281
+let resolvedRef = await resolveRecords(refRecord, resolveDepth - 1, recordsInDB, 
+    resolveNamesOnly, summarizeRecipe, addRecipeNutritionalSummary, branchVisited, 
+    resolveFieldNames, currentDepth + 1);
+```
 
 ## Backward Compatibility
 
-✅ **Fully Backward Compatible:**
-- Default behavior unchanged when parameters are not specified
-- Existing API calls work exactly the same
-- `resolveNamesOnly` now works BETTER (correctly applies only at deepest level)
-- `resolveFieldName` is optional - when omitted, all fields resolve
+### No Breaking Changes
+
+- **Existing behavior preserved:** If `resolveFieldName` is not provided, all fields are resolved (default behavior)
+- **`resolveNamesOnly` fix:** The correction to apply it only at the deepest level is the intended behavior and fixes a bug
+- **All existing API calls continue to work**
+
+### Migration Guide
+
+**No migration needed!** Existing code will continue to work exactly as before (or better, with the `resolveNamesOnly` fix).
+
+**Optional enhancements:**
+
+```javascript
+// Old way (still works)
+fetch('/api/records?recordType=workout&resolveDepth=2')
+
+// New way (more efficient)
+fetch('/api/records?recordType=workout&resolveDepth=2&resolveFieldName=data.workout.exercise')
+```
 
 ## Testing Recommendations
 
-### Test Case 1: Verify Deepest-Level-Only Behavior
+### Test Case 1: Verify `resolveNamesOnly` at Deepest Level
+
 ```javascript
 // Test with resolveDepth=2 and resolveNamesOnly=true
-// Verify that depth 1 has full records, depth 2 has names only
 const response = await fetch('/api/records?recordType=workout&resolveDepth=2&resolveNamesOnly=true&limit=1');
 const workout = response.records[0];
 
-// Check depth 1 - should be full exercise record
-console.assert(typeof workout.data.workout.exercise[0] === 'object', 'Depth 1 should be full record');
-console.assert(workout.data.workout.exercise[0].data !== undefined, 'Depth 1 should have data');
+// Verify:
+// 1. workout.exercise should be full records (depth 1)
+console.assert(typeof workout.data.workout.exercise[0] === 'object');
+console.assert(workout.data.workout.exercise[0].data !== undefined);
 
-// Check depth 2 - should be names only
-const exerciseEquipment = workout.data.workout.exercise[0].data.exercise.equipmentRequired;
-if (Array.isArray(exerciseEquipment)) {
-    console.assert(typeof exerciseEquipment[0] === 'string', 'Depth 2 should be names only');
-    console.assert(!exerciseEquipment[0].startsWith('did:'), 'Depth 2 should not be DIDs');
-}
+// 2. If exercises have drefs, those should be names only (depth 2)
+// (if applicable to your data structure)
 ```
 
 ### Test Case 2: Verify Selective Field Resolution
+
 ```javascript
-// Test that only specified fields are resolved
-const response = await fetch('/api/records?recordType=recipe&resolveDepth=1&resolveFieldName=recipe.ingredient&limit=1');
-const recipe = response.records[0];
+// Test with resolveFieldName
+const response = await fetch('/api/records?recordType=workout&resolveDepth=2&resolveFieldName=data.workout.exercise&limit=1');
+const workout = response.records[0];
 
-// Check that ingredient is resolved
-console.assert(Array.isArray(recipe.data.recipe.ingredient), 'Ingredient should be array');
-if (recipe.data.recipe.ingredient.length > 0) {
-    console.assert(typeof recipe.data.recipe.ingredient[0] === 'object', 'Ingredient should be resolved');
-}
+// Verify:
+// 1. workout.exercise should be resolved
+console.assert(typeof workout.data.workout.exercise[0] === 'object');
 
-// Check that other drefs are NOT resolved (if present)
-if (recipe.data.basic.avatar) {
-    console.assert(recipe.data.basic.avatar.startsWith('did:'), 'Avatar should remain as DID');
+// 2. Other drefs should NOT be resolved (still DIDs)
+if (workout.data.basic.avatar) {
+    console.assert(workout.data.basic.avatar.startsWith('did:'));
 }
 ```
 
 ### Test Case 3: Verify Multiple Field Resolution
+
 ```javascript
 // Test with multiple fields
-const response = await fetch('/api/records?recordType=workout&resolveDepth=1&resolveFieldName=workout.exercise,basic.avatar&limit=1');
-const workout = response.records[0];
+const response = await fetch('/api/records?recordType=recipe&resolveDepth=2&resolveFieldName=data.recipe.ingredient,data.basic.avatar&limit=1');
+const recipe = response.records[0];
 
-// Both fields should be resolved
-console.assert(typeof workout.data.workout.exercise[0] === 'object', 'Exercise should be resolved');
-if (workout.data.basic.avatar) {
-    console.assert(typeof workout.data.basic.avatar === 'object', 'Avatar should be resolved');
+// Verify:
+// 1. recipe.ingredient should be resolved
+console.assert(typeof recipe.data.recipe.ingredient[0] === 'object');
+
+// 2. basic.avatar should be resolved
+console.assert(typeof recipe.data.basic.avatar === 'object');
+
+// 3. Other drefs should NOT be resolved
+if (recipe.data.recipe.featuredImage) {
+    console.assert(recipe.data.recipe.featuredImage.startsWith('did:'));
 }
 ```
 
-## Common Use Cases
+## Troubleshooting
 
-### Use Case 1: Workout Lists (Optimized)
-```http
-GET /api/records?recordType=workout&resolveDepth=1&resolveFieldName=workout.exercise&limit=20
+### Issue: Fields Not Resolving
+
+**Problem:** You specified `resolveFieldName` but fields are still showing as DIDs.
+
+**Checklist:**
+1. Verify `resolveDepth` is set and > 0
+2. Check field path format (try both `data.category.field` and `category.field`)
+3. Ensure the field actually contains a dref (DID string)
+4. Check console logs for "Resolving only specified fields: ..." message
+
+**Example:**
+```javascript
+// ❌ Wrong field path
+resolveFieldName: 'workout.exercise'  // Missing 'data.' prefix
+
+// ✅ Correct field paths
+resolveFieldName: 'data.workout.exercise'  // Full path
+resolveFieldName: 'workout.exercise'       // Short path (also works)
 ```
-**Why:** Get workout with exercise details, skip resolving images/avatars/equipment for faster loading.
 
-### Use Case 2: Recipe Display (Full Details)
-```http
-GET /api/records?recordType=recipe&resolveDepth=2&resolveNamesOnly=true&resolveFieldName=recipe.ingredient
+### Issue: All Fields Resolving (Not Selective)
+
+**Problem:** Even with `resolveFieldName`, all drefs are being resolved.
+
+**Cause:** Check if `resolveFieldName` is actually being passed to the API.
+
+**Debug:**
+```javascript
+// Add to helpers/elasticsearch.js after line 3449
+console.log('Parsed resolveFieldNamesArray:', resolveFieldNamesArray);
 ```
-**Why:** Get full ingredient details (depth 1), but simplify nutritional info references to names (depth 2).
 
-### Use Case 3: Exercise Directory (Names Only)
-```http
-GET /api/records?recordType=workout&resolveDepth=1&resolveNamesOnly=true&limit=50
-```
-**Why:** List workouts with exercise names only (not full exercise records) for a compact directory view.
+### Issue: `resolveNamesOnly` Still Applying at All Levels
 
-### Use Case 4: Profile Cards (Minimal Resolution)
-```http
-GET /api/records?recordType=post&resolveDepth=1&resolveFieldName=basic.avatar&limit=10
-```
-**Why:** Display posts with just avatar images resolved, skip resolving categories, tags, or other references.
+**Problem:** Even after the update, names are resolved at all levels.
 
-## Migration Guide
+**Cause:** This should be fixed now. If still occurring:
+1. Check that you're using the updated code
+2. Verify the `isDeepestLevel` logic in `helpers/utils.js` line 236
+3. Add debug logging:
+   ```javascript
+   console.log('Current depth:', currentDepth, 'resolveDepth:', resolveDepth, 'isDeepestLevel:', isDeepestLevel);
+   ```
 
-### No Changes Required For:
-- Existing API calls without `resolveNamesOnly` or `resolveFieldName`
-- API calls that only use `resolveDepth`
-- Frontend code that doesn't use these parameters
+## Additional Resources
 
-### Update Recommended For:
-- Code that uses `resolveNamesOnly=true` and expects names at ALL levels (it now only applies at deepest)
-  - **Action:** If you need names at depth 1, use `resolveDepth=1` instead of `resolveDepth=2`
+- **API Documentation:** See `docs/API_RECORDS_ENDPOINT_DOCUMENTATION.md` for full API reference
+- **Technical Overview:** See `docs/OIP_TECHNICAL_OVERVIEW.md` for OIP system architecture
+- **Source Code:**
+  - Resolution logic: `helpers/utils.js` (line 204+)
+  - API integration: `helpers/elasticsearch.js` (line 2372+)
 
-### Optimization Opportunities:
-- Any queries that resolve unnecessary fields
-  - **Action:** Add `resolveFieldName` parameter to only resolve what you need
-  - **Benefit:** Faster response times, smaller payloads
+## Conclusion
 
-## Technical Notes
+The updates to `resolveDepth`, `resolveNamesOnly`, and the addition of `resolveFieldName` provide:
 
-### Recursion Tracking
-- `currentDepth` parameter tracks how deep we are in the resolution tree
-- Starts at 0 when first called
-- Increments with each recursive call
-- Used internally to determine when we're at the deepest level
+✅ **Correct `resolveNamesOnly` behavior** - Only applies at the deepest level as intended  
+✅ **Selective field resolution** - Resolve only the drefs you need  
+✅ **Better performance** - Smaller payloads, faster responses  
+✅ **Backward compatible** - Existing code continues to work  
+✅ **Flexible API** - Multiple ways to specify field paths  
 
-### Field Path Matching Algorithm
-The `shouldResolveField` function matches field paths flexibly:
-1. Exact match: `data.workout.exercise` === `data.workout.exercise`
-2. Short match: `workout.exercise` matches `data.workout.exercise`
-3. Prefix match: `workout` matches `workout.exercise`, `workout.duration`, etc.
-
-### Visited Set Handling
-- Each branch of recursion maintains its own visited set
-- Prevents infinite loops in circular references
-- Cloned when entering new branches to allow the same record to appear in different branches
-
-## Files Modified
-
-1. **`helpers/utils.js`**
-   - Updated `resolveRecords` function signature
-   - Added `resolveFieldNames` and `currentDepth` parameters
-   - Added `shouldResolveField` helper function
-   - Changed `resolveNamesOnly` to only apply at deepest level
-   - Updated recipe merging logic to use `shouldResolveNamesOnly`
-
-2. **`helpers/elasticsearch.js`**
-   - Added `resolveFieldName` parameter extraction in `getRecords`
-   - Added parsing logic for comma-separated field names
-   - Updated `resolveRecords` call to pass new parameters
-
-## Related Documentation
-
-- [API Records Endpoint Documentation](./API_RECORDS_ENDPOINT_DOCUMENTATION.md)
-- [OIP Technical Overview](./OIP_TECHNICAL_OVERVIEW.md)
-- [Elasticsearch Comprehensive Guide](./ELASTICSEARCH_COMPREHENSIVE_GUIDE.md)
-
-## Questions or Issues?
-
-If you have questions about these changes or encounter any issues, please refer to:
-- The test cases above
-- The usage examples
-- The implementation details in `helpers/utils.js` lines 204-340
-
+These improvements make the OIP records API more efficient and give developers fine-grained control over record resolution behavior.
