@@ -3394,8 +3394,8 @@ async function getRecords(queryParams) {
         if (noDuplicates === true || noDuplicates === 'true') {
             // console.log('Applying noDuplicates filtering...');
             
-            // use default for duplicate resolution
-            const duplicateSortBy = 'inArweaveBlock:desc';
+            // Use the user's sortBy parameter for duplicate resolution, or default to inArweaveBlock:desc
+            const duplicateSortBy = sortBy || 'inArweaveBlock:desc';
             
             // Group records by their basic.name field
             const recordsByName = {};
@@ -3427,6 +3427,9 @@ async function getRecords(queryParams) {
             // Also include records that don't have a basic.name field
             const recordsWithoutName = records.filter(record => !record.data?.basic?.name);
             uniqueRecords.push(...recordsWithoutName);
+            
+            // Re-apply the original sorting to the unique records to maintain the user's requested order
+            applySorting(uniqueRecords, sortBy, true);
             
             records = uniqueRecords;
             console.log(`After noDuplicates filtering, ${records.length} unique records remain`);
