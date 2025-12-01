@@ -4501,10 +4501,24 @@ const buildElasticsearchQuery = (params) => {
     if (params.fieldSearch && params.fieldName) {
         const fieldPath = `data.${params.fieldName}`;
         
-        // Detect if the search value is numeric (for proper query construction)
-        const isNumericSearch = !isNaN(params.fieldSearch) && !isNaN(parseFloat(params.fieldSearch));
+        // Detect if the search value is boolean (true/false strings)
+        const isBooleanSearch = params.fieldSearch === 'true' || params.fieldSearch === 'false';
         
-        if (isNumericSearch) {
+        // Detect if the search value is numeric (for proper query construction)
+        const isNumericSearch = !isBooleanSearch && !isNaN(params.fieldSearch) && !isNaN(parseFloat(params.fieldSearch));
+        
+        if (isBooleanSearch) {
+            // For boolean fields, convert string to boolean and use term query
+            const booleanValue = params.fieldSearch === 'true';
+            must.push({
+                nested: {
+                    path: "data",
+                    query: {
+                        term: { [fieldPath]: booleanValue }
+                    }
+                }
+            });
+        } else if (isNumericSearch) {
             // For numeric fields, use term query without .keyword suffix
             const numericValue = parseFloat(params.fieldSearch);
             must.push({
@@ -4516,22 +4530,39 @@ const buildElasticsearchQuery = (params) => {
                 }
             });
         } else if (params.fieldMatchMode === 'exact') {
-            // For text fields with exact match
+            // For text fields with exact match - try case-insensitive first, then case-sensitive
             must.push({
                 nested: {
                     path: "data",
                     query: {
-                        term: { [`${fieldPath}.keyword`]: params.fieldSearch }
+                        bool: {
+                            should: [
+                                // Try case-insensitive exact match first
+                                { match_phrase: { [fieldPath]: params.fieldSearch } },
+                                // Fall back to case-sensitive keyword match
+                                { term: { [`${fieldPath}.keyword`]: params.fieldSearch } }
+                            ],
+                            minimum_should_match: 1
+                        }
                     }
                 }
             });
         } else {
-            // For text fields with partial match (default)
+            // For text fields with partial match (default) - use case-insensitive wildcard
+            // Use wildcard on lowercase, but also support the analyzed field for better matching
             must.push({
                 nested: {
                     path: "data",
                     query: {
-                        wildcard: { [`${fieldPath}.keyword`]: `*${params.fieldSearch.toLowerCase()}*` }
+                        bool: {
+                            should: [
+                                // Case-insensitive phrase matching
+                                { match_phrase: { [fieldPath]: params.fieldSearch } },
+                                // Wildcard on keyword field (preserves case but less flexible)
+                                { wildcard: { [`${fieldPath}.keyword`]: `*${params.fieldSearch}*` } }
+                            ],
+                            minimum_should_match: 1
+                        }
                     }
                 }
             });
