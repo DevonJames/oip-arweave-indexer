@@ -24,7 +24,7 @@ module.exports = {
         fitnessEquipment: "VEz6iYZ8XpsOHQCOriv7gxyvY0OqyBXrNANCVHEgIsk",
         userFitnessProfile: "wZs4nUUuGnpUyRYM72QYailPb3zfqb4tPsxEE2XWNDk",
         workoutSchedule: "ACgUZxpsxhvy1TaXoOBMBgduje3-d8__gs9nPFSGXWM",
-        mealPlan: "qHsbqgp3dSRZk3Jm1ePUJGLQ6xdhMgeD_fv2hSE3-mU",
+        mealPlan: "esZZwZdP3kpC69CDy4Mtxzf08BZbAdR_mjphAVNS0FI",
         exerciseResult: "eZFqXh4O5zVqCEs2oNvhi5K3fi8VrTJ9kROVjYmEuxc",
         workoutCompletion: "C3BEhAF0_4Cbblo4CRp8585v6oyaPcgkpiKBp4jWQyw",
         weightEntry: "yXFy2izo1ALbAQOvl8qEQP2XpmMzZoUGXri72I-SKFY",
