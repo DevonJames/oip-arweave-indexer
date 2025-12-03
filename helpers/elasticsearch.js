@@ -2962,6 +2962,7 @@ async function getRecords(queryParams) {
         };
         
         // Add field search scoring (fieldSearch filter already handled in ES, just add scores)
+        // Supports multiple field searches
         if (fieldSearch !== undefined && fieldName !== undefined) {
             // Helper function to safely navigate nested object paths
             const getNestedValue = (obj, path) => {
@@ -2977,13 +2978,36 @@ async function getRecords(queryParams) {
                 return currentValue;
             };
             
+            // Support both single values and arrays for multiple field searches
+            const fieldNames = Array.isArray(fieldName) ? fieldName : [fieldName];
+            const fieldSearches = Array.isArray(fieldSearch) ? fieldSearch : [fieldSearch];
+            
+            // Ensure we have matching pairs
+            const pairs = fieldNames.map((fn, index) => ({
+                fieldName: fn,
+                fieldSearch: fieldSearches[index] !== undefined ? fieldSearches[index] : fieldSearches[fieldSearches.length - 1]
+            }));
+            
             // Add similarity scores to already-filtered records for sorting
             records = records.map(record => {
-                const fieldValue = getNestedValue(record.data, fieldName);
-                if (fieldValue !== undefined && fieldValue !== null) {
-                    const fieldValueStr = String(fieldValue);
-                    record.fieldSearchScore = calculateSimilarityScore(fieldValueStr, fieldSearch);
+                let totalScore = 0;
+                let matchedFields = 0;
+                
+                pairs.forEach(({ fieldName, fieldSearch }) => {
+                    const fieldValue = getNestedValue(record.data, fieldName);
+                    if (fieldValue !== undefined && fieldValue !== null) {
+                        const fieldValueStr = String(fieldValue);
+                        totalScore += calculateSimilarityScore(fieldValueStr, fieldSearch);
+                        matchedFields++;
+                    }
+                });
+                
+                // Average score across all matched fields
+                if (matchedFields > 0) {
+                    record.fieldSearchScore = totalScore / matchedFields;
+                    record.fieldSearchMatchedCount = matchedFields;
                 }
+                
                 return record;
             });
         }
@@ -4496,77 +4520,90 @@ const buildElasticsearchQuery = (params) => {
         }
     }
     
-    // Field-specific search
+    // Field-specific search (supports multiple field searches)
     // CRITICAL FIX: data field is mapped as "nested" in ES, so we must use nested queries
     if (params.fieldSearch && params.fieldName) {
-        const fieldPath = `data.${params.fieldName}`;
+        // Support both single values and arrays for multiple field searches
+        const fieldNames = Array.isArray(params.fieldName) ? params.fieldName : [params.fieldName];
+        const fieldSearches = Array.isArray(params.fieldSearch) ? params.fieldSearch : [params.fieldSearch];
         
-        // Detect if the search value is boolean (true/false strings)
-        const isBooleanSearch = params.fieldSearch === 'true' || params.fieldSearch === 'false';
+        // Ensure we have matching pairs (if not, use the last search value for remaining fields)
+        const pairs = fieldNames.map((fieldName, index) => ({
+            fieldName,
+            fieldSearch: fieldSearches[index] !== undefined ? fieldSearches[index] : fieldSearches[fieldSearches.length - 1]
+        }));
         
-        // Detect if the search value is numeric (for proper query construction)
-        const isNumericSearch = !isBooleanSearch && !isNaN(params.fieldSearch) && !isNaN(parseFloat(params.fieldSearch));
-        
-        if (isBooleanSearch) {
-            // For boolean fields, convert string to boolean and use term query
-            const booleanValue = params.fieldSearch === 'true';
-            must.push({
-                nested: {
-                    path: "data",
-                    query: {
-                        term: { [fieldPath]: booleanValue }
-                    }
-                }
-            });
-        } else if (isNumericSearch) {
-            // For numeric fields, use term query without .keyword suffix
-            const numericValue = parseFloat(params.fieldSearch);
-            must.push({
-                nested: {
-                    path: "data",
-                    query: {
-                        term: { [fieldPath]: numericValue }
-                    }
-                }
-            });
-        } else if (params.fieldMatchMode === 'exact') {
-            // For text fields with exact match - try case-insensitive first, then case-sensitive
-            must.push({
-                nested: {
-                    path: "data",
-                    query: {
-                        bool: {
-                            should: [
-                                // Try case-insensitive exact match first
-                                { match_phrase: { [fieldPath]: params.fieldSearch } },
-                                // Fall back to case-sensitive keyword match
-                                { term: { [`${fieldPath}.keyword`]: params.fieldSearch } }
-                            ],
-                            minimum_should_match: 1
+        // Add a query for each field/search pair
+        pairs.forEach(({ fieldName, fieldSearch }) => {
+            const fieldPath = `data.${fieldName}`;
+            
+            // Detect if the search value is boolean (true/false strings)
+            const isBooleanSearch = fieldSearch === 'true' || fieldSearch === 'false';
+            
+            // Detect if the search value is numeric (for proper query construction)
+            const isNumericSearch = !isBooleanSearch && !isNaN(fieldSearch) && !isNaN(parseFloat(fieldSearch));
+            
+            if (isBooleanSearch) {
+                // For boolean fields, convert string to boolean and use term query
+                const booleanValue = fieldSearch === 'true';
+                must.push({
+                    nested: {
+                        path: "data",
+                        query: {
+                            term: { [fieldPath]: booleanValue }
                         }
                     }
-                }
-            });
-        } else {
-            // For text fields with partial match (default) - use case-insensitive wildcard
-            // Use wildcard on lowercase, but also support the analyzed field for better matching
-            must.push({
-                nested: {
-                    path: "data",
-                    query: {
-                        bool: {
-                            should: [
-                                // Case-insensitive phrase matching
-                                { match_phrase: { [fieldPath]: params.fieldSearch } },
-                                // Wildcard on keyword field (preserves case but less flexible)
-                                { wildcard: { [`${fieldPath}.keyword`]: `*${params.fieldSearch}*` } }
-                            ],
-                            minimum_should_match: 1
+                });
+            } else if (isNumericSearch) {
+                // For numeric fields, use term query without .keyword suffix
+                const numericValue = parseFloat(fieldSearch);
+                must.push({
+                    nested: {
+                        path: "data",
+                        query: {
+                            term: { [fieldPath]: numericValue }
                         }
                     }
-                }
-            });
-        }
+                });
+            } else if (params.fieldMatchMode === 'exact') {
+                // For text fields with exact match - try case-insensitive first, then case-sensitive
+                must.push({
+                    nested: {
+                        path: "data",
+                        query: {
+                            bool: {
+                                should: [
+                                    // Try case-insensitive exact match first
+                                    { match_phrase: { [fieldPath]: fieldSearch } },
+                                    // Fall back to case-sensitive keyword match
+                                    { term: { [`${fieldPath}.keyword`]: fieldSearch } }
+                                ],
+                                minimum_should_match: 1
+                            }
+                        }
+                    }
+                });
+            } else {
+                // For text fields with partial match (default) - use case-insensitive wildcard
+                // Use wildcard on lowercase, but also support the analyzed field for better matching
+                must.push({
+                    nested: {
+                        path: "data",
+                        query: {
+                            bool: {
+                                should: [
+                                    // Case-insensitive phrase matching
+                                    { match_phrase: { [fieldPath]: fieldSearch } },
+                                    // Wildcard on keyword field (preserves case but less flexible)
+                                    { wildcard: { [`${fieldPath}.keyword`]: `*${fieldSearch}*` } }
+                                ],
+                                minimum_should_match: 1
+                            }
+                        }
+                    }
+                });
+            }
+        });
     }
     
     // Exact match filtering (JSON object with field paths)
