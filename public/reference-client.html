@@ -10903,6 +10903,49 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             <input type="text" id="music-lyrics" placeholder="did:arweave:... (optional)">
                             <small>Reference to a text record containing the lyrics</small>
                         </div>
+
+                        <!-- Album Art Section -->
+                        <div class="form-group" style="border-top: 2px solid #e1e5e9; padding-top: 20px; margin-top: 20px;">
+                            <h4 style="margin-bottom: 15px;">🎨 Album Art</h4>
+                            
+                            <div class="form-group">
+                                <label for="album-art-source">Album Art Source:</label>
+                                <select id="album-art-source" onchange="updateAlbumArtInterface()">
+                                    <option value="">No Album Art</option>
+                                    <option value="url">Image URL</option>
+                                    <option value="upload">Upload Image File</option>
+                                </select>
+                            </div>
+
+                            <div id="album-art-input-section" style="display: none;">
+                                <div class="form-group" id="album-art-url-section" style="display: none;">
+                                    <label for="album-art-url">Album Art URL:</label>
+                                    <input type="url" id="album-art-url" placeholder="https://example.com/album-art.jpg">
+                                    <button type="button" onclick="previewAlbumArt()" style="margin-top: 5px;">Preview</button>
+                                </div>
+
+                                <div class="form-group" id="album-art-upload-section" style="display: none;">
+                                    <label for="album-art-file">Upload Album Art:</label>
+                                    <input type="file" id="album-art-file" accept="image/jpeg,image/jpg,image/png" onchange="handleAlbumArtFileSelect(this)">
+                                    <small>Supported: JPG, PNG</small>
+                                </div>
+
+                                <!-- Album Art Upload Progress -->
+                                <div id="album-art-upload-progress" class="upload-progress hidden" style="margin: 15px 0;">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 0%;"></div>
+                                    </div>
+                                    <div class="progress-text">Ready to upload...</div>
+                                </div>
+
+                                <!-- Album Art Preview -->
+                                <div id="album-art-preview" class="hidden" style="margin: 15px 0;">
+                                    <label>Preview:</label>
+                                    <img id="album-art-preview-img" style="max-width: 300px; max-height: 300px; border-radius: 8px; display: block; margin-top: 10px;">
+                                    <div id="album-art-info" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Tags -->
@@ -16030,6 +16073,83 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
             } catch (error) {
                 console.warn('Could not extract audio metadata:', error);
             }
+        }
+
+        // Album Art Interface Functions
+        function updateAlbumArtInterface() {
+            const source = document.getElementById('album-art-source').value;
+            const inputSection = document.getElementById('album-art-input-section');
+            const urlSection = document.getElementById('album-art-url-section');
+            const uploadSection = document.getElementById('album-art-upload-section');
+            const preview = document.getElementById('album-art-preview');
+            
+            if (source === '') {
+                inputSection.style.display = 'none';
+                preview.classList.add('hidden');
+            } else {
+                inputSection.style.display = 'block';
+                
+                if (source === 'url') {
+                    urlSection.style.display = 'block';
+                    uploadSection.style.display = 'none';
+                } else if (source === 'upload') {
+                    urlSection.style.display = 'none';
+                    uploadSection.style.display = 'block';
+                }
+            }
+        }
+
+        function handleAlbumArtFileSelect(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const preview = document.getElementById('album-art-preview');
+                const previewImg = document.getElementById('album-art-preview-img');
+                const info = document.getElementById('album-art-info');
+                
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    
+                    // Get image dimensions
+                    const img = new Image();
+                    img.onload = function() {
+                        const sizeKB = (file.size / 1024).toFixed(2);
+                        info.innerHTML = `<strong>File:</strong> ${file.name}<br>
+                                         <strong>Size:</strong> ${sizeKB} KB<br>
+                                         <strong>Dimensions:</strong> ${img.width} × ${img.height}px<br>
+                                         <strong>Type:</strong> ${file.type}`;
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function previewAlbumArt() {
+            const url = document.getElementById('album-art-url').value;
+            if (!url) {
+                alert('Please enter an image URL');
+                return;
+            }
+            
+            const preview = document.getElementById('album-art-preview');
+            const previewImg = document.getElementById('album-art-preview-img');
+            const info = document.getElementById('album-art-info');
+            
+            previewImg.src = url;
+            preview.classList.remove('hidden');
+            
+            // Get image dimensions when loaded
+            previewImg.onload = function() {
+                info.innerHTML = `<strong>URL:</strong> ${url}<br>
+                                 <strong>Dimensions:</strong> ${previewImg.naturalWidth} × ${previewImg.naturalHeight}px`;
+            };
+            
+            previewImg.onerror = function() {
+                info.innerHTML = `<span style="color: red;">Failed to load image from URL</span>`;
+            };
         }
 
         // Dynamic ingredient/exercise management
@@ -22476,6 +22596,73 @@ CRITICAL:
                     }
                 }
 
+                // Handle album art upload/URL if provided
+                let albumArtUrl = '';
+                let albumArtContentType = '';
+                const albumArtSource = document.getElementById('album-art-source')?.value;
+                
+                if (albumArtSource === 'upload') {
+                    const albumArtFileInput = document.getElementById('album-art-file');
+                    const albumArtFile = albumArtFileInput?.files[0];
+                    
+                    if (albumArtFile) {
+                        // Show album art upload progress
+                        const progressDiv = document.getElementById('album-art-upload-progress');
+                        const progressFill = progressDiv.querySelector('.progress-fill');
+                        const progressText = progressDiv.querySelector('.progress-text');
+                        progressDiv.classList.remove('hidden');
+                        
+                        progressText.textContent = 'Uploading album art...';
+                        progressFill.style.width = '10%';
+
+                        // Upload album art file
+                        const albumArtFormData = new FormData();
+                        albumArtFormData.append('file', albumArtFile);
+                        albumArtFormData.append('name', `${audioTitle} - Album Art`);
+                        albumArtFormData.append('access_level', 'private');
+                        
+                        if (audioDescription) {
+                            albumArtFormData.append('description', `Album art for ${audioTitle}`);
+                        }
+
+                        const albumArtUploadResponse = await fetch('/api/media/upload', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: albumArtFormData
+                        });
+
+                        progressFill.style.width = '50%';
+                        progressText.textContent = 'Processing album art...';
+
+                        const albumArtUploadResult = await albumArtUploadResponse.json();
+                        
+                        if (!albumArtUploadResponse.ok) {
+                            throw new Error(albumArtUploadResult.error || 'Album art upload failed');
+                        }
+
+                        // Use the uploaded album art info
+                        albumArtUrl = albumArtUploadResult.httpUrl;
+                        albumArtContentType = albumArtUploadResult.mime;
+
+                        progressFill.style.width = '100%';
+                        progressText.textContent = 'Album art uploaded!';
+                    }
+                } else if (albumArtSource === 'url') {
+                    albumArtUrl = document.getElementById('album-art-url')?.value?.trim() || '';
+                    if (albumArtUrl) {
+                        // Try to guess content type from extension
+                        const ext = albumArtUrl.split('.').pop()?.toLowerCase();
+                        const imageTypeMap = {
+                            'jpg': 'image/jpeg',
+                            'jpeg': 'image/jpeg',
+                            'png': 'image/png'
+                        };
+                        albumArtContentType = imageTypeMap[ext] || 'image/jpeg';
+                    }
+                }
+
                 // Build record data based on audio type
                 let recordData;
                 
@@ -22514,6 +22701,14 @@ CRITICAL:
                             performerItems: document.getElementById('music-performers').value.split(',').map(t => t.trim()).filter(t => t)
                         }
                     };
+
+                    // Add image template if album art is provided
+                    if (albumArtUrl) {
+                        recordData.image = {
+                            webUrl: albumArtUrl,
+                            contentType: albumArtContentType
+                        };
+                    }
 
                     // Add BitTorrent address if file was uploaded
                     if (uploadedMediaId) {
