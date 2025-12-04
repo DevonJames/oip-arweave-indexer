@@ -1,0 +1,30 @@
+{
+    "audio": {
+        "genre": "string",
+        "index_genre": 0,
+        "subGenre": "string",
+        "index_subGenre": 1,
+        "bpm": "uint32",
+        "index_bpm": 2,
+        "key": "string",
+        "index_key": 3,
+        "sampleRateHz": "uint32",
+        "index_sampleRateHz": 4,
+        "bitDepth": "uint32",
+        "index_bitDepth": 5,
+        "lyrics": "dref",
+        "index_lyrics": 6,
+        "composerItems": "repeated dref",
+        "index_composerItems": 7,
+        "performerItems": "repeated dref",
+        "index_performerItems": 8,
+        "album": "string",
+        "index_album": 9,
+        "albumRef": "dref",
+        "index_albumRef": 10,
+        "trackNumber": "uint32",
+        "index_trackNumber": 11,
+        "isrc": "string",
+        "index_isrc": 12
+    }
+}
