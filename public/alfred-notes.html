@@ -659,6 +659,108 @@
             color: var(--text-primary);
         }
 
+        /* Participants Section */
+        .participants-section {
+            width: 100%;
+            max-width: 520px;
+            margin-top: 28px;
+        }
+
+        .participant-entry {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 10px 12px;
+            box-shadow: var(--shadow-chip);
+            transition: all var(--transition-fast);
+        }
+
+        .participant-entry:hover {
+            border-color: rgba(95, 252, 249, 0.4);
+        }
+
+        .participant-field {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .participant-label {
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .participant-input {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            color: var(--text-primary);
+            font-family: inherit;
+            outline: none;
+            transition: all var(--transition-fast);
+        }
+
+        .participant-input:focus {
+            border-color: var(--accent-cyan);
+            background: var(--bg-panel);
+        }
+
+        .participant-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .remove-participant-btn {
+            background: transparent;
+            border: 1px solid rgba(255, 92, 92, 0.3);
+            color: var(--red);
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all var(--transition-fast);
+        }
+
+        .remove-participant-btn:hover {
+            background: rgba(255, 92, 92, 0.15);
+            border-color: var(--red);
+        }
+
+        .add-participant-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-panel);
+            border: 1px dashed var(--border-strong);
+            border-radius: 12px;
+            color: var(--accent-cyan);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all var(--transition-fast);
+            margin-top: 10px;
+        }
+
+        .add-participant-btn:hover {
+            background: rgba(95, 252, 249, 0.08);
+            border-color: var(--accent-cyan);
+            border-style: solid;
+        }
+
         /* Library View */
         .library-view {
             background: transparent;
@@ -1693,6 +1795,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Participants Section -->
+                    <div class="participants-section" id="participantsSection">
+                        <h3 class="template-title">Participants (Optional)</h3>
+                        <div id="participantsList">
+                            <!-- Participant entries will be dynamically added here -->
+                        </div>
+                        <button class="add-participant-btn" onclick="alfredApp.addParticipant()">+ Add Participant</button>
+                    </div>
                 </div>
             </div>
 
@@ -1987,6 +2098,7 @@
                 audioChunks: [],
                 recordingStartTime: null,
                 selectedTemplate: 'MEETING',
+                participants: [],
                 notes: [],
                 currentNote: null,
                 jwtToken: localStorage.getItem('alfred_jwt_token'),
@@ -2034,6 +2146,9 @@
 
                 // Setup template selection
                 this.setupTemplateSelection();
+                
+                // Initialize participants section
+                this.renderParticipants();
                 
                 // Setup event listeners
                 this.setupEventListeners();
@@ -2083,6 +2198,71 @@
                         this.state.selectedTemplate = card.dataset.template;
                     });
                 });
+            },
+
+            // Participant Management
+            addParticipant() {
+                const participantId = Date.now();
+                this.state.participants.push({ id: participantId, name: '', role: '' });
+                this.renderParticipants();
+            },
+
+            removeParticipant(id) {
+                this.state.participants = this.state.participants.filter(p => p.id !== id);
+                this.renderParticipants();
+            },
+
+            updateParticipant(id, field, value) {
+                const participant = this.state.participants.find(p => p.id === id);
+                if (participant) {
+                    participant[field] = value;
+                }
+            },
+
+            renderParticipants() {
+                const container = document.getElementById('participantsList');
+                if (!container) return;
+
+                container.innerHTML = this.state.participants.map(p => `
+                    <div class="participant-entry">
+                        <div class="participant-field">
+                            <div class="participant-label">Name</div>
+                            <input 
+                                type="text" 
+                                class="participant-input" 
+                                placeholder="John Doe" 
+                                value="${p.name}"
+                                oninput="alfredApp.updateParticipant(${p.id}, 'name', this.value)"
+                            >
+                        </div>
+                        <div class="participant-field">
+                            <div class="participant-label">Role</div>
+                            <input 
+                                type="text" 
+                                class="participant-input" 
+                                placeholder="CEO" 
+                                value="${p.role}"
+                                oninput="alfredApp.updateParticipant(${p.id}, 'role', this.value)"
+                            >
+                        </div>
+                        <button class="remove-participant-btn" onclick="alfredApp.removeParticipant(${p.id})" title="Remove participant">×</button>
+                    </div>
+                `).join('');
+            },
+
+            getParticipantsData() {
+                const names = this.state.participants
+                    .filter(p => p.name.trim())
+                    .map(p => p.name.trim());
+                const roles = this.state.participants
+                    .filter(p => p.name.trim())
+                    .map(p => p.role.trim());
+                return { names, roles };
+            },
+
+            clearParticipants() {
+                this.state.participants = [];
+                this.renderParticipants();
             },
 
             // Setup event listeners
@@ -2521,6 +2701,15 @@
                 formData.append('model', this.state.settings.model);
                 formData.append('addToWebServer', this.state.settings.webServerUpload);
 
+                // Add participants if provided
+                const { names, roles } = this.getParticipantsData();
+                if (names.length > 0) {
+                    formData.append('participant_display_names', JSON.stringify(names));
+                }
+                if (roles.length > 0) {
+                    formData.append('participant_roles', JSON.stringify(roles));
+                }
+
                 try {
                     const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/from-audio`, {
                         method: 'POST',
@@ -2534,6 +2723,7 @@
 
                     if (data.success) {
                         this.showToast('Note created successfully!', 'success');
+                        this.clearParticipants(); // Clear participants after successful upload
                         this.loadNotes();
                     } else {
                         this.showToast('Failed to create note: ' + (data.error || 'Unknown error'), 'error');
