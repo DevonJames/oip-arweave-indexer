@@ -306,19 +306,15 @@ body .records-header-right {
 body select {
     border-radius: var(--radius-pill);
     border: 1px solid rgba(148, 163, 255, 0.5);
-    background: radial-gradient(circle at 0 0, rgba(30, 64, 175, 0.6), rgba(15, 23, 42, 0.9));
-    color: var(--text-main);
+    /* Use a more solid background for better text visibility */
+    background: rgba(15, 23, 42, 0.95);
+    /* Ensure selected text is clearly visible */
+    color: #ffffff;
     padding: 6px 26px 6px 12px;
     font-size: 12px;
     cursor: pointer;
-    /* Remove appearance: none to keep native dropdown functionality */
-    /* appearance: none; */
-    /* Commented out custom arrow background images that interfere with select functionality */
-    /* background-image: linear-gradient(45deg, transparent 50%, rgba(148, 163, 255, 0.8) 50%),
-                      linear-gradient(135deg, rgba(148, 163, 255, 0.8) 50%, transparent 50%);
-    background-position: calc(100% - 13px) 10px, calc(100% - 9px) 10px;
-    background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat; */
+    /* Keep native appearance for full functionality */
+    font-weight: 500;
 }
 
 /* Ensure select options are visible with proper contrast */
