@@ -4327,6 +4327,7 @@
                             <option value="video">Video</option>
                             <option value="audio">Audio / Podcast</option>
                             <option value="music">Music</option>
+                            <option value="musicReleaseSimple">💿 Music Release (Simple)</option>
                             <option value="image">Image</option>
                             <option value="recipe">Recipe</option>
                             <option value="recipeBundle">🍽️ Recipe Bundle (Complete Workflow)</option>
@@ -23728,7 +23729,7 @@ CRITICAL:
                         tagItems: document.getElementById('text-tags').value.split(',').map(t => t.trim()).filter(t => t)
                     },
                     text: {
-                        rawText: document.getElementById('text-content').value,
+                        rawtext: document.getElementById('text-content').value,
                         contentType: document.getElementById('text-type').value,
                         authorName: document.getElementById('text-author').value
                     }
@@ -23747,7 +23748,7 @@ CRITICAL:
                     return;
                 }
 
-                if (!textData.text.rawText) {
+                if (!textData.text.rawtext) {
                     showMessage('publish-status', 'Please fill in content', 'error');
                     return;
                 }
