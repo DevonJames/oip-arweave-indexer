@@ -310,12 +310,22 @@ body select {
     color: var(--text-main);
     padding: 6px 26px 6px 12px;
     font-size: 12px;
-    appearance: none;
-    background-image: linear-gradient(45deg, transparent 50%, rgba(148, 163, 255, 0.8) 50%),
+    cursor: pointer;
+    /* Remove appearance: none to keep native dropdown functionality */
+    /* appearance: none; */
+    /* Commented out custom arrow background images that interfere with select functionality */
+    /* background-image: linear-gradient(45deg, transparent 50%, rgba(148, 163, 255, 0.8) 50%),
                       linear-gradient(135deg, rgba(148, 163, 255, 0.8) 50%, transparent 50%);
     background-position: calc(100% - 13px) 10px, calc(100% - 9px) 10px;
     background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat;
+    background-repeat: no-repeat; */
+}
+
+/* Ensure select options are visible with proper contrast */
+body select option {
+    background: #ffffff;
+    color: #000000;
+    padding: 6px 12px;
 }
 
 /* Advanced filter panel at top */
