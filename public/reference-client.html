@@ -10436,6 +10436,12 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         initializeRecipeBundleInterface();
                     }, 100);
                     break;
+                case 'musicReleaseSimple':
+                    interfaceContainer.innerHTML = createMusicReleaseSimpleInterface();
+                    setTimeout(() => {
+                        initializeMusicReleaseSimpleInterface();
+                    }, 100);
+                    break;
                 default:
                     interfaceContainer.innerHTML = '<div class="loading">Unknown record type</div>';
             }
@@ -12251,6 +12257,132 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                         </button>
                         <div style="text-align: center; margin-top: 10px; font-size: 14px; color: #666;">
                             <span id="recipe-bundle-publish-estimate">Includes recipe, ingredients, and image</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createMusicReleaseSimpleInterface() {
+            return `
+                <div class="publish-form">
+                    <h3>💿 Music Release (Simple) - Album Publishing</h3>
+                    
+                    <div class="info-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
+                        <h4 style="margin: 0 0 12px 0; color: white;">🎵 Multi-Track Album Publishing</h4>
+                        <p style="margin: 0 0 12px 0; opacity: 0.95;">Publish a complete album with all tracks in one workflow:</p>
+                        <ol style="margin: 10px 0 10px 20px; opacity: 0.95;">
+                            <li><strong>Album Details</strong> - Define your album information</li>
+                            <li><strong>Tracks</strong> - Upload new tracks or link existing ones</li>
+                            <li><strong>Album Art</strong> - Upload album cover artwork</li>
+                        </ol>
+                        <p style="margin: 15px 0 0 0; font-size: 14px; opacity: 0.9;">
+                            ✨ <strong>Smart DID Passing:</strong> All tracks are linked automatically!
+                        </p>
+                    </div>
+
+                    <!-- Progress Tracker -->
+                    <div id="music-release-progress" class="hidden" style="background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 10px 0;">📊 Publishing Progress</h4>
+                        <div id="music-release-progress-message" style="margin-bottom: 10px; font-weight: 500;"></div>
+                        <div class="progress-bar" style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                            <div id="music-release-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Section 1: Album Details -->
+                    <div id="music-release-section-album" class="bundle-section" style="border: 2px solid #e5e5ff; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">1</div>
+                            <h4 style="margin: 0; flex: 1;">💿 Album Details</h4>
+                            <button type="button" onclick="toggleSection('music-release-section-album-content')" class="btn-small">Toggle</button>
+                        </div>
+                        
+                        <div id="music-release-section-album-content">
+                            <div class="form-group">
+                                <label for="music-release-album-title">Album Title:</label>
+                                <input type="text" id="music-release-album-title" placeholder="e.g., Greatest Hits" style="width: 100%;">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="music-release-album-description">Album Description:</label>
+                                <textarea id="music-release-album-description" rows="3" placeholder="Brief description of the album..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="music-release-album-artists">Album Artists (comma-separated):</label>
+                                <input type="text" id="music-release-album-artists" placeholder="Artist 1, Artist 2, Artist 3">
+                                <small>Names of artists performing on this album</small>
+                            </div>
+
+                            <!-- Album Art Section -->
+                            <div class="form-group" style="border-top: 2px solid #e1e5e9; padding-top: 20px; margin-top: 20px;">
+                                <h4 style="margin-bottom: 15px;">🎨 Album Art</h4>
+                                
+                                <div class="form-group">
+                                    <label for="music-release-album-art-source">Album Art Source:</label>
+                                    <select id="music-release-album-art-source" onchange="updateMusicReleaseAlbumArtInterface()">
+                                        <option value="">No Album Art</option>
+                                        <option value="url">Image URL</option>
+                                        <option value="upload">Upload Image File</option>
+                                    </select>
+                                </div>
+
+                                <div id="music-release-album-art-input-section" style="display: none;">
+                                    <div class="form-group" id="music-release-album-art-url-section" style="display: none;">
+                                        <label for="music-release-album-art-url">Album Art URL:</label>
+                                        <input type="url" id="music-release-album-art-url" placeholder="https://example.com/album-art.jpg">
+                                        <button type="button" onclick="previewMusicReleaseAlbumArt()" style="margin-top: 5px;">Preview</button>
+                                    </div>
+
+                                    <div class="form-group" id="music-release-album-art-upload-section" style="display: none;">
+                                        <label for="music-release-album-art-file">Upload Album Art:</label>
+                                        <input type="file" id="music-release-album-art-file" accept="image/jpeg,image/jpg,image/png" onchange="handleMusicReleaseAlbumArtFileSelect(this)">
+                                        <small>Supported: JPG, PNG</small>
+                                    </div>
+
+                                    <!-- Album Art Upload Progress -->
+                                    <div id="music-release-album-art-upload-progress" class="upload-progress hidden" style="margin: 15px 0;">
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: 0%;"></div>
+                                        </div>
+                                        <div class="progress-text">Ready to upload...</div>
+                                    </div>
+
+                                    <!-- Album Art Preview -->
+                                    <div id="music-release-album-art-preview" class="hidden" style="margin: 15px 0;">
+                                        <label>Preview:</label>
+                                        <img id="music-release-album-art-preview-img" style="max-width: 300px; max-height: 300px; border-radius: 8px; display: block; margin-top: 10px;">
+                                        <div id="music-release-album-art-info" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Tracks -->
+                    <div class="bundle-section" style="border: 2px solid #f3e5f5; border-radius: 12px; padding: 20px; margin-bottom: 20px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 18px;">2</div>
+                            <h4 style="margin: 0; flex: 1;">🎵 Tracks</h4>
+                        </div>
+                        
+                        <div id="music-release-tracks-container">
+                            <!-- Track items will be added here -->
+                        </div>
+                        
+                        <button type="button" onclick="addMusicReleaseTrack()" class="btn-small" style="margin-top: 10px;">
+                            + Add Track
+                        </button>
+                    </div>
+
+                    <!-- Publish All Button -->
+                    <div style="position: sticky; bottom: 20px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1); margin-top: 30px;">
+                        <button onclick="publishMusicReleaseSimple()" class="btn-primary" id="music-release-publish-btn" style="width: 100%; padding: 16px; font-size: 16px; font-weight: 600;">
+                            🚀 Publish Complete Album
+                        </button>
+                        <div style="text-align: center; margin-top: 10px; font-size: 14px; color: #666;">
+                            <span id="music-release-publish-estimate">Includes album details, tracks, and album art</span>
                         </div>
                     </div>
                 </div>
@@ -22234,6 +22366,623 @@ CRITICAL:
 
         // ==================== END RECIPE BUNDLE FUNCTIONS (PART 2) ====================
 
+        // ==================== MUSIC RELEASE (SIMPLE) FUNCTIONS ====================
+
+        async function initializeMusicReleaseSimpleInterface() {
+            console.log('💿 Initializing Music Release Simple Interface');
+            // Add first track
+            addMusicReleaseTrack();
+            console.log('✅ Music Release Simple Interface initialized');
+        }
+
+        function updateMusicReleaseAlbumArtInterface() {
+            const source = document.getElementById('music-release-album-art-source').value;
+            const inputSection = document.getElementById('music-release-album-art-input-section');
+            const urlSection = document.getElementById('music-release-album-art-url-section');
+            const uploadSection = document.getElementById('music-release-album-art-upload-section');
+            const preview = document.getElementById('music-release-album-art-preview');
+            
+            if (source === '') {
+                inputSection.style.display = 'none';
+                preview.classList.add('hidden');
+            } else {
+                inputSection.style.display = 'block';
+                
+                if (source === 'url') {
+                    urlSection.style.display = 'block';
+                    uploadSection.style.display = 'none';
+                } else if (source === 'upload') {
+                    urlSection.style.display = 'none';
+                    uploadSection.style.display = 'block';
+                }
+            }
+        }
+
+        function handleMusicReleaseAlbumArtFileSelect(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const preview = document.getElementById('music-release-album-art-preview');
+                const previewImg = document.getElementById('music-release-album-art-preview-img');
+                const info = document.getElementById('music-release-album-art-info');
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    
+                    const img = new Image();
+                    img.onload = function() {
+                        const sizeKB = (file.size / 1024).toFixed(2);
+                        info.innerHTML = `<strong>File:</strong> ${file.name}<br>
+                                         <strong>Size:</strong> ${sizeKB} KB<br>
+                                         <strong>Dimensions:</strong> ${img.width} × ${img.height}px<br>
+                                         <strong>Type:</strong> ${file.type}`;
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function previewMusicReleaseAlbumArt() {
+            const url = document.getElementById('music-release-album-art-url').value;
+            if (!url) {
+                alert('Please enter an image URL');
+                return;
+            }
+            
+            const preview = document.getElementById('music-release-album-art-preview');
+            const previewImg = document.getElementById('music-release-album-art-preview-img');
+            const info = document.getElementById('music-release-album-art-info');
+            
+            previewImg.src = url;
+            preview.classList.remove('hidden');
+            
+            previewImg.onload = function() {
+                info.innerHTML = `<strong>URL:</strong> ${url}<br>
+                                 <strong>Dimensions:</strong> ${previewImg.naturalWidth} × ${previewImg.naturalHeight}px`;
+            };
+            
+            previewImg.onerror = function() {
+                info.innerHTML = `<span style="color: red;">Failed to load image from URL</span>`;
+            };
+        }
+
+        let trackCounter = 0;
+
+        function addMusicReleaseTrack() {
+            const container = document.getElementById('music-release-tracks-container');
+            if (!container) return;
+            
+            trackCounter++;
+            const trackId = `track-item-${Date.now()}-${trackCounter}`;
+            
+            const item = document.createElement('div');
+            item.id = trackId;
+            item.className = 'track-item';
+            item.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #f9f9f9;';
+            
+            const trackNumber = container.querySelectorAll('.track-item').length + 1;
+            
+            item.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <strong style="font-size: 16px;">Track ${trackNumber}</strong>
+                    <button type="button" onclick="removeMusicReleaseTrack('${trackId}')" class="btn-small" style="background: #f44336; color: white;">
+                        Remove
+                    </button>
+                </div>
+                
+                <!-- Track Number and Artists -->
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Track Number:</label>
+                        <input type="number" class="track-number" min="1" value="${trackNumber}" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Track Artists (comma-separated):</label>
+                        <input type="text" class="track-artists" placeholder="Artist 1, Artist 2" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                </div>
+                
+                <!-- Track Mode Selection -->
+                <div style="border: 1px solid #e8f5e9; border-radius: 6px; padding: 12px; background: white;">
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Mode:</label>
+                        <select class="track-mode" onchange="toggleTrackMode('${trackId}')" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <option value="create">Create New Music Track</option>
+                            <option value="existing">Use Existing Track DID</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Existing Track DID Input (hidden by default) -->
+                    <div class="track-existing-section hidden">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Track DID:</label>
+                        <input type="text" class="track-existing-did" placeholder="did:arweave:..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                        <small style="font-size: 11px; color: #666;">Paste the DID of an existing music record</small>
+                    </div>
+                    
+                    <!-- Create New Track Fields (shown by default) -->
+                    <div class="track-create-section">
+                        ${createMusicTrackFields(trackId)}
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(item);
+        }
+
+        function createMusicTrackFields(trackId) {
+            return `
+                <!-- Audio Source -->
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Audio Source:</label>
+                    <select class="track-audio-source" onchange="updateTrackAudioInterface('${trackId}')" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                        <option value="url">Audio URL</option>
+                        <option value="upload">Upload Audio File</option>
+                    </select>
+                </div>
+
+                <div class="track-audio-input-section">
+                    <div class="track-audio-url-section" style="margin-bottom: 8px;">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Audio URL:</label>
+                        <input type="url" class="track-audio-url" placeholder="https://example.com/track.mp3" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                    <div class="track-audio-upload-section hidden">
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Upload Audio File:</label>
+                        <input type="file" class="track-audio-file" accept="audio/*" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                        <small style="font-size: 11px; color: #666;">Supported: MP3, WAV, FLAC, OGG, AAC, M4A</small>
+                    </div>
+                </div>
+
+                <!-- Track Title -->
+                <div style="margin-bottom: 8px;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600;">Track Title:</label>
+                    <input type="text" class="track-title" placeholder="Song title" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                </div>
+
+                <!-- Track Description -->
+                <div style="margin-bottom: 8px;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 13px;">Description:</label>
+                    <textarea class="track-description" rows="2" placeholder="Track description..." style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;"></textarea>
+                </div>
+
+                <!-- Music-specific fields -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Genre:</label>
+                        <select class="track-genre" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                            <option value="">Select genre</option>
+                            <option value="Classical">Classical</option>
+                            <option value="Rock">Rock</option>
+                            <option value="Pop">Pop</option>
+                            <option value="Hip-Hop">Hip-Hop</option>
+                            <option value="Jazz">Jazz</option>
+                            <option value="Blues">Blues</option>
+                            <option value="Country">Country</option>
+                            <option value="Electronic">Electronic</option>
+                            <option value="Folk">Folk</option>
+                            <option value="R&B">R&B</option>
+                            <option value="Reggae">Reggae</option>
+                            <option value="Metal">Metal</option>
+                            <option value="Punk">Punk</option>
+                            <option value="Alternative">Alternative</option>
+                            <option value="Indie">Indie</option>
+                            <option value="World">World</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Sub-Genre:</label>
+                        <input type="text" class="track-subgenre" placeholder="e.g., Progressive Rock" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">BPM:</label>
+                        <input type="number" class="track-bpm" placeholder="120" min="40" max="200" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Key:</label>
+                        <input type="text" class="track-key" placeholder="C Major" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 4px; font-size: 13px;">Duration (sec):</label>
+                        <input type="number" class="track-duration" placeholder="225" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 13px;">Composers (comma-separated):</label>
+                    <input type="text" class="track-composers" placeholder="Composer 1, Composer 2" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 13px;">Performers (comma-separated):</label>
+                    <input type="text" class="track-performers" placeholder="Performer 1, Performer 2" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 13px;">ISRC Code:</label>
+                    <input type="text" class="track-isrc" placeholder="US-ABC-12-34567" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <label style="display: block; margin-bottom: 4px; font-size: 13px;">Lyrics DID Reference:</label>
+                    <input type="text" class="track-lyrics" placeholder="did:arweave:... (optional)" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                </div>
+            `;
+        }
+
+        function removeMusicReleaseTrack(trackId) {
+            const item = document.getElementById(trackId);
+            if (item) {
+                item.remove();
+            }
+        }
+
+        function toggleTrackMode(trackId) {
+            const item = document.getElementById(trackId);
+            const mode = item.querySelector('.track-mode').value;
+            const existingSection = item.querySelector('.track-existing-section');
+            const createSection = item.querySelector('.track-create-section');
+            
+            if (mode === 'existing') {
+                existingSection.classList.remove('hidden');
+                createSection.classList.add('hidden');
+            } else {
+                existingSection.classList.add('hidden');
+                createSection.classList.remove('hidden');
+            }
+        }
+
+        function updateTrackAudioInterface(trackId) {
+            const item = document.getElementById(trackId);
+            const source = item.querySelector('.track-audio-source').value;
+            const urlSection = item.querySelector('.track-audio-url-section');
+            const uploadSection = item.querySelector('.track-audio-upload-section');
+            
+            if (source === 'url') {
+                urlSection.classList.remove('hidden');
+                uploadSection.classList.add('hidden');
+            } else {
+                urlSection.classList.add('hidden');
+                uploadSection.classList.remove('hidden');
+            }
+        }
+
+        function updateMusicReleaseProgress(message, percent) {
+            const progressDiv = document.getElementById('music-release-progress');
+            const progressBar = document.getElementById('music-release-progress-bar');
+            const progressMessage = document.getElementById('music-release-progress-message');
+            
+            if (progressDiv) progressDiv.classList.remove('hidden');
+            if (progressBar) progressBar.style.width = `${percent}%`;
+            if (progressMessage) progressMessage.textContent = message;
+        }
+
+        async function publishMusicReleaseSimple() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for publishing. Please log in first.', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById('music-release-publish-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '🚀 Publishing...';
+                }
+
+                // Get album details
+                const albumTitle = document.getElementById('music-release-album-title').value.trim();
+                const albumDescription = document.getElementById('music-release-album-description').value.trim();
+                const albumArtistsStr = document.getElementById('music-release-album-artists').value.trim();
+
+                if (!albumTitle) {
+                    throw new Error('Please provide an album title');
+                }
+
+                updateMusicReleaseProgress('Preparing album...', 5);
+
+                // Handle album art if provided
+                let albumArtUrl = '';
+                let albumArtContentType = '';
+                const albumArtSource = document.getElementById('music-release-album-art-source')?.value;
+                
+                if (albumArtSource === 'upload') {
+                    const albumArtFile = document.getElementById('music-release-album-art-file')?.files[0];
+                    
+                    if (albumArtFile) {
+                        updateMusicReleaseProgress('Uploading album art...', 10);
+
+                        const albumArtFormData = new FormData();
+                        albumArtFormData.append('file', albumArtFile);
+                        albumArtFormData.append('name', `${albumTitle} - Album Art`);
+                        albumArtFormData.append('access_level', 'public');
+                        albumArtFormData.append('description', `Album art for ${albumTitle}`);
+
+                        const albumArtUploadResponse = await fetch('/api/media/upload', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: albumArtFormData
+                        });
+
+                        const albumArtUploadResult = await albumArtUploadResponse.json();
+                        
+                        if (!albumArtUploadResponse.ok) {
+                            throw new Error(albumArtUploadResult.error || 'Album art upload failed');
+                        }
+
+                        albumArtUrl = albumArtUploadResult.httpUrl;
+                        albumArtContentType = albumArtUploadResult.mime;
+                    }
+                } else if (albumArtSource === 'url') {
+                    albumArtUrl = document.getElementById('music-release-album-art-url')?.value?.trim() || '';
+                    if (albumArtUrl) {
+                        const ext = albumArtUrl.split('.').pop()?.toLowerCase();
+                        const imageTypeMap = {
+                            'jpg': 'image/jpeg',
+                            'jpeg': 'image/jpeg',
+                            'png': 'image/png'
+                        };
+                        albumArtContentType = imageTypeMap[ext] || 'image/jpeg';
+                    }
+                }
+
+                // Process all tracks
+                updateMusicReleaseProgress('Publishing tracks...', 20);
+                const trackDIDs = await processMusicReleaseTracks();
+                
+                if (trackDIDs.length === 0) {
+                    throw new Error('Please add at least one track');
+                }
+
+                // Build the music release record
+                updateMusicReleaseProgress('Creating album record...', 90);
+
+                const albumArtists = albumArtistsStr.split(',').map(a => a.trim()).filter(a => a);
+                
+                const trackNumbers = trackDIDs.map(t => t.trackNumber);
+                const trackArtistsList = trackDIDs.map(t => `"${t.artists}"`); // Wrap in quotes as specified
+                const tracks = trackDIDs.map(t => t.did);
+
+                const releaseData = {
+                    basic: {
+                        name: albumTitle,
+                        description: albumDescription || `Music album: ${albumTitle}`,
+                        date: Math.floor(Date.now() / 1000),
+                        language: 'en'
+                    },
+                    musicReleaseSimple: {
+                        albumArtists: albumArtists,
+                        tracks: tracks,
+                        trackNumber: trackNumbers,
+                        trackArtists: trackArtistsList
+                    }
+                };
+
+                // Add image template if album art is provided
+                if (albumArtUrl) {
+                    releaseData.image = {
+                        webUrl: albumArtUrl,
+                        contentType: albumArtContentType
+                    };
+                }
+
+                const response = await fetch('/api/records/newRecord?recordType=musicReleaseSimple', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(releaseData)
+                });
+
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to publish album');
+                }
+
+                const did = result.recordToIndex?.oip?.did || result.did || `did:arweave:${result.transactionId}`;
+
+                updateMusicReleaseProgress('✅ Album published successfully!', 100);
+                showMessage('publish-success', `🎉 Album published! DID: ${did}`, 'success');
+
+                // Clear form
+                document.getElementById('publish-record-type').value = '';
+                loadPublishInterface();
+
+            } catch (error) {
+                console.error('Album publishing error:', error);
+                updateMusicReleaseProgress(`❌ Error: ${error.message}`, 0);
+                showMessage('publish-status', `Error: ${error.message}`, 'error');
+            } finally {
+                const btn = document.getElementById('music-release-publish-btn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Publish Complete Album';
+                }
+            }
+        }
+
+        async function processMusicReleaseTracks() {
+            const trackItems = document.querySelectorAll('.track-item');
+            const trackDIDs = [];
+            let processedCount = 0;
+            
+            for (const item of trackItems) {
+                processedCount++;
+                const progress = 20 + (60 * processedCount / trackItems.length);
+                updateMusicReleaseProgress(`Publishing track ${processedCount}/${trackItems.length}...`, progress);
+
+                const mode = item.querySelector('.track-mode').value;
+                const trackNumber = parseInt(item.querySelector('.track-number').value) || 1;
+                const trackArtists = item.querySelector('.track-artists').value.trim();
+                
+                let trackDID;
+                
+                if (mode === 'existing') {
+                    // Use existing track DID
+                    trackDID = item.querySelector('.track-existing-did').value.trim();
+                    if (!trackDID) {
+                        throw new Error(`Track ${trackNumber}: Please provide a DID or switch to Create mode`);
+                    }
+                } else {
+                    // Create new track
+                    trackDID = await publishMusicReleaseTrack(item, trackNumber);
+                }
+                
+                trackDIDs.push({
+                    did: trackDID,
+                    trackNumber: trackNumber,
+                    artists: trackArtists
+                });
+            }
+            
+            return trackDIDs;
+        }
+
+        async function publishMusicReleaseTrack(trackItem, trackNumber) {
+            const audioSource = trackItem.querySelector('.track-audio-source').value;
+            const title = trackItem.querySelector('.track-title').value.trim();
+            const description = trackItem.querySelector('.track-description').value.trim();
+            
+            if (!title) {
+                throw new Error(`Track ${trackNumber}: Please provide a track title`);
+            }
+
+            let audioUrl = '';
+            let uploadResult = null;
+            let fileSize = 0;
+            let contentType = '';
+            let filename = '';
+
+            // Handle audio file upload or URL
+            if (audioSource === 'upload') {
+                const fileInput = trackItem.querySelector('.track-audio-file');
+                const file = fileInput?.files[0];
+                
+                if (!file) {
+                    throw new Error(`Track ${trackNumber}: Please select an audio file`);
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('name', title);
+                formData.append('access_level', 'public');
+                if (description) formData.append('description', description);
+
+                const uploadResponse = await fetch('/api/media/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+
+                uploadResult = await uploadResponse.json();
+                
+                if (!uploadResponse.ok) {
+                    throw new Error(`Track ${trackNumber}: File upload failed - ${uploadResult.error}`);
+                }
+
+                audioUrl = uploadResult.httpUrl;
+                fileSize = uploadResult.size;
+                contentType = uploadResult.mime;
+                filename = uploadResult.originalName;
+            } else {
+                audioUrl = trackItem.querySelector('.track-audio-url').value.trim();
+                if (!audioUrl) {
+                    throw new Error(`Track ${trackNumber}: Please provide an audio URL`);
+                }
+                
+                // Extract filename from URL
+                try {
+                    const urlObj = new URL(audioUrl);
+                    filename = urlObj.pathname.split('/').pop() || 'audio_file';
+                    const ext = filename.split('.').pop()?.toLowerCase();
+                    const mimeMap = {
+                        'mp3': 'audio/mpeg',
+                        'wav': 'audio/wav',
+                        'flac': 'audio/flac',
+                        'ogg': 'audio/ogg',
+                        'aac': 'audio/aac',
+                        'm4a': 'audio/mp4'
+                    };
+                    contentType = mimeMap[ext] || 'audio/mpeg';
+                } catch (error) {
+                    filename = 'audio_file';
+                    contentType = 'audio/mpeg';
+                }
+            }
+
+            // Build music record
+            const trackData = {
+                basic: {
+                    name: title,
+                    description: description || `Music: ${title}`,
+                    language: 'en',
+                    date: Math.floor(Date.now() / 1000),
+                    nsfw: false,
+                    tagItems: [],
+                    webUrl: audioUrl
+                },
+                audio: {
+                    webUrl: audioUrl,
+                    filename: filename,
+                    size: fileSize,
+                    duration: parseInt(trackItem.querySelector('.track-duration')?.value) || 0,
+                    contentType: contentType,
+                    creator: ''
+                },
+                music: {
+                    genre: trackItem.querySelector('.track-genre')?.value || '',
+                    subGenre: trackItem.querySelector('.track-subgenre')?.value || '',
+                    bpm: parseInt(trackItem.querySelector('.track-bpm')?.value) || 0,
+                    key: trackItem.querySelector('.track-key')?.value || '',
+                    sampleRateHz: 44100,
+                    bitDepth: 16,
+                    album: '',
+                    trackNumber: trackNumber,
+                    isrc: trackItem.querySelector('.track-isrc')?.value || '',
+                    lyrics: trackItem.querySelector('.track-lyrics')?.value || '',
+                    composerItems: trackItem.querySelector('.track-composers')?.value.split(',').map(t => t.trim()).filter(t => t) || [],
+                    performerItems: trackItem.querySelector('.track-performers')?.value.split(',').map(t => t.trim()).filter(t => t) || []
+                }
+            };
+
+            // Add BitTorrent address if file was uploaded
+            if (uploadResult) {
+                trackData.audio.bittorrentAddress = uploadResult.magnetURI;
+            }
+
+            const response = await fetch('/api/records/newRecord?recordType=music', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify(trackData)
+            });
+
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(`Track ${trackNumber}: Failed to publish - ${result.error}`);
+            }
+
+            const did = result.recordToIndex?.oip?.did || result.did || `did:arweave:${result.transactionId}`;
+            console.log(`✅ Track ${trackNumber} published: ${did}`);
+            
+            return did;
+        }
+
+        // ==================== END MUSIC RELEASE (SIMPLE) FUNCTIONS ====================
+
         // Publishing functions for each record type
         async function publishPost() {
             try {
@@ -22536,7 +23285,7 @@ CRITICAL:
                     const formData = new FormData();
                     formData.append('file', file);
                     formData.append('name', audioTitle);
-                    formData.append('access_level', 'private');
+                    formData.append('access_level', 'public');  // Make it publicly accessible
                     
                     if (audioDescription) {
                         formData.append('description', audioDescription);
@@ -22620,7 +23369,7 @@ CRITICAL:
                         const albumArtFormData = new FormData();
                         albumArtFormData.append('file', albumArtFile);
                         albumArtFormData.append('name', `${audioTitle} - Album Art`);
-                        albumArtFormData.append('access_level', 'private');
+                        albumArtFormData.append('access_level', 'public');  // Make it publicly accessible
                         
                         if (audioDescription) {
                             albumArtFormData.append('description', `Album art for ${audioTitle}`);
