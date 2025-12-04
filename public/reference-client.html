@@ -22508,6 +22508,7 @@ CRITICAL:
                 
                 let audioUrl = '';
                 let uploadedMediaId = null;
+                let uploadResult = null; // Declare at function scope
                 let fileSize = 0;
                 let contentType = '';
                 let filename = '';
@@ -22552,7 +22553,7 @@ CRITICAL:
                     progressFill.style.width = '50%';
                     progressText.textContent = 'Creating BitTorrent...';
 
-                    const uploadResult = await uploadResponse.json();
+                    uploadResult = await uploadResponse.json();
                     
                     if (!uploadResponse.ok) {
                         throw new Error(uploadResult.error || 'File upload failed');
