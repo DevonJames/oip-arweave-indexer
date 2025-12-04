@@ -11315,6 +11315,7 @@ Return ONLY a valid JSON object with the field values, no additional text or exp
                             <option value="essay">Essay</option>
                             <option value="story">Story</option>
                             <option value="poem">Poem</option>
+                            <option value="lyrics">Lyrics</option>
                             <option value="tutorial">Tutorial</option>
                             <option value="other">Other</option>
                         </select>
@@ -22739,6 +22740,109 @@ CRITICAL:
                     loadPublishInterface();
                 } else {
                     showMessage('publish-status', result.error || 'Failed to publish recipe', 'error');
+                }
+            } catch (error) {
+                showMessage('publish-status', 'Network error: ' + error.message, 'error');
+            }
+        }
+
+        async function publishText() {
+            try {
+                if (!authToken) {
+                    showMessage('publish-status', 'JWT token required for publishing. Please set your token first.', 'error');
+                    return;
+                }
+
+                // Get storage type to determine if access control should be included
+                const storageType = document.getElementById('publish-storage-type')?.value || 'arweave';
+                
+                let accessLevel = 'public'; // Default for Arweave
+                let selectedOrganizationDid = null;
+                
+                // Only get access level and organization for GUN storage
+                if (storageType === 'gun') {
+                    accessLevel = document.getElementById('text-access-level')?.value || 'public';
+                    
+                    // Get organization selection if needed
+                    if (accessLevel === 'organization') {
+                        selectedOrganizationDid = document.getElementById('text-organization')?.value;
+                        if (!selectedOrganizationDid) {
+                            showMessage('publish-status', 'Please select an organization when using Organization access level', 'error');
+                            return;
+                        }
+                    }
+                }
+
+                const textData = {
+                    basic: {
+                        name: document.getElementById('text-title').value,
+                        language: document.getElementById('text-language').value,
+                        date: Math.floor(Date.now() / 1000),
+                        description: document.getElementById('text-description').value,
+                        nsfw: document.getElementById('text-nsfw').checked,
+                        tagItems: document.getElementById('text-tags').value.split(',').map(t => t.trim()).filter(t => t)
+                    },
+                    text: {
+                        rawText: document.getElementById('text-content').value,
+                        contentType: document.getElementById('text-type').value,
+                        authorName: document.getElementById('text-author').value
+                    }
+                };
+
+                // Only add accessControl for GUN storage (private records)
+                if (storageType === 'gun') {
+                    textData.accessControl = {
+                        access_level: accessLevel,
+                        shared_with: selectedOrganizationDid // Organization's DID if selected
+                    };
+                }
+
+                if (!textData.basic.name) {
+                    showMessage('publish-status', 'Please fill in document title', 'error');
+                    return;
+                }
+
+                if (!textData.text.rawText) {
+                    showMessage('publish-status', 'Please fill in content', 'error');
+                    return;
+                }
+
+                const localId = document.getElementById('gun-local-id')?.value?.trim() || null;
+                
+                // Always use /api/records/newRecord for text publishing
+                const endpoint = '/api/records/newRecord';
+                const queryParams = `?recordType=text${localId ? `&localId=${localId}` : ''}`;
+
+                const requestBody = { ...textData };
+                if (storageType === 'gun') {
+                    requestBody.storage = 'gun';
+                    if (localId) requestBody.localId = localId;
+                } else {
+                    requestBody.blockchain = storageType;
+                }
+
+                const response = await fetch(`${endpoint}${queryParams}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    const successMessage = storageType === 'gun' 
+                        ? `Text published to GUN! DID: ${result.did}` 
+                        : `Text published to Arweave! Transaction ID: ${result.transactionId}`;
+                    showMessage('publish-success', successMessage, 'success');
+                    
+                    // Clear form
+                    document.getElementById('publish-record-type').value = '';
+                    loadPublishInterface();
+                } else {
+                    showMessage('publish-status', result.error || 'Failed to publish text', 'error');
                 }
             } catch (error) {
                 showMessage('publish-status', 'Network error: ' + error.message, 'error');
