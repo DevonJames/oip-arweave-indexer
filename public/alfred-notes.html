@@ -2085,7 +2085,7 @@
                         <div class="alfred-viz-content">
                             <div class="alfred-avatar-container">
                                 <img src="/alfred.png" alt="Alfred" class="alfred-avatar-img">
-                                <canvas id="alfredSoundwave" class="alfred-soundwave-overlay" width="120" height="24"></canvas>
+                                <canvas id="alfredSoundwave" class="alfred-soundwave-overlay" width="60" height="24"></canvas>
                             </div>
                             <div id="alfredVizStatus" class="alfred-viz-status">Ready to speak</div>
                         </div>
@@ -2403,7 +2403,10 @@
                 currentAudioButton: null, // Button for currently playing audio
                 soundwaveAnimationId: null, // Animation frame ID for sound wave
                 isStreamingAudio: false, // Whether audio is currently streaming
-                streamComplete: false // Whether the SSE stream is complete
+                streamComplete: false, // Whether the SSE stream is complete
+                audioContext: null, // Web Audio API context
+                audioAnalyser: null, // Audio analyser node
+                audioSource: null // Audio source node
             },
 
             // Initialize app
@@ -3484,68 +3487,42 @@ JSON:`;
                 });
 
                 try {
-                    // Build FormData for /api/voice/converse (matches working implementation)
-                    const formData = new FormData();
+                    // Always use /api/notes/converse - it supports both text and audio modes
+                    const requestBody = {
+                        question: question,
+                        model: this.state.settings.model,
+                        conversationHistory: this.state.conversationHistory.slice(-10)
+                    };
                     
-                    formData.append('text', question);
-                    formData.append('model', this.state.settings.model);
-                    formData.append('include_filter_analysis', 'false');
-                    
-                    // Determine which mode we're in and set appropriate parameters
+                    // Add pinned DID if in selected note mode
                     if (this.state.chatMode === 'selected' && this.state.selectedNoteForChat) {
-                        // Selected Note mode - query specific note
-                        formData.append('processing_mode', 'rag');
-                        formData.append('pinnedDidTx', this.state.selectedNoteForChat);
+                        requestBody.pinnedDidTx = this.state.selectedNoteForChat;
                         console.log('📝 Selected Note mode - using DID:', this.state.selectedNoteForChat);
                     } else if (this.state.chatMode === 'notes') {
-                        // All Notes mode - search across all notes (RAG mode)
-                        formData.append('processing_mode', 'rag');
                         console.log('📚 All Notes mode - searching all notes');
                     } else {
-                        // Chat mode - pure LLM (no RAG)
-                        formData.append('processing_mode', 'llm');
                         console.log('💬 Chat mode - pure LLM');
                     }
                     
-                    // Add conversation history
-                    formData.append('conversationHistory', JSON.stringify(this.state.conversationHistory.slice(-10)));
+                    // Add audio parameters if audio is enabled
+                    if (this.state.settings.audioEnabled) {
+                        requestBody.return_audio = true;
+                        requestBody.engine = 'elevenlabs';
+                        requestBody.voice_id = 'onwK4e9ZLuTAKqWW03F9';
+                        requestBody.speed = 1;
+                        
+                        console.log('🎤 Audio enabled - requesting audio response');
+                    }
                     
-                    // Voice configuration for Text-to-Speech (matching exact working implementation)
-                    // Always use elevenlabs with the specific voice ID
-                    const voiceConfig = {
-                        engine: 'elevenlabs',
-                        voice_id: 'onwK4e9ZLuTAKqWW03F9',
-                        elevenlabs: {
-                            selectedVoice: 'onwK4e9ZLuTAKqWW03F9',
-                            model_id: 'eleven_turbo_v2',
-                            stability: 0.5,
-                            similarity_boost: 0.75,
-                            style: 0,
-                            use_speaker_boost: true
-                        },
-                        speed: 1,
-                        enabled: this.state.settings.audioEnabled
-                    };
-                    
-                    formData.append('voiceConfig', JSON.stringify(voiceConfig));
+                    console.log('🚀 Sending request to /api/notes/converse:', requestBody);
 
-                    const processingMode = this.state.chatMode === 'selected' ? 'rag' : 
-                                          this.state.chatMode === 'notes' ? 'rag' : 'llm';
-                    
-                    console.log('🚀 Sending request to /api/voice/converse:', {
-                        text: question,
-                        processing_mode: processingMode,
-                        audioEnabled: this.state.settings.audioEnabled,
-                        voiceConfig: voiceConfig,
-                        pinnedDidTx: this.state.selectedNoteForChat
-                    });
-
-                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/voice/converse`, {
+                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/converse`, {
                         method: 'POST',
                         headers: {
-                            'Authorization': `Bearer ${this.state.jwtToken}`
+                            'Authorization': `Bearer ${this.state.jwtToken}`,
+                            'Content-Type': 'application/json'
                         },
-                        body: formData
+                        body: JSON.stringify(requestBody)
                     });
 
                     if (!response.ok) {
@@ -3553,12 +3530,32 @@ JSON:`;
                     }
 
                     const data = await response.json();
-                    console.log('📥 Response from /api/voice/converse:', data);
+                    console.log('📥 Response from /api/notes/converse:', data);
 
-                    if (data.success || data.dialogueId) {
-                        // Open streaming connection to get the actual response
-                        const dialogueId = data.dialogueId;
-                        this.handleStreamingResponse(dialogueId);
+                    if (data.success) {
+                        const answer = data.answer || 'No response';
+                        const audioData = data.audio_data;
+                        
+                        // Add message with optional audio
+                        this.addMessage('assistant', answer, audioData);
+                        
+                        // Add assistant response to history
+                        this.state.conversationHistory.push({
+                            role: 'assistant',
+                            content: answer
+                        });
+                        
+                        // Auto-play if enabled and audio is available
+                        if (audioData && this.state.settings.audioEnabled && this.state.settings.autoPlay) {
+                            // Find the speaker button in the just-added message
+                            const chatMessages = document.getElementById('chatMessages');
+                            const lastMessage = chatMessages?.lastElementChild;
+                            const speakerButton = lastMessage?.querySelector('.speaker-button');
+                            
+                            if (speakerButton) {
+                                setTimeout(() => this.playAudio(audioData, speakerButton), 300);
+                            }
+                        }
                     } else {
                         this.addMessage('assistant', 'Sorry, I encountered an error: ' + (data.error || 'Unknown error'));
                     }
@@ -3568,15 +3565,17 @@ JSON:`;
                 }
             },
 
-            async handleStreamingResponse(dialogueId) {
+            async handleStreamingResponse(dialogueId, userQuestion) {
                 console.log('🎯 Opening SSE stream for dialogueId:', dialogueId);
                 const streamUrl = `${this.state.settings.apiBaseUrl}/api/voice/open-stream?dialogueId=${dialogueId}`;
                 const eventSource = new EventSource(streamUrl);
                 
                 let accumulatedText = '';
+                let filteredText = '';
                 let assistantMessageDiv = null;
                 let audioChunks = [];
                 let audioPlaybackStarted = false;
+                let questionFiltered = false;
                 
                 // Reset stream state
                 this.state.streamComplete = false;
@@ -3587,6 +3586,28 @@ JSON:`;
                         const chunkData = JSON.parse(event.data);
                         console.log('📝 Text chunk received:', chunkData.text);
                         accumulatedText += chunkData.text || '';
+                        
+                        // Filter out the user's question if it appears at the beginning
+                        let displayText = accumulatedText;
+                        if (!questionFiltered && userQuestion) {
+                            // Check if the accumulated text starts with the user's question
+                            const questionLower = userQuestion.toLowerCase();
+                            const accumulatedLower = accumulatedText.toLowerCase();
+                            
+                            if (accumulatedLower.startsWith(questionLower)) {
+                                displayText = accumulatedText.substring(userQuestion.length).trim();
+                                questionFiltered = true;
+                                console.log('🧹 Filtered out repeated question from response');
+                            } else if (accumulatedLower.includes(questionLower) && accumulatedText.length < userQuestion.length + 50) {
+                                // Sometimes the question might be slightly modified (punctuation, etc.)
+                                const questionIndex = accumulatedLower.indexOf(questionLower);
+                                if (questionIndex === 0 || questionIndex === 1) {
+                                    displayText = accumulatedText.substring(questionIndex + userQuestion.length).trim();
+                                    questionFiltered = true;
+                                    console.log('🧹 Filtered out repeated question from response (with offset)');
+                                }
+                            }
+                        }
                         
                         // Update existing message or create new one
                         if (!assistantMessageDiv) {
@@ -3607,10 +3628,13 @@ JSON:`;
                             chatMessages.appendChild(assistantMessageDiv);
                         }
                         
-                        // Update message text
+                        // Store the filtered text for conversation history
+                        filteredText = displayText;
+                        
+                        // Update message text with filtered content
                         const messageText = assistantMessageDiv.querySelector('.message-text');
                         if (messageText) {
-                            messageText.innerHTML = accumulatedText.replace(/\n/g, '<br>');
+                            messageText.innerHTML = displayText.replace(/\n/g, '<br>');
                         }
                         
                         // Scroll to bottom
@@ -3648,10 +3672,10 @@ JSON:`;
                     console.log('🎉 Stream complete event received');
                     eventSource.close();
                     
-                    // Add assistant response to history
+                    // Add assistant response to history (use filtered text to avoid duplicating the question)
                     this.state.conversationHistory.push({
                         role: 'assistant',
-                        content: accumulatedText
+                        content: filteredText || accumulatedText
                     });
                     
                     // Signal that streaming is complete (audio playback will finish playing remaining chunks)
@@ -3681,9 +3705,18 @@ JSON:`;
             async playStreamedAudioSequentially(audioChunksArray) {
                 if (!audioChunksArray || audioChunksArray.length === 0) return;
                 
-                console.log('🎵 Starting sequential audio playback');
-                // Start visualization when first audio chunk plays
-                this.startSoundwaveVisualization();
+                console.log('🎵 Starting sequential audio playback with real-time analysis');
+                
+                // Initialize Web Audio API for audio analysis
+                if (!this.state.audioContext) {
+                    this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                if (!this.state.audioAnalyser) {
+                    this.state.audioAnalyser = this.state.audioContext.createAnalyser();
+                    this.state.audioAnalyser.fftSize = 64; // Small FFT for 16 bars
+                    this.state.audioAnalyser.smoothingTimeConstant = 0.8;
+                }
                 
                 let currentChunkIndex = 0;
                 this.state.isStreamingAudio = true;
@@ -3709,6 +3742,16 @@ JSON:`;
                             console.log('🎵 All audio chunks played');
                             this.stopSoundwaveVisualization();
                             this.state.isStreamingAudio = false;
+                            
+                            // Disconnect audio source
+                            if (this.state.audioSource) {
+                                try {
+                                    this.state.audioSource.disconnect();
+                                    this.state.audioSource = null;
+                                } catch (e) {
+                                    console.log('Audio source already disconnected');
+                                }
+                            }
                             return;
                         }
                     }
@@ -3727,9 +3770,34 @@ JSON:`;
                         const blob = new Blob([bytes], { type: 'audio/wav' });
                         const audioUrl = URL.createObjectURL(blob);
                         
-                        // Create and play audio
+                        // Create audio element
                         const audio = new Audio(audioUrl);
                         this.state.currentAudio = audio;
+                        
+                        // Connect to Web Audio API for analysis
+                        // Disconnect previous source if exists
+                        if (this.state.audioSource) {
+                            try {
+                                this.state.audioSource.disconnect();
+                            } catch (e) {
+                                console.log('Previous audio source already disconnected');
+                            }
+                        }
+                        
+                        // Create new media element source and connect it
+                        try {
+                            this.state.audioSource = this.state.audioContext.createMediaElementSource(audio);
+                            this.state.audioSource.connect(this.state.audioAnalyser);
+                            this.state.audioAnalyser.connect(this.state.audioContext.destination);
+                        } catch (error) {
+                            console.error('Error connecting audio for analysis:', error);
+                            // Fallback: play audio without visualization
+                        }
+                        
+                        // Start visualization on first chunk
+                        if (currentChunkIndex === 1) {
+                            this.startSoundwaveVisualization();
+                        }
                         
                         // Wait for audio to finish before playing next chunk
                         await new Promise((resolve, reject) => {
@@ -3755,6 +3823,15 @@ JSON:`;
                         console.error('Error processing audio chunk:', error);
                         this.stopSoundwaveVisualization();
                         this.state.isStreamingAudio = false;
+                        
+                        if (this.state.audioSource) {
+                            try {
+                                this.state.audioSource.disconnect();
+                                this.state.audioSource = null;
+                            } catch (e) {
+                                console.log('Audio source already disconnected');
+                            }
+                        }
                     }
                 };
                 
@@ -3839,6 +3916,17 @@ JSON:`;
                 }
 
                 try {
+                    // Initialize Web Audio API for audio analysis
+                    if (!this.state.audioContext) {
+                        this.state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    
+                    if (!this.state.audioAnalyser) {
+                        this.state.audioAnalyser = this.state.audioContext.createAnalyser();
+                        this.state.audioAnalyser.fftSize = 64;
+                        this.state.audioAnalyser.smoothingTimeConstant = 0.8;
+                    }
+                    
                     // Convert base64 to blob
                     const binaryString = atob(audioDataBase64);
                     const bytes = new Uint8Array(binaryString.length);
@@ -3848,10 +3936,32 @@ JSON:`;
                     const blob = new Blob([bytes], { type: 'audio/wav' });
                     const audioUrl = URL.createObjectURL(blob);
 
-                    // Create and play audio
+                    // Create audio element
                     const audio = new Audio(audioUrl);
                     this.state.currentAudio = audio;
                     this.state.currentAudioButton = buttonElement;
+                    
+                    // Connect to Web Audio API for analysis
+                    // Disconnect previous source if exists
+                    if (this.state.audioSource) {
+                        try {
+                            this.state.audioSource.disconnect();
+                        } catch (e) {
+                            console.log('Previous audio source already disconnected');
+                        }
+                    }
+                    
+                    // Create new media element source and connect it
+                    try {
+                        this.state.audioSource = this.state.audioContext.createMediaElementSource(audio);
+                        this.state.audioSource.connect(this.state.audioAnalyser);
+                        this.state.audioAnalyser.connect(this.state.audioContext.destination);
+                    } catch (error) {
+                        console.error('Error connecting audio for analysis:', error);
+                        // Fallback: play audio without visualization
+                    }
+                    
+                    this.state.isStreamingAudio = true;
 
                     buttonElement.classList.add('playing');
                     buttonElement.innerHTML = `
@@ -3878,9 +3988,20 @@ JSON:`;
                         URL.revokeObjectURL(audioUrl);
                         this.state.currentAudio = null;
                         this.state.currentAudioButton = null;
+                        this.state.isStreamingAudio = false;
                         
                         // Stop sound wave visualization
                         this.stopSoundwaveVisualization();
+                        
+                        // Disconnect audio source
+                        if (this.state.audioSource) {
+                            try {
+                                this.state.audioSource.disconnect();
+                                this.state.audioSource = null;
+                            } catch (e) {
+                                console.log('Audio source already disconnected');
+                            }
+                        }
                     };
 
                     audio.play().catch(error => {
@@ -3895,6 +4016,7 @@ JSON:`;
                             </svg>
                             <span>Play</span>
                         `;
+                        this.state.isStreamingAudio = false;
                         // Stop visualization on error
                         this.stopSoundwaveVisualization();
                     });
@@ -3919,7 +4041,7 @@ JSON:`;
                 const status = document.getElementById('alfredVizStatus');
                 const panel = document.getElementById('alfredVizPanel');
                 
-                if (!canvas) return;
+                if (!canvas || !this.state.audioAnalyser) return;
                 
                 const ctx = canvas.getContext('2d');
                 
@@ -3930,49 +4052,61 @@ JSON:`;
                 }
                 if (panel) panel.classList.add('speaking');
                 
-                // Initialize sound wave animation
-                let animationId;
+                // Initialize sound wave animation with real audio data
                 const bars = 16;
                 const barWidth = canvas.width / bars;
-                let time = 0;
+                const bufferLength = this.state.audioAnalyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                console.log('🎵 Starting audio-driven visualization with', bars, 'bars');
                 
                 const animate = () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    time += 0.08;
+                    if (!this.state.isStreamingAudio) {
+                        return; // Stop animation if audio stopped
+                    }
                     
-                    // Draw animated sound wave bars with sine wave variation
+                    // Get real-time frequency data from the audio
+                    this.state.audioAnalyser.getByteFrequencyData(dataArray);
+                    
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw bars based on actual audio frequencies
                     for (let i = 0; i < bars; i++) {
-                        // Create wave pattern using sine functions for more natural speech-like motion
-                        const baseHeight = Math.sin(time + i * 0.5) * 0.3 + 0.5; // Main wave
-                        const variation = Math.sin(time * 2.3 + i * 0.3) * 0.2; // Fast variation
-                        const slowWave = Math.sin(time * 0.5 + i * 0.7) * 0.15; // Slow modulation
+                        // Map bar index to frequency data (sample the frequency spectrum)
+                        const dataIndex = Math.floor((i / bars) * bufferLength);
+                        const value = dataArray[dataIndex];
                         
-                        const normalizedHeight = Math.abs(baseHeight + variation + slowWave);
-                        const height = normalizedHeight * canvas.height * 0.75 + canvas.height * 0.15;
+                        // Normalize the value (0-255) to a height percentage (0-1)
+                        const normalizedHeight = value / 255;
+                        
+                        // Add minimum height so bars are always visible
+                        const height = normalizedHeight * canvas.height * 0.8 + canvas.height * 0.15;
                         
                         const x = i * barWidth + barWidth * 0.1;
                         const y = (canvas.height - height) / 2;
                         
-                        // Create gradient with alpha for better blending
+                        // Create gradient with intensity based on frequency (black to grey)
                         const gradient = ctx.createLinearGradient(x, y, x, y + height);
-                        gradient.addColorStop(0, 'rgba(95, 252, 249, 0.9)');
-                        gradient.addColorStop(0.5, 'rgba(91, 140, 255, 1)');
-                        gradient.addColorStop(1, 'rgba(176, 132, 255, 0.9)');
+                        const alpha = 0.7 + (normalizedHeight * 0.3); // Vary transparency with intensity
+                        gradient.addColorStop(0, `rgba(100, 100, 100, ${alpha})`); // Grey
+                        gradient.addColorStop(0.5, `rgba(50, 50, 50, ${alpha})`); // Dark grey
+                        gradient.addColorStop(1, `rgba(20, 20, 20, ${alpha})`); // Almost black
                         
                         ctx.fillStyle = gradient;
-                        ctx.shadowColor = '#5FFCF9';
-                        ctx.shadowBlur = 10;
+                        
+                        // Add subtle glow effect that varies with frequency intensity
+                        ctx.shadowColor = '#333333';
+                        ctx.shadowBlur = 3 + (normalizedHeight * 5);
                         ctx.fillRect(x, y, barWidth * 0.8, height);
                         
                         // Reset shadow for next iteration
                         ctx.shadowBlur = 0;
                     }
                     
-                    animationId = requestAnimationFrame(animate);
+                    this.state.soundwaveAnimationId = requestAnimationFrame(animate);
                 };
                 
                 animate();
-                this.state.soundwaveAnimationId = animationId;
             },
 
             stopSoundwaveVisualization() {
@@ -3980,6 +4114,11 @@ JSON:`;
                 const overlay = document.querySelector('.alfred-soundwave-overlay');
                 const status = document.getElementById('alfredVizStatus');
                 const panel = document.getElementById('alfredVizPanel');
+                
+                console.log('🛑 Stopping audio visualization');
+                
+                // Stop the streaming flag to halt animation
+                this.state.isStreamingAudio = false;
                 
                 if (this.state.soundwaveAnimationId) {
                     cancelAnimationFrame(this.state.soundwaveAnimationId);
