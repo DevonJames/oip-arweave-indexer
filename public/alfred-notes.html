@@ -1217,8 +1217,8 @@
         .alfred-soundwave-overlay {
             position: absolute;
             left: 50%;
-            top: 33%;
-            transform: translate(-50%, -50%);
+            top: calc(33% + 30px);
+            transform: translate(-50%, -50%) scale(0.5);
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.3s ease;
@@ -2402,7 +2402,8 @@
                 currentAudio: null, // Currently playing audio element
                 currentAudioButton: null, // Button for currently playing audio
                 soundwaveAnimationId: null, // Animation frame ID for sound wave
-                isStreamingAudio: false // Whether audio is currently streaming
+                isStreamingAudio: false, // Whether audio is currently streaming
+                streamComplete: false // Whether the SSE stream is complete
             },
 
             // Initialize app
@@ -3510,24 +3511,21 @@ JSON:`;
                     formData.append('conversationHistory', JSON.stringify(this.state.conversationHistory.slice(-10)));
                     
                     // Voice configuration for Text-to-Speech (matching exact working implementation)
+                    // Always use elevenlabs with the specific voice ID
                     const voiceConfig = {
-                        engine: this.state.settings.audioEnabled ? (this.state.settings.ttsEngine || 'elevenlabs') : 'elevenlabs',
-                        voice_id: this.state.settings.voiceId || 'onwK4e9ZLuTAKqWW03F9',
-                        speed: 1,
-                        enabled: this.state.settings.audioEnabled
-                    };
-                    
-                    // Add engine-specific configuration
-                    if (voiceConfig.engine === 'elevenlabs') {
-                        voiceConfig.elevenlabs = {
-                            selectedVoice: this.state.settings.voiceId || 'onwK4e9ZLuTAKqWW03F9',
+                        engine: 'elevenlabs',
+                        voice_id: 'onwK4e9ZLuTAKqWW03F9',
+                        elevenlabs: {
+                            selectedVoice: 'onwK4e9ZLuTAKqWW03F9',
                             model_id: 'eleven_turbo_v2',
                             stability: 0.5,
                             similarity_boost: 0.75,
                             style: 0,
                             use_speaker_boost: true
-                        };
-                    }
+                        },
+                        speed: 1,
+                        enabled: this.state.settings.audioEnabled
+                    };
                     
                     formData.append('voiceConfig', JSON.stringify(voiceConfig));
 
@@ -3579,6 +3577,10 @@ JSON:`;
                 let assistantMessageDiv = null;
                 let audioChunks = [];
                 let audioPlaybackStarted = false;
+                
+                // Reset stream state
+                this.state.streamComplete = false;
+                this.state.isStreamingAudio = false;
 
                 eventSource.addEventListener('textChunk', (event) => {
                     try {
@@ -3628,12 +3630,13 @@ JSON:`;
                         
                         if (chunkData.audio && this.state.settings.audioEnabled) {
                             audioChunks.push(chunkData.audio);
+                            console.log(`📦 Audio chunk ${audioChunks.length} queued`);
                             
                             // Start audio playback with the first chunk if not already started
-                            if (!audioPlaybackStarted && audioChunks.length === 1) {
+                            if (!audioPlaybackStarted) {
                                 audioPlaybackStarted = true;
-                                console.log('🎵 Starting audio playback...');
-                                this.playStreamedAudioChunks(audioChunks);
+                                console.log('🎵 Starting sequential audio playback...');
+                                this.playStreamedAudioSequentially(audioChunks);
                             }
                         }
                     } catch (error) {
@@ -3652,10 +3655,8 @@ JSON:`;
                     });
                     
                     // Signal that streaming is complete (audio playback will finish playing remaining chunks)
-                    setTimeout(() => {
-                        this.state.isStreamingAudio = false;
-                    }, 1000);
-                    
+                    this.state.streamComplete = true;
+                    console.log(`✅ Stream complete. Total audio chunks: ${audioChunks.length}`);
                     console.log('✅ Conversation updated. Total messages:', this.state.conversationHistory.length);
                 });
 
@@ -3677,33 +3678,43 @@ JSON:`;
                 return chunks[0];
             },
 
-            async playStreamedAudioChunks(audioChunksArray) {
+            async playStreamedAudioSequentially(audioChunksArray) {
                 if (!audioChunksArray || audioChunksArray.length === 0) return;
                 
-                console.log('🎵 Starting streamed audio playback');
+                console.log('🎵 Starting sequential audio playback');
                 // Start visualization when first audio chunk plays
                 this.startSoundwaveVisualization();
                 
                 let currentChunkIndex = 0;
-                let isPlaying = true;
                 this.state.isStreamingAudio = true;
+                this.state.streamComplete = false;
                 
                 const playNextChunk = async () => {
-                    // Wait for next chunk if we've played all available chunks
-                    while (currentChunkIndex >= audioChunksArray.length && isPlaying) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    
-                    // Check if we should stop (stream complete and no more chunks)
-                    if (!this.state.isStreamingAudio || currentChunkIndex >= audioChunksArray.length) {
-                        console.log('🎵 All audio chunks played');
-                        this.stopSoundwaveVisualization();
-                        this.state.isStreamingAudio = false;
-                        return;
+                    // If we've played all available chunks, check if more are coming
+                    if (currentChunkIndex >= audioChunksArray.length) {
+                        // Wait a bit to see if more chunks arrive
+                        if (!this.state.streamComplete) {
+                            console.log('⏳ Waiting for more audio chunks...');
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                            
+                            // Check again
+                            if (currentChunkIndex >= audioChunksArray.length && !this.state.streamComplete) {
+                                // Still no new chunks, wait a bit more
+                                await new Promise(resolve => setTimeout(resolve, 300));
+                            }
+                        }
+                        
+                        // Final check - if still no chunks and stream is complete, we're done
+                        if (currentChunkIndex >= audioChunksArray.length) {
+                            console.log('🎵 All audio chunks played');
+                            this.stopSoundwaveVisualization();
+                            this.state.isStreamingAudio = false;
+                            return;
+                        }
                     }
                     
                     const audioData = audioChunksArray[currentChunkIndex];
-                    console.log(`🎵 Playing chunk ${currentChunkIndex + 1}/${audioChunksArray.length}`);
+                    console.log(`🎵 Playing chunk ${currentChunkIndex + 1} of ${audioChunksArray.length}`);
                     currentChunkIndex++;
                     
                     try {
@@ -3720,20 +3731,26 @@ JSON:`;
                         const audio = new Audio(audioUrl);
                         this.state.currentAudio = audio;
                         
-                        audio.onended = () => {
-                            URL.revokeObjectURL(audioUrl);
-                            // Play next chunk
-                            playNextChunk();
-                        };
+                        // Wait for audio to finish before playing next chunk
+                        await new Promise((resolve, reject) => {
+                            audio.onended = () => {
+                                console.log(`✅ Chunk ${currentChunkIndex} finished`);
+                                URL.revokeObjectURL(audioUrl);
+                                resolve();
+                            };
+                            
+                            audio.onerror = (error) => {
+                                console.error('Error playing audio chunk:', error);
+                                URL.revokeObjectURL(audioUrl);
+                                reject(error);
+                            };
+                            
+                            audio.play().catch(reject);
+                        });
                         
-                        audio.onerror = (error) => {
-                            console.error('Error playing audio chunk:', error);
-                            URL.revokeObjectURL(audioUrl);
-                            this.stopSoundwaveVisualization();
-                            this.state.isStreamingAudio = false;
-                        };
+                        // Play next chunk after this one finishes
+                        playNextChunk();
                         
-                        await audio.play();
                     } catch (error) {
                         console.error('Error processing audio chunk:', error);
                         this.stopSoundwaveVisualization();
