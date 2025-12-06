@@ -1085,6 +1085,135 @@
             gap: 14px;
         }
 
+        /* Alfred Visualization Panel */
+        .alfred-viz-panel {
+            position: fixed;
+            right: 20px;
+            top: 80px;
+            width: 320px;
+            background: var(--bg-elevated);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-strong);
+            box-shadow: var(--shadow-soft);
+            z-index: 100;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: none;
+        }
+
+        #chatView.active .alfred-viz-panel {
+            display: block;
+        }
+
+        .alfred-viz-panel.collapsed {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+
+        .alfred-viz-header {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-subtle);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .alfred-viz-panel.collapsed .alfred-viz-header {
+            border-bottom: none;
+            padding: 12px;
+            justify-content: center;
+        }
+
+        .alfred-viz-title {
+            font-family: "Press Start 2P", system-ui;
+            font-size: 9px;
+            letter-spacing: 0.1em;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+        }
+
+        .alfred-viz-panel.collapsed .alfred-viz-title {
+            display: none;
+        }
+
+        .alfred-viz-toggle {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px;
+            transition: all var(--transition-fast);
+        }
+
+        .alfred-viz-toggle:hover {
+            color: var(--accent-cyan);
+            transform: scale(1.1);
+        }
+
+        .alfred-viz-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .alfred-viz-panel.collapsed .alfred-viz-content {
+            display: none;
+        }
+
+        .alfred-avatar-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .alfred-avatar-img {
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        .alfred-soundwave-overlay {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .alfred-soundwave-overlay.active {
+            opacity: 1;
+        }
+
+        .alfred-viz-status {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-family: "Space Grotesk", sans-serif;
+            text-align: center;
+            padding: 8px 16px;
+            background: var(--bg-chip);
+            border-radius: 12px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .alfred-viz-status.speaking {
+            color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            background: rgba(95, 252, 249, 0.1);
+        }
+
         .message {
             display: flex;
             gap: 10px;
@@ -1915,6 +2044,51 @@
                         <textarea class="chat-input" id="chatInput" placeholder="Ask Alfred anything..." rows="1"></textarea>
                         <button class="send-button" id="sendButton" onclick="alfredApp.sendMessage()">➤</button>
                     </div>
+
+                    <!-- Alfred Visualization Panel -->
+                    <div id="alfredVizPanel" class="alfred-viz-panel collapsed">
+                        <div class="alfred-viz-header" onclick="alfredApp.toggleAlfredViz()">
+                            <div class="alfred-viz-title">Alfred</div>
+                            <button class="alfred-viz-toggle">◐</button>
+                        </div>
+                        <div class="alfred-viz-content">
+                            <div class="alfred-avatar-container">
+                                <svg class="alfred-avatar-img" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+                                    <!-- VR Headset Top -->
+                                    <rect x="40" y="20" width="80" height="8" fill="#1a2332"/>
+                                    <rect x="36" y="28" width="88" height="4" fill="#e8e5d5"/>
+                                    
+                                    <!-- Headset Main Body -->
+                                    <rect x="32" y="32" width="96" height="36" fill="#1a2332"/>
+                                    <rect x="36" y="36" width="88" height="28" fill="#0a1420"/>
+                                    
+                                    <!-- Visor -->
+                                    <rect x="44" y="44" width="72" height="16" fill="#5a6b7d"/>
+                                    
+                                    <!-- Face/Chin -->
+                                    <rect x="60" y="68" width="40" height="12" fill="#e8e5d5"/>
+                                    <rect x="56" y="76" width="48" height="4" fill="#5a6b7d"/>
+                                    
+                                    <!-- Body/Shoulders -->
+                                    <rect x="48" y="88" width="64" height="48" fill="#1a2332"/>
+                                    
+                                    <!-- Shirt Details -->
+                                    <rect x="72" y="96" width="16" height="8" fill="#e8e5d5"/>
+                                    <rect x="68" y="104" width="24" height="20" fill="#e8e5d5"/>
+                                    
+                                    <!-- Arms -->
+                                    <rect x="28" y="100" width="16" height="36" fill="#e8e5d5"/>
+                                    <rect x="116" y="100" width="16" height="36" fill="#e8e5d5"/>
+                                    
+                                    <!-- Hands -->
+                                    <rect x="24" y="132" width="24" height="8" fill="#e8e5d5"/>
+                                    <rect x="112" y="132" width="24" height="8" fill="#e8e5d5"/>
+                                </svg>
+                                <canvas id="alfredSoundwave" class="alfred-soundwave-overlay" width="80" height="20"></canvas>
+                            </div>
+                            <div id="alfredVizStatus" class="alfred-viz-status">Ready to speak</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2225,7 +2399,8 @@
                 homeMode: 'record', // 'record' or 'upload'
                 selectedAudioFile: null,
                 currentAudio: null, // Currently playing audio element
-                currentAudioButton: null // Button for currently playing audio
+                currentAudioButton: null, // Button for currently playing audio
+                soundwaveAnimationId: null // Animation frame ID for sound wave
             },
 
             // Initialize app
@@ -3443,6 +3618,8 @@ JSON:`;
                             <span>Play</span>
                         `;
                     }
+                    // Stop visualization when pausing
+                    this.stopSoundwaveVisualization();
                     if (this.state.currentAudioButton === buttonElement) {
                         this.state.currentAudio = null;
                         this.state.currentAudioButton = null;
@@ -3474,6 +3651,9 @@ JSON:`;
                         <span>Pause</span>
                     `;
 
+                    // Start sound wave visualization
+                    this.startSoundwaveVisualization();
+
                     audio.onended = () => {
                         buttonElement.classList.remove('playing');
                         buttonElement.innerHTML = `
@@ -3487,6 +3667,9 @@ JSON:`;
                         URL.revokeObjectURL(audioUrl);
                         this.state.currentAudio = null;
                         this.state.currentAudioButton = null;
+                        
+                        // Stop sound wave visualization
+                        this.stopSoundwaveVisualization();
                     };
 
                     audio.play().catch(error => {
@@ -3501,10 +3684,88 @@ JSON:`;
                             </svg>
                             <span>Play</span>
                         `;
+                        // Stop visualization on error
+                        this.stopSoundwaveVisualization();
                     });
                 } catch (error) {
                     console.error('Error creating audio:', error);
                     this.showToast('Failed to create audio', 'error');
+                    this.stopSoundwaveVisualization();
+                }
+            },
+
+            // Alfred Visualization Panel
+            toggleAlfredViz() {
+                const panel = document.getElementById('alfredVizPanel');
+                if (panel) {
+                    panel.classList.toggle('collapsed');
+                }
+            },
+
+            startSoundwaveVisualization() {
+                const canvas = document.getElementById('alfredSoundwave');
+                const overlay = document.querySelector('.alfred-soundwave-overlay');
+                const status = document.getElementById('alfredVizStatus');
+                
+                if (!canvas) return;
+                
+                const ctx = canvas.getContext('2d');
+                overlay.classList.add('active');
+                status.classList.add('speaking');
+                status.textContent = 'Speaking...';
+                
+                // Initialize sound wave animation
+                let animationId;
+                const bars = 12;
+                const barWidth = canvas.width / bars;
+                const animate = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw animated sound wave bars
+                    for (let i = 0; i < bars; i++) {
+                        const height = Math.random() * canvas.height * 0.8 + canvas.height * 0.2;
+                        const x = i * barWidth + barWidth * 0.2;
+                        const y = (canvas.height - height) / 2;
+                        
+                        // Create gradient
+                        const gradient = ctx.createLinearGradient(x, y, x, y + height);
+                        gradient.addColorStop(0, '#5FFCF9');
+                        gradient.addColorStop(0.5, '#5B8CFF');
+                        gradient.addColorStop(1, '#B084FF');
+                        
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(x, y, barWidth * 0.6, height);
+                    }
+                    
+                    animationId = requestAnimationFrame(animate);
+                };
+                
+                animate();
+                this.state.soundwaveAnimationId = animationId;
+            },
+
+            stopSoundwaveVisualization() {
+                const canvas = document.getElementById('alfredSoundwave');
+                const overlay = document.querySelector('.alfred-soundwave-overlay');
+                const status = document.getElementById('alfredVizStatus');
+                
+                if (this.state.soundwaveAnimationId) {
+                    cancelAnimationFrame(this.state.soundwaveAnimationId);
+                    this.state.soundwaveAnimationId = null;
+                }
+                
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+                
+                if (overlay) {
+                    overlay.classList.remove('active');
+                }
+                
+                if (status) {
+                    status.classList.remove('speaking');
+                    status.textContent = 'Ready to speak';
                 }
             },
 
