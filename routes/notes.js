@@ -127,6 +127,85 @@ async function generateAudioForResponse(responseText, requestParams) {
 }
 
 /**
+ * Helper function to detect self-referential questions about the AI
+ */
+function isSelfReferentialQuestion(text) {
+    const lowerText = text.toLowerCase();
+    
+    // Don't treat system prompts as self-referential (avoid "You are a professional..." false positives)
+    if (lowerText.startsWith('you are a ') || lowerText.includes('based on this request')) {
+        return false;
+    }
+    
+    const selfReferentialPatterns = [
+        /\b(tell me about yourself|about yourself|who are you|what are you|introduce yourself|describe yourself)\b/,
+        /\b(your capabilities|what can you do|what do you do|your purpose|your role)\b/,
+        /\b(are you alfred|are you an ai|what are you|who are you)\b/,  // More specific - avoid "you are" at start
+        /\b(hello.*yourself|hi.*yourself|greet.*yourself)\b/,
+        /\b(how do you work|how were you made|how were you created)\b/,
+        /\b(what is your function|what is your job|what is your mission)\b/
+    ];
+    
+    return selfReferentialPatterns.some(pattern => pattern.test(lowerText));
+}
+
+/**
+ * Helper function to handle self-referential questions with special prompt
+ */
+async function handleSelfReferentialQuestion(inputText, model, conversationHistory) {
+    console.log(`[ALFRED Notes] Self-referential question detected: "${inputText}" - using special prompt`);
+    
+    const systemPrompt = "You are ALFRED (Autonomous Linguistic Framework for Retrieval & Enhanced Dialogue), a versatile and articulate AI assistant. You help by answering questions and retrieving information from stored records. You prioritize clarity, speed, and relevance. IMPORTANT: Do not use emojis, asterisks, or other markdown formatting in your responses, as they interfere with text-to-speech synthesis. When asked about yourself, explain your role as an AI assistant that helps with information retrieval and explanation.";
+    
+    const conversationWithSystem = [
+        {
+            role: "system",
+            content: systemPrompt
+        },
+        ...conversationHistory
+    ];
+
+    try {
+        // Call LLM directly for self-referential questions
+        const alfredInstance = require('../helpers/alfred');
+        
+        const alfredOptions = {
+            model: model,
+            conversationHistory: conversationWithSystem,
+            useFieldExtraction: false,
+            bypassRAG: true  // Skip RAG search for self-referential questions
+        };
+
+        const alfredResponse = await alfredInstance.query(inputText, alfredOptions);
+        
+        const responseText = alfredResponse.answer || "Hello! I'm ALFRED, your AI assistant designed to help with information retrieval and content creation.";
+        
+        return {
+            answer: responseText,
+            sources: [],
+            context_used: false,
+            search_results_count: 0,
+            search_results: [],
+            applied_filters: { bypass_reason: "Self-referential question detected" },
+            model: alfredResponse.model || model
+        };
+        
+    } catch (llmError) {
+        console.error('[ALFRED Notes] Direct LLM call failed:', llmError);
+        const fallbackResponse = "Hello! I'm ALFRED, your AI assistant. I'm designed to help you stay informed and productive by answering questions, and retrieving information from stored records. How can I assist you today?";
+        
+        return {
+            answer: fallbackResponse,
+            sources: [],
+            context_used: false,
+            search_results_count: 0,
+            search_results: [],
+            applied_filters: { bypass_reason: "Self-referential question - LLM fallback" }
+        };
+    }
+}
+
+/**
  * POST /api/notes/from-audio
  * Main ingestion endpoint for audio notes
  * Processes: Audio → Transcription → Chunking → Summary → OIP Records
@@ -1094,6 +1173,41 @@ router.post('/converse', authenticateToken, async (req, res) => {
         if (allNotes === false && !noteDid) {
             console.log('[ALFRED Notes Fast Path] allNotes=false, going directly to LLM...');
             
+            // Check if this is a self-referential question
+            if (isSelfReferentialQuestion(question)) {
+                console.log('[ALFRED Notes Fast Path] Self-referential question detected');
+                
+                const alfredResponse = await handleSelfReferentialQuestion(question, model, conversationHistory);
+                
+                // Generate audio if requested
+                let audioData = null;
+                if (req.body.return_audio) {
+                    audioData = await generateAudioForResponse(alfredResponse.answer, req.body);
+                }
+
+                const response = {
+                    success: true,
+                    answer: alfredResponse.answer,
+                    context: {
+                        mode: 'direct_llm',
+                        fastPath: true,
+                        selfReferential: true
+                    },
+                    model: alfredResponse.model || model,
+                    sources: alfredResponse.sources || [],
+                    error: alfredResponse.error || undefined,
+                    error_code: alfredResponse.error_code || undefined
+                };
+                
+                if (audioData) {
+                    response.audio_data = audioData;
+                    response.has_audio = true;
+                    response.engine_used = req.body.engine || 'elevenlabs';
+                }
+                
+                return res.json(response);
+            }
+            
             const alfredInstance = require('../helpers/alfred');
             
             const alfredOptions = {
@@ -1389,6 +1503,40 @@ Rules:
         if (!req.body.noteDid && !allNotes) {
             console.log('[ALFRED Notes] Running in pure LLM mode (no note context)');
             
+            // Check if this is a self-referential question
+            if (isSelfReferentialQuestion(question)) {
+                console.log('[ALFRED Notes Pure LLM] Self-referential question detected');
+                
+                const alfredResponse = await handleSelfReferentialQuestion(question, model, conversationHistory);
+                
+                // Generate audio if requested
+                let audioData = null;
+                if (req.body.return_audio) {
+                    audioData = await generateAudioForResponse(alfredResponse.answer, req.body);
+                }
+
+                const response = {
+                    success: true,
+                    answer: alfredResponse.answer,
+                    context: {
+                        mode: 'llm',
+                        selfReferential: true
+                    },
+                    model: alfredResponse.model || model,
+                    sources: alfredResponse.sources || [],
+                    error: alfredResponse.error || undefined,
+                    error_code: alfredResponse.error_code || undefined
+                };
+                
+                if (audioData) {
+                    response.audio_data = audioData;
+                    response.has_audio = true;
+                    response.engine_used = req.body.engine || 'elevenlabs';
+                }
+                
+                return res.json(response);
+            }
+            
             const alfredInstance = require('../helpers/alfred');
             
             const alfredOptions = {
@@ -1433,6 +1581,43 @@ Rules:
         // ========================================
         // Get the noteDid (either from request or from allNotes search above)
         const targetNoteDid = req.body.noteDid;
+        
+        // Check if this is a self-referential question (even with note context)
+        if (isSelfReferentialQuestion(question)) {
+            console.log('[ALFRED Notes RAG Mode] Self-referential question detected - bypassing note context');
+            
+            const alfredResponse = await handleSelfReferentialQuestion(question, model, conversationHistory);
+            
+            // Generate audio if requested
+            let audioData = null;
+            if (req.body.return_audio) {
+                audioData = await generateAudioForResponse(alfredResponse.answer, req.body);
+            }
+
+            const response = {
+                success: true,
+                answer: alfredResponse.answer,
+                context: {
+                    mode: 'rag',
+                    selfReferential: true,
+                    note: {
+                        did: targetNoteDid
+                    }
+                },
+                model: alfredResponse.model || model,
+                sources: alfredResponse.sources || [],
+                error: alfredResponse.error || undefined,
+                error_code: alfredResponse.error_code || undefined
+            };
+            
+            if (audioData) {
+                response.audio_data = audioData;
+                response.has_audio = true;
+                response.engine_used = req.body.engine || 'elevenlabs';
+            }
+            
+            return res.json(response);
+        }
         
         // Step 1: Retrieve the main note record with resolveDepth=1 to include transcript
         console.log('[ALFRED Notes RAG Mode] Step 1: Fetching note record with embedded references...');
