@@ -1131,6 +1131,60 @@
             line-height: 1.55;
         }
 
+        .message-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            align-items: center;
+        }
+
+        .speaker-button {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--primary-blue));
+            border: none;
+            border-radius: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--bg-deep);
+            font-family: "Space Grotesk", sans-serif;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 8px rgba(95, 252, 249, 0.3);
+        }
+
+        .speaker-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(95, 252, 249, 0.4);
+        }
+
+        .speaker-button:active {
+            transform: translateY(0);
+        }
+
+        .speaker-button.loading {
+            opacity: 0.6;
+            cursor: wait;
+            background: linear-gradient(135deg, var(--text-tertiary), var(--text-secondary));
+        }
+
+        .speaker-button.playing {
+            background: linear-gradient(135deg, var(--green), var(--accent-cyan));
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .speaker-icon {
+            width: 14px;
+            height: 14px;
+        }
+
         .chat-input-container {
             background: linear-gradient(180deg, rgba(5, 8, 22, 0.2), rgba(5, 8, 22, 0.7));
             border-top: 1px solid var(--border-subtle);
@@ -1942,6 +1996,55 @@
                     </div>
 
                     <div class="settings-section">
+                        <h2 class="section-title">Voice Response</h2>
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Enable Voice Responses</div>
+                                <div class="setting-description">Hear Alfred/Alice speak their responses</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="audioToggle" onchange="alfredApp.updateSettings()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div style="width: 100%;">
+                                <div class="setting-label">TTS Engine</div>
+                                <select class="model-select" id="ttsEngineSelect" onchange="alfredApp.updateSettings()" style="margin-top: 8px;">
+                                    <option value="kokoro">Kokoro TTS (High quality, fast)</option>
+                                    <option value="silero">Silero Neural TTS (GPU-accelerated)</option>
+                                    <option value="elevenlabs">ElevenLabs (Premium, requires API key)</option>
+                                    <option value="edge_tts">Edge TTS (Microsoft)</option>
+                                    <option value="gtts">Google TTS (Simple, reliable)</option>
+                                    <option value="espeak">eSpeak (Offline fallback)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div style="width: 100%;">
+                                <div class="setting-label">Voice Selection</div>
+                                <select class="model-select" id="voiceSelect" onchange="alfredApp.updateSettings()" style="margin-top: 8px;">
+                                    <option value="en">English (American)</option>
+                                    <option value="en-gb">English (British)</option>
+                                    <option value="es">Spanish</option>
+                                    <option value="fr">French</option>
+                                    <option value="de">German</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div>
+                                <div class="setting-label">Auto-play Responses</div>
+                                <div class="setting-description">Automatically play audio when received</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="autoPlayToggle" onchange="alfredApp.updateSettings()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
                         <h2 class="section-title">LLM Model</h2>
                         <div class="setting-row">
                             <div class="setting-label">Select the model for summarization</div>
@@ -2108,7 +2211,11 @@
                     backendEnabled: true,
                     webServerUpload: true,
                     model: 'llama3.2:3b',
-                    apiBaseUrl: localStorage.getItem('alfred_api_base_url') || 'https://api.oip.onl'
+                    apiBaseUrl: localStorage.getItem('alfred_api_base_url') || 'https://api.oip.onl',
+                    audioEnabled: localStorage.getItem('alfred_audio_enabled') === 'true',
+                    ttsEngine: localStorage.getItem('alfred_tts_engine') || 'kokoro',
+                    voiceId: localStorage.getItem('alfred_voice_id') || 'en',
+                    autoPlay: localStorage.getItem('alfred_auto_play') === 'true'
                 },
                 isEditingApiUrl: false,
                 currentAI: 'alfred',
@@ -2116,7 +2223,9 @@
                 selectedNoteForChat: null, // The note DID when in 'selected' mode
                 conversationHistory: [],
                 homeMode: 'record', // 'record' or 'upload'
-                selectedAudioFile: null
+                selectedAudioFile: null,
+                currentAudio: null, // Currently playing audio element
+                currentAudioButton: null // Button for currently playing audio
             },
 
             // Initialize app
@@ -2134,6 +2243,19 @@
                 if (chatModelSelect) {
                     chatModelSelect.value = this.state.settings.model;
                 }
+                
+                // Initialize audio settings
+                const audioToggle = document.getElementById('audioToggle');
+                const ttsEngineSelect = document.getElementById('ttsEngineSelect');
+                const voiceSelect = document.getElementById('voiceSelect');
+                const autoPlayToggle = document.getElementById('autoPlayToggle');
+                const modelSelect = document.getElementById('modelSelect');
+                
+                if (audioToggle) audioToggle.checked = this.state.settings.audioEnabled;
+                if (ttsEngineSelect) ttsEngineSelect.value = this.state.settings.ttsEngine;
+                if (voiceSelect) voiceSelect.value = this.state.settings.voiceId;
+                if (autoPlayToggle) autoPlayToggle.checked = this.state.settings.autoPlay;
+                if (modelSelect) modelSelect.value = this.state.settings.model;
                 
                 // Check authentication
                 if (!this.state.jwtToken) {
@@ -2681,17 +2803,23 @@
                 const audioBlob = new Blob(this.state.audioChunks, { type: 'audio/webm' });
                 const endTime = Date.now();
                 
+                // Capture participant data before clearing UI
+                const participantsData = this.getParticipantsData();
+                
+                // Clear participants from UI immediately
+                this.clearParticipants();
+                
                 this.showToast('Processing recording...', 'success');
 
                 try {
-                    await this.uploadNote(audioBlob, this.state.recordingStartTime, endTime);
+                    await this.uploadNote(audioBlob, this.state.recordingStartTime, endTime, participantsData);
                 } catch (error) {
                     console.error('Error processing recording:', error);
                     this.showToast('Failed to process recording', 'error');
                 }
             },
 
-            async uploadNote(audioBlob, startTime, endTime) {
+            async uploadNote(audioBlob, startTime, endTime, participantsData = null) {
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'recording.webm');
                 formData.append('start_time', new Date(startTime).toISOString());
@@ -2702,12 +2830,14 @@
                 formData.append('addToWebServer', this.state.settings.webServerUpload);
 
                 // Add participants if provided
-                const { names, roles } = this.getParticipantsData();
-                if (names.length > 0) {
-                    formData.append('participant_display_names', JSON.stringify(names));
-                }
-                if (roles.length > 0) {
-                    formData.append('participant_roles', JSON.stringify(roles));
+                if (participantsData) {
+                    const { names, roles } = participantsData;
+                    if (names.length > 0) {
+                        formData.append('participant_display_names', JSON.stringify(names));
+                    }
+                    if (roles.length > 0) {
+                        formData.append('participant_roles', JSON.stringify(roles));
+                    }
                 }
 
                 try {
@@ -2723,7 +2853,6 @@
 
                     if (data.success) {
                         this.showToast('Note created successfully!', 'success');
-                        this.clearParticipants(); // Clear participants after successful upload
                         this.loadNotes();
                     } else {
                         this.showToast('Failed to create note: ' + (data.error || 'Unknown error'), 'error');
@@ -3177,29 +3306,39 @@ JSON:`;
                 });
 
                 try {
+                    // Build request body for /api/voice/chat
                     const requestBody = {
-                        question: question,
+                        text: question,
                         model: this.state.settings.model,
-                        conversationHistory: this.state.conversationHistory.slice(-10) // Keep last 5 exchanges (10 messages)
+                        processing_mode: 'rag', // Default to RAG mode
+                        return_audio: this.state.settings.audioEnabled,
+                        conversationHistory: JSON.stringify(this.state.conversationHistory.slice(-10)) // Keep last 5 exchanges (10 messages)
                     };
+
+                    // Add audio parameters if audio is enabled
+                    if (this.state.settings.audioEnabled) {
+                        requestBody.engine = this.state.settings.ttsEngine;
+                        requestBody.voice_id = this.state.settings.voiceId;
+                    }
 
                     // Determine which mode we're in and set appropriate parameters
                     if (this.state.chatMode === 'selected' && this.state.selectedNoteForChat) {
                         // Selected Note mode - query specific note
-                        requestBody.noteDid = this.state.selectedNoteForChat;
+                        requestBody.pinnedDidTx = this.state.selectedNoteForChat;
                         console.log('📝 Selected Note mode - using DID:', this.state.selectedNoteForChat);
                     } else if (this.state.chatMode === 'notes') {
-                        // All Notes mode - search across all notes
-                        requestBody.allNotes = true;
+                        // All Notes mode - search across all notes (RAG mode)
+                        requestBody.processing_mode = 'rag';
                         console.log('📚 All Notes mode - searching all notes');
                     } else {
-                        // Chat mode - pure LLM
+                        // Chat mode - pure LLM (no RAG)
+                        requestBody.processing_mode = 'llm';
                         console.log('💬 Chat mode - pure LLM');
                     }
 
-                    console.log('🚀 Sending request:', requestBody);
+                    console.log('🚀 Sending request to /api/voice/chat:', requestBody);
 
-                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/notes/converse`, {
+                    const response = await fetch(`${this.state.settings.apiBaseUrl}/api/voice/chat`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${this.state.jwtToken}`,
@@ -3211,19 +3350,22 @@ JSON:`;
                     const data = await response.json();
 
                     if (data.success) {
-                        // If in All Notes mode and we got search context, show which note was found
-                        let answerText = data.answer;
-                        if (this.state.chatMode === 'notes' && data.context?.search) {
-                            const noteTitle = data.context.note?.title || 'a note';
-                            answerText = `📝 Found in "${noteTitle}"\n\n${data.answer}`;
+                        // Extract response text
+                        let answerText = data.response_text || data.answer || 'No response';
+                        
+                        // If in All Notes mode and we got search context, show which sources were found
+                        if (this.state.chatMode === 'notes' && data.sources && data.sources.length > 0) {
+                            const sourceTitle = data.sources[0].title || 'a note';
+                            answerText = `📝 Found in "${sourceTitle}"\n\n${answerText}`;
                         }
                         
-                        this.addMessage('assistant', answerText);
+                        // Add message with optional audio data
+                        this.addMessage('assistant', answerText, data.audio_data);
                         
                         // Add assistant response to history
                         this.state.conversationHistory.push({
                             role: 'assistant',
-                            content: data.answer
+                            content: data.response_text || data.answer
                         });
                     } else {
                         this.addMessage('assistant', 'Sorry, I encountered an error: ' + (data.error || 'Unknown error'));
@@ -3234,7 +3376,7 @@ JSON:`;
                 }
             },
 
-            addMessage(role, text) {
+            addMessage(role, text, audioData = null) {
                 const chatMessages = document.getElementById('chatMessages');
                 if (!chatMessages) return;
 
@@ -3243,7 +3385,7 @@ JSON:`;
                 
                 const avatarDiv = document.createElement('div');
                 avatarDiv.className = 'message-avatar';
-                avatarDiv.textContent = role === 'user' ? 'U' : 'A';
+                avatarDiv.textContent = role === 'user' ? 'U' : (this.state.currentAI === 'alice' ? 'L' : 'A');
 
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'message-content';
@@ -3252,11 +3394,118 @@ JSON:`;
                 const formattedText = text.replace(/\n/g, '<br>');
                 contentDiv.innerHTML = `<div class="message-text">${formattedText}</div>`;
 
+                // Add speaker button for assistant messages with audio
+                if (role === 'assistant' && audioData) {
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'message-actions';
+                    
+                    const speakerBtn = document.createElement('button');
+                    speakerBtn.className = 'speaker-button';
+                    speakerBtn.innerHTML = `
+                        <svg class="speaker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+                            <path d="M15.54 8.46a5 5 0 010 7.07"/>
+                            <path d="M19.07 4.93a10 10 0 010 14.14"/>
+                        </svg>
+                        <span>Play</span>
+                    `;
+                    speakerBtn.onclick = () => this.playAudio(audioData, speakerBtn);
+                    
+                    actionsDiv.appendChild(speakerBtn);
+                    contentDiv.appendChild(actionsDiv);
+                    
+                    // Auto-play if enabled
+                    if (this.state.settings.autoPlay) {
+                        setTimeout(() => this.playAudio(audioData, speakerBtn), 300);
+                    }
+                }
+
                 messageDiv.appendChild(avatarDiv);
                 messageDiv.appendChild(contentDiv);
                 chatMessages.appendChild(messageDiv);
 
                 chatMessages.scrollTop = chatMessages.scrollHeight;
+            },
+
+            playAudio(audioDataBase64, buttonElement) {
+                // If already playing, stop
+                if (this.state.currentAudio && !this.state.currentAudio.paused) {
+                    this.state.currentAudio.pause();
+                    this.state.currentAudio.currentTime = 0;
+                    if (this.state.currentAudioButton) {
+                        this.state.currentAudioButton.classList.remove('playing');
+                        this.state.currentAudioButton.innerHTML = `
+                            <svg class="speaker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+                                <path d="M15.54 8.46a5 5 0 010 7.07"/>
+                                <path d="M19.07 4.93a10 10 0 010 14.14"/>
+                            </svg>
+                            <span>Play</span>
+                        `;
+                    }
+                    if (this.state.currentAudioButton === buttonElement) {
+                        this.state.currentAudio = null;
+                        this.state.currentAudioButton = null;
+                        return;
+                    }
+                }
+
+                try {
+                    // Convert base64 to blob
+                    const binaryString = atob(audioDataBase64);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    const blob = new Blob([bytes], { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(blob);
+
+                    // Create and play audio
+                    const audio = new Audio(audioUrl);
+                    this.state.currentAudio = audio;
+                    this.state.currentAudioButton = buttonElement;
+
+                    buttonElement.classList.add('playing');
+                    buttonElement.innerHTML = `
+                        <svg class="speaker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="6" y="4" width="4" height="16"/>
+                            <rect x="14" y="4" width="4" height="16"/>
+                        </svg>
+                        <span>Pause</span>
+                    `;
+
+                    audio.onended = () => {
+                        buttonElement.classList.remove('playing');
+                        buttonElement.innerHTML = `
+                            <svg class="speaker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+                                <path d="M15.54 8.46a5 5 0 010 7.07"/>
+                                <path d="M19.07 4.93a10 10 0 010 14.14"/>
+                            </svg>
+                            <span>Play</span>
+                        `;
+                        URL.revokeObjectURL(audioUrl);
+                        this.state.currentAudio = null;
+                        this.state.currentAudioButton = null;
+                    };
+
+                    audio.play().catch(error => {
+                        console.error('Error playing audio:', error);
+                        this.showToast('Failed to play audio', 'error');
+                        buttonElement.classList.remove('playing');
+                        buttonElement.innerHTML = `
+                            <svg class="speaker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+                                <path d="M15.54 8.46a5 5 0 010 7.07"/>
+                                <path d="M19.07 4.93a10 10 0 010 14.14"/>
+                            </svg>
+                            <span>Play</span>
+                        `;
+                    });
+                } catch (error) {
+                    console.error('Error creating audio:', error);
+                    this.showToast('Failed to create audio', 'error');
+                }
             },
 
             switchAI(ai) {
@@ -3429,6 +3678,17 @@ JSON:`;
                 this.state.settings.backendEnabled = document.getElementById('backendToggle')?.checked ?? true;
                 this.state.settings.webServerUpload = document.getElementById('webServerToggle')?.checked ?? true;
                 this.state.settings.model = document.getElementById('modelSelect')?.value ?? 'llama3.2:3b';
+                this.state.settings.audioEnabled = document.getElementById('audioToggle')?.checked ?? false;
+                this.state.settings.ttsEngine = document.getElementById('ttsEngineSelect')?.value ?? 'kokoro';
+                this.state.settings.voiceId = document.getElementById('voiceSelect')?.value ?? 'en';
+                this.state.settings.autoPlay = document.getElementById('autoPlayToggle')?.checked ?? false;
+                
+                // Save audio settings to localStorage
+                localStorage.setItem('alfred_audio_enabled', this.state.settings.audioEnabled);
+                localStorage.setItem('alfred_tts_engine', this.state.settings.ttsEngine);
+                localStorage.setItem('alfred_voice_id', this.state.settings.voiceId);
+                localStorage.setItem('alfred_auto_play', this.state.settings.autoPlay);
+                
                 this.showToast('Settings updated', 'success');
             },
 
